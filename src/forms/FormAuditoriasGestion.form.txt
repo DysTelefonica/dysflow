@@ -1,0 +1,1946 @@
+Version =21
+VersionRequired =20
+Checksum =-595782316
+Begin Form
+    AutoResize = NotDefault
+    RecordSelectors = NotDefault
+    MaxButton = NotDefault
+    MinButton = NotDefault
+    ControlBox = NotDefault
+    AutoCenter = NotDefault
+    NavigationButtons = NotDefault
+    CloseButton = NotDefault
+    DividingLines = NotDefault
+    DefaultView =0
+    ScrollBars =0
+    ViewsAllowed =1
+    TabularFamily =0
+    PictureAlignment =2
+    DatasheetGridlinesBehavior =3
+    GridY =10
+    Width =8560
+    DatasheetFontHeight =10
+    ItemSuffix =119
+    Left =5205
+    Top =4290
+    Right =15090
+    Bottom =10860
+    DatasheetGridlinesColor =12632256
+    RecSrcDt = Begin
+        0x0db6127f15a5e340
+    End
+    GUID = Begin
+        0x2d3b52b4cb97224380b6088d3af8a954
+    End
+    NameMap = Begin
+        0x0acc0e5500000000000000000000000000000000000000000c00000005000000 ,
+        0x0000000000000000000000000000
+    End
+    Caption ="GESTIÓN DE LAS NO CONFORMIDADES / OBSERVACIONES"
+    DatasheetFontName ="Arial"
+    PrtMip = Begin
+        0x6801000068010000680100006801000000000000201c0000e010000001000000 ,
+        0x010000006801000000000000a10700000100000001000000
+    End
+    PrtDevMode = Begin
+        0x0000000000000000000000000000000020b5b3c5f67f000000b1487b55020000 ,
+        0x010403069c000c0303ff0000010009009a0b3408640001000f00580202000100 ,
+        0x5802020000004134002a9e286b00000000000000000000006c1521c5f67f0000 ,
+        0x0000000000000000000000000000000000000000010000000000000001000000 ,
+        0x0200000001000000ffffffff0000000000000000000000000000000044494e55 ,
+        0x2200b0000c030000c1951cfb0000000000000000000000000000000000000000 ,
+        0x0000000000000000060000000100000000000000020001000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000100000000000000000000000000000000000000 ,
+        0x000000000000000000000000000000000000000000000000b0000000534d544a ,
+        0x000000001000a000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000
+    End
+    PrtDevNames = Begin
+        0x0800220052000100000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x000000000000000000000000000000000000545330303200
+    End
+    OnLoad ="[Event Procedure]"
+    AllowDatasheetView =0
+    FilterOnLoad =0
+    AllowLayoutView =0
+    DatasheetGridlinesColor12 =12632256
+    PrtDevModeW = Begin
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x6900720065006300630069006f006e00610064006f0029002000280000000000 ,
+        0x01040306dc000c0303ff0000010009009a0b3408640001000f00580202000100 ,
+        0x5802020000004100340000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000010000000000000001000000 ,
+        0x0200000001000000ffffffff0000000000000000000000000000000044494e55 ,
+        0x2200b0000c030000c1951cfb0000000000000000000000000000000000000000 ,
+        0x0000000000000000060000000100000000000000020001000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000100000000000000000000000000000000000000 ,
+        0x000000000000000000000000000000000000000000000000b0000000534d544a ,
+        0x000000001000a000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000
+    End
+    PrtDevNamesW = Begin
+        0x04001e004e000100000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000054005300 ,
+        0x3000300032000000
+    End
+    NoSaveCTIWhenDisabled =1
+    Begin
+        Begin Label
+            BackStyle =0
+            OldBorderStyle =1
+            FontSize =11
+            FontWeight =700
+            FontName ="Calibri"
+        End
+        Begin Rectangle
+            SpecialEffect =3
+            BackStyle =0
+            BorderLineStyle =0
+            Width =850
+            Height =850
+        End
+        Begin Line
+            BorderLineStyle =0
+            Width =1701
+        End
+        Begin Image
+            BackStyle =0
+            OldBorderStyle =0
+            BorderLineStyle =0
+            PictureAlignment =2
+            Width =1701
+            Height =1701
+        End
+        Begin CommandButton
+            Width =1701
+            Height =283
+            FontSize =8
+            FontWeight =400
+            ForeColor =-2147483630
+            FontName ="Tahoma"
+            BorderLineStyle =0
+        End
+        Begin CheckBox
+            SpecialEffect =2
+            BorderLineStyle =0
+            LabelX =230
+            LabelY =-30
+        End
+        Begin OptionGroup
+            SpecialEffect =3
+            BorderLineStyle =0
+            Width =1701
+            Height =1701
+        End
+        Begin TextBox
+            FELineBreak = NotDefault
+            SpecialEffect =2
+            OldBorderStyle =0
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontName ="Tahoma"
+            AsianLineBreak =255
+        End
+        Begin ListBox
+            SpecialEffect =2
+            BorderLineStyle =0
+            Width =1701
+            Height =1417
+            LabelX =-1701
+            FontName ="Tahoma"
+        End
+        Begin ComboBox
+            SpecialEffect =2
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontName ="Tahoma"
+        End
+        Begin Subform
+            BorderLineStyle =0
+            Width =1701
+            Height =1701
+            BorderColor =10921638
+            GridlineColor =10921638
+            BorderThemeColorIndex =1
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+            BorderShade =65.0
+            ShowPageHeaderAndPageFooter =1
+        End
+        Begin FormHeader
+            Height =686
+            BackColor =16737792
+            Name ="EncabezadoDelFormulario"
+            GUID = Begin
+                0x5530bd058cdb034e966c7009e0ca84f5
+            End
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            Begin
+                Begin Label
+                    OldBorderStyle =0
+                    OverlapFlags =85
+                    TextAlign =2
+                    Left =90
+                    Width =8295
+                    Height =615
+                    FontSize =23
+                    BorderColor =8355711
+                    ForeColor =16777215
+                    Name ="lblTitulo1"
+                    Caption ="GESTIÓN DE LAS AUDITORÍAS"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xb9115c39d584f3428be82261a846526f
+                    End
+                    GridlineColor =10921638
+                    LayoutCachedLeft =90
+                    LayoutCachedWidth =8385
+                    LayoutCachedHeight =615
+                    BackThemeColorIndex =1
+                    BorderThemeColorIndex =0
+                    BorderTint =50.0
+                    ForeThemeColorIndex =1
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                End
+            End
+        End
+        Begin Section
+            Height =5159
+            Name ="Detalle"
+            GUID = Begin
+                0x773fd72601393942938be908378db61b
+            End
+            Begin
+                Begin ListBox
+                    ColumnHeads = NotDefault
+                    TabStop = NotDefault
+                    RowSourceTypeInt =1
+                    SpecialEffect =0
+                    OverlapFlags =85
+                    IMESentenceMode =3
+                    ColumnCount =4
+                    Left =450
+                    Top =1155
+                    Width =7705
+                    Height =3109
+                    FontSize =10
+                    TabIndex =7
+                    BackColor =16047562
+                    ForeColor =8210719
+                    BorderColor =14136213
+                    Name ="ListaFiltrados"
+                    RowSourceType ="Value List"
+                    RowSource ="ID;Nombre;Tipo;FInicial;FFinal"
+                    ColumnWidths ="0;2268;1278;1278"
+                    OnDblClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    OnClick ="[Event Procedure]"
+                    Tag ="TbNoConformidadesAux"
+                    GUID = Begin
+                        0x25dd55ab0445ef43a5684dc42f39edf8
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =450
+                    LayoutCachedTop =1155
+                    LayoutCachedWidth =8155
+                    LayoutCachedHeight =4264
+                    BorderTint =60.0
+                    ForeThemeColorIndex =2
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                End
+                Begin CommandButton
+                    TabStop = NotDefault
+                    OverlapFlags =85
+                    Left =2550
+                    Top =255
+                    Width =297
+                    Height =297
+                    FontSize =11
+                    TabIndex =8
+                    ForeColor =4210752
+                    Name ="ComandoLimpiarAño"
+                    Caption ="Comando36"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Calibri"
+                    ControlTipText ="Quita el contenido del campo Código"
+                    Picture ="Cepillo.ico"
+                    GUID = Begin
+                        0xa7f18c200a72d941be6a3512c8754b2e
+                    End
+                    GridlineColor =10921638
+                    ImageData = Begin
+                        0x0000010001001e230000010020001c11000016000000280000001e0000004600 ,
+                        0x00000100200000000000f4100000d70d0000d70d00000000000000000000ffff ,
+                        0xff00ffffff00ffffff00ffffff0000000001000000060000000b000000100000 ,
+                        0x0015000000190000001d00000021000000190000001b0000001b0000001c0000 ,
+                        0x00220000002a0000002d0000002c0000002b0000002900000027000000240000 ,
+                        0x00210000001d0000001900000015000000100000000bffffff00ffffff000000 ,
+                        0x0001000000060000000d00000012000000180000001d00000023000000280000 ,
+                        0x002d00000022006d877d029fc1c1028faeb100759590004d6568000d11450000 ,
+                        0x0034000000360000003d0000003c0000003900000036000000310000002d0000 ,
+                        0x0028000000230000001e00000018ffffff0000000001000000080000000f0000 ,
+                        0x00150000001b00000021000000280000002d000000340000002b00546d6f23ba ,
+                        0xd8ff7fe6f8ff53cfe8ff5ddaf0ff4bc7e0ff069dbfe70082a2b300485d770000 ,
+                        0x004a0000004000000046000000450000003f00000039000000340000002e0000 ,
+                        0x002800000021ffffff00000000060000000d000000140000001a000000210000 ,
+                        0x00270000002e000000350000003500212b4c10a4c5ee84e8f6ff2ab4d0ff18bf ,
+                        0xd8ff76e4efff4cc5dcff1cbad8ff77e4f7ff47c5dfff0091b4d80058748f0000 ,
+                        0x00510000004300000048000000430000003c000000350000002e00000027ffff ,
+                        0xff00000000070000000e000000150000001c0000002200000029000000300000 ,
+                        0x00370000002f0082a3b763e0f5ff50c9deff00aacaff3ad4e5ff40c4dbff00a4 ,
+                        0xc7ff1ac9deff73e1edff5dcfe2ff28bddcff51d0eaff119dbedb00576e820000 ,
+                        0x00400000003d0000003f000000370000003000000029ffffff00000000050000 ,
+                        0x000c000000130000001a00000021000000270000002e0000002a0042575f27b9 ,
+                        0xd6ff78e2efff09afceff07c0d9ff4ed3e4ff0ca9c9ff02bfd9ff42d5e6ff56d5 ,
+                        0xe5ff00a5c7ff30c9deff95ecf4ff43c9e3ff15b0d4ff008daec0002e3d520000 ,
+                        0x002b000000340000002f00000027ffffff0000000001000000070000000e0000 ,
+                        0x00150000001b00000021000000270000001e008cadb55edff4ff45cbdfff00b0 ,
+                        0xcfff25d0e3ff31bbd5ff00b4d3ff1bd0e6ff62dfeeff2bb8d3ff01b1cfff54db ,
+                        0xeaff2abdd6ff00a7c9ff46d4e6ff60def3ff13a9caee006a89740000001b0000 ,
+                        0x002400000022ffffff00ffffff0000000001000000060000000c000000120000 ,
+                        0x001800000016003248371eafcdf664e0eeff17bad4ff01bed8ff31d0e4ff13b0 ,
+                        0xd0ff0fcce5ff3bdaedff59d3e7ff00a7c9ff31d1e4ff45c9deff00a5c7ff00bf ,
+                        0xd8ff0ec6dcff7ae1edff94edf8ff1db7d8ff0081a7970000001100000011ffff ,
+                        0xff00ffffff00ffffff00ffffff0000000002000000060000000b000000010081 ,
+                        0xa77145d2ebff3ed1e3ff08b8d4ff12cee5ff22c2dcff11bedaff1fd8efff56e1 ,
+                        0xf2ff21b2d0ff0dbfdaff4cd4e6ff0aa7c9ff00bbd5ff08c5dcff50d6e7ff51d5 ,
+                        0xe6ff2cb9d3ff2ab8d4ff4dd1ecff0a9ebfad003d5e07ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00049ec2b357def1ff12c3 ,
+                        0xdbff0cc1dcff1fd6edff13bbd9ff21d2ebff34e2f7ff3fcae3ff00adceff3dda ,
+                        0xedff21b3d0ff00b4d1ff01c4dbff46d4e5ff4fd1e3ff0caacaff0eb0ceff65db ,
+                        0xe9ffb4f5fbff3ed6f6ff0096bd97ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff000065990919accbe655ddeeff07c1dcff1bcfe7ff23d4 ,
+                        0xedff19c2dfff31e2f9ff36dff5ff0eaccdff23d1e8ff34c6deff00afceff00c3 ,
+                        0xdbff38d1e3ff46cbe0ff00a8c9ff1ebdd7ff80e5f0ff8feaf8ff32b8d5fc00a0 ,
+                        0xc59100a1c225ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff000084af2f2fbad6ff4cdbedff0ec9e3ff2adcf2ff25d1ebff29d2ecff3fed ,
+                        0xffff1cc2e0ff12bedcff36d7edff0eb4d2ff00c2daff28cde1ff3dc7ddff00aa ,
+                        0xcaff28c7dcff95ecf4ff75e0f5ff11a8cbcb0086b436ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000090ba5444ce ,
+                        0xe8ff44dbeeff1cd3ecff34e3faff29d1ebff3fe3faff3be0f7ff14bad9ff30dd ,
+                        0xf4ff1bc0dcff07c4ddff1dcce0ff31c3daff00adcdff2ecce0ff9deef7ff55ce ,
+                        0xe8ff0099c293001e6d06ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff000095bb7153d9f1ff40dff3ff2ce0 ,
+                        0xf7ff3be3faff38d6efff52ebffff29c7e3ff2ed7f1ff26d2ecff13c6e0ff1cd0 ,
+                        0xe6ff24c1d9ff00b2cfff2fcee1ff9aedf9ff3abdd9fb008fba64ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff0000a7c6795de0f7ff42e4f8ff3ae6feff43dff6ff52e3 ,
+                        0xf8ff49dcf3ff32d0eaff3ae2faff1fcce7ff20d4ebff1bc4dcff00b5d1ff30ce ,
+                        0xe1ff8eeaf8ff28b3d3ef0085b544ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff0000005b0a0000 ,
+                        0x515a0073a2a567f0ffff4cf1ffff44e6fdff53e2f7ff60e7f9ff44d5edff4be6 ,
+                        0xfcff30d9f2ff26d8efff19cbe4ff00bbd6ff35d0e2ff7ee6f7ff1aaccfe2007f ,
+                        0xaf2fffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00000068a20000a1ff000882ff386b ,
+                        0xa0ff6ee5f1ff65fdffff67ecfdff60e1f4ff5ae6f9ff48e5fbff31def6ff21d5 ,
+                        0xedff07c6e0ff3ed4e5ff6ae0f4ff10a8ccd40078a521ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff0000004126000081ff0000d5ff0000c8ff000098ff1b1f81ff5c92 ,
+                        0xb7ff8cf4fbff77fbffff5bebfeff42e6fcff28def6ff1dd4ebff56ddedff54d9 ,
+                        0xf1ff04a2c8c3006d9d14ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000000 ,
+                        0x0004001279dc00008fff0000bdff1717e3ff2320d6ff170f9cff2f3789ff69b0 ,
+                        0xcbff66fbffff40f1ffff46e3f7ff6ee7f7ff42ceeaff009dc4a4005e7e07ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff000091b61b00a5ca9e1fc0d8f32b87 ,
+                        0xb2ff05197eff09009eff3330e8ff5454ffff423edfff17108eff2f5093ff67c9 ,
+                        0xdfff63e7faff22b5d4f10096bf6fffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff000098c13102a5cbf82ed4efff41daeaff31e5f3ff49d9ebff3372 ,
+                        0xa6ff0f1384ff342bc7ff5b5affff4342f4ff150cafff060a83ff006da4a5008b ,
+                        0xb120ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00009f ,
+                        0xbf1700a3c99215b2d1f63ed3e9ff62e4f4ff6df3ffff75ffffff62cde0ff2a52 ,
+                        0x94ff13118eff2a22c7ff2323e0ff050292ff00002133ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000096 ,
+                        0xc321008eb7d930c0ddff79e9f7ff8ef6ffff83fcffff82ffffff66b3cdff0f2c ,
+                        0x83ff08088dff00006aacffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00003c73360a6099f00777 ,
+                        0xadff0794bcff49cae1ff90f2fdff9afaffff9bffffff16accad5000048340000 ,
+                        0x2805ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00003b7810065e95e22581b9ff116ca9ff0a68a3ff0077 ,
+                        0xaaff119fc3ff64e0f4ff8df9ffff0aa7c9bdffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00005489ab2f8ac2ff1e7fbaff086fadff1a78b2ff1066a0ff004b8253009b ,
+                        0xc07214b8dbf604a3c7b1ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff0000457e662c83baff3793 ,
+                        0xccff0975b8ff1178b7ff2986c0ff065b91d0ffffff00ffffff00008cb227009d ,
+                        0xc32effffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff0000316f281c6fa3f652a4d7ff107ec2ff0978beff288a ,
+                        0xc7ff2681b9ff004b835effffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000000 ,
+                        0x00020a5c90cd60abd9ff2389c9ff0a79bfff107ec2ff429bd3ff0e6397e4001a ,
+                        0x5308ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00004b80684d9ccdff3c97 ,
+                        0xd0ff0074bbff0b7cc1ff2f90ccff4195c9ff004b827cffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00116598c857a4d4ff1a6fa4ff2071a2ff0572 ,
+                        0xb6ff59a9dbff1d6fa1f2002b6316ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff001b6c9fd43c8dbfff7aa4bfff9bb9ccff1773acff59a8d9ff004f ,
+                        0x8698ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000657 ,
+                        0x8e8b4b9ed1ff3f88b5ff3881afff5ea8d7ff1a6ea3fc00397227ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00003b6d14086099cf3387 ,
+                        0xbbff3b8bbdff196ea3dd00477d4effffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff000037792d0037742d0000 ,
+                        0x0004ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00f0000000c0000000800000008000000080000000800000008000 ,
+                        0x0000c0000000f0000000ff000000fe000000fe00000cfe00001cfe00007cfe00 ,
+                        0x00fcf80001fcf80003fcf00007fcf0000ffce0003ffcc0007ffcc000fffcf001 ,
+                        0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
+                        0xfffc01fffffc01fffffc03fffffcc7fffffc
+                    End
+
+                    LayoutCachedLeft =2550
+                    LayoutCachedTop =255
+                    LayoutCachedWidth =2847
+                    LayoutCachedHeight =552
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    ThemeFontIndex =1
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                    Overlaps =1
+                End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =2040
+                    Top =4425
+                    Width =1575
+                    Height =390
+                    FontSize =10
+                    FontWeight =700
+                    TabIndex =1
+                    ForeColor =16737792
+                    Name ="ComandoEditar"
+                    Caption ="Cambiar fechas"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Cambiar fechas de la auditoría seleccionada"
+                    GUID = Begin
+                        0x290c18eb48e4ac4c855e6fc77d3f0948
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =2040
+                    LayoutCachedTop =4425
+                    LayoutCachedWidth =3615
+                    LayoutCachedHeight =4815
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =16737792
+                    PressedForeColor =16737792
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                    Overlaps =1
+                End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =7209
+                    Top =4425
+                    Width =946
+                    Height =405
+                    FontSize =10
+                    FontWeight =700
+                    TabIndex =4
+                    ForeColor =2366701
+                    Name ="ComandoEliminar"
+                    Caption ="Eliminar"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Eliminamos definitivamente la auditoría seleccionada"
+                    GUID = Begin
+                        0xf83632ed4814bf4fb41efe790fa1f2db
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =7209
+                    LayoutCachedTop =4425
+                    LayoutCachedWidth =8155
+                    LayoutCachedHeight =4830
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =2366701
+                    PressedForeColor =2366701
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                    Overlaps =1
+                End
+                Begin ComboBox
+                    RowSourceTypeInt =1
+                    SpecialEffect =0
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    ListRows =100
+                    ListWidth =1134
+                    Left =6585
+                    Top =255
+                    Width =1134
+                    Height =297
+                    FontSize =10
+                    TabIndex =6
+                    BackColor =16511723
+                    BorderColor =14136213
+                    ForeColor =4210752
+                    GUID = Begin
+                        0xeafffeaa59e931458953d7ba3e00e528
+                    End
+                    Name ="Tipo"
+                    RowSourceType ="Value List"
+                    RowSource ="Interna;Externa"
+                    ColumnWidths ="1134"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="BUSQUEDA"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =6585
+                    LayoutCachedTop =255
+                    LayoutCachedWidth =7719
+                    LayoutCachedHeight =552
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                End
+                Begin CommandButton
+                    TabStop = NotDefault
+                    OverlapFlags =85
+                    Left =7858
+                    Top =255
+                    Width =297
+                    Height =297
+                    FontSize =11
+                    TabIndex =9
+                    ForeColor =4210752
+                    Name ="ComandoLimpiarTipo"
+                    Caption ="Comando36"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Calibri"
+                    ControlTipText ="Quita el contenido del campo Tipo"
+                    Picture ="Cepillo.ico"
+                    GUID = Begin
+                        0xe0340fc6f0921b4f94cd6c2557d4054c
+                    End
+                    GridlineColor =10921638
+                    ImageData = Begin
+                        0x0000010001001e230000010020001c11000016000000280000001e0000004600 ,
+                        0x00000100200000000000f4100000d70d0000d70d00000000000000000000ffff ,
+                        0xff00ffffff00ffffff00ffffff0000000001000000060000000b000000100000 ,
+                        0x0015000000190000001d00000021000000190000001b0000001b0000001c0000 ,
+                        0x00220000002a0000002d0000002c0000002b0000002900000027000000240000 ,
+                        0x00210000001d0000001900000015000000100000000bffffff00ffffff000000 ,
+                        0x0001000000060000000d00000012000000180000001d00000023000000280000 ,
+                        0x002d00000022006d877d029fc1c1028faeb100759590004d6568000d11450000 ,
+                        0x0034000000360000003d0000003c0000003900000036000000310000002d0000 ,
+                        0x0028000000230000001e00000018ffffff0000000001000000080000000f0000 ,
+                        0x00150000001b00000021000000280000002d000000340000002b00546d6f23ba ,
+                        0xd8ff7fe6f8ff53cfe8ff5ddaf0ff4bc7e0ff069dbfe70082a2b300485d770000 ,
+                        0x004a0000004000000046000000450000003f00000039000000340000002e0000 ,
+                        0x002800000021ffffff00000000060000000d000000140000001a000000210000 ,
+                        0x00270000002e000000350000003500212b4c10a4c5ee84e8f6ff2ab4d0ff18bf ,
+                        0xd8ff76e4efff4cc5dcff1cbad8ff77e4f7ff47c5dfff0091b4d80058748f0000 ,
+                        0x00510000004300000048000000430000003c000000350000002e00000027ffff ,
+                        0xff00000000070000000e000000150000001c0000002200000029000000300000 ,
+                        0x00370000002f0082a3b763e0f5ff50c9deff00aacaff3ad4e5ff40c4dbff00a4 ,
+                        0xc7ff1ac9deff73e1edff5dcfe2ff28bddcff51d0eaff119dbedb00576e820000 ,
+                        0x00400000003d0000003f000000370000003000000029ffffff00000000050000 ,
+                        0x000c000000130000001a00000021000000270000002e0000002a0042575f27b9 ,
+                        0xd6ff78e2efff09afceff07c0d9ff4ed3e4ff0ca9c9ff02bfd9ff42d5e6ff56d5 ,
+                        0xe5ff00a5c7ff30c9deff95ecf4ff43c9e3ff15b0d4ff008daec0002e3d520000 ,
+                        0x002b000000340000002f00000027ffffff0000000001000000070000000e0000 ,
+                        0x00150000001b00000021000000270000001e008cadb55edff4ff45cbdfff00b0 ,
+                        0xcfff25d0e3ff31bbd5ff00b4d3ff1bd0e6ff62dfeeff2bb8d3ff01b1cfff54db ,
+                        0xeaff2abdd6ff00a7c9ff46d4e6ff60def3ff13a9caee006a89740000001b0000 ,
+                        0x002400000022ffffff00ffffff0000000001000000060000000c000000120000 ,
+                        0x001800000016003248371eafcdf664e0eeff17bad4ff01bed8ff31d0e4ff13b0 ,
+                        0xd0ff0fcce5ff3bdaedff59d3e7ff00a7c9ff31d1e4ff45c9deff00a5c7ff00bf ,
+                        0xd8ff0ec6dcff7ae1edff94edf8ff1db7d8ff0081a7970000001100000011ffff ,
+                        0xff00ffffff00ffffff00ffffff0000000002000000060000000b000000010081 ,
+                        0xa77145d2ebff3ed1e3ff08b8d4ff12cee5ff22c2dcff11bedaff1fd8efff56e1 ,
+                        0xf2ff21b2d0ff0dbfdaff4cd4e6ff0aa7c9ff00bbd5ff08c5dcff50d6e7ff51d5 ,
+                        0xe6ff2cb9d3ff2ab8d4ff4dd1ecff0a9ebfad003d5e07ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00049ec2b357def1ff12c3 ,
+                        0xdbff0cc1dcff1fd6edff13bbd9ff21d2ebff34e2f7ff3fcae3ff00adceff3dda ,
+                        0xedff21b3d0ff00b4d1ff01c4dbff46d4e5ff4fd1e3ff0caacaff0eb0ceff65db ,
+                        0xe9ffb4f5fbff3ed6f6ff0096bd97ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff000065990919accbe655ddeeff07c1dcff1bcfe7ff23d4 ,
+                        0xedff19c2dfff31e2f9ff36dff5ff0eaccdff23d1e8ff34c6deff00afceff00c3 ,
+                        0xdbff38d1e3ff46cbe0ff00a8c9ff1ebdd7ff80e5f0ff8feaf8ff32b8d5fc00a0 ,
+                        0xc59100a1c225ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff000084af2f2fbad6ff4cdbedff0ec9e3ff2adcf2ff25d1ebff29d2ecff3fed ,
+                        0xffff1cc2e0ff12bedcff36d7edff0eb4d2ff00c2daff28cde1ff3dc7ddff00aa ,
+                        0xcaff28c7dcff95ecf4ff75e0f5ff11a8cbcb0086b436ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000090ba5444ce ,
+                        0xe8ff44dbeeff1cd3ecff34e3faff29d1ebff3fe3faff3be0f7ff14bad9ff30dd ,
+                        0xf4ff1bc0dcff07c4ddff1dcce0ff31c3daff00adcdff2ecce0ff9deef7ff55ce ,
+                        0xe8ff0099c293001e6d06ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff000095bb7153d9f1ff40dff3ff2ce0 ,
+                        0xf7ff3be3faff38d6efff52ebffff29c7e3ff2ed7f1ff26d2ecff13c6e0ff1cd0 ,
+                        0xe6ff24c1d9ff00b2cfff2fcee1ff9aedf9ff3abdd9fb008fba64ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff0000a7c6795de0f7ff42e4f8ff3ae6feff43dff6ff52e3 ,
+                        0xf8ff49dcf3ff32d0eaff3ae2faff1fcce7ff20d4ebff1bc4dcff00b5d1ff30ce ,
+                        0xe1ff8eeaf8ff28b3d3ef0085b544ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff0000005b0a0000 ,
+                        0x515a0073a2a567f0ffff4cf1ffff44e6fdff53e2f7ff60e7f9ff44d5edff4be6 ,
+                        0xfcff30d9f2ff26d8efff19cbe4ff00bbd6ff35d0e2ff7ee6f7ff1aaccfe2007f ,
+                        0xaf2fffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00000068a20000a1ff000882ff386b ,
+                        0xa0ff6ee5f1ff65fdffff67ecfdff60e1f4ff5ae6f9ff48e5fbff31def6ff21d5 ,
+                        0xedff07c6e0ff3ed4e5ff6ae0f4ff10a8ccd40078a521ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff0000004126000081ff0000d5ff0000c8ff000098ff1b1f81ff5c92 ,
+                        0xb7ff8cf4fbff77fbffff5bebfeff42e6fcff28def6ff1dd4ebff56ddedff54d9 ,
+                        0xf1ff04a2c8c3006d9d14ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000000 ,
+                        0x0004001279dc00008fff0000bdff1717e3ff2320d6ff170f9cff2f3789ff69b0 ,
+                        0xcbff66fbffff40f1ffff46e3f7ff6ee7f7ff42ceeaff009dc4a4005e7e07ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff000091b61b00a5ca9e1fc0d8f32b87 ,
+                        0xb2ff05197eff09009eff3330e8ff5454ffff423edfff17108eff2f5093ff67c9 ,
+                        0xdfff63e7faff22b5d4f10096bf6fffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff000098c13102a5cbf82ed4efff41daeaff31e5f3ff49d9ebff3372 ,
+                        0xa6ff0f1384ff342bc7ff5b5affff4342f4ff150cafff060a83ff006da4a5008b ,
+                        0xb120ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00009f ,
+                        0xbf1700a3c99215b2d1f63ed3e9ff62e4f4ff6df3ffff75ffffff62cde0ff2a52 ,
+                        0x94ff13118eff2a22c7ff2323e0ff050292ff00002133ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000096 ,
+                        0xc321008eb7d930c0ddff79e9f7ff8ef6ffff83fcffff82ffffff66b3cdff0f2c ,
+                        0x83ff08088dff00006aacffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00003c73360a6099f00777 ,
+                        0xadff0794bcff49cae1ff90f2fdff9afaffff9bffffff16accad5000048340000 ,
+                        0x2805ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00003b7810065e95e22581b9ff116ca9ff0a68a3ff0077 ,
+                        0xaaff119fc3ff64e0f4ff8df9ffff0aa7c9bdffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00005489ab2f8ac2ff1e7fbaff086fadff1a78b2ff1066a0ff004b8253009b ,
+                        0xc07214b8dbf604a3c7b1ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff0000457e662c83baff3793 ,
+                        0xccff0975b8ff1178b7ff2986c0ff065b91d0ffffff00ffffff00008cb227009d ,
+                        0xc32effffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff0000316f281c6fa3f652a4d7ff107ec2ff0978beff288a ,
+                        0xc7ff2681b9ff004b835effffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000000 ,
+                        0x00020a5c90cd60abd9ff2389c9ff0a79bfff107ec2ff429bd3ff0e6397e4001a ,
+                        0x5308ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00004b80684d9ccdff3c97 ,
+                        0xd0ff0074bbff0b7cc1ff2f90ccff4195c9ff004b827cffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00116598c857a4d4ff1a6fa4ff2071a2ff0572 ,
+                        0xb6ff59a9dbff1d6fa1f2002b6316ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff001b6c9fd43c8dbfff7aa4bfff9bb9ccff1773acff59a8d9ff004f ,
+                        0x8698ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff000657 ,
+                        0x8e8b4b9ed1ff3f88b5ff3881afff5ea8d7ff1a6ea3fc00397227ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00003b6d14086099cf3387 ,
+                        0xbbff3b8bbdff196ea3dd00477d4effffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff000037792d0037742d0000 ,
+                        0x0004ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffffff00ffff ,
+                        0xff00ffffff00f0000000c0000000800000008000000080000000800000008000 ,
+                        0x0000c0000000f0000000ff000000fe000000fe00000cfe00001cfe00007cfe00 ,
+                        0x00fcf80001fcf80003fcf00007fcf0000ffce0003ffcc0007ffcc000fffcf001 ,
+                        0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
+                        0xfffc01fffffc01fffffc03fffffcc7fffffc
+                    End
+
+                    LayoutCachedLeft =7858
+                    LayoutCachedTop =255
+                    LayoutCachedWidth =8155
+                    LayoutCachedHeight =552
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    ThemeFontIndex =1
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                    Overlaps =1
+                End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =6236
+                    Top =4425
+                    Width =855
+                    Height =405
+                    FontSize =10
+                    FontWeight =700
+                    TabIndex =3
+                    ForeColor =16737792
+                    Name ="ComandoAnexos"
+                    Caption ="Anexos"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Ver los anexos de la  auditoría seleccionada"
+                    GUID = Begin
+                        0xd0484ed1e74af742b6bca57c9ea6a4f3
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =6236
+                    LayoutCachedTop =4425
+                    LayoutCachedWidth =7091
+                    LayoutCachedHeight =4830
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =16737792
+                    PressedForeColor =16737792
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                    Overlaps =1
+                End
+                Begin Label
+                    OldBorderStyle =0
+                    OverlapFlags =85
+                    TextAlign =3
+                    Left =450
+                    Top =261
+                    Width =735
+                    Height =297
+                    FontSize =10
+                    ForeColor =16737792
+                    Name ="Etiqueta86"
+                    Caption ="Año"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xec726c289a771e4db8a2f532b6fe8994
+                    End
+                    LayoutCachedLeft =450
+                    LayoutCachedTop =261
+                    LayoutCachedWidth =1185
+                    LayoutCachedHeight =558
+                End
+                Begin Label
+                    OldBorderStyle =0
+                    OverlapFlags =85
+                    TextAlign =3
+                    Left =5925
+                    Top =255
+                    Width =510
+                    Height =297
+                    FontSize =10
+                    ForeColor =16737792
+                    Name ="Etiqueta92"
+                    Caption ="Tipo"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0x0cccf6468cb14846bc9044ae03721999
+                    End
+                    LayoutCachedLeft =5925
+                    LayoutCachedTop =255
+                    LayoutCachedWidth =6435
+                    LayoutCachedHeight =552
+                End
+                Begin TextBox
+                    SpecialEffect =0
+                    OldBorderStyle =1
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =1247
+                    Top =243
+                    Width =1191
+                    Height =315
+                    FontSize =10
+                    TabIndex =5
+                    BackColor =16511723
+                    BorderColor =14136213
+                    ForeColor =4210752
+                    Name ="Año"
+                    FontName ="Segoe UI"
+                    OnKeyDown ="[Event Procedure]"
+                    GUID = Begin
+                        0xc87db6d34f3b3745a40e329ba19abf82
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =1247
+                    LayoutCachedTop =243
+                    LayoutCachedWidth =2438
+                    LayoutCachedHeight =558
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =450
+                    Top =4425
+                    Width =1395
+                    Height =390
+                    FontSize =10
+                    FontWeight =700
+                    ForeColor =16737792
+                    Name ="ComandoVerNC"
+                    Caption ="Ver registros"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Ver las NC de auditoria seleccionada"
+                    GUID = Begin
+                        0x6256f2ab2c7a804f90d7b2d985a5400e
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =450
+                    LayoutCachedTop =4425
+                    LayoutCachedWidth =1845
+                    LayoutCachedHeight =4815
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =16737792
+                    PressedForeColor =16737792
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                End
+                Begin Image
+                    Visible = NotDefault
+                    SizeMode =1
+                    Left =7764
+                    Top =675
+                    Width =391
+                    Height =390
+                    Name ="ImagenAnexo"
+                    OnClick ="[Event Procedure]"
+                    ControlTipText ="Anexo"
+                    Picture ="PDF_3Masa_16x16.png"
+                    HyperlinkAddress ="#"
+                    GUID = Begin
+                        0xa013e73ff00df24ea71e0b849e37d1c1
+                    End
+                    ImageData = Begin
+                        0x89504e470d0a1a0a0000000d49484452000000100000001008060000001ff3ff ,
+                        0x6100000183694343504943432070726f66696c65000028917d913d48c3401cc5 ,
+                        0x5f3fa4525a1ccc20e290a13ad945451c4b158b60a1b4155a7530b9f40b9a3424 ,
+                        0x292e8e826bc1c18fc5aa838bb3ae0eae8220f801e2ece0a4e82225fe2f29b488 ,
+                        0xf1e0b81fefee3deede01fe769da9663001a89a65645349b1505c1543af882088 ,
+                        0x28c2102466eae9dc621e9ee3eb1e3ebedec57996f7b93f475429990cf089c409 ,
+                        0xa61b16f106f1eca6a573de271658555288cf89270dba20f123d76597df38571c ,
+                        0xf6f34cc1c867e7890562b1d2c7721fb3aaa112cf10c71455a37c7fc16585f316 ,
+                        0x67b5de64dd7bf217464ada4a8eeb34c790c212d2c840848c266aa8c3429c568d ,
+                        0x141359da4f7af8471d7f865c32b96a60e45840032a24c70ffe07bfbb35cbd353 ,
+                        0x6e5224090cbcd8f6c73810da053a2ddbfe3eb6edce09107806aeb49ebfd106e6 ,
+                        0x3e496ff5b4d81130b40d5c5cf734790fb8dc01469e74c9901c2940d35f2e03ef ,
+                        0x67f44d4560f81608afb9bd75f771fa00e4a9abe51be0e01098a850f6bac7bb07 ,
+                        0xfb7bfbf74cb7bf1f514b72992d34258900000006624b474400ff00ff00ffa0bd ,
+                        0xa793000000097048597300000dd700000dd70142289b780000000774494d4507 ,
+                        0xe80c040d0b0f07c21e10000001324944415438cb95d3bf4b957114c7f1d7f93e ,
+                        0xea6244928a4338d866086dcd1141fe01fe030ec1bd24118410096d2d2d816473 ,
+                        0xff41a352d99043260d0a6d3ae59f1005d5f39c96829bf7c1cbf3193fe77cdec3 ,
+                        0xf91106d5cf0bc2beb4a85ddb58b115dffe19e5bf72e5ea39619892b6ade5c576 ,
+                        0x402d9ca7f018076a6ff5726a18305ad7bc8c077827ec5acb99b14ef1f4542faf ,
+                        0x48c742a5b613fa398787c2bc7409b7bb30433f3fe0a3f46944ef4da177d62cb8 ,
+                        0x61cb3a66851913f6b120358a5d2c08936a8fdaa863082245dec2a15f96715931 ,
+                        0x8d715c57d940dd0618dcc2bcf05df159f143fa2955a3665084c6932cd2732fe2 ,
+                        0x99c6a914f8aaf1467865334efc6e87855ebe178ea4bd11e3be83d561fb6e4eab ,
+                        0xdc57ccfe3dd5956e6b1cd4bd5cd238ea022867705d4f7be8994ef0a543fef51f ,
+                        0xb84253ebdef8f4550000000049454e44ae426082
+                    End
+
+                    LayoutCachedLeft =7764
+                    LayoutCachedTop =675
+                    LayoutCachedWidth =8155
+                    LayoutCachedHeight =1065
+                    TabIndex =10
+                End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =3840
+                    Top =4440
+                    Width =870
+                    Height =390
+                    FontSize =10
+                    FontWeight =700
+                    TabIndex =2
+                    ForeColor =16737792
+                    Name ="ComandoAltaNCAuditoria"
+                    Caption ="Alta NC"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Genera un nuevo registro NC de la auditoría seleccionada"
+                    GUID = Begin
+                        0x8b59403afb121d4494b859ef0d3331fa
+                    End
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =3840
+                    LayoutCachedTop =4440
+                    LayoutCachedWidth =4710
+                    LayoutCachedHeight =4830
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =16737792
+                    PressedForeColor =16737792
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                End
+            End
+        End
+        Begin FormFooter
+            Height =686
+            BackColor =16737792
+            Name ="PieDelFormulario"
+            GUID = Begin
+                0x1886e5109ae2b64fb06021cba21276e5
+            End
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            Begin
+                Begin CommandButton
+                    OverlapFlags =85
+                    Left =7577
+                    Top =45
+                    Width =578
+                    Height =578
+                    FontSize =11
+                    FontWeight =700
+                    ForeColor =4210752
+                    Name ="cmdSalir"
+                    Caption ="Salir"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Calibri"
+                    Picture ="Salir1_32x32.png"
+                    GUID = Begin
+                        0xdc953894e1aae5469b9a44a523ef2f52
+                    End
+                    GridlineColor =10921638
+                    ImageData = Begin
+                        0x89504e470d0a1a0a0000000d4948445200000020000000200806000000737a7a ,
+                        0xf4000000097048597300000ec400000ec401952b0e1b0000000774494d4507e8 ,
+                        0x0a140901370d7f44e70000057e4944415458859d976b6c545510c77f7376f76e ,
+                        0x77db422b0a253e1252d00f46a0e15115f1032f3184181f68a2418dd2d256904f ,
+                        0xfa8918633451e207a9b45b44938ac618014d7c40e25b836041a18d3581148dc4 ,
+                        0xc43e94a77dedeb8c1feebdedb677b7adfc939b3df7cc9e99ff9c336766ae3015 ,
+                        0x3c6d6762598c528d5085320f950a544b0110fa811e842e84768436a2729c57a5 ,
+                        0x7732d532a1f429bb0e433dca0a1c892140d67b2ca0395a0c10f27e01529ac4f0 ,
+                        0x35195a68361fff3f029bed5ca2341292bb1120e519cc8502514f43328f0e0344 ,
+                        0x3c795a3f67906dbc654e4d4ea0ceae25c27b3852ce5021deb8de66f44ba08f90 ,
+                        0x3c1c20988b1890d64ba4d8488bf9a43081cd7615510e2112263d8142f10864f5 ,
+                        0x469a4c170d7a8110656427581301542d69d6933007fd6933f2875abd9e88ec9b ,
+                        0xd0781828f21e03281150509591797fdbc7230d8818c2bc4fbdce0912086b3351 ,
+                        0xcaf21a0f79caadfec1b03631a4f5a4f40c50420d31e02cc3fa04433c4f568f13 ,
+                        0x069c02241c2945f50d7fcae5da60971395ef49311ad9301a68592ea2ba9dd7a5 ,
+                        0x09f1dc6bb0fb509a48d14194569acd3d23ebb6dad528afe04815c37988140143 ,
+                        0xba8684f9c227b09f98dc1f083a07c8e859b2ac25614eb1c95e4b9c1a94b5c012 ,
+                        0x5254d1279d54e8792274a37c87b2975de608cb35c402fd80a8dc17d0eb123848 ,
+                        0xc2ac139eb1250cd08d919231916c00d14186a9668fe9a4ced6e1b003474ac902 ,
+                        0x1920a3f3e9915fa9d03e623263244fa4f54d9a4c0df7aa61b61ec39145a4c6e9 ,
+                        0xb69a24c96cc3005544c719c7dbfa8cec608fe9a4de6ea4441220a50cc2883261 ,
+                        0x908fc4a228696008f79c8b6513f5f65d5726b558b56302d3024512c561b10116 ,
+                        0xe584e228c361fd1787d7d8624b116924e5790d6e6c1800b98306bb9410a5230e ,
+                        0x283000c4e511eaec1a12728214df0682520065a941991ff03e02580eb3532e61 ,
+                        0x7988386523c67d6400a115a40d241a085e05842ddecc81809359405868102a03 ,
+                        0x045cefda3caaabf366b9dc3aa079e4ee755ec27615447e74f3408edcd5596980 ,
+                        0x9979f33cfabb3bd63905d3acef693eb86baea1576751c459329a0a1010661994 ,
+                        0xe28012f78c2f7a1e96163432194212224c19e7e847c75d46977cb1410aa8578f ,
+                        0xaf5eb1799f8472950a9227418b6818e80f880440cabdb7cb93740df92180d50c ,
+                        0x96f30c310d875840aeda6f507a0311ea0a2bbdb7ae807c2a70d7f4d0227f1361 ,
+                        0x0e8e4402890ee931790db80172ab47e6d015ed4004507e0001c332c2e3e42100 ,
+                        0x3d6330740408b85766195bedd5f4cb0106b53b6f752b04c1bf053b01501e08f4 ,
+                        0x0a06b09c3464f93970cddc541927cdb3ec9524508b785e4d0603140343da48c2 ,
+                        0x1ca5dede8923b705cabc0221693314d1c1b05e70b7240749c0611b75b69a84f9 ,
+                        0x946136a0fa1771dc3a11c6ddc690377680386034433f2fd362b651a3310cbb03 ,
+                        0xc9ca4df503889ef0cb712b31792c5036234056fbb0aca7d91ca3418b09ebe358 ,
+                        0xee4299074c4731c000863f110ea3f20ebbe434353a8d22fd9088ac0cf4043160 ,
+                        0x50f793301b5c027576218e9c244bb02171704ba7f2224969648f5c9ef418b6d8 ,
+                        0x07819770646ec0b87f9449bd9d84393a1adff5f66d8ae55106f32834b8db9ed4 ,
+                        0x7f50bec27204e134ca390c592cd311e6202c465849446ec242def62e0e0cb8de ,
+                        0xfb7c5c3c69cb89d14e446ec8dbe7837bde7e205a46bf15fc2e19bc46a5c07ab7 ,
+                        0xc3eac1b08046d337960040832e20a4df1096f2822472e1af9e4ab28e0259ed27 ,
+                        0xc52a5a4c9b3f3d3603344b07695690d12ee2017a414c540d7349c6717bcb71c6 ,
+                        0x8304005a4c3b835493d4dd18b5c4207045a782108cac1da695344bc61bf7f915 ,
+                        0xc656bb10a845594f58ae2384ebb17ffee33f4e8d37ce0219ed46f80c61378de6 ,
+                        0xa74226a696e59fd30817f466a08a2cb72054021528252882d08fd00bfc86e117 ,
+                        0x2cedcc904e5e904923e93fbb2014d2251d42230000000049454e44ae426082
+                    End
+
+                    LayoutCachedLeft =7577
+                    LayoutCachedTop =45
+                    LayoutCachedWidth =8155
+                    LayoutCachedHeight =623
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    GridlineThemeColorIndex =1
+                    GridlineShade =65.0
+                    UseTheme =1
+                    Shape =1
+                    Gradient =12
+                    BackColor =14136213
+                    BackThemeColorIndex =4
+                    BackTint =60.0
+                    BorderColor =14136213
+                    BorderThemeColorIndex =4
+                    BorderTint =60.0
+                    ThemeFontIndex =1
+                    HoverColor =15060409
+                    HoverThemeColorIndex =4
+                    HoverTint =40.0
+                    PressedColor =9592887
+                    PressedThemeColorIndex =4
+                    PressedShade =75.0
+                    HoverForeColor =4210752
+                    HoverForeThemeColorIndex =0
+                    HoverForeTint =75.0
+                    PressedForeColor =4210752
+                    PressedForeThemeColorIndex =0
+                    PressedForeTint =75.0
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                End
+            End
+        End
+    End
+End
+CodeBehindForm
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+
+Private WithEvents m_FormAnexos As Form_FormAuditoriaDocumentos
+Attribute m_FormAnexos.VB_VarHelpID = -1
+
+Private m_AuditoriaSeleccionada As Auditoria
+Private m_AuditoriaOp As AuditoriaOperaciones
+
+Private WithEvents m_Form As Form_FormAuditoria
+Attribute m_Form.VB_VarHelpID = -1
+Private m_Error As String
+
+
+
+Private Sub Año_KeyDown(KeyCode As Integer, Shift As Integer)
+     On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    If KeyCode = vbKeyReturn Or KeyCode = 9 Then
+        Me.ComandoLimpiarAño.SetFocus
+        
+        Filtrar m_Error
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        
+        ' Si deseas evitar que Access realice la acción predeterminada de Enter,
+        ' puedes utilizar la siguiente línea:
+        KeyCode = 0
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al Año_KeyDown se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub cmdSalir_Click()
+    On Error Resume Next
+    DoCmd.Close acForm, Me.Name, acSaveNo
+End Sub
+
+
+
+Private Sub ComandoAltaNCAuditoria_Click()
+    
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    If EsTecnico = EnumSino.Sí Then
+        m_Error = "No tiene autorización para esa acción"
+        Err.Raise 1000
+    End If
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    
+    Set m_ObjAuditoriaActiva = m_AuditoriaSeleccionada
+   
+    
+    If FormularioAbierto("FormNCAuditoria") Then
+        DoCmd.Close acForm, "FormNCAuditoria", acSaveNo
+    End If
+    Set m_ObjNCAuditoriaActiva = New NCAuditoria
+    m_ObjNCAuditoriaActiva.IDAuditoria = m_ObjAuditoriaActiva.IDAuditoria
+    DoCmd.OpenForm "FormNCAuditoria"
+    
+  
+     VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+   Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoAltaNCAuditoria_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ComandoAnexos_Click()
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    Set m_ObjAuditoriaActiva = m_AuditoriaSeleccionada
+    If FormularioAbierto("FormAuditoriaDocumentos") Then
+        DoCmd.Close acForm, "FormAuditoriaDocumentos", acSaveNo
+    End If
+    DoCmd.OpenForm "FormAuditoriaDocumentos"
+    If FormularioAbierto("FormAuditoriaDocumentos") Then
+        Set m_FormAnexos = Forms("FormAuditoriaDocumentos")
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoAnexos_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+
+Private Sub ComandoEditar_Click()
+     On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    If EsTecnico = EnumSino.Sí Then
+        m_Error = "No tiene autorización para esa acción"
+        Err.Raise 1000
+    End If
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    Set m_ObjAuditoriaActiva = m_AuditoriaSeleccionada
+    If FormularioAbierto("FormAuditoria") Then
+        DoCmd.Close acForm, "FormAuditoria", acSaveNo
+    End If
+    DoCmd.OpenForm "FormAuditoria"
+    If FormularioAbierto("FormAuditoria") Then
+        Set m_Form = Forms("FormAuditoria")
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoEditar_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ComandoEliminar_Click()
+    
+    
+    
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    If EsTecnico = EnumSino.Sí Then
+        m_Error = "No tiene autorización para esa acción"
+        Err.Raise 1000
+    End If
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    
+    
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    pregunta = MsgBox("¿Desea eliminar definitivamente del sistema la auditoría seleccionada?", _
+                    vbExclamation + vbYesNo + vbDefaultButton2, "Eliminación/Deseliminacion")
+    If pregunta <> vbYes Then
+        
+        Exit Sub
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    Set m_AuditoriaOp = New AuditoriaOperaciones
+    With m_AuditoriaOp
+        Set .Auditoria = m_AuditoriaSeleccionada
+        .Eliminar m_Error
+        If m_Error <> "" Then
+            Err.Raise 100
+        End If
+    End With
+    Set m_AuditoriaOp = Nothing
+    
+    If FormularioAbierto("FormNCAuditoriaGestion") Then
+        Set m_ObjEntorno.ColAuditorias = Nothing
+        EstablecerComboAuditoriasNombres Forms("FormNCAuditoriaGestion").Controls("Auditoria"), m_Error
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+       
+
+    End If
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoEliminar_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+
+
+Public Function Filtrar(Optional ByRef p_Error As String) As String
+    
+    Dim m_Col As Scripting.Dictionary
+    Dim m_Audtoria As Auditoria
+    Dim m_ID As Variant
+    Dim lst As ListBox
+   
+    
+    On Error GoTo errores
+    Set m_AuditoriaSeleccionada = Nothing
+    Set m_ObjAuditoriaActiva = Nothing
+    
+    
+    Me.ComandoEditar.Enabled = False
+    Me.ComandoAnexos.Enabled = False
+    Me.ComandoEliminar.Enabled = False
+    Me.ComandoVerNC.Enabled = False
+    Me.ImagenAnexo.Visible = False
+    Me.ComandoAltaNCAuditoria.Enabled = False
+    Set lst = Me.ListaFiltrados
+    lst.RowSource = "ID;Nombre;FInicial;FFinal"
+    
+    
+    
+    Set m_Col = m_ObjEntorno.ColAuditorias
+    p_Error = m_ObjEntorno.Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
+    
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+    '"ID;Tipo;FInicial;FFinal"
+    For Each m_ID In m_Col
+        Set m_Audtoria = m_Col(m_ID)
+        With m_Audtoria
+            If Nz(Me.Año, "") <> "" Then
+                If CStr(Year(.FechaInicio)) <> Trim(Me.Año) Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.Tipo, "") <> "" Then
+                If .Tipo <> Me.Tipo Then
+                    GoTo siguiente
+                End If
+            End If
+            
+            lst.AddItem .IDAuditoria & ";" & .NombreAuditoria & ";" & .FechaInicio & ";" & .FechaFin
+
+        End With
+siguiente:
+        Set m_Audtoria = Nothing
+    Next
+    
+    If lst.ListCount = 1 Then
+        Exit Function
+    End If
+    lst.Selected(1) = True
+    ListaFiltrados_Click
+
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Filtrar ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+    End If
+   
+End Function
+
+
+
+Private Sub ComandoLimpiarAño_Click()
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    Me.Año = Null
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
+     VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoLimpiarAño_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ComandoLimpiarTipo_Click()
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    Me.Tipo = Null
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
+     VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoLimpiarTipo_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ComandoVerNC_Click()
+    Dim m_Form As Form
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    
+    If FormularioAbierto("FormNCAuditoriaGestion") Then
+        DoCmd.Close acForm, "FormNCAuditoriaGestion", acSaveNo
+    End If
+    DoCmd.OpenForm "FormNCAuditoriaGestion"
+    Set m_Form = Forms("FormNCAuditoriaGestion")
+    m_Form.Controls("Estado") = Null
+    m_Form.Controls("Auditoria") = m_AuditoriaSeleccionada.IDAuditoria
+    Form_FormNCAuditoriaGestion.ActualizarLista
+    With m_Form
+        
+    End With
+    
+     VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+   Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoVerNC_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub Form_Load()
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+    Ajustar Me
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Me.Caption = Me.lblTitulo1.Caption
+     VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+   Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al Form_Load se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ImagenAnexo_Click()
+    Dim m_Documento As DocumentoAuditoria
+    Dim m_ID As Variant
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+    
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_AuditoriaSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
+    End If
+    
+    If m_AuditoriaSeleccionada.Documentos Is Nothing Then
+        m_Error = "No parece tener anexos registrados"
+        Err.Raise 1000
+    End If
+    If m_AuditoriaSeleccionada.Documentos.count = 1 Then
+        For Each m_ID In m_AuditoriaSeleccionada.Documentos
+            Set m_Documento = m_AuditoriaSeleccionada.Documentos(m_ID)
+            AbrirEnLocal m_Documento.URLAnexo, m_Error
+            If m_Error <> "" Then
+                Err.Raise 1000
+            End If
+            Set m_Documento = Nothing
+            Exit For
+        Next
+    End If
+    
+    
+    
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ImagenAnexo_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ListaFiltrados_Click()
+    
+    
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    m_Error = ""
+   
+    Me.ComandoEditar.Enabled = False
+    Me.ComandoAnexos.Enabled = False
+    Me.ComandoEliminar.Enabled = False
+    Me.ComandoVerNC.Enabled = False
+    Me.ImagenAnexo.Visible = False
+    Me.ComandoAltaNCAuditoria.Enabled = False
+    If Nz(Me.ListaFiltrados.Column(0), "") = "" Then
+        Set m_AuditoriaSeleccionada = Nothing
+        VBA.DoEvents
+        DoCmd.Hourglass False
+        VBA.DoEvents
+        Exit Sub
+    End If
+    If m_AuditoriaSeleccionada Is Nothing Then
+        Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Me.ListaFiltrados.Column(0), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+    Else
+        If m_AuditoriaSeleccionada.IDAuditoria <> Me.ListaFiltrados.Column(0) Then
+            Set m_AuditoriaSeleccionada = constructor.getAuditoria(p_ID:=Me.ListaFiltrados.Column(0), p_Error:=m_Error)
+            If m_Error <> "" Then
+                Err.Raise 1000
+            End If
+        End If
+    End If
+    If m_AuditoriaSeleccionada Is Nothing Then
+        VBA.DoEvents
+        DoCmd.Hourglass False
+        VBA.DoEvents
+        Exit Sub
+    End If
+    If Not m_AuditoriaSeleccionada.Documentos Is Nothing Then
+        Me.ImagenAnexo.Visible = True
+    End If
+    Me.ComandoEditar.Enabled = True
+    Me.ComandoAnexos.Enabled = True
+    Me.ComandoEliminar.Enabled = True
+    Me.ComandoVerNC.Enabled = True
+    Me.ComandoAltaNCAuditoria.Enabled = True
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ListaFiltrados_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ListaFiltrados_DblClick(Cancel As Integer)
+    On Error Resume Next
+    Application.Echo False
+    If Me.ComandoEditar.Enabled = True Then
+        ComandoEditar_Click
+    End If
+    Application.Echo True
+End Sub
+
+
+
+Private Sub m_Form_Alta()
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If FormularioAbierto("FormNCAuditoriaGestion") Then
+        Set m_ObjEntorno.ColAuditorias = Nothing
+        EstablecerComboAuditoriasNombres Forms("FormNCAuditoriaGestion").Controls("Auditoria"), m_Error
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+       
+
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al m_Form_Alta se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub m_Form_Editada()
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If FormularioAbierto("FormNCAuditoriaGestion") Then
+        Set m_ObjEntorno.ColAuditorias = Nothing
+        EstablecerComboAuditoriasNombres Forms("FormNCAuditoriaGestion").Controls("Auditoria"), m_Error
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+       
+
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al m_Form_Editada se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+
+Private Sub m_FormAnexos_Alta()
+    
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+    Set m_AuditoriaSeleccionada = Nothing
+    ListaFiltrados_Click
+    
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al m_FormAnexos_Alta se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub m_FormAnexos_Eliminado()
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+    Set m_AuditoriaSeleccionada = Nothing
+    ListaFiltrados_Click
+    
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al m_FormAnexos_Eliminado se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub Tipo_AfterUpdate()
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    Filtrar m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al Tipo_AfterUpdate se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
