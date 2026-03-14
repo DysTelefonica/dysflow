@@ -1,0 +1,64 @@
+{
+  "name": "git-release-manager",
+  "version": "2.0.0",
+  "description": "GitHub release automation with structured changelog generation and CHANGELOG.md management. Language-agnostic, works with any project.",
+  "tags": ["git", "github", "release", "changelog", "versioning", "semver", "gh-cli", "keep-a-changelog", "conventional-commits"],
+  "compatibility": {
+    "shell": "PowerShell 5.1+",
+    "tools": ["git", "gh"],
+    "platform": ["windows", "linux", "macos"]
+  },
+  "triggers": [
+    "make a release", "create release", "crear release", "crear una release",
+    "generate changelog", "generar changelog", "update changelog", "actualizar changelog",
+    "tag version", "etiquetar versión", "publish release", "publicar release",
+    "cut a release", "release v", "new version", "nueva versión",
+    "subir versión", "bump version"
+  ],
+  "entry": "SKILL.md",
+  "scripts": {
+    "release": "release.ps1"
+  },
+  "parameters": {
+    "required": ["Version"],
+    "optional": ["SourceBranch", "TargetBranch", "NoMerge", "Draft", "Prerelease", "AssetPath", "NoEdit", "Editor"]
+  },
+  "changelog": {
+    "standard": "Keep a Changelog 1.1.0",
+    "commits": "Conventional Commits",
+    "file": "CHANGELOG.md",
+    "edit_flow": "mixed",
+    "categories": {
+      "breaking":    ["feat!:", "BREAKING CHANGE"],
+      "features":    ["feat:", "feature:"],
+      "fixes":       ["fix:", "bugfix:", "hotfix:"],
+      "performance": ["perf:"],
+      "refactor":    ["refactor:"],
+      "docs":        ["docs:", "doc:"],
+      "maintenance": ["chore:", "build:", "ci:"],
+      "other":       ["(uncategorized)"]
+    }
+  },
+  "examples": [
+    {
+      "description": "Standard release (develop → main, opens editor)",
+      "command": ".\\release.ps1 -Version v1.3.0"
+    },
+    {
+      "description": "Release without merge, skip editor",
+      "command": ".\\release.ps1 -Version v1.3.0 -NoMerge -NoEdit"
+    },
+    {
+      "description": "Pre-release from feature branch",
+      "command": ".\\release.ps1 -Version v2.0.0-beta.1 -SourceBranch feature/new-ui -Prerelease"
+    },
+    {
+      "description": "Draft release with attached asset",
+      "command": ".\\release.ps1 -Version v1.3.0 -Draft -AssetPath .\\dist\\app.zip"
+    },
+    {
+      "description": "Hotfix with explicit editor",
+      "command": ".\\release.ps1 -Version v1.2.1 -SourceBranch hotfix/fix-crash -Editor \"code --wait\""
+    }
+  ]
+}
