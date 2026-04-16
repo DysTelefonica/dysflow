@@ -508,4 +508,3 @@ Private Sub ListaDocumentos_DblClick(Cancel As Integer)
     On Error Resume Next
     If Me.ImagenAnexo.Visible = True Then ImagenAnexo_Click
 End Sub
-
