@@ -1,12 +1,3 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "Form_FormNCProyectoGestion"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = True
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
@@ -16,7 +7,6 @@ Public m_NCSeleccionada As NCProyecto
 Private m_ColFiltrado As Scripting.Dictionary
 Private m_Expediente As Expediente
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
-Attribute m_FormExpedientes.VB_VarHelpID = -1
 
 Private m_Error As String
 
@@ -1834,4 +1824,3 @@ errores:
         p_Error = "El método ActualizarDatosFiltrados ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
-

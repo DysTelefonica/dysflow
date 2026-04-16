@@ -1,12 +1,3 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "Form_FormNCProyectoAcciones"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = True
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
@@ -18,11 +9,8 @@ Public m_ARSeleccionada As ARProyecto
 Private m_UltimoOrden As String
 
 Private WithEvents m_FormAnexos As Form_FormARProyectoDocumentos
-Attribute m_FormAnexos.VB_VarHelpID = -1
 Private WithEvents m_FormAR As Form_FormNCProyectoAR
-Attribute m_FormAR.VB_VarHelpID = -1
 Private WithEvents m_FormAC As Form_FormNCProyectoAC
-Attribute m_FormAC.VB_VarHelpID = -1
 Private m_Error As String
 
 Private Sub ComandoACAlta_Click()
@@ -1467,4 +1455,3 @@ errores:
         p_Error = "El método EstablecerCombos ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
-

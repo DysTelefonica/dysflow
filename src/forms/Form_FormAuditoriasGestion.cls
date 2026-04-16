@@ -1,23 +1,12 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "Form_FormAuditoriasGestion"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = True
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
 Private WithEvents m_FormAnexos As Form_FormAuditoriaDocumentos
-Attribute m_FormAnexos.VB_VarHelpID = -1
 
 Private m_AuditoriaSeleccionada As Auditoria
 Private m_AuditoriaOp As AuditoriaOperaciones
 
 Private WithEvents m_Form As Form_FormAuditoria
-Attribute m_Form.VB_VarHelpID = -1
 Private m_Error As String
 
 

@@ -442,6 +442,7 @@ Public Function RegistrarDatosUnicos( _
         End If
         RegistrarLogProyecto "Alta de NC", , Me.nc, , p_Error
         
+        
        
             
         

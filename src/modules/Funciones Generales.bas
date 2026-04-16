@@ -1049,6 +1049,7 @@ Public Function RegistrarLogProyecto( _
     End If
     m_Col.Add m_LineaInicial
     For Each m_NombreCampo In p_Objeto.ColCampos
+        Debug.Print m_NombreCampo
         m_ValorActual = p_Objeto.getPropiedad(m_NombreCampo, p_Error)
         If p_Error <> "" Then
             Err.Raise 1000

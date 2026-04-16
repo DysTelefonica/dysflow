@@ -1,0 +1,1194 @@
+Version =21
+VersionRequired =20
+PublishOption =1
+Checksum =1894002352
+Begin Form
+    AutoResize = NotDefault
+    RecordSelectors = NotDefault
+    MaxButton = NotDefault
+    MinButton = NotDefault
+    ControlBox = NotDefault
+    AutoCenter = NotDefault
+    NavigationButtons = NotDefault
+    CloseButton = NotDefault
+    DividingLines = NotDefault
+    DefaultView =0
+    ScrollBars =0
+    ViewsAllowed =1
+    BorderStyle =3
+    PictureAlignment =2
+    DatasheetGridlinesBehavior =3
+    GridY =10
+    Width =13039
+    DatasheetFontHeight =11
+    ItemSuffix =67
+    Left =3420
+    Top =5250
+    Right =16455
+    Bottom =12045
+    DatasheetGridlinesColor =14806254
+    RecSrcDt = Begin
+        0x7bf11d65d99ee540
+    End
+    GUID = Begin
+        0xa4c29c2b6bf9b54b95f71e1fc3dc18d4
+    End
+    NameMap = Begin
+        0x0acc0e5500000000000000000000000000000000000000000c00000005000000 ,
+        0x0000000000000000000000000000
+    End
+    Caption ="Usuario conectado: Administrador ( Administrador )"
+    DatasheetFontName ="Calibri"
+    PrtMip = Begin
+        0x6801000068010000680100006801000000000000201c0000e010000001000000 ,
+        0x010000006801000000000000a10700000100000001000000
+    End
+    PrtDevMode = Begin
+        0x000000000000c8420000c842eeece10050c0e9612102000040d81ab0fb7f0000 ,
+        0x010403069c000c030f930100010009009a0b3408640001000700c80001000200 ,
+        0xc800020000004134000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000010000000000000001000000 ,
+        0x0200000001000000ffffffff0000000000000000000000000000000044494e55 ,
+        0x2200b0000c030000c1951cfb0000000000000000000000000000000000000000 ,
+        0x0000000000000000060000000100000000000000020001000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000100000000000000000000000000000000000000 ,
+        0x000000000000000000000000000000000000000000000000b0000000534d544a ,
+        0x000000001000a000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000
+    End
+    PrtDevNames = Begin
+        0x0800220052000100000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000005453303032000000000000000000
+    End
+    OnLoad ="[Event Procedure]"
+    AllowDatasheetView =0
+    FilterOnLoad =0
+    ShowPageMargins =0
+    DisplayOnSharePointSite =1
+    AllowLayoutView =0
+    DatasheetAlternateBackColor =15921906
+    DatasheetGridlinesColor12 =0
+    DatasheetBackThemeColorIndex =1
+    BorderThemeColorIndex =3
+    ThemeFontIndex =1
+    ForeThemeColorIndex =0
+    AlternateBackThemeColorIndex =1
+    AlternateBackShade =95.0
+    PrtDevModeW = Begin
+        0x000000000000000000000000000000000c000000000000001000000000000000 ,
+        0xb800000000000000000000000000000000000000000000004100000000000000 ,
+        0x01040306dc000c030f930100010009009a0b3408640001000700c80001000200 ,
+        0xc800020000004100340000000000000000000000000000000200000200000000 ,
+        0x4800000000000000b80000000000000000000000000000004100004100000000 ,
+        0x0100000000000000000000000000000000000000010000000000000001000000 ,
+        0x0200000001000000ffffffff0000000000000000000000000000000044494e55 ,
+        0x2200b0000c030000c1951cfb0000000000000000000000000000000000000000 ,
+        0x0000000000000000060000000100000000000000020001000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000100000000000000000000000000000000000000 ,
+        0x000000000000000000000000000000000000000000000000b0000000534d544a ,
+        0x000000001000a000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000
+    End
+    PrtDevNamesW = Begin
+        0x04001e004e000100000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000054005300 ,
+        0x300030003200000000000000000000000000000000000000
+    End
+    NoSaveCTIWhenDisabled =1
+    Begin
+        Begin Label
+            BackStyle =0
+            FontSize =11
+            BorderColor =8355711
+            ForeColor =8355711
+            FontName ="Calibri"
+            GridlineColor =10921638
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =0
+            BorderTint =50.0
+            ForeThemeColorIndex =0
+            ForeTint =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Rectangle
+            SpecialEffect =3
+            BackStyle =0
+            BorderLineStyle =0
+            Width =850
+            Height =850
+            BorderColor =10921638
+            GridlineColor =10921638
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Image
+            BackStyle =0
+            OldBorderStyle =0
+            BorderLineStyle =0
+            SizeMode =3
+            PictureAlignment =2
+            Width =1701
+            Height =1701
+            BorderColor =10921638
+            GridlineColor =10921638
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin CommandButton
+            Width =1701
+            Height =283
+            FontSize =11
+            FontWeight =400
+            ForeColor =4210752
+            FontName ="Calibri"
+            GridlineColor =10921638
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+            UseTheme =1
+            Shape =1
+            Gradient =12
+            BackColor =14136213
+            BackThemeColorIndex =4
+            BackTint =60.0
+            BorderLineStyle =0
+            BorderColor =14136213
+            BorderThemeColorIndex =4
+            BorderTint =60.0
+            ThemeFontIndex =1
+            HoverColor =15060409
+            HoverThemeColorIndex =4
+            HoverTint =40.0
+            PressedColor =9592887
+            PressedThemeColorIndex =4
+            PressedShade =75.0
+            HoverForeColor =4210752
+            HoverForeThemeColorIndex =0
+            HoverForeTint =75.0
+            PressedForeColor =4210752
+            PressedForeThemeColorIndex =0
+            PressedForeTint =75.0
+        End
+        Begin OptionGroup
+            SpecialEffect =3
+            BorderLineStyle =0
+            Width =1701
+            Height =1701
+            BorderColor =10921638
+            GridlineColor =10921638
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin TextBox
+            AddColon = NotDefault
+            FELineBreak = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            BorderColor =10921638
+            ForeColor =4210752
+            FontName ="Calibri"
+            AsianLineBreak =1
+            GridlineColor =10921638
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ThemeFontIndex =1
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin ListBox
+            BorderLineStyle =0
+            Width =1701
+            Height =1417
+            LabelX =-1701
+            FontSize =11
+            ForeColor =4210752
+            BorderColor =10921638
+            FontName ="Calibri"
+            GridlineColor =10921638
+            AllowValueListEdits =1
+            InheritValueList =1
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin ComboBox
+            AddColon = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            BorderColor =10921638
+            ForeColor =4138256
+            FontName ="Calibri"
+            GridlineColor =10921638
+            AllowValueListEdits =1
+            InheritValueList =1
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ForeThemeColorIndex =2
+            ForeShade =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Section
+            CanGrow = NotDefault
+            Height =6803
+            Name ="Detalle"
+            GUID = Begin
+                0x07fa48529c725040bdc35da42fd0106f
+            End
+            AlternateBackColor =15921906
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =11665
+                    Top =270
+                    Width =1176
+                    Height =297
+                    FontSize =10
+                    BackColor =16446961
+                    BorderColor =14136213
+                    Name ="FechaPrevistaControlEficacia"
+                    Format ="Short Date"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    GUID = Begin
+                        0x68dc2018a5e65f4791f3fce0cebc7778
+                    End
+
+                    LayoutCachedLeft =11665
+                    LayoutCachedTop =270
+                    LayoutCachedWidth =12841
+                    LayoutCachedHeight =567
+                    BackThemeColorIndex =-1
+                    BackTint =8.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ThemeFontIndex =-1
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =1
+                    Left =330
+                    Top =270
+                    Width =2655
+                    Height =297
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta254"
+                    Caption ="Requiere control de eficacia"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xb5daa6fa8b66bf4e9b4156e737e9a745
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =330
+                    LayoutCachedTop =270
+                    LayoutCachedWidth =2985
+                    LayoutCachedHeight =567
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =3
+                    Left =8325
+                    Top =270
+                    Width =3210
+                    Height =315
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta255"
+                    Caption ="Fecha prevista control de eficacia"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xbf0f115796fa3d4e949af1f7aa9b3928
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =8325
+                    LayoutCachedTop =270
+                    LayoutCachedWidth =11535
+                    LayoutCachedHeight =585
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin TextBox
+                    EnterKeyBehavior = NotDefault
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =340
+                    Top =1140
+                    Width =12501
+                    Height =1980
+                    FontSize =10
+                    TabIndex =1
+                    BackColor =16446961
+                    BorderColor =14136213
+                    Name ="ControlEficacia"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    GUID = Begin
+                        0x4506190c57aa6a4ca944415fa9467aed
+                    End
+
+                    LayoutCachedLeft =340
+                    LayoutCachedTop =1140
+                    LayoutCachedWidth =12841
+                    LayoutCachedHeight =3120
+                    BackThemeColorIndex =-1
+                    BackTint =8.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ThemeFontIndex =-1
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =1
+                    Left =330
+                    Top =735
+                    Width =1830
+                    Height =315
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta256"
+                    Caption ="Control de eficacia"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xf19e7869bbd24b40b7e361cd5e0ef467
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =330
+                    LayoutCachedTop =735
+                    LayoutCachedWidth =2160
+                    LayoutCachedHeight =1050
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin TextBox
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =2925
+                    Top =3330
+                    Width =1176
+                    Height =297
+                    FontSize =10
+                    TabIndex =2
+                    BackColor =16446961
+                    BorderColor =14136213
+                    Name ="FechaControlEficacia"
+                    Format ="Short Date"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    GUID = Begin
+                        0x56de16ae39788744b2359e11fae39158
+                    End
+
+                    LayoutCachedLeft =2925
+                    LayoutCachedTop =3330
+                    LayoutCachedWidth =4101
+                    LayoutCachedHeight =3627
+                    BackThemeColorIndex =-1
+                    BackTint =8.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ThemeFontIndex =-1
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =1
+                    Left =345
+                    Top =3330
+                    Width =2430
+                    Height =315
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta264"
+                    Caption ="Fecha control de eficacia"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0x5e0007cad1ab0b4aa4f2421c5ada751e
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =345
+                    LayoutCachedTop =3330
+                    LayoutCachedWidth =2775
+                    LayoutCachedHeight =3645
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin CommandButton
+                    TabStop = NotDefault
+                    OverlapFlags =85
+                    Left =11950
+                    Top =6300
+                    Width =885
+                    Height =390
+                    FontWeight =700
+                    TabIndex =5
+                    ForeColor =16737792
+                    Name ="ComandoGrabar"
+                    Caption ="Grabar"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Guardar"
+                    GUID = Begin
+                        0x166651fa7cc5e540a29186c00b22ffd1
+                    End
+
+                    LayoutCachedLeft =11950
+                    LayoutCachedTop =6300
+                    LayoutCachedWidth =12835
+                    LayoutCachedHeight =6690
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    ThemeFontIndex =-1
+                    HoverForeColor =16737792
+                    HoverForeThemeColorIndex =-1
+                    HoverForeTint =100.0
+                    PressedForeColor =16737792
+                    PressedForeThemeColorIndex =-1
+                    PressedForeTint =100.0
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                End
+                Begin TextBox
+                    EnterKeyBehavior = NotDefault
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =340
+                    Top =4155
+                    Width =12501
+                    Height =1980
+                    FontSize =10
+                    TabIndex =3
+                    BackColor =16446961
+                    BorderColor =14136213
+                    Name ="ResultadoControlEficacia"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    GUID = Begin
+                        0xd67146d783e4244caa57817fbf4e30fe
+                    End
+
+                    LayoutCachedLeft =340
+                    LayoutCachedTop =4155
+                    LayoutCachedWidth =12841
+                    LayoutCachedHeight =6135
+                    BackThemeColorIndex =-1
+                    BackTint =8.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ThemeFontIndex =-1
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =1
+                    Left =345
+                    Top =3705
+                    Width =1005
+                    Height =315
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta63"
+                    Caption ="Resultado"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0x7eedf33ac6976440a607a45e075645d9
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =345
+                    LayoutCachedTop =3705
+                    LayoutCachedWidth =1350
+                    LayoutCachedHeight =4020
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin ComboBox
+                    LimitToList = NotDefault
+                    RowSourceTypeInt =1
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    ListRows =2
+                    ListWidth =2106
+                    Left =1485
+                    Top =6390
+                    Width =2106
+                    Height =297
+                    FontSize =10
+                    TabIndex =4
+                    BackColor =16446961
+                    BorderColor =14136213
+                    ForeColor =4210752
+                    GUID = Begin
+                        0x1f0dd1333e96ec42af27a3fafd9016cc
+                    End
+                    Name ="ConformeControlEficacia"
+                    RowSourceType ="Value List"
+                    RowSource ="Sí;No"
+                    ColumnWidths ="1058"
+                    AfterUpdate ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    AllowValueListEdits =0
+                    InheritValueList =0
+
+                    LayoutCachedLeft =1485
+                    LayoutCachedTop =6390
+                    LayoutCachedWidth =3591
+                    LayoutCachedHeight =6687
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BackTint =8.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ForeThemeColorIndex =0
+                    ForeTint =75.0
+                    ForeShade =100.0
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =1
+                    Left =345
+                    Top =6393
+                    Width =1005
+                    Height =315
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =0
+                    ForeColor =16737792
+                    Name ="Etiqueta65"
+                    Caption ="Conforme"
+                    FontName ="Segoe UI"
+                    GUID = Begin
+                        0xbed320b86f488940850ab3231fcc1262
+                    End
+                    GridlineColor =0
+                    LayoutCachedLeft =345
+                    LayoutCachedTop =6393
+                    LayoutCachedWidth =1350
+                    LayoutCachedHeight =6708
+                    ThemeFontIndex =-1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderTint =100.0
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin TextBox
+                    Locked = NotDefault
+                    TabStop = NotDefault
+                    OverlapFlags =85
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =3231
+                    Top =270
+                    Width =1176
+                    Height =297
+                    FontSize =10
+                    TabIndex =6
+                    BackColor =15720403
+                    BorderColor =14136213
+                    Name ="RequiereControlEficacia"
+                    Format ="Short Date"
+                    FontName ="Segoe UI"
+                    Tag ="DATO"
+                    GUID = Begin
+                        0xfaf2c2b36e591142a6ab76b1eb9e4340
+                    End
+
+                    LayoutCachedLeft =3231
+                    LayoutCachedTop =270
+                    LayoutCachedWidth =4407
+                    LayoutCachedHeight =567
+                    BackThemeColorIndex =4
+                    BackTint =25.0
+                    BorderThemeColorIndex =-1
+                    BorderTint =60.0
+                    BorderShade =100.0
+                    ThemeFontIndex =-1
+                End
+            End
+        End
+    End
+End
+CodeBehindForm
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+
+Private m_NC As NCProyecto
+Private m_sEstadoAlInicio As EnumEstadoNC
+
+Private m_Error As String
+
+Public Function RellenarDatosObjeto(Optional ByRef p_Error As String) As String
+    
+    Dim ctl As Control
+    Dim m_Valor As String
+    
+    On Error GoTo errores
+    If m_ObjNCProyectoActiva Is Nothing Then
+        Set m_ObjNCProyectoActiva = New NCProyecto
+    End If
+    For Each ctl In Me.Controls
+        If InStr(1, Nz(ctl.Tag, ""), "DATO") <> 0 Then
+            m_ObjNCProyectoActiva.SetPropiedad ctl.Name, Nz(ctl.Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+            
+        End If
+    Next
+   
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método RellenarDatosObjeto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+Private Sub ComandoGrabar_Click()
+    Dim m_NCOp As NCProyectoOperaciones
+    Dim m_HaHabidoCambiosControlEficacia As Boolean
+    Dim m_HaHabidoCambiosResultadoControlEficacia As Boolean
+    Dim m_EstadoAlInicio As String
+    Dim m_Estado As String
+    On Error GoTo errores
+    
+   
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+    If EsTecnico = EnumSino.Sí Then
+        m_Error = "No tiene autorización para esa acción"
+        Err.Raise 1000
+    End If
+    m_HaHabidoCambiosControlEficacia = HaHabidoCambiosControlEficacia(m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    m_HaHabidoCambiosResultadoControlEficacia = HaHabidoCambiosResultadoControlEficacia(m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If m_HaHabidoCambiosControlEficacia = False And m_HaHabidoCambiosResultadoControlEficacia = False Then
+        m_Error = "No hay cambios que guardar"
+        Err.Raise 1000
+    End If
+    
+    RellenarDatosObjeto m_Error
+    If m_Error <> "" Then
+        Err.Raise 100
+    End If
+    m_EstadoAlInicio = m_ObjNCProyectoActiva.Estado
+    Set m_NCOp = New NCProyectoOperaciones
+    With m_NCOp
+        
+        Set .nc = m_ObjNCProyectoActiva
+        If Nz(Me.FechaPrevistaControlEficacia, "") <> "" Then
+            If m_HaHabidoCambiosControlEficacia Then
+                .RegistrarControlEficacia m_Error
+                If m_Error <> "" Then
+                     Set m_ObjNCProyectoActiva = constructor.getNCProyecto(p_IDNC:=m_ObjNCProyectoActiva.IDNoConformidad)
+                    Err.Raise 1000
+                End If
+            End If
+        Else
+            If Form_FormNCProyecto.m_NCAlInicio.FechaPrevistaControlEficacia <> "" Then
+                .EliminarResultadoControlEficacia m_Error
+                If m_Error <> "" Then
+                     Set m_ObjNCProyectoActiva = constructor.getNCProyecto(p_IDNC:=m_ObjNCProyectoActiva.IDNoConformidad)
+                    Err.Raise 1000
+                End If
+                GoTo fin
+                
+            End If
+        End If
+        
+        If Nz(Me.FechaControlEficacia, "") <> "" Then
+            If m_HaHabidoCambiosResultadoControlEficacia Then
+                .RegistrarResultadoControlEficacia m_Error
+                If m_Error <> "" Then
+                     Set m_ObjNCProyectoActiva = constructor.getNCProyecto(p_IDNC:=m_ObjNCProyectoActiva.IDNoConformidad)
+                    Err.Raise 1000
+                End If
+            End If
+           
+        Else
+            If Form_FormNCProyecto.m_NCAlInicio.FechaControlEficacia <> "" Then
+                .EliminarResultadoControlEficacia m_Error
+                If m_Error <> "" Then
+                     Set m_ObjNCProyectoActiva = constructor.getNCProyecto(p_IDNC:=m_ObjNCProyectoActiva.IDNoConformidad)
+                    Err.Raise 1000
+                End If
+            End If
+            
+        End If
+    End With
+    
+    
+fin:
+    Set Form_FormNCProyecto.m_NCAlInicio = constructor.getNCProyecto(p_IDNC:=m_ObjNCProyectoActiva.IDNoConformidad, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    With Form_FormNCProyecto.m_NCAlInicio
+        .FechaPrevistaControlEficacia = Nz(Me.FechaPrevistaControlEficacia, "")
+        .FechaControlEficacia = Nz(Me.FechaControlEficacia, "")
+        .ControlEficacia = Nz(Me.ControlEficacia, "")
+        .ResultadoControlEficacia = Nz(Me.ResultadoControlEficacia, "")
+        .ConformeControlEficacia = Nz(Me.ConformeControlEficacia, "")
+    End With
+    m_ObjNCProyectoActiva.EstadoGrabar
+    m_sEstadoAlInicio = m_ObjNCProyectoActiva.EstadoEnum
+    EstablecerDatos
+    
+    If Me.ConformeControlEficacia = "No" Then
+        If m_ObjNCProyectoActiva.RequiereControlEficaciaCalculado = EnumSino.Sí Then
+            pregunta = MsgBox("Al indicar que no es conforme se han de planificar nuevas acciones." & vbNewLine & _
+                        "¿Desea planificar una nueva acción?", vbExclamation + vbYesNo + vbDefaultButton1, "Nuevas acciones")
+            If pregunta = vbYes Then
+                Me.Parent.NavAcciones.SetFocus
+                Me.Parent.FrmDetalle.SourceObject = "FormNCProyectoAcciones"
+            End If
+        End If
+        
+    End If
+    m_Estado = m_ObjNCProyectoActiva.Estado
+   
+    If m_EstadoAlInicio <> "" Then
+        If m_EstadoAlInicio <> "Cerrada" Then
+            If m_Estado = "Cerrada" Then
+                pregunta = MsgBox("La NC de proyecto pasa a estar cerrada ", vbInformation, "Cierre de NC")
+            End If
+        Else
+            If m_EstadoAlInicio = "Cerrada" Then
+                If m_Estado <> "Cerrada" Then
+                    pregunta = MsgBox("La NC de proyecto ha dejado de estar cerrada ", vbInformation, "Reapertura de NC")
+                End If
+            End If
+        End If
+        If m_Estado <> m_EstadoAlInicio Then
+            If FormularioAbierto("FormNCProyectoGestion") Then
+                Form_FormNCProyectoGestion.ActualizarLineaLista
+            End If
+        End If
+    End If
+    
+    
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+   
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoGrabar_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Private Sub ConformeControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+End Sub
+
+Private Sub ControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+End Sub
+
+Private Sub FechaControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+End Sub
+
+Private Sub FechaPrevistaControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+
+End Sub
+
+Private Sub EstableceColorBordes()
+    On Error Resume Next
+    
+    
+    Me.FechaPrevistaControlEficacia.BorderColor = COLOR_BORDE_CAMPO_RELLENO
+    Me.FechaControlEficacia.BorderColor = COLOR_BORDE_CAMPO_RELLENO
+    Me.ControlEficacia.BorderColor = COLOR_BORDE_CAMPO_RELLENO
+    Me.ResultadoControlEficacia.BorderColor = COLOR_BORDE_CAMPO_RELLENO
+    Me.ConformeControlEficacia.BorderColor = COLOR_BORDE_CAMPO_RELLENO
+    
+    Me.FechaPrevistaControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_RELLENO
+    Me.FechaControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_RELLENO
+    Me.ControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_RELLENO
+    Me.ResultadoControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_RELLENO
+    Me.ConformeControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_RELLENO
+    
+    If m_sEstadoAlInicio = EnumEstadoNC.Cerrada Then
+        
+        Exit Sub
+    
+    End If
+    
+    With m_ObjNCProyectoActiva
+        
+        .FechaControlEficacia = Nz(Me.FechaControlEficacia, "")
+        .RequiereControlEficacia = Nz(Me.RequiereControlEficacia, "")
+        .FechaPrevistaControlEficacia = Nz(Me.FechaPrevistaControlEficacia, "")
+        .ControlEficacia = Nz(Me.ControlEficacia, "")
+        .ResultadoControlEficacia = Nz(Me.ResultadoControlEficacia, "")
+        .ConformeControlEficacia = Nz(Me.ConformeControlEficacia, "")
+        If .EficaciaOK = EnumSino.Sí Then
+            Me.Parent.Controls("NavControlEficacia").ForeColor = PESTAÑA_TODOS_DATOS_OK_SI
+        Else
+            Me.Parent.Controls("NavControlEficacia").ForeColor = PESTAÑA_TODOS_DATOS_OK_NO
+        End If
+    End With
+    If Not IsDate(Me.FechaPrevistaControlEficacia) Then
+        Me.FechaPrevistaControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+        Me.FechaPrevistaControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+    End If
+    If Nz(Me.ControlEficacia, "") = "" Then
+        Me.ControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+        Me.ControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+    End If
+    
+    
+    If IsDate(Me.FechaControlEficacia) Then
+        If Nz(Me.ResultadoControlEficacia, "") = "" Then
+            Me.ResultadoControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+            Me.ResultadoControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+        End If
+        If Nz(Me.ConformeControlEficacia, "") = "" Then
+            Me.ConformeControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+            Me.ConformeControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+        End If
+    Else
+        If Nz(Me.ResultadoControlEficacia, "") <> "" Then
+            Me.ResultadoControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+            Me.ResultadoControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+        End If
+        If Nz(Me.ConformeControlEficacia, "") <> "" Then
+            Me.ConformeControlEficacia.BorderColor = COLOR_BORDE_CAMPO_NORELLENO
+            Me.ConformeControlEficacia.BorderWidth = ANCHO_BORDE_CAMPO_NORELLENO
+        End If
+    End If
+    
+   
+End Sub
+
+Private Sub Form_Load()
+    On Error GoTo errores
+    
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+    EstablecerDatos m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
+    
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al Form_Load se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
+Public Function EstablecerDatos( _
+                                    Optional ByRef p_Error As String _
+                                    ) As String
+    On Error GoTo errores
+    If m_ObjNCProyectoActiva Is Nothing Then
+        m_Error = "El formulario se ha abierto con parámetros insuficentes"
+        Err.Raise 1000
+    End If
+    If m_ObjNCProyectoActiva.IDNoConformidad = "" Then
+        m_Error = "El formulario se ha abierto con parámetros insuficentes"
+        Err.Raise 1000
+    End If
+    
+    If m_ObjNCProyectoActiva.NCProyectoAsociada Is Nothing Then
+        m_sEstadoAlInicio = m_ObjNCProyectoActiva.EstadoCalculado
+        If EsTecnico <> EnumSino.Sí Then
+            Me.ComandoGrabar.Enabled = True
+        Else
+            Me.AllowEdits = False
+            Me.ComandoGrabar.Enabled = False
+        End If
+    Else
+        Me.AllowEdits = False
+        Me.ComandoGrabar.Enabled = False
+    End If
+    If m_ObjNCProyectoActiva.NCProyectoAsociada Is Nothing Then
+        Set m_NC = m_ObjNCProyectoActiva
+    Else
+        Set m_NC = m_ObjNCProyectoActiva.NCProyectoAsociada
+    End If
+    With m_NC
+        Me.RequiereControlEficacia = "Sí"
+        If .FechaPrevistaControlEficacia <> "" Then
+            Me.FechaPrevistaControlEficacia = .FechaPrevistaControlEficacia
+        End If
+        If .FechaControlEficacia <> "" Then
+            Me.FechaControlEficacia = .FechaControlEficacia
+        End If
+        If .ControlEficacia <> "" Then
+            Me.ControlEficacia = .ControlEficacia
+        End If
+        If .ResultadoControlEficacia <> "" Then
+            Me.ResultadoControlEficacia = .ResultadoControlEficacia
+        End If
+        If .ConformeControlEficacia <> "" Then
+            Me.ConformeControlEficacia = .ConformeControlEficacia
+        End If
+    End With
+    If EsTecnico <> EnumSino.Sí Then
+        EstableceColorBordes
+    End If
+    
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método EstablecerDatos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Private Sub RequiereControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+End Sub
+Private Function HaHabidoCambiosControlEficacia(Optional ByRef p_Error As String) As Boolean
+    
+    On Error GoTo errores
+    If Form_FormNCProyecto.m_NCAlInicio Is Nothing Then
+        HaHabidoCambiosControlEficacia = True
+        Exit Function
+    End If
+    With Form_FormNCProyecto.m_NCAlInicio
+        
+        
+        If .FechaPrevistaControlEficacia <> Nz(Me.FechaPrevistaControlEficacia, "") Then
+            HaHabidoCambiosControlEficacia = True
+            Exit Function
+        End If
+        
+        If .ControlEficacia <> Nz(Me.ControlEficacia, "") Then
+            HaHabidoCambiosControlEficacia = True
+            Exit Function
+        End If
+        
+    End With
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método HaHabidoCambiosControlEficacia ha devuelto el error: " & Err.Description
+    End If
+End Function
+Private Function HaHabidoCambiosResultadoControlEficacia(Optional ByRef p_Error As String) As Boolean
+    
+    On Error GoTo errores
+    If Form_FormNCProyecto.m_NCAlInicio Is Nothing Then
+        HaHabidoCambiosResultadoControlEficacia = True
+        Exit Function
+    End If
+    With Form_FormNCProyecto.m_NCAlInicio
+        
+        
+       
+        If .ResultadoControlEficacia <> Nz(Me.ResultadoControlEficacia, "") Then
+            HaHabidoCambiosResultadoControlEficacia = True
+            Exit Function
+        End If
+        If .ConformeControlEficacia <> Nz(Me.ConformeControlEficacia, "") Then
+            HaHabidoCambiosResultadoControlEficacia = True
+            Exit Function
+        End If
+    End With
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método HaHabidoCambiosResultadoControlEficacia ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Private Sub ResultadoControlEficacia_AfterUpdate()
+    On Error Resume Next
+    
+    If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.Sí Then
+        EstableceColorBordes
+        
+    End If
+End Sub
