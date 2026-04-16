@@ -431,12 +431,16 @@ Public Function RegistrarDatosUnicos( _
             m_EstadoAlFinal = Me.nc.Estado
             rcdDatos.Fields("Estado") = Me.nc.Estado
         rcdDatos.Update
-        ' Actualizar Caché
-        CacheNCProyecto.ActualizarCacheNC Me.nc, "*", p_Error
-        RegistrarLogProyecto "Alta de NC", , Me.nc, , p_Error
-        If p_Error <> "" Then
-            Err.Raise 1000
+       ' Actualizar Caché
+        If AplicarCache Then
+        
+        
+            CacheNCProyecto.ActualizarCacheNC Me.nc, "*", p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
         End If
+        RegistrarLogProyecto "Alta de NC", , Me.nc, , p_Error
         
        
             
