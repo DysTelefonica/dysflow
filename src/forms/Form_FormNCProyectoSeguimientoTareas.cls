@@ -1,12 +1,3 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "Form_FormNCProyectoSeguimientoTareas"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = True
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
@@ -15,7 +6,6 @@ Option Explicit
 Public m_ARProyectoSeleccionado As ARProyecto
 
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
-Attribute m_FormExpedientes.VB_VarHelpID = -1
 Private m_Error As String
 
 
@@ -605,5 +595,4 @@ errores:
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
 End Sub
-
 

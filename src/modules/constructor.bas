@@ -6035,6 +6035,67 @@ Public Function getNCAuditorias( _
 
 
 
+    ' ============================================
+    ' MÉTODOS DE CACHÉ PARA VIEWMODELS (Cherry-pick de cache-plan002)
+    ' ============================================
+
+    Public Function getNCsFiltradosVM( _
+                            Optional ByRef p_Error As String _
+                            ) As Collection
+
+        Dim colVM As Collection
+        
+        On Error GoTo errores
+        p_Error = ""
+        
+        Set colVM = CacheNCProyecto.GetListVM(p_Error)
+        If p_Error <> "" Then
+            Set getNCsFiltradosVM = Nothing
+            Exit Function
+        End If
+        
+        Set getNCsFiltradosVM = colVM
+        Exit Function
+        
+    errores:
+        If Err.Number <> 1000 Then
+            p_Error = "El método getNCsFiltradosVM ha devuelto el error: " & Err.Description
+        End If
+        Set getNCsFiltradosVM = Nothing
+    End Function
+
+    Public Function getNCProyectoDetailVM( _
+                                    Optional p_IDNC As Long, _
+                                    Optional ByRef p_Error As String _
+                                    ) As NCProyectoDetailVM
+
+        Dim vm As NCProyectoDetailVM
+        
+        On Error GoTo errores
+        p_Error = ""
+        
+        Set vm = New NCProyectoDetailVM
+        
+        If p_IDNC > 0 Then
+            If Not vm.CargarPorID(p_IDNC, p_Error) Then
+                If p_Error <> "" Then
+                    Err.Raise 1000, "getNCProyectoDetailVM", p_Error
+                End If
+                Set getNCProyectoDetailVM = Nothing
+                Exit Function
+            End If
+        End If
+        
+        Set getNCProyectoDetailVM = vm
+        Exit Function
+        
+    errores:
+        If Err.Number <> 1000 Then
+            p_Error = "El método getNCProyectoDetailVM ha devuelto el error: " & Err.Description
+        End If
+        Set getNCProyectoDetailVM = Nothing
+    End Function
+
     Exit Function
 
 errores:

@@ -1,17 +1,7 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "Form_FormNCAuditoriaAR"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = True
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
 Private WithEvents m_FormAnexos As Form_FormARAuditoriaDocumentos
-Attribute m_FormAnexos.VB_VarHelpID = -1
 Public Event AltaAnexo()
 Public Event EliminadoAnexo()
 Public Event Alta(p_EstadoAlInicio As String)
@@ -661,4 +651,3 @@ errores:
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
 End Sub
-
