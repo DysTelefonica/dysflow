@@ -117,7 +117,7 @@ Public Function Registrar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     Dim m_RepOP As ReplanificacionesAuditoriaOperaciones
@@ -467,7 +467,7 @@ Public Function Replanificar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_RepOP As ReplanificacionesAuditoriaOperaciones
     Dim m_Rep As ReplanificacionesAuditoria
@@ -524,7 +524,7 @@ Public Function RegistrarNAccion( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -570,7 +570,7 @@ Public Function RegistrarResponsable( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     

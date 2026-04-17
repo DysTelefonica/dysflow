@@ -90,7 +90,7 @@ End Property
 
 Public Function Registrar(Optional ByRef p_Error As String) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
      On Error GoTo errores
     
     Me.Error = ""

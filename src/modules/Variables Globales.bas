@@ -99,9 +99,9 @@ Public EsTecnico As EnumSino
 Public EsCalidad As EnumSino
 Public m_ObjUsuarioConectado As usuario
 Public m_ObjUsuarioConectadoInicialmente As usuario
-Public wks As dao.Workspace
-Private db As dao.Database
-Private db1 As dao.Database
+Public wks As DAO.Workspace
+Private db As DAO.Database
+Private db1 As DAO.Database
 Public Const ColorEnlacePosible As Long = 16737792
 Public Const ColorEnlaceNoPosible As Long = 12566463
 
@@ -140,7 +140,7 @@ Public m_ColFiltradoTareasNCProyectos As Scripting.Dictionary
     
 Public Function getdb( _
                         Optional ByRef p_Error As String _
-                        ) As dao.Database
+                        ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
@@ -166,7 +166,7 @@ errores:
 End Function
 Public Function getdbNCPruebas( _
                         Optional ByRef p_Error As String _
-                        ) As dao.Database
+                        ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
@@ -185,7 +185,7 @@ errores:
 End Function
 Public Function getdbNCProduccion( _
                                     Optional ByRef p_Error As String _
-                                    ) As dao.Database
+                                    ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
@@ -204,7 +204,7 @@ errores:
 End Function
 Public Function getdbLanzadera( _
                                 Optional ByRef p_Error As String _
-                                ) As dao.Database
+                                ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
@@ -233,7 +233,7 @@ End Function
 
 Public Function getdbCorreo( _
                                 Optional ByRef p_Error As String _
-                                ) As dao.Database
+                                ) As DAO.Database
     
     Dim m_URL As String
         
@@ -264,7 +264,7 @@ errores:
         p_Error = "El método getdbCorreo ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
-Public Function getdbExpedientes(Optional ByRef p_Error As String) As dao.Database
+Public Function getdbExpedientes(Optional ByRef p_Error As String) As DAO.Database
     Dim m_URL As String
     On Error GoTo errores
    
@@ -286,7 +286,7 @@ errores:
     End If
 End Function
 
-Public Function getdbRiesgos(Optional ByRef p_Error As String) As dao.Database
+Public Function getdbRiesgos(Optional ByRef p_Error As String) As DAO.Database
     Dim m_URL As String
     On Error GoTo errores
    

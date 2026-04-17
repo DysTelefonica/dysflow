@@ -1,3 +1,4 @@
+Attribute VB_Name = "Test_NCProyectoDetailVM"
 Option Compare Database
 Option Explicit
 

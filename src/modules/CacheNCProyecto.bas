@@ -29,10 +29,74 @@ Public Enum EnumOperacionCache
     Insertar = 3
 End Enum
 
-Private m_Db As dao.Database
+Private m_Db As DAO.Database
 Private m_Transacciones As Collection
 Private Const NOMBRE_TABLA_CACHE As String = "TbCacheNCProyecto"
 Private Const NOMBRE_TABLA_LOG As String = "TbLogCache"
+Private Const CAMPO_CACHE_HABILITADA As String = "CacheHabilitada"
+
+' ============================================
+' KILL-SWITCH DE CACHÉ
+' ============================================
+' Lee/escribe el flag de habilitación de caché desde TbConfiguracion.
+' Si la tabla o el registro no existen, devuelve False (caché desactivada por defecto).
+
+Public Function IsCacheEnabled() As Boolean
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+    Dim SQL As String
+    
+    On Error GoTo errores
+    IsCacheEnabled = False
+    
+    Set db = CurrentDb
+    SQL = "SELECT " & CAMPO_CACHE_HABILITADA & " FROM TbConfiguracion WHERE ID = 1"
+    Set rs = db.OpenRecordset(SQL, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        If Not IsNull(rs.Fields(CAMPO_CACHE_HABILITADA).Value) Then
+            IsCacheEnabled = (rs.Fields(CAMPO_CACHE_HABILITADA).Value = True)
+        End If
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+    Exit Function
+    
+errores:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+    IsCacheEnabled = False  ' Fail-safe: si hay error, cache desactivada
+End Function
+
+Public Function SetCacheEnabled(ByVal p_Enabled As Boolean, Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim SQL As String
+    
+    On Error GoTo errores
+    p_Error = ""
+    SetCacheEnabled = False
+    
+    Set db = CurrentDb
+    SQL = "UPDATE TbConfiguracion SET " & CAMPO_CACHE_HABILITADA & " = " & IIf(p_Enabled, "-1", "0") & " WHERE ID = 1"
+    db.Execute SQL, dbFailOnError
+    
+    SetCacheEnabled = True
+    Set db = Nothing
+    Exit Function
+    
+errores:
+    p_Error = "SetCacheEnabled: " & Err.Description
+    Set db = Nothing
+End Function
+
+' Alias para los tests
+Public Function CacheConfig_SetEnabled(ByVal p_Enabled As Boolean, Optional ByRef p_Error As String) As Boolean
+    CacheConfig_SetEnabled = SetCacheEnabled(p_Enabled, p_Error)
+End Function
 
 ' ============================================
 ' FUNCIONES PÚBLICAS PRINCIPALES
@@ -102,8 +166,8 @@ Public Function ObtenerNCDesdeCache( _
     Optional ByRef p_Error As String _
 ) As NCProyecto
     
-    Dim rcd As dao.Recordset
-    Dim sql As String
+    Dim rcd As DAO.Recordset
+    Dim SQL As String
     Dim nc As NCProyecto
     Dim jsonNC As String
     Dim jsonACs As String
@@ -116,10 +180,10 @@ Public Function ObtenerNCDesdeCache( _
     p_Error = ""
     
     ' Consultar caché
-    sql = "SELECT * FROM " & NOMBRE_TABLA_CACHE & " " & _
+    SQL = "SELECT * FROM " & NOMBRE_TABLA_CACHE & " " & _
            "WHERE IDNoConformidad=" & p_IDNC & " AND CacheValida=True;"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     If rcd.EOF Then
         rcd.Close
@@ -203,15 +267,15 @@ Private Function CacheExiste( _
     p_IDNC As String _
 ) As Boolean
     
-    Dim rcd As dao.Recordset
-    Dim sql As String
+    Dim rcd As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
-    sql = "SELECT IDNoConformidad FROM " & NOMBRE_TABLA_CACHE & " " & _
+    SQL = "SELECT IDNoConformidad FROM " & NOMBRE_TABLA_CACHE & " " & _
            "WHERE IDNoConformidad=" & p_IDNC & ";"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     CacheExiste = Not rcd.EOF
     rcd.Close
     Set rcd = Nothing
@@ -226,15 +290,15 @@ Private Function CacheValida( _
     p_IDNC As String _
 ) As Boolean
     
-    Dim rcd As dao.Recordset
-    Dim sql As String
+    Dim rcd As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
-    sql = "SELECT CacheValida FROM " & NOMBRE_TABLA_CACHE & " " & _
+    SQL = "SELECT CacheValida FROM " & NOMBRE_TABLA_CACHE & " " & _
            "WHERE IDNoConformidad=" & p_IDNC & ";"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     If rcd.EOF Then
         CacheValida = False
@@ -259,7 +323,7 @@ Public Function GenerarCacheCompleto( _
     Dim inicio As Long
     Dim jsonNC As String, jsonACs As String, jsonARs As String
     Dim jsonReplanif As String, jsonRiesgos As String
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim tamanioBytes As Long
     Dim usuario As String
     Dim idLong As Long
@@ -370,9 +434,9 @@ Public Function InvalidarCache( _
     Optional ByRef p_Error As String _
 ) As Boolean
     
-    Dim sql As String
+    Dim SQL As String
     Dim usuario As String
-    Dim qdf As dao.QueryDef
+    Dim qdf As DAO.QueryDef
     
     On Error GoTo errores
     
@@ -381,7 +445,7 @@ Public Function InvalidarCache( _
     usuario = ObtenerUsuarioConectado()
     
     Set qdf = getdb().CreateQueryDef("")
-    qdf.sql = "UPDATE " & NOMBRE_TABLA_CACHE & " SET CacheValida=False WHERE IDNoConformidad=[pIDNC];"
+    qdf.SQL = "UPDATE " & NOMBRE_TABLA_CACHE & " SET CacheValida=False WHERE IDNoConformidad=[pIDNC];"
     qdf.Parameters("pIDNC") = p_IDNC
     qdf.Execute
     qdf.Close
@@ -403,9 +467,9 @@ Public Function BorrarCache( _
     Optional ByRef p_Error As String _
 ) As Boolean
     
-    Dim sql As String
+    Dim SQL As String
     Dim usuario As String
-    Dim qdf As dao.QueryDef
+    Dim qdf As DAO.QueryDef
     
     On Error GoTo errores
     
@@ -414,7 +478,7 @@ Public Function BorrarCache( _
     usuario = ObtenerUsuarioConectado()
     
     Set qdf = getdb().CreateQueryDef("")
-    qdf.sql = "DELETE FROM " & NOMBRE_TABLA_CACHE & " WHERE IDNoConformidad=[pIDNC];"
+    qdf.SQL = "DELETE FROM " & NOMBRE_TABLA_CACHE & " WHERE IDNoConformidad=[pIDNC];"
     qdf.Parameters("pIDNC") = p_IDNC
     qdf.Execute
     qdf.Close
@@ -437,7 +501,7 @@ Public Function ActualizarCacheNC( _
     Optional ByRef p_Error As String _
 ) As Boolean
     
-    Dim sql As String
+    Dim SQL As String
     Dim jsonNC As String
     
     On Error GoTo errores
@@ -712,9 +776,9 @@ Public Function RollbackTransaccionCache( _
     
     ' Si originalmente era válido, restaurar validez
     If transInfo("InvalidadoOriginal") = True Then
-        Dim qdf As dao.QueryDef
+        Dim qdf As DAO.QueryDef
         Set qdf = getdb().CreateQueryDef("")
-        qdf.sql = "UPDATE " & NOMBRE_TABLA_CACHE & " SET CacheValida=True WHERE IDNoConformidad=[pIDNC];"
+        qdf.SQL = "UPDATE " & NOMBRE_TABLA_CACHE & " SET CacheValida=True WHERE IDNoConformidad=[pIDNC];"
         qdf.Parameters("pIDNC") = transInfo("IDNC")
         qdf.Execute
         qdf.Close
@@ -745,18 +809,18 @@ Private Function GenerarJSONNC( _
                             ) As String
     
     Dim nc As NCProyecto
-    Dim sql As String
-    Dim rcd As dao.Recordset
+    Dim SQL As String
+    Dim rcd As DAO.Recordset
     Dim campo As Variant
     Dim dictNC As Scripting.Dictionary
     
     On Error GoTo errores
     
     ' Obtener NC desde BD
-    sql = "SELECT * FROM TbNoConformidades " & _
+    SQL = "SELECT * FROM TbNoConformidades " & _
            "WHERE IDNoConformidad=" & p_IDNC & ";"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     If rcd.EOF Then
         rcd.Close
@@ -794,8 +858,8 @@ Private Function GenerarJSONACs( _
                                 ByRef p_Error As String _
                             ) As String
     
-    Dim sql As String
-    Dim rcd As dao.Recordset
+    Dim SQL As String
+    Dim rcd As DAO.Recordset
     Dim AC As ACProyecto
     Dim col As Scripting.Dictionary
     Dim dictAC As Scripting.Dictionary
@@ -804,11 +868,11 @@ Private Function GenerarJSONACs( _
     On Error GoTo errores
     
     ' Obtener ACs desde BD
-    sql = "SELECT * FROM TbNCAccionCorrectivas " & _
+    SQL = "SELECT * FROM TbNCAccionCorrectivas " & _
            "WHERE IDNoConformidad=" & p_IDNC & " " & _
            "ORDER BY IdAccionCorrectiva;"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -849,8 +913,8 @@ Private Function GenerarJSONARs( _
     ByRef p_Error As String _
 ) As String
     
-    Dim sql As String
-    Dim rcd As dao.Recordset
+    Dim SQL As String
+    Dim rcd As DAO.Recordset
     Dim AR As ARProyecto
     Dim col As Scripting.Dictionary
     Dim dictARs As Scripting.Dictionary
@@ -860,13 +924,13 @@ Private Function GenerarJSONARs( _
     On Error GoTo errores
     
     ' Obtener ARs desde BD (unidas con ACs)
-    sql = "SELECT TbNCAccionesRealizadas.* " & _
+    SQL = "SELECT TbNCAccionesRealizadas.* " & _
            "FROM TbNCAccionesRealizadas INNER JOIN TbNCAccionCorrectivas " & _
            "ON TbNCAccionesRealizadas.IdAccionCorrectiva = TbNCAccionCorrectivas.IdAccionCorrectiva " & _
            "WHERE TbNCAccionCorrectivas.IDNoConformidad=" & p_IDNC & " " & _
            "ORDER BY TbNCAccionesRealizadas.IdAccionCorrectiva, TbNCAccionesRealizadas.IDAccionRealizada;"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -920,8 +984,8 @@ Private Function GenerarJSONReplanificaciones( _
     ByRef p_Error As String _
 ) As String
     
-    Dim sql As String
-    Dim rcd As dao.Recordset
+    Dim SQL As String
+    Dim rcd As DAO.Recordset
     Dim replanif As ReplanificacionesProyecto
     Dim col As Scripting.Dictionary
     Dim dictReplanif As Scripting.Dictionary
@@ -930,11 +994,11 @@ Private Function GenerarJSONReplanificaciones( _
     On Error GoTo errores
     
     ' Obtener Replanificaciones desde BD
-    sql = "SELECT * FROM TbReplanificacionesProyecto " & _
+    SQL = "SELECT * FROM TbReplanificacionesProyecto " & _
            "WHERE IDNoConformidad=" & p_IDNC & " " & _
            "ORDER BY IDReplanificacion;"
     
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -975,8 +1039,8 @@ Private Function GenerarJSONRiesgos( _
     ByRef p_Error As String _
 ) As String
     
-    Dim sql As String
-    Dim rcd As dao.Recordset
+    Dim SQL As String
+    Dim rcd As DAO.Recordset
     Dim riesgo As riesgo
     Dim col As Scripting.Dictionary
     Dim dictRiesgo As Scripting.Dictionary
@@ -986,12 +1050,12 @@ Private Function GenerarJSONRiesgos( _
     
     ' Obtener Riesgos asociados a la NC
     ' Basado en RiesgoRepositorio.GetRiesgosAsociados
-    sql = "SELECT R.* FROM TbRiesgos AS R " & _
+    SQL = "SELECT R.* FROM TbRiesgos AS R " & _
           "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
           "WHERE L.IDNC = " & p_IDNC
     
     ' Usamos getdbRiesgos() para acceder a la BD de riesgos
-    Set rcd = getdbRiesgos().OpenRecordset(sql)
+    Set rcd = getdbRiesgos().OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -1274,6 +1338,397 @@ errores:
 End Function
 
 ' ============================================
+' MÉTODOS DE LISTADO CON FILTROS (Spec-003)
+' ============================================
+
+' Obtiene listado filtrado de NCs como ViewModels (ListItem)
+' Retorna Collection de NCProyectoListItemVM
+Public Function GetListadoFiltradoSQL( _
+                                Optional ByVal p_Codigo As String = "", _
+                                Optional ByVal p_IDExpediente As Long = 0, _
+                                Optional ByVal p_IDTipo As Long = 0, _
+                                Optional ByVal p_Estado As String = "", _
+                                Optional ByVal p_Descripcion As String = "", _
+                                Optional ByVal p_Notas As String = "", _
+                                Optional ByVal p_RequiereCE As String = "", _
+                                Optional ByVal p_ControlEficacia As String = "", _
+                                Optional ByVal p_ResponsableCalidad As String = "", _
+                                Optional ByVal p_RegistrosCerrados As String = "", _
+                                Optional ByVal p_ResponsableTelefonica As String = "", _
+                                Optional ByVal p_Google As String = "", _
+                                Optional ByRef p_Error As String _
+                            ) As Collection
+
+    Dim rs As dao.Recordset
+    Dim SQL As String
+    Dim col As Collection
+    Dim vm As NCProyectoListItemVM
+    Dim filtros As String
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    Set col = New Collection
+    
+    ' Verificar kill-switch (Spec-010)
+    If Not IsCacheEnabled() Then
+        Set GetListadoFiltradoSQL = col
+        Exit Function
+    End If
+    
+    ' Construir WHERE dinámico
+    SQL = "SELECT n.IDNoConformidad, n.CodigoNoConformidad, n.IDExpediente, " & _
+          "n.Descripcion, n.Estado, n.FechaApertura, n.FECHACIERRE, " & _
+          "n.Proyecto, n.Vehiculo, n.ResponsableTelefonica, n.ResponsableCalidad, " & _
+          "n.Cerrada, n.RequiereACR, n.ACR, n.RequiereControlEficacia, " & _
+          "e.Nemotecnico, e.CodExp " & _
+          "FROM TbNoConformidades n " & _
+          "LEFT JOIN TbExpedientes e ON n.IDExpediente = e.IDExpediente " & _
+          "WHERE 1=1 "
+    
+    If p_Codigo <> "" Then
+        SQL = SQL & "AND n.CodigoNoConformidad LIKE '%" & Replace(p_Codigo, "'", "''") & "%' "
+    End If
+    
+    If p_IDExpediente > 0 Then
+        SQL = SQL & "AND n.IDExpediente = " & p_IDExpediente & " "
+    End If
+    
+    If p_IDTipo > 0 Then
+        SQL = SQL & "AND n.IDTipo = " & p_IDTipo & " "
+    End If
+    
+    If p_Estado <> "" Then
+        SQL = SQL & "AND n.Estado = '" & Replace(p_Estado, "'", "''") & "' "
+    End If
+    
+    If p_Descripcion <> "" Then
+        SQL = SQL & "AND n.Descripcion LIKE '%" & Replace(p_Descripcion, "'", "''") & "%' "
+    End If
+    
+    If p_Notas <> "" Then
+        SQL = SQL & "AND n.Notas LIKE '%" & Replace(p_Notas, "'", "''") & "%' "
+    End If
+    
+    If p_RequiereCE <> "" Then
+        SQL = SQL & "AND n.RequiereCE = '" & Replace(p_RequiereCE, "'", "''") & "' "
+    End If
+    
+    If p_ControlEficacia <> "" Then
+        SQL = SQL & "AND n.RequiereControlEficacia = '" & Replace(p_ControlEficacia, "'", "''") & "' "
+    End If
+    
+    If p_ResponsableCalidad <> "" Then
+        SQL = SQL & "AND n.ResponsableCalidad LIKE '%" & Replace(p_ResponsableCalidad, "'", "''") & "%' "
+    End If
+    
+    If p_ResponsableTelefonica <> "" Then
+        SQL = SQL & "AND n.ResponsableTelefonica LIKE '%" & Replace(p_ResponsableTelefonica, "'", "''") & "%' "
+    End If
+    
+    ' Filtro de registros cerrados
+    If p_RegistrosCerrados = "0" Then
+        SQL = SQL & "AND n.Cerrada = 0 "
+    ElseIf p_RegistrosCerrados = "1" Then
+        SQL = SQL & "AND n.Cerrada = 1 "
+    End If
+    
+    SQL = SQL & "ORDER BY n.FechaApertura DESC"
+    
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        rs.MoveFirst
+        Do While Not rs.EOF
+            Set vm = New NCProyectoListItemVM
+            vm.CargarDesdeRecordset rs, p_Error
+            If p_Error = "" Then
+                col.Add vm
+            End If
+            Set vm = Nothing
+            rs.MoveNext
+        Loop
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    
+    Set GetListadoFiltradoSQL = col
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.GetListadoFiltradoSQL: " & Err.Description
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+    Set GetListadoFiltradoSQL = col
+End Function
+
+' ============================================
+' INVALIDACIÓN DE LISTA (Spec-008 / Spec-010)
+' ============================================
+
+' Invalida el caché de listados
+' p_Razon: descripción del motivo de invalidación
+Public Function InvalidateList_Cache( _
+                            Optional ByVal p_Razon As String = "", _
+                            Optional ByRef p_Error As String _
+                        ) As Boolean
+    
+    Dim qdf As dao.QueryDef
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    InvalidateList_Cache = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        InvalidateList_Cache = True
+        Exit Function
+    End If
+    
+    ' Invalidar todos los registros de caché de lista
+    ' (TbCacheNCProyecto tiene CacheValida que se invalida por NC individual)
+    ' Esta función marca todas como inválidas para forzar rebuild lazy
+    Set qdf = getdb().CreateQueryDef("")
+    qdf.SQL = "UPDATE " & NOMBRE_TABLA_CACHE & " SET CacheValida=False WHERE CacheValida=True;"
+    qdf.Execute
+    qdf.Close
+    Set qdf = Nothing
+    
+    LogCacheOperacion "0", "InvalidateList", p_Razon, ObtenerUsuarioConectado(), True
+    
+    InvalidateList_Cache = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.InvalidateList_Cache: " & Err.Description
+    If Not qdf Is Nothing Then qdf.Close: Set qdf = Nothing
+    InvalidateList_Cache = False
+End Function
+
+' ============================================
+' REBUILD DE LISTA (Spec-009 Precalentado)
+' ============================================
+
+' Rebuild completo del caché de listados
+' Recorre todas las NCs y regenera su caché
+Public Function RebuildCacheLista( _
+                            Optional ByRef p_Error As String _
+                        ) As Boolean
+    
+    Dim rs As dao.Recordset
+    Dim sql As String
+    Dim contador As Long
+    Dim inicio As Long
+    Dim erroresRebuild As Long
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    RebuildCacheLista = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        RebuildCacheLista = True
+        Exit Function
+    End If
+    
+    inicio = Timer
+    contador = 0
+    erroresRebuild = 0
+    
+    ' Obtener todos los IDs de NC
+    sql = "SELECT IDNoConformidad FROM TbNoConformidades ORDER BY IDNoConformidad"
+    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        rs.MoveFirst
+        Do While Not rs.EOF
+            Dim idNC As String
+            Dim errItem As String
+            
+            idNC = CStr(rs!IDNoConformidad)
+            
+            If GenerarCacheCompleto(idNC, errItem) Then
+                contador = contador + 1
+            Else
+                erroresRebuild = erroresRebuild + 1
+            End If
+            
+            rs.MoveNext
+        Loop
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    
+    LogCacheOperacion "0", "RebuildLista", "Rebuild completado: " & contador & " NCs, " & erroresRebuild & " errores", ObtenerUsuarioConectado(), True
+    
+    RebuildCacheLista = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.RebuildCacheLista: " & Err.Description
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+    RebuildCacheLista = False
+End Function
+
+' ============================================
+' INVALIDACIÓN EN CASCADA (Spec-008)
+' ============================================
+
+' Invalida el caché en cascada según tipo de entidad
+' p_TipoEntidad: "NC", "AC", "AR", "Replanificacion", "Riesgo"
+' p_ID: ID de la entidad afectada
+' Implementa invalidación lazy: marca inválida pero no rebuild inmediato
+Public Function InvalidateCascada( _
+                            ByVal p_TipoEntidad As String, _
+                            ByVal p_ID As Long, _
+                            Optional ByRef p_Error As String _
+                        ) As Boolean
+    
+    Dim idNC As String
+    Dim errItem As String
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    InvalidateCascada = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        InvalidateCascada = True
+        Exit Function
+    End If
+    
+    ' Determinar qué NC se ve afectada según el tipo de entidad
+    Select Case LCase(p_TipoEntidad)
+        Case "nc"
+            ' Invalidación directa de la NC
+            idNC = CStr(p_ID)
+            
+        Case "ac"
+            ' AC pertenece a una NC - obtener el ID de NC padre
+            idNC = ObtenerIDNCDesdeAC(p_ID)
+            
+        Case "ar"
+            ' AR pertenece a una NC a través de AC
+            idNC = ObtenerIDNCDesdeAR(p_ID)
+            
+        Case "replanificacion"
+            ' La replanificación tiene IDNoConformidad directo
+            idNC = CStr(p_ID)
+            
+        Case "riesgo"
+            ' El riesgo se asocia a NC a través de tabla de link
+            idNC = ObtenerIDNCDesdeRiesgo(p_ID)
+            
+        Case Else
+            p_Error = "TipoEntidad desconocido: " & p_TipoEntidad
+            Exit Function
+    End Select
+    
+    If idNC = "" Then
+        ' No se encontró NC asociada - no hay nada que invalidar
+        InvalidateCascada = True
+        Exit Function
+    End If
+    
+    ' Invalidar el caché de la NC padre
+    ' Lazy: solo se marca, no se regenera ahora
+    If Not InvalidarCache(idNC, "Invalidacion cascada (" & p_TipoEntidad & " ID:" & p_ID & ")", errItem) Then
+        p_Error = errItem
+        Exit Function
+    End If
+    
+    LogCacheOperacion idNC, "InvalidateCascada", "Cascada (" & p_TipoEntidad & " ID:" & p_ID & ")", ObtenerUsuarioConectado(), True
+    
+    InvalidateCascada = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.InvalidateCascada: " & Err.Description
+    InvalidateCascada = False
+End Function
+
+' Helper: Obtiene ID de NC padre desde un AC
+Private Function ObtenerIDNCDesdeAC(ByVal p_IDAC As Long) As String
+    Dim rs As dao.Recordset
+    Dim sql As String
+    
+    On Error GoTo errores
+    
+    sql = "SELECT IDNoConformidad FROM TbNCAccionCorrectivas WHERE IdAccionCorrectiva = " & p_IDAC
+    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        ObtenerIDNCDesdeAC = CStr(Nz(rs!IDNoConformidad, ""))
+    Else
+        ObtenerIDNCDesdeAC = ""
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    Exit Function
+    
+errores:
+    ObtenerIDNCDesdeAC = ""
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+End Function
+
+' Helper: Obtiene ID de NC padre desde un AR
+Private Function ObtenerIDNCDesdeAR(ByVal p_IDAR As Long) As String
+    Dim rs As dao.Recordset
+    Dim sql As String
+    
+    On Error GoTo errores
+    
+    sql = "SELECT AC.IDNoConformidad FROM TbNCAccionesRealizadas AR " & _
+          "INNER JOIN TbNCAccionCorrectivas AC ON AR.IdAccionCorrectiva = AC.IdAccionCorrectiva " & _
+          "WHERE AR.IDAccionRealizada = " & p_IDAR
+    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        ObtenerIDNCDesdeAR = CStr(Nz(rs!IDNoConformidad, ""))
+    Else
+        ObtenerIDNCDesdeAR = ""
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    Exit Function
+    
+errores:
+    ObtenerIDNCDesdeAR = ""
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+End Function
+
+' Helper: Obtiene ID de NC desde un Riesgo (vía tabla de link TbRiesgosNC)
+Private Function ObtenerIDNCDesdeRiesgo(ByVal p_IDRiesgo As Long) As String
+    Dim rs As dao.Recordset
+    Dim sql As String
+    
+    On Error GoTo errores
+    
+    sql = "SELECT IDNC FROM TbRiesgosNC WHERE IDRiesgo = " & p_IDRiesgo
+    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    
+    If Not rs.EOF Then
+        ObtenerIDNCDesdeRiesgo = CStr(Nz(rs!IDNC, ""))
+    Else
+        ObtenerIDNCDesdeRiesgo = ""
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    Exit Function
+    
+errores:
+    ObtenerIDNCDesdeRiesgo = ""
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+End Function
+
+' ============================================
 ' HELPERS
 ' ============================================
 
@@ -1293,15 +1748,15 @@ Private Function LogCacheOperacion( _
 )
     ' Función auxiliar para logging
     ' Implementar inserción en TbLogCache
-    Dim sql As String
+    Dim SQL As String
     On Error Resume Next
     
-    sql = "INSERT INTO " & NOMBRE_TABLA_LOG & " " & _
+    SQL = "INSERT INTO " & NOMBRE_TABLA_LOG & " " & _
            "(IDNoConformidad, TipoOperacion, Detalles, Usuario, Exito, DuracionMs, FechaOperacion) VALUES (" & _
            p_IDNC & ", '" & p_Operacion & "', '" & Replace(p_Detalle, "'", "''") & "', " & _
            "'" & p_Usuario & "', " & IIf(p_Exito, "True", "False") & ", " & p_Duracion & ", Now());"
            
-    getdb().Execute sql
+    getdb().Execute SQL
 End Function
 
 

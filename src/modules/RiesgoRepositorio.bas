@@ -5,7 +5,7 @@ Option Explicit
 
 ' Obtiene los riesgos asociados a una NC específica desde la tabla de unión local
 Public Function GetRiesgosAsociados(ByVal p_IDNC As Long, ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim m_SQL As String
     Dim m_Riesgo As riesgo
     Dim m_Col As Scripting.Dictionary
@@ -45,7 +45,7 @@ End Function
 
 ' Obtiene los riesgos candidatos de la ÚLTIMA edición del proyecto vinculado al expediente
 Public Function GetRiesgosDisponibles(ByVal p_IDExpediente As Long, ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim m_SQL As String
     Dim m_Riesgo As riesgo
     Dim m_Col As Scripting.Dictionary
@@ -82,7 +82,7 @@ errores:
 End Function
 
 Public Sub GuardarAsociaciones(ByVal p_IDNC As Long, ByRef p_ColIDs As Collection, ByRef p_Error As String)
-    Dim dbRiesgos As dao.Database
+    Dim dbRiesgos As DAO.Database
     Dim varIDRiesgo As Variant
     Dim nuevoID As Long
     Dim m_Fecha As String

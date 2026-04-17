@@ -15,10 +15,10 @@ Public Juridica As String
 Public CodigoNoConformidad As String
 Public EsNoConformidad As Boolean
 Public Expediente As String
-Public PROYECTO As String
+Public Proyecto As String
 Public VEHICULO As String
 Public Descripcion As String
-Public CAUSA As String
+Public Causa As String
 Public CausaYAnalisRaiz As String
 Public EntidadResponsable As String
 Public ResponsableTelefonica As String 'usuariored
@@ -1242,22 +1242,22 @@ Public Property Get ProyectoCalculado() As String
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
-    If Me.PROYECTO = "" Then
+    If Me.Proyecto = "" Then
         Exit Property
     End If
     If Me.Expediente = "" Then
-        m_sProyectoCalculado = Me.PROYECTO
+        m_sProyectoCalculado = Me.Proyecto
         ProyectoCalculado = m_sProyectoCalculado
         Exit Property
     End If
-    If InStr(1, Me.PROYECTO, ".") = 0 Then
-        m_sProyectoCalculado = Me.Expediente & "." & Me.PROYECTO
+    If InStr(1, Me.Proyecto, ".") = 0 Then
+        m_sProyectoCalculado = Me.Expediente & "." & Me.Proyecto
     Else
-        dato = Split(Me.PROYECTO, ".")
+        dato = Split(Me.Proyecto, ".")
         If Me.Expediente <> dato(0) Then
             m_sProyectoCalculado = Me.Expediente & "." & dato(1)
         Else
-            m_sProyectoCalculado = Me.PROYECTO
+            m_sProyectoCalculado = Me.Proyecto
         End If
     End If
     ProyectoCalculado = m_sProyectoCalculado
@@ -1605,7 +1605,7 @@ End Function
 
 Private Function getCodigo(Optional ByRef p_Error As String) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     Dim m_NCUltimo As String
@@ -1814,7 +1814,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "PROYECTO" Then
-        getPropiedad = Me.PROYECTO
+        getPropiedad = Me.Proyecto
         Exit Function
     End If
     If m_NombrePropiedad = "VEHICULO" Then
@@ -1826,7 +1826,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "CAUSA" Then
-        getPropiedad = Me.CAUSA
+        getPropiedad = Me.Causa
         Exit Function
     End If
     If m_NombrePropiedad = "CausaYAnalisRaiz" Then
@@ -1993,7 +1993,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "PROYECTO" Then
-        Me.PROYECTO = m_ValorPropiedad
+        Me.Proyecto = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "VEHICULO" Then
@@ -2005,7 +2005,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "CAUSA" Then
-        Me.CAUSA = m_ValorPropiedad
+        Me.Causa = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "CausaYAnalisRaiz" Then

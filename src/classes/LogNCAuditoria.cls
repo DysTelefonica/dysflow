@@ -187,7 +187,7 @@ Public Function Alta( _
                         Optional ByRef p_Error As String _
                         ) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_lineaResultante As String
     

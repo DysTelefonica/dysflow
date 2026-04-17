@@ -522,7 +522,7 @@ Public Function EstablecerDatos( _
     Dim m_EntidadResponsable As String
     Dim m_RequiereControlEficacia As String
     Dim m_FechaPrevistaControlEficacia As String
-    Dim m_VEHICULO As String
+    Dim m_Vehiculo As String
     Dim m_FPREVCIERRE As String
     Dim m_FechaCierre As String
     Dim m_DatosGeneralesOK As EnumSino
@@ -603,7 +603,7 @@ Public Function EstablecerDatos( _
             m_EntidadResponsable = .NCProyectoAsociada.EntidadResponsable
             m_RequiereControlEficacia = .NCProyectoAsociada.RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .NCProyectoAsociada.FechaPrevistaControlEficacia
-            m_VEHICULO = .NCProyectoAsociada.VEHICULO
+            m_Vehiculo = .NCProyectoAsociada.VEHICULO
             m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRE
             m_FechaCierre = .NCProyectoAsociada.FECHACIERRECalculada
             .NCProyectoAsociada.EstadoGrabar
@@ -625,7 +625,7 @@ Public Function EstablecerDatos( _
             m_EntidadResponsable = .EntidadResponsable
             m_RequiereControlEficacia = .RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .FechaPrevistaControlEficacia
-            m_VEHICULO = .VEHICULO
+            m_Vehiculo = .VEHICULO
             .FPREVCIERREGrabar
             m_FPREVCIERRE = .FPREVCIERRE
             .FECHACIERREGrabar
@@ -688,8 +688,8 @@ Public Function EstablecerDatos( _
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
         End If
-        If m_VEHICULO = "" Then
-            Me.VEHICULO = m_VEHICULO
+        If m_Vehiculo = "" Then
+            Me.VEHICULO = m_Vehiculo
         End If
         If .FPREVCIERRE <> "" Then
             Me.FPREVCIERRE = .FPREVCIERRE

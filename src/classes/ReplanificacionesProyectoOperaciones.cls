@@ -108,7 +108,7 @@ Public Function Registrar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     
@@ -169,7 +169,7 @@ Private Function Repetida( _
                                 ) As EnumSino
         
     Dim m_SQL As Variant
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     
     
     On Error GoTo errores

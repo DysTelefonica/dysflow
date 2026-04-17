@@ -465,10 +465,10 @@ Public Function NCProyectoAJSON( _
     obj("CodigoNoConformidad") = p_NC.CodigoNoConformidad
     obj("EsNoConformidad") = p_NC.EsNoConformidad
     obj("Expediente") = p_NC.Expediente
-    obj("Proyecto") = p_NC.PROYECTO
+    obj("Proyecto") = p_NC.Proyecto
     obj("Vehiculo") = p_NC.VEHICULO
     obj("Descripcion") = p_NC.Descripcion
-    obj("Causa") = p_NC.CAUSA
+    obj("Causa") = p_NC.Causa
     obj("CausaYAnalisRaiz") = p_NC.CausaYAnalisRaiz
     obj("EntidadResponsable") = p_NC.EntidadResponsable
     obj("ResponsableTelefonica") = p_NC.ResponsableTelefonica

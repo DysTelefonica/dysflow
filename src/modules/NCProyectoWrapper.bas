@@ -1,3 +1,4 @@
+Attribute VB_Name = "NCProyectoWrapper"
 Option Compare Database
 Option Explicit
 
@@ -330,7 +331,7 @@ Public Function SaveNC( _
     If p_NC.IDNoConformidad = 0 Or p_NC.IDNoConformidad = "" Then
         blnResult = NCService.Alta(p_NC, db, p_Error)
     Else
-        blnResult = NCService.Modificar(p_NC, p_NC, db, p_Error)
+        blnResult = NCService.Modificar(p_NC, p_NC, db, p_Error) ' TODO (Spec-016): pasar p_NC_Original para diff de campos
     End If
     
     If Not blnResult Then

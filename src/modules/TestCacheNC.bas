@@ -123,22 +123,22 @@ Private Sub TestIntegracionConstructor(p_IDNC As String)
 End Sub
 
 Private Function GetValidIDNC() As String
-    Dim rcd As dao.Recordset
-    Dim sql As String
+    Dim rcd As DAO.Recordset
+    Dim SQL As String
     
     ' Buscamos una NC que tenga ACs y ARs para un test más completo
-    sql = "SELECT TOP 1 TbNoConformidades.IDNoConformidad " & _
+    SQL = "SELECT TOP 1 TbNoConformidades.IDNoConformidad " & _
           "FROM (TbNoConformidades INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
           "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IdAccionCorrectiva = TbNCAccionesRealizadas.IdAccionCorrectiva " & _
           "WHERE TbNoConformidades.Borrado = False;"
           
     On Error Resume Next
-    Set rcd = getdb().OpenRecordset(sql)
+    Set rcd = getdb().OpenRecordset(SQL)
     
     If rcd Is Nothing Or rcd.EOF Then
         ' Si no hay con todo, cualquier NC
-        sql = "SELECT TOP 1 IDNoConformidad FROM TbNoConformidades WHERE Borrado = False;"
-        Set rcd = getdb().OpenRecordset(sql)
+        SQL = "SELECT TOP 1 IDNoConformidad FROM TbNoConformidades WHERE Borrado = False;"
+        Set rcd = getdb().OpenRecordset(SQL)
     End If
     
     If Not rcd.EOF Then

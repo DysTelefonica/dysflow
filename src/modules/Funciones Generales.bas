@@ -1230,7 +1230,7 @@ Public Function CorreoAlAdministrador( _
                                         ) As String
                                         
    
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_mensaje As String
     Dim m_Asunto As String
@@ -2017,11 +2017,11 @@ End Function
 Public Function DameID( _
                         p_NOmbreTabla As String, _
                         p_NombreCampoID As String, _
-                        Optional ByRef p_db As dao.Database, _
+                        Optional ByRef p_Db As DAO.Database, _
                         Optional ByRef p_Error As String _
                         ) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim lngIDMax As Long
     On Error GoTo errores
@@ -2030,12 +2030,12 @@ Public Function DameID( _
         p_Error = "Se ha de indicar el nombre de la tabla y de su campo ID"
         Err.Raise 1000
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT Max(" & p_NOmbreTabla & "." & p_NombreCampoID & ") AS MaxID " & _
             "FROM " & p_NOmbreTabla & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             If IsNumeric(Nz(.Fields("MaxID"), "")) Then
@@ -2794,7 +2794,7 @@ Public Function ActualizarDatosNCsProyecto( _
                                         Optional ByRef p_Error As String) As String
     
     Dim m_NC As NCProyecto
-    Dim m_IdNC As Variant
+    Dim m_IDNC As Variant
     Dim m_NCOp As NCProyectoOperaciones
     Dim m_ACProyecto As ACProyecto
     Dim m_ID As Variant
@@ -2804,8 +2804,8 @@ Public Function ActualizarDatosNCsProyecto( _
         Exit Function
     End If
     Set m_NCOp = New NCProyectoOperaciones
-    For Each m_IdNC In p_col
-        Set m_NC = p_col(m_IdNC)
+    For Each m_IDNC In p_col
+        Set m_NC = p_col(m_IDNC)
         With m_NCOp
             Set .nc = m_NC
             .ActualizarDatosCalculados p_Error
@@ -2831,7 +2831,7 @@ Public Function ActualizarDatosNCsAuditoria( _
                                             Optional ByRef p_Error As String) As String
         
     Dim m_NC As NCAuditoria
-    Dim m_IdNC As Variant
+    Dim m_IDNC As Variant
     Dim m_NCOp As NCaUDITORIAOperaciones
     Dim m_ACAuditoria As ACAuditoria
     Dim m_ID As Variant
@@ -2841,8 +2841,8 @@ Public Function ActualizarDatosNCsAuditoria( _
         Exit Function
     End If
     Set m_NCOp = New NCaUDITORIAOperaciones
-    For Each m_IdNC In p_col
-        Set m_NC = p_col(m_IdNC)
+    For Each m_IDNC In p_col
+        Set m_NC = p_col(m_IDNC)
         With m_NCOp
             Set .nc = m_NC
             .ActualizarDatosCalculados p_Error
@@ -2873,7 +2873,7 @@ Public Function SincronizarNCProyectoVinculada( _
     
     
     Dim m_SQL As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_NCVinculada As NCProyecto
     Dim m_Valor As String
     Dim m_IDAC As Variant
@@ -3171,7 +3171,7 @@ Public Function RellenarTbProyectoParaLista( _
                                                 p_NC As NCProyecto, _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_IDAR As Variant
     Dim m_AR As ARProyecto
@@ -3312,7 +3312,7 @@ Public Function PuntoNormaAuditoriaRegistrar( _
                                             p_PuntoNorma As String, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -3433,7 +3433,7 @@ Public Function getAlgunaAccionPteReplanificar( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3470,7 +3470,7 @@ Public Function getAlgunaAccionIrregular( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3510,7 +3510,7 @@ Public Function getAlgunaAccionActiva( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3548,7 +3548,7 @@ Public Function getTodasAccionesFinalizadas( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3585,7 +3585,7 @@ Public Function getTieneAccionesPorReplanificar( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3623,7 +3623,7 @@ Public Function getFechaInicialMinimaCalculada( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3658,7 +3658,7 @@ Public Function getFechaFinalUltimaCalculada( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3693,7 +3693,7 @@ Public Function getFechaFinPrevistaUltimaCalculada( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3728,7 +3728,7 @@ Public Function getFECHACIERRENCCalculada( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_NombreTabla As String
     
@@ -3767,7 +3767,7 @@ Public Function getFPREVCIERRENCCalculada( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -3806,7 +3806,7 @@ Public Function getNAccionACCalculado( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -3848,7 +3848,7 @@ Public Function getTieneAccionesNCPorReplanificar( _
                                                     p_EsDeProyecto As EnumSino, _
                                                     Optional ByRef p_Error As String _
                                                     ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -3889,7 +3889,7 @@ Public Function getTodasLasACsSinFechas( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -3931,7 +3931,7 @@ Public Function getTodasLasArsFinalizadas( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional ByRef p_Error As String _
                                             ) As EnumSino
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     

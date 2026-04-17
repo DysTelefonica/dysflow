@@ -20,7 +20,7 @@ Public Function Registrar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-     Dim rcdDatos As dao.Recordset
+     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     Dim m_URLFinal As String
@@ -259,7 +259,7 @@ Private Function DocumentoRepetido( _
                                     ) As EnumSino
         
     Dim m_SQL As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
    
     
     On Error GoTo errores

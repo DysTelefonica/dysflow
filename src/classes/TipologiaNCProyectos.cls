@@ -129,7 +129,7 @@ Public Function Registrar( _
                                         
                             
                            
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     

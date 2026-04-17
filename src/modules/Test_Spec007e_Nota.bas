@@ -1,3 +1,4 @@
+Attribute VB_Name = "Test_Spec007e_Nota"
 Option Compare Database
 Option Explicit
 

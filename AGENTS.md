@@ -29,3 +29,17 @@ Los skills usados en este entorno son los **globales**. No deben mantenerse copi
 4. **Doble edición en formularios:** si se modifica un `.cls` de formulario, revisar también su `.form.txt`.
 5. **UI documentada:** si se toca `.form.txt`, detallar los cambios de controles.
 6. **Sin ruido metodológico en main:** no añadir aquí specs, PRDs, templates o reglas de proceso.
+7. **Regla de VB_Attributes en formularios (importación a Access):** al importar un formulario a Access, el bloque `CodeBehind` en `.form.txt` exige los 4 atributos VBA justo después, antes de `Option Compare Database`:
+
+```
+CodeBehind
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+```
+
+Si falta alguno, Access rejecciona el import con: `Error en la línea N. Esperado: Fin de archivo. Encontrado: CodeBehind.`
+
+Verificación: ejecutar `temp_check_forms.ps1` del skill `access-query` antes de importar.

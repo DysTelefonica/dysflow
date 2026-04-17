@@ -326,7 +326,7 @@ Public Function RegistrarDatosUnicos( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoDatosUnicosNoOK As String
     Dim m_EstadoAlInicio As String
@@ -581,7 +581,7 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
                                                     Optional ByRef p_Error As String _
                                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoAltaDatosUnicosNoOK As String
    
@@ -706,7 +706,7 @@ Public Function RegistrarCambiosDatosUnicosConVinculoNC( _
                                                         Optional ByRef p_Error As String _
                                                         ) As String
                                             
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
    
@@ -822,7 +822,7 @@ Public Function Eliminar( _
                             ) As String
     
     Dim m_SQL As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_Documentos As Scripting.Dictionary
     Dim m_Documento As DocumentoProyecto
     Dim m_IDDOC As Variant
@@ -966,7 +966,7 @@ End Function
 Public Function Habilitar( _
                             Optional ByRef p_Error As String _
                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     On Error GoTo errores
@@ -1026,7 +1026,7 @@ Public Function RegistrarControlEficacia( _
                                         Optional ByRef p_Error As String _
                                         ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -1099,7 +1099,7 @@ Public Function EliminarControlEficacia( _
                                         Optional ByRef p_Error As String _
                                         ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_EstadoAlInicio As String
     Dim m_EstadoAlFinal As String
@@ -1171,7 +1171,7 @@ Public Function RegistrarResultadoControlEficacia( _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     'para poder registrar este resultado ha de haber acciones con tareas y todas ellas finalizadas
@@ -1272,7 +1272,7 @@ Public Function EliminarResultadoControlEficacia( _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     On Error GoTo errores
@@ -1405,7 +1405,7 @@ Public Function BorrarTodoLoNecesarioEnVinculados( _
                                                     Optional ByRef p_Error As String _
                                                     ) As String
     Dim m_Campo As Variant
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -1515,7 +1515,7 @@ errores:
 End Function
 
 Public Sub ActualizarRiesgosNC(p_IDNC As Long, p_ColIDs As Collection, ByRef p_Error As String)
-    Dim db As dao.Database
+    Dim db As DAO.Database
     Dim vIDRiesgo As Variant
     Dim nuevoID As Long
     

@@ -1,3 +1,4 @@
+Attribute VB_Name = "ACRepository"
 Option Compare Database
 Option Explicit
 
