@@ -6,6 +6,8 @@ Attribute VB_Name = "DocumentoService"
 Option Compare Database
 Option Explicit
 
+Private m_CacheNCCrud As New CacheNCCrud
+
 Public Function Registrar(ByRef p_Documento As DocumentoProyecto, Optional ByRef p_Error As String) As Boolean
     Dim m_Op As DocumentoProyectoOperaciones
     Dim m_Result As String
@@ -41,7 +43,7 @@ Public Function Registrar(ByRef p_Documento As DocumentoProyecto, Optional ByRef
     End If
     
     If m_IDNC <> 0 Then
-        If Not CacheNCCrud.NotificarCambioDocumentos(m_IDNC, p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioDocumentos(m_IDNC, p_Error) Then
             Exit Function
         End If
     End If
@@ -88,7 +90,7 @@ Public Function Eliminar(ByRef p_Documento As DocumentoProyecto, Optional ByRef 
     End If
     
     If m_IDNC <> 0 Then
-        If Not CacheNCCrud.NotificarCambioDocumentos(m_IDNC, p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioDocumentos(m_IDNC, p_Error) Then
             Exit Function
         End If
     End If

@@ -8,6 +8,7 @@ Option Explicit
 
 Public Function NotificarAltaNC(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -18,7 +19,7 @@ Public Function NotificarAltaNC(ByVal p_IDNC As Long, Optional ByRef p_Error As 
         Exit Function
     End If
     
-    blnResultado = CacheNCService.NotificarAltaNC_Impl(p_IDNC, p_Error)
+    blnResultado = m_CacheService.NotificarAltaNC_Impl(p_IDNC, p_Error)
     
     NotificarAltaNC = blnResultado
     Exit Function
@@ -29,6 +30,7 @@ End Function
 
 Public Function NotificarModificacionNC(ByVal p_IDNC As Long, ByRef p_Campos As Collection, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -40,9 +42,9 @@ Public Function NotificarModificacionNC(ByVal p_IDNC As Long, ByRef p_Campos As 
     End If
     
     If p_Campos Is Nothing Then
-        blnResultado = CacheNCService.NotificarCambioNC(p_IDNC, Campo_DatosNC, p_Error)
+        blnResultado = m_CacheService.NotificarCambioNC(p_IDNC, Campo_DatosNC, p_Error)
     Else
-        blnResultado = CacheNCService.NotificarCambioMultiCampo(p_IDNC, p_Campos, p_Error)
+        blnResultado = m_CacheService.NotificarCambioMultiCampo(p_IDNC, p_Campos, p_Error)
     End If
     
     NotificarModificacionNC = blnResultado
@@ -54,6 +56,7 @@ End Function
 
 Public Function NotificarEliminacionNC(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -64,7 +67,7 @@ Public Function NotificarEliminacionNC(ByVal p_IDNC As Long, Optional ByRef p_Er
         Exit Function
     End If
     
-    blnResultado = CacheNCService.NotificarEliminacionNC_Impl(p_IDNC, p_Error)
+    blnResultado = m_CacheService.NotificarEliminacionNC_Impl(p_IDNC, p_Error)
     
     NotificarEliminacionNC = blnResultado
     Exit Function
@@ -100,6 +103,7 @@ End Function
 Public Function NotificarCambioDocumentos(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
     Dim m_Campos As New Collection
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -113,7 +117,7 @@ Public Function NotificarCambioDocumentos(ByVal p_IDNC As Long, Optional ByRef p
     m_Campos.Add Campo_DatosDocumentos
     m_Campos.Add Campo_DatosNC
     
-    blnResultado = CacheNCService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
+    blnResultado = m_CacheService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
     
     NotificarCambioDocumentos = blnResultado
     Exit Function
@@ -125,6 +129,7 @@ End Function
 Public Function NotificarCambioRiesgos(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
     Dim m_Campos As New Collection
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -138,7 +143,7 @@ Public Function NotificarCambioRiesgos(ByVal p_IDNC As Long, Optional ByRef p_Er
     m_Campos.Add Campo_DatosRiesgos
     m_Campos.Add Campo_DatosNC
     
-    blnResultado = CacheNCService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
+    blnResultado = m_CacheService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
     
     NotificarCambioRiesgos = blnResultado
     Exit Function
@@ -149,6 +154,7 @@ End Function
 
 Public Function NotificarCambioReplanificaciones(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -159,7 +165,7 @@ Public Function NotificarCambioReplanificaciones(ByVal p_IDNC As Long, Optional 
         Exit Function
     End If
     
-    blnResultado = CacheNCService.NotificarCambioNC(p_IDNC, Campo_DatosReplanificaciones, p_Error)
+    blnResultado = m_CacheService.NotificarCambioNC(p_IDNC, Campo_DatosReplanificaciones, p_Error)
     
     NotificarCambioReplanificaciones = blnResultado
     Exit Function
@@ -171,6 +177,7 @@ End Function
 Public Function NotificarCierreNC(ByVal p_IDNC As Long, Optional ByRef p_Error As String) As Boolean
     Dim blnResultado As Boolean
     Dim m_Campos As New Collection
+    Dim m_CacheService As New CacheNCService
     
     On Error GoTo errores
     p_Error = ""
@@ -184,7 +191,7 @@ Public Function NotificarCierreNC(ByVal p_IDNC As Long, Optional ByRef p_Error A
     m_Campos.Add Campo_DatosNC
     m_Campos.Add Campo_Cerrado
     
-    blnResultado = CacheNCService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
+    blnResultado = m_CacheService.NotificarCambioMultiCampo(p_IDNC, m_Campos, p_Error)
     
     NotificarCierreNC = blnResultado
     Exit Function

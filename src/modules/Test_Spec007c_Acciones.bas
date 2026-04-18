@@ -104,7 +104,7 @@ Private Sub Test_Spec007c_RunAll()
     
     Debug.Print "=========================================="
     Debug.Print "RESULTADO: " & m_Passed & " passed, " & m_Failed & " failed"
-    Debug.Print "Tiempo: " & Format(TimeDiff(m_Start, Now), "hh:nn:ss")
+    Debug.Print "Tiempo: " & Format(Now - m_Start, "hh:nn:ss")
     Debug.Print "=========================================="
     Debug.Print ""
     
@@ -134,7 +134,7 @@ Private Function Test001_EstructuraColARs() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: VM de NC que tiene ARs (necesitamos encontrar una con ARs)
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Then
         Debug.Print "  ERROR CARGA: " & errorMsg
@@ -194,7 +194,7 @@ Private Function Test002_EstructuraColACs() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: VM de NC que tiene ACs
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Then
         Debug.Print "  ERROR CARGA: " & errorMsg
@@ -254,7 +254,7 @@ Private Function Test003_VMCargaARsACs() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: VM de NC 405
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Then
         Debug.Print "  ERROR CARGA: " & errorMsg
@@ -312,7 +312,7 @@ Private Function Test004_NCSinARs() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: NC sin ARs (necesitamos encontrar una o crear escenario)
-    Set vm = getNCProyectoDetailVM(p_IDNC:=999999, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(999999)
     
     If vm Is Nothing Then
         Debug.Print "  VERIFICADO: VM es Nothing para NC inexistente"
@@ -347,7 +347,7 @@ Private Function Test005_NCSinACs() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: NC sin ACs
-    Set vm = getNCProyectoDetailVM(p_IDNC:=999999, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(999999)
     
     If vm Is Nothing Then
         Debug.Print "  VERIFICADO: VM es Nothing para NC inexistente"
@@ -382,7 +382,7 @@ Private Function Test006_NCInexistenteSeguro() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: ID de NC inexistente
-    Set vm = getNCProyectoDetailVM(p_IDNC:=99999999, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(99999999)
     
     ' WHEN/THEN: Verificar comportamiento seguro
     If vm Is Nothing Then
@@ -419,7 +419,7 @@ Private Function Test007_ArrayAR10Elementos() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: VM con ARs
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Or vm Is Nothing Or Not vm.EstaCargado Then
         Debug.Print "  SKIP: No se pudo cargar VM para verificar estructura"
@@ -488,7 +488,7 @@ Private Function Test008_ArrayAC8Elementos() As Boolean
     On Error GoTo handleError
     
     ' GIVEN: VM con ACs
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Or vm Is Nothing Or Not vm.EstaCargado Then
         Debug.Print "  SKIP: No se pudo cargar VM para verificar estructura"

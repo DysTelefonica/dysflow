@@ -35,7 +35,7 @@ Private Sub Test001_PropiedadesControlEficaciaEnVM()
     On Error GoTo testFail
     
     ' WHEN: Cargar VM
-    Set m_VM = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=m_Error)
+    Set m_VM = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If m_Error <> "" Then
         Debug.Print "  RESULT: FAIL - Error al cargar VM: " & m_Error
@@ -99,7 +99,7 @@ Private Sub Test002_VMNoDisponible_ChequeaPropiedadEstaCargado()
     On Error GoTo testFail
     
     ' WHEN: Crear instancia sin cargar
-    Set m_VM = getNCProyectoDetailVM(p_Error:=m_Error)
+    Set m_VM = New NCProyectoDetailVM
     
     If m_VM Is Nothing Then
         Debug.Print "  RESULT: FAIL - VM es Nothing"
@@ -142,10 +142,10 @@ Private Sub Test003_VerificaRutaDual_CargaVMvsFallback()
     On Error GoTo testFail
     
     ' VM CARGADO
-    Set m_VMCargado = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=m_Error)
+    Set m_VMCargado = NCProyectoWrapper.GetNCProyectoVM(405)
     
     ' VM NO CARGADO
-    Set m_VMNoCargado = getNCProyectoDetailVM(p_Error:=m_Error)
+    Set m_VMNoCargado = New NCProyectoDetailVM
     
     ' WHEN: Evaluar condicion dual-path
     ' Path VM: Not m_VM Is Nothing And m_VM.EstaCargado
@@ -202,7 +202,7 @@ Private Sub Test004_ControlEficacia_conNCReal()
     
     On Error GoTo testFail
     
-    Set m_VM = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=m_Error)
+    Set m_VM = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If m_Error <> "" Then
         Debug.Print "  RESULT: SKIP - No se pudo cargar VM: " & m_Error

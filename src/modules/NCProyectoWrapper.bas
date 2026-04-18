@@ -312,6 +312,8 @@ Public Function SaveNC( _
     Dim blnResult As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim svcNC As New NCService
+    Dim cacheCrud As New CacheNCCrud
     
     p_Error = ""
     SaveNC = False
@@ -329,9 +331,9 @@ Public Function SaveNC( _
     m_HayTransaccion = True
     
     If p_NC.IDNoConformidad = 0 Or p_NC.IDNoConformidad = "" Then
-        blnResult = NCService.Alta(p_NC, db, p_Error)
+        blnResult = svcNC.Alta(p_NC, db, p_Error)
     Else
-        blnResult = NCService.Modificar(p_NC, p_NC, db, p_Error) ' TODO (Spec-016): pasar p_NC_Original para diff de campos
+        blnResult = svcNC.Modificar(p_NC, p_NC, db, p_Error) ' TODO (Spec-016): pasar p_NC_Original para diff de campos
     End If
     
     If Not blnResult Then
@@ -342,9 +344,9 @@ Public Function SaveNC( _
     End If
     
     If p_NC.IDNoConformidad = 0 Or p_NC.IDNoConformidad = "" Then
-        blnResult = CacheNCCrud.NotificarAltaNC(p_NC.IDNoConformidad, p_Error)
+        blnResult = cacheCrud.NotificarAltaNC(CLng(p_NC.IDNoConformidad), p_Error)
     Else
-        blnResult = CacheNCCrud.NotificarModificacionNC(p_NC.IDNoConformidad, Nothing, p_Error)
+        blnResult = cacheCrud.NotificarModificacionNC(CLng(p_NC.IDNoConformidad), Nothing, p_Error)
     End If
     
     If Not blnResult Then
@@ -388,6 +390,8 @@ Public Function DeleteNC( _
     Dim blnResult As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim svcNC As New NCService
+    Dim cacheCrud As New CacheNCCrud
     
     p_Error = ""
     DeleteNC = False
@@ -399,7 +403,7 @@ Public Function DeleteNC( _
     m_Wrk.BeginTrans
     m_HayTransaccion = True
     
-    blnResult = NCService.Eliminar(p_IDNC:=CStr(p_IDNC), p_Logico:=True, p_Db:=db, p_Error:=p_Error)
+    blnResult = svcNC.Eliminar(p_IDNC:=CStr(p_IDNC), p_Logico:=True, p_Db:=db, p_Error:=p_Error)
     
     If Not blnResult Then
         m_Wrk.Rollback
@@ -408,7 +412,7 @@ Public Function DeleteNC( _
         Exit Function
     End If
     
-    blnResult = CacheNCCrud.NotificarEliminacionNC(p_IDNC, p_Error)
+    blnResult = cacheCrud.NotificarEliminacionNC(p_IDNC, p_Error)
     
     If Not blnResult Then
         m_Wrk.Rollback

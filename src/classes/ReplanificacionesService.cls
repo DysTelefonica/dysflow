@@ -6,6 +6,8 @@ Attribute VB_Name = "ReplanificacionesService"
 Option Compare Database
 Option Explicit
 
+Private m_CacheNCCrud As New CacheNCCrud
+
 Public Function Registrar(ByRef p_Replanificacion As ReplanificacionesProyecto, Optional ByRef p_Error As String) As Boolean
     Dim m_Op As ReplanificacionesProyectoOperaciones
     Dim m_Result As String
@@ -28,7 +30,7 @@ Public Function Registrar(ByRef p_Replanificacion As ReplanificacionesProyecto, 
     End If
     
     If Not p_Replanificacion.nc Is Nothing Then
-        If Not CacheNCCrud.NotificarCambioReplanificaciones(CLng(p_Replanificacion.nc.IDNoConformidad), p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioReplanificaciones(CLng(p_Replanificacion.nc.IDNoConformidad), p_Error) Then
             Exit Function
         End If
     End If
@@ -62,7 +64,7 @@ Public Function Eliminar(ByRef p_Replanificacion As ReplanificacionesProyecto, O
     End If
     
     If Not p_Replanificacion.nc Is Nothing Then
-        If Not CacheNCCrud.NotificarCambioReplanificaciones(CLng(p_Replanificacion.nc.IDNoConformidad), p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioReplanificaciones(CLng(p_Replanificacion.nc.IDNoConformidad), p_Error) Then
             Exit Function
         End If
     End If

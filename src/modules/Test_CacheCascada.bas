@@ -566,9 +566,9 @@ Private Sub Test006_OperacionMinima_DetalleMarcado()
     qdf.Close
     
     Debug.Print "  GIVEN: NC=" & idNC & " en cache con Version=" & versionAntes
-    Debug.Print "  WHEN:  CacheNCProyecto.InvalidateDetail(" & idNC & ")"
-    
-    resultado = CacheNCProyecto.InvalidateDetail(idNC, m_Error)
+    Debug.Print "  WHEN:  CacheNCProyecto.InvalidateCascada(""NC"", " & idNC & ")"
+    Debug.Print "  WHEN:  CacheNCProyecto.InvalidarCache(" & idNC & ")"
+    resultado = CacheNCProyecto.InvalidarCache(CStr(idNC), m_Error)
     
     If m_Error <> "" Then
         Debug.Print "  THEN:  p_Error = '" & m_Error & "'"
@@ -675,6 +675,7 @@ Private Sub Test008_NotificarCambioACAR_InvalidacionCorrecta()
     Dim m_Error As String
     Dim resultado As Boolean
     Dim wasValidBefore As Boolean
+    Dim crud As New CacheNCCrud
     
     Debug.Print "[TEST] Test008_NotificarCambioACAR_InvalidacionCorrecta"
     
@@ -693,7 +694,7 @@ Private Sub Test008_NotificarCambioACAR_InvalidacionCorrecta()
     Debug.Print "  GIVEN: NC=" & idNC & " con CacheValida=" & wasValidBefore
     Debug.Print "  WHEN:  CacheNCCrud.NotificarCambioACAR(" & idNC & ")"
     
-    resultado = CacheNCCrud.NotificarCambioACAR(idNC, m_Error)
+    resultado = crud.NotificarCambioACAR(idNC, m_Error)
     
     If m_Error <> "" Then
         Debug.Print "  THEN:  p_Error = '" & m_Error & "'"

@@ -134,17 +134,18 @@ Public Sub Test_NCService_Modificar_ConNotificacionCache()
     Dim m_Error As String
     Dim result As Boolean
     Dim s_IDTest As String
+    Dim svcNC As New NCService
     
     Set db = getdb()
     Set m_NC = CreateTestNC()
     
-    If Not NCService.Alta(m_NC, db, m_Error) Then
+    If Not svcNC.Alta(m_NC, db, m_Error) Then
         Debug.Print "FAIL: Test_NCService_Modificar_ConNotificacionCache - Alta previa falló: " & m_Error
         Exit Sub
     End If
     s_IDTest = m_NC.IDNoConformidad
     
-    Set m_NCOriginal = NCService.GetById(s_IDTest, db, m_Error)
+    Set m_NCOriginal = svcNC.GetById(s_IDTest, db, m_Error)
     If m_NCOriginal Is Nothing Then
         Debug.Print "FAIL: Test_NCService_Modificar_ConNotificacionCache - No se pudo recargar la NC"
         DeleteTestNC s_IDTest
@@ -154,7 +155,7 @@ Public Sub Test_NCService_Modificar_ConNotificacionCache()
     Set m_NC = m_NCOriginal
     m_NC.Descripcion = "NC modificada con cache " & Format(Now, "yyyymmddhhnnss")
     
-    result = NCService.Modificar(m_NC, m_NCOriginal, db, m_Error)
+    result = svcNC.Modificar(m_NC, m_NCOriginal, db, m_Error)
     
     If result Then
         Debug.Print "PASS: Test_NCService_Modificar_ConNotificacionCache - Modificar successful con notificacion cache"
@@ -182,18 +183,20 @@ Public Sub Test_ACService_Alta_AtomicidadCache()
     Dim result As Boolean
     Dim s_IDNCTest As String
     Dim s_IDACTest As String
+    Dim svcNC As New NCService
+    Dim svcAC As New ACService
     
     Set db = getdb()
     Set m_NC = CreateTestNC()
     
-    If Not NCService.Alta(m_NC, db, m_Error) Then
+    If Not svcNC.Alta(m_NC, db, m_Error) Then
         Debug.Print "FAIL: Test_ACService_Alta_AtomicidadCache - Alta previa NC falló: " & m_Error
         Exit Sub
     End If
     s_IDNCTest = m_NC.IDNoConformidad
     
     Set m_AC = CreateTestACConNC(m_NC)
-    result = ACService.Alta(m_AC, db, m_Error)
+    result = svcAC.Alta(m_AC, db, m_Error)
     
     If result Then
         s_IDACTest = m_AC.IdAccionCorrectiva
@@ -219,25 +222,27 @@ Public Sub Test_ACService_Modificar_AtomicidadCache()
     Dim result As Boolean
     Dim s_IDNCTest As String
     Dim s_IDACTest As String
+    Dim svcNC As New NCService
+    Dim svcAC As New ACService
     
     Set db = getdb()
     Set m_NC = CreateTestNC()
     
-    If Not NCService.Alta(m_NC, db, m_Error) Then
+    If Not svcNC.Alta(m_NC, db, m_Error) Then
         Debug.Print "FAIL: Test_ACService_Modificar_AtomicidadCache - Alta NC falló: " & m_Error
         Exit Sub
     End If
     s_IDNCTest = m_NC.IDNoConformidad
     
     Set m_AC = CreateTestACConNC(m_NC)
-    If Not ACService.Alta(m_AC, db, m_Error) Then
+    If Not svcAC.Alta(m_AC, db, m_Error) Then
         Debug.Print "FAIL: Test_ACService_Modificar_AtomicidadCache - Alta AC falló: " & m_Error
         DeleteTestNC s_IDNCTest
         Exit Sub
     End If
     s_IDACTest = m_AC.IdAccionCorrectiva
     
-    Set m_ACOriginal = ACService.GetById(s_IDACTest, db, m_Error)
+    Set m_ACOriginal = svcAC.GetById(s_IDACTest, db, m_Error)
     If m_ACOriginal Is Nothing Then
         Debug.Print "FAIL: Test_ACService_Modificar_AtomicidadCache - No se pudo recargar AC"
         DeleteTestAC s_IDACTest
@@ -248,7 +253,7 @@ Public Sub Test_ACService_Modificar_AtomicidadCache()
     Set m_AC = m_ACOriginal
     m_AC.AccionCorrectiva = "AC modificada atomicamente " & Format(Now, "yyyymmddhhnnss")
     
-    result = ACService.Modificar(m_AC, m_ACOriginal, db, m_Error)
+    result = svcAC.Modificar(m_AC, m_ACOriginal, db, m_Error)
     
     If result Then
         Debug.Print "PASS: Test_ACService_Modificar_AtomicidadCache - AC modificada atomicamente"
@@ -272,25 +277,27 @@ Public Sub Test_ACService_Eliminar_AtomicidadCache()
     Dim result As Boolean
     Dim s_IDNCTest As String
     Dim s_IDACTest As String
+    Dim svcNC As New NCService
+    Dim svcAC As New ACService
     
     Set db = getdb()
     Set m_NC = CreateTestNC()
     
-    If Not NCService.Alta(m_NC, db, m_Error) Then
+    If Not svcNC.Alta(m_NC, db, m_Error) Then
         Debug.Print "FAIL: Test_ACService_Eliminar_AtomicidadCache - Alta NC falló: " & m_Error
         Exit Sub
     End If
     s_IDNCTest = m_NC.IDNoConformidad
     
     Set m_AC = CreateTestACConNC(m_NC)
-    If Not ACService.Alta(m_AC, db, m_Error) Then
+    If Not svcAC.Alta(m_AC, db, m_Error) Then
         Debug.Print "FAIL: Test_ACService_Eliminar_AtomicidadCache - Alta AC falló: " & m_Error
         DeleteTestNC s_IDNCTest
         Exit Sub
     End If
     s_IDACTest = m_AC.IdAccionCorrectiva
     
-    result = ACService.Eliminar(s_IDACTest, db, m_Error)
+    result = svcAC.Eliminar(s_IDACTest, db, m_Error)
     
     If result Then
         Debug.Print "PASS: Test_ACService_Eliminar_AtomicidadCache - AC eliminada atomicamente"
@@ -316,11 +323,12 @@ Public Sub Test_ARService_Alta_AtomicidadCache()
     Dim m_Error As String
     Dim result As Boolean
     Dim s_IDARTest As String
+    Dim svcAR As New ARService
     
     Set db = getdb()
     Set m_AR = CreateTestARAlta()
     
-    result = ARService.Alta(m_AR, db, m_Error)
+    result = svcAR.Alta(m_AR, db, m_Error)
     
     If result Then
         s_IDARTest = m_AR.IDAccionRealizada
@@ -342,17 +350,18 @@ Public Sub Test_ARService_Modificar_AtomicidadCache()
     Dim m_Error As String
     Dim result As Boolean
     Dim s_IDARTest As String
+    Dim svcAR As New ARService
     
     Set db = getdb()
     Set m_AR = CreateTestARAlta()
     
-    If Not ARService.Alta(m_AR, db, m_Error) Then
+    If Not svcAR.Alta(m_AR, db, m_Error) Then
         Debug.Print "FAIL: Test_ARService_Modificar_AtomicidadCache - Alta AR falló: " & m_Error
         Exit Sub
     End If
     s_IDARTest = m_AR.IDAccionRealizada
     
-    Set m_AROriginal = ARService.GetById(s_IDARTest, db, m_Error)
+    Set m_AROriginal = svcAR.GetById(s_IDARTest, db, m_Error)
     If m_AROriginal Is Nothing Then
         Debug.Print "FAIL: Test_ARService_Modificar_AtomicidadCache - No se pudo recargar AR"
         DeleteTestAR s_IDARTest
@@ -362,7 +371,7 @@ Public Sub Test_ARService_Modificar_AtomicidadCache()
     Set m_AR = m_AROriginal
     m_AR.AccionRealizada = "AR modificada atomicamente " & Format(Now, "yyyymmddhhnnss")
     
-    result = ARService.Modificar(m_AR, m_AROriginal, db, m_Error)
+    result = svcAR.Modificar(m_AR, m_AROriginal, db, m_Error)
     
     If result Then
         Debug.Print "PASS: Test_ARService_Modificar_AtomicidadCache - AR modificada atomicamente"
@@ -383,17 +392,18 @@ Public Sub Test_ARService_Eliminar_AtomicidadCache()
     Dim m_Error As String
     Dim result As Boolean
     Dim s_IDARTest As String
+    Dim svcAR As New ARService
     
     Set db = getdb()
     Set m_AR = CreateTestARAlta()
     
-    If Not ARService.Alta(m_AR, db, m_Error) Then
+    If Not svcAR.Alta(m_AR, db, m_Error) Then
         Debug.Print "FAIL: Test_ARService_Eliminar_AtomicidadCache - Alta AR falló: " & m_Error
         Exit Sub
     End If
     s_IDARTest = m_AR.IDAccionRealizada
     
-    result = ARService.Eliminar(s_IDARTest, db, m_Error)
+    result = svcAR.Eliminar(s_IDARTest, db, m_Error)
     
     If result Then
         Debug.Print "PASS: Test_ARService_Eliminar_AtomicidadCache - AR eliminada atomicamente"
@@ -420,6 +430,8 @@ Public Sub Test_KillSwitch_OFF_ACService_StillWorks()
     Dim s_IDNCTest As String
     Dim s_IDACTest As String
     Dim blnCacheEstadoAnterior As Boolean
+    Dim svcNC As New NCService
+    Dim svcAC As New ACService
     
     blnCacheEstadoAnterior = IsCacheEnabled()
     
@@ -429,7 +441,7 @@ Public Sub Test_KillSwitch_OFF_ACService_StillWorks()
     Set db = getdb()
     Set m_NC = CreateTestNC()
     
-    If Not NCService.Alta(m_NC, db, m_Error) Then
+    If Not svcNC.Alta(m_NC, db, m_Error) Then
         Debug.Print "FAIL: Test_KillSwitch_OFF_ACService_StillWorks - Alta NC falló: " & m_Error
         CacheConfig_SetEnabled blnCacheEstadoAnterior, "Test: Restaurar estado"
         Exit Sub
@@ -437,7 +449,7 @@ Public Sub Test_KillSwitch_OFF_ACService_StillWorks()
     s_IDNCTest = m_NC.IDNoConformidad
     
     Set m_AC = CreateTestACConNC(m_NC)
-    result = ACService.Alta(m_AC, db, m_Error)
+    result = svcAC.Alta(m_AC, db, m_Error)
     
     If result Then
         s_IDACTest = m_AC.IdAccionCorrectiva
@@ -464,6 +476,7 @@ Public Sub Test_KillSwitch_OFF_ARService_StillWorks()
     Dim result As Boolean
     Dim s_IDARTest As String
     Dim blnCacheEstadoAnterior As Boolean
+    Dim svcAR As New ARService
     
     blnCacheEstadoAnterior = IsCacheEnabled()
     
@@ -473,7 +486,7 @@ Public Sub Test_KillSwitch_OFF_ARService_StillWorks()
     Set db = getdb()
     Set m_AR = CreateTestARAlta()
     
-    result = ARService.Alta(m_AR, db, m_Error)
+    result = svcAR.Alta(m_AR, db, m_Error)
     
     If result Then
         s_IDARTest = m_AR.IDAccionRealizada
@@ -561,6 +574,6 @@ Public Sub Test_Atomicidad_CacheServices_RunAll()
     Debug.Print ""
     Debug.Print "=========================================="
     Debug.Print "BATERIA COMPLETADA"
-    Debug.Print "Tiempo: " & Format(TimeDiff(m_Start, Now), "hh:nn:ss")
+    Debug.Print "Tiempo: " & Format(Now - m_Start, "hh:nn:ss")
     Debug.Print "=========================================="
 End Sub

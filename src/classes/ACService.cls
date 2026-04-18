@@ -6,6 +6,9 @@ Attribute VB_Name = "ACService"
 Option Compare Database
 Option Explicit
 
+Private m_ACValidator As New ACValidator
+Private m_CacheNCCrud As New CacheNCCrud
+
 Public Function Alta(ByRef p_AC As ACProyecto, ByRef p_Db As DAO.Database, Optional ByRef p_Error As String) As Boolean
     Dim blnResult As Boolean
     Dim m_Wrk As DAO.Workspace
@@ -15,7 +18,7 @@ Public Function Alta(ByRef p_AC As ACProyecto, ByRef p_Db As DAO.Database, Optio
     p_Error = ""
     Alta = False
     
-    If Not ACValidator.ValidarAlta(p_AC, p_Error) Then
+    If Not m_ACValidator.ValidarAlta(p_AC, p_Error) Then
         Exit Function
     End If
     
@@ -59,7 +62,7 @@ Public Function Alta(ByRef p_AC As ACProyecto, ByRef p_Db As DAO.Database, Optio
         
         ' Notificación intratransaccional de caché (RFC-001 §3.6)
         ' Si falla la cache, rollback total del CRUD
-        If Not CacheNCCrud.NotificarCambioACAR(CLng(p_AC.IDNoConformidad), p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioACAR(CLng(p_AC.IDNoConformidad), p_Error) Then
             m_Wrk.Rollback
             m_HayTransaccion = False
             p_Error = "ACService.Alta: Error en cache. " & p_Error
@@ -90,7 +93,7 @@ Public Function Modificar(ByRef p_AC As ACProyecto, ByRef p_AC_Original As ACPro
     p_Error = ""
     Modificar = False
     
-    If Not ACValidator.ValidarEdicion(p_AC, p_Error) Then
+    If Not m_ACValidator.ValidarEdicion(p_AC, p_Error) Then
         Exit Function
     End If
     
@@ -120,7 +123,7 @@ Public Function Modificar(ByRef p_AC As ACProyecto, ByRef p_AC_Original As ACPro
         
         ' Notificación intratransaccional de caché (RFC-001 §3.6)
         ' Si falla la cache, rollback total del CRUD
-        If Not CacheNCCrud.NotificarCambioACAR(CLng(p_AC.IDNoConformidad), p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioACAR(CLng(p_AC.IDNoConformidad), p_Error) Then
             m_Wrk.Rollback
             m_HayTransaccion = False
             p_Error = "ACService.Modificar: Error en cache. " & p_Error
@@ -200,7 +203,7 @@ Public Function Eliminar(ByVal p_IDAC As String, ByRef p_Db As DAO.Database, Opt
         
         ' Notificación intratransaccional de caché (RFC-001 §3.6)
         ' Si falla la cache, rollback total del CRUD
-        If Not CacheNCCrud.NotificarCambioACAR(CLng(m_AC.IDNoConformidad), p_Error) Then
+        If Not m_CacheNCCrud.NotificarCambioACAR(CLng(m_AC.IDNoConformidad), p_Error) Then
             m_Wrk.Rollback
             m_HayTransaccion = False
             p_Error = "ACService.Eliminar: Error en cache. " & p_Error

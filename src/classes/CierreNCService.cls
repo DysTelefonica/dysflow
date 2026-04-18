@@ -6,6 +6,8 @@ Attribute VB_Name = "CierreNCService"
 Option Compare Database
 Option Explicit
 
+Private m_CacheNCCrud As New CacheNCCrud
+
 Public Function CerrarNC(ByVal p_IDNC As Long, ByRef p_Error As String) As Boolean
     Dim m_NCOp As NCProyectoOperaciones
     Dim m_NC As NCProyecto
@@ -37,7 +39,7 @@ Public Function CerrarNC(ByVal p_IDNC As Long, ByRef p_Error As String) As Boole
         Exit Function
     End If
     
-    If Not CacheNCCrud.NotificarCierreNC(p_IDNC, p_Error) Then
+    If Not m_CacheNCCrud.NotificarCierreNC(p_IDNC, p_Error) Then
         Exit Function
     End If
     

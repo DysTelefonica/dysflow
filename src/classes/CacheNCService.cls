@@ -10,6 +10,7 @@ Public Function NotificarCambioNC(ByVal p_IDNC As Long, ByVal p_Campo As EnumCam
     Dim blnResultado As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim m_CacheRepositorio As New CacheNCCacheRepositorio
     
     On Error GoTo errores
     p_Error = ""
@@ -28,7 +29,7 @@ Public Function NotificarCambioNC(ByVal p_IDNC As Long, ByVal p_Campo As EnumCam
         Exit Function
     End If
     
-    blnResultado = CacheNCCacheRepositorio.UpsertListado(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.UpsertListado(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False
@@ -54,6 +55,7 @@ Public Function NotificarCambioMultiCampo(ByVal p_IDNC As Long, ByRef p_Campos A
     Dim blnResultado As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim m_CacheRepositorio As New CacheNCCacheRepositorio
     
     On Error GoTo errores
     p_Error = ""
@@ -82,7 +84,7 @@ Public Function NotificarCambioMultiCampo(ByVal p_IDNC As Long, ByRef p_Campos A
         Exit Function
     End If
     
-    blnResultado = CacheNCCacheRepositorio.UpsertListado(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.UpsertListado(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False
@@ -108,6 +110,7 @@ Public Function NotificarEliminacionNC_Impl(ByVal p_IDNC As Long, Optional ByRef
     Dim blnResultado As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim m_CacheRepositorio As New CacheNCCacheRepositorio
     
     On Error GoTo errores
     p_Error = ""
@@ -119,14 +122,14 @@ Public Function NotificarEliminacionNC_Impl(ByVal p_IDNC As Long, Optional ByRef
     m_Wrk.BeginTrans
     m_HayTransaccion = True
     
-    blnResultado = CacheNCCacheRepositorio.EliminarDetalle(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.EliminarDetalle(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False
         Exit Function
     End If
     
-    blnResultado = CacheNCCacheRepositorio.EliminarListado(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.EliminarListado(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False
@@ -152,6 +155,7 @@ Public Function NotificarAltaNC_Impl(ByVal p_IDNC As Long, Optional ByRef p_Erro
     Dim blnResultado As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim m_CacheRepositorio As New CacheNCCacheRepositorio
     
     On Error GoTo errores
     p_Error = ""
@@ -170,7 +174,7 @@ Public Function NotificarAltaNC_Impl(ByVal p_IDNC As Long, Optional ByRef p_Erro
         Exit Function
     End If
     
-    blnResultado = CacheNCCacheRepositorio.UpsertListado(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.UpsertListado(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False
@@ -196,6 +200,7 @@ Public Function SincronizarCacheNC(ByVal p_IDNC As Long, Optional ByRef p_Error 
     Dim blnResultado As Boolean
     Dim m_Wrk As DAO.Workspace
     Dim m_HayTransaccion As Boolean
+    Dim m_CacheRepositorio As New CacheNCCacheRepositorio
     
     On Error GoTo errores
     p_Error = ""
@@ -214,7 +219,7 @@ Public Function SincronizarCacheNC(ByVal p_IDNC As Long, Optional ByRef p_Error 
         Exit Function
     End If
     
-    blnResultado = CacheNCCacheRepositorio.UpsertListado(p_IDNC, p_Error)
+    blnResultado = m_CacheRepositorio.UpsertListado(p_IDNC, p_Error)
     If Not blnResultado Then
         m_Wrk.Rollback
         m_HayTransaccion = False

@@ -31,7 +31,8 @@ End Enum
 
 Private m_Db As DAO.Database
 Private m_Transacciones As Collection
-Private Const NOMBRE_TABLA_CACHE As String = "TbCacheNCProyecto"
+Public Const NOMBRE_TABLA_CACHE As String = "TbCacheNCProyecto"
+Public Const NOMBRE_TABLA_LISTADO As String = "TbCacheListadoNC"
 Private Const NOMBRE_TABLA_LOG As String = "TbLogCache"
 Private Const CAMPO_CACHE_HABILITADA As String = "CacheHabilitada"
 
@@ -1506,6 +1507,54 @@ errores:
     InvalidateList_Cache = False
 End Function
 
+' Invalida un item específico del caché de listados (TbCacheListadoNC)
+' y lo regenera inmediatamente (Spec-008: DELETE + REGENERATE para listados)
+Public Function InvalidateListItem( _
+                            ByVal p_IDNC As Long, _
+                            Optional ByRef p_Error As String _
+                        ) As Boolean
+    
+    Dim qdf As dao.QueryDef
+    Dim rs As dao.Recordset
+    Dim sql As String
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    InvalidateListItem = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        InvalidateListItem = True
+        Exit Function
+    End If
+    
+    ' Eliminar el registro de listado
+    Set qdf = getdb().CreateQueryDef("")
+    qdf.SQL = "DELETE FROM " & NOMBRE_TABLA_LISTADO & " WHERE IDNoConformidad=[pIDNC];"
+    qdf.Parameters("pIDNC") = p_IDNC
+    qdf.Execute
+    qdf.Close
+    Set qdf = Nothing
+    
+    ' Regenerar el item en el caché de listado
+    ' Usamos CacheNCCacheRepositorio para esto
+    Dim cacheRepo As New CacheNCCacheRepositorio
+    If Not cacheRepo.UpsertListado(p_IDNC, p_Error) Then
+        Exit Function
+    End If
+    
+    LogCacheOperacion CStr(p_IDNC), "InvalidateListItem", "Item listado invalidado y regenerado", ObtenerUsuarioConectado(), True
+    
+    InvalidateListItem = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.InvalidateListItem: " & Err.Description
+    If Not qdf Is Nothing Then qdf.Close: Set qdf = Nothing
+    InvalidateListItem = False
+End Function
+
 ' ============================================
 ' REBUILD DE LISTA (Spec-009 Precalentado)
 ' ============================================
@@ -1703,6 +1752,200 @@ errores:
     If Not rs Is Nothing Then rs.Close: Set rs = Nothing
 End Function
 
+' ============================================
+' SINCRONIZACIÓN DE CACHÉ (Spec-003 §4.2)
+' ============================================
+
+' Regenera un registro específico en ambas tablas de caché
+' Detalle: TbCacheNCProyecto (GenerarCacheCompleto)
+' Listado: TbCacheListadoNC (UpsertListado via CacheNCCacheRepositorio)
+Public Function RegenerarRegistro( _
+    ByVal p_IDNC As String, _
+    Optional ByRef p_Error As String _
+) As Boolean
+    
+    Dim cacheRepo As CacheNCCacheRepositorio
+    Dim errDetalle As String
+    Dim errListado As String
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    RegenerarRegistro = False
+    
+    ' 1. Generar/regenerar caché de DETALLE (TbCacheNCProyecto)
+    If Not GenerarCacheCompleto(p_IDNC, errDetalle) Then
+        p_Error = "Error generando cache detalle: " & errDetalle
+        Exit Function
+    End If
+    
+    ' 2. Upsert en caché de LISTADO (TbCacheListadoNC)
+    Set cacheRepo = New CacheNCCacheRepositorio
+    If Not cacheRepo.UpsertListado(CLng(p_IDNC), errListado) Then
+        p_Error = "Error actualizando cache listado: " & errListado
+        Exit Function
+    End If
+    
+    LogCacheOperacion p_IDNC, "Regenerar", "Registro regenerado en detalle y listado", ObtenerUsuarioConectado(), True
+    
+    RegenerarRegistro = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.RegenerarRegistro: " & Err.Description
+    RegenerarRegistro = False
+End Function
+
+' Sincroniza el caché de listados con la fuente de verdad
+' Invariante: TbCacheListadoNC.IDs == TbNoConformidades.IDs (no orphans, no missing)
+' Spec: §4.2
+Public Function SincronizarCache(Optional ByRef p_Error As String) As Boolean
+    
+    Dim rsFuente As DAO.Recordset
+    Dim rsCache As DAO.Recordset
+    Dim SQL As String
+    Dim colFuente As New Collection
+    Dim colCache As New Collection
+    Dim colFaltan As New Collection
+    Dim colSobran As New Collection
+    Dim idNC As Variant
+    Dim errItem As String
+    Dim inicio As Long
+    Dim erroresCount As Long
+    Dim i As Long
+    Dim usuarios As String
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    SincronizarCache = False
+    erroresCount = 0
+    
+    ' 1. Kill-switch: si cache desactivada, retornar True (NOOP)
+    If Not IsCacheEnabled() Then
+        LogCacheOperacion "0", "Sincronizar", "Cache desactivada - NOOP", "Sistema", True
+        SincronizarCache = True
+        Exit Function
+    End If
+    
+    inicio = Timer
+    usuarios = ObtenerUsuarioConectado()
+    
+    ' 2. Obtener IDs de la FUENTE (TbNoConformidades WHERE Borrado=0)
+    SQL = "SELECT IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado, 0) = 0 ORDER BY IDNoConformidad"
+    Set rsFuente = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    
+    Do While Not rsFuente.EOF
+        colFuente.Add CStr(rsFuente!IDNoConformidad)
+        rsFuente.MoveNext
+    Loop
+    rsFuente.Close
+    Set rsFuente = Nothing
+    
+    ' 3. Obtener IDs del CACHÉ de listado (TbCacheListadoNC)
+    SQL = "SELECT IDNoConformidad FROM " & NOMBRE_TABLA_LISTADO & " ORDER BY IDNoConformidad"
+    Set rsCache = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    
+    Do While Not rsCache.EOF
+        colCache.Add CStr(rsCache!IDNoConformidad)
+        rsCache.MoveNext
+    Loop
+    rsCache.Close
+    Set rsCache = Nothing
+    
+    ' 4. Calcular FALTAN (IDs en fuente pero no en caché)
+    For Each idNC In colFuente
+        If NotExisteEnColeccion(colCache, CStr(idNC)) Then
+            colFaltan.Add idNC
+        End If
+    Next idNC
+    
+    ' 5. Calcular SOBRAN (IDs en caché pero no en fuente)
+    For Each idNC In colCache
+        If NotExisteEnColeccion(colFuente, CStr(idNC)) Then
+            colSobran.Add idNC
+        End If
+    Next idNC
+    
+    ' 6. Procesar FALTAN: regenerar registro en detalle + upsert en listado
+    For i = 1 To colFaltan.Count
+        idNC = colFaltan(i)
+        If Not RegenerarRegistro(CStr(idNC), errItem) Then
+            erroresCount = erroresCount + 1
+            LogCacheOperacion CStr(idNC), "Sync-Faltan", "Error: " & errItem, usuarios, False
+        Else
+            LogCacheOperacion CStr(idNC), "Sync-Faltan", "Registrado en cache", usuarios, True
+        End If
+    Next i
+    
+    ' 7. Procesar SOBRAN: eliminar de ambas tablas de caché
+    Dim cacheRepo As CacheNCCacheRepositorio
+    Set cacheRepo = New CacheNCCacheRepositorio
+    
+    For i = 1 To colSobran.Count
+        idNC = colSobran(i)
+        
+        ' DELETE de TbCacheNCProyecto (detalle)
+        If Not cacheRepo.EliminarDetalle(CLng(idNC), errItem) Then
+            erroresCount = erroresCount + 1
+            LogCacheOperacion CStr(idNC), "Sync-Sobran-Detalle", "Error: " & errItem, usuarios, False
+        End If
+        
+        ' DELETE de TbCacheListadoNC (listado)
+        If Not cacheRepo.EliminarListado(CLng(idNC), errItem) Then
+            erroresCount = erroresCount + 1
+            LogCacheOperacion CStr(idNC), "Sync-Sobran-Listado", "Error: " & errItem, usuarios, False
+        End If
+        
+        If erroresCount = 0 Then
+            LogCacheOperacion CStr(idNC), "Sync-Sobran", "Eliminado de cache", usuarios, True
+        End If
+    Next i
+    
+    Set cacheRepo = Nothing
+    
+    ' 8. Log del resultado global
+    Dim duracion As Long
+    duracion = (Timer - inicio) * 1000
+    
+    Dim detalleLog As String
+    detalleLog = "Sincronizacion completada. Faltan: " & colFaltan.Count & ", Sobran: " & colSobran.Count & ", Errores: " & erroresCount
+    
+    If erroresCount = 0 Then
+        LogCacheOperacion "0", "Sincronizar", detalleLog, usuarios, True, duracion
+        SincronizarCache = True
+    Else
+        p_Error = erroresCount & " errores durante sincronizacion"
+        LogCacheOperacion "0", "Sincronizar", detalleLog, usuarios, False, duracion
+        SincronizarCache = False
+    End If
+    
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.SincronizarCache: " & Err.Description
+    If Not rsFuente Is Nothing Then rsFuente.Close: Set rsFuente = Nothing
+    If Not rsCache Is Nothing Then rsCache.Close: Set rsCache = Nothing
+    SincronizarCache = False
+End Function
+
+' Helper: verifica si un ID no existe en la colección
+Private Function NotExisteEnColeccion( _
+    ByRef p_Col As Collection, _
+    ByVal p_ID As String _
+) As Boolean
+    
+    Dim item As Variant
+    NotExisteEnColeccion = True
+    
+    For Each item In p_Col
+        If CStr(item) = p_ID Then
+            NotExisteEnColeccion = False
+            Exit Function
+        End If
+    Next item
+End Function
+
 ' Helper: Obtiene ID de NC desde un Riesgo (vía tabla de link TbRiesgosNC)
 Private Function ObtenerIDNCDesdeRiesgo(ByVal p_IDRiesgo As Long) As String
     Dim rs As dao.Recordset
@@ -1726,6 +1969,241 @@ Private Function ObtenerIDNCDesdeRiesgo(ByVal p_IDRiesgo As Long) As String
 errores:
     ObtenerIDNCDesdeRiesgo = ""
     If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+End Function
+
+' ============================================
+' PRECALENTADO MANUAL DE CACHÉ (Spec-009)
+' ============================================
+
+' Precalienta el caché completo (detalle + listado) de todas las NCs
+' Parámetros:
+'   p_BatchSize: Cantidad de NCs a procesar por lote (default 50)
+'   p_IncluirListado: Si True, precalienta también el caché de listado (default True)
+'   p_FiltrosListado: Lista de filtros baseline a precalentar (separados por comma)
+'   p_ForceOverwrite: Si True, regenera incluso si ya existe caché válida (default False)
+'   p_Error: Variable de salida para mensaje de error
+' Retorna: True si el proceso completó exitosamente, False si hubo errores
+Public Function PrecalentarCacheCompleto( _
+    Optional ByVal p_BatchSize As Long = 50, _
+    Optional ByVal p_IncluirListado As Boolean = True, _
+    Optional ByVal p_FiltrosListado As String = "", _
+    Optional ByVal p_ForceOverwrite As Boolean = False, _
+    Optional ByRef p_Error As String _
+) As Boolean
+    
+    Dim rs As DAO.Recordset
+    Dim SQL As String
+    Dim cacheRepo As CacheNCCacheRepositorio
+    Dim contadorTotal As Long
+    Dim contadorExitosas As Long
+    Dim contadorOmitidas As Long
+    Dim contadorErrores As Long
+    Dim inicio As Long
+    Dim duracionTotal As Double
+    Dim idNC As Long
+    Dim errItem As String
+    Dim enBatch As Long
+    Dim totalNCs As Long
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    PrecalentarCacheCompleto = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        LogCacheOperacion "0", "PrecalentarCache", "Caché deshabilitada - NOOP", ObtenerUsuarioConectado(), True
+        PrecalentarCacheCompleto = True
+        Exit Function
+    End If
+    
+    inicio = Timer
+    
+    ' Obtener total de NCs
+    SQL = "SELECT COUNT(*) AS Total FROM TbNoConformidades"
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    totalNCs = rs!Total
+    rs.Close
+    Set rs = Nothing
+    
+    If totalNCs = 0 Then
+        LogCacheOperacion "0", "PrecalentarCache", "No hay NCs para precalentar", ObtenerUsuarioConectado(), True
+        PrecalentarCacheCompleto = True
+        Exit Function
+    End If
+    
+    ' Inicializar contadores
+    contadorTotal = 0
+    contadorExitosas = 0
+    contadorOmitidas = 0
+    contadorErrores = 0
+    enBatch = 0
+    
+    ' Obtener todos los IDs de NCs
+    SQL = "SELECT IDNoConformidad FROM TbNoConformidades ORDER BY IDNoConformidad"
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    
+    ' Crear instancia del repositorio de caché
+    Set cacheRepo = New CacheNCCacheRepositorio
+    
+    If Not rs.EOF Then
+        rs.MoveFirst
+        
+        Do While Not rs.EOF
+            idNC = rs!IDNoConformidad
+            contadorTotal = contadorTotal + 1
+            enBatch = enBatch + 1
+            
+            ' Verificar si debemos procesar esta NC
+            Dim skipNC As Boolean
+            skipNC = False
+            
+            If Not p_ForceOverwrite Then
+                ' Si no forzamos overwrite, verificar si ya tiene caché válida en ambas tablas
+                Dim cacheDetalleValida As Boolean
+                Dim cacheListadoValida As Boolean
+                
+                cacheDetalleValida = CacheValida(CStr(idNC))
+                
+                If p_IncluirListado Then
+                    cacheListadoValida = cacheRepo.GetListadoValido(idNC, errItem)
+                Else
+                    cacheListadoValida = True  ' Si no incluimos listado, no importa
+                End If
+                
+                If cacheDetalleValida And cacheListadoValida Then
+                    skipNC = True
+                    contadorOmitidas = contadorOmitidas + 1
+                End If
+            End If
+            
+            If skipNC Then
+                ' No hacer nada - ya tiene caché válida
+            Else
+                ' Generar caché de detalle
+                If GenerarCacheCompleto(CStr(idNC), errItem) Then
+                    contadorExitosas = contadorExitosas + 1
+                    
+                    ' Si incluye listado, generar también el caché de listado
+                    If p_IncluirListado Then
+                        cacheRepo.UpsertListado idNC, errItem
+                    End If
+                Else
+                    contadorErrores = contadorErrores + 1
+                    LogCacheOperacion CStr(idNC), "PrecalentarError", errItem, ObtenerUsuarioConectado(), False
+                End If
+            End If
+            
+            ' Mostrar progreso cada batch
+            If enBatch >= p_BatchSize Then
+                Debug.Print "Procesando NCs: " & contadorTotal & "/" & totalNCs & _
+                            " | Exitosas: " & contadorExitosas & _
+                            " | Omitidas: " & contadorOmitidas & _
+                            " | Errores: " & contadorErrores
+                enBatch = 0
+            End If
+            
+            rs.MoveNext
+        Loop
+    End If
+    
+    rs.Close
+    Set rs = Nothing
+    Set cacheRepo = Nothing
+    
+    duracionTotal = Timer - inicio
+    
+    ' Resumen final
+    Debug.Print "=== PRECALENTADO COMPLETO ==="
+    Debug.Print "Detalle: " & contadorTotal & " NCs procesadas, " & _
+                contadorExitosas & " exitosas, " & _
+                contadorOmitidas & " omitidas, " & _
+                contadorErrores & " fallidas"
+    If p_IncluirListado Then
+        Debug.Print "Listado: Precalentado " & IIf(p_ForceOverwrite, "con", "sin") & " overwrite"
+    End If
+    Debug.Print "Tiempo total: " & Format(duracionTotal, "0.00") & "s"
+    Debug.Print "=========================="
+    
+    LogCacheOperacion "0", "PrecalentarCache", _
+        "Completado: " & contadorTotal & " NCs, " & contadorExitosas & " exitosas, " & _
+        contadorErrores & " errores, " & Format(duracionTotal, "0.00") & "s", _
+        ObtenerUsuarioConectado(), True
+    
+    PrecalentarCacheCompleto = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en PrecalentarCacheCompleto: " & Err.Description
+    If Not rs Is Nothing Then rs.Close: Set rs = Nothing
+    If Not cacheRepo Is Nothing Then Set cacheRepo = Nothing
+    PrecalentarCacheCompleto = False
+End Function
+
+' Limpia todo el caché (detalle y listado)
+' Uso: CacheNCProyecto.LimpiarCacheCompleta
+' Retorna: True si la limpieza se completó exitosamente
+Public Function LimpiarCacheCompleta(Optional ByRef p_Error As String) As Boolean
+    
+    Dim SQL As String
+    Dim inicio As Long
+    Dim duracion As Double
+    Dim registrosDetalle As Long
+    Dim registrosListado As Long
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    LimpiarCacheCompleta = False
+    
+    ' Verificar kill-switch
+    If Not IsCacheEnabled() Then
+        LogCacheOperacion "0", "LimpiarCache", "Caché deshabilitada - NOOP", ObtenerUsuarioConectado(), True
+        LimpiarCacheCompleta = True
+        Exit Function
+    End If
+    
+    inicio = Timer
+    
+    ' Contar registros antes de borrar
+    Dim rs As DAO.Recordset
+    Set rs = getdb().OpenRecordset("SELECT COUNT(*) FROM " & NOMBRE_TABLA_CACHE, dbOpenSnapshot)
+    registrosDetalle = rs!Total
+    rs.Close
+    Set rs = Nothing
+    
+    Set rs = getdb().OpenRecordset("SELECT COUNT(*) FROM " & NOMBRE_TABLA_LISTADO, dbOpenSnapshot)
+    registrosListado = rs!Total
+    rs.Close
+    Set rs = Nothing
+    
+    ' Eliminar todos los registros de caché de detalle
+    SQL = "DELETE FROM " & NOMBRE_TABLA_CACHE
+    getdb().Execute SQL, dbFailOnError
+    
+    ' Eliminar todos los registros de caché de listado
+    SQL = "DELETE FROM " & NOMBRE_TABLA_LISTADO
+    getdb().Execute SQL, dbFailOnError
+    
+    duracion = Timer - inicio
+    
+    Debug.Print "=== LIMPIEZA DE CACHÉ ==="
+    Debug.Print "TbCacheNCProyecto: " & registrosDetalle & " registros eliminados"
+    Debug.Print "TbCacheListadoNC: " & registrosListado & " registros eliminados"
+    Debug.Print "Tiempo: " & Format(duracion, "0.00") & "s"
+    Debug.Print "========================="
+    
+    LogCacheOperacion "0", "LimpiarCache", _
+        "Cache limpiada: " & registrosDetalle & " detalle, " & registrosListado & " listado", _
+        ObtenerUsuarioConectado(), True
+    
+    LimpiarCacheCompleta = True
+    Exit Function
+    
+errores:
+    p_Error = "Error en LimpiarCacheCompleta: " & Err.Description
+    Set rs = Nothing
+    LimpiarCacheCompleta = False
 End Function
 
 ' ============================================

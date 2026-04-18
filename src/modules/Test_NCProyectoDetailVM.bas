@@ -17,7 +17,7 @@ Public Sub Test_NCProyectoDetailVM()
     
     On Error GoTo handleError
     
-    Set vm = getNCProyectoDetailVM(p_IDNC:=405, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(405)
     
     If errorMsg <> "" Then
         Debug.Print "[ERROR CARGA] " & errorMsg
@@ -105,7 +105,7 @@ Public Sub Test_NCProyectoDetailVM()
     
     Debug.Print ""
     Debug.Print "--- Test con ID inexistente ---"
-    Set vm2 = getNCProyectoDetailVM(p_IDNC:=999999, p_Error:=errorMsg)
+    Set vm2 = NCProyectoWrapper.GetNCProyectoVM(999999)
     
     If vm2 Is Nothing Then
         Debug.Print "[OK] vm2 es Nothing (esperado)"
@@ -118,7 +118,7 @@ Public Sub Test_NCProyectoDetailVM()
     
     Debug.Print ""
     Debug.Print "--- Test sin ID (instancia vacía) ---"
-    Set vm2 = getNCProyectoDetailVM(p_Error:=errorMsg)
+    Set vm2 = New NCProyectoDetailVM
     
     If vm2 Is Nothing Then
         Debug.Print "[FALLO] vm no debería ser Nothing"

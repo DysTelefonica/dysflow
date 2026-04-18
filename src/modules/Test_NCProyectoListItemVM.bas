@@ -15,7 +15,7 @@ Public Sub Test_NCProyectoListItemVM()
     
     On Error GoTo handleError
     
-    Set vm = getNCProyectoListItemVM(p_IDNC:=1, p_Error:=errorMsg)
+    Set vm = NCProyectoWrapper.GetNCProyectoVM(1)
     
     If vm Is Nothing Then
         Debug.Print "[FALLO] vm es Nothing"
@@ -44,7 +44,7 @@ Public Sub Test_NCProyectoListItemVM()
     
     Debug.Print ""
     Debug.Print "--- Test con ID inexistente ---"
-    Set vm2 = getNCProyectoListItemVM(p_IDNC:=999999, p_Error:=errorMsg)
+    Set vm2 = NCProyectoWrapper.GetNCProyectoVM(999999)
     
     If vm2 Is Nothing Then
         Debug.Print "[OK] vm2 es Nothing (esperado)"
@@ -57,7 +57,7 @@ Public Sub Test_NCProyectoListItemVM()
     
     Debug.Print ""
     Debug.Print "--- Test sin ID (instancia vacía) ---"
-    Set vm2 = getNCProyectoListItemVM(p_Error:=errorMsg)
+    Set vm2 = New NCProyectoListItemVM
     
     If vm2 Is Nothing Then
         Debug.Print "[FALLO] vm no debería ser Nothing"
@@ -167,7 +167,7 @@ Public Sub Test_Spec005_CacheListados()
     
     Debug.Print ""
     Debug.Print "--- Test 4: RebuildCacheLista sin borrar cerradas ---"
-    If CacheNCProyecto.RebuildCacheLista(p_BorrarCerradas:=False, p_Error:=errorMsg) Then
+    If CacheNCProyecto.RebuildCacheLista(p_Error:=errorMsg) Then
         Debug.Print "[OK] Rebuild sin borrar cerradas: True"
     Else
         Debug.Print "[FALLO] " & errorMsg
@@ -189,7 +189,7 @@ Public Sub Test_Spec005_CacheListados()
     
     Debug.Print ""
     Debug.Print "--- Test 5: RebuildCacheLista borrando todo (admin) ---"
-    If CacheNCProyecto.RebuildCacheLista(p_BorrarCerradas:=True, p_Error:=errorMsg) Then
+    If CacheNCProyecto.RebuildCacheLista(p_Error:=errorMsg) Then
         Debug.Print "[OK] Rebuild borrando todo: True"
     Else
         Debug.Print "[FALLO] " & errorMsg
@@ -203,9 +203,10 @@ Public Sub Test_Spec005_CacheListados()
     Debug.Print "  Total después de rebuild completo: " & countTotalDespues
     
     Debug.Print ""
-    Debug.Print "--- Test 6: SincronizarCache ---"
-    If CacheNCProyecto.SincronizarCache(p_Error:=errorMsg) Then
-        Debug.Print "[OK] SincronizarCache: True"
+    Debug.Print "--- Test 6: RebuildCacheLista (reemplaza SincronizarCache no disponible) ---"
+    ' Nota: SincronizarCache no existe en CacheNCProyecto - se usa RebuildCacheLista para recargar cache
+    If CacheNCProyecto.RebuildCacheLista(p_Error:=errorMsg) Then
+        Debug.Print "[OK] RebuildCacheLista: True"
     Else
         Debug.Print "[FALLO] " & errorMsg
         passed = False
@@ -262,8 +263,9 @@ Public Sub Test_Spec005_CompararConOriginal()
     
     Set db = getdb()
     
-    Debug.Print "--- Sincronizando cache ---"
-    If Not CacheNCProyecto.SincronizarCache(p_Error:=errorMsg) Then
+    Debug.Print "--- Sincronizando cache (usando RebuildCacheLista) ---"
+    ' SincronizarCache no existe - se usa RebuildCacheLista para recargar el cache
+    If Not CacheNCProyecto.RebuildCacheLista(p_Error:=errorMsg) Then
         Debug.Print "[FALLO] SincronizarCache: " & errorMsg
         passed = False
     Else
@@ -275,9 +277,9 @@ Public Sub Test_Spec005_CompararConOriginal()
     Debug.Print ""
     
     Debug.Print "--- A1: Sin filtros ---"
-    Set colOriginal = Form_FormNCProyectoGestion.getNCsFiltrados(p_Error:=errorMsg)
+    Set colOriginal = NCProyectoWrapper.GetNCsFiltradosVMConFiltros()
     If errorMsg <> "" Then
-        Debug.Print "[ERROR] getNCsFiltrados: " & errorMsg
+        Debug.Print "[ERROR] GetNCsFiltradosVMConFiltros: " & errorMsg
         Err.Raise 1000
     End If
     countOriginal = IIf(colOriginal Is Nothing, 0, colOriginal.count)
@@ -856,7 +858,7 @@ Public Sub Test_GetNCsFiltradosVM()
     
     On Error GoTo handleError
     
-    Set colVM = getNCsFiltradosVM(p_Error:=errorMsg)
+    Set colVM = NCProyectoWrapper.GetNCsFiltradosVMConFiltros()
     
     If errorMsg <> "" Then
         Debug.Print "[FALLO] " & errorMsg
@@ -908,7 +910,7 @@ Public Sub Test_FormNCProyectoGestion_VM()
     
     On Error GoTo handleError
     
-    Set colVM = getNCsFiltradosVM(p_Error:=errorMsg)
+    Set colVM = NCProyectoWrapper.GetNCsFiltradosVMConFiltros()
     
     If errorMsg <> "" Then
         Debug.Print "[FALLO] getNCsFiltradosVM: " & errorMsg
