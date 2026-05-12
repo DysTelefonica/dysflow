@@ -1,7 +1,7 @@
 Version =21
 VersionRequired =20
 PublishOption =1
-Checksum =-1602187302
+Checksum =-356300252
 Begin Form
     AutoResize = NotDefault
     RecordSelectors = NotDefault
@@ -22,10 +22,10 @@ Begin Form
     Width =13039
     DatasheetFontHeight =11
     ItemSuffix =96
-    Left =3420
-    Top =4515
-    Right =16455
-    Bottom =11310
+    Left =15165
+    Top =1230
+    Right =28200
+    Bottom =8025
     DatasheetGridlinesColor =14806254
     RecSrcDt = Begin
         0x7bf11d65d99ee540
@@ -44,13 +44,13 @@ Begin Form
         0x010000006801000000000000a10700000100000001000000
     End
     PrtDevMode = Begin
-        0x0033ee80ad000000e0070d366e02000008b4dc0dfe7f00009681ca0dfe7f0000 ,
-        0x010403069c0058140f930100010009009a0b3408640001000700580201000200 ,
-        0x58020300000041340086384bfd7f000002000000ad00000000a0c580ad000000 ,
-        0xd033ee80ad000000000000000000000000000000010000000000000001000000 ,
+        0x000000000000000000000000000000000000000000000000100917aaa3020000 ,
+        0x010403069c0050140f930100010009009a0b3408640001000700580201000200 ,
+        0x58020300000041340001e0b4a30200000004000000000000f6a9bc55f77f0000 ,
+        0x02000000a3020000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
-        0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
-        0x00000000000000000500000000002f0001000000000000000000000000000000 ,
+        0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
+        0x0000000000000000050000000000050001000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -67,21 +67,21 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000100000000000000000000000000000000000000 ,
-        0x000000000000000000000000000000000000000000000000d0000000534d544a ,
-        0x000000001000c0007b00300038003400460030003100460041002d0045003600 ,
+        0x000000000000000000000000000000000000000000000000c8000000534d544a ,
+        0x000000001000b8007b00300038003400460030003100460041002d0045003600 ,
         0x330034002d0034004400370037002d0038003300450045002d00300037003400 ,
         0x3800310037004300300033003500380031007d000000524553444c4c00556e69 ,
-        0x726573444c4c00506170657253697a65004c4554544552004f7269656e746174 ,
-        0x696f6e00504f525452414954005265736f6c7574696f6e005265734f7074696f ,
-        0x6e3100436f6c6f724d6f646500436f6c6f720000000000000000000000000000 ,
-        0x00000000000000002c1100005634444d01000000000000009c0a70221c000000 ,
-        0xec00000003000000fa014f0834e6774d83ee074817c03581d00000004c000000 ,
-        0x0300000000080000000000000000000003000000000800002a00000000080000 ,
-        0x0300000040000000560000000010000044006f00630075006d0065006e007400 ,
-        0x5500730065007200500061007300730077006f0072006400000044006f006300 ,
-        0x75006d0065006e0074004f0077006e0065007200500061007300730077006f00 ,
-        0x72006400000044006f00630075006d0065006e00740043007200790070007400 ,
-        0x5300650063007500720069007400790000000000000000000000000000000000 ,
+        0x726573444c4c00506170657253697a65004134004f7269656e746174696f6e00 ,
+        0x504f525452414954005265736f6c7574696f6e005265734f7074696f6e310043 ,
+        0x6f6c6f724d6f646500436f6c6f72000000000000000000000000000000000000 ,
+        0x2c1100005634444d01000000000000009c0a70221c000000ec00000003000000 ,
+        0xfa014f0834e6774d83ee074817c03581d00000004c0000000300000000080000 ,
+        0x000000000000000003000000000800002a000000000800000300000040000000 ,
+        0x560000000010000044006f00630075006d0065006e0074005500730065007200 ,
+        0x500061007300730077006f0072006400000044006f00630075006d0065006e00 ,
+        0x74004f0077006e0065007200500061007300730077006f007200640000004400 ,
+        0x6f00630075006d0065006e007400430072007900700074005300650063007500 ,
+        0x7200690074007900000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -211,12 +211,12 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x0000000000000000000000000000000000000000
+        0x000000000000000000000000
     End
     PrtDevNames = Begin
         0x08001f0036000100000000000000000000000000000000000000000000000000 ,
         0x00000000000000000000000000000000000000000000504f525450524f4d5054 ,
-        0x3a0000000000
+        0x3a00
     End
     OnLoad ="[Event Procedure]"
     AllowDatasheetView =0
@@ -233,15 +233,15 @@ Begin Form
     AlternateBackThemeColorIndex =1
     AlternateBackShade =95.0
     PrtDevModeW = Begin
-        0x000058b0c5e374ab57b12eaee7eef8679686d53865aa9dacc7aeb4dae6bc1256 ,
-        0xef1520dca1c1e4c58dced4461e35bf9a5fa9548116d66bdfc0fc84f984770723 ,
-        0x01040306dc0058140f930100010009009a0b3408640001000700580201000200 ,
-        0x5802030000004100340000008477072300000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x74006f0020005000440046000000000000000000000000000000000000000000 ,
+        0x01040306dc0050140f930100010009009a0b3408640001000700580201000200 ,
+        0x580203000000410034000000000000001400000000000000dd41c28efd7f0000 ,
+        0x500773b3a3020000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
-        0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
-        0x00000000000000000500000000002f0001000000000000000000000000000000 ,
+        0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
+        0x0000000000000000050000000000050001000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -258,21 +258,21 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000100000000000000000000000000000000000000 ,
-        0x000000000000000000000000000000000000000000000000d0000000534d544a ,
-        0x000000001000c0007b00300038003400460030003100460041002d0045003600 ,
+        0x000000000000000000000000000000000000000000000000c8000000534d544a ,
+        0x000000001000b8007b00300038003400460030003100460041002d0045003600 ,
         0x330034002d0034004400370037002d0038003300450045002d00300037003400 ,
         0x3800310037004300300033003500380031007d000000524553444c4c00556e69 ,
-        0x726573444c4c00506170657253697a65004c4554544552004f7269656e746174 ,
-        0x696f6e00504f525452414954005265736f6c7574696f6e005265734f7074696f ,
-        0x6e3100436f6c6f724d6f646500436f6c6f720000000000000000000000000000 ,
-        0x00000000000000002c1100005634444d01000000000000009c0a70221c000000 ,
-        0xec00000003000000fa014f0834e6774d83ee074817c03581d00000004c000000 ,
-        0x0300000000080000000000000000000003000000000800002a00000000080000 ,
-        0x0300000040000000560000000010000044006f00630075006d0065006e007400 ,
-        0x5500730065007200500061007300730077006f0072006400000044006f006300 ,
-        0x75006d0065006e0074004f0077006e0065007200500061007300730077006f00 ,
-        0x72006400000044006f00630075006d0065006e00740043007200790070007400 ,
-        0x5300650063007500720069007400790000000000000000000000000000000000 ,
+        0x726573444c4c00506170657253697a65004134004f7269656e746174696f6e00 ,
+        0x504f525452414954005265736f6c7574696f6e005265734f7074696f6e310043 ,
+        0x6f6c6f724d6f646500436f6c6f72000000000000000000000000000000000000 ,
+        0x2c1100005634444d01000000000000009c0a70221c000000ec00000003000000 ,
+        0xfa014f0834e6774d83ee074817c03581d00000004c0000000300000000080000 ,
+        0x000000000000000003000000000800002a000000000800000300000040000000 ,
+        0x560000000010000044006f00630075006d0065006e0074005500730065007200 ,
+        0x500061007300730077006f0072006400000044006f00630075006d0065006e00 ,
+        0x74004f0077006e0065007200500061007300730077006f007200640000004400 ,
+        0x6f00630075006d0065006e007400430072007900700074005300650063007500 ,
+        0x7200690074007900000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -402,14 +402,13 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x0000000000000000000000000000000000000000
+        0x000000000000000000000000
     End
     PrtDevNamesW = Begin
         0x04001b0032000100000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x0000000050004f0052005400500052004f004d00500054003a00000000000000 ,
-        0x00000000
+        0x0000000050004f0052005400500052004f004d00500054003a000000
     End
     NoSaveCTIWhenDisabled =1
     Begin
@@ -1643,6 +1642,44 @@ Begin Form
                     GridlineThemeColorIndex =-1
                     GridlineShade =100.0
                 End
+                Begin CommandButton
+                    Enabled = NotDefault
+                    OverlapFlags =85
+                    Left =6973
+                    Top =5767
+                    Width =2085
+                    Height =297
+                    FontSize =9
+                    FontWeight =700
+                    TabIndex =17
+                    ForeColor =16737792
+                    Name ="ComandoVerNoRequiere"
+                    Caption ="Ver Motivos NR"
+                    OnClick ="[Event Procedure]"
+                    FontName ="Segoe UI"
+                    ControlTipText ="Formulario de entrada de datos de control de eficacia"
+                    GUID = Begin
+                        0x2f6c710d620c6b49a1044ff7387397cd
+                    End
+
+                    LayoutCachedLeft =6973
+                    LayoutCachedTop =5767
+                    LayoutCachedWidth =9058
+                    LayoutCachedHeight =6064
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                    ThemeFontIndex =-1
+                    HoverForeColor =16737792
+                    HoverForeThemeColorIndex =-1
+                    HoverForeTint =100.0
+                    PressedForeColor =16737792
+                    PressedForeThemeColorIndex =-1
+                    PressedForeTint =100.0
+                    WebImagePaddingLeft =2
+                    WebImagePaddingTop =2
+                    WebImagePaddingRight =1
+                    WebImagePaddingBottom =1
+                End
             End
         End
     End
@@ -1654,7 +1691,6 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
-
 Private m_Error As String
 
 
@@ -1759,6 +1795,12 @@ Public Sub ComandoGrabar_Click()
     RellenarDatosObjeto m_Error
     If m_Error <> "" Then
         Err.Raise 100
+    End If
+    
+    ' Validación: si RequiereControlEficacia="No" debe haber motivo
+    If Nz(Me.RequiereControlEficacia, "") = "No" And Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos NR'."
+        Err.Raise 1000
     End If
     
     If Not Form_FormNCAuditoria.m_NCAlInicio Is Nothing Then
@@ -1997,6 +2039,25 @@ Public Function EstablecerDatos( _
         
         If .RequiereControlEficacia <> "" Then
             Me.RequiereControlEficacia = .RequiereControlEficacia
+            ' Botón ComandoControlEficaciaDatos según RequiereControlEficacia
+            Me.ComandoControlEficaciaDatos.Enabled = False
+            If .RequiereControlEficacia = "Sí" Then
+                Me.ComandoControlEficaciaDatos.Enabled = True
+            End If
+            ' Botón ComandoVerNoRequiere según RequiereControlEficacia
+            If .RequiereControlEficacia = "No" Then
+                Me.ComandoVerNoRequiere.Enabled = True
+If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                Else
+                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                End If
+            Else
+                Me.ComandoVerNoRequiere.Enabled = False
+            End If
+        Else
+            Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = False
         End If
         
         If .FechaApertura <> "" Then
@@ -2090,14 +2151,32 @@ End Sub
 Private Sub RequiereControlEficacia_AfterUpdate()
     On Error Resume Next
     
-    
-    
     If Form_FormNCAuditoria.m_PermitidoEditar = EnumSino.Sí Then
         RellenarBordeCamposObligatorios Me
         If Nz(Me.RequiereControlEficacia, "") = "Sí" Then
             Me.ComandoControlEficaciaDatos.Enabled = True
+            Me.ComandoVerNoRequiere.Enabled = False
+            ' Warn if motivos will be lost
+            If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+                pregunta = MsgBox("Ya existen motivos de No Requiere Control de Eficacia." & vbNewLine & _
+                        "Al cambiar a 'Sí' se perderán. ¿Continuar?", vbExclamation + vbYesNo + vbDefaultButton2, "Cambio de Requiere Control de Eficacia")
+                If pregunta <> vbYes Then
+                    Me.RequiereControlEficacia = "No"
+                    Exit Sub
+                End If
+                m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia = ""
+            End If
+        ElseIf Nz(Me.RequiereControlEficacia, "") = "No" Then
+            Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = True
+            If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+                Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+            Else
+                Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+            End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = False
         End If
     End If
 End Sub
@@ -2130,6 +2209,41 @@ errores:
         p_Error = "El método RellenarDatosObjeto ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
+
+Private Sub ComandoVerNoRequiere_Click()
+    Dim m_Motivo As String
+    
+    On Error GoTo errores
+    
+    ' Open the popup form as modal dialog
+    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", WindowMode:=acDialog
+    
+    ' After dialog closes, read the value from the popup form's control
+    If FormularioAbierto("FormMotivosNoRequiereControlEficacia") Then
+        m_Motivo = Nz(Forms("FormMotivosNoRequiereControlEficacia").MotivoNoRequiereControlEficacia, "")
+        If m_Motivo <> "" Then
+            m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia = m_Motivo
+        End If
+        DoCmd.Close acForm, "FormMotivosNoRequiereControlEficacia", acSaveNo
+    End If
+    
+    ' Update button caption
+    If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+        Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+    Else
+        Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+    End If
+    
+    Exit Sub
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoVerNoRequiere_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
 
 Public Function HaHabidoCambios(Optional ByRef p_Error As String) As Boolean
 

@@ -303,6 +303,12 @@ Public Sub ComandoGrabar_Click()
         Err.Raise 100
     End If
     
+    ' Validación: si RequiereControlEficacia="No" debe haber motivo
+    If Nz(Me.RequiereControlEficacia, "") = "No" And Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos NR'."
+        Err.Raise 1000
+    End If
+    
     If Not Form_FormNCProyecto.m_NCAlInicio Is Nothing Then
         If Form_FormNCProyecto.m_NCAlInicio.VinculadoANC = EnumSino.No Then
             If m_ObjNCProyectoActiva.RequiereControlEficacia = "No" Then
@@ -522,7 +528,7 @@ Public Function EstablecerDatos( _
     Dim m_EntidadResponsable As String
     Dim m_RequiereControlEficacia As String
     Dim m_FechaPrevistaControlEficacia As String
-    Dim m_Vehiculo As String
+    Dim m_VEHICULO As String
     Dim m_FPREVCIERRE As String
     Dim m_FechaCierre As String
     Dim m_DatosGeneralesOK As EnumSino
@@ -603,7 +609,7 @@ Public Function EstablecerDatos( _
             m_EntidadResponsable = .NCProyectoAsociada.EntidadResponsable
             m_RequiereControlEficacia = .NCProyectoAsociada.RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .NCProyectoAsociada.FechaPrevistaControlEficacia
-            m_Vehiculo = .NCProyectoAsociada.VEHICULO
+            m_VEHICULO = .NCProyectoAsociada.VEHICULO
             m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRE
             m_FechaCierre = .NCProyectoAsociada.FECHACIERRECalculada
             .NCProyectoAsociada.EstadoGrabar
@@ -625,7 +631,7 @@ Public Function EstablecerDatos( _
             m_EntidadResponsable = .EntidadResponsable
             m_RequiereControlEficacia = .RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .FechaPrevistaControlEficacia
-            m_Vehiculo = .VEHICULO
+            m_VEHICULO = .VEHICULO
             .FPREVCIERREGrabar
             m_FPREVCIERRE = .FPREVCIERRE
             .FECHACIERREGrabar
@@ -668,6 +674,7 @@ Public Function EstablecerDatos( _
         End If
         If m_RequiereControlEficacia <> "" Then
             Me.RequiereControlEficacia = m_RequiereControlEficacia
+            ' Botón ComandoControlEficaciaDatos según RequiereControlEficacia
             If Not .NCProyectoAsociada Is Nothing Then
                 Me.ComandoControlEficaciaDatos.Enabled = False
             Else
@@ -685,11 +692,23 @@ Public Function EstablecerDatos( _
                     Me.ComandoControlEficaciaDatos.Enabled = False
                 End If
             End If
+            ' Botón ComandoVerNoRequiere según RequiereControlEficacia
+            If m_RequiereControlEficacia = "No" Then
+                Me.ComandoVerNoRequiere.Enabled = True
+                If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                Else
+                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                End If
+            Else
+                Me.ComandoVerNoRequiere.Enabled = False
+            End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = False
         End If
-        If m_Vehiculo = "" Then
-            Me.VEHICULO = m_Vehiculo
+        If m_VEHICULO = "" Then
+            Me.VEHICULO = m_VEHICULO
         End If
         If .FPREVCIERRE <> "" Then
             Me.FPREVCIERRE = .FPREVCIERRE
@@ -807,8 +826,28 @@ Private Sub RequiereControlEficacia_AfterUpdate()
         RellenarBordeCamposObligatorios Me
         If Nz(Me.RequiereControlEficacia, "") = "Sí" Then
             Me.ComandoControlEficaciaDatos.Enabled = True
+            Me.ComandoVerNoRequiere.Enabled = False
+            ' Warn if motivos will be lost
+If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+                pregunta = MsgBox("Ya existen motivos de No Requiere Control de Eficacia." & vbNewLine & _
+                        "Al cambiar a 'Sí' se perderán. ¿Continuar?", vbExclamation + vbYesNo + vbDefaultButton2, "Cambio de Requiere Control de Eficacia")
+                If pregunta <> vbYes Then
+                    Me.RequiereControlEficacia = "No"
+                    Exit Sub
+                End If
+                m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = ""
+            End If
+        ElseIf Nz(Me.RequiereControlEficacia, "") = "No" Then
+            Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = True
+            If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+                Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+            Else
+                Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+            End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
+            Me.ComandoVerNoRequiere.Enabled = False
         End If
     End If
 End Sub
@@ -1096,6 +1135,47 @@ Private Sub btnSeleccionarRiesgos_Click()
 errores:
     MsgBox "Error al abrir selección de riesgos: " & Err.Description, vbCritical
 End Sub
+Private Sub ComandoVerNoRequiere_Click()
+    Dim m_Motivo As String
+    
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
+    ' Open the popup form as modal dialog
+    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", WindowMode:=acDialog
+    
+    ' After dialog closes, read the value from the popup form's control
+    If FormularioAbierto("FormMotivosNoRequiereControlEficacia") Then
+        ' The popup stores the text in its TxtMotivo control
+        m_Motivo = Nz(Forms("FormMotivosNoRequiereControlEficacia").MotivoNoRequiereControlEficacia, "")
+        m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
+        DoCmd.Close acForm, "FormMotivosNoRequiereControlEficacia", acSaveNo
+    End If
+    
+    ' Update button caption
+    If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+        Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+    Else
+        Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+    End If
+    
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    Exit Sub
+errores:
+    DoCmd.Hourglass False
+    If Err.Number <> 1000 Then
+        m_Error = "Al ComandoVerNoRequiere_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
+End Sub
+
 Private Sub ActualizarTextoRiesgosUI()
     Dim vKey As Variant
     Dim sCodigos As String
