@@ -4,6 +4,10 @@
 Proyecto Microsoft Access/VBA para la gestión de no conformidades en Telefónica.
 El código generado se trabaja mediante exportación a `src/` y validación posterior en Access.
 
+## dysflow MCP — Este proyecto
+- `accessPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES\NoConformidades.accdb`
+- `backendPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES\NoConformidades_Datos.accdb`
+
 ## Alcance del repositorio principal
 Este repositorio main debe contener solo lo imprescindible para operar y evolucionar el proyecto:
 

@@ -1,3 +1,5 @@
 .access-vba-skill/
 *.laccdb
 *.ldb
+
+opencode.json
