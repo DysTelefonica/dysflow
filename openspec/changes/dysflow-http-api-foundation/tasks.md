@@ -51,9 +51,9 @@ Chain strategy: feature-branch-chain
 
 ## Phase 3: Access Runner and Core Services
 
-- [ ] 3.1 RED/GREEN: test and implement `src\core\runner\access-runner.ts` with timeout and sanitized PowerShell output mapping.
-- [ ] 3.2 RED/GREEN: test and implement `src\core\services\*.ts` using fake runners for VBA, query, and diagnostics scenarios.
-- [ ] 3.3 REFACTOR: enforce `src\core\**` imports no MCP/HTTP modules.
+- [x] 3.1 RED/GREEN: test and implement `src\core\runner\access-runner.ts` with timeout and sanitized PowerShell output mapping.
+- [x] 3.2 RED/GREEN: test and implement `src\core\services\*.ts` using fake runners for VBA, query, and diagnostics scenarios.
+- [x] 3.3 REFACTOR: enforce `src\core\**` imports no MCP/HTTP modules.
 
 ## Phase 4: MCP Adapter and Product Docs
 
@@ -66,5 +66,3 @@ Chain strategy: feature-branch-chain
 - [ ] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
 - [ ] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
 - [ ] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
-
-
