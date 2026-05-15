@@ -63,6 +63,6 @@ Chain strategy: feature-branch-chain
 
 ## Phase 5: HTTP Adapter Final
 
-- [ ] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
-- [ ] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
-- [ ] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
+- [x] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
+- [x] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
+- [x] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
