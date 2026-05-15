@@ -39,9 +39,9 @@ Chain strategy: feature-branch-chain
 
 ## Phase 1: Test Tooling Foundation
 
-- [ ] 1.1 RED: create `C:\Proyectos\dysflow\test\cli\help.test.ts` proving `dysflow --help` dispatch shape before CLI exists.
-- [ ] 1.2 GREEN: create `package.json`, `tsconfig.json`, `vitest.config.ts`, and minimal `src\cli\index.ts` so `pnpm test` runs.
-- [ ] 1.3 REFACTOR: add `pnpm build` and keep test fixtures fake-only; do not touch `C:\Proyectos\workflow\skills\dysflow`.
+- [x] 1.1 RED: create `C:\Proyectos\dysflow\test\cli\help.test.ts` proving `dysflow --help` dispatch shape before CLI exists.
+- [x] 1.2 GREEN: create `package.json`, `tsconfig.json`, `vitest.config.ts`, and minimal `src\cli\index.ts` so `pnpm test` runs.
+- [x] 1.3 REFACTOR: add `pnpm build` and keep test fixtures fake-only; do not touch `C:\Proyectos\workflow\skills\dysflow`.
 
 ## Phase 2: CLI, Configuration, Contracts
 
@@ -66,4 +66,5 @@ Chain strategy: feature-branch-chain
 - [ ] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
 - [ ] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
 - [ ] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
+
 
