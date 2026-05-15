@@ -75,4 +75,34 @@ describe("legacy Dysflow MCP parity inventory", () => {
       content: [{ type: "text", text: "LEGACY_TOOL_NOT_IMPLEMENTED: export_modules is tracked for legacy parity but not ported in this slice." }],
     });
   });
+
+  it("dispatches VBA sync legacy tools to the configured product service", async () => {
+    const legacyCalls: unknown[] = [];
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(),
+      queryService: new FakeQueryService(),
+      diagnosticsService: new FakeDiagnosticsService(),
+      legacyToolService: {
+        execute: async (toolName, input) => {
+          legacyCalls.push({ toolName, input });
+          return successResult({ ok: true, toolName });
+        },
+      },
+    });
+
+    await expect(tools.find((tool) => tool.name === "export_modules")?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" })).resolves.toEqual({
+      isError: false,
+      content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "export_modules" }) }],
+    });
+    await expect(tools.find((tool) => tool.name === "verify_binary")?.handler({ moduleNames: ["Form_Main"], diff: true })).resolves.toEqual({
+      isError: false,
+      content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_binary" }) }],
+    });
+
+    expect(legacyCalls).toEqual([
+      { toolName: "export_modules", input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" } },
+      { toolName: "verify_binary", input: { moduleNames: ["Form_Main"], diff: true } },
+    ]);
+  });
+
 });

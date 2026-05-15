@@ -7,7 +7,7 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, type LegacyDysflowMcpToolName } from "./legacy-tool-inventory.js";
+import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, LEGACY_VBA_SYNC_TOOL_NAMES, type LegacyDysflowMcpToolName } from "./legacy-tool-inventory.js";
 
 export type McpTextContent = {
   type: "text";
@@ -37,6 +37,7 @@ export type DysflowMcpServices = {
   };
   operationRegistry?: AccessOperationRegistry;
   cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
+  legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
 };
 
 export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
@@ -130,21 +131,30 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
-    add(createNotImplementedLegacyTool(legacyName));
+    add(createLegacyDispatchTool(legacyName, services));
   }
 
   return tools;
 }
 
-function createNotImplementedLegacyTool(name: LegacyDysflowMcpToolName): DysflowMcpTool {
+function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices): DysflowMcpTool {
   return {
     name,
     description: `Legacy Dysflow MCP tool ${name}; tracked for parity and implemented by its dedicated slice.`,
-    handler: async () => ({
-      isError: true,
-      content: [{ type: "text", text: `LEGACY_TOOL_NOT_IMPLEMENTED: ${name} is tracked for legacy parity but not ported in this slice.` }],
-    }),
+    handler: async (input) => {
+      if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
+        return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
+      }
+      return {
+        isError: true,
+        content: [{ type: "text", text: `LEGACY_TOOL_NOT_IMPLEMENTED: ${name} is tracked for legacy parity but not ported in this slice.` }],
+      };
+    },
   };
+}
+
+function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
