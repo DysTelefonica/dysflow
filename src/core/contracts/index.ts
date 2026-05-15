@@ -1,3 +1,5 @@
+import type { AccessOperationMetadata } from "../operations/access-operation-registry.js";
+
 export type DiagnosticLevel = "info" | "warning" | "error";
 
 export type Diagnostic = {
@@ -13,8 +15,8 @@ export type DysflowError = {
 };
 
 export type OperationResult<T> =
-  | { ok: true; data: T; diagnostics: Diagnostic[]; durationMs: number }
-  | { ok: false; error: DysflowError; diagnostics: Diagnostic[]; durationMs: number };
+  | { ok: true; data: T; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata }
+  | { ok: false; error: DysflowError; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata };
 
 export type AccessVbaRequest = {
   moduleName: string;
@@ -41,24 +43,26 @@ export function createDysflowError(
 
 export function successResult<T>(
   data: T,
-  options: { diagnostics?: Diagnostic[]; durationMs?: number } = {},
+  options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
 ): OperationResult<T> {
   return {
     ok: true,
     data,
     diagnostics: options.diagnostics ?? [],
     durationMs: options.durationMs ?? 0,
+    ...(options.operation ? { operation: options.operation } : {}),
   };
 }
 
 export function failureResult<T = never>(
   error: DysflowError,
-  options: { diagnostics?: Diagnostic[]; durationMs?: number } = {},
+  options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
 ): OperationResult<T> {
   return {
     ok: false,
     error,
     diagnostics: options.diagnostics ?? [],
     durationMs: options.durationMs ?? 0,
+    ...(options.operation ? { operation: options.operation } : {}),
   };
 }

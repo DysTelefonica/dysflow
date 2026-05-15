@@ -84,6 +84,21 @@ Request:
 
 This is treated as a write route and is blocked unless the server was started with `--enable-writes`.
 
+
+### GET /access/operations
+
+Lists recent Dysflow-owned Access operations, including completed, failed, timed out, cleanup pending, and pid unknown records. This is the discovery endpoint AI agents should use after an error or timeout.
+
+### POST /access/cleanup
+
+Request:
+
+```json
+{ "operationId": "dysflow-...", "accessPath": "C:/data/app.accdb" }
+```
+
+Cleanup is safety-gated. Dysflow refuses to kill Access unless the operation exists, `accessPath` matches exactly, the registered PID still exists, the process start time matches, and the process name is `MSACCESS.EXE`. Never kill `MSACCESS.EXE` by process name from caller scripts; use this endpoint/tool only.
+
 ## Script examples
 
 ### PowerShell example

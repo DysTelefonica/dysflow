@@ -16,6 +16,9 @@ describe("HTTP API documentation", () => {
     expect(doc).toContain("POST /query/read");
     expect(doc).toContain("POST /query/write");
     expect(doc).toContain("POST /vba/execute");
+    expect(doc).toContain("GET /access/operations");
+    expect(doc).toContain("POST /access/cleanup");
+    expect(doc).toContain("Never kill `MSACCESS.EXE` by process name");
     expect(doc).toContain("PowerShell example");
     expect(doc).toContain("Node fetch example");
     expect(doc).toContain("--enable-writes");

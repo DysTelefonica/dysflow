@@ -30,15 +30,15 @@ describe("dysflow command modules", () => {
   });
 
 
-  it("fails explicitly when the real MCP stdio runtime is not implemented yet", async () => {
+  it("returns a clean MCP configuration error when Access path is missing", async () => {
     const result = await runCli(["mcp"], {
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+      env: {},
     });
 
     expect(result).toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "MCP_STDIO_RUNTIME_NOT_IMPLEMENTED: dysflow mcp requires the real MCP stdio runtime before it can serve tools.",
+      stderr: "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH or pass accessDbPath.",
     });
   });
 
