@@ -1,4 +1,8 @@
 import type { AccessQueryRequest, AccessVbaRequest, OperationResult } from "../../core/contracts/index.js";
+import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
+import type { AccessOperationRecord, AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
+import { successResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
@@ -30,6 +34,8 @@ export type DysflowMcpServices = {
   diagnosticsService: {
     run(request?: AccessDiagnosticsRequest): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
+  operationRegistry?: AccessOperationRegistry;
+  cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
 };
 
 export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
@@ -48,6 +54,24 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
       name: "dysflow.doctor",
       description: "Run Dysflow diagnostics through core services.",
       handler: async (input) => translateCoreResultToMcpContent(await services.diagnosticsService.run(input as AccessDiagnosticsRequest)),
+    },
+    {
+      name: "dysflow.access.operations.list",
+      description: "List recent Access operations tracked by Dysflow.",
+      handler: async () => {
+        const registry = services.operationRegistry ?? getDefaultAccessOperationRegistry();
+        return translateCoreResultToMcpContent(successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })));
+      },
+    },
+    {
+      name: "dysflow.access.cleanup",
+      description: "Safely cleanup a registered Access operation by operationId and accessPath.",
+      handler: async (input) => {
+        if (services.cleanupService === undefined) {
+          return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
+        }
+        return translateCoreResultToMcpContent(await services.cleanupService.cleanup(input as { operationId: string; accessPath: string; force?: boolean }));
+      },
     },
   ];
 }

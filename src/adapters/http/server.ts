@@ -1,7 +1,10 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
 import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult } from "../../core/contracts/index.js";
-import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
+import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
+import { AccessOperationCleanupService, type AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
+import type { AccessOperationRecord, AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
 import { AccessDiagnosticsService, type AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService, type AccessQueryResult } from "../../core/services/query-service.js";
 import { AccessVbaService, type AccessVbaResult } from "../../core/services/vba-service.js";
@@ -19,6 +22,8 @@ export type DysflowHttpServices = {
   vbaService: {
     execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>>;
   };
+  operationRegistry?: AccessOperationRegistry;
+  cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
 };
 
 export type StartDysflowHttpServerOptions = {
@@ -74,6 +79,12 @@ function createCoreServices(env?: Record<string, string | undefined>): DysflowHt
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
     queryService: new AccessQueryService({ runner, config: configResult.data }),
     vbaService: new AccessVbaService({ runner, config: configResult.data }),
+    operationRegistry: getDefaultAccessOperationRegistry(),
+    cleanupService: new AccessOperationCleanupService({
+      registry: getDefaultAccessOperationRegistry(),
+      processInspector: new WindowsMsAccessProcessInspector(),
+      processKiller: new WindowsProcessKiller(),
+    }),
   };
 }
 
@@ -87,6 +98,23 @@ async function routeRequest(
 
   if (method === "GET" && path === "/health") {
     sendJson(response, 200, { ok: true, service: "dysflow", writesEnabled: context.writesEnabled });
+    return;
+  }
+
+  if (method === "GET" && path === "/access/operations") {
+    const registry = context.services.operationRegistry ?? getDefaultAccessOperationRegistry();
+    sendOperationResult(response, successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })));
+    return;
+  }
+
+  if (method === "POST" && path === "/access/cleanup") {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      sendOperationResult(response, body, 400);
+      return;
+    }
+    const cleanupService = context.services.cleanupService ?? new AccessOperationCleanupService({ registry: getDefaultAccessOperationRegistry(), processInspector: new WindowsMsAccessProcessInspector(), processKiller: new WindowsProcessKiller() });
+    sendOperationResult(response, await cleanupService.cleanup({ operationId: String(body.data.operationId ?? ""), accessPath: String(body.data.accessPath ?? ""), force: body.data.force === true }));
     return;
   }
 

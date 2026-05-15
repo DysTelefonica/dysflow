@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AccessPowerShellRunner,
+  resolveDefaultRunnerScriptPath,
   sanitizePowerShellOutput,
   type PowerShellExecutor,
 } from "../../../src/core/runner/access-runner.js";
@@ -27,7 +28,7 @@ describe("AccessPowerShellRunner", () => {
       config,
     );
 
-    expect(result).toEqual({ ok: true, data: { returnValue: 42 }, diagnostics: [], durationMs: 12 });
+    expect(result).toMatchObject({ ok: true, data: { returnValue: 42 }, durationMs: 12, operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" } });
     expect(calls).toEqual([
       {
         command: "powershell.exe",
@@ -45,11 +46,21 @@ describe("AccessPowerShellRunner", () => {
           "vba",
           "-PayloadJson",
           '{"moduleName":"Main Module","procedureName":"Run-It","arguments":["a;b","$(nope)"]}',
+          "-OperationId",
+          expect.stringMatching(/^dysflow-/),
           "-AccessPassword",
           "super-secret",
         ],
       },
     ]);
+  });
+
+
+
+  it("resolves the production runner script from DYSFLOW_HOME", () => {
+    expect(resolveDefaultRunnerScriptPath({ DYSFLOW_HOME: "C:/Users/adm1/AppData/Local/dysflow" })).toBe(
+      "C:/Users/adm1/AppData/Local/dysflow/app/scripts/dysflow-access-runner.ps1",
+    );
   });
 
   it("maps timed-out execution to a retryable timeout error with sanitized diagnostics", async () => {
@@ -64,14 +75,16 @@ describe("AccessPowerShellRunner", () => {
 
     const result = await runner.run({ kind: "diagnostics", request: { includeEnvironment: true } }, config);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: { code: "RUNNER_TIMEOUT", message: "Access operation timed out after 1500ms.", retryable: true },
       diagnostics: [
         { level: "warning", source: "powershell.stdout", message: "starting with [REDACTED]" },
         { level: "error", source: "powershell.stderr", message: "connection password=[REDACTED] stalled" },
+        { level: "warning", source: "access.pid", message: "Access PID could not be determined; automatic cleanup is not safe." },
       ],
       durationMs: 1_501,
+      operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
     });
   });
 
@@ -87,15 +100,19 @@ describe("AccessPowerShellRunner", () => {
 
     const result = await runner.run({ kind: "query", request: { sql: "SELECT * FROM Customers", mode: "read" } }, config);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: {
         code: "RUNNER_FAILED",
         message: "PowerShell runner failed with exit code 7: failed opening C:/data/finance.accdb with [REDACTED]",
         retryable: false,
       },
-      diagnostics: [{ level: "error", source: "powershell.stderr", message: "failed opening C:/data/finance.accdb with [REDACTED]" }],
+      diagnostics: [
+        { level: "error", source: "powershell.stderr", message: "failed opening C:/data/finance.accdb with [REDACTED]" },
+        { level: "warning", source: "access.pid", message: "Access PID could not be determined; automatic cleanup is not safe." },
+      ],
       durationMs: 33,
+      operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
     });
   });
 });

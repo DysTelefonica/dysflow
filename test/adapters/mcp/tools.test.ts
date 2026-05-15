@@ -43,7 +43,7 @@ describe("MCP tool registration over core services", () => {
     const tools = createDysflowMcpTools({ vbaService: vba, queryService: query, diagnosticsService: diagnostics });
     const toolNames = tools.map((tool) => tool.name);
 
-    expect(toolNames).toEqual(["dysflow.vba.execute", "dysflow.query.execute", "dysflow.doctor"]);
+    expect(toolNames).toEqual(["dysflow.vba.execute", "dysflow.query.execute", "dysflow.doctor", "dysflow.access.operations.list", "dysflow.access.cleanup"]);
     await expect(tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
