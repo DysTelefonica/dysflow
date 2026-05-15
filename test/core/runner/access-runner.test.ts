@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AccessPowerShellRunner,
+  resolveDefaultRunnerScriptPath,
   sanitizePowerShellOutput,
   type PowerShellExecutor,
 } from "../../../src/core/runner/access-runner.js";
@@ -52,6 +53,14 @@ describe("AccessPowerShellRunner", () => {
         ],
       },
     ]);
+  });
+
+
+
+  it("resolves the production runner script from DYSFLOW_HOME", () => {
+    expect(resolveDefaultRunnerScriptPath({ DYSFLOW_HOME: "C:/Users/adm1/AppData/Local/dysflow" })).toBe(
+      "C:/Users/adm1/AppData/Local/dysflow/app/scripts/dysflow-access-runner.ps1",
+    );
   });
 
   it("maps timed-out execution to a retryable timeout error with sanitized diagnostics", async () => {

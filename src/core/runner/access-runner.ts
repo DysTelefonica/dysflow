@@ -55,7 +55,7 @@ export class AccessPowerShellRunner implements AccessRunner {
 
   constructor(options: AccessPowerShellRunnerOptions = {}) {
     this.executor = options.executor ?? spawnPowerShell;
-    this.scriptPath = options.scriptPath ?? DEFAULT_RUNNER_SCRIPT_PATH;
+    this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
     this.operationRegistry = options.operationRegistry ?? defaultRegistry;
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
@@ -161,6 +161,15 @@ function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TDa
   return JSON.parse(safeStdout) as TData;
 }
 
+export function resolveDefaultRunnerScriptPath(env: Record<string, string | undefined> = process.env): string {
+  const dysflowHome = env.DYSFLOW_HOME;
+  if (dysflowHome !== undefined && dysflowHome.trim().length > 0) {
+    return `${dysflowHome.replace(/\\$/, "")}/app/scripts/dysflow-access-runner.ps1`;
+  }
+
+  return DEFAULT_RUNNER_SCRIPT_PATH;
+}
+
 const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
   const startedAt = Date.now();
   return new Promise((resolve) => {
@@ -172,16 +181,21 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
-      stderr += text;
+      const nonMarkerLines: string[] = [];
       for (const line of text.split(/\r?\n/)) {
-        if (!line.startsWith(ACCESS_PROCESS_MARKER)) continue;
-        try {
-          const parsed = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length)) as AccessProcessOwnership;
-          void options.onAccessProcessCaptured(parsed);
-        } catch {
-          // Keep stderr intact; malformed ownership markers become diagnostics through normal stderr handling.
+        if (line.startsWith(ACCESS_PROCESS_MARKER)) {
+          try {
+            const parsed = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length)) as AccessProcessOwnership;
+            void options.onAccessProcessCaptured(parsed);
+          } catch {
+            nonMarkerLines.push(line);
+          }
+          continue;
         }
+        nonMarkerLines.push(line);
       }
+      const nonMarkerText = nonMarkerLines.filter((line) => line.length > 0).join("\n");
+      if (nonMarkerText.length > 0) stderr += nonMarkerText;
     });
     child.on("error", (error: Error) => { stderr += error.message; });
     child.on("close", (exitCode) => { clearTimeout(timer); resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut }); });
