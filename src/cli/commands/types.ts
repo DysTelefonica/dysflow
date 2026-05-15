@@ -1,5 +1,6 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
+import type { StartHttpAdapter } from "./serve.js";
 
 export type CliResult = {
   exitCode: number;
@@ -13,6 +14,7 @@ export type CliCommandContext = {
   diagnosticsService?: {
     run(request?: { includeEnvironment?: boolean }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
+  startHttpAdapter?: StartHttpAdapter;
 };
 
 export const HELP_TEXT = [

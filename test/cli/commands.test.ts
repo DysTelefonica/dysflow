@@ -85,13 +85,36 @@ describe("dysflow command modules", () => {
     });
   });
 
-  it("keeps serve explicit as a planned HTTP adapter instead of starting anything", async () => {
-    const result = await runCli(["serve"]);
+  it("wires serve to the HTTP adapter with safe defaults", async () => {
+    const starts: unknown[] = [];
+    const result = await runCli(["serve", "--port", "0"], {
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+      startHttpAdapter: async (options) => {
+        starts.push(options);
+        return { url: "http://127.0.0.1:17321", host: "127.0.0.1", port: 17321, writesEnabled: false };
+      },
+    });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("dysflow serve is planned for the HTTP adapter phase.");
-    expect(result.stderr).toContain("Usage: dysflow serve [--host 127.0.0.1] [--port 17321]");
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: "Dysflow HTTP API listening on http://127.0.0.1:17321 (writes disabled)",
+      stderr: "",
+    });
+    expect(starts).toEqual([{ host: "127.0.0.1", port: 0, writesEnabled: false, env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" } }]);
+  });
+
+  it("requires an explicit flag before serve enables write routes", async () => {
+    const starts: unknown[] = [];
+    const result = await runCli(["serve", "--host", "127.0.0.1", "--port", "0", "--enable-writes"], {
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+      startHttpAdapter: async (options) => {
+        starts.push(options);
+        return { url: "http://127.0.0.1:17321", host: "127.0.0.1", port: 17321, writesEnabled: true };
+      },
+    });
+
+    expect(result.stdout).toBe("Dysflow HTTP API listening on http://127.0.0.1:17321 (writes enabled)");
+    expect(starts).toEqual([{ host: "127.0.0.1", port: 0, writesEnabled: true, env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" } }]);
   });
 
   it("exports command handlers as small modules", async () => {
@@ -108,7 +131,7 @@ describe("dysflow command modules", () => {
 
     await expect(handleServeCommand(["--help"])).resolves.toEqual({
       exitCode: 0,
-      stdout: "Usage: dysflow serve [--host 127.0.0.1] [--port 17321]",
+      stdout: "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]",
       stderr: "",
     });
   });
