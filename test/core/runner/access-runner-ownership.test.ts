@@ -1,0 +1,48 @@
+import { describe, expect, it } from "vitest";
+import { AccessPowerShellRunner, type PowerShellExecutor } from "../../../src/core/runner/access-runner.js";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
+import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
+
+const config: DysflowConfig = { accessDbPath: "C:/data/app.accdb", timeoutMs: 100 };
+
+describe("AccessPowerShellRunner operation ownership", () => {
+  it("records operationId/accessPid/processStartTime on successful calls and returns operation metadata", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const executor: PowerShellExecutor = async (_command, _args, options) => {
+      await options.onAccessProcessCaptured({ pid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/data/app.accdb"' });
+      await expect(registry.get("op-success")).resolves.toMatchObject({ status: "running", accessPid: 4567 });
+      return {
+      exitCode: 0,
+      stdout: '{"returnValue":"ok"}',
+      stderr: "",
+      durationMs: 10,
+      timedOut: false,
+      accessProcess: { pid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/data/app.accdb"' },
+    };
+    };
+    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-success" });
+
+    const result = await runner.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
+
+    expect(result).toMatchObject({ ok: true, operation: { operationId: "op-success", accessPath: "C:/data/app.accdb", accessPid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", status: "completed" } });
+    await expect(registry.get("op-success")).resolves.toMatchObject({ accessPid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", status: "completed" });
+  });
+
+  it("keeps accessPid/processStartTime in the registry when the call times out", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: null,
+      stdout: "",
+      stderr: "hung",
+      durationMs: 101,
+      timedOut: true,
+      accessProcess: { pid: 4568, processStartTime: "2026-05-15T10:01:00.000Z" },
+    });
+    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-timeout" });
+
+    const result = await runner.run({ kind: "query", request: { sql: "SELECT * FROM T", mode: "read" } }, config);
+
+    expect(result).toMatchObject({ ok: false, operation: { operationId: "op-timeout", accessPid: 4568, processStartTime: "2026-05-15T10:01:00.000Z", status: "timed_out" } });
+    await expect(registry.get("op-timeout")).resolves.toMatchObject({ accessPid: 4568, processStartTime: "2026-05-15T10:01:00.000Z", status: "timed_out" });
+  });
+});
