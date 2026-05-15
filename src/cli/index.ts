@@ -5,7 +5,7 @@ import { handleMcpCommand } from "./commands/mcp.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
 import { handleTuiCommand } from "./commands/tui.js";
-import { HELP_TEXT, type CliResult, type CommandHandler } from "./commands/types.js";
+import { HELP_TEXT, type CliCommandContext, type CliResult, type CommandHandler } from "./commands/types.js";
 
 export type { CliResult } from "./commands/types.js";
 
@@ -17,7 +17,7 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["serve", handleServeCommand],
 ]);
 
-export async function runCli(args: readonly string[]): Promise<CliResult> {
+export async function runCli(args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
   const [command, ...commandArgs] = args;
 
   if (command === undefined || command === "--help" || command === "-h") {
@@ -26,7 +26,7 @@ export async function runCli(args: readonly string[]): Promise<CliResult> {
 
   const handler = COMMANDS.get(command);
   if (handler !== undefined) {
-    return handler(commandArgs);
+    return handler(commandArgs, context);
   }
 
   return {

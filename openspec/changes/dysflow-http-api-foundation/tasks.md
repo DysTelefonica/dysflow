@@ -57,9 +57,9 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: MCP Adapter and Product Docs
 
-- [ ] 4.1 RED/GREEN: test and implement `src\adapters\mcp\*` tool registration over core services with safe error translation.
-- [ ] 4.2 RED/GREEN: wire `dysflow mcp`, `setup`, and `doctor` to core without stdout pollution.
-- [ ] 4.3 Create `docs\architecture\dysflow-core-and-adapters.md` documenting dependency direction and legacy compatibility.
+- [x] 4.1 RED/GREEN: test and implement `src\adapters\mcp\*` tool registration over core services with safe error translation.
+- [x] 4.2 RED/GREEN: wire `dysflow mcp`, `setup`, and `doctor` to core without stdout pollution.
+- [x] 4.3 Create `docs\architecture\dysflow-core-and-adapters.md` documenting dependency direction and legacy compatibility.
 
 ## Phase 5: HTTP Adapter Final
 
