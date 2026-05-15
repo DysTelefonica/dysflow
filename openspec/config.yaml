@@ -1,0 +1,69 @@
+schema: spec-driven
+project: dysflow
+initialized: 2026-05-15
+artifact_store: hybrid
+
+context: |
+  Productization repo for Dysflow, currently README + planning docs only.
+  Target stack: Node.js/TypeScript/pnpm, MCP stdio adapter, final HTTP adapter.
+  Existing working implementation lives outside this repo at C:\Proyectos\workflow\skills\dysflow and is stdio MCP-only.
+  Architecture direction: protocol-neutral core first; adapters depend on core; HTTP is final adapter.
+  Strict TDD is enabled by instruction, but no test runner exists in this repo yet.
+
+testing:
+  strict_tdd: true
+  test_command: ""
+  runner: ""
+  framework: ""
+  detected: "2026-05-15"
+  layers:
+    unit:
+      available: false
+      tool: ""
+    integration:
+      available: false
+      tool: ""
+    e2e:
+      available: false
+      tool: ""
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter:
+      available: false
+      command: ""
+    type_checker:
+      available: false
+      command: ""
+    formatter:
+      available: false
+      command: ""
+
+rules:
+  proposal:
+    - Keep HTTP as a final adapter unless a later approved design changes that dependency direction.
+    - Include rollback/compatibility notes when touching migration boundaries.
+  specs:
+    - Use Given/When/Then scenarios and RFC 2119 keywords.
+    - Specify protocol-neutral core behavior before adapter behavior.
+  design:
+    - Enforce core/adapters dependency direction: adapters depend on core; core depends on no adapter.
+    - Document how compatibility with the existing workflow MCP is preserved.
+  tasks:
+    - Group tasks into reviewable work units.
+    - Keep HTTP API work behind core and MCP/setup/doctor foundations.
+  apply:
+    tdd: true
+    test_command: ""
+    notes:
+      - Strict TDD is active; if no runner exists, add one before production code.
+      - Do not modify C:\Proyectos\workflow\skills\dysflow unless explicitly requested.
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+    notes:
+      - Report missing test/build commands as blockers or warnings depending on phase maturity.
+  archive:
+    - Preserve openspec archive history; never delete archived changes.
