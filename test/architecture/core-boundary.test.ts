@@ -27,7 +27,10 @@ function collectTypeScriptFiles(directory: string): string[] {
 
 describe("core dependency direction", () => {
   it("keeps src/core free of MCP and HTTP adapter imports", () => {
-    const violations = collectTypeScriptFiles(coreRoot).flatMap((file) => {
+    const coreFiles = collectTypeScriptFiles(coreRoot);
+    expect(coreFiles.length).toBeGreaterThan(0);
+
+    const violations = coreFiles.flatMap((file) => {
       const source = readFileSync(file, "utf8");
       return forbiddenImportPatterns
         .filter((pattern) => pattern.test(source))

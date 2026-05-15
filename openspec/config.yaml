@@ -8,21 +8,21 @@ context: |
   Target stack: Node.js/TypeScript/pnpm, MCP stdio adapter, final HTTP adapter.
   Existing working implementation lives outside this repo at C:\Proyectos\workflow\skills\dysflow and is stdio MCP-only.
   Architecture direction: protocol-neutral core first; adapters depend on core; HTTP is final adapter.
-  Strict TDD is enabled by instruction, but no test runner exists in this repo yet.
+  Strict TDD is enabled. Vitest and TypeScript build are now available in this repo.
 
 testing:
   strict_tdd: true
-  test_command: ""
-  runner: ""
-  framework: ""
+  test_command: "pnpm test"
+  runner: "pnpm"
+  framework: "Vitest"
   detected: "2026-05-15"
   layers:
     unit:
-      available: false
-      tool: ""
+      available: true
+      tool: "Vitest"
     integration:
-      available: false
-      tool: ""
+      available: true
+      tool: "Vitest + in-process adapters/fetch"
     e2e:
       available: false
       tool: ""
@@ -34,8 +34,8 @@ testing:
       available: false
       command: ""
     type_checker:
-      available: false
-      command: ""
+      available: true
+      command: "pnpm build"
     formatter:
       available: false
       command: ""
@@ -55,15 +55,15 @@ rules:
     - Keep HTTP API work behind core and MCP/setup/doctor foundations.
   apply:
     tdd: true
-    test_command: ""
+    test_command: "pnpm test"
     notes:
-      - Strict TDD is active; if no runner exists, add one before production code.
+      - Strict TDD is active; Vitest runner is now available and must be used before production changes.
       - Do not modify C:\Proyectos\workflow\skills\dysflow unless explicitly requested.
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "pnpm test"
+    build_command: "pnpm build"
     coverage_threshold: 0
     notes:
-      - Report missing test/build commands as blockers or warnings depending on phase maturity.
+      - Run pnpm test and pnpm build for verification.
   archive:
     - Preserve openspec archive history; never delete archived changes.
