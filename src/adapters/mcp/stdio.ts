@@ -7,6 +7,7 @@ import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../..
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
+import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
 import { createDysflowMcpTools, type DysflowMcpTool, type McpToolResult } from "./tools.js";
 
 export type McpStdioRuntime = {
@@ -144,6 +145,7 @@ export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLi
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
     }),
+    legacyToolService: new VbaSyncLegacyService(),
   };
 
   for (const tool of createDysflowMcpTools(services)) {
