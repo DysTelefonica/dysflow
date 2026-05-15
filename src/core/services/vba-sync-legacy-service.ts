@@ -42,6 +42,8 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   import_all: mapping("Import"),
   list_objects: mapping("List-Objects", true),
   exists: mapping("Exists", true, (input) => { const moduleName = stringValue(input.moduleName); return moduleName ? [moduleName] : []; }),
+  test_vba: mapping("Run-Tests", true, () => [], (input) => ({ proceduresJson: directTestProceduresJson(input) })),
+  compile_vba: mapping("Compile", true),
   fix_encoding: mapping("Fix-Encoding", false, (input) => stringArray(input.moduleNames), (input) => ({ location: stringValue(input.location) })),
   delete_module: mapping("Delete", true, (input) => stringArray(input.moduleNames)),
   generate_erd: mapping("Generate-ERD", false, () => [], (input) => ({ backendPath: stringValue(input.backendPath), erdPath: stringValue(input.erdPath) })),
@@ -129,6 +131,19 @@ function stringArray(value: unknown): string[] {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
+  const procedureName = stringValue(input.procedureName);
+  if (procedureName === undefined) return undefined;
+  return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(input.argsJson) }]);
+}
+
+function parseArgsJson(value: unknown): unknown[] {
+  const text = stringValue(value);
+  if (text === undefined) return [];
+  const parsed = JSON.parse(text) as unknown;
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

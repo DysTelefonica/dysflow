@@ -53,6 +53,66 @@ describe("VbaSyncLegacyService", () => {
     ]);
   });
 
+  it("maps compile_vba to the repo-owned compile action with JSON output", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+    });
+
+    await expect(service.execute("compile_vba", { accessPath: "C:/custom/front.accdb", destinationRoot: "C:/repo" })).resolves.toMatchObject({
+      ok: true,
+      data: { ok: true },
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        action: "Compile",
+        accessPath: "C:/custom/front.accdb",
+        destinationRoot: "C:/repo",
+        moduleNames: [],
+        json: true,
+        extra: {},
+      }),
+    ]);
+  });
+
+  it("maps direct test_vba calls to a Run-Tests procedures JSON payload", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_RunAll"}]', stderr: "", durationMs: 5 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+    });
+
+    await expect(service.execute("test_vba", {
+      procedureName: "Test_RunAll",
+      argsJson: "[\"fixture\", 1]",
+      destinationRoot: "C:/repo",
+    })).resolves.toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_RunAll" }],
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        action: "Run-Tests",
+        destinationRoot: "C:/repo",
+        json: true,
+        extra: {
+          proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: ["fixture", 1] }]),
+        },
+      }),
+    ]);
+  });
+
   it("returns a safe failure when a direct runner mapping is not available yet", async () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: "{}", stderr: "", durationMs: 1 }),
