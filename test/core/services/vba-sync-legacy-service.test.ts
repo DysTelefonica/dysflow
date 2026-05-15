@@ -101,7 +101,13 @@ describe("VbaSyncLegacyService", () => {
       destinationRoot: "C:/repo",
     })).resolves.toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_RunAll" }],
+      data: {
+        ok: true,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        results: [{ ok: true, procedure: "Test_RunAll", failures: [] }],
+      },
     });
 
     expect(calls).toEqual([
@@ -137,7 +143,14 @@ describe("VbaSyncLegacyService", () => {
 
     await expect(service.execute("test_vba", { testsPath: "tests.vba.json", filter: "smoke" })).resolves.toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_Import" }],
+      data: {
+        ok: true,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        skipped: 1,
+        results: [{ name: "smoke import", procedure: "Test_Import", ok: true }],
+      },
     });
 
     expect(calls).toEqual([
@@ -150,6 +163,47 @@ describe("VbaSyncLegacyService", () => {
         },
       }),
     ]);
+  });
+
+  it("evaluates manifest expectations and returns a legacy-style test report", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-report-tests-"));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify([
+      { name: "returns answer", procedure: "Test_ReturnAnswer", args: [], tags: ["unit"], expect: { returnValue: 42 } },
+      { name: "wrong answer", procedure: "Test_WrongAnswer", args: [], tags: ["unit"], expect: { returnValue: 7 } },
+    ]), "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify([
+          { ok: true, procedure: "Test_ReturnAnswer", returnValue: 42, logs: ["ok"] },
+          { ok: true, procedure: "Test_WrongAnswer", returnValue: 8, logs: ["bad"] },
+        ]),
+        stderr: "",
+        durationMs: 9,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("test_vba", {})).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: false,
+        total: 2,
+        passed: 1,
+        failed: 1,
+        summary: {
+          total: 2,
+          passed: 1,
+          failed: 1,
+        },
+        results: [
+          { name: "returns answer", ok: true, failures: [] },
+          { name: "wrong answer", ok: false, failures: ['returnValue esperado 7, recibido 8'] },
+        ],
+      },
+    });
   });
 
   it("runs compile before test_vba plan execution when compile is requested", async () => {

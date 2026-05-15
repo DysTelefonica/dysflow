@@ -122,14 +122,22 @@ export class VbaSyncLegacyService {
       if (!compileResult.ok) return compileResult;
     }
 
-    const proceduresJson = await this.resolveTestProceduresJson(params);
-    return this.executeMappedTool("test_vba", { ...params, proceduresJson }, DIRECT_MAPPINGS.test_vba);
+    const plan = await this.resolveTestPlan(params);
+    const result = await this.executeMappedTool("test_vba", { ...params, proceduresJson: plan.proceduresJson }, DIRECT_MAPPINGS.test_vba);
+    if (!result.ok) return result;
+    return successResult(buildTestReport(plan, result.data, result.durationMs), { durationMs: result.durationMs, operation: result.operation });
   }
 
-  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<string> {
+  private async resolveTestPlan(params: Record<string, unknown>): Promise<ResolvedTestPlan> {
     const procedureName = stringValue(params.procedureName);
     if (procedureName !== undefined) {
-      return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]);
+      const test = { name: procedureName, procedure: procedureName, args: parseArgsJson(params.argsJson), tags: ["direct"], expect: {} };
+      return {
+        testsPath: null,
+        totalInPlan: 1,
+        selected: [test],
+        proceduresJson: JSON.stringify([{ procedure: test.procedure, args: test.args }]),
+      };
     }
 
     const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
@@ -144,7 +152,12 @@ export class VbaSyncLegacyService {
       || test.procedure.toLowerCase().includes(filterText)
       || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
     );
-    return JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args })));
+    return {
+      testsPath: resolvedPath,
+      totalInPlan: tests.length,
+      selected,
+      proceduresJson: JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))),
+    };
   }
 }
 
@@ -189,6 +202,14 @@ type VbaTestPlanEntry = {
   procedure: string;
   args: unknown[];
   tags: string[];
+  expect: Record<string, unknown>;
+};
+
+type ResolvedTestPlan = {
+  testsPath: string | null;
+  totalInPlan: number;
+  selected: VbaTestPlanEntry[];
+  proceduresJson: string;
 };
 
 function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
@@ -202,13 +223,81 @@ function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
     if (procedure === undefined) throw new Error(`Test #${index + 1} is missing procedure.`);
     const args = Array.isArray(item.args) ? item.args : [];
     const tags = Array.isArray(item.tags) ? item.tags.map(String) : [];
+    const expect = isRecord(item.expect) ? item.expect : {};
     return {
       name: stringValue(item.name) ?? procedure,
       procedure,
       args,
       tags,
+      expect,
     };
   });
+}
+
+function buildTestReport(plan: ResolvedTestPlan, runnerData: unknown, durationMs: number): Record<string, unknown> {
+  const rawResults = Array.isArray(runnerData) ? runnerData : [];
+  const results = plan.selected.map((test, index) => {
+    const run = isRecord(rawResults[index]) ? rawResults[index] : { ok: false, procedure: test.procedure, error: "No result returned from runner" };
+    const assertion = evaluateExpectation(run, test.expect);
+    return {
+      name: test.name,
+      procedure: test.procedure,
+      args: test.args,
+      tags: test.tags,
+      durationMs: typeof run.durationMs === "number" ? run.durationMs : undefined,
+      ok: assertion.ok,
+      failures: assertion.failures,
+      run,
+      logs: Array.isArray(run.logs) ? run.logs : [],
+    };
+  });
+  const failed = results.filter((result) => result.ok !== true).length;
+  const report = {
+    ok: failed === 0,
+    phase: "tests",
+    testsPath: plan.testsPath,
+    total: plan.selected.length,
+    passed: plan.selected.length - failed,
+    failed,
+    skipped: plan.totalInPlan - plan.selected.length,
+    durationMs,
+    results,
+  };
+  return {
+    ...report,
+    summary: {
+      total: report.total,
+      passed: report.passed,
+      failed: report.failed,
+      skipped: report.skipped,
+      testsPath: report.testsPath,
+      text: `Total: ${report.total} | Passed: ${report.passed} | Failed: ${report.failed} | Skipped: ${report.skipped}`,
+      failures: results.filter((result) => result.ok !== true).map((result) => ({
+        name: result.name,
+        procedure: result.procedure,
+        failures: result.failures,
+        logs: result.logs,
+        error: isRecord(result.run) && typeof result.run.error === "string" ? result.run.error : null,
+      })),
+    },
+  };
+}
+
+function evaluateExpectation(run: Record<string, unknown>, expected: Record<string, unknown>): { ok: boolean; failures: string[] } {
+  const failures: string[] = [];
+  if (Object.prototype.hasOwnProperty.call(expected, "ok")) {
+    if (run.ok !== expected.ok) failures.push(`ok esperado ${String(expected.ok)}, recibido ${String(run.ok)}`);
+  } else if (run.ok !== true) {
+    failures.push(`ok esperado true, recibido ${String(run.ok)}`);
+  }
+  if (Object.prototype.hasOwnProperty.call(expected, "returnValue") && !jsonEqual(run.returnValue, expected.returnValue)) {
+    failures.push(`returnValue esperado ${JSON.stringify(expected.returnValue)}, recibido ${JSON.stringify(run.returnValue)}`);
+  }
+  return { ok: failures.length === 0, failures };
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function truthy(value: unknown): boolean {
