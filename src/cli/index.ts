@@ -1,37 +1,32 @@
 #!/usr/bin/env node
 
-export type CliResult = {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-};
+import { handleDoctorCommand } from "./commands/doctor.js";
+import { handleMcpCommand } from "./commands/mcp.js";
+import { handleServeCommand } from "./commands/serve.js";
+import { handleSetupCommand } from "./commands/setup.js";
+import { handleTuiCommand } from "./commands/tui.js";
+import { HELP_TEXT, type CliCommandContext, type CliResult, type CommandHandler } from "./commands/types.js";
 
-const HELP_TEXT = [
-  "Usage: dysflow <command>",
-  "",
-  "Commands:",
-  "  mcp     Start the MCP stdio adapter",
-  "  setup   Prepare local Dysflow configuration",
-  "  doctor  Check local Dysflow requirements",
-  "  tui     Open the Dysflow terminal UI",
-  "  serve   Planned local HTTP API adapter",
-].join("\n");
+export type { CliResult } from "./commands/types.js";
 
-const PLANNED_COMMANDS = new Set(["mcp", "setup", "doctor", "tui", "serve"]);
+const COMMANDS = new Map<string, CommandHandler>([
+  ["mcp", handleMcpCommand],
+  ["setup", handleSetupCommand],
+  ["doctor", handleDoctorCommand],
+  ["tui", handleTuiCommand],
+  ["serve", handleServeCommand],
+]);
 
-export async function runCli(args: readonly string[]): Promise<CliResult> {
-  const [command] = args;
+export async function runCli(args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
+  const [command, ...commandArgs] = args;
 
   if (command === undefined || command === "--help" || command === "-h") {
     return { exitCode: 0, stdout: HELP_TEXT, stderr: "" };
   }
 
-  if (PLANNED_COMMANDS.has(command)) {
-    return {
-      exitCode: 0,
-      stdout: `${command} is planned for a later Dysflow foundation phase.`,
-      stderr: "",
-    };
+  const handler = COMMANDS.get(command);
+  if (handler !== undefined) {
+    return handler(commandArgs, context);
   }
 
   return {

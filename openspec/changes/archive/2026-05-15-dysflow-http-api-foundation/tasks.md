@@ -45,26 +45,24 @@ Chain strategy: feature-branch-chain
 
 ## Phase 2: CLI, Configuration, Contracts
 
-- [ ] 2.1 RED/GREEN: test and implement `src\cli\commands\*.ts` for `mcp`, `setup`, `doctor`, `tui`, and planned `serve` usage/errors.
-- [ ] 2.2 RED/GREEN: test and implement `src\core\config\dysflow-config.ts` for Access path, timeout, env input, and password redaction.
-- [ ] 2.3 RED/GREEN: test and implement `src\core\contracts\*.ts` for `OperationResult`, diagnostics, typed errors, VBA/query requests.
+- [x] 2.1 RED/GREEN: test and implement `src\cli\commands\*.ts` for `mcp`, `setup`, `doctor`, `tui`, and planned `serve` usage/errors.
+- [x] 2.2 RED/GREEN: test and implement `src\core\config\dysflow-config.ts` for Access path, timeout, env input, and password redaction.
+- [x] 2.3 RED/GREEN: test and implement `src\core\contracts\*.ts` for `OperationResult`, diagnostics, typed errors, VBA/query requests.
 
 ## Phase 3: Access Runner and Core Services
 
-- [ ] 3.1 RED/GREEN: test and implement `src\core\runner\access-runner.ts` with timeout and sanitized PowerShell output mapping.
-- [ ] 3.2 RED/GREEN: test and implement `src\core\services\*.ts` using fake runners for VBA, query, and diagnostics scenarios.
-- [ ] 3.3 REFACTOR: enforce `src\core\**` imports no MCP/HTTP modules.
+- [x] 3.1 RED/GREEN: test and implement `src\core\runner\access-runner.ts` with timeout and sanitized PowerShell output mapping.
+- [x] 3.2 RED/GREEN: test and implement `src\core\services\*.ts` using fake runners for VBA, query, and diagnostics scenarios.
+- [x] 3.3 REFACTOR: enforce `src\core\**` imports no MCP/HTTP modules.
 
 ## Phase 4: MCP Adapter and Product Docs
 
-- [ ] 4.1 RED/GREEN: test and implement `src\adapters\mcp\*` tool registration over core services with safe error translation.
-- [ ] 4.2 RED/GREEN: wire `dysflow mcp`, `setup`, and `doctor` to core without stdout pollution.
-- [ ] 4.3 Create `docs\architecture\dysflow-core-and-adapters.md` documenting dependency direction and legacy compatibility.
+- [x] 4.1 RED/GREEN: test and implement `src\adapters\mcp\*` tool registration over core services with safe error translation.
+- [x] 4.2 RED/GREEN: wire `dysflow mcp`, `setup`, and `doctor` to core without stdout pollution.
+- [x] 4.3 Create `docs\architecture\dysflow-core-and-adapters.md` documenting dependency direction and legacy compatibility.
 
 ## Phase 5: HTTP Adapter Final
 
-- [ ] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
-- [ ] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
-- [ ] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
-
-
+- [x] 5.1 Decide HTTP server library, then RED/GREEN `src\adapters\http\*` for `127.0.0.1` default bind and JSON read routes.
+- [x] 5.2 RED/GREEN: implement write routes blocked by default unless explicitly enabled.
+- [x] 5.3 Create `docs\api\http-api.md` with route schemas and script examples.
