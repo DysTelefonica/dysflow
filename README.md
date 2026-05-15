@@ -22,7 +22,7 @@ It is designed for OpenCode and other MCP clients, while also exposing a CLI and
 | Safely cleanup owned Access processes | MCP, HTTP | Available |
 | Local HTTP API for scripts | `dysflow serve` | Available |
 | Windows profile install | `AppData\Local\dysflow` | Available |
-| TUI | `dysflow tui` | Planned |
+| AI editor MCP install helper | `dysflow tui install-mcp` | Available for OpenCode/Codex; guided for others |
 
 ## Why this exists
 
@@ -318,7 +318,33 @@ Writes are disabled by default.
 | `dysflow doctor` | Open Access and run diagnostics |
 | `dysflow mcp` | Start MCP stdio server |
 | `dysflow serve` | Start local HTTP API |
-| `dysflow tui` | Planned TUI placeholder |
+| `dysflow tui` | Show TUI entrypoints, including AI editor MCP installation |
+| `dysflow tui install-mcp --editor <id>` | Install or preview Dysflow MCP config for an AI editor |
+
+## Install Dysflow MCP into AI editors
+
+Inspired by the Gentle AI adapter model, Dysflow exposes a single installer surface for MCP-capable AI clients.
+
+```powershell
+dysflow tui
+dysflow tui install-mcp --editor opencode --dry-run
+dysflow tui install-mcp --editor opencode
+dysflow tui install-mcp --editor codex
+```
+
+Supported editor IDs:
+
+| Editor | Status | Config target |
+|---|---|---|
+| `opencode` | Automatic JSON merge | `%USERPROFILE%\.config\opencode\opencode.json` |
+| `codex` | Automatic TOML section update | `%USERPROFILE%\.codex\config.toml` |
+| `claude-code` | Guided/manual pending safe-writer validation | `%USERPROFILE%\.claude\mcp\dysflow.json` |
+| `pi` | Guided/manual pending Pi adapter validation | `%USERPROFILE%\.pi\agent\mcp.json` |
+| `gemini-cli` | Guided/manual pending config validation | `%USERPROFILE%\.gemini\settings.json` |
+| `cursor` | Guided/manual pending config validation | `%USERPROFILE%\.cursor\mcp.json` |
+| `windsurf` | Guided/manual pending config validation | `%USERPROFILE%\.codeium\windsurf\mcp.json` |
+
+Use `--dry-run` first. It prints the exact file and MCP payload before Dysflow writes anything.
 
 ## Testing against a real Access front/backend
 

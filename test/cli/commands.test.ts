@@ -4,17 +4,7 @@ import { handleDoctorCommand } from "../../src/cli/commands/doctor";
 import { handleServeCommand } from "../../src/cli/commands/serve";
 import { successResult } from "../../src/core/contracts/index";
 
-const plannedCommandCases = [
-  ["tui", "tui is planned; terminal UI is not implemented yet."],
-] as const;
-
 describe("dysflow command modules", () => {
-  it.each(plannedCommandCases)("dispatches %s through a dedicated planned handler", async (command, stdout) => {
-    const result = await runCli([command]);
-
-    expect(result).toEqual({ exitCode: 0, stdout, stderr: "" });
-  });
-
   it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
     const calls: string[] = [];
 

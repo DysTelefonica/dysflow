@@ -1,6 +1,7 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { StartHttpAdapter } from "./serve.js";
+import type { DysflowFileSystem } from "../../core/services/ai-editor-installer.js";
 
 export type CliResult = {
   exitCode: number;
@@ -15,6 +16,7 @@ export type CliCommandContext = {
     run(request?: { includeEnvironment?: boolean }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
   startHttpAdapter?: StartHttpAdapter;
+  fileSystem?: DysflowFileSystem;
 };
 
 export const HELP_TEXT = [
