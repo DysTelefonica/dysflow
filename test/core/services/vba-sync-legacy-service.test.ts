@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
 import { VbaSyncLegacyService, resolveDefaultVbaManagerScriptPath, type VbaManagerExecutor } from "../../../src/core/services/vba-sync-legacy-service";
 
@@ -109,6 +112,67 @@ describe("VbaSyncLegacyService", () => {
         extra: {
           proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: ["fixture", 1] }]),
         },
+      }),
+    ]);
+  });
+
+  it("loads test_vba manifests from testsPath and filters by name, procedure, or tags", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-tests-"));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify({
+      tests: [
+        { name: "smoke import", procedure: "Test_Import", args: ["a"], tags: ["smoke"] },
+        { name: "slow export", procedure: "Test_Export", args: ["b"], tags: ["slow"] },
+      ],
+    }), "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Import"}]', stderr: "", durationMs: 7 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("test_vba", { testsPath: "tests.vba.json", filter: "smoke" })).resolves.toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_Import" }],
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        action: "Run-Tests",
+        destinationRoot: root,
+        json: true,
+        extra: {
+          proceduresJson: JSON.stringify([{ procedure: "Test_Import", args: ["a"] }]),
+        },
+      }),
+    ]);
+  });
+
+  it("runs compile before test_vba plan execution when compile is requested", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-compile-tests-"));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify([{ procedure: "Test_RunAll", args: [] }]), "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: request.action === "Compile" ? '{"ok":true}' : '[{"ok":true}]', stderr: "", durationMs: 4 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("test_vba", { compile: true })).resolves.toMatchObject({ ok: true });
+
+    expect(calls).toEqual([
+      expect.objectContaining({ action: "Compile", json: true }),
+      expect.objectContaining({
+        action: "Run-Tests",
+        extra: { proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: [] }]) },
       }),
     ]);
   });

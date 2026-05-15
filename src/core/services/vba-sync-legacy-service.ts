@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 
 export type VbaManagerExecutionRequest = {
@@ -76,11 +78,18 @@ export class VbaSyncLegacyService {
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     const params = isRecord(input) ? input : {};
+    if (toolName === "test_vba") {
+      return this.executeTestVba(params);
+    }
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
       return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
     }
 
+    return this.executeMappedTool(toolName, params, mapping);
+  }
+
+  private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
     const accessPath = stringValue(params.accessPath) || this.env.DYSFLOW_ACCESS_DB_PATH;
     const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const password = this.env.DYSFLOW_ACCESS_PASSWORD;
@@ -105,6 +114,37 @@ export class VbaSyncLegacyService {
     }
 
     return successResult(parseOutput(result.stdout, secrets), { durationMs: result.durationMs });
+  }
+
+  private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    if (truthy(params.compile)) {
+      const compileResult = await this.executeMappedTool("compile_vba", params, DIRECT_MAPPINGS.compile_vba);
+      if (!compileResult.ok) return compileResult;
+    }
+
+    const proceduresJson = await this.resolveTestProceduresJson(params);
+    return this.executeMappedTool("test_vba", { ...params, proceduresJson }, DIRECT_MAPPINGS.test_vba);
+  }
+
+  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<string> {
+    const procedureName = stringValue(params.procedureName);
+    if (procedureName !== undefined) {
+      return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]);
+    }
+
+    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+    const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
+    const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
+    const raw = await readFile(resolvedPath, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    const tests = normalizeTestPlan(parsed);
+    const filterText = stringValue(params.filter)?.toLowerCase();
+    const selected = filterText === undefined ? tests : tests.filter((test) =>
+      test.name.toLowerCase().includes(filterText)
+      || test.procedure.toLowerCase().includes(filterText)
+      || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
+    );
+    return JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args })));
   }
 }
 
@@ -134,9 +174,7 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
-  const procedureName = stringValue(input.procedureName);
-  if (procedureName === undefined) return undefined;
-  return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(input.argsJson) }]);
+  return stringValue(input.proceduresJson);
 }
 
 function parseArgsJson(value: unknown): unknown[] {
@@ -144,6 +182,37 @@ function parseArgsJson(value: unknown): unknown[] {
   if (text === undefined) return [];
   const parsed = JSON.parse(text) as unknown;
   return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+type VbaTestPlanEntry = {
+  name: string;
+  procedure: string;
+  args: unknown[];
+  tags: string[];
+};
+
+function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
+  const tests = Array.isArray(value) ? value : isRecord(value) && Array.isArray(value.tests) ? value.tests : undefined;
+  if (tests === undefined) {
+    throw new Error("tests.vba.json must contain an array or an object with a tests array.");
+  }
+  return tests.map((item, index) => {
+    if (!isRecord(item)) throw new Error(`Test #${index + 1} must be an object.`);
+    const procedure = stringValue(item.procedure) ?? stringValue(item.proc);
+    if (procedure === undefined) throw new Error(`Test #${index + 1} is missing procedure.`);
+    const args = Array.isArray(item.args) ? item.args : [];
+    const tags = Array.isArray(item.tags) ? item.tags.map(String) : [];
+    return {
+      name: stringValue(item.name) ?? procedure,
+      procedure,
+      args,
+      tags,
+    };
+  });
+}
+
+function truthy(value: unknown): boolean {
+  return value === true || value === "true" || value === 1 || value === "1";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
