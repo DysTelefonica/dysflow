@@ -45,9 +45,9 @@ Chain strategy: feature-branch-chain
 
 ## Phase 2: CLI, Configuration, Contracts
 
-- [ ] 2.1 RED/GREEN: test and implement `src\cli\commands\*.ts` for `mcp`, `setup`, `doctor`, `tui`, and planned `serve` usage/errors.
-- [ ] 2.2 RED/GREEN: test and implement `src\core\config\dysflow-config.ts` for Access path, timeout, env input, and password redaction.
-- [ ] 2.3 RED/GREEN: test and implement `src\core\contracts\*.ts` for `OperationResult`, diagnostics, typed errors, VBA/query requests.
+- [x] 2.1 RED/GREEN: test and implement `src\cli\commands\*.ts` for `mcp`, `setup`, `doctor`, `tui`, and planned `serve` usage/errors.
+- [x] 2.2 RED/GREEN: test and implement `src\core\config\dysflow-config.ts` for Access path, timeout, env input, and password redaction.
+- [x] 2.3 RED/GREEN: test and implement `src\core\contracts\*.ts` for `OperationResult`, diagnostics, typed errors, VBA/query requests.
 
 ## Phase 3: Access Runner and Core Services
 
