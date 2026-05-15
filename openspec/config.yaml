@@ -1,0 +1,69 @@
+schema: spec-driven
+project: dysflow
+initialized: 2026-05-15
+artifact_store: hybrid
+
+context: |
+  Productization repo for Dysflow, currently README + planning docs only.
+  Target stack: Node.js/TypeScript/pnpm, MCP stdio adapter, final HTTP adapter.
+  Existing working implementation lives outside this repo at C:\Proyectos\workflow\skills\dysflow and is stdio MCP-only.
+  Architecture direction: protocol-neutral core first; adapters depend on core; HTTP is final adapter.
+  Strict TDD is enabled. Vitest and TypeScript build are now available in this repo.
+
+testing:
+  strict_tdd: true
+  test_command: "pnpm test"
+  runner: "pnpm"
+  framework: "Vitest"
+  detected: "2026-05-15"
+  layers:
+    unit:
+      available: true
+      tool: "Vitest"
+    integration:
+      available: true
+      tool: "Vitest + in-process adapters/fetch"
+    e2e:
+      available: false
+      tool: ""
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter:
+      available: false
+      command: ""
+    type_checker:
+      available: true
+      command: "pnpm build"
+    formatter:
+      available: false
+      command: ""
+
+rules:
+  proposal:
+    - Keep HTTP as a final adapter unless a later approved design changes that dependency direction.
+    - Include rollback/compatibility notes when touching migration boundaries.
+  specs:
+    - Use Given/When/Then scenarios and RFC 2119 keywords.
+    - Specify protocol-neutral core behavior before adapter behavior.
+  design:
+    - Enforce core/adapters dependency direction: adapters depend on core; core depends on no adapter.
+    - Document how compatibility with the existing workflow MCP is preserved.
+  tasks:
+    - Group tasks into reviewable work units.
+    - Keep HTTP API work behind core and MCP/setup/doctor foundations.
+  apply:
+    tdd: true
+    test_command: "pnpm test"
+    notes:
+      - Strict TDD is active; Vitest runner is now available and must be used before production changes.
+      - Do not modify C:\Proyectos\workflow\skills\dysflow unless explicitly requested.
+  verify:
+    test_command: "pnpm test"
+    build_command: "pnpm build"
+    coverage_threshold: 0
+    notes:
+      - Run pnpm test and pnpm build for verification.
+  archive:
+    - Preserve openspec archive history; never delete archived changes.

@@ -1,0 +1,22 @@
+{
+  "name": "dysflow",
+  "version": "0.1.0",
+  "description": "Dysflow Access automation product foundation.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "dysflow": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
