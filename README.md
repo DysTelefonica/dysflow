@@ -59,6 +59,132 @@ Cleanup is only allowed through Dysflow's cleanup tool, which validates the oper
 
 Dysflow's PowerShell runner is compatible with Windows PowerShell 5.1, including Windows Server 2016.
 
+## Installation
+
+Dysflow is installed as a **profile-local Windows runtime**, similar to Engram. The source repository stays wherever you clone it, but the runnable tool lives under:
+
+```text
+%LOCALAPPDATA%\dysflow
+```
+
+> Publishing to npm/pnpm is not enabled yet. Until that exists, install from a cloned repo with the production layout below.
+
+### Prerequisites
+
+- Windows with Microsoft Access installed.
+- PowerShell 5.1 or newer. Windows Server 2016 includes Windows PowerShell 5.1 by default.
+- Node.js and pnpm available in the build machine.
+
+### Build from source
+
+```powershell
+git clone https://github.com/DysTelefonica/dysflow.git
+cd dysflow
+pnpm install
+pnpm test
+pnpm build
+```
+
+### Install into your user profile
+
+```powershell
+$InstallRoot = Join-Path $env:LOCALAPPDATA "dysflow"
+
+New-Item -ItemType Directory -Force -Path `
+  "$InstallRoot\app", `
+  "$InstallRoot\app\dist", `
+  "$InstallRoot\app\scripts", `
+  "$InstallRoot\bin" | Out-Null
+
+Copy-Item -Recurse -Force ".\dist\*" "$InstallRoot\app\dist\"
+Copy-Item -Force ".\package.json" "$InstallRoot\app\package.json"
+Copy-Item -Force ".\scripts\dysflow-access-runner.ps1" "$InstallRoot\app\scripts\dysflow-access-runner.ps1"
+
+@'
+@echo off
+node "%LOCALAPPDATA%\dysflow\app\dist\cli\index.js" %*
+'@ | Set-Content -Encoding ASCII "$InstallRoot\bin\dysflow.cmd"
+
+@'
+node "$env:LOCALAPPDATA\dysflow\app\dist\cli\index.js" @args
+'@ | Set-Content -Encoding UTF8 "$InstallRoot\bin\dysflow.ps1"
+
+[Environment]::SetEnvironmentVariable("DYSFLOW_HOME", $InstallRoot, "User")
+
+$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (($UserPath -split ";") -notcontains "$InstallRoot\bin") {
+  [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallRoot\bin", "User")
+}
+```
+
+Close and reopen your terminal after changing user environment variables.
+
+### Configure Access defaults
+
+Set the frontend path used by the MCP tools. If the database is password-protected, set the password as a user environment variable; do not hardcode it in scripts.
+
+```powershell
+[Environment]::SetEnvironmentVariable("DYSFLOW_ACCESS_DB_PATH", "C:\path\to\Frontend.accdb", "User")
+[Environment]::SetEnvironmentVariable("DYSFLOW_ACCESS_BACKEND_PATH", "C:\path\to\Backend.accdb", "User")
+[Environment]::SetEnvironmentVariable("DYSFLOW_ACCESS_PASSWORD", "<access-password>", "User")
+[Environment]::SetEnvironmentVariable("DYSFLOW_TIMEOUT_MS", "30000", "User")
+```
+
+`DYSFLOW_ACCESS_BACKEND_PATH` is optional, but useful for E2E validation where the frontend links to a backend database.
+
+### Configure OpenCode MCP
+
+Edit:
+
+```text
+%USERPROFILE%\.config\opencode\opencode.json
+```
+
+Add or update the MCP entry:
+
+```json
+{
+  "mcp": {
+    "dysflow": {
+      "command": [
+        "C:/Users/<user>/AppData/Local/dysflow/bin/dysflow.cmd",
+        "mcp"
+      ],
+      "type": "local"
+    }
+  }
+}
+```
+
+Restart OpenCode so it inherits the new user environment variables.
+
+### Verify the install
+
+```powershell
+Get-Command dysflow -All
+dysflow setup
+dysflow doctor
+opencode mcp list
+```
+
+`dysflow setup` must redact secrets. `dysflow doctor` opens Access through the same production runner used by the MCP server.
+
+### Update an existing install
+
+From the cloned repository:
+
+```powershell
+git pull
+pnpm install
+pnpm test
+pnpm build
+
+$InstallRoot = Join-Path $env:LOCALAPPDATA "dysflow"
+Copy-Item -Recurse -Force ".\dist\*" "$InstallRoot\app\dist\"
+Copy-Item -Force ".\package.json" "$InstallRoot\app\package.json"
+Copy-Item -Force ".\scripts\dysflow-access-runner.ps1" "$InstallRoot\app\scripts\dysflow-access-runner.ps1"
+```
+
 ## Install layout
 
 For a profile-local production install, Dysflow lives here:
