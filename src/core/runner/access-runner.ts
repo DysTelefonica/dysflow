@@ -7,6 +7,7 @@ import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMe
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
 const POWERSHELL_COMMAND = "powershell.exe";
 const REDACTED_SECRET = "[REDACTED]";
+const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 
 export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
 export type AccessRunnerOperation =
@@ -169,7 +170,19 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill(); }, options.timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      stderr += text;
+      for (const line of text.split(/\r?\n/)) {
+        if (!line.startsWith(ACCESS_PROCESS_MARKER)) continue;
+        try {
+          const parsed = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length)) as AccessProcessOwnership;
+          void options.onAccessProcessCaptured(parsed);
+        } catch {
+          // Keep stderr intact; malformed ownership markers become diagnostics through normal stderr handling.
+        }
+      }
+    });
     child.on("error", (error: Error) => { stderr += error.message; });
     child.on("close", (exitCode) => { clearTimeout(timer); resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut }); });
   });
