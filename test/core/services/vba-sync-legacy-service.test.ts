@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
@@ -243,6 +243,68 @@ describe("VbaSyncLegacyService", () => {
       message: "verify_binary requires a higher-level source/binary comparison implementation and is tracked by #25.",
       retryable: false,
     }));
+  });
+
+  it("verifies document CodeBehind against sidecar cls files without opening Access", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-code-"));
+    await mkdir(join(root, "forms"), { recursive: true });
+    await writeFile(join(root, "forms", "Customer.form.txt"), [
+      "Version =20",
+      "Begin Form",
+      "End",
+      "CodeBehindForm",
+      "Option Compare Database",
+      "",
+      "Public Sub Hello()",
+      "  Debug.Print \"ok\"",
+      "End Sub",
+    ].join("\n"), "utf8");
+    await writeFile(join(root, "forms", "Customer.cls"), [
+      "Option Compare Database",
+      "",
+      "Public Sub Hello()",
+      "Debug.Print \"ok\"",
+      "End Sub",
+    ].join("\n"), "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async () => { throw new Error("verify_code must not invoke the PowerShell runner"); },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: {},
+      cwd: root,
+    });
+
+    await expect(service.execute("verify_code", {})).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: true,
+        checked: 1,
+        mismatches: 0,
+        results: [{ moduleName: "Customer", status: "in_sync" }],
+      },
+    });
+  });
+
+  it("reports verify_code mismatches in strict mode", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-code-mismatch-"));
+    await mkdir(join(root, "forms"), { recursive: true });
+    await writeFile(join(root, "forms", "Customer.form.txt"), "Begin Form\nEnd\nCodeBehindForm\nPublic Sub Hello()\n  Debug.Print \"form\"\nEnd Sub", "utf8");
+    await writeFile(join(root, "forms", "Customer.cls"), "Public Sub Hello()\n  Debug.Print \"cls\"\nEnd Sub", "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async () => { throw new Error("verify_code must not invoke the PowerShell runner"); },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: {},
+      cwd: root,
+    });
+
+    await expect(service.execute("verify_code", { strict: true, moduleNames: ["Customer"] })).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: false,
+        checked: 1,
+        mismatches: 1,
+        results: [{ moduleName: "Customer", status: "mismatch" }],
+      },
+    });
   });
 
   it("redacts passwords from runner failures", async () => {

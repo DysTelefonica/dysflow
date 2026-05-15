@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 
 export type VbaManagerExecutionRequest = {
@@ -78,9 +78,8 @@ export class VbaSyncLegacyService {
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     const params = isRecord(input) ? input : {};
-    if (toolName === "test_vba") {
-      return this.executeTestVba(params);
-    }
+    if (toolName === "test_vba") return this.executeTestVba(params);
+    if (toolName === "verify_code") return this.executeVerifyCode(params);
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
       return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
@@ -158,6 +157,50 @@ export class VbaSyncLegacyService {
       selected,
       proceduresJson: JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))),
     };
+  }
+
+  private async executeVerifyCode(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const sourceRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+    const moduleNames = stringArray(params.moduleNames);
+    const strict = truthy(params.strict);
+    const targets = moduleNames.length > 0 ? moduleNames : await listDocumentModuleNames(sourceRoot);
+    const results = [];
+
+    for (const moduleName of targets) {
+      const artifacts = await resolveDocumentArtifacts(sourceRoot, moduleName);
+      if (artifacts === undefined) {
+        results.push({ moduleName, status: "missing_document" });
+        continue;
+      }
+      if (artifacts.clsPath === undefined) {
+        results.push({ moduleName, status: "missing_cls", textPath: artifacts.textPath });
+        continue;
+      }
+
+      const documentText = await readFile(artifacts.textPath, "utf8");
+      const clsText = await readFile(artifacts.clsPath, "utf8");
+      const documentBody = extractDocumentCodeBehindBody(documentText);
+      if (documentBody === undefined) {
+        results.push({ moduleName, status: "missing_codebehind", textPath: artifacts.textPath, clsPath: artifacts.clsPath });
+        continue;
+      }
+      const left = normalizeVbaBody(stripVbaMetadata(documentBody), strict);
+      const right = normalizeVbaBody(stripVbaMetadata(clsText), strict);
+      results.push({
+        moduleName,
+        status: left === right ? "in_sync" : "mismatch",
+        textPath: artifacts.textPath,
+        clsPath: artifacts.clsPath,
+      });
+    }
+
+    const mismatches = results.filter((result) => result.status === "mismatch").length;
+    return successResult({
+      ok: mismatches === 0,
+      checked: results.length,
+      mismatches,
+      results,
+    });
   }
 }
 
@@ -302,6 +345,87 @@ function jsonEqual(left: unknown, right: unknown): boolean {
 
 function truthy(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
+}
+
+async function listDocumentModuleNames(sourceRoot: string): Promise<string[]> {
+  const folders = [
+    { dir: join(sourceRoot, "forms"), suffix: ".form.txt" },
+    { dir: join(sourceRoot, "reports"), suffix: ".report.txt" },
+  ];
+  const names: string[] = [];
+  for (const folder of folders) {
+    let entries: string[] = [];
+    try {
+      entries = await readdir(folder.dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.toLowerCase().endsWith(folder.suffix)) {
+        names.push(entry.slice(0, -folder.suffix.length));
+      }
+    }
+  }
+  return names.sort();
+}
+
+async function resolveDocumentArtifacts(sourceRoot: string, moduleName: string): Promise<{ textPath: string; clsPath?: string } | undefined> {
+  const folders = [
+    { dir: join(sourceRoot, "forms"), suffix: ".form.txt" },
+    { dir: join(sourceRoot, "reports"), suffix: ".report.txt" },
+  ];
+  for (const folder of folders) {
+    const textPath = join(folder.dir, `${moduleName}${folder.suffix}`);
+    if (!(await existsFile(textPath))) continue;
+    const clsPath = join(folder.dir, `${moduleName.replace(/^(Form|Report)_/i, "")}.cls`);
+    return {
+      textPath,
+      ...(await existsFile(clsPath) ? { clsPath } : {}),
+    };
+  }
+  return undefined;
+}
+
+async function existsFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function extractDocumentCodeBehindBody(text: string): string | undefined {
+  const normalized = normalizeNewlines(text);
+  const match = /^([ \t]*CodeBehind\w*[^\r\n]*)(?:\n|$)/im.exec(normalized);
+  if (match === null || match.index === undefined) return undefined;
+  return normalized.slice(match.index + match[0].length);
+}
+
+function stripVbaMetadata(text: string): string {
+  const lines = normalizeNewlines(text).split("\n");
+  while (lines.length > 0) {
+    const trimmed = (lines[0] ?? "").trim();
+    if (trimmed.length === 0 || /^Option\s+/i.test(trimmed) || /^(Attribute|VERSION|BEGIN|END)\b/i.test(trimmed) || /^[A-Za-z][\w]*\s*=/.test(trimmed)) {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+  return lines.join("\n");
+}
+
+function normalizeVbaBody(text: string, strict: boolean): string {
+  const normalized = normalizeNewlines(text);
+  if (strict) return normalized.trimEnd();
+  return normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function normalizeNewlines(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
