@@ -82,6 +82,7 @@ export class VbaSyncLegacyService {
     if (toolName === "test_vba") return this.executeTestVba(params);
     if (toolName === "verify_code") return this.executeVerifyCode(params);
     if (toolName === "verify_binary") return this.executeVerifyBinary(params);
+    if (toolName === "reconcile_binary") return this.executeReconcileBinary(params);
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
       return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
@@ -223,6 +224,19 @@ export class VbaSyncLegacyService {
     } finally {
       await rm(tempRoot, { recursive: true, force: true }).catch(() => {});
     }
+  }
+
+  private async executeReconcileBinary(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    if (truthy(params.apply)) {
+      return failureResult(createDysflowError(
+        "RECONCILE_BINARY_APPLY_NOT_IMPLEMENTED",
+        "reconcile_binary apply=true is intentionally deferred to a separate safety-reviewed slice.",
+      ));
+    }
+
+    const report = await this.executeVerifyBinary(params);
+    if (!report.ok) return report;
+    return successResult({ ...(report.data as Record<string, unknown>), applied: false }, { durationMs: report.durationMs, operation: report.operation });
   }
 }
 

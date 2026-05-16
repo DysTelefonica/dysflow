@@ -238,9 +238,9 @@ describe("VbaSyncLegacyService", () => {
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
     });
 
-    expect(await service.execute("reconcile_binary", { apply: true })).toEqual(failureResult({
+    expect(await service.execute("init_project", {})).toEqual(failureResult({
       code: "LEGACY_TOOL_NOT_IMPLEMENTED",
-      message: "reconcile_binary requires source/binary reconciliation and is tracked by #25.",
+      message: "init_project requires project bootstrap orchestration and is tracked by #25.",
       retryable: false,
     }));
   });
@@ -375,6 +375,50 @@ describe("VbaSyncLegacyService", () => {
         ok: true,
         same: [{ module: "Keep" }],
         different: [],
+      },
+    });
+  });
+
+  it("returns reconcile_binary dry-run plans without mutating Access", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-reconcile-binary-"));
+    await mkdir(join(root, "modules"), { recursive: true });
+    await writeFile(join(root, "modules", "Shared.bas"), "Public Sub Shared()\nDebug.Print \"source\"\nEnd Sub", "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+        await writeFile(join(request.destinationRoot, "modules", "Shared.bas"), "Public Sub Shared()\nDebug.Print \"binary\"\nEnd Sub", "utf8");
+        return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 6 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("reconcile_binary", {})).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: false,
+        applied: false,
+        plan: { import: ["Shared"], delete: [] },
+      },
+    });
+
+    expect(calls).toEqual([expect.objectContaining({ action: "Export" })]);
+  });
+
+  it("refuses reconcile_binary apply until the mutating slice is implemented", async () => {
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 0, stdout: "OK", stderr: "", durationMs: 1 }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+    });
+
+    await expect(service.execute("reconcile_binary", { apply: true })).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: "RECONCILE_BINARY_APPLY_NOT_IMPLEMENTED",
       },
     });
   });
