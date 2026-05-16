@@ -9,6 +9,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
 import { createDysflowMcpTools, type DysflowMcpTool, type McpToolResult } from "./tools.js";
+import { isRecord } from "../../core/utils/index.js";
 
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;
@@ -121,10 +122,6 @@ class JsonRpcMethodNotFound extends Error {
   constructor(method: string) {
     super(`Method not found: ${method}`);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLineMcpStdioRuntime()): Promise<void> {

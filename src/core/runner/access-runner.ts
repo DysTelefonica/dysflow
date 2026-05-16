@@ -3,10 +3,12 @@ import { createDiagnostic, createDysflowError, failureResult, successResult, typ
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
+import { sanitizeSecrets } from "../utils/index.js";
+
+export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
 const POWERSHELL_COMMAND = "powershell.exe";
-const REDACTED_SECRET = "[REDACTED]";
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 
 export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
@@ -107,7 +109,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
 
     if (execution.exitCode !== 0) {
-      const safeOutput = sanitizePowerShellOutput(execution.stderr || execution.stdout || "No runner output.", secrets);
+      const safeOutput = sanitizeSecrets(execution.stderr || execution.stdout || "No runner output.", secrets);
       return failureResult(
         createDysflowError("RUNNER_FAILED", `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
@@ -135,10 +137,6 @@ export class AccessPowerShellRunner implements AccessRunner {
   }
 }
 
-export function sanitizePowerShellOutput(output: string, secrets: readonly string[] = []): string {
-  return secrets.reduce((safeOutput, secret) => secret.length === 0 ? safeOutput : safeOutput.split(secret).join(REDACTED_SECRET), output);
-}
-
 function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOperation, config: DysflowConfig, operationId: string): string[] {
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-AccessDbPath", config.accessDbPath, "-Operation", operation.kind, "-PayloadJson", JSON.stringify(operation.request), "-OperationId", operationId];
   if (config.accessPassword !== undefined) args.push("-AccessPassword", config.accessPassword);
@@ -147,8 +145,8 @@ function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOpe
 
 function collectDiagnostics(execution: PowerShellExecutionResult, secrets: readonly string[]): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  const safeStdout = sanitizePowerShellOutput(execution.stdout, secrets);
-  const safeStderr = sanitizePowerShellOutput(execution.stderr, secrets);
+  const safeStdout = sanitizeSecrets(execution.stdout, secrets);
+  const safeStderr = sanitizeSecrets(execution.stderr, secrets);
   if (safeStdout.length > 0 && (execution.exitCode !== 0 || execution.timedOut)) diagnostics.push(createDiagnostic("warning", "powershell.stdout", safeStdout));
   if (safeStderr.length > 0) diagnostics.push(createDiagnostic("error", "powershell.stderr", safeStderr));
   if (execution.accessProcess === undefined) diagnostics.push(createDiagnostic("warning", "access.pid", "Access PID could not be determined; automatic cleanup is not safe."));
@@ -156,7 +154,7 @@ function collectDiagnostics(execution: PowerShellExecutionResult, secrets: reado
 }
 
 function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TData {
-  const safeStdout = sanitizePowerShellOutput(stdout, secrets);
+  const safeStdout = sanitizeSecrets(stdout, secrets);
   if (safeStdout.trim().length === 0) return {} as TData;
   return JSON.parse(safeStdout) as TData;
 }
