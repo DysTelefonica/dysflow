@@ -26,6 +26,7 @@ export type JsonSchemaPrimitiveType = "string" | "boolean" | "number" | "array" 
 export type JsonSchemaProperty = {
   type: JsonSchemaPrimitiveType;
   description?: string;
+  enum?: readonly string[];
   items?: JsonSchemaProperty;
   additionalProperties?: boolean;
   properties?: Record<string, JsonSchemaProperty>;
@@ -65,7 +66,7 @@ const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   additionalProperties: false,
   properties: {
     sql: { type: "string", description: "Access SQL to execute." },
-    mode: { type: "string", description: "Execution mode: read or write." },
+    mode: { type: "string", enum: ["read", "write"], description: "Execution mode: read or write." },
   },
 };
 
@@ -124,7 +125,39 @@ function validateInput(input: unknown, schema: JsonObjectSchema): string | undef
   for (const [key, property] of Object.entries(schema.properties)) {
     const value = params[key];
     if (value === undefined) continue;
-    if (!matchesJsonSchemaType(value, property.type)) return `${key} must be ${articleFor(property.type)} ${property.type}.`;
+    const validation = validateJsonSchemaProperty(value, property, key);
+    if (validation !== undefined) return validation;
+  }
+
+  return undefined;
+}
+
+function validateJsonSchemaProperty(value: unknown, property: JsonSchemaProperty, path: string): string | undefined {
+  if (!matchesJsonSchemaType(value, property.type)) return `${path} must be ${articleFor(property.type)} ${property.type}.`;
+
+  if (property.enum !== undefined) {
+    if (typeof value !== "string" || !property.enum.includes(value)) return `${path} must be one of: ${property.enum.join(", ")}.`;
+  }
+
+  if (property.type === "array" && property.items !== undefined && Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const validation = validateJsonSchemaProperty(item, property.items, `${path}[${index}]`);
+      if (validation !== undefined) return validation;
+    }
+  }
+
+  if (property.type === "object" && isRecord(value)) {
+    if (property.additionalProperties === false) {
+      for (const key of Object.keys(value)) {
+        if (property.properties?.[key] === undefined) return `${path}.${key} is not allowed.`;
+      }
+    }
+    for (const [key, childProperty] of Object.entries(property.properties ?? {})) {
+      const childValue = value[key];
+      if (childValue === undefined) continue;
+      const validation = validateJsonSchemaProperty(childValue, childProperty, `${path}.${key}`);
+      if (validation !== undefined) return validation;
+    }
   }
 
   return undefined;
@@ -148,7 +181,7 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
   const properties: Record<string, JsonSchemaProperty> = {
     accessPath: { type: "string", description: "Access frontend database path." },
     allowTable: { type: "string", description: "Single allowed table." },
-    allowTables: { type: "array", description: "Allowed tables." },
+    allowTables: { type: "array", items: { type: "string" }, description: "Allowed tables." },
     apply: { type: "boolean", description: "Apply a write instead of dry run." },
     argsJson: { type: "string", description: "JSON encoded argument array." },
     backendPath: { type: "string", description: "Access backend database path." },
@@ -165,7 +198,7 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     diff: { type: "boolean", description: "Include a diff when supported." },
     erdPath: { type: "string", description: "ERD output path." },
     denyTable: { type: "string", description: "Single denied table." },
-    denyTables: { type: "array", description: "Denied tables." },
+    denyTables: { type: "array", items: { type: "string" }, description: "Denied tables." },
     directory: { type: "string", description: "Directory path alias." },
     dryRun: { type: "boolean", description: "Run without applying writes." },
     exportPath: { type: "string", description: "Export path." },
@@ -177,7 +210,7 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     limit: { type: "number", description: "Maximum number of items or diff lines." },
     importPath: { type: "string", description: "Import path." },
     moduleName: { type: "string", description: "VBA module name." },
-    moduleNames: { type: "array", description: "VBA module names." },
+    moduleNames: { type: "array", items: { type: "string" }, description: "VBA module names." },
     name: { type: "string", description: "Object or generated form name." },
     operationId: { type: "string", description: "Dysflow operation id." },
     path: { type: "string", description: "Path alias." },
@@ -185,9 +218,9 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     projectRoot: { type: "string", description: "Project root path." },
     procedureName: { type: "string", description: "Public VBA procedure name." },
     query: { type: "string", description: "SQL query alias." },
-    queryDefinitions: { type: "array", description: "Query definitions." },
+    queryDefinitions: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions." },
     replace: { type: "boolean", description: "Replace existing resources." },
-    queries: { type: "array", description: "Query definitions alias." },
+    queries: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions alias." },
     rootPath: { type: "string", description: "Root directory path." },
     strict: { type: "boolean", description: "Use strict comparison or validation." },
     strictWrite: { type: "boolean", description: "Use strict write guards." },
@@ -323,10 +356,12 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       const validation = validateInput(input, legacySchemaForTool("run_vba"));
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
+      const parsedArgs = parseLegacyArgsJson(request.argsJson);
+      if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
       return translateCoreResultToMcpContent(await services.vbaService.execute({
         moduleName: "",
         procedureName: request.procedureName,
-        arguments: parseLegacyArgsJson(request.argsJson),
+        arguments: parsedArgs.value,
       }));
     },
   });
@@ -430,10 +465,18 @@ function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
 }
 
-function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
-  if (argsJson === undefined || argsJson.trim().length === 0) return [];
-  const parsed = JSON.parse(argsJson) as unknown;
-  return Array.isArray(parsed) ? parsed : [parsed];
+type LegacyArgsJsonParseResult =
+  | { ok: true; value: unknown[] }
+  | { ok: false; message: string };
+
+function parseLegacyArgsJson(argsJson: string | undefined): LegacyArgsJsonParseResult {
+  if (argsJson === undefined || argsJson.trim().length === 0) return { ok: true, value: [] };
+  try {
+    const parsed = JSON.parse(argsJson) as unknown;
+    return { ok: true, value: Array.isArray(parsed) ? parsed : [parsed] };
+  } catch {
+    return { ok: false, message: "argsJson must be valid JSON." };
+  }
 }
 
 function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {

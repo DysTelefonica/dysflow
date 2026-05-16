@@ -99,6 +99,65 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests).toEqual([expect.objectContaining({ action: "seed_fixture", tableName: "People", allowTables: ["People"] })]);
   });
 
+  it("rejects invalid nested MCP inputs before calling core services", async () => {
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "SELECT 1", mode: "delete" })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
+      isError: true,
+    });
+    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "People", allowTables: ["People", 7], rows: [{ id: 1 }] })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: allowTables[1] must be a string." }],
+      isError: true,
+    });
+    await expect(tools.find((tool) => tool.name === "import_queries")?.handler({ queryDefinitions: [{ name: "q_people", sql: 42 }] })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: queryDefinitions[0].sql must be a string." }],
+      isError: true,
+    });
+
+    expect(vba.requests).toEqual([]);
+    expect(query.requests).toEqual([]);
+  });
+
+  it("handles legacy run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    const runVba = tools.find((tool) => tool.name === "run_vba");
+
+    await expect(runVba?.handler({ procedureName: "Broken", argsJson: "[1," })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: argsJson must be valid JSON." }],
+      isError: true,
+    });
+    await expect(runVba?.handler({ procedureName: "Blank", argsJson: "   " })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
+      isError: false,
+    });
+    await expect(runVba?.handler({ procedureName: "Array", argsJson: "[1,\"two\"]" })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
+      isError: false,
+    });
+    await expect(runVba?.handler({ procedureName: "Single", argsJson: "42" })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
+      isError: false,
+    });
+
+    expect(vba.requests).toEqual([
+      { moduleName: "", procedureName: "Blank", arguments: [] },
+      { moduleName: "", procedureName: "Array", arguments: [1, "two"] },
+      { moduleName: "", procedureName: "Single", arguments: [42] },
+    ]);
+  });
+
   it("declares explicit JSON schemas for every MCP tool", () => {
     const tools = createDysflowMcpTools({
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
