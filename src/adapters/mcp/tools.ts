@@ -99,6 +99,7 @@ export type DysflowMcpServices = {
   diagnosticsService: {
     run(request?: AccessDiagnosticsRequest): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
+  /** Optional registry override. When omitted, MCP operation-list tools intentionally use Dysflow's default process-local registry. */
   operationRegistry?: AccessOperationRegistry;
   cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
   legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
@@ -458,7 +459,7 @@ function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
 }
 
 function isQueryMaintenanceSliceTool(name: LegacyDysflowMcpToolName): boolean {
-  return (LEGACY_QUERY_MAINTENANCE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+  return getLegacyParityToolDefinition(name).queryMode !== undefined;
 }
 
 function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
@@ -520,10 +521,10 @@ function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unkn
 
 function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
-  const isReadOnly = name === "list_links" || name === "export_queries";
+  const queryMode = getLegacyParityToolDefinition(name).queryMode ?? "write";
   return {
     action: name as AccessQueryRequest["action"],
-    mode: isReadOnly ? "read" : "write",
+    mode: queryMode,
     sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
     tableName: stringValue(params.tableName) ?? stringValue(params.table),
     columnName: stringValue(params.columnName) ?? stringValue(params.column),

@@ -175,6 +175,13 @@ describe("legacy Dysflow MCP parity inventory", () => {
     ]);
   });
 
+  it("declares maintenance query access modes in the parity registry", () => {
+    expect(getLegacyParityToolDefinition("list_links")).toMatchObject({ queryMode: "read" });
+    expect(getLegacyParityToolDefinition("export_queries")).toMatchObject({ queryMode: "read" });
+    expect(getLegacyParityToolDefinition("link_tables")).toMatchObject({ queryMode: "write" });
+    expect(getLegacyParityToolDefinition("compact_repair")).toMatchObject({ queryMode: "write" });
+  });
+
   it("dispatches maintenance query tools to the configured query service", async () => {
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools({
@@ -214,6 +221,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
         backendPath: undefined,
         rootPath: undefined,
         databasePath: undefined,
+        dryRun: true,
         exportPath: undefined,
         importPath: undefined,
         queryDefinitions: undefined,

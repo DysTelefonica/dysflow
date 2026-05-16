@@ -8,11 +8,25 @@ import {
 export type LegacyParitySlice = "vba-sync" | "query";
 export type LegacyParityStatus = "implemented" | "pending";
 
+export type LegacyQueryMode = "read" | "write";
+
 export type LegacyParityToolDefinition = {
   name: LegacyDysflowMcpToolName;
   slice: LegacyParitySlice;
   status: LegacyParityStatus;
   description: string;
+  queryMode?: LegacyQueryMode;
+};
+
+const maintenanceQueryModes: Partial<Record<LegacyDysflowMcpToolName, LegacyQueryMode>> = {
+  list_links: "read",
+  export_queries: "read",
+  link_tables: "write",
+  relink_tables: "write",
+  localize_backend_links: "write",
+  unlink_table: "write",
+  import_queries: "write",
+  compact_repair: "write",
 };
 
 const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
@@ -66,6 +80,7 @@ export const LEGACY_PARITY_REGISTRY: readonly LegacyParityToolDefinition[] = LEG
     slice,
     status,
     description: buildDescription(name, slice, status),
+    queryMode: maintenanceQueryModes[name],
   };
 });
 
