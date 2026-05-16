@@ -2,6 +2,14 @@
 
 **Status:** Production-ready MCP/CLI runtime for safe Microsoft Access automation on Windows.
 
+<p align="center">
+  <a href="https://github.com/DysTelefonica/dysflow/releases">
+    <img src="https://img.shields.io/github/v/release/DysTelefonica/dysflow" alt="Release" />
+  </a>
+  <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform: Windows" />
+  <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
+</p>
+
 Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
 
 ---
@@ -122,14 +130,37 @@ Refusal examples include:
 
 ---
 
-## Installation and bootstrap (source)
+## Installation (remote-ready)
 
-From source:
+### Install directly from GitHub (recommended)
+
+Use this when a teammate wants to install from GitHub on another machine, without cloning manually.
+
+> Note: this repository is not published as an npm package yet, so Git URL install is the official remote path.
+
+```bash
+# Latest version from GitHub remote
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.1.0"
+# or if you prefer the latest main branch
+pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
+```
+
+Then verify:
+
+```powershell
+dysflow setup
+dysflow doctor
+```
+
+### Install from source (full control)
 
 ```powershell
 pnpm install
 pnpm build
+pnpm install -g .
 ```
+
+### Runtime profile install
 
 Recommended production/runtime install remains profile-local on Windows (`%LOCALAPPDATA%\\dysflow`) for MCP tooling.
 
