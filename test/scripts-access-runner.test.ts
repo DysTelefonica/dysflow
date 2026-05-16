@@ -12,4 +12,13 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain("$values += Format-SqlLiteral $value");
     expect(script).not.toContain("$values += '\" + ($value.ToString().Replace(\"'\", \"''\")) + \"'");
   });
+
+  it("splits run_script SQL without treating semicolons inside single-quoted strings as statement separators", () => {
+    expect(script).toContain("Split-SqlStatements");
+    expect(script).toContain("$inSingleQuote = -not $inSingleQuote");
+    expect(script).toContain("if ($char -eq \"'\" -and $inSingleQuote -and $nextChar -eq \"'\")");
+    expect(script).toContain("if ($char -eq \";\" -and -not $inSingleQuote)");
+    expect(script).toContain("$statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))");
+    expect(script).not.toContain(".Split([char]\";\")");
+  });
 });
