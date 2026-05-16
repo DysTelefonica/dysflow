@@ -17,6 +17,18 @@
       "procedure": "Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic",
       "expect": { "ok": true },
       "tags": ["e2e", "atomic", "env-config", "safe"]
+    },
+    {
+      "name": "E2E KillSwitch escribe y restaura TbConfiguracion",
+      "procedure": "Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "killswitch", "write-controlled"]
+    },
+    {
+      "name": "E2E KillSwitch OFF ON OFF restore",
+      "procedure": "Test_E2E_KillSwitch_OffOnOff_Restore_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "killswitch", "write-controlled"]
     }
   ]
 }

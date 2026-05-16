@@ -6,6 +6,18 @@
       "expect": { "ok": true },
       "tags": ["atomic", "killswitch", "safe"]
     },
+    {
+      "name": "KillSwitch schema+seed idempotente",
+      "procedure": "Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "killswitch", "schema", "migration"]
+    },
+    {
+      "name": "KillSwitch OFF ON OFF persistencia",
+      "procedure": "Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "killswitch", "toggle", "safe"]
+    },
 
     {
       "name": "Spec007b VM nil fallback",

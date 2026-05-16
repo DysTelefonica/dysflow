@@ -295,6 +295,61 @@ Cleanup:
     Set db = Nothing
 End Function
 
+Public Function Test_E2E_KillSwitch_OffOnOff_Restore_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim originalState As Boolean
+    Dim assertError As String
+    Dim opError As String
+    Dim restoreErr As String
+
+    Set logs = TestHelper.NewLogs
+    originalState = IsCacheEnabled()
+    TestHelper.AddLog logs, "Estado original=" & CStr(originalState)
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(False, opError), "OFF inicial OK", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = False, "OFF inicial persistido", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(True, opError), "ON intermedio OK", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = True, "ON intermedio persistido", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(False, opError), "OFF final OK", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = False, "OFF final persistido", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call RestoreCacheStateE2E(originalState, logs, restoreErr)
+    If restoreErr <> "" Then
+        Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(restoreErr, logs)
+    Else
+        Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonOk(logs, "off_on_off_restore_ok")
+    End If
+    Exit Function
+
+Fail:
+    Call RestoreCacheStateE2E(originalState, logs, restoreErr)
+    If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
+    Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    Call RestoreCacheStateE2E(originalState, logs, restoreErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If restoreErr <> "" Then
+        Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & restoreErr, logs)
+    Else
+        Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    End If
+End Function
+
 Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     On Error GoTo EH
 
@@ -420,6 +475,22 @@ Private Sub RestaurarConfiguracionDesdeSnapshot(ByRef p_Rs As DAO.Recordset, ByV
     p_Rs.Fields("MotivoCambioCache").Value = p_Motivo
     p_Rs.Update
     TestHelper.AddLog p_Logs, "Rollback defensivo de TbConfiguracion aplicado"
+End Sub
+
+Private Sub RestoreCacheStateE2E(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
+    Dim opError As String
+    Dim ok As Boolean
+
+    opError = ""
+    ok = CacheConfig_SetEnabled(p_Enabled, opError)
+    If ok Then
+        p_Error = ""
+        TestHelper.AddLog p_Logs, "Estado restaurado a " & CStr(p_Enabled)
+    Else
+        p_Error = "No se pudo restaurar estado de caché"
+        If opError <> "" Then p_Error = p_Error & " | " & opError
+        TestHelper.AddLog p_Logs, p_Error
+    End If
 End Sub
 
 Private Sub RestoreTbConfiguracionBackends(ByRef p_Rs As DAO.Recordset, ByVal p_BackendActivo As String, ByVal p_BackendProduccion As String, ByVal p_BackendSandbox As String, ByVal p_EnPruebas As String, ByVal p_IDAplicacion As Variant, ByVal p_RutaProd As String, ByVal p_RutaLocal As String, ByRef p_Logs As Collection)
