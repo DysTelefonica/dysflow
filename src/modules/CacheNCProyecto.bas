@@ -35,6 +35,9 @@ Public Const NOMBRE_TABLA_CACHE As String = "TbCacheNCProyecto"
 Public Const NOMBRE_TABLA_LISTADO As String = "TbCacheListadoNC"
 Private Const NOMBRE_TABLA_LOG As String = "TbLogCache"
 Private Const CAMPO_CACHE_HABILITADA As String = "CacheHabilitada"
+Private Const CAMPO_FECHA_CAMBIO_CACHE As String = "FechaCambioCache"
+Private Const CAMPO_USUARIO_CAMBIO_CACHE As String = "UsuarioCambioCache"
+Private Const CAMPO_MOTIVO_CAMBIO_CACHE As String = "MotivoCambioCache"
 
 ' ============================================
 ' KILL-SWITCH DE CACHÉ
@@ -46,10 +49,17 @@ Public Function IsCacheEnabled() As Boolean
     Dim db As DAO.Database
     Dim rs As DAO.Recordset
     Dim SQL As String
+    Dim ensureErr As String
     
     On Error GoTo errores
     IsCacheEnabled = False
     
+    ensureErr = ""
+    If Not EnsureCacheSchemaReadiness(ensureErr) Then
+        IsCacheEnabled = False
+        Exit Function
+    End If
+
     Set db = getdb()
     SQL = "SELECT " & CAMPO_CACHE_HABILITADA & " FROM TbConfiguracion WHERE ID = 1"
     Set rs = db.OpenRecordset(SQL, dbOpenSnapshot)
@@ -76,13 +86,29 @@ End Function
 Public Function SetCacheEnabled(ByVal p_Enabled As Boolean, Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
     Dim SQL As String
+    Dim nowSql As String
+    Dim userSql As String
+    Dim motivoSql As String
     
     On Error GoTo errores
     p_Error = ""
     SetCacheEnabled = False
     
+    If Not EnsureCacheSchemaReadiness(p_Error) Then
+        SetCacheEnabled = False
+        Exit Function
+    End If
+
     Set db = getdb()
-    SQL = "UPDATE TbConfiguracion SET " & CAMPO_CACHE_HABILITADA & " = " & IIf(p_Enabled, "-1", "0") & " WHERE ID = 1"
+    nowSql = "#" & Format$(Now, "yyyy-mm-dd hh:nn:ss") & "#"
+    userSql = "'" & Replace$(Nz(Environ$("USERNAME"), "SYSTEM"), "'", "''") & "'"
+    motivoSql = "'" & Replace$("Toggle cache via SetCacheEnabled", "'", "''") & "'"
+    SQL = "UPDATE TbConfiguracion SET " & _
+          CAMPO_CACHE_HABILITADA & " = " & IIf(p_Enabled, "-1", "0") & ", " & _
+          CAMPO_FECHA_CAMBIO_CACHE & " = " & nowSql & ", " & _
+          CAMPO_USUARIO_CAMBIO_CACHE & " = " & userSql & ", " & _
+          CAMPO_MOTIVO_CAMBIO_CACHE & " = " & motivoSql & _
+          " WHERE ID = 1"
     db.Execute SQL, dbFailOnError
     
     SetCacheEnabled = True
@@ -92,6 +118,169 @@ Public Function SetCacheEnabled(ByVal p_Enabled As Boolean, Optional ByRef p_Err
 errores:
     p_Error = "SetCacheEnabled: " & Err.Description
     Set db = Nothing
+End Function
+
+Public Function EnsureCacheSchemaReadiness(Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+
+    On Error GoTo errores
+    p_Error = ""
+    EnsureCacheSchemaReadiness = False
+
+    Set db = getdb()
+
+    If Not EnsureTbConfiguracion(db, p_Error) Then GoTo salida
+    If Not EnsureTbCacheListadoNC(db, p_Error) Then GoTo salida
+
+    EnsureCacheSchemaReadiness = True
+
+salida:
+    Set db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "EnsureCacheSchemaReadiness: " & Err.Description
+    Set db = Nothing
+    EnsureCacheSchemaReadiness = False
+End Function
+
+Private Function EnsureTbConfiguracion(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
+    Dim rsSeed As DAO.Recordset
+    On Error GoTo errores
+
+    EnsureTbConfiguracion = False
+    p_Error = ""
+
+    If Not TableExists(p_Db, "TbConfiguracion") Then
+        p_Db.Execute "CREATE TABLE TbConfiguracion (ID LONG CONSTRAINT PK_TbConfiguracion PRIMARY KEY)", dbFailOnError
+    End If
+
+    If Not FieldExists(p_Db, "TbConfiguracion", CAMPO_CACHE_HABILITADA) Then
+        p_Db.Execute "ALTER TABLE TbConfiguracion ADD COLUMN " & CAMPO_CACHE_HABILITADA & " YESNO", dbFailOnError
+    End If
+    If Not FieldExists(p_Db, "TbConfiguracion", CAMPO_FECHA_CAMBIO_CACHE) Then
+        p_Db.Execute "ALTER TABLE TbConfiguracion ADD COLUMN " & CAMPO_FECHA_CAMBIO_CACHE & " DATETIME", dbFailOnError
+    End If
+    If Not FieldExists(p_Db, "TbConfiguracion", CAMPO_USUARIO_CAMBIO_CACHE) Then
+        p_Db.Execute "ALTER TABLE TbConfiguracion ADD COLUMN " & CAMPO_USUARIO_CAMBIO_CACHE & " TEXT(255)", dbFailOnError
+    End If
+    If Not FieldExists(p_Db, "TbConfiguracion", CAMPO_MOTIVO_CAMBIO_CACHE) Then
+        p_Db.Execute "ALTER TABLE TbConfiguracion ADD COLUMN " & CAMPO_MOTIVO_CAMBIO_CACHE & " LONGTEXT", dbFailOnError
+    End If
+
+    Set rsSeed = p_Db.OpenRecordset("SELECT ID FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
+    If rsSeed.EOF Then
+        p_Db.Execute "INSERT INTO TbConfiguracion (ID, " & CAMPO_CACHE_HABILITADA & ") VALUES (1, 0)", dbFailOnError
+    Else
+        p_Db.Execute "UPDATE TbConfiguracion SET " & CAMPO_CACHE_HABILITADA & " = 0 WHERE ID=1 AND " & CAMPO_CACHE_HABILITADA & " IS NULL", dbFailOnError
+    End If
+    rsSeed.Close
+    Set rsSeed = Nothing
+
+    EnsureTbConfiguracion = True
+    Exit Function
+
+errores:
+    On Error Resume Next
+    If Not rsSeed Is Nothing Then rsSeed.Close
+    Set rsSeed = Nothing
+    p_Error = "EnsureTbConfiguracion: " & Err.Description
+    EnsureTbConfiguracion = False
+End Function
+
+Private Function EnsureTbCacheListadoNC(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
+    Dim pkExists As Boolean
+
+    On Error GoTo errores
+    EnsureTbCacheListadoNC = False
+    p_Error = ""
+
+    If Not TableExists(p_Db, NOMBRE_TABLA_LISTADO) Then
+        p_Db.Execute "CREATE TABLE " & NOMBRE_TABLA_LISTADO & " (IDNoConformidad LONG)", dbFailOnError
+    End If
+
+    EnsureListadoField p_Db, "Version", "LONG"
+    EnsureListadoField p_Db, "CodigoNoConformidad", "TEXT(255)"
+    EnsureListadoField p_Db, "IDExpediente", "LONG"
+    EnsureListadoField p_Db, "Nemotecnico", "TEXT(255)"
+    EnsureListadoField p_Db, "CodExp", "TEXT(255)"
+    EnsureListadoField p_Db, "JuridicaExp", "TEXT(255)"
+    EnsureListadoField p_Db, "IDTipo", "LONG"
+    EnsureListadoField p_Db, "Descripcion", "LONGTEXT"
+    EnsureListadoField p_Db, "Notas", "LONGTEXT"
+    EnsureListadoField p_Db, "Estado", "TEXT(100)"
+    EnsureListadoField p_Db, "FechaApertura", "DATETIME"
+    EnsureListadoField p_Db, "FechaCierre", "DATETIME"
+    EnsureListadoField p_Db, "RequiereControlEficacia", "TEXT(10)"
+    EnsureListadoField p_Db, "ControlEficacia", "TEXT(255)"
+    EnsureListadoField p_Db, "ResponsableTelefonica", "TEXT(255)"
+    EnsureListadoField p_Db, "RESPONSABLECALIDAD", "TEXT(255)"
+    EnsureListadoField p_Db, "ACR", "TEXT(255)"
+    EnsureListadoField p_Db, "Cerrada", "TEXT(10)"
+    EnsureListadoField p_Db, "FechaCache", "DATETIME"
+    EnsureListadoField p_Db, "CacheValida", "YESNO"
+
+    pkExists = IndexExists(p_Db, NOMBRE_TABLA_LISTADO, "PrimaryKey") Or IndexExists(p_Db, NOMBRE_TABLA_LISTADO, "PK_TbCacheListadoNC")
+    If Not pkExists Then
+        p_Db.Execute "CREATE UNIQUE INDEX PK_TbCacheListadoNC ON " & NOMBRE_TABLA_LISTADO & " (IDNoConformidad)", dbFailOnError
+    End If
+
+    EnsureTbCacheListadoNC = True
+    Exit Function
+
+errores:
+    p_Error = "EnsureTbCacheListadoNC: " & Err.Description
+    EnsureTbCacheListadoNC = False
+End Function
+
+Private Sub EnsureListadoField(ByVal p_Db As DAO.Database, ByVal p_FieldName As String, ByVal p_FieldTypeDDL As String)
+    If Not FieldExists(p_Db, NOMBRE_TABLA_LISTADO, p_FieldName) Then
+        p_Db.Execute "ALTER TABLE " & NOMBRE_TABLA_LISTADO & " ADD COLUMN " & p_FieldName & " " & p_FieldTypeDDL, dbFailOnError
+    End If
+End Sub
+
+Private Function TableExists(ByVal p_Db As DAO.Database, ByVal p_TableName As String) As Boolean
+    Dim tdf As DAO.TableDef
+    On Error GoTo notfound
+    Set tdf = p_Db.TableDefs(p_TableName)
+    TableExists = True
+    Exit Function
+notfound:
+    TableExists = False
+End Function
+
+Private Function FieldExists(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_FieldName As String) As Boolean
+    Dim tdf As DAO.TableDef
+    Dim fld As DAO.Field
+    On Error GoTo notfound
+    Set tdf = p_Db.TableDefs(p_TableName)
+    For Each fld In tdf.Fields
+        If StrComp(fld.Name, p_FieldName, vbTextCompare) = 0 Then
+            FieldExists = True
+            Exit Function
+        End If
+    Next fld
+    FieldExists = False
+    Exit Function
+notfound:
+    FieldExists = False
+End Function
+
+Private Function IndexExists(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_IndexName As String) As Boolean
+    Dim tdf As DAO.TableDef
+    Dim idx As DAO.Index
+    On Error GoTo notfound
+    Set tdf = p_Db.TableDefs(p_TableName)
+    For Each idx In tdf.Indexes
+        If StrComp(idx.Name, p_IndexName, vbTextCompare) = 0 Then
+            IndexExists = True
+            Exit Function
+        End If
+    Next idx
+    IndexExists = False
+    Exit Function
+notfound:
+    IndexExists = False
 End Function
 
 ' Alias para los tests
@@ -1042,6 +1231,8 @@ Private Function GenerarJSONRiesgos( _
     
     Dim SQL As String
     Dim rcd As DAO.Recordset
+    Dim dbRiesgos As DAO.Database
+    Dim errRiesgos As String
     Dim riesgo As riesgo
     Dim col As Scripting.Dictionary
     Dim dictRiesgo As Scripting.Dictionary
@@ -1055,8 +1246,17 @@ Private Function GenerarJSONRiesgos( _
           "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
           "WHERE L.IDNC = " & p_IDNC
     
-    ' Usamos getdbRiesgos() para acceder a la BD de riesgos
-    Set rcd = getdbRiesgos().OpenRecordset(SQL)
+    ' Usamos getdbRiesgos() para acceder a la BD de riesgos.
+    ' Si el backend vinculado de Riesgos no está disponible, la caché de NC no debe bloquearse:
+    ' se cachean los datos principales y se deja Riesgos como objeto vacío.
+    Set dbRiesgos = getdbRiesgos(errRiesgos)
+    If dbRiesgos Is Nothing Then
+        p_Error = ""
+        GenerarJSONRiesgos = "{}"
+        Exit Function
+    End If
+
+    Set rcd = dbRiesgos.OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -1086,6 +1286,7 @@ Private Function GenerarJSONRiesgos( _
     
     rcd.Close
     Set rcd = Nothing
+    Set dbRiesgos = Nothing
     
     ' Convertir a JSON usando JsonConverter
     GenerarJSONRiesgos = JsonConverter.ConvertToJson(col)
@@ -1093,6 +1294,9 @@ Private Function GenerarJSONRiesgos( _
     Exit Function
     
 errores:
+    If Not rcd Is Nothing Then rcd.Close
+    Set rcd = Nothing
+    Set dbRiesgos = Nothing
     p_Error = "Error en GenerarJSONRiesgos: " & Err.Description
     GenerarJSONRiesgos = "{}"
 End Function

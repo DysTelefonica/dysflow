@@ -153,6 +153,153 @@ EH:
     Test_KillSwitch_RestoreDefault_Atomic = TestHelper.TestFail(Err.Description, logs)
 End Function
 
+Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim ok1 As Boolean
+    Dim ok2 As Boolean
+    Dim errMsg As String
+    Dim assertError As String
+
+    Set logs = TestHelper.NewLogs
+    errMsg = ""
+    ok1 = EnsureCacheSchemaReadiness(errMsg)
+    Call TestHelper.AssertTrue(ok1, "EnsureCacheSchemaReadiness primera ejecución OK", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(errMsg = "", "Primera ejecución sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    errMsg = ""
+    ok2 = EnsureCacheSchemaReadiness(errMsg)
+    Call TestHelper.AssertTrue(ok2, "EnsureCacheSchemaReadiness segunda ejecución OK (idempotente)", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(errMsg = "", "Segunda ejecución sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call TestHelper.AssertTrue(CountRowsBackend("TbConfiguracion", "ID=1") = 1, "TbConfiguracion debe tener una sola fila ID=1", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call TestHelper.AssertTrue(TableHasField("TbConfiguracion", "CacheHabilitada"), "TbConfiguracion.CacheHabilitada existe", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(TableHasField("TbCacheListadoNC", "IDNoConformidad"), "TbCacheListadoNC.IDNoConformidad existe", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(TableHasField("TbCacheListadoNC", "CacheValida"), "TbCacheListadoNC.CacheValida existe", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestPass(logs, "schema_seed_ready")
+    Exit Function
+
+Fail:
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestFail(assertError, logs)
+    Exit Function
+
+EH:
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestFail(Err.Description, logs)
+End Function
+
+Private Function CountRowsBackend(ByVal p_Table As String, Optional ByVal p_Where As String = "") As Long
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+    Dim sql As String
+    On Error GoTo EH
+
+    sql = "SELECT COUNT(*) AS Cnt FROM " & p_Table
+    If Trim$(p_Where) <> "" Then sql = sql & " WHERE " & p_Where
+
+    Set db = getdb()
+    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
+    CountRowsBackend = CLng(Nz(rs.Fields("Cnt").Value, 0))
+    rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+    Exit Function
+EH:
+    CountRowsBackend = -1
+End Function
+
+Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim originalState As Boolean
+    Dim assertError As String
+    Dim opError As String
+    Dim restoreErr As String
+
+    Set logs = TestHelper.NewLogs
+    originalState = IsCacheEnabled()
+    TestHelper.AddLog logs, "Estado original=" & CStr(originalState)
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(False, opError), "Set OFF debe devolver True", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(opError = "", "Set OFF sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = False, "Estado persistido OFF", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(True, opError), "Set ON debe devolver True", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(opError = "", "Set ON sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = True, "Estado persistido ON", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opError = ""
+    Call TestHelper.AssertTrue(CacheConfig_SetEnabled(False, opError), "Set OFF final debe devolver True", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(opError = "", "Set OFF final sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(IsCacheEnabled() = False, "Estado persistido OFF final", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call RestoreState(originalState, logs, restoreErr)
+    If restoreErr <> "" Then
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(restoreErr, logs)
+    Else
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestPass(logs, "off_on_off_ok")
+    End If
+    Exit Function
+
+Fail:
+    Call RestoreState(originalState, logs, restoreErr)
+    If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
+    Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(assertError, logs)
+    Exit Function
+
+EH:
+    Call RestoreState(originalState, logs, restoreErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If restoreErr <> "" Then
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(Err.Description & " | Restore: " & restoreErr, logs)
+    Else
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(Err.Description, logs)
+    End If
+End Function
+
+Private Function TableHasField(ByVal p_Table As String, ByVal p_Field As String) As Boolean
+    Dim db As DAO.Database
+    Dim tdf As DAO.TableDef
+    Dim fld As DAO.Field
+    On Error GoTo EH
+
+    Set db = getdb()
+    Set tdf = db.TableDefs(p_Table)
+    For Each fld In tdf.Fields
+        If StrComp(fld.Name, p_Field, vbTextCompare) = 0 Then
+            TableHasField = True
+            Exit Function
+        End If
+    Next fld
+    TableHasField = False
+    Exit Function
+EH:
+    TableHasField = False
+End Function
+
 Private Sub RestoreState(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
     Dim ok As Boolean
     Dim opError As String

@@ -6,7 +6,6 @@
       "expect": { "ok": true },
       "tags": ["atomic", "killswitch", "safe"]
     },
-
     {
       "name": "Spec007b VM nil fallback",
       "procedure": "Test_Spec007b_VMNil_Atomic",
