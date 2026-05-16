@@ -9,6 +9,7 @@ import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, LEGACY_VBA_SYNC_TOOL_NAMES, type LegacyDysflowMcpToolName } from "./legacy-tool-inventory.js";
 import { getLegacyParityToolDefinition } from "./legacy-parity-registry.js";
+import { stringValue, isRecord } from "../../core/utils/index.js";
 
 export type McpTextContent = {
   type: "text";
@@ -272,14 +273,6 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
     dryRun: params.dryRun === false ? false : true,
   };
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringArrayValue(value: unknown): string[] | undefined {

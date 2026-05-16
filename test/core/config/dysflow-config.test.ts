@@ -152,6 +152,52 @@ describe("dysflow configuration", () => {
     }
   });
 
+  it("returns CONFIG_AMBIGUOUS_PROJECT_FILE when both .dysflow/project.json and dysflow.project.json exist", () => {
+    const workspace = createTempWorkspace();
+    try {
+      const projectJson = { id: "alpha", accessPath: "front.accdb" };
+      mkdirSync(join(workspace.root, ".dysflow"), { recursive: true });
+      writeFileSync(
+        join(workspace.root, ".dysflow", "project.json"),
+        JSON.stringify(projectJson, null, 2),
+        "utf8",
+      );
+      writeFileSync(
+        join(workspace.root, "dysflow.project.json"),
+        JSON.stringify({ id: "beta", accessPath: "other.accdb" }, null, 2),
+        "utf8",
+      );
+
+      const result = loadDysflowConfig({ cwd: workspace.root, env: {} });
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: "CONFIG_AMBIGUOUS_PROJECT_FILE" },
+      });
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it("returns ok when only one project config file exists (regression guard)", () => {
+    const workspace = createTempWorkspace();
+    try {
+      const projectJson = { id: "single", accessPath: "front.accdb" };
+      writeFileSync(
+        join(workspace.root, "dysflow.project.json"),
+        JSON.stringify(projectJson, null, 2),
+        "utf8",
+      );
+      writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
+
+      const result = loadDysflowConfig({ cwd: workspace.root, env: {} });
+
+      expect(result.ok).toBe(true);
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   it("resolves projectId via registry and relative project config paths", () => {
     const workspace = createTempWorkspace();
     try {

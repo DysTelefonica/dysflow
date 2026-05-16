@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
+import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync } from "../utils/index.js";
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
@@ -124,7 +125,7 @@ export class VbaSyncLegacyService {
     }
     if (result.exitCode !== 0) {
       return failureResult(
-        createDysflowError("VBA_MANAGER_FAILED", `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitize(result.stderr || result.stdout || "No output.", secrets)}`),
+        createDysflowError("VBA_MANAGER_FAILED", `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
         { durationMs: result.durationMs },
       );
     }
@@ -151,29 +152,33 @@ export class VbaSyncLegacyService {
       if (!compileResult.ok) return compileResult;
     }
 
-    const proceduresJson = await this.resolveTestProceduresJson(params);
-    return this.executeMappedTool("test_vba", { ...params, proceduresJson }, DIRECT_MAPPINGS.test_vba);
+    const planResult = await this.resolveTestProceduresJson(params);
+    if (!planResult.ok) return planResult;
+    return this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba);
   }
 
-  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<string> {
-    const procedureName = stringValue(params.procedureName);
-    if (procedureName !== undefined) {
-      return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]);
-    }
+  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<OperationResult<string>> {
+    try {
+      const procedureName = stringValue(params.procedureName);
+      if (procedureName !== undefined) {
+        return successResult(JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]));
+      }
 
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
-    const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
-    const raw = await readFile(resolvedPath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    const tests = normalizeTestPlan(parsed);
-    const filterText = stringValue(params.filter)?.toLowerCase();
-    const selected = filterText === undefined ? tests : tests.filter((test) =>
-      test.name.toLowerCase().includes(filterText)
-      || test.procedure.toLowerCase().includes(filterText)
-      || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
-    );
-    return JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args })));
+      const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+      const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
+      const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
+      const parsed = await readJsonFileAsync<unknown>(resolvedPath);
+      const tests = normalizeTestPlan(parsed);
+      const filterText = stringValue(params.filter)?.toLowerCase();
+      const selected = filterText === undefined ? tests : tests.filter((test) =>
+        test.name.toLowerCase().includes(filterText)
+        || test.procedure.toLowerCase().includes(filterText)
+        || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
+      );
+      return successResult(JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))));
+    } catch (err) {
+      return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
+    }
   }
 
   private async validateFormSpec(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
@@ -222,7 +227,7 @@ export class VbaSyncLegacyService {
 
     const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const catalogPath = stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
-    const catalog = await this.readJsonFile<Record<string, unknown>>(catalogPath).catch(() => ({} as Record<string, unknown>));
+    const catalog = await readJsonFileAsync<Record<string, unknown>>(catalogPath).catch(() => ({} as Record<string, unknown>));
     const forms = isRecord(catalog.forms) ? catalog.forms as Record<string, unknown> : {};
     const controls = Array.isArray(forms[spec.data.name]) ? forms[spec.data.name] as unknown[] : [];
     controls.push({
@@ -252,7 +257,7 @@ export class VbaSyncLegacyService {
       for (const entry of entries) {
         if (!entry.toLowerCase().endsWith(".json")) continue;
         if (!entry.toLowerCase().endsWith(".form.json") && !entry.toLowerCase().endsWith(".report.json")) continue;
-        const spec = await this.readJsonFile<Record<string, unknown>>(resolve(folder, entry)).catch(() => undefined);
+        const spec = await readJsonFileAsync<Record<string, unknown>>(resolve(folder, entry)).catch(() => undefined);
         if (spec === undefined) continue;
         const controls = Array.isArray(spec.controls) ? spec.controls : [];
         catalog.push({
@@ -275,7 +280,7 @@ export class VbaSyncLegacyService {
   private async resolveFormSpec(params: Record<string, unknown>): Promise<OperationResult<{ name: string; kind: "Form" | "Report"; controls: readonly { name: string; type: string }[]; specPath?: string }>> {
     const specFromInput = isRecord(params.spec) ? params.spec : undefined;
     const specPath = stringValue(params.specPath);
-    const loaded = specFromInput ?? (specPath ? await this.readJsonFile<Record<string, unknown>>(specPath) : undefined);
+    const loaded = specFromInput ?? (specPath ? await readJsonFileAsync<Record<string, unknown>>(specPath) : undefined);
     if (loaded === undefined) {
       return failureResult(createDysflowError("FORM_SPEC_MISSING", "validate_form_spec requires spec or specPath."));
     }
@@ -303,11 +308,6 @@ export class VbaSyncLegacyService {
       controls,
       specPath,
     });
-  }
-
-  private async readJsonFile<T>(path: string): Promise<T> {
-    const raw = await readFile(path, "utf8");
-    return JSON.parse(raw) as T;
   }
 
   private async safeReadDir(path: string): Promise<string[]> {
@@ -338,10 +338,6 @@ function mapping(
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
@@ -386,22 +382,14 @@ function truthy(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
-  const safe = sanitize(stdout, secrets).trim();
+  const safe = sanitizeSecrets(stdout, secrets).trim();
   if (safe.length === 0) return { ok: true };
   try {
     return JSON.parse(safe) as unknown;
   } catch {
     return { ok: true, stdout: safe };
   }
-}
-
-function sanitize(value: string, secrets: readonly string[]): string {
-  return secrets.reduce((text, secret) => text.split(secret).join("[REDACTED]"), value);
 }
 
 export const spawnVbaManager: VbaManagerExecutor = (request) => {

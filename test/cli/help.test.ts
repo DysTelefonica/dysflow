@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../../src/cli/index";
 
 describe("dysflow CLI help", () => {
-  it("prints the planned command surface for --help", async () => {
+  it("prints the available command surface for --help", async () => {
     const result = await runCli(["--help"]);
 
     expect(result).toEqual({
@@ -15,7 +15,7 @@ describe("dysflow CLI help", () => {
         "  setup   Prepare local Dysflow configuration",
         "  doctor  Check local Dysflow requirements",
         "  tui     Open the Dysflow terminal UI",
-        "  serve   Planned local HTTP API adapter",
+        "  serve   Start local HTTP API",
       ].join("\n"),
       stderr: "",
     });

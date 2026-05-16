@@ -25,7 +25,7 @@ export const HELP_TEXT = [
   "  setup   Prepare local Dysflow configuration",
   "  doctor  Check local Dysflow requirements",
   "  tui     Open the Dysflow terminal UI",
-  "  serve   Planned local HTTP API adapter",
+  "  serve   Start local HTTP API",
 ].join("\n");
 
 export type CommandHandler = (args: readonly string[], context?: CliCommandContext) => Promise<CliResult> | CliResult;
