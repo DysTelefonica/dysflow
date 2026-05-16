@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Cache ON precalentar+sincronizar evidencia",
+      "procedure": "Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache", "staging", "write-controlled"]
+    },
+    {
+      "name": "Cache ON invalidate sin stale listado",
+      "procedure": "Test_E2E_Cache_Invalidate_NoStaleListado_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache", "staging", "write-controlled"]
+    },
+    {
+      "name": "Spec007 PA09 invalidate",
+      "procedure": "Test_Spec007_PA09_InvalidateNC_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache", "spec007", "write-controlled"]
+    }
+  ]
+}

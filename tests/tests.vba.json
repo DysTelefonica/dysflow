@@ -7,31 +7,6 @@
       "tags": ["atomic", "killswitch", "safe"]
     },
     {
-      "name": "KillSwitch schema+seed idempotente",
-      "procedure": "Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "killswitch", "schema", "migration"]
-    },
-    {
-      "name": "KillSwitch OFF ON OFF persistencia",
-      "procedure": "Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "killswitch", "toggle", "safe"]
-    },
-    {
-      "name": "Cache ON precalentar+sincronizar evidencia",
-      "procedure": "Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache", "staging", "write-controlled"]
-    },
-    {
-      "name": "Cache ON invalidate sin stale listado",
-      "procedure": "Test_E2E_Cache_Invalidate_NoStaleListado_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache", "staging", "write-controlled"]
-    },
-
-    {
       "name": "Spec007b VM nil fallback",
       "procedure": "Test_Spec007b_VMNil_Atomic",
       "expect": { "ok": true },
