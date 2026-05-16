@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import { JsonLineMcpStdioRuntime } from "../../../src/adapters/mcp/stdio.js";
+import { JsonLineMcpStdioRuntime, MCP_PROTOCOL_VERSION } from "../../../src/adapters/mcp/stdio.js";
 import { successResult, type OperationResult } from "../../../src/core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
@@ -53,6 +53,12 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
   });
 
+  it("declares the targeted MCP protocol version as a named maintenance constant", () => {
+    expect(MCP_PROTOCOL_VERSION).toBe("2024-11-05");
+    expect(stdioSource).toContain("MCP_PROTOCOL_VERSION");
+    expect(stdioSource).not.toContain('protocolVersion: "2024-11-05"');
+  });
+
   it("does not hardcode the initialize server version", () => {
     expect(stdioSource).not.toContain('version: "0.1.0"');
   });
@@ -69,6 +75,7 @@ describe("JsonLineMcpStdioRuntime", () => {
 
     const started = runtime.start();
     writeMessage(input, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    writeMessage(input, { jsonrpc: "2.0", id: null, method: "initialize", params: {} });
     writeMessage(input, { jsonrpc: "2.0", method: "notifications/initialized" });
     writeMessage(input, { jsonrpc: "2.0", id: 2, method: "tools/list" });
     writeMessage(input, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "dysflow.echo", arguments: { ok: true } } });
@@ -77,7 +84,8 @@ describe("JsonLineMcpStdioRuntime", () => {
     output.end();
 
     await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: expect.any(String), serverInfo: { name: "dysflow", version: packageVersion } }) }),
+      expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: MCP_PROTOCOL_VERSION, serverInfo: { name: "dysflow", version: packageVersion } }) }),
+      expect.objectContaining({ id: null, result: expect.objectContaining({ protocolVersion: MCP_PROTOCOL_VERSION, serverInfo: { name: "dysflow", version: packageVersion } }) }),
       expect.objectContaining({
         id: 2,
         result: {

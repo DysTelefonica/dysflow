@@ -16,6 +16,12 @@ const require = createRequire(import.meta.url);
 const packageJson = require("../../../package.json") as { version?: unknown };
 const SERVER_VERSION = typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
 
+/**
+ * MCP protocol version intentionally targeted by Dysflow's hand-written stdio runtime.
+ * When MCP protocol support changes, update this constant and the protocol maintenance tests together.
+ */
+export const MCP_PROTOCOL_VERSION = "2024-11-05";
+
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;
   start(): Promise<void>;
@@ -81,7 +87,7 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
   private async dispatch(request: JsonRpcRequest): Promise<unknown> {
     if (request.method === "initialize") {
       return {
-        protocolVersion: "2024-11-05",
+        protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: { name: "dysflow", version: SERVER_VERSION },
       };
