@@ -17,7 +17,7 @@ export async function handleDoctorCommand(_args: readonly string[], context: Cli
 }
 
 function createDiagnosticsService(context: CliCommandContext): AccessDiagnosticsService {
-  const configResult = loadDysflowConfig({ env: context.env });
+  const configResult = loadDysflowConfig({ env: context.env, cwd: context.cwd });
   if (!configResult.ok) {
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }

@@ -158,7 +158,12 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
     }),
-    legacyToolService: new VbaSyncLegacyService({ processTimeoutMs: configResult.data.processTimeoutMs }),
+    legacyToolService: new VbaSyncLegacyService({
+      processTimeoutMs: configResult.data.processTimeoutMs,
+      accessPath: configResult.data.accessDbPath,
+      destinationRoot: configResult.data.destinationRoot,
+      accessPassword: configResult.data.accessPassword,
+    }),
   };
 
   for (const tool of createDysflowMcpTools(services)) {

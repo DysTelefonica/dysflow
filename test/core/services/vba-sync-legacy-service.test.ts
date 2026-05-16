@@ -22,7 +22,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor,
       scriptPath: "C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb", DYSFLOW_ACCESS_PASSWORD: "secret" },
+      accessPath: "C:/db/front.accdb",
+      env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
     });
 
     await expect(service.execute("export_modules", { moduleNames: ["Module1"], destinationRoot: "C:/repo/src" })).resolves.toMatchObject({
@@ -57,7 +58,8 @@ describe("VbaSyncLegacyService", () => {
         executor,
         processTimeoutMs: 50,
         scriptPath: "scripts/dysflow-vba-manager.ps1",
-        env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+        accessPath: "C:/db/front.accdb",
+      env: {},
       });
 
       const resultPromise = service.execute("export_all", {});
@@ -78,7 +80,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 1, stdout: "", stderr: "failed", durationMs: 51, timedOut: true }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     const result = await service.execute("export_all", {});
@@ -125,7 +128,8 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '{"exists":true}', stderr: "", durationMs: 1, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     await service.execute("exists", { moduleName: "Form_Main" });
@@ -145,7 +149,8 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     await expect(service.execute("compile_vba", { accessPath: "C:/custom/front.accdb", destinationRoot: "C:/repo" })).resolves.toMatchObject({
@@ -173,7 +178,8 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_RunAll"}]', stderr: "", durationMs: 5, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     await expect(service.execute("test_vba", {
@@ -212,7 +218,8 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Import"}]', stderr: "", durationMs: 7, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
       cwd: root,
     });
 
@@ -243,7 +250,8 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: request.action === "Compile" ? '{"ok":true}' : '[{"ok":true}]', stderr: "", durationMs: 4, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
       cwd: root,
     });
 
@@ -262,7 +270,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     expect(await service.execute("verify_binary", { diff: true })).toEqual(failureResult({
@@ -276,7 +285,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 1, stdout: "", stderr: "bad password secret", durationMs: 3, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb", DYSFLOW_ACCESS_PASSWORD: "secret" },
+      accessPath: "C:/db/front.accdb",
+      env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
     });
 
     const result = await service.execute("export_all", {});
@@ -296,7 +306,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
       cwd: root,
     });
 
@@ -314,7 +325,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
       cwd: root,
     });
 
@@ -332,7 +344,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
       cwd: root,
     });
 
@@ -348,7 +361,8 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Run"}]', stderr: "", durationMs: 2 }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      accessPath: "C:/db/front.accdb",
+      env: {},
     });
 
     const result = await service.execute("test_vba", { procedureName: "Test_Run" });

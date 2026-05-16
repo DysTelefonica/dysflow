@@ -1,13 +1,32 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../../src/cli/index";
 import { handleDoctorCommand } from "../../src/cli/commands/doctor";
 import { handleServeCommand } from "../../src/cli/commands/serve";
+import { handleSetupCommand } from "../../src/cli/commands/setup";
 import { successResult } from "../../src/core/contracts/index";
 
-const plannedCommandCases = [["install", ""]] as const;
+const plannedCommandCases = [
+	["install", ""],
+	["update", ""],
+] as const;
 
 const missingAccessError =
-	"CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH, define .dysflow/project.json, or pass accessDbPath/projectId.";
+	"CONFIG_MISSING_ACCESS_PATH: Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.";
+
+function createRepoConfigWorkspace(): { root: string; cleanup(): void } {
+	const root = mkdtempSync(join(tmpdir(), "dysflow-cli-"));
+	mkdirSync(join(root, ".dysflow"), { recursive: true });
+	writeFileSync(
+		join(root, ".dysflow", "project.json"),
+		`${JSON.stringify({ accessPath: "front.accdb", passwordEnv: "DYSFLOW_ACCESS_PASSWORD" }, null, 2)}\n`,
+		"utf8",
+	);
+	writeFileSync(join(root, "front.accdb"), "", "utf8");
+	return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+}
 
 describe("dysflow command modules", () => {
 	it.each(
@@ -16,30 +35,34 @@ describe("dysflow command modules", () => {
 		const result = await runCli([command, "--help"]);
 
 		expect(result.exitCode).toBe(0);
-		expect(result.stdout).toContain("Usage: dysflow install");
+		expect(result.stdout).toContain(`Usage: dysflow ${command}`);
 		expect(result.stderr).toBe("");
 	});
 
 	it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
 		const calls: unknown[] = [];
 
-		const result = await runCli(["mcp"], {
-			startMcpAdapter: async (...args: unknown[]) => {
-				calls.push(args[0]);
-			},
-			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-		});
+		const workspace = createRepoConfigWorkspace();
+		try {
+			const result = await runCli(["mcp"], {
+				startMcpAdapter: async (...args: unknown[]) => {
+					calls.push(args[0]);
+				},
+				cwd: workspace.root,
+				env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
+			});
 
-		expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
-		expect(calls).toEqual([
-			expect.objectContaining({ accessDbPath: "C:/data/app.accdb" }),
-		]);
+			expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+			expect(calls).toEqual([
+				expect.objectContaining({ accessDbPath: join(workspace.root, "front.accdb") }),
+			]);
+		} finally {
+			workspace.cleanup();
+		}
 	});
 
 	it("returns a clean MCP configuration error when Access path is missing", async () => {
-		const result = await runCli(["mcp"], {
-			env: {},
-		});
+		const result = await runCli(["mcp"], { env: {} });
 
 		expect(result).toEqual({
 			exitCode: 1,
@@ -49,20 +72,57 @@ describe("dysflow command modules", () => {
 	});
 
 	it("wires setup to core configuration and prints only redacted configuration", async () => {
-		const result = await runCli(["setup"], {
-			env: {
-				DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb",
-				DYSFLOW_ACCESS_PASSWORD: "super-secret",
-				DYSFLOW_TIMEOUT_MS: "1234",
-			},
-		});
+		const workspace = createRepoConfigWorkspace();
+		try {
+			const result = await runCli(["setup"], {
+				cwd: workspace.root,
+				env: { DYSFLOW_ACCESS_PASSWORD: "super-secret" },
+			});
 
-		expect(result.exitCode).toBe(0);
-		expect(result.stdout).toContain("Access database: C:/data/app.accdb");
-		expect(result.stdout).toContain("Timeout: 1234ms");
-		expect(result.stdout).toContain("Password: [REDACTED]");
-		expect(result.stdout).not.toContain("super-secret");
-		expect(result.stderr).toBe("");
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toContain(`Access database: ${join(workspace.root, "front.accdb")}`);
+			expect(result.stdout).toContain("Timeout: 30000ms");
+			expect(result.stdout).toContain("Password: [REDACTED]");
+			expect(result.stdout).not.toContain("super-secret");
+			expect(result.stderr).toBe("");
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("writes portable project config with only db filenames when --write-project is used", async () => {
+		const workspace = mkdtempSync(join(tmpdir(), "dysflow-setup-"));
+		const projectPath = join(workspace, ".dysflow", "project.json");
+		const accessPath = join(workspace, "front.accdb");
+		const backendPath = join(workspace, "backend.accdb");
+
+		try {
+			writeFileSync(accessPath, "", "utf8");
+			writeFileSync(backendPath, "", "utf8");
+
+			const result = await handleSetupCommand(
+				["--write-project", "--access-path", accessPath, "--backend-path", backendPath],
+				{ env: {}, cwd: workspace },
+			);
+
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toContain(
+				`Wrote portable project config to ${projectPath}`,
+			);
+			expect(readFileSync(projectPath, "utf8")).toBe(
+				`${JSON.stringify(
+					{
+						id: basename(workspace),
+						accessPath: "front.accdb",
+						backendPath: "backend.accdb",
+					},
+					null,
+					2,
+				)}\n`,
+			);
+		} finally {
+			rmSync(workspace, { recursive: true, force: true });
+		}
 	});
 
 	it("wires doctor to core diagnostics service", async () => {
@@ -75,7 +135,7 @@ describe("dysflow command modules", () => {
 						],
 					}),
 			},
-			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			env: {},
 		});
 
 		expect(result).toEqual({
@@ -86,7 +146,9 @@ describe("dysflow command modules", () => {
 	});
 
 	it("returns a clean doctor error when configuration is missing", async () => {
-		const result = await runCli(["doctor"], { env: {} });
+		const result = await runCli(["doctor"], {
+			env: {},
+		});
 
 		expect(result).toEqual({
 			exitCode: 1,
@@ -98,7 +160,7 @@ describe("dysflow command modules", () => {
 	it("wires serve to the HTTP adapter with safe defaults", async () => {
 		const starts: unknown[] = [];
 		const result = await runCli(["serve", "--port", "0"], {
-			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			env: {},
 			startHttpAdapter: async (options) => {
 				starts.push(options);
 				return {
@@ -121,7 +183,7 @@ describe("dysflow command modules", () => {
 				host: "127.0.0.1",
 				port: 0,
 				writesEnabled: false,
-				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+				env: {},
 			},
 		]);
 	});
@@ -131,7 +193,7 @@ describe("dysflow command modules", () => {
 		const result = await runCli(
 			["serve", "--host", "127.0.0.1", "--port", "0", "--enable-writes"],
 			{
-				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+				env: {},
 				startHttpAdapter: async (options) => {
 					starts.push(options);
 					return {
@@ -152,7 +214,7 @@ describe("dysflow command modules", () => {
 				host: "127.0.0.1",
 				port: 0,
 				writesEnabled: true,
-				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+				env: {},
 			},
 		]);
 	});
@@ -168,7 +230,7 @@ describe("dysflow command modules", () => {
 							],
 						}),
 				},
-				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+				env: {},
 			}),
 		).resolves.toEqual({
 			exitCode: 0,

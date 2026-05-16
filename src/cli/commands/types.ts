@@ -11,6 +11,7 @@ export type CliResult = {
 
 export type CliCommandContext = {
 	env?: Record<string, string | undefined>;
+	cwd?: string;
 	startMcpAdapter?: (config: DysflowConfig) => Promise<void>;
 	diagnosticsService?: {
 		run(request?: {
