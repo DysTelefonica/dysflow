@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
-import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
+import { loadDysflowConfig, type DysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
 import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
@@ -129,8 +129,13 @@ class JsonRpcMethodNotFound extends Error {
   }
 }
 
-export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLineMcpStdioRuntime()): Promise<void> {
-  const configResult = loadDysflowConfig();
+export async function startMcpStdioAdapter(runtime?: McpStdioRuntime): Promise<void>;
+export async function startMcpStdioAdapter(config?: DysflowConfig, runtime?: McpStdioRuntime): Promise<void>;
+export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | McpStdioRuntime, runtime?: McpStdioRuntime): Promise<void> {
+  const suppliedRuntime = isMcpStdioRuntime(configOrRuntime) ? configOrRuntime : runtime;
+  const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
+  const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
+  const configResult = config === undefined ? loadDysflowConfig() : { ok: true as const, data: config };
   if (!configResult.ok) {
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }
@@ -151,8 +156,12 @@ export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLi
   };
 
   for (const tool of createDysflowMcpTools(services)) {
-    runtime.registerTool(tool);
+    activeRuntime.registerTool(tool);
   }
 
-  await runtime.start();
+  await activeRuntime.start();
+}
+
+function isMcpStdioRuntime(value: unknown): value is McpStdioRuntime {
+  return isRecord(value) && typeof value.registerTool === "function" && typeof value.start === "function";
 }

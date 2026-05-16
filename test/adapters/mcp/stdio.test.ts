@@ -22,6 +22,11 @@ async function collectOutput(output: PassThrough): Promise<unknown[]> {
 }
 
 describe("JsonLineMcpStdioRuntime", () => {
+  it("preserves runtime-first startMcpStdioAdapter overload", () => {
+    expect(stdioSource).toContain("function startMcpStdioAdapter(runtime?: McpStdioRuntime)");
+    expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
+  });
+
   it("does not hardcode the initialize server version", () => {
     expect(stdioSource).not.toContain('version: "0.1.0"');
   });

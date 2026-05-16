@@ -9,7 +9,7 @@ export async function handleMcpCommand(_args: readonly string[], context: CliCom
       return { exitCode: 1, stdout: "", stderr: `${configResult.error.code}: ${configResult.error.message}` };
     }
 
-    await (context.startMcpAdapter ?? startMcpStdioAdapter)();
+    await (context.startMcpAdapter ?? startMcpStdioAdapter)(configResult.data);
     return { exitCode: 0, stdout: "", stderr: "" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start MCP stdio adapter.";
