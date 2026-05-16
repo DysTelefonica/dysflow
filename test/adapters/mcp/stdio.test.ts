@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { JsonLineMcpStdioRuntime } from "../../../src/adapters/mcp/stdio.js";
+
+const packageVersion = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version;
+const stdioSource = readFileSync("src/adapters/mcp/stdio.ts", "utf8");
 
 function writeMessage(input: PassThrough, message: unknown): void {
   input.write(`${JSON.stringify(message)}\n`);
@@ -18,6 +22,10 @@ async function collectOutput(output: PassThrough): Promise<unknown[]> {
 }
 
 describe("JsonLineMcpStdioRuntime", () => {
+  it("does not hardcode the initialize server version", () => {
+    expect(stdioSource).not.toContain('version: "0.1.0"');
+  });
+
   it("answers initialize, tools/list, and tools/call over JSON-RPC lines", async () => {
     const input = new PassThrough();
     const output = new PassThrough();
@@ -38,7 +46,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     output.end();
 
     await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: expect.any(String) }) }),
+      expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: expect.any(String), serverInfo: { name: "dysflow", version: packageVersion } }) }),
       expect.objectContaining({ id: 2, result: { tools: [expect.objectContaining({ name: "dysflow.echo", description: "Echo test tool" })] } }),
       expect.objectContaining({ id: 3, result: { content: [{ type: "text", text: '{"ok":true}' }], isError: false } }),
     ]);

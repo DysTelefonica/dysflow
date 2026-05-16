@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
@@ -10,6 +11,10 @@ import { AccessVbaService } from "../../core/services/vba-service.js";
 import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
 import { createDysflowMcpTools, type DysflowMcpTool, type McpToolResult } from "./tools.js";
 import { isRecord } from "../../core/utils/index.js";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../../../package.json") as { version?: unknown };
+const SERVER_VERSION = typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
 
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;
@@ -78,7 +83,7 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
       return {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "dysflow", version: "0.1.0" },
+        serverInfo: { name: "dysflow", version: SERVER_VERSION },
       };
     }
 
