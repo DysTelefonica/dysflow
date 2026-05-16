@@ -87,6 +87,16 @@ export function loadDysflowConfig(input: DysflowConfigInput = {}): OperationResu
     return loadProjectConfigFromPath(projectConfigPath, input, env, cwd, "project-registry");
   }
 
+  const ambiguousCheck = detectAmbiguousProjectConfig(cwd);
+  if (ambiguousCheck !== undefined) {
+    return failureResult(
+      createDysflowError(
+        "CONFIG_AMBIGUOUS_PROJECT_FILE",
+        `Ambiguous project config in ${cwd}: ${ambiguousCheck.join(", ")}`,
+      ),
+    );
+  }
+
   const worktreeConfigPath = findWorktreeProjectConfigPath(cwd);
   if (worktreeConfigPath !== undefined) {
     return loadProjectConfigFromPath(worktreeConfigPath, input, env, cwd, "worktree-config");
@@ -285,14 +295,20 @@ function resolvePathRelativeToRegistry(value: string, registryPath: string): str
   return isAbsolute(normalized) ? resolve(normalized) : resolve(dirname(registryPath), normalized);
 }
 
+function detectAmbiguousProjectConfig(cwd: string): string[] | undefined {
+  const existing = DEFAULT_PROJECT_CONFIG_FILENAMES
+    .map((relative) => resolve(cwd, relative))
+    .filter((path) => existsSync(path));
+  if (existing.length > 1 && resolve(existing[0]) !== resolve(existing[1])) {
+    return existing;
+  }
+  return undefined;
+}
+
 function findWorktreeProjectConfigPath(cwd: string): string | undefined {
   const candidates = DEFAULT_PROJECT_CONFIG_FILENAMES
     .map((relative) => resolve(cwd, relative))
     .filter((path) => existsSync(path));
-  if (candidates.length === 0) return undefined;
-  if (candidates.length > 1 && resolve(candidates[0]) !== resolve(candidates[1])) {
-    throw new Error(`Ambiguous project config in ${cwd}: ${candidates.join(", ")}`);
-  }
   return candidates[0];
 }
 

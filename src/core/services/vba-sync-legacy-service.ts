@@ -126,29 +126,34 @@ export class VbaSyncLegacyService {
       if (!compileResult.ok) return compileResult;
     }
 
-    const proceduresJson = await this.resolveTestProceduresJson(params);
-    return this.executeMappedTool("test_vba", { ...params, proceduresJson }, DIRECT_MAPPINGS.test_vba);
+    const planResult = await this.resolveTestProceduresJson(params);
+    if (!planResult.ok) return planResult;
+    return this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba);
   }
 
-  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<string> {
-    const procedureName = stringValue(params.procedureName);
-    if (procedureName !== undefined) {
-      return JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]);
-    }
+  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<OperationResult<string>> {
+    try {
+      const procedureName = stringValue(params.procedureName);
+      if (procedureName !== undefined) {
+        return successResult(JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]));
+      }
 
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
-    const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
-    const raw = await readFile(resolvedPath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    const tests = normalizeTestPlan(parsed);
-    const filterText = stringValue(params.filter)?.toLowerCase();
-    const selected = filterText === undefined ? tests : tests.filter((test) =>
-      test.name.toLowerCase().includes(filterText)
-      || test.procedure.toLowerCase().includes(filterText)
-      || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
-    );
-    return JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args })));
+      const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+      const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
+      const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
+      const raw = await readFile(resolvedPath, "utf8");
+      const parsed = JSON.parse(raw) as unknown;
+      const tests = normalizeTestPlan(parsed);
+      const filterText = stringValue(params.filter)?.toLowerCase();
+      const selected = filterText === undefined ? tests : tests.filter((test) =>
+        test.name.toLowerCase().includes(filterText)
+        || test.procedure.toLowerCase().includes(filterText)
+        || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
+      );
+      return successResult(JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))));
+    } catch (err) {
+      return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
+    }
   }
 
   private async validateFormSpec(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
