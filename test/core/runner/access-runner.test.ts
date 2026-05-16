@@ -63,6 +63,37 @@ describe("AccessPowerShellRunner", () => {
     );
   });
 
+  it("surfaces access process capture failures as diagnostics", async () => {
+    const executor: PowerShellExecutor = async (_command, _args, options) => {
+      const captureTask = options.onAccessProcessCaptured({ pid: 4567, processStartTime: "2026-05-15T10:00:00.000Z" });
+      await Promise.allSettled([captureTask]);
+      return { exitCode: 0, stdout: '{"returnValue":42}', stderr: "", durationMs: 12, timedOut: false };
+    };
+    let updateCalls = 0;
+    const runner = new AccessPowerShellRunner({
+      executor,
+      operationRegistry: {
+        create: async (record) => record,
+        update: async (_operationId, patch) => {
+          updateCalls += 1;
+          if (updateCalls === 1) throw new Error("registry write failed");
+          return { operationId: "op", action: "vba", accessPath: config.accessDbPath, projectRootAbs: "", destinationRootAbs: "", metadata: {}, accessPid: null, processStartTime: null, status: "completed", updatedAt: "now", ...patch };
+        },
+        get: async () => undefined,
+        listRecent: async () => [],
+      },
+      operationIdFactory: () => "op",
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      { level: "error", source: "access.pid", message: "Failed to record Access PID ownership: registry write failed" },
+    ]));
+  });
+
   it("maps timed-out execution to a retryable timeout error with sanitized diagnostics", async () => {
     const executor: PowerShellExecutor = async () => ({
       exitCode: null,
