@@ -1,6 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
+import {
+  FileAccessOperationRegistry,
+  InMemoryAccessOperationRegistry,
+} from "../../../src/core/operations/access-operation-registry.js";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 
 const base = {
@@ -28,6 +34,46 @@ describe("Access operation registry and cleanup safety", () => {
 
     await expect(registry.get("old")).resolves.toBeUndefined();
     await expect(registry.listRecent({ limit: 10 })).resolves.toMatchObject([{ operationId: "new" }, { operationId: "middle" }]);
+  });
+
+  it("persists non-completed operation records to a repo-local runtime file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-ops-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      await registry.create({ ...base, operationId: "op-timeout", status: "starting", accessPid: null, processStartTime: null, updatedAt: "2026-05-15T10:00:00.000Z" });
+      await registry.update("op-timeout", { status: "timed_out", accessPid: 4321, processStartTime: "2026-05-15T10:05:00.000Z", updatedAt: "2026-05-15T10:05:00.000Z" });
+
+      await expect(new FileAccessOperationRegistry({ filePath: registryPath }).get("op-timeout")).resolves.toMatchObject({
+        operationId: "op-timeout",
+        status: "timed_out",
+        accessPid: 4321,
+        processStartTime: "2026-05-15T10:05:00.000Z",
+      });
+      await expect(readFile(registryPath, "utf8")).resolves.toContain("op-timeout");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("purges completed and cleaned records from the persistent runtime file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-ops-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      await registry.create({ ...base, operationId: "op-complete", status: "starting", accessPid: null, processStartTime: null, updatedAt: "2026-05-15T10:00:00.000Z" });
+      await registry.update("op-complete", { status: "completed", updatedAt: "2026-05-15T10:01:00.000Z" });
+
+      await expect(registry.get("op-complete")).resolves.toBeUndefined();
+      expect(existsSync(registryPath)).toBe(true);
+      await expect(readFile(registryPath, "utf8")).resolves.not.toContain("op-complete");
+
+      await registry.create({ ...base, operationId: "op-cleaned", status: "timed_out", accessPid: 1234, processStartTime: "2026-05-15T10:00:00.000Z", updatedAt: "2026-05-15T10:00:00.000Z" });
+      await registry.update("op-cleaned", { status: "cleaned", updatedAt: "2026-05-15T10:02:00.000Z" });
+      await expect(registry.get("op-cleaned")).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("lists the latest operation including completed records", async () => {

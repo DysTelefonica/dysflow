@@ -229,6 +229,19 @@ Bootstrap a repo-local config explicitly:
 dysflow setup --write-project --access-path .\src\ProjectABC.accdb --backend-path .\src\ProjectABC_Datos.accdb
 ```
 
+### Runtime operation state
+
+Dysflow keeps Access PID ownership state separate from stable project configuration:
+
+```text
+.dysflow/
+├─ project.json                  # stable project config
+└─ runtime/
+   └─ operations.json            # volatile Access operation registry, git-ignored
+```
+
+`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `dysflow.access.cleanup` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
+
 ---
 
 ## MCP (stdlib-style stdio)

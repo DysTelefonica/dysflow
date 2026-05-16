@@ -1,10 +1,12 @@
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
+import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { loadDysflowConfig, type DysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
-import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
+import { FileAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
@@ -146,7 +148,7 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }
 
-  const operationRegistry = getDefaultAccessOperationRegistry();
+  const operationRegistry = createProjectOperationRegistry(configResult.data);
   const runner = new AccessPowerShellRunner({ operationRegistry });
   const services = {
     vbaService: new AccessVbaService({ runner, config: configResult.data }),
@@ -171,6 +173,14 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
   }
 
   await activeRuntime.start();
+}
+
+export function resolveProjectOperationRegistryPath(config: Pick<DysflowConfig, "projectRoot">): string {
+  return join(config.projectRoot ?? process.cwd(), ".dysflow", "runtime", "operations.json");
+}
+
+function createProjectOperationRegistry(config: Pick<DysflowConfig, "projectRoot">): FileAccessOperationRegistry {
+  return new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath(config) });
 }
 
 function isMcpStdioRuntime(value: unknown): value is McpStdioRuntime {

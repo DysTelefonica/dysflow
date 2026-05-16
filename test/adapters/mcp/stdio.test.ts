@@ -2,145 +2,229 @@ import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import { JsonLineMcpStdioRuntime, MCP_PROTOCOL_VERSION } from "../../../src/adapters/mcp/stdio.js";
-import { successResult, type OperationResult } from "../../../src/core/contracts/index.js";
+import {
+	JsonLineMcpStdioRuntime,
+	MCP_PROTOCOL_VERSION,
+	resolveProjectOperationRegistryPath,
+} from "../../../src/adapters/mcp/stdio.js";
+import {
+	successResult,
+	type OperationResult,
+} from "../../../src/core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";
 
-const packageVersion = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version;
+const packageVersion = (
+	JSON.parse(readFileSync("package.json", "utf8")) as { version: string }
+).version;
 const stdioSource = readFileSync("src/adapters/mcp/stdio.ts", "utf8");
 
 class FakeVbaService {
-  public requests: unknown[] = [];
-  constructor(private readonly result: OperationResult<AccessVbaResult>) {}
-  async execute(request: unknown): Promise<OperationResult<AccessVbaResult>> {
-    this.requests.push(request);
-    return this.result;
-  }
+	public requests: unknown[] = [];
+	constructor(private readonly result: OperationResult<AccessVbaResult>) {}
+	async execute(request: unknown): Promise<OperationResult<AccessVbaResult>> {
+		this.requests.push(request);
+		return this.result;
+	}
 }
 
 class FakeQueryService {
-  async execute(): Promise<OperationResult<AccessQueryResult>> {
-    return successResult({ rows: [] });
-  }
+	async execute(): Promise<OperationResult<AccessQueryResult>> {
+		return successResult({ rows: [] });
+	}
 }
 
 class FakeDiagnosticsService {
-  async run(): Promise<OperationResult<AccessDiagnosticsResult>> {
-    return successResult({ checks: [] });
-  }
+	async run(): Promise<OperationResult<AccessDiagnosticsResult>> {
+		return successResult({ checks: [] });
+	}
 }
 
 function writeMessage(input: PassThrough, message: unknown): void {
-  input.write(`${JSON.stringify(message)}\n`);
+	input.write(`${JSON.stringify(message)}\n`);
 }
 
 async function collectOutput(output: PassThrough): Promise<unknown[]> {
-  await new Promise<void>((resolve) => output.once("finish", resolve));
-  return output
-    .read()
-    ?.toString("utf8")
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line: string) => JSON.parse(line)) ?? [];
+	await new Promise<void>((resolve) => output.once("finish", resolve));
+	return (
+		output
+			.read()
+			?.toString("utf8")
+			.trim()
+			.split(/\r?\n/)
+			.filter(Boolean)
+			.map((line: string) => JSON.parse(line)) ?? []
+	);
 }
 
 describe("JsonLineMcpStdioRuntime", () => {
-  it("preserves runtime-first startMcpStdioAdapter overload", () => {
-    expect(stdioSource).toContain("function startMcpStdioAdapter(runtime?: McpStdioRuntime)");
-    expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
-  });
+	it("resolves persistent operation registry under repo-local .dysflow/runtime", () => {
+		expect(
+			resolveProjectOperationRegistryPath({
+				projectRoot: "C:/repo/app",
+			}).replace(/\\/g, "/"),
+		).toBe("C:/repo/app/.dysflow/runtime/operations.json");
+	});
 
-  it("declares the targeted MCP protocol version as a named maintenance constant", () => {
-    expect(MCP_PROTOCOL_VERSION).toBe("2024-11-05");
-    expect(stdioSource).toContain("MCP_PROTOCOL_VERSION");
-    expect(stdioSource).not.toContain('protocolVersion: "2024-11-05"');
-  });
+	it("preserves runtime-first startMcpStdioAdapter overload", () => {
+		expect(stdioSource).toContain("function startMcpStdioAdapter(");
+		expect(stdioSource).toContain("runtime?: McpStdioRuntime");
+		expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
+	});
 
-  it("does not hardcode the initialize server version", () => {
-    expect(stdioSource).not.toContain('version: "0.1.0"');
-  });
+	it("declares the targeted MCP protocol version as a named maintenance constant", () => {
+		expect(MCP_PROTOCOL_VERSION).toBe("2024-11-05");
+		expect(stdioSource).toContain("MCP_PROTOCOL_VERSION");
+		expect(stdioSource).not.toContain('protocolVersion: "2024-11-05"');
+	});
 
-  it("answers initialize, tools/list, and tools/call over JSON-RPC lines", async () => {
-    const input = new PassThrough();
-    const output = new PassThrough();
-    const runtime = new JsonLineMcpStdioRuntime({ input, output });
-    runtime.registerTool({
-      name: "dysflow.echo",
-      description: "Echo test tool",
-      handler: async (args) => ({ content: [{ type: "text", text: JSON.stringify(args) }], isError: false }),
-    });
+	it("does not hardcode the initialize server version", () => {
+		expect(stdioSource).not.toContain('version: "0.1.0"');
+	});
 
-    const started = runtime.start();
-    writeMessage(input, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
-    writeMessage(input, { jsonrpc: "2.0", id: null, method: "initialize", params: {} });
-    writeMessage(input, { jsonrpc: "2.0", method: "notifications/initialized" });
-    writeMessage(input, { jsonrpc: "2.0", id: 2, method: "tools/list" });
-    writeMessage(input, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "dysflow.echo", arguments: { ok: true } } });
-    input.end();
-    await started;
-    output.end();
+	it("answers initialize, tools/list, and tools/call over JSON-RPC lines", async () => {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const runtime = new JsonLineMcpStdioRuntime({ input, output });
+		runtime.registerTool({
+			name: "dysflow.echo",
+			description: "Echo test tool",
+			handler: async (args) => ({
+				content: [{ type: "text", text: JSON.stringify(args) }],
+				isError: false,
+			}),
+		});
 
-    await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: MCP_PROTOCOL_VERSION, serverInfo: { name: "dysflow", version: packageVersion } }) }),
-      expect.objectContaining({ id: null, result: expect.objectContaining({ protocolVersion: MCP_PROTOCOL_VERSION, serverInfo: { name: "dysflow", version: packageVersion } }) }),
-      expect.objectContaining({
-        id: 2,
-        result: {
-          tools: [expect.objectContaining({
-            name: "dysflow.echo",
-            description: "Echo test tool",
-            inputSchema: { type: "object", additionalProperties: false, properties: {} },
-          })],
-        },
-      }),
-      expect.objectContaining({ id: 3, result: { content: [{ type: "text", text: '{"ok":true}' }], isError: false } }),
-    ]);
-  });
+		const started = runtime.start();
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "initialize",
+			params: {},
+		});
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: null,
+			method: "initialize",
+			params: {},
+		});
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			method: "notifications/initialized",
+		});
+		writeMessage(input, { jsonrpc: "2.0", id: 2, method: "tools/list" });
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: 3,
+			method: "tools/call",
+			params: { name: "dysflow.echo", arguments: { ok: true } },
+		});
+		input.end();
+		await started;
+		output.end();
 
-  it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
-    const input = new PassThrough();
-    const output = new PassThrough();
-    const runtime = new JsonLineMcpStdioRuntime({ input, output });
-    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
-    for (const tool of createDysflowMcpTools({
-      vbaService: vba,
-      queryService: new FakeQueryService(),
-      diagnosticsService: new FakeDiagnosticsService(),
-    })) {
-      runtime.registerTool(tool);
-    }
+		await expect(collectOutput(output)).resolves.toEqual([
+			expect.objectContaining({
+				id: 1,
+				result: expect.objectContaining({
+					protocolVersion: MCP_PROTOCOL_VERSION,
+					serverInfo: { name: "dysflow", version: packageVersion },
+				}),
+			}),
+			expect.objectContaining({
+				id: null,
+				result: expect.objectContaining({
+					protocolVersion: MCP_PROTOCOL_VERSION,
+					serverInfo: { name: "dysflow", version: packageVersion },
+				}),
+			}),
+			expect.objectContaining({
+				id: 2,
+				result: {
+					tools: [
+						expect.objectContaining({
+							name: "dysflow.echo",
+							description: "Echo test tool",
+							inputSchema: {
+								type: "object",
+								additionalProperties: false,
+								properties: {},
+							},
+						}),
+					],
+				},
+			}),
+			expect.objectContaining({
+				id: 3,
+				result: {
+					content: [{ type: "text", text: '{"ok":true}' }],
+					isError: false,
+				},
+			}),
+		]);
+	});
 
-    const started = runtime.start();
-    writeMessage(input, { jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "run_vba", arguments: { procedureName: "Broken", argsJson: "[1," } } });
-    input.end();
-    await started;
-    output.end();
+	it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const runtime = new JsonLineMcpStdioRuntime({ input, output });
+		const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+		for (const tool of createDysflowMcpTools({
+			vbaService: vba,
+			queryService: new FakeQueryService(),
+			diagnosticsService: new FakeDiagnosticsService(),
+		})) {
+			runtime.registerTool(tool);
+		}
 
-    await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({
-        id: 7,
-        result: { content: [{ type: "text", text: "MCP_INPUT_INVALID: argsJson must be valid JSON." }], isError: true },
-      }),
-    ]);
-    expect(vba.requests).toEqual([]);
-  });
+		const started = runtime.start();
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: 7,
+			method: "tools/call",
+			params: {
+				name: "run_vba",
+				arguments: { procedureName: "Broken", argsJson: "[1," },
+			},
+		});
+		input.end();
+		await started;
+		output.end();
 
-  it("returns JSON-RPC errors for unsupported methods", async () => {
-    const input = new PassThrough();
-    const output = new PassThrough();
-    const runtime = new JsonLineMcpStdioRuntime({ input, output });
+		await expect(collectOutput(output)).resolves.toEqual([
+			expect.objectContaining({
+				id: 7,
+				result: {
+					content: [
+						{
+							type: "text",
+							text: "MCP_INPUT_INVALID: argsJson must be valid JSON.",
+						},
+					],
+					isError: true,
+				},
+			}),
+		]);
+		expect(vba.requests).toEqual([]);
+	});
 
-    const started = runtime.start();
-    writeMessage(input, { jsonrpc: "2.0", id: 99, method: "unknown/method" });
-    input.end();
-    await started;
-    output.end();
+	it("returns JSON-RPC errors for unsupported methods", async () => {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const runtime = new JsonLineMcpStdioRuntime({ input, output });
 
-    await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({ id: 99, error: expect.objectContaining({ code: -32601 }) }),
-    ]);
-  });
+		const started = runtime.start();
+		writeMessage(input, { jsonrpc: "2.0", id: 99, method: "unknown/method" });
+		input.end();
+		await started;
+		output.end();
+
+		await expect(collectOutput(output)).resolves.toEqual([
+			expect.objectContaining({
+				id: 99,
+				error: expect.objectContaining({ code: -32601 }),
+			}),
+		]);
+	});
 });
