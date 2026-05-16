@@ -464,6 +464,189 @@ Cleanup:
     Set db = Nothing
 End Function
 
+Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+    Dim idNC As Long
+    Dim originalState As Boolean
+    Dim opErr As String
+    Dim assertError As String
+    Dim ok As Boolean
+    Dim cacheCount As Long
+    Dim logCount As Long
+
+    Set logs = TestHelper.NewLogs
+    Set db = getdb()
+
+    idNC = ObtenerIDNCControlado(db)
+    Call TestHelper.AssertTrue(idNC > 0, "Debe existir al menos una NC activa para test controlado", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    originalState = IsCacheEnabled()
+    opErr = ""
+    ok = CacheConfig_SetEnabled(True, opErr)
+    Call TestHelper.AssertTrue(ok, "Cache ON para validación funcional", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opErr = ""
+    ok = SincronizarCache(opErr)
+    Call TestHelper.AssertTrue(ok, "SincronizarCache debe completar en ON", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opErr = ""
+    ok = PrecalentarCacheCompleto(20, True, "", True, opErr)
+    Call TestHelper.AssertTrue(ok, "PrecalentarCacheCompleto debe completar en ON", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Set rs = db.OpenRecordset("SELECT COUNT(*) AS Total FROM TbCacheListadoNC", dbOpenSnapshot)
+    cacheCount = CLng(Nz(rs.Fields("Total").Value, 0))
+    rs.Close: Set rs = Nothing
+    Call TestHelper.AssertTrue(cacheCount > 0, "TbCacheListadoNC debe quedar poblada", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Set rs = db.OpenRecordset("SELECT COUNT(*) AS Total FROM TbLogCache WHERE TipoOperacion IN ('Sincronizar','PrecalentarCache')", dbOpenSnapshot)
+    logCount = CLng(Nz(rs.Fields("Total").Value, 0))
+    rs.Close: Set rs = Nothing
+    Call TestHelper.AssertTrue(logCount > 0, "TbLogCache debe registrar evidencia de sincronización/precalentado", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If opErr <> "" Then
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(opErr, logs)
+    Else
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonOk(logs, cacheCount)
+    End If
+    Exit Function
+
+Fail:
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
+    Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If opErr <> "" Then
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
+    Else
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    End If
+End Function
+
+Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim idNC As Long
+    Dim originalState As Boolean
+    Dim originalDesc As String
+    Dim mutatedDesc As String
+    Dim cacheDesc As String
+    Dim opErr As String
+    Dim assertError As String
+    Dim ok As Boolean
+
+    Set logs = TestHelper.NewLogs
+    Set db = getdb()
+
+    idNC = ObtenerIDNCControlado(db)
+    Call TestHelper.AssertTrue(idNC > 0, "Debe existir una NC activa para invalidación controlada", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    originalState = IsCacheEnabled()
+    originalDesc = ObtenerDescripcionNC(db, idNC)
+    mutatedDesc = "E2E-CACHE-" & CStr(idNC) & "-" & Format$(Now, "yyyymmddhhnnss")
+
+    opErr = ""
+    ok = CacheConfig_SetEnabled(True, opErr)
+    Call TestHelper.AssertTrue(ok, "Cache ON para escenario no-stale", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    opErr = ""
+    ok = SincronizarCache(opErr)
+    Call TestHelper.AssertTrue(ok, "Sincronización base previa", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call ActualizarDescripcionNC(db, idNC, mutatedDesc)
+    opErr = ""
+    ok = InvalidateListItem(idNC, opErr)
+    Call TestHelper.AssertTrue(ok, "InvalidateListItem debe regenerar registro listado", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    cacheDesc = ObtenerDescripcionCacheListado(db, idNC)
+    Call TestHelper.AssertTrue(cacheDesc = mutatedDesc, "TbCacheListadoNC debe reflejar descripción actualizada", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call ActualizarDescripcionNC(db, idNC, originalDesc)
+    opErr = ""
+    Call InvalidateListItem(idNC, opErr)
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If opErr <> "" Then
+        Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(opErr, logs)
+    Else
+        Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonOk(logs, cacheDesc)
+    End If
+    Exit Function
+
+Fail:
+    On Error Resume Next
+    If idNC > 0 Then Call ActualizarDescripcionNC(db, idNC, originalDesc)
+    On Error GoTo 0
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
+    Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    On Error Resume Next
+    If idNC > 0 Then Call ActualizarDescripcionNC(db, idNC, originalDesc)
+    On Error GoTo 0
+    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If opErr <> "" Then
+        Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
+    Else
+        Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    End If
+End Function
+
+Private Function ObtenerIDNCControlado(ByVal p_Db As DAO.Database) As Long
+    Dim rs As DAO.Recordset
+    On Error GoTo EH
+
+    Set rs = p_Db.OpenRecordset("SELECT TOP 1 IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado,0)=0 ORDER BY IDNoConformidad", dbOpenSnapshot)
+    If Not rs.EOF Then ObtenerIDNCControlado = CLng(Nz(rs.Fields("IDNoConformidad").Value, 0))
+    rs.Close: Set rs = Nothing
+    Exit Function
+EH:
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    ObtenerIDNCControlado = 0
+End Function
+
+Private Function ObtenerDescripcionNC(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long) As String
+    Dim rs As DAO.Recordset
+    Set rs = p_Db.OpenRecordset("SELECT TOP 1 Descripcion FROM TbNoConformidades WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
+    If Not rs.EOF Then ObtenerDescripcionNC = Nz(rs.Fields("Descripcion").Value, "")
+    rs.Close: Set rs = Nothing
+End Function
+
+Private Function ObtenerDescripcionCacheListado(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long) As String
+    Dim rs As DAO.Recordset
+    Set rs = p_Db.OpenRecordset("SELECT TOP 1 Descripcion FROM TbCacheListadoNC WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
+    If Not rs.EOF Then ObtenerDescripcionCacheListado = Nz(rs.Fields("Descripcion").Value, "")
+    rs.Close: Set rs = Nothing
+End Function
+
+Private Sub ActualizarDescripcionNC(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long, ByVal p_Descripcion As String)
+    p_Db.Execute "UPDATE TbNoConformidades SET Descripcion='" & Replace$(p_Descripcion, "'", "''") & "' WHERE IDNoConformidad=" & p_IDNC, dbFailOnError
+End Sub
+
 Private Sub RestaurarConfiguracionDesdeSnapshot(ByRef p_Rs As DAO.Recordset, ByVal p_Cache As Variant, ByVal p_Fecha As Variant, ByVal p_Usuario As Variant, ByVal p_Motivo As Variant, ByRef p_Logs As Collection)
     On Error Resume Next
     If p_Rs Is Nothing Then Exit Sub

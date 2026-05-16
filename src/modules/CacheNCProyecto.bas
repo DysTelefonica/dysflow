@@ -199,10 +199,12 @@ Private Function EnsureTbCacheListadoNC(ByVal p_Db As DAO.Database, ByRef p_Erro
         p_Db.Execute "CREATE TABLE " & NOMBRE_TABLA_LISTADO & " (IDNoConformidad LONG)", dbFailOnError
     End If
 
+    EnsureListadoField p_Db, "Version", "LONG"
     EnsureListadoField p_Db, "CodigoNoConformidad", "TEXT(255)"
     EnsureListadoField p_Db, "IDExpediente", "LONG"
     EnsureListadoField p_Db, "Nemotecnico", "TEXT(255)"
     EnsureListadoField p_Db, "CodExp", "TEXT(255)"
+    EnsureListadoField p_Db, "JuridicaExp", "TEXT(255)"
     EnsureListadoField p_Db, "IDTipo", "LONG"
     EnsureListadoField p_Db, "Descripcion", "LONGTEXT"
     EnsureListadoField p_Db, "Notas", "LONGTEXT"
@@ -1229,6 +1231,8 @@ Private Function GenerarJSONRiesgos( _
     
     Dim SQL As String
     Dim rcd As DAO.Recordset
+    Dim dbRiesgos As DAO.Database
+    Dim errRiesgos As String
     Dim riesgo As riesgo
     Dim col As Scripting.Dictionary
     Dim dictRiesgo As Scripting.Dictionary
@@ -1242,8 +1246,17 @@ Private Function GenerarJSONRiesgos( _
           "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
           "WHERE L.IDNC = " & p_IDNC
     
-    ' Usamos getdbRiesgos() para acceder a la BD de riesgos
-    Set rcd = getdbRiesgos().OpenRecordset(SQL)
+    ' Usamos getdbRiesgos() para acceder a la BD de riesgos.
+    ' Si el backend vinculado de Riesgos no está disponible, la caché de NC no debe bloquearse:
+    ' se cachean los datos principales y se deja Riesgos como objeto vacío.
+    Set dbRiesgos = getdbRiesgos(errRiesgos)
+    If dbRiesgos Is Nothing Then
+        p_Error = ""
+        GenerarJSONRiesgos = "{}"
+        Exit Function
+    End If
+
+    Set rcd = dbRiesgos.OpenRecordset(SQL)
     
     Set col = New Scripting.Dictionary
     col.CompareMode = TextCompare
@@ -1273,6 +1286,7 @@ Private Function GenerarJSONRiesgos( _
     
     rcd.Close
     Set rcd = Nothing
+    Set dbRiesgos = Nothing
     
     ' Convertir a JSON usando JsonConverter
     GenerarJSONRiesgos = JsonConverter.ConvertToJson(col)
@@ -1280,6 +1294,9 @@ Private Function GenerarJSONRiesgos( _
     Exit Function
     
 errores:
+    If Not rcd Is Nothing Then rcd.Close
+    Set rcd = Nothing
+    Set dbRiesgos = Nothing
     p_Error = "Error en GenerarJSONRiesgos: " & Err.Description
     GenerarJSONRiesgos = "{}"
 End Function

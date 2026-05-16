@@ -29,6 +29,18 @@
       "procedure": "Test_E2E_KillSwitch_OffOnOff_Restore_Atomic",
       "expect": { "ok": true },
       "tags": ["e2e", "atomic", "killswitch", "write-controlled"]
+    },
+    {
+      "name": "E2E Cache ON precalentar sincronizar evidencia",
+      "procedure": "Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache", "write-controlled"]
+    },
+    {
+      "name": "E2E Cache ON invalidate sin stale",
+      "procedure": "Test_E2E_Cache_Invalidate_NoStaleListado_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache", "write-controlled"]
     }
   ]
 }

@@ -203,23 +203,35 @@ Public Function UpsertListado(ByVal p_IDNC As Long, Optional ByRef p_Error As St
     Set rsNCSource = db.OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rsNCSource.EOF Then
-        rsListado!CodigoNoConformidad = Nz(rsNCSource!CodigoNoConformidad, "")
-        rsListado!IDExpediente = Nz(rsNCSource!IDExpediente, "")
-        rsListado!Nemotecnico = Nz(rsNCSource!Nemotecnico, "")
-        rsListado!CodExp = Nz(rsNCSource!CodExp, "")
-        rsListado!JuridicaExp = Nz(rsNCSource!JuridicaExp, "")
+        rsListado!CodigoNoConformidad = Left$(Nz(rsNCSource!CodigoNoConformidad, ""), 255)
+        If IsNull(rsNCSource!IDExpediente) Then
+            rsListado!IDExpediente = Null
+        Else
+            rsListado!IDExpediente = rsNCSource!IDExpediente
+        End If
+        rsListado!Nemotecnico = Left$(Nz(rsNCSource!Nemotecnico, ""), 255)
+        rsListado!CodExp = Left$(Nz(rsNCSource!CodExp, ""), 255)
+        rsListado!JuridicaExp = Left$(Nz(rsNCSource!JuridicaExp, ""), 255)
         rsListado!IDTipo = Nz(rsNCSource!IDTipo, 0)
         rsListado!Descripcion = Nz(rsNCSource!Descripcion, "")
         rsListado!Notas = Nz(rsNCSource!Notas, "")
-        rsListado!Estado = Nz(rsNCSource!Estado, "")
-        rsListado!FechaApertura = Nz(rsNCSource!FechaApertura, "")
-        rsListado!FECHACIERRE = Nz(rsNCSource!FECHACIERRE, "")
-        rsListado!RequiereControlEficacia = Nz(rsNCSource!RequiereControlEficacia, "")
-        rsListado!ControlEficacia = Nz(rsNCSource!ControlEficacia, "")
-        rsListado!ResponsableTelefonica = Nz(rsNCSource!ResponsableTelefonica, "")
-        rsListado!RESPONSABLECALIDAD = Nz(rsNCSource!RESPONSABLECALIDAD, "")
-        rsListado!ACR = Nz(rsNCSource!ACR, "")
-        rsListado!Cerrada = Nz(rsNCSource!Cerrada, False)
+        rsListado!Estado = Left$(Nz(rsNCSource!Estado, ""), 100)
+        If IsNull(rsNCSource!FechaApertura) Then
+            rsListado!FechaApertura = Null
+        Else
+            rsListado!FechaApertura = rsNCSource!FechaApertura
+        End If
+        If IsNull(rsNCSource!FECHACIERRE) Then
+            rsListado!FECHACIERRE = Null
+        Else
+            rsListado!FECHACIERRE = rsNCSource!FECHACIERRE
+        End If
+        rsListado!RequiereControlEficacia = Left$(Nz(rsNCSource!RequiereControlEficacia, ""), 10)
+        rsListado!ControlEficacia = Left$(Nz(rsNCSource!ControlEficacia, ""), 255)
+        rsListado!ResponsableTelefonica = Left$(Nz(rsNCSource!ResponsableTelefonica, ""), 255)
+        rsListado!RESPONSABLECALIDAD = Left$(Nz(rsNCSource!RESPONSABLECALIDAD, ""), 255)
+        rsListado!ACR = Left$(Nz(rsNCSource!ACR, ""), 255)
+        rsListado!Cerrada = Left$(CStr(Nz(rsNCSource!Cerrada, False)), 10)
     End If
     
     rsNCSource.Close
