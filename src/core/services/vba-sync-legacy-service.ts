@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 
@@ -80,6 +81,7 @@ export class VbaSyncLegacyService {
     const params = isRecord(input) ? input : {};
     if (toolName === "test_vba") return this.executeTestVba(params);
     if (toolName === "verify_code") return this.executeVerifyCode(params);
+    if (toolName === "verify_binary") return this.executeVerifyBinary(params);
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
       return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
@@ -201,6 +203,26 @@ export class VbaSyncLegacyService {
       mismatches,
       results,
     });
+  }
+
+  private async executeVerifyBinary(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const sourceRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+    const tempRoot = await mkdtemp(join(tmpdir(), "dysflow-verify-binary-"));
+    try {
+      const exportResult = await this.executeMappedTool("export_all", { ...params, destinationRoot: tempRoot }, DIRECT_MAPPINGS.export_all);
+      if (!exportResult.ok) return exportResult;
+
+      const report = await buildBinaryVerificationReport({
+        sourceRoot,
+        binaryRoot: tempRoot,
+        moduleNames: stringArray(params.moduleNames),
+        strict: truthy(params.strict),
+        accessPath: stringValue(params.accessPath) || this.env.DYSFLOW_ACCESS_DB_PATH,
+      });
+      return successResult(report, { durationMs: exportResult.durationMs, operation: exportResult.operation });
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 
@@ -426,6 +448,102 @@ function normalizeVbaBody(text: string, strict: boolean): string {
 
 function normalizeNewlines(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+type BinaryCompareArtifact = {
+  module: string;
+  file: string;
+  normalized: string;
+};
+
+async function buildBinaryVerificationReport(options: {
+  sourceRoot: string;
+  binaryRoot: string;
+  moduleNames: readonly string[];
+  strict: boolean;
+  accessPath?: string;
+}): Promise<Record<string, unknown>> {
+  const sourceArtifacts = await collectBinaryArtifacts(options.sourceRoot, options.strict);
+  const binaryArtifacts = await collectBinaryArtifacts(options.binaryRoot, options.strict);
+  const requested = new Set(options.moduleNames.map(String));
+  const shouldInclude = (module: string): boolean => requested.size === 0 || requested.has(module);
+  const moduleNames = [...new Set([...sourceArtifacts.keys(), ...binaryArtifacts.keys()])]
+    .filter(shouldInclude)
+    .sort();
+
+  const same = [];
+  const different = [];
+  const sourceOnly = [];
+  const binaryOnly = [];
+
+  for (const module of moduleNames) {
+    const source = sourceArtifacts.get(module);
+    const binary = binaryArtifacts.get(module);
+    if (source !== undefined && binary !== undefined) {
+      if (source.normalized === binary.normalized) same.push({ module, file: source.file });
+      else different.push({ module, file: source.file });
+    } else if (source !== undefined) {
+      sourceOnly.push({ module, file: source.file });
+    } else if (binary !== undefined) {
+      binaryOnly.push({ module, file: binary.file });
+    }
+  }
+
+  return {
+    ok: different.length === 0 && sourceOnly.length === 0 && binaryOnly.length === 0,
+    accessPath: options.accessPath,
+    sourceRoot: options.sourceRoot,
+    same,
+    different,
+    sourceOnly,
+    binaryOnly,
+    plan: {
+      import: [...different, ...sourceOnly].map((item) => item.module).sort(),
+      delete: binaryOnly.map((item) => item.module).sort(),
+    },
+    diffs: [],
+  };
+}
+
+async function collectBinaryArtifacts(root: string, strict: boolean): Promise<Map<string, BinaryCompareArtifact>> {
+  const specs = [
+    { dir: "modules", suffix: ".bas" },
+    { dir: "classes", suffix: ".cls" },
+    { dir: "forms", suffix: ".form.txt" },
+    { dir: "reports", suffix: ".report.txt" },
+  ];
+  const artifacts = new Map<string, BinaryCompareArtifact>();
+  for (const spec of specs) {
+    const dir = join(root, spec.dir);
+    let entries: string[] = [];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries.sort()) {
+      if (!entry.toLowerCase().endsWith(spec.suffix)) continue;
+      const file = `${spec.dir}/${entry}`;
+      const module = entry.slice(0, -spec.suffix.length);
+      const text = await readFile(join(dir, entry), "utf8");
+      artifacts.set(module, {
+        module,
+        file,
+        normalized: normalizeBinaryArtifactText(text, spec.suffix, strict),
+      });
+    }
+  }
+  return artifacts;
+}
+
+function normalizeBinaryArtifactText(text: string, suffix: string, strict: boolean): string {
+  if (suffix === ".form.txt" || suffix === ".report.txt") {
+    const body = extractDocumentCodeBehindBody(text);
+    const ui = body === undefined ? normalizeNewlines(text).trimEnd() : normalizeNewlines(text).slice(0, normalizeNewlines(text).length - body.length).trimEnd();
+    const code = body === undefined ? "" : normalizeVbaBody(stripVbaMetadata(body), strict);
+    return `${ui}\n${code}`;
+  }
+  return normalizeVbaBody(stripVbaMetadata(text), strict);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

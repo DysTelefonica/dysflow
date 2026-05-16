@@ -238,9 +238,9 @@ describe("VbaSyncLegacyService", () => {
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
     });
 
-    expect(await service.execute("verify_binary", { diff: true })).toEqual(failureResult({
+    expect(await service.execute("reconcile_binary", { apply: true })).toEqual(failureResult({
       code: "LEGACY_TOOL_NOT_IMPLEMENTED",
-      message: "verify_binary requires a higher-level source/binary comparison implementation and is tracked by #25.",
+      message: "reconcile_binary requires source/binary reconciliation and is tracked by #25.",
       retryable: false,
     }));
   });
@@ -303,6 +303,78 @@ describe("VbaSyncLegacyService", () => {
         checked: 1,
         mismatches: 1,
         results: [{ moduleName: "Customer", status: "mismatch" }],
+      },
+    });
+  });
+
+  it("exports Access to a temp folder and reports verify_binary differences", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-binary-"));
+    await mkdir(join(root, "modules"), { recursive: true });
+    await writeFile(join(root, "modules", "SourceOnly.bas"), "Public Sub SourceOnly()\nEnd Sub", "utf8");
+    await writeFile(join(root, "modules", "Shared.bas"), "Public Sub Shared()\nDebug.Print \"source\"\nEnd Sub", "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+        await writeFile(join(request.destinationRoot, "modules", "BinaryOnly.bas"), "Public Sub BinaryOnly()\nEnd Sub", "utf8");
+        await writeFile(join(request.destinationRoot, "modules", "Shared.bas"), "Public Sub Shared()\nDebug.Print \"binary\"\nEnd Sub", "utf8");
+        return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 11 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("verify_binary", {})).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: false,
+        same: [],
+        different: [{ module: "Shared", file: "modules/Shared.bas" }],
+        sourceOnly: [{ module: "SourceOnly", file: "modules/SourceOnly.bas" }],
+        binaryOnly: [{ module: "BinaryOnly", file: "modules/BinaryOnly.bas" }],
+        plan: {
+          import: ["Shared", "SourceOnly"],
+          delete: ["BinaryOnly"],
+        },
+      },
+      durationMs: 11,
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        action: "Export",
+        accessPath: "C:/db/front.accdb",
+        moduleNames: [],
+        json: false,
+      }),
+    ]);
+  });
+
+  it("filters verify_binary reports by moduleNames", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-binary-filter-"));
+    await mkdir(join(root, "modules"), { recursive: true });
+    await writeFile(join(root, "modules", "Keep.bas"), "Public Sub Keep()\nEnd Sub", "utf8");
+    await writeFile(join(root, "modules", "Ignore.bas"), "Public Sub Ignore()\nEnd Sub", "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+        await writeFile(join(request.destinationRoot, "modules", "Keep.bas"), "Public Sub Keep()\nEnd Sub", "utf8");
+        await writeFile(join(request.destinationRoot, "modules", "Ignore.bas"), "Public Sub Changed()\nEnd Sub", "utf8");
+        return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 3 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    await expect(service.execute("verify_binary", { moduleNames: ["Keep"] })).resolves.toMatchObject({
+      ok: true,
+      data: {
+        ok: true,
+        same: [{ module: "Keep" }],
+        different: [],
       },
     });
   });
