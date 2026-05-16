@@ -112,14 +112,14 @@ describe("MCP tool registration over core services", () => {
     }
   });
 
-  it("translates core failures to safe MCP errors without leaking diagnostics or protocol details", () => {
+  it("translates core failures to safe MCP errors without leaking diagnostics, protocol details, or local paths", () => {
     const result = failureResult(
-      { code: "RUNNER_FAILED", message: "PowerShell runner failed: password=[REDACTED]", retryable: false },
+      { code: "RUNNER_FAILED", message: "PowerShell runner failed for C:\\Users\\Jane Doe\\NoConformidades.accdb and /Users/Jane Doe/db.accdb: password=[REDACTED]", retryable: false },
       { diagnostics: [{ level: "error", source: "powershell.stderr", message: "raw internal stack" }], durationMs: 11 },
     );
 
     expect(translateCoreResultToMcpContent(result)).toEqual({
-      content: [{ type: "text", text: "RUNNER_FAILED: PowerShell runner failed: password=[REDACTED]" }],
+      content: [{ type: "text", text: "RUNNER_FAILED: PowerShell runner failed for [PATH] and [PATH]: password=[REDACTED]" }],
       isError: true,
     });
   });

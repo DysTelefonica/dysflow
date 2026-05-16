@@ -523,7 +523,7 @@ function queryDefinitionsValue(value: unknown): readonly { name: string; sql: st
 export function translateCoreResultToMcpContent<TData>(result: OperationResult<TData>): McpToolResult {
   if (!result.ok) {
     return {
-      content: [{ type: "text", text: `${result.error.code}: ${result.error.message}` }],
+      content: [{ type: "text", text: `${result.error.code}: ${sanitizeErrorMessage(result.error.message)}` }],
       isError: true,
     };
   }
@@ -532,6 +532,14 @@ export function translateCoreResultToMcpContent<TData>(result: OperationResult<T
     content: [{ type: "text", text: JSON.stringify(result.data) }],
     isError: false,
   };
+}
+
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/[A-Za-z]:\\[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
+    .replace(/\/[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
+    .replace(/[A-Za-z]:\\(?:[^\\\s:]+\\)*[^\\\s:]+/g, "[PATH]")
+    .replace(/(?:\/[^/\s:]+)+/g, "[PATH]");
 }
 
 const LEGACY_QUERY_SLICE_TOOL_NAMES = [
