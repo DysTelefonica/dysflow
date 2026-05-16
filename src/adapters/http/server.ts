@@ -11,6 +11,7 @@ import { AccessVbaService, type AccessVbaResult } from "../../core/services/vba-
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17_321;
+export const DEFAULT_HTTP_MAX_BODY_BYTES = 1024 * 1024;
 
 export type DysflowHttpServices = {
   diagnosticsService: {
@@ -30,6 +31,7 @@ export type StartDysflowHttpServerOptions = {
   host?: string;
   port?: number;
   writesEnabled?: boolean;
+  maxBodyBytes?: number;
   services?: DysflowHttpServices;
   env?: Record<string, string | undefined>;
 };
@@ -50,9 +52,10 @@ export async function startDysflowHttpServer(
   const host = options.host ?? DEFAULT_HTTP_HOST;
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
+  const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
   const services = options.services ?? createCoreServices(options.env);
   const server = createServer((request, response) => {
-    void routeRequest(request, response, { services, writesEnabled });
+    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -91,8 +94,11 @@ function createCoreServices(env?: Record<string, string | undefined>): DysflowHt
 async function routeRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  context: { services: DysflowHttpServices; writesEnabled: boolean },
+  context: { services: DysflowHttpServices; writesEnabled: boolean; maxBodyBytes: number },
 ): Promise<void> {
+  const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
+    sendOperationResult(response, body, bodyReadFailureStatus(body));
+  };
   const method = request.method ?? "GET";
   const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
 
@@ -108,9 +114,9 @@ async function routeRequest(
   }
 
   if (method === "POST" && path === "/access/cleanup") {
-    const body = await readJsonBody(request);
+    const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
-      sendOperationResult(response, body, 400);
+      sendBodyReadFailure(body);
       return;
     }
     const cleanupService = context.services.cleanupService ?? new AccessOperationCleanupService({ registry: getDefaultAccessOperationRegistry(), processInspector: new WindowsMsAccessProcessInspector(), processKiller: new WindowsProcessKiller() });
@@ -124,9 +130,9 @@ async function routeRequest(
   }
 
   if (method === "POST" && path === "/query/read") {
-    const body = await readJsonBody(request);
+    const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
-      sendOperationResult(response, body, 400);
+      sendBodyReadFailure(body);
       return;
     }
     const sql = String(body.data.sql ?? "");
@@ -149,9 +155,9 @@ async function routeRequest(
       sendWritesDisabled(response);
       return;
     }
-    const body = await readJsonBody(request);
+    const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
-      sendOperationResult(response, body, 400);
+      sendBodyReadFailure(body);
       return;
     }
     sendOperationResult(response, await context.services.queryService.execute({ sql: String(body.data.sql ?? ""), mode: "write" }));
@@ -163,9 +169,9 @@ async function routeRequest(
       sendWritesDisabled(response);
       return;
     }
-    const body = await readJsonBody(request);
+    const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
-      sendOperationResult(response, body, 400);
+      sendBodyReadFailure(body);
       return;
     }
     sendOperationResult(response, await context.services.vbaService.execute(toVbaRequest(body.data)));
@@ -196,14 +202,25 @@ function toVbaRequest(body: JsonBody): AccessVbaRequest {
   return request;
 }
 
-async function readJsonBody(request: IncomingMessage): Promise<OperationResult<JsonBody>> {
+async function readJsonBody(request: IncomingMessage, maxBodyBytes: number): Promise<OperationResult<JsonBody>> {
+  const contentLength = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+    return bodyTooLarge(maxBodyBytes);
+  }
+
   const chunks: Buffer[] = [];
+  let receivedBytes = 0;
   for await (const chunk of request) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
+    const buffer = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk);
+    receivedBytes += buffer.byteLength;
+    if (receivedBytes > maxBodyBytes) {
+      return bodyTooLarge(maxBodyBytes);
+    }
+    chunks.push(buffer);
   }
 
   try {
-    const rawBody = Buffer.concat(chunks).toString("utf8");
+    const rawBody = Buffer.concat(chunks, receivedBytes).toString("utf8");
     const parsed = rawBody.length > 0 ? JSON.parse(rawBody) : {};
     return successResult(isJsonBody(parsed) ? parsed : {});
   } catch {
@@ -211,8 +228,20 @@ async function readJsonBody(request: IncomingMessage): Promise<OperationResult<J
   }
 }
 
+function normalizeMaxBodyBytes(value: number | undefined): number {
+  return Math.max(1, Math.floor(value ?? DEFAULT_HTTP_MAX_BODY_BYTES));
+}
+
+function bodyTooLarge(maxBodyBytes: number): OperationResult<JsonBody> {
+  return failureResult(createDysflowError("HTTP_BODY_TOO_LARGE", `Request body exceeds the ${maxBodyBytes} byte limit.`));
+}
+
 function isJsonBody(value: unknown): value is JsonBody {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function bodyReadFailureStatus(result: OperationResult<JsonBody>): number {
+  return !result.ok && result.error.code === "HTTP_BODY_TOO_LARGE" ? 413 : 400;
 }
 
 function sendWritesDisabled(response: ServerResponse): void {

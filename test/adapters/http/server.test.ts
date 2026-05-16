@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { Server } from "node:http";
+import { request as httpRequest, type Server } from "node:http";
 import { startDysflowHttpServer } from "../../../src/adapters/http/server";
 import { failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest } from "../../../src/core/contracts/index";
 
@@ -50,6 +50,27 @@ function createFakeServices(overrides: Partial<Parameters<typeof startDysflowHtt
 async function readJson(url: string, init?: RequestInit) {
   const response = await fetch(url, init);
   return { response, body: await response.json() };
+}
+
+async function postChunkedJson(url: string, chunks: readonly string[]) {
+  const target = new URL(url);
+  return new Promise<{ statusCode: number; body: unknown }>((resolve, reject) => {
+    const request = httpRequest({
+      hostname: target.hostname,
+      port: Number(target.port),
+      path: target.pathname,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    }, (response) => {
+      let raw = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { raw += chunk; });
+      response.on("end", () => resolve({ statusCode: response.statusCode ?? 0, body: JSON.parse(raw) as unknown }));
+    });
+    request.on("error", reject);
+    for (const chunk of chunks) request.write(chunk);
+    request.end();
+  });
 }
 
 afterEach(async () => {
@@ -127,6 +148,32 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
+  });
+
+  it("rejects request bodies above the configured size limit before parsing JSON", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services, maxBodyBytes: 16 });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT 1" }),
+    });
+
+    expect(response.response.status).toBe(413);
+    expect(response.body).toEqual({ ok: false, error: { code: "HTTP_BODY_TOO_LARGE", message: "Request body exceeds the 16 byte limit.", retryable: false }, diagnostics: [], durationMs: 0 });
+    expect(services.calls.queries).toEqual([]);
+  });
+
+  it("rejects chunked request bodies above the configured size limit with a JSON 413 response", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services, maxBodyBytes: 16 });
+
+    const response = await postChunkedJson(`${server.url}/query/read`, ["{\"sql\":", "\"SELECT 1\"}"]);
+
+    expect(response.statusCode).toBe(413);
+    expect(response.body).toEqual({ ok: false, error: { code: "HTTP_BODY_TOO_LARGE", message: "Request body exceeds the 16 byte limit.", retryable: false }, diagnostics: [], durationMs: 0 });
     expect(services.calls.queries).toEqual([]);
   });
 
