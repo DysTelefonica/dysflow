@@ -1,183 +1,305 @@
 # Dysflow
 
-Dysflow is a local-first automation runtime for Microsoft Access/VBA projects. It gives AI agents and scripts a controlled way to inspect, run, query, diagnose, and safely clean up Access operations without guessing which `MSACCESS.EXE` process belongs to them.
+**Status:** Production-ready MCP/CLI runtime for safe Microsoft Access automation on Windows.
 
-The main production entrypoint is the MCP server:
+Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
 
-```powershell
-dysflow mcp
-```
+---
 
-It is designed for OpenCode and other MCP clients, while also exposing a CLI and local HTTP API for scripts.
+## Release milestone
 
-## What Dysflow can do today
+### Dysflow v0.1.0 — Initial Release: MCP Safety Baseline
 
-| Capability | Interface | Status |
-|---|---|---|
-| Run as MCP stdio server | `dysflow mcp` | Available |
-| Diagnose Access configuration | CLI, MCP, HTTP | Available |
-| Execute Access read/write queries | MCP, HTTP, core services | Available |
-| Execute VBA procedures | MCP, HTTP, core services | Available |
-| List Access operations opened by Dysflow | MCP, HTTP | Available |
-| Safely cleanup owned Access processes | MCP, HTTP | Available |
-| Local HTTP API for scripts | `dysflow serve` | Available |
-| Windows profile install | `AppData\Local\dysflow` | Available |
-| TUI | `dysflow tui` | Planned |
+**Release date:** 2026-05-16  
+**Type:** Initial production release (first stable milestone)
+
+#### Highlights
+
+- **Core-safe MCP/CLI runtime** with controlled Access automation lifecycle.
+- **Operation-owned cleanup** with strict ownership validation before any process termination.
+- **JSON-RPC MCP protocol hardening** with explicit protocol version (`MCP_PROTOCOL_VERSION = 2024-11-05`) and null-id request behavior.
+- **Deterministic legacy write safety** (`dryRun`/`apply`) and timeout cancellation path in the legacy write stack.
+- **Legacy compatibility surface** preserved for legacy Dysflow MCP tools while routing through new core services.
+- **Public docs and maintenance playbooks** for protocol drift and MCP e2e/HTTP usage.
+
+#### Known boundaries in v0.1.0
+
+- HTTP support is implemented for local use-cases with writes disabled by default.
+- `dysflow tui` is defined as planned and not yet implemented.
+- Windows PowerShell 5.1 and local Access automation are required.
+
+## What Dysflow is (and is not)
+
+### It is
+
+- A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
+- A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
+- A replacement path for legacy Dysflow MCP behavior with a compatibility layer for older tool names.
+
+### It is not
+
+- A full Access UI replacement.
+- A tool to run arbitrary system-level process management.
+- A web-hosted service (defaults to local-only execution).
+
+---
 
 ## Why this exists
 
-Access automation is dangerous when processes are not owned explicitly. A generic command like this is not acceptable:
+Access automation is risky when ownership is implicit. For example, this is unsafe:
 
 ```powershell
 Stop-Process -Name MSACCESS -Force
 ```
 
-It can kill a user's Access session, another project, or another automation run.
+It can terminate unrelated user sessions.
 
-Dysflow solves that by treating every Access-opening call as an auditable operation. When Dysflow opens Access, it records:
+Dysflow records every Access launch (operation id, action, db path, PID, process metadata, lifecycle) and gates destructive actions so cleanup can only happen on verified operations.
+
+---
+
+## Architectural model
+
+Dysflow follows a strict one-way dependency model:
+
+```text
+CLI / MCP stdio / HTTP
+  -> src/adapters/*
+     -> src/core/services/*
+        -> src/core/runner/access-runner.ts
+           -> PowerShell / MSACCESS
+```
+
+`src/core` owns domain logic and returns typed `OperationResult` values. Adapters only translate results to protocol-specific responses.
+
+---
+
+## Safety model (mandatory)
+
+### 1) Operation registry is the source of truth
+
+Every `dysflow` invocation that starts Access records an operation with:
 
 - `operationId`
-- action: `diagnostics`, `query`, `vba`, etc.
-- Access database path
-- exact `MSACCESS.EXE` PID
-- OS process start time
-- command line when available
+- action (`diagnostics`, `query`, `vba`, ...)
+- target `accessPath`
+- Access `PID`
+- process start time
+- command line (when available)
 - status lifecycle
-- operation metadata
 
-Cleanup is only allowed through Dysflow's cleanup tool, which validates the operation id, path, PID, process start time, process name, command line compatibility, and status before killing anything.
+### 2) Cleanup is explicit and validated
+
+`dysflow.access.cleanup`/`cleanup_access_operation` only succeeds when all safety checks pass.
+
+Refusal examples include:
+
+- `CLEANUP_OPERATION_NOT_FOUND`
+- `CLEANUP_ACCESS_PATH_MISMATCH`
+- `CLEANUP_PID_UNKNOWN`
+- `CLEANUP_PROCESS_NOT_FOUND`
+- `CLEANUP_PROCESS_NAME_MISMATCH`
+- `CLEANUP_PROCESS_START_TIME_MISMATCH`
+- `CLEANUP_STATUS_NOT_ELIGIBLE`
+
+### 3) Writes are safer by construction
+
+- Read tools are default/explicit `mode: "read"`.
+- Write-like operations pass through guarded request paths.
+- `dryRun`-style safety is preserved in legacy compatibility paths where applicable.
+
+---
 
 ## Requirements
 
-| Requirement | Notes |
-|---|---|
-| Windows | Target platform for Access automation |
-| Microsoft Access / ACE | Required for `.accdb` automation |
-| Windows PowerShell 5.1 | Required and supported; do not require PowerShell 7 |
-| Node.js 20+ | Runtime for the Dysflow CLI/MCP server |
-| MCP client | OpenCode is the current production target |
+| Requirement  | Notes                                |
+| ------------ | ------------------------------------ |
+| OS           | Windows                              |
+| Runtime      | Node.js 20+                          |
+| Access stack | Microsoft Access / ACE               |
+| Shell        | Windows PowerShell 5.1               |
+| MCP client   | OpenCode (current production target) |
 
-Dysflow's PowerShell runner is compatible with Windows PowerShell 5.1, including Windows Server 2016.
+---
 
-## Install layout
+## Installation and bootstrap (source)
 
-For a profile-local production install, Dysflow lives here:
+From source:
 
-```txt
+```powershell
+pnpm install
+pnpm build
+```
+
+Recommended production/runtime install remains profile-local on Windows (`%LOCALAPPDATA%\\dysflow`) for MCP tooling.
+
+### Layout (profile install)
+
+```text
 C:\Users\<user>\AppData\Local\dysflow
 ├─ app
 │  ├─ dist
 │  └─ scripts
-│     └─ dysflow-access-runner.ps1
+│     └─ dysflow-vba-manager.ps1
 └─ bin
    ├─ dysflow.cmd
    └─ dysflow.ps1
 ```
 
-The `bin` directory should be on the user's `PATH`:
+Expose the `bin` path:
 
-```txt
+```text
 C:\Users\<user>\AppData\Local\dysflow\bin
 ```
 
-Verify:
-
-```powershell
-Get-Command dysflow -All | Select-Object CommandType, Source
-dysflow setup
-```
-
-The first `dysflow` should resolve from `AppData\Local\dysflow\bin`.
+---
 
 ## Configuration
 
-Dysflow reads configuration from environment variables, with first-class support for per-project contexts.
+Dysflow resolves configuration in priority order:
 
-Prefer project mode over global `DYSFLOW_ACCESS_DB_PATH` when working in multiple repositories.
-
-| Variable | Required | Purpose |
-|---|---:|---|
-| `DYSFLOW_HOME` | Yes for installed runtime | Runtime root, e.g. `C:\Users\adm1\AppData\Local\dysflow` |
-| `DYSFLOW_ACCESS_DB_PATH` | Yes (legacy/global mode) | Frontend `.accdb/.mdb` opened by Dysflow |
-| `DYSFLOW_PROJECT_ID` | No | Selects project context from `%APPDATA%/dysflow/projects.json` |
-| `DYSFLOW_CONTEXT_ID` | No | Alias for `DYSFLOW_PROJECT_ID` |
-| `DYSFLOW_PROJECT_CONFIG_PATH` | No | Direct path to `.json` project config (`.dysflow/project.json`) |
-| `DYSFLOW_PROJECTS_REGISTRY_PATH` | No | Custom path to `projects.json` registry |
-| `DYSFLOW_PROJECT_ROOT` | No | Explicit override for project root |
-| `DYSFLOW_DESTINATION_ROOT` | No | Base destination path when not set by project config |
-| `DYSFLOW_ACCESS_PASSWORD` | If protected | Access password; never printed in clear text |
-| `DYSFLOW_BACKEND_PASSWORD` | If protected | Backend password for tooling that needs it |
-| `DYSFLOW_BACKEND_PATH` | No | Backend `.accdb/.mdb` path |
-| `DYSFLOW_BACKEND_DB_PATH` | No | Backward-compatible alias for backend path |
-| `DYSFLOW_TIMEOUT_MS` | No | Operation timeout; default `30000` |
-
-Example:
-
-```powershell
-[Environment]::SetEnvironmentVariable('DYSFLOW_HOME', "$env:LOCALAPPDATA\dysflow", 'User')
-[Environment]::SetEnvironmentVariable('DYSFLOW_PROJECT_ID', '00-gestion-riesgos-develop', 'User')
-[Environment]::SetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD', '<secret>', 'User')
-[Environment]::SetEnvironmentVariable('DYSFLOW_TIMEOUT_MS', '30000', 'User')
-```
-
-### Project config mode
-
-For multi-project setups, Dysflow resolves configuration in this order:
-
-1. explicit `accessDbPath`/`accessPath` inputs (runtime callers)
-2. `projectId`/`contextId` (direct/implicit)
-3. `projectConfigPath`
-4. worktree `.dysflow/project.json` (or `dysflow.project.json`)
+1. explicit input (`accessDbPath` / config object)
+2. `projectId` / `contextId` registry resolution
+3. explicit `projectConfigPath`
+4. worktree config files (`.dysflow/project.json` or `dysflow.project.json`)
 5. legacy `DYSFLOW_ACCESS_DB_PATH`
 
-#### `.dysflow/project.json`
+### Environment variables
+
+| Variable                                           | Purpose                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| `DYSFLOW_HOME`                                     | Runtime root (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
+| `DYSFLOW_ACCESS_DB_PATH`                           | Legacy/global Access DB path                                     |
+| `DYSFLOW_PROJECT_ID` / `DYSFLOW_CONTEXT_ID`        | Select project from registry                                     |
+| `DYSFLOW_PROJECT_CONFIG_PATH`                      | Direct project config path                                       |
+| `DYSFLOW_PROJECTS_REGISTRY_PATH`                   | Custom registry path                                             |
+| `DYSFLOW_PROJECT_ROOT`                             | Override resolved project root                                   |
+| `DYSFLOW_DESTINATION_ROOT`                         | Base export/import root                                          |
+| `DYSFLOW_TIMEOUT_MS`                               | Operation timeout (ms, default 30000)                            |
+| `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD`   | Access DB password fallback                                      |
+| `DYSFLOW_BACKEND_PASSWORD`                         | Backend DB password fallback                                     |
+| `DYSFLOW_BACKEND_PATH` / `DYSFLOW_BACKEND_DB_PATH` | Backend DB path                                                  |
+| `ACCESS_VBA_PASSWORD`                              | Legacy fallback password env                                     |
+
+### Project config examples
+
+`project.json`:
 
 ```json
 {
-  "id": "00-gestion-riesgos-develop",
-  "name": "GESTION RIESGOS develop",
-  "accessPath": "Gestion_Riesgos.accdb",
-  "backendPath": "Gestion_Riesgos_Datos.accdb",
+  "id": "project-abc",
+  "name": "Project ABC",
+  "accessPath": "src/ProjectABC.accdb",
+  "backendPath": "src/ProjectABC_Datos.accdb",
   "destinationRoot": "src",
   "projectRoot": ".",
   "timeoutMs": 120000,
-  "passwordEnv": "GESTION_RIESGOS_ACCESS_PASSWORD",
-  "frontendPasswordEnv": "GESTION_RIESGOS_ACCESS_PASSWORD",
-  "backendPasswordEnv": "GESTION_RIESGOS_BACKEND_PASSWORD"
+  "passwordEnv": "PROJECTABC_ACCESS_PASSWORD",
+  "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD"
 }
 ```
 
-Field notes:
-
-- Paths may be absolute or relative to the worktree root.
-- `destinationRoot` and `projectRoot` default to the current worktree when omitted.
-- Passwords are resolved from environment variables; no secret is stored in JSON.
-
-#### Registry file (`projects.json`)
-
-Map stable project IDs to config files:
+`projects.json`:
 
 ```json
 {
   "projects": {
-    "00-gestion-riesgos-develop": "C:\\00repos\\codigo\\00_GESTION_RIESGOS_develop\\.dysflow\\project.json"
+    "project-abc": "C:\\repos\\ProjectABC\\.dysflow\\project.json"
   }
 }
 ```
 
-By default, this is read from:
+---
 
-- `%APPDATA%/dysflow/projects.json` (Windows)
+## MCP (stdlib-style stdio)
 
-You can override it with `DYSFLOW_PROJECTS_REGISTRY_PATH`.
+The main production entrypoint is:
 
-Then restart the terminal or MCP client so it inherits the variables.
+```powershell
+dysflow mcp
+```
 
-## OpenCode MCP configuration
+### Core MCP tools
 
-OpenCode should point to the profile-installed runtime, not to any old skill path.
+| Tool                             | Purpose                                            |
+| -------------------------------- | -------------------------------------------------- |
+| `dysflow.vba.execute`            | Execute a public VBA procedure                     |
+| `dysflow.query.execute`          | Execute Access SQL in `read` or `write` mode       |
+| `dysflow.doctor`                 | Run diagnostics                                    |
+| `dysflow.access.operations.list` | List recent tracked operations                     |
+| `dysflow.access.cleanup`         | Validate and cleanup a single owned Access process |
 
-`C:\Users\<user>\.config\opencode\opencode.json`:
+### Compatibility tools (legacy)
+
+Dysflow also exposes a compatibility surface with legacy Dysflow MCP tool names and behaviors:
+
+- `list_access_operations` / `cleanup_access_operation`
+- `run_vba`
+- `query_sql`
+- `exec_sql`, `run_script`, `create_table`, `drop_table`, `seed_fixture`, `teardown_fixture`
+- `list_tables`, `get_schema`, `count_rows`, `distinct_values`, `compare_backends`, `get_relationships`, `list_access_files`
+- `list_links`, `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`
+- `export_queries`, `import_queries`, `compact_repair`
+- `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`
+- `list_linked_tables`
+
+Compatibility entries are documented and tracked in `src/adapters/mcp/legacy-parity-registry.ts`.
+
+### MCP protocol and maintenance
+
+Initialize response uses a named protocol constant:
+
+- `MCP_PROTOCOL_VERSION` (`2024-11-05`)
+- See `docs/testing/mcp-protocol-maintenance.md` for update procedure and JSON-RPC guards.
+
+Important behavior now explicitly covered in tests:
+
+- `id: null` is treated as a valid request id and receives a response.
+- notifications (no `id`) are intentionally ignored.
+
+---
+
+## HTTP API (local)
+
+Start local HTTP adapter for scripts:
+
+```powershell
+dysflow serve --host 127.0.0.1 --port 17321
+```
+
+Defaults:
+
+- host: `127.0.0.1`
+- port: `17321`
+- writes: disabled by default
+
+See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
+
+---
+
+## CLI
+
+| Command          | Description                                   |
+| ---------------- | --------------------------------------------- |
+| `dysflow mcp`    | Start MCP stdio adapter                       |
+| `dysflow doctor` | Run config + environment diagnostics          |
+| `dysflow setup`  | Print resolved config (with redacted secrets) |
+| `dysflow serve`  | Start local HTTP API                          |
+| `dysflow tui`    | Planned terminal UI                           |
+
+### Common flow
+
+1. Validate config: `dysflow setup` or `dysflow doctor`
+2. Start MCP: `dysflow mcp`
+3. Run MCP client session (OpenCode, etc.)
+4. On automation error/timeouts, inspect `dysflow.access.operations.list`
+5. Clean up owned operation explicitly via `dysflow.access.cleanup`
+
+---
+
+## OpenCode MCP config
+
+Point OpenCode to the installed runtime binary, e.g.:
 
 ```json
 {
@@ -193,267 +315,72 @@ OpenCode should point to the profile-installed runtime, not to any old skill pat
 }
 ```
 
-Verify:
+Validate:
 
 ```powershell
 opencode mcp list
 ```
 
-Expected:
+---
 
-```txt
-✓ dysflow connected
-C:/Users/<user>/AppData/Local/dysflow/bin/dysflow.cmd mcp
-```
+## Error handling and diagnostics
 
-## MCP tools
+All command/tool responses expose structured error codes and diagnostics. In CLI mode, `dysflow doctor` prints check-by-check status (`✓`/`✗`).
 
-Dysflow exposes these MCP tools.
+For MCP, errors are returned as standard MCP content or JSON-RPC errors depending on adapter route.
 
-| Tool | Purpose | Typical input |
-|---|---|---|
-| `dysflow.doctor` | Run Access diagnostics | `{ "includeEnvironment": true }` |
-| `dysflow.query.execute` | Execute Access SQL | `{ "sql": "SELECT ...", "mode": "read" }` |
-| `dysflow.vba.execute` | Execute a VBA procedure | `{ "moduleName": "...", "procedureName": "...", "arguments": [] }` |
-| `dysflow.access.operations.list` | List recent Access operations | `{}` |
-| `dysflow.access.cleanup` | Safely cleanup a registered operation | `{ "operationId": "...", "accessPath": "...", "force": true }` |
+---
 
-### Legacy parity extensions
+## Testing
 
-Dysflow also keeps legacy-compatible tool names for the remaining Access/VBA parity slices:
-
-- Query / maintenance: `list_links`, `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `export_queries`, `import_queries`, `compact_repair`
-- Form tooling: `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`
-
-These legacy names resolve through the same safe core services as the production MCP tools. For maintenance operations, keep using explicit paths when the tool accepts them; for form tooling, prefer a local spec/catal
-og workflow under the project worktree.
-
-### `dysflow.doctor`
-
-Checks that Dysflow can resolve configuration and open Access.
-
-Example MCP call:
-
-```json
-{
-  "name": "dysflow.doctor",
-  "arguments": { "includeEnvironment": true }
-}
-```
-
-Expected result includes checks like:
-
-```json
-{
-  "checks": [
-    { "name": "access-db-path", "ok": true, "message": "configured" },
-    { "name": "access-open", "ok": true, "message": "opened" }
-  ]
-}
-```
-
-### `dysflow.query.execute`
-
-Executes SQL through the Access runner.
-
-Read example:
-
-```json
-{
-  "name": "dysflow.query.execute",
-  "arguments": {
-    "sql": "SELECT TOP 5 Name FROM MSysObjects WHERE Type=1 AND Flags=0",
-    "mode": "read"
-  }
-}
-```
-
-Write example:
-
-```json
-{
-  "name": "dysflow.query.execute",
-  "arguments": {
-    "sql": "UPDATE SomeTable SET SomeField = 'value' WHERE ID = 1",
-    "mode": "write"
-  }
-}
-```
-
-Use write mode only in controlled tests or approved automations.
-
-### `dysflow.vba.execute`
-
-Runs a public VBA procedure through Access.
-
-```json
-{
-  "name": "dysflow.vba.execute",
-  "arguments": {
-    "moduleName": "Automation",
-    "procedureName": "Refresh",
-    "arguments": [2026]
-  }
-}
-```
-
-The `moduleName` is metadata for callers and operation tracking. The runner invokes the procedure name through Access automation.
-
-### `dysflow.access.operations.list`
-
-Shows recent operations, including completed, failed, timed out, cleanup pending, and PID-unknown records.
-
-```json
-{
-  "name": "dysflow.access.operations.list",
-  "arguments": {}
-}
-```
-
-Example operation record:
-
-```json
-{
-  "operationId": "dysflow-...",
-  "action": "query",
-  "accessPath": "C:\\path\\Front.accdb",
-  "accessPid": 12345,
-  "processStartTime": "2026-05-15T14:04:56.4567720Z",
-  "status": "completed",
-  "metadata": { "sql": "SELECT TOP 5 ...", "mode": "read" },
-  "commandLine": "\"C:\\Program Files\\Microsoft Office\\Root\\Office16\\MSACCESS.EXE\" -Embedding"
-}
-```
-
-### `dysflow.access.cleanup`
-
-Cleans up only a process that Dysflow can prove it owns.
-
-```json
-{
-  "name": "dysflow.access.cleanup",
-  "arguments": {
-    "operationId": "dysflow-...",
-    "accessPath": "C:\\path\\Front.accdb",
-    "force": true
-  }
-}
-```
-
-Cleanup refuses when any safety check fails:
-
-| Check | Refusal example |
-|---|---|
-| Unknown operation | `CLEANUP_OPERATION_NOT_FOUND` |
-| Path mismatch | `CLEANUP_ACCESS_PATH_MISMATCH` |
-| PID missing | `CLEANUP_PID_UNKNOWN` |
-| Process gone | `CLEANUP_PROCESS_NOT_FOUND` |
-| Process name mismatch | `CLEANUP_PROCESS_NAME_MISMATCH` |
-| Start time mismatch | `CLEANUP_PROCESS_START_TIME_MISMATCH` |
-| Command line mismatch | `CLEANUP_COMMAND_LINE_MISMATCH` |
-| Unsafe status | `CLEANUP_STATUS_NOT_ELIGIBLE` |
-
-## Local HTTP API
-
-Dysflow can also run a local HTTP server for scripts:
-
-```powershell
-dysflow serve --host 127.0.0.1 --port 17321
-```
-
-Default bind:
-
-```txt
-127.0.0.1:17321
-```
-
-Routes:
-
-| Route | Purpose |
-|---|---|
-| `GET /health` | Health check |
-| `GET /diagnostics` | Run diagnostics |
-| `POST /query/read` | Read-only SQL |
-| `POST /query/write` | Write SQL; disabled unless `--enable-writes` |
-| `POST /vba/execute` | VBA execution; disabled unless `--enable-writes` |
-| `GET /access/operations` | List operation registry |
-| `POST /access/cleanup` | Safe cleanup |
-
-Writes are disabled by default.
-
-## CLI commands
-
-| Command | Purpose |
-|---|---|
-| `dysflow setup` | Resolve and print redacted configuration |
-| `dysflow doctor` | Open Access and run diagnostics |
-| `dysflow mcp` | Start MCP stdio server |
-| `dysflow serve` | Start local HTTP API |
-| `dysflow tui` | Planned TUI placeholder |
-
-## Testing against a real Access front/backend
-
-The E2E checklist lives here:
-
-```txt
-docs/testing/mcp-access-e2e.md
-```
-
-It covers:
-
-- OpenCode MCP connectivity
-- MCP stdio protocol smoke tests
-- Access diagnostics
-- read query against the front
-- backend validation through auxiliary Access query tooling
-- operation registry inspection
-- PID ownership validation
-- cleanup refusal cases
-- controlled cleanup of owned PIDs
-- Windows PowerShell 5.1 compatibility
-
-## Development
-
-Install dependencies:
-
-```powershell
-pnpm install
-```
-
-Run tests:
+Development workflow:
 
 ```powershell
 pnpm test
-```
-
-Build:
-
-```powershell
 pnpm build
 ```
 
-Current test baseline:
+Current test baseline includes strict coverage for MCP compatibility behavior, protocol constants, and write-safety semantics.
 
-Run `pnpm test` before release; keep the suite green.
+Useful references:
 
-## Safety contract for AI agents
+- `test/adapters/mcp/*.test.ts`
+- `test/core/services/*.test.ts`
+- `docs/testing/mcp-access-e2e.md`
 
-Agents using Dysflow must follow these rules:
+---
 
-1. Use `dysflow.access.operations.list` to discover operations.
-2. Use `dysflow.access.cleanup(operationId, accessPath)` for cleanup.
-3. Never kill `MSACCESS.EXE` by process name.
-4. Never claim cleanup is safe for `pid_unknown` operations.
-5. Preserve operation metadata in error reports.
-6. Treat write SQL and VBA execution as controlled, explicit operations.
+## Development notes
 
-## Project status
+- `src/core/**` remains protocol-agnostic and returns normalized `OperationResult`.
+- Adapters translate protocol-specific formats at boundaries only.
+- Legacy parity additions are additive by default; implemented and pending tool surface is tracked in `src/adapters/mcp/legacy-parity-registry.ts`.
+- The MCP standard adapter is intentionally small and controlled; protocol drift is tracked as a first-class maintenance item.
 
-Dysflow is now operational as a local MCP runtime for Access automation. The current production target is a Windows user-profile install under `AppData\Local\dysflow`, with OpenCode consuming it through MCP stdio.
+---
 
-Planned next steps:
+## Current roadmap
 
-- harden installer/update workflow
-- add richer schemas for MCP tool inputs
-- add more Access/VBA domain-specific tools
-- expand E2E coverage for project-specific VBA test procedures
+- Installer/update hardening
+- richer MCP input schemas for complex domains
+- expanded Access/VBA domain tooling
+- broader E2E coverage for multi-project project-context flows
+
+---
+
+## Open-source quality posture
+
+- **Clear safety contracts** before destructive operations
+- **Structured error semantics** with explicit codes
+- **Deterministic compatibility layer** for legacy tools
+- **TDD-first changes** with strict `pnpm test` / `pnpm build` verification
+
+---
+
+## Relevant docs
+
+- [`CHANGELOG.md`](CHANGELOG.md)
+- [`docs/architecture/dysflow-core-and-adapters.md`](docs/architecture/dysflow-core-and-adapters.md)
+- [`docs/api/http-api.md`](docs/api/http-api.md)
+- [`docs/testing/mcp-access-e2e.md`](docs/testing/mcp-access-e2e.md)
+- [`docs/testing/mcp-protocol-maintenance.md`](docs/testing/mcp-protocol-maintenance.md)
