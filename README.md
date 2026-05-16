@@ -91,24 +91,85 @@ The first `dysflow` should resolve from `AppData\Local\dysflow\bin`.
 
 ## Configuration
 
-Dysflow reads configuration from environment variables.
+Dysflow reads configuration from environment variables, with first-class support for per-project contexts.
+
+Prefer project mode over global `DYSFLOW_ACCESS_DB_PATH` when working in multiple repositories.
 
 | Variable | Required | Purpose |
 |---|---:|---|
 | `DYSFLOW_HOME` | Yes for installed runtime | Runtime root, e.g. `C:\Users\adm1\AppData\Local\dysflow` |
-| `DYSFLOW_ACCESS_DB_PATH` | Yes | Frontend `.accdb/.mdb` opened by Dysflow |
+| `DYSFLOW_ACCESS_DB_PATH` | Yes (legacy/global mode) | Frontend `.accdb/.mdb` opened by Dysflow |
+| `DYSFLOW_PROJECT_ID` | No | Selects project context from `%APPDATA%/dysflow/projects.json` |
+| `DYSFLOW_CONTEXT_ID` | No | Alias for `DYSFLOW_PROJECT_ID` |
+| `DYSFLOW_PROJECT_CONFIG_PATH` | No | Direct path to `.json` project config (`.dysflow/project.json`) |
+| `DYSFLOW_PROJECTS_REGISTRY_PATH` | No | Custom path to `projects.json` registry |
+| `DYSFLOW_PROJECT_ROOT` | No | Explicit override for project root |
+| `DYSFLOW_DESTINATION_ROOT` | No | Base destination path when not set by project config |
 | `DYSFLOW_ACCESS_PASSWORD` | If protected | Access password; never printed in clear text |
+| `DYSFLOW_BACKEND_PASSWORD` | If protected | Backend password for tooling that needs it |
+| `DYSFLOW_BACKEND_PATH` | No | Backend `.accdb/.mdb` path |
+| `DYSFLOW_BACKEND_DB_PATH` | No | Backward-compatible alias for backend path |
 | `DYSFLOW_TIMEOUT_MS` | No | Operation timeout; default `30000` |
-| `DYSFLOW_ACCESS_BACKEND_PATH` | No | Backend path used by external test tooling/context |
 
 Example:
 
 ```powershell
 [Environment]::SetEnvironmentVariable('DYSFLOW_HOME', "$env:LOCALAPPDATA\dysflow", 'User')
-[Environment]::SetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH', 'C:\path\Front.accdb', 'User')
+[Environment]::SetEnvironmentVariable('DYSFLOW_PROJECT_ID', '00-gestion-riesgos-develop', 'User')
 [Environment]::SetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD', '<secret>', 'User')
 [Environment]::SetEnvironmentVariable('DYSFLOW_TIMEOUT_MS', '30000', 'User')
 ```
+
+### Project config mode
+
+For multi-project setups, Dysflow resolves configuration in this order:
+
+1. explicit `accessDbPath`/`accessPath` inputs (runtime callers)
+2. `projectId`/`contextId` (direct/implicit)
+3. `projectConfigPath`
+4. worktree `.dysflow/project.json` (or `dysflow.project.json`)
+5. legacy `DYSFLOW_ACCESS_DB_PATH`
+
+#### `.dysflow/project.json`
+
+```json
+{
+  "id": "00-gestion-riesgos-develop",
+  "name": "GESTION RIESGOS develop",
+  "accessPath": "Gestion_Riesgos.accdb",
+  "backendPath": "Gestion_Riesgos_Datos.accdb",
+  "destinationRoot": "src",
+  "projectRoot": ".",
+  "timeoutMs": 120000,
+  "passwordEnv": "GESTION_RIESGOS_ACCESS_PASSWORD",
+  "frontendPasswordEnv": "GESTION_RIESGOS_ACCESS_PASSWORD",
+  "backendPasswordEnv": "GESTION_RIESGOS_BACKEND_PASSWORD"
+}
+```
+
+Field notes:
+
+- Paths may be absolute or relative to the worktree root.
+- `destinationRoot` and `projectRoot` default to the current worktree when omitted.
+- Passwords are resolved from environment variables; no secret is stored in JSON.
+
+#### Registry file (`projects.json`)
+
+Map stable project IDs to config files:
+
+```json
+{
+  "projects": {
+    "00-gestion-riesgos-develop": "C:\\00repos\\codigo\\00_GESTION_RIESGOS_develop\\.dysflow\\project.json"
+  }
+}
+```
+
+By default, this is read from:
+
+- `%APPDATA%/dysflow/projects.json` (Windows)
+
+You can override it with `DYSFLOW_PROJECTS_REGISTRY_PATH`.
 
 Then restart the terminal or MCP client so it inherits the variables.
 
