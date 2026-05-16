@@ -331,17 +331,13 @@ function resolvePassword(explicitPassword: string | undefined, envPassword: stri
 }
 
 function resolvePasswordEnv(config: DysflowProjectConfig): string | undefined {
-  return stringValue(config.passwordEnv)
-    ?? stringValue(config.accessPasswordEnv)
+  return stringValue(config.accessPasswordEnv)
     ?? stringValue(config.frontendPasswordEnv)
-    ?? stringValue(config.backendPasswordEnv);
+    ?? stringValue(config.passwordEnv);
 }
 
 function resolveBackendPasswordEnv(config: DysflowProjectConfig): string | undefined {
-  return stringValue(config.backendPasswordEnv)
-    ?? stringValue(config.passwordEnv)
-    ?? stringValue(config.accessPasswordEnv)
-    ?? stringValue(config.frontendPasswordEnv);
+  return stringValue(config.backendPasswordEnv);
 }
 
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
