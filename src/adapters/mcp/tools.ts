@@ -214,7 +214,7 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
       if (isQuerySliceTool(name)) {
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
       }
-      if (isWriteFixtureSliceTool(name)) {
+      if (isWriteFixtureSliceTool(name) || isLinkMaintenanceSliceTool(name)) {
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)));
       }
       return {
@@ -280,12 +280,14 @@ function schemaForLegacyTool(name: LegacyDysflowMcpToolName): Record<string, unk
       reuseInstance: { type: "boolean" },
     });
   }
-  if (isQuerySliceTool(name) || isWriteFixtureSliceTool(name)) {
+  if (isQuerySliceTool(name) || isWriteFixtureSliceTool(name) || isLinkMaintenanceSliceTool(name)) {
     return objectSchema({
       sql: { type: "string" },
       backendPath: { type: "string" },
       projectRoot: { type: "string" },
       tableName: { type: "string" },
+      sourceTableName: { type: "string" },
+      tableNames: { type: "array", items: { type: "string" } },
       columnName: { type: "string" },
     });
   }
@@ -317,6 +319,10 @@ function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
 
 function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function isLinkMaintenanceSliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_LINK_MAINTENANCE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
@@ -351,6 +357,8 @@ function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unkn
     dryRun: params.apply === true || params.dryRun === false ? false : true,
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
+    sourceTableName: stringValue(params.sourceTableName) ?? stringValue(params.sourceTable),
+    tableNames: stringArrayValue(params.tableNames),
   };
 }
 
@@ -395,6 +403,7 @@ const LEGACY_QUERY_SLICE_TOOL_NAMES = [
   "compare_backends",
   "list_access_files",
   "get_relationships",
+  "list_links",
 ] as const;
 
 const LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES = [
@@ -404,6 +413,13 @@ const LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES = [
   "drop_table",
   "seed_fixture",
   "teardown_fixture",
+] as const;
+
+const LEGACY_LINK_MAINTENANCE_SLICE_TOOL_NAMES = [
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
 ] as const;
 
 export function translateCoreResultToMcpContent<TData>(result: OperationResult<TData>): McpToolResult {

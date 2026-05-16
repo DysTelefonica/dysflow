@@ -30,7 +30,7 @@ export type AccessVbaRequest = {
 export type AccessQueryRequest = {
   sql?: string;
   mode: "read" | "write";
-  action?: "query_sql" | "list_tables" | "list_linked_tables" | "get_schema" | "count_rows" | "distinct_values" | "compare_backends" | "list_access_files" | "get_relationships" | "exec_sql" | "run_script" | "create_table" | "drop_table" | "seed_fixture" | "teardown_fixture";
+  action?: "query_sql" | "list_tables" | "list_linked_tables" | "get_schema" | "count_rows" | "distinct_values" | "compare_backends" | "list_access_files" | "get_relationships" | "list_links" | "link_tables" | "relink_tables" | "localize_backend_links" | "unlink_table" | "exec_sql" | "run_script" | "create_table" | "drop_table" | "seed_fixture" | "teardown_fixture";
   tableName?: string;
   columnName?: string;
   backendPath?: string;
@@ -41,6 +41,8 @@ export type AccessQueryRequest = {
   dryRun?: boolean;
   allowTables?: readonly string[];
   denyTables?: readonly string[];
+  sourceTableName?: string;
+  tableNames?: readonly string[];
 };
 
 export function createDiagnostic(level: DiagnosticLevel, source: string, message: string): Diagnostic {
