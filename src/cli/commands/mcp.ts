@@ -4,7 +4,7 @@ import type { CliCommandContext, CliResult } from "./types.js";
 
 export async function handleMcpCommand(_args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
   try {
-    const configResult = loadDysflowConfig({ env: context.env });
+    const configResult = loadDysflowConfig({ env: context.env, cwd: context.cwd });
     if (!configResult.ok) {
       return { exitCode: 1, stdout: "", stderr: `${configResult.error.code}: ${configResult.error.message}` };
     }

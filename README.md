@@ -187,29 +187,22 @@ C:\Users\<user>\AppData\Local\dysflow\bin
 
 ## Configuration
 
-Dysflow resolves configuration in priority order:
+Dysflow resolves functional project configuration from the current repository:
 
-1. explicit input (`accessDbPath` / config object)
-2. `projectId` / `contextId` registry resolution
-3. explicit `projectConfigPath`
-4. worktree config files (`.dysflow/project.json` or `dysflow.project.json`)
-5. legacy `DYSFLOW_ACCESS_DB_PATH`
+1. explicit programmatic input (`accessDbPath` / config object)
+2. repo-local `.dysflow/project.json`
+
+The runtime installation directory is only for executable code (`DYSFLOW_HOME`). It must not contain the active `.dysflow` project configuration.
+
+Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state. Only secrets may come from environment variables.
 
 ### Environment variables
 
 | Variable                                           | Purpose                                                          |
 | -------------------------------------------------- | ---------------------------------------------------------------- |
 | `DYSFLOW_HOME`                                     | Runtime root (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
-| `DYSFLOW_ACCESS_DB_PATH`                           | Legacy/global Access DB path                                     |
-| `DYSFLOW_PROJECT_ID` / `DYSFLOW_CONTEXT_ID`        | Select project from registry                                     |
-| `DYSFLOW_PROJECT_CONFIG_PATH`                      | Direct project config path                                       |
-| `DYSFLOW_PROJECTS_REGISTRY_PATH`                   | Custom registry path                                             |
-| `DYSFLOW_PROJECT_ROOT`                             | Override resolved project root                                   |
-| `DYSFLOW_DESTINATION_ROOT`                         | Base export/import root                                          |
-| `DYSFLOW_TIMEOUT_MS`                               | Operation timeout (ms, default 30000)                            |
 | `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD`   | Access DB password fallback                                      |
 | `DYSFLOW_BACKEND_PASSWORD`                         | Backend DB password fallback                                     |
-| `DYSFLOW_BACKEND_PATH` / `DYSFLOW_BACKEND_DB_PATH` | Backend DB path                                                  |
 | `ACCESS_VBA_PASSWORD`                              | Legacy fallback password env                                     |
 
 ### Project config examples
@@ -230,14 +223,10 @@ Dysflow resolves configuration in priority order:
 }
 ```
 
-`projects.json`:
+Bootstrap a repo-local config explicitly:
 
-```json
-{
-  "projects": {
-    "project-abc": "C:\\repos\\ProjectABC\\.dysflow\\project.json"
-  }
-}
+```powershell
+dysflow setup --write-project --access-path .\src\ProjectABC.accdb --backend-path .\src\ProjectABC_Datos.accdb
 ```
 
 ---
@@ -310,15 +299,15 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 
 ## CLI
 
-| Command          | Description                                   |
-| ---------------- | --------------------------------------------- |
-| `dysflow mcp`    | Start MCP stdio adapter                       |
-| `dysflow setup`  | Print resolved config (with redacted secrets) |
-| `dysflow doctor` | Run config + environment diagnostics          |
-| `dysflow install`| Install runtime + auto-wire MCP integrations  |
-| `dysflow update` | Reinstall runtime if source version is newer |
-| `dysflow tui`    | Interactive alias for `dysflow install`       |
-| `dysflow serve`  | Start local HTTP API                          |
+| Command           | Description                                   |
+| ----------------- | --------------------------------------------- |
+| `dysflow mcp`     | Start MCP stdio adapter                       |
+| `dysflow setup`   | Print resolved config (with redacted secrets) |
+| `dysflow doctor`  | Run config + environment diagnostics          |
+| `dysflow install` | Install runtime + auto-wire MCP integrations  |
+| `dysflow update`  | Reinstall runtime if source version is newer  |
+| `dysflow tui`     | Interactive alias for `dysflow install`       |
+| `dysflow serve`   | Start local HTTP API                          |
 
 ### Common flow
 

@@ -32,6 +32,9 @@ export type VbaSyncLegacyServiceOptions = {
   scriptPath?: string;
   env?: Record<string, string | undefined>;
   cwd?: string;
+  accessPath?: string;
+  destinationRoot?: string;
+  accessPassword?: string;
   processTimeoutMs?: number;
 };
 
@@ -73,6 +76,9 @@ export class VbaSyncLegacyService {
   private readonly scriptPath: string;
   private readonly env: Record<string, string | undefined>;
   private readonly cwd: string;
+  private readonly accessPath?: string;
+  private readonly destinationRoot?: string;
+  private readonly accessPassword?: string;
   private readonly processTimeoutMs: number;
 
   constructor(options: VbaSyncLegacyServiceOptions = {}) {
@@ -80,6 +86,9 @@ export class VbaSyncLegacyService {
     this.executor = options.executor ?? spawnVbaManager;
     this.scriptPath = options.scriptPath ?? resolveDefaultVbaManagerScriptPath(this.env);
     this.cwd = options.cwd ?? process.cwd();
+    this.accessPath = stringValue(options.accessPath);
+    this.destinationRoot = stringValue(options.destinationRoot);
+    this.accessPassword = stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
   }
 
@@ -101,9 +110,9 @@ export class VbaSyncLegacyService {
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
-    const accessPath = stringValue(params.accessPath) || this.env.DYSFLOW_ACCESS_DB_PATH;
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const password = this.env.DYSFLOW_ACCESS_PASSWORD;
+    const accessPath = stringValue(params.accessPath) ?? this.accessPath;
+    const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
+    const password = this.accessPassword;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,

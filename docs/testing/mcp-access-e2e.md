@@ -4,11 +4,12 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 
 ## Quick path
 
-1. Cerrar y abrir de nuevo OpenCode/Codex para heredar variables de usuario.
+1. Cerrar y abrir de nuevo OpenCode/Codex para heredar `PATH`, `DYSFLOW_HOME` y secretos de usuario.
 2. Verificar que `dysflow` resuelve desde `AppData\Local`.
-3. Verificar `opencode mcp list` con `dysflow connected`.
-4. Ejecutar pruebas MCP: `initialize`, `tools/list`, `dysflow.doctor`, query read, list operations y cleanup seguro.
-5. Validar PID ownership: cada operación que abre Access registra `operationId`, `accessPid`, `processStartTime`, `accessPath` y `status`.
+3. Verificar que el repo activo contiene `.dysflow/project.json`; la configuración funcional no sale de variables de entorno.
+4. Verificar `opencode mcp list` con `dysflow connected`.
+5. Ejecutar pruebas MCP: `initialize`, `tools/list`, `dysflow.doctor`, query read, list operations y cleanup seguro.
+6. Validar PID ownership: cada operación que abre Access registra `operationId`, `accessPid`, `processStartTime`, `accessPath` y `status`.
 
 ## Entorno esperado
 
@@ -20,6 +21,7 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 | MCP command | `C:/Users/adm1/AppData/Local/dysflow/bin/dysflow.cmd mcp` |
 | Front Access | `C:\Proyectos\dysflow\NoConformidades.accdb` |
 | Backend Access | `C:\Proyectos\dysflow\NoConformidades_Datos.accdb` |
+| Project config | `C:\Proyectos\dysflow\.dysflow\project.json` |
 | Password | `DYSFLOW_ACCESS_PASSWORD` configurado como secreto de usuario |
 | PowerShell target | Windows PowerShell 5.1 vía `powershell.exe`, no `pwsh` |
 
@@ -28,8 +30,8 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 ```powershell
 Get-Command dysflow -All | Select-Object CommandType, Source
 [Environment]::GetEnvironmentVariable('DYSFLOW_HOME','User')
-[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User')
-[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_BACKEND_PATH','User')
+Test-Path .\.dysflow\project.json
+Get-Content .\.dysflow\project.json
 [bool][Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User')
 ```
 
@@ -37,7 +39,8 @@ Resultado esperado:
 
 - El primer `dysflow` debe venir de `C:\Users\adm1\AppData\Local\dysflow\bin`.
 - `DYSFLOW_HOME` debe apuntar a `C:\Users\adm1\AppData\Local\dysflow`.
-- `DYSFLOW_ACCESS_DB_PATH` debe apuntar al front.
+- `.dysflow/project.json` debe estar en el repo activo y contener `accessPath`/`backendPath` relativos o portables.
+- No debe requerirse `DYSFLOW_ACCESS_DB_PATH`, `DYSFLOW_ACCESS_BACKEND_PATH` ni variables de selección de proyecto.
 - La password debe estar seteada, pero nunca imprimirse.
 
 ## Prueba 1 — CLI runtime instalado
@@ -340,7 +343,8 @@ opencode mcp list
 dysflow setup
 dysflow doctor
 [Environment]::GetEnvironmentVariable('DYSFLOW_HOME','User')
-[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User')
+Test-Path .\.dysflow\project.json
+Get-Content .\.dysflow\project.json
 [bool][Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User')
 ```
 
