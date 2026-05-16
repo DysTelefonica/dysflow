@@ -39,7 +39,7 @@ export class AccessOperationCleanupService {
       return failureResult(createDysflowError("CLEANUP_OPERATION_NOT_FOUND", `Operation ${request.operationId} was not found.`));
     }
 
-    if (record.accessPath !== request.accessPath) {
+    if (record.accessPath.toLowerCase() !== request.accessPath.toLowerCase()) {
       return failureResult(createDysflowError("CLEANUP_ACCESS_PATH_MISMATCH", "Cleanup refused because accessPath does not match the registered operation."));
     }
 
