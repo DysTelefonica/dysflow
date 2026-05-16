@@ -8,6 +8,8 @@ const plannedCommandCases = [
   ["tui", "tui is planned; terminal UI is not implemented yet."],
 ] as const;
 
+const missingAccessError = "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH, define .dysflow/project.json, or pass accessDbPath/projectId.";
+
 describe("dysflow command modules", () => {
   it.each(plannedCommandCases)("dispatches %s through a dedicated planned handler", async (command, stdout) => {
     const result = await runCli([command]);
@@ -38,7 +40,7 @@ describe("dysflow command modules", () => {
     expect(result).toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH or pass accessDbPath.",
+      stderr: missingAccessError,
     });
   });
 
@@ -81,7 +83,7 @@ describe("dysflow command modules", () => {
     expect(result).toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH or pass accessDbPath.",
+      stderr: missingAccessError,
     });
   });
 
