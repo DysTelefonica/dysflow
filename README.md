@@ -171,6 +171,17 @@ Legacy-compatible read-only query aliases are also exposed for agents migrating 
 | `list_access_files` | Find `.accdb` and `.mdb` files below a root | `{ "rootPath": "C:\\data" }` |
 | `get_relationships` | List Access relationships | `{}` |
 
+Legacy-compatible guarded write and fixture aliases are also exposed. They default to dry-run unless called with `{ "apply": true }` or `{ "dryRun": false }`, and honor `allowTables`/`denyTables` safeguards:
+
+| Tool | Purpose | Typical input |
+|---|---|---|
+| `exec_sql` | Execute guarded write SQL | `{ "sql": "UPDATE ...", "allowTables": ["Customers"], "apply": true }` |
+| `run_script` | Execute a guarded `.sql` script | `{ "scriptPath": "C:\\fixtures\\setup.sql" }` |
+| `create_table` | Create a fixture table | `{ "tableName": "Fixture_Customers", "definition": "Id INTEGER" }` |
+| `drop_table` | Drop an allowed fixture table | `{ "tableName": "Fixture_Customers", "allowTables": ["Fixture_Customers"], "apply": true }` |
+| `seed_fixture` | Insert fixture rows | `{ "tableName": "Fixture_Customers", "rows": [{ "Id": 1 }] }` |
+| `teardown_fixture` | Delete rows from a fixture table | `{ "tableName": "Fixture_Customers", "allowTables": ["Fixture_Customers"], "apply": true }` |
+
 ### `dysflow.doctor`
 
 Checks that Dysflow can resolve configuration and open Access.

@@ -142,6 +142,78 @@ function Get-AccessFiles {
                   @{ Name = 'length'; Expression = { $_.Length } })
 }
 
+function ConvertTo-StringArray {
+  param($Value)
+  if ($null -eq $Value) { return @() }
+  if ($Value -is [System.Array]) { return @($Value | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) }
+  return @([string]$Value | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+
+function Protect-AccessTableName {
+  param($Payload, [string] $TableName)
+  if ([string]::IsNullOrWhiteSpace($TableName)) { return }
+  if ($TableName.StartsWith('MSys', [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to modify system table: $TableName"
+  }
+  $denyTables = @(ConvertTo-StringArray $Payload.denyTables)
+  foreach ($denyTable in $denyTables) {
+    if ($denyTable -eq '*' -or $denyTable.Equals($TableName, [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Table denied by policy: $TableName"
+    }
+  }
+  $allowTables = @(ConvertTo-StringArray $Payload.allowTables)
+  if ($allowTables.Count -gt 0) {
+    $allowed = $false
+    foreach ($allowTable in $allowTables) {
+      if ($allowTable -eq '*' -or $allowTable.Equals($TableName, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $allowed = $true
+        break
+      }
+    }
+    if (-not $allowed) { throw "Table not allowed by policy: $TableName" }
+  }
+}
+
+function Get-SqlTableNames {
+  param([string] $Sql)
+  $tables = New-Object System.Collections.ArrayList
+  foreach ($pattern in @('(?i)\bUPDATE\s+(?:\[([^\]]+)\]|([A-Za-z0-9_]+))', '(?i)\bINTO\s+(?:\[([^\]]+)\]|([A-Za-z0-9_]+))', '(?i)\bFROM\s+(?:\[([^\]]+)\]|([A-Za-z0-9_]+))')) {
+    foreach ($match in [regex]::Matches($Sql, $pattern)) {
+      $name = $match.Groups[1].Value
+      if ([string]::IsNullOrWhiteSpace($name)) { $name = $match.Groups[2].Value }
+      [void]$tables.Add($name.Trim())
+    }
+  }
+  return @($tables | Select-Object -Unique)
+}
+
+function Protect-AccessSql {
+  param($Payload, [string] $Sql)
+  if ([string]::IsNullOrWhiteSpace($Sql)) { throw 'SQL is required for write action.' }
+  foreach ($tableName in @(Get-SqlTableNames -Sql $Sql)) {
+    Protect-AccessTableName -Payload $Payload -TableName $tableName
+  }
+}
+
+function ConvertTo-SqlLiteral {
+  param($Value)
+  if ($null -eq $Value) { return 'NULL' }
+  if ($Value -is [bool]) { if ($Value) { return 'True' } else { return 'False' } }
+  if ($Value -is [int] -or $Value -is [long] -or $Value -is [decimal] -or $Value -is [double]) { return [string]$Value }
+  return "'" + ([string]$Value).Replace("'", "''") + "'"
+}
+
+function ConvertTo-SeedFixtureSql {
+  param([string] $TableName, $Rows)
+  $statements = New-Object System.Collections.ArrayList
+  foreach ($row in @($Rows)) {
+    $columns = @($row.PSObject.Properties | ForEach-Object { '[' + $_.Name.Replace(']', ']]') + ']' })
+    $values = @($row.PSObject.Properties | ForEach-Object { ConvertTo-SqlLiteral $_.Value })
+    [void]$statements.Add('INSERT INTO [' + $TableName.Replace(']', ']]') + '] (' + ($columns -join ', ') + ') VALUES (' + ($values -join ', ') + ')')
+  }
+  return @($statements)
+}
+
 $access = $null
 try {
   if (-not (Test-Path -LiteralPath $AccessDbPath)) {
@@ -240,6 +312,87 @@ try {
       } finally {
         if ($null -ne $other) { $other.Close() }
       }
+      exit 0
+    }
+
+    if ($action -eq 'exec_sql') {
+      $sql = [string]$payload.sql
+      Protect-AccessSql -Payload $payload -Sql $sql
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; statements = @($sql) } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $db.Execute($sql, 128)
+      [ordered]@{ applied = $true; affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    }
+    if ($action -eq 'run_script') {
+      $scriptPath = [string]$payload.scriptPath
+      if ([string]::IsNullOrWhiteSpace($scriptPath) -or -not (Test-Path -LiteralPath $scriptPath)) { throw "SQL script not found: $scriptPath" }
+      $statements = @((Get-Content -LiteralPath $scriptPath -Raw) -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
+      foreach ($statement in $statements) { Protect-AccessSql -Payload $payload -Sql $statement }
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; scriptPath = $scriptPath; statements = $statements } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $affectedRows = 0
+      foreach ($statement in $statements) {
+        $db.Execute($statement, 128)
+        $affectedRows += [int]$db.RecordsAffected
+      }
+      [ordered]@{ applied = $true; affectedRows = $affectedRows } | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    }
+    if ($action -eq 'create_table') {
+      $tableName = [string]$payload.tableName
+      Protect-AccessTableName -Payload $payload -TableName $tableName
+      $sql = 'CREATE TABLE [' + $tableName.Replace(']', ']]') + '] (' + ([string]$payload.definition) + ')'
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; statements = @($sql) } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $db.Execute($sql, 128)
+      [ordered]@{ applied = $true; affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    }
+    if ($action -eq 'drop_table') {
+      $tableName = [string]$payload.tableName
+      Protect-AccessTableName -Payload $payload -TableName $tableName
+      $sql = 'DROP TABLE [' + $tableName.Replace(']', ']]') + ']'
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; statements = @($sql) } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $db.Execute($sql, 128)
+      [ordered]@{ applied = $true; affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    }
+    if ($action -eq 'seed_fixture') {
+      $tableName = [string]$payload.tableName
+      Protect-AccessTableName -Payload $payload -TableName $tableName
+      $statements = @(ConvertTo-SeedFixtureSql -TableName $tableName -Rows $payload.rows)
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; tableName = $tableName; statements = $statements } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $affectedRows = 0
+      foreach ($statement in $statements) {
+        $db.Execute($statement, 128)
+        $affectedRows += [int]$db.RecordsAffected
+      }
+      [ordered]@{ applied = $true; affectedRows = $affectedRows } | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    }
+    if ($action -eq 'teardown_fixture') {
+      $tableName = [string]$payload.tableName
+      Protect-AccessTableName -Payload $payload -TableName $tableName
+      $sql = 'DELETE FROM [' + $tableName.Replace(']', ']]') + ']'
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; statements = @($sql) } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $db.Execute($sql, 128)
+      [ordered]@{ applied = $true; affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
       exit 0
     }
 

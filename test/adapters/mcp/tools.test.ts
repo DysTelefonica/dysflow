@@ -102,4 +102,29 @@ describe("MCP tool registration over core services", () => {
       { action: "get_relationships", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined },
     ]);
   });
+
+  it("routes legacy guarded write and fixture tools through the query service as dry-run by default", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: null })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await tools.find((tool) => tool.name === "exec_sql")?.handler({ sql: "UPDATE Customers SET Active=True", apply: true, allowTables: ["Customers"] });
+    await tools.find((tool) => tool.name === "run_script")?.handler({ scriptPath: "C:/fixtures/setup.sql", allowTable: "Customers" });
+    await tools.find((tool) => tool.name === "create_table")?.handler({ tableName: "Fixture_Customers", definition: "Id INTEGER" });
+    await tools.find((tool) => tool.name === "drop_table")?.handler({ tableName: "Fixture_Customers", apply: true, allowTables: ["Fixture_Customers"] });
+    await tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "Fixture_Customers", rows: [{ Id: 1, Name: "Ada" }] });
+    await tools.find((tool) => tool.name === "teardown_fixture")?.handler({ tableName: "Fixture_Customers", apply: true, allowTables: ["Fixture_Customers"] });
+
+    expect(query.requests).toEqual([
+      { action: "exec_sql", mode: "write", sql: "UPDATE Customers SET Active=True", tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: ["Customers"], denyTables: undefined },
+      { action: "run_script", mode: "write", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: "C:/fixtures/setup.sql", definition: undefined, rows: undefined, dryRun: true, allowTables: ["Customers"], denyTables: undefined },
+      { action: "create_table", mode: "write", sql: undefined, tableName: "Fixture_Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: "Id INTEGER", rows: undefined, dryRun: true, allowTables: undefined, denyTables: undefined },
+      { action: "drop_table", mode: "write", sql: undefined, tableName: "Fixture_Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: ["Fixture_Customers"], denyTables: undefined },
+      { action: "seed_fixture", mode: "write", sql: undefined, tableName: "Fixture_Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: [{ Id: 1, Name: "Ada" }], dryRun: true, allowTables: undefined, denyTables: undefined },
+      { action: "teardown_fixture", mode: "write", sql: undefined, tableName: "Fixture_Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: ["Fixture_Customers"], denyTables: undefined },
+    ]);
+  });
 });

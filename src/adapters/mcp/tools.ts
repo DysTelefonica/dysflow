@@ -148,6 +148,9 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
       if (isQuerySliceTool(name)) {
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
       }
+      if (isWriteFixtureSliceTool(name)) {
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)));
+      }
       return {
         isError: true,
         content: [{ type: "text", text: `LEGACY_TOOL_NOT_IMPLEMENTED: ${name} is tracked for legacy parity but not ported in this slice.` }],
@@ -162,6 +165,10 @@ function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
 
 function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_QUERY_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
 }
 
 function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
@@ -179,6 +186,26 @@ function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): A
   };
 }
 
+function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+  const params = isRecord(input) ? input : {};
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
+  return {
+    action: name as AccessQueryRequest["action"],
+    mode: "write",
+    sql: stringValue(params.sql) ?? stringValue(params.query),
+    tableName,
+    columnName: stringValue(params.columnName) ?? stringValue(params.column),
+    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
+    scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
+    definition: stringValue(params.definition) ?? stringValue(params.fields),
+    rows: rowsValue(params.rows),
+    dryRun: params.apply === true || params.dryRun === false ? false : true,
+    allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
+    denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
+  };
+}
+
 function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
   if (argsJson === undefined || argsJson.trim().length === 0) return [];
   const parsed = JSON.parse(argsJson) as unknown;
@@ -187,6 +214,23 @@ function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function stringArrayValue(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function singleStringArrayValue(value: unknown): string[] | undefined {
+  const single = stringValue(value);
+  return single === undefined ? undefined : [single];
+}
+
+function rowsValue(value: unknown): readonly Record<string, unknown>[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.filter(isRecord);
+  return rows.length > 0 ? rows : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -203,6 +247,15 @@ const LEGACY_QUERY_SLICE_TOOL_NAMES = [
   "compare_backends",
   "list_access_files",
   "get_relationships",
+] as const;
+
+const LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES = [
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
 ] as const;
 
 export function translateCoreResultToMcpContent<TData>(result: OperationResult<TData>): McpToolResult {
