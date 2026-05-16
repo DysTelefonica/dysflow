@@ -22,6 +22,9 @@ export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;
   arguments?: readonly unknown[];
+  accessPath?: string;
+  projectRoot?: string;
+  destinationRoot?: string;
 };
 
 export type AccessQueryRequest = {

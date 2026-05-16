@@ -55,10 +55,10 @@ describe("legacy Dysflow MCP parity inventory", () => {
       expect(byName.has(name), `${name} should be registered`).toBe(true);
     }
 
-    await byName.get("run_vba")?.handler({ procedureName: "Smoke", argsJson: "[1,2]" });
+    await byName.get("run_vba")?.handler({ procedureName: "Smoke", argsJson: "[1,2]", accessPath: "C:/data/app.accdb" });
     await byName.get("query_sql")?.handler({ sql: "SELECT 1" });
 
-    expect(vba.requests).toEqual([{ moduleName: "", procedureName: "Smoke", arguments: [1, 2] }]);
+    expect(vba.requests).toEqual([{ moduleName: "", procedureName: "Smoke", arguments: [1, 2], accessPath: "C:/data/app.accdb", projectRoot: undefined, destinationRoot: undefined }]);
     expect(query.requests).toEqual([{ sql: "SELECT 1", mode: "read" }]);
   });
 

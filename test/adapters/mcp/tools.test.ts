@@ -113,6 +113,13 @@ describe("MCP tool registration over core services", () => {
         reuseInstance: { type: "boolean" },
       },
     });
+    expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.inputSchema).toMatchObject({
+      properties: {
+        accessPath: { type: "string" },
+        procedureName: { type: "string" },
+      },
+      required: ["procedureName", "accessPath"],
+    });
   });
 
   it("registers protocol-safe MCP tools that invoke the matching core services", async () => {
@@ -126,7 +133,7 @@ describe("MCP tool registration over core services", () => {
     const toolNames = tools.map((tool) => tool.name);
 
     expect(toolNames).toEqual(expect.arrayContaining(["dysflow.vba.execute", "dysflow.query.execute", "dysflow.doctor", "dysflow.access.operations.list", "dysflow.access.cleanup"]));
-    await expect(tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] })).resolves.toEqual({
+    await expect(tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026], accessPath: "C:/data/app.accdb" })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
     });
@@ -135,11 +142,11 @@ describe("MCP tool registration over core services", () => {
       isError: false,
     });
     await expect(tools[2]?.handler({ includeEnvironment: true })).resolves.toEqual({
-      content: [{ type: "text", text: JSON.stringify({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }) }],
+      content: [{ type: "text", text: JSON.stringify({ checks: [{ name: "access-db-path", ok: true, message: "configured" }], context: { passwordSource: "missing", activeOperations: [] } }) }],
       isError: false,
     });
 
-    expect(vba.requests).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }]);
+    expect(vba.requests).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026], accessPath: "C:/data/app.accdb" }]);
     expect(query.requests).toEqual([{ sql: "SELECT id, name FROM People", mode: "read" }]);
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
   });

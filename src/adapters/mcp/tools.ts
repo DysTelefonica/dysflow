@@ -57,17 +57,41 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
     {
       name: "dysflow.vba.execute",
       description: "Execute a VBA procedure through Dysflow core services.",
+      inputSchema: objectSchema({
+        moduleName: { type: "string" },
+        procedureName: { type: "string" },
+        arguments: { type: "array" },
+        accessPath: { type: "string" },
+        projectRoot: { type: "string" },
+        destinationRoot: { type: "string" },
+      }, ["procedureName", "accessPath"]),
       handler: async (input) => translateCoreResultToMcpContent(await services.vbaService.execute(input as AccessVbaRequest)),
     },
     {
       name: "dysflow.query.execute",
       description: "Execute an Access SQL query through Dysflow core services.",
+      inputSchema: objectSchema({
+        sql: { type: "string" },
+        mode: { type: "string", enum: ["read", "write"] },
+        backendPath: { type: "string" },
+        projectRoot: { type: "string" },
+      }, ["sql", "mode"]),
       handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest)),
     },
     {
       name: "dysflow.doctor",
       description: "Run Dysflow diagnostics through core services.",
-      handler: async (input) => translateCoreResultToMcpContent(await services.diagnosticsService.run(input as AccessDiagnosticsRequest)),
+      inputSchema: objectSchema({
+        includeEnvironment: { type: "boolean" },
+      }),
+      handler: async (input) => {
+        const result = await services.diagnosticsService.run(input as AccessDiagnosticsRequest);
+        if (!result.ok) return translateCoreResultToMcpContent(result);
+        return translateCoreResultToMcpContent(successResult({
+          ...result.data,
+          context: await buildRuntimeContext(services),
+        }, { durationMs: result.durationMs, diagnostics: result.diagnostics, operation: result.operation }));
+      },
     },
     {
       name: "dysflow.context",
@@ -145,11 +169,14 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       if (services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute("run_vba", input));
       }
-      const request = input as { procedureName: string; argsJson?: string };
+      const request = input as { procedureName: string; argsJson?: string; accessPath?: string; projectRoot?: string; destinationRoot?: string };
       return translateCoreResultToMcpContent(await services.vbaService.execute({
         moduleName: "",
         procedureName: request.procedureName,
         arguments: parseLegacyArgsJson(request.argsJson),
+        accessPath: request.accessPath,
+        projectRoot: request.projectRoot,
+        destinationRoot: request.destinationRoot,
       }));
     },
   });

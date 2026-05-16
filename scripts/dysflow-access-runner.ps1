@@ -235,8 +235,8 @@ try {
 
   if ($Operation -eq 'diagnostics') {
     $checks = @(
-      [ordered]@{ name = 'access-db-path'; ok = $true; message = 'configured' },
-      [ordered]@{ name = 'access-open'; ok = $true; message = 'opened' }
+      [ordered]@{ name = 'access-db-path'; ok = $true; message = "configuredAccessPath=$AccessDbPath" },
+      [ordered]@{ name = 'access-open'; ok = $true; message = "openedAccessPath=$AccessDbPath" }
     )
     [ordered]@{ checks = $checks } | ConvertTo-Json -Compress -Depth 10
     exit 0

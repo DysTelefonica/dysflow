@@ -62,14 +62,14 @@ describe("dysflow command modules", () => {
   it("wires doctor to core diagnostics service", async () => {
     const result = await runCli(["doctor"], {
       diagnosticsService: {
-        run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }),
+        run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configuredAccessPath=C:/data/app.accdb" }] }),
       },
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
     });
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: "✓ access-db-path: configured",
+      stdout: "✓ access-db-path: configuredAccessPath=C:/data/app.accdb",
       stderr: "",
     });
   });
@@ -120,12 +120,12 @@ describe("dysflow command modules", () => {
   it("exports command handlers as small modules", async () => {
     await expect(handleDoctorCommand([], {
       diagnosticsService: {
-        run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }),
+          run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configuredAccessPath=C:/data/app.accdb" }] }),
       },
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
     })).resolves.toEqual({
       exitCode: 0,
-      stdout: "✓ access-db-path: configured",
+      stdout: "✓ access-db-path: configuredAccessPath=C:/data/app.accdb",
       stderr: "",
     });
 

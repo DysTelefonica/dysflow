@@ -10,11 +10,13 @@ const config: DysflowConfig = { accessDbPath: "C:/data/app.accdb", timeoutMs: 2_
 
 class FakeRunner implements AccessRunner {
   public operations: AccessRunnerOperation[] = [];
+  public configs: (DysflowConfig | undefined)[] = [];
 
   constructor(private readonly nextResult: OperationResult<unknown>) {}
 
-  async run<TData>(operation: AccessRunnerOperation): Promise<OperationResult<TData>> {
+  async run<TData>(operation: AccessRunnerOperation, config?: DysflowConfig): Promise<OperationResult<TData>> {
     this.operations.push(operation);
+    this.configs.push(config);
     return this.nextResult as OperationResult<TData>;
   }
 }
@@ -24,12 +26,26 @@ describe("core services over AccessRunner", () => {
     const runner = new FakeRunner(successResult({ returnValue: "done" }, { durationMs: 9 }));
     const service = new AccessVbaService({ runner, config });
 
-    const result = await service.execute({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] });
+    const result = await service.execute({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026], accessPath: "C:/data/app.accdb", projectRoot: "C:/data" });
 
     expect(runner.operations).toEqual([
-      { kind: "vba", request: { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] } },
+      { kind: "vba", request: { moduleName: "Automation", procedureName: "Refresh", arguments: [2026], accessPath: "C:/data/app.accdb", projectRoot: "C:/data" } },
     ]);
+    expect(runner.configs).toEqual([{ accessDbPath: "C:/data/app.accdb", timeoutMs: 2_000 }]);
     expect(result).toEqual({ ok: true, data: { returnValue: "done" }, diagnostics: [], durationMs: 9 });
+  });
+
+  it("rejects VBA requests without explicit accessPath before reaching the runner", async () => {
+    const runner = new FakeRunner(successResult({ returnValue: "done" }));
+    const service = new AccessVbaService({ runner, config });
+
+    const result = await service.execute({ moduleName: "Automation", procedureName: "Refresh" });
+
+    expect(runner.operations).toEqual([]);
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "ACCESS_PATH_REQUIRED" },
+    });
   });
 
   it("returns runner timeout failures from VBA service without adapter translation", async () => {
@@ -38,7 +54,7 @@ describe("core services over AccessRunner", () => {
     );
     const service = new AccessVbaService({ runner, config });
 
-    const result = await service.execute({ moduleName: "Automation", procedureName: "Slow" });
+    const result = await service.execute({ moduleName: "Automation", procedureName: "Slow", accessPath: "C:/data/app.accdb", projectRoot: "C:/data" });
 
     expect(result).toEqual({
       ok: false,
