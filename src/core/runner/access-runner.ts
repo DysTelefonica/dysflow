@@ -82,22 +82,27 @@ export class AccessPowerShellRunner implements AccessRunner {
       updatedAt: this.clock(),
     });
 
+    const captureDiagnostics: Diagnostic[] = [];
     const execution = await this.executor(POWERSHELL_COMMAND, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
       timeoutMs: config.timeoutMs,
       operationId,
       accessPath: config.accessDbPath,
       onAccessProcessCaptured: async (process) => {
-        record = (await this.operationRegistry.update(operationId, {
-          accessPid: process.pid,
-          processStartTime: process.processStartTime,
-          commandLine: process.commandLine,
-          status: "running",
-          updatedAt: this.clock(),
-        })) ?? record;
+        try {
+          record = (await this.operationRegistry.update(operationId, {
+            accessPid: process.pid,
+            processStartTime: process.processStartTime,
+            commandLine: process.commandLine,
+            status: "running",
+            updatedAt: this.clock(),
+          })) ?? record;
+        } catch (error) {
+          captureDiagnostics.push(createDiagnostic("error", "access.pid", `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`));
+        }
       },
     });
     const secrets = [config.accessPassword].filter((secret): secret is string => Boolean(secret));
-    const diagnostics = collectDiagnostics(execution, secrets);
+    const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
 
@@ -175,6 +180,7 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    const captureTasks: Promise<void>[] = [];
     const timer = setTimeout(() => { timedOut = true; child.kill(); }, options.timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => {
@@ -184,7 +190,7 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
         if (line.startsWith(ACCESS_PROCESS_MARKER)) {
           try {
             const parsed = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length)) as AccessProcessOwnership;
-            void options.onAccessProcessCaptured(parsed);
+            captureTasks.push(options.onAccessProcessCaptured(parsed));
           } catch {
             nonMarkerLines.push(line);
           }
@@ -196,6 +202,11 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
       if (nonMarkerText.length > 0) stderr += nonMarkerText;
     });
     child.on("error", (error: Error) => { stderr += error.message; });
-    child.on("close", (exitCode) => { clearTimeout(timer); resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut }); });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      void Promise.allSettled(captureTasks).then(() => {
+        resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
+      });
+    });
   });
 };
