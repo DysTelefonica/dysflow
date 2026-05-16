@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
@@ -12,6 +13,13 @@ const base = {
 };
 
 describe("Access operation registry and cleanup safety", () => {
+  it("keeps AccessOperationAction as a strict union instead of widening to string", () => {
+    const source = readFileSync("src/core/operations/access-operation-registry.ts", "utf8");
+
+    expect(source).toContain("export type AccessOperationAction =");
+    expect(source).not.toContain("| string");
+  });
+
   it("lists the latest operation including completed records", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({ ...base, operationId: "old", status: "completed", accessPid: 1, processStartTime: "2026-05-15T10:00:00.000Z", updatedAt: "2026-05-15T10:00:00.000Z" });

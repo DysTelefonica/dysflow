@@ -11,7 +11,7 @@ export type AccessOperationStatus =
   | "pid_unknown"
   | "running_untracked";
 
-export type AccessOperationAction = "vba" | "query" | "diagnostics" | "import" | "test" | "run" | string;
+export type AccessOperationAction = "vba" | "query" | "diagnostics" | "import" | "test" | "run";
 
 export type AccessOperationRecord = {
   operationId: string;
