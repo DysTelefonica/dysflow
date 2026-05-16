@@ -1,16 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
-import { VbaSyncLegacyService, resolveDefaultVbaManagerScriptPath, type VbaManagerExecutor } from "../../../src/core/services/vba-sync-legacy-service";
+import { VbaSyncLegacyService, resolveDefaultVbaManagerScriptPath, spawnVbaManager, type VbaManagerExecutor } from "../../../src/core/services/vba-sync-legacy-service";
+
+const spawnMock = vi.hoisted(() => vi.fn());
+
+vi.mock("node:child_process", () => ({
+  spawn: spawnMock,
+}));
 
 describe("VbaSyncLegacyService", () => {
   it("maps export_modules to a product-owned PowerShell runner invocation", async () => {
     const calls: unknown[] = [];
     const executor: VbaManagerExecutor = async (request) => {
       calls.push(request);
-      return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 12 };
+      return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 12, timedOut: false };
     };
     const service = new VbaSyncLegacyService({
       executor,
@@ -33,7 +40,75 @@ describe("VbaSyncLegacyService", () => {
       password: "secret",
       json: false,
       extra: {},
+      timeoutMs: 30_000,
     }]);
+  });
+
+  it("timeout: executor that never exits resolves VBA_MANAGER_TIMEOUT", async () => {
+    vi.useFakeTimers();
+    try {
+      const executor: VbaManagerExecutor = () => new Promise(() => {});
+      const service = new VbaSyncLegacyService({
+        executor,
+        processTimeoutMs: 50,
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      });
+
+      const resultPromise = service.execute("export_all", {});
+      await vi.advanceTimersByTimeAsync(50);
+
+      await expect(resultPromise).resolves.toMatchObject({
+        ok: false,
+        error: { code: "VBA_MANAGER_TIMEOUT", retryable: true },
+        durationMs: 50,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 1, stdout: "", stderr: "failed", durationMs: 51, timedOut: true }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+    });
+
+    const result = await service.execute("export_all", {});
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.message).not.toContain("VBA_MANAGER_FAILED");
+    }
+  });
+
+  it("-NonInteractive present in spawned args at correct position", async () => {
+    let capturedArgs: readonly string[] = [];
+    spawnMock.mockImplementationOnce((_command: string, args: readonly string[]) => {
+      capturedArgs = args;
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn> };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    });
+
+    await spawnVbaManager({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      action: "Export",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      moduleNames: [],
+      json: false,
+      extra: {},
+      timeoutMs: 1_000,
+    });
+
+    expect(capturedArgs.slice(0, 4)).toEqual(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"]);
   });
 
   it("maps legacy list/exists tools with JSON output enabled", async () => {
@@ -41,7 +116,7 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async (request) => {
         calls.push(request);
-        return { exitCode: 0, stdout: '{"exists":true}', stderr: "", durationMs: 1 };
+        return { exitCode: 0, stdout: '{"exists":true}', stderr: "", durationMs: 1, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
@@ -61,7 +136,7 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async (request) => {
         calls.push(request);
-        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2 };
+        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
@@ -89,7 +164,7 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async (request) => {
         calls.push(request);
-        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_RunAll"}]', stderr: "", durationMs: 5 };
+        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_RunAll"}]', stderr: "", durationMs: 5, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
@@ -128,7 +203,7 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async (request) => {
         calls.push(request);
-        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Import"}]', stderr: "", durationMs: 7 };
+        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Import"}]', stderr: "", durationMs: 7, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
@@ -159,7 +234,7 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async (request) => {
         calls.push(request);
-        return { exitCode: 0, stdout: request.action === "Compile" ? '{"ok":true}' : '[{"ok":true}]', stderr: "", durationMs: 4 };
+        return { exitCode: 0, stdout: request.action === "Compile" ? '{"ok":true}' : '[{"ok":true}]', stderr: "", durationMs: 4, timedOut: false };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
@@ -179,7 +254,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("returns a safe failure when a direct runner mapping is not available yet", async () => {
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 0, stdout: "{}", stderr: "", durationMs: 1 }),
+      executor: async () => ({ exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
     });
@@ -193,7 +268,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("redacts passwords from runner failures", async () => {
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 1, stdout: "", stderr: "bad password secret", durationMs: 3 }),
+      executor: async () => ({ exitCode: 1, stdout: "", stderr: "bad password secret", durationMs: 3, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb", DYSFLOW_ACCESS_PASSWORD: "secret" },
     });
