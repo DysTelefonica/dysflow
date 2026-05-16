@@ -6,4 +6,10 @@ build/
 *.log
 .DS_Store
 Thumbs.db
-E2E_testing/
+
+# Real Access E2E fixtures may live under E2E_testing/, but source code there must stay tracked/reviewable.
+E2E_testing/**/*.accdb
+E2E_testing/**/*.mdb
+E2E_testing/**/*.accde
+E2E_testing/**/*.mde
+E2E_testing/**/*.laccdb
