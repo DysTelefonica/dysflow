@@ -145,13 +145,19 @@ Public Function getdb( _
     Dim m_URL As String
     On Error GoTo errores
     
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\NoConformidades_Datos.accdb"
-    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-        m_URL = m_URLRutaAplicacionRemota & "NoConformidades_Datos.accdb"
-    Else
-        p_Error = "No se conoce el origen de los datos"
-        Err.Raise 1000
+    Call LeeConfiguracionLocal(p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+
+    m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
+    If m_URL = "" Then
+        If Application.TempVars("DatosEnLocal") = "Sí" Then
+            m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\NoConformidades_Datos.accdb"
+        ElseIf Application.TempVars("DatosEnLocal") = "No" Then
+            m_URL = m_URLRutaAplicacionRemota & "NoConformidades_Datos.accdb"
+        Else
+            p_Error = "No se conoce el origen de los datos"
+            Err.Raise 1000
+        End If
     End If
     
     Set wks = DBEngine.Workspaces(0)
@@ -162,6 +168,91 @@ Public Function getdb( _
 errores:
     If Err.Number <> 1000 Then
         p_Error = "El método getdb ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Public Function LeeConfiguracionLocal( _
+                            Optional ByRef p_Error As String _
+                            ) As Boolean
+    Dim m_Db As DAO.Database
+    Dim m_Rs As DAO.Recordset
+    Dim m_BackendActivo As String
+    Dim m_BackendProduccion As String
+    Dim m_BackendSandbox As String
+    Dim m_EnPruebas As String
+    Dim m_IDAplicacionCfg As Variant
+    Dim m_RutaProd As String
+    Dim m_RutaLocal As String
+
+    On Error GoTo errores
+
+    Set m_Db = CurrentDb
+    Set m_Rs = m_Db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenSnapshot)
+    If m_Rs.EOF Then
+        p_Error = "TbConfiguracionBackends no tiene filas de configuración"
+        Err.Raise 1000
+    End If
+
+    m_BackendActivo = UCase$(Trim$(Nz(m_Rs.Fields("BackendActivo").Value, "")))
+    m_BackendProduccion = Trim$(Nz(m_Rs.Fields("BackendProduccion").Value, ""))
+    m_BackendSandbox = Trim$(Nz(m_Rs.Fields("BackendSandbox").Value, ""))
+    m_EnPruebas = Trim$(Nz(m_Rs.Fields("EnPruebas").Value, ""))
+    m_IDAplicacionCfg = Nz(m_Rs.Fields("IDAplicacion").Value, 0)
+    m_RutaProd = Trim$(Nz(m_Rs.Fields("RutaDirectorioAplicacion_PROD").Value, ""))
+    m_RutaLocal = Trim$(Nz(m_Rs.Fields("RutaDirectorioAplicacion_LOCAL").Value, ""))
+
+    If m_EnPruebas <> "Sí" And m_EnPruebas <> "No" Then
+        p_Error = "EnPruebas debe ser texto 'Sí' o 'No' en TbConfiguracionBackends"
+        Err.Raise 1000
+    End If
+
+    If m_BackendActivo = "PROD" Then
+        Application.TempVars("DatosEnLocal") = "No"
+        Application.TempVars("BackendPathConfigurado") = m_BackendProduccion
+    ElseIf m_BackendActivo = "LOCAL" Or m_BackendActivo = "SANDBOX" Then
+        Application.TempVars("DatosEnLocal") = "Sí"
+        Application.TempVars("BackendPathConfigurado") = m_BackendSandbox
+    Else
+        p_Error = "BackendActivo inválido en TbConfiguracionBackends. Use PROD/LOCAL/SANDBOX"
+        Err.Raise 1000
+    End If
+
+    Application.TempVars("BackendActivo") = m_BackendActivo
+    Application.TempVars("EnPruebas") = m_EnPruebas
+
+    If m_RutaProd <> "" Then m_URLRutaAplicacionRemota = m_RutaProd
+    If m_RutaLocal <> "" Then m_URLRutaAplicacionLocal = m_RutaLocal
+
+    If CLng(m_IDAplicacionCfg) > 0 Then
+        IDAplicacion = CStr(m_IDAplicacionCfg)
+    ElseIf Application.TempVars("EnPruebas") = "Sí" Then
+        IDAplicacion = "81"
+    Else
+        IDAplicacion = "8"
+    End If
+
+    LeeConfiguracionLocal = True
+    m_Rs.Close
+    Set m_Rs = Nothing
+    Set m_Db = Nothing
+    Exit Function
+
+errores:
+    Dim errNumber As Long
+    Dim errDescription As String
+    errNumber = Err.Number
+    errDescription = Err.Description
+
+    On Error Resume Next
+    If Not m_Rs Is Nothing Then m_Rs.Close
+    On Error GoTo 0
+    Set m_Rs = Nothing
+    Set m_Db = Nothing
+
+    If errNumber <> 1000 Then
+        p_Error = "LeeConfiguracionLocal ha devuelto el error: " & vbNewLine & errDescription
+    ElseIf p_Error = "" Then
+        p_Error = errDescription
     End If
 End Function
 Public Function getdbNCPruebas( _
@@ -343,25 +434,37 @@ Public Function EVE(Optional ByRef p_Error As String) As String
     Application.TempVars("NombreCSSNoPruebas") = "CSS.txt"
     AplicarCache = False
     'AplicarCache = True
-    If Application.TempVars("EnPruebas") = "Sí" Then
-        IDAplicacion = "81"
-    Else
-        IDAplicacion = "8"
+    Call LeeConfiguracionLocal(p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+    If IDAplicacion = "" Then
+        If Application.TempVars("EnPruebas") = "Sí" Then
+            IDAplicacion = "81"
+        Else
+            IDAplicacion = "8"
+        End If
     End If
     
     Set m_ObjEntorno = New Entorno
-     m_URLRutaAplicacionesRemotas = "\\datoste\aplicaciones_dys\Aplicaciones PpD\"
+    If m_URLRutaAplicacionesRemotas = "" Then
+        m_URLRutaAplicacionesRemotas = "\\datoste\aplicaciones_dys\Aplicaciones PpD\"
+    End If
     If Application.TempVars("EnPruebas") = "Sí" Then
         m_NombreCarpeta = "No Conformidades PRUEBA"
     Else
         m_NombreCarpeta = "No Conformidades"
     End If
     
-    m_URLRutaAplicacionRemota = m_URLRutaAplicacionesRemotas & m_NombreCarpeta & "\"
+    If m_URLRutaAplicacionRemota = "" Then
+        m_URLRutaAplicacionRemota = m_URLRutaAplicacionesRemotas & m_NombreCarpeta & "\"
+    End If
     If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URLRutaAplicacionesLocal = getRutaAplicacionesLocal(p_Error)
+        If m_URLRutaAplicacionesLocal = "" Then
+            m_URLRutaAplicacionesLocal = getRutaAplicacionesLocal(p_Error)
+        End If
         If m_URLRutaAplicacionesLocal <> "" Then
-            m_URLRutaAplicacionLocal = m_URLRutaAplicacionesLocal & m_NombreCarpeta & "\"
+            If m_URLRutaAplicacionLocal = "" Then
+                m_URLRutaAplicacionLocal = m_URLRutaAplicacionesLocal & m_NombreCarpeta & "\"
+            End If
         End If
     Else
        m_URLRutaAplicacionesLocal = ""

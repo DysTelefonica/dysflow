@@ -50,7 +50,7 @@ Public Function IsCacheEnabled() As Boolean
     On Error GoTo errores
     IsCacheEnabled = False
     
-    Set db = CurrentDb
+    Set db = getdb()
     SQL = "SELECT " & CAMPO_CACHE_HABILITADA & " FROM TbConfiguracion WHERE ID = 1"
     Set rs = db.OpenRecordset(SQL, dbOpenSnapshot)
     
@@ -81,7 +81,7 @@ Public Function SetCacheEnabled(ByVal p_Enabled As Boolean, Optional ByRef p_Err
     p_Error = ""
     SetCacheEnabled = False
     
-    Set db = CurrentDb
+    Set db = getdb()
     SQL = "UPDATE TbConfiguracion SET " & CAMPO_CACHE_HABILITADA & " = " & IIf(p_Enabled, "-1", "0") & " WHERE ID = 1"
     db.Execute SQL, dbFailOnError
     
