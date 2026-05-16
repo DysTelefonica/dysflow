@@ -447,6 +447,44 @@ function Format-SqlLiteral {
   return "'" + ($Value.ToString().Replace("'", "''")) + "'"
 }
 
+function Split-SqlStatements {
+  param([string] $Sql)
+  $statements = New-Object System.Collections.ArrayList
+  $builder = New-Object System.Text.StringBuilder
+  $inSingleQuote = $false
+
+  for ($i = 0; $i -lt $Sql.Length; $i++) {
+    $char = $Sql[$i]
+    $nextChar = if ($i + 1 -lt $Sql.Length) { $Sql[$i + 1] } else { [char]0 }
+
+    if ($char -eq "'" -and $inSingleQuote -and $nextChar -eq "'") {
+      [void]$builder.Append($char)
+      [void]$builder.Append($nextChar)
+      $i++
+      continue
+    }
+
+    if ($char -eq "'") {
+      $inSingleQuote = -not $inSingleQuote
+      [void]$builder.Append($char)
+      continue
+    }
+
+    if ($char -eq ";" -and -not $inSingleQuote) {
+      $sql = $builder.ToString().Trim()
+      if (-not [string]::IsNullOrWhiteSpace($sql)) { [void]$statements.Add($sql) }
+      [void]$builder.Clear()
+      continue
+    }
+
+    [void]$builder.Append($char)
+  }
+
+  $tail = $builder.ToString().Trim()
+  if (-not [string]::IsNullOrWhiteSpace($tail)) { [void]$statements.Add($tail) }
+  return $statements
+}
+
 function Invoke-WriteAction {
   param($Database, [string] $Action, $Payload)
 
@@ -482,7 +520,7 @@ function Invoke-WriteAction {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.scriptPath)) { throw "scriptPath is required for run_script." }
       $scriptPath = [string]$Payload.scriptPath
       if (-not (Test-Path -LiteralPath $scriptPath)) { throw "Script file not found: $scriptPath" }
-      $statements = @(Get-Content -LiteralPath $scriptPath -Raw).Split([char]";")
+      $statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))
       $executed = New-Object System.Collections.ArrayList
       foreach ($statement in $statements) {
         $sql = $statement.Trim()
