@@ -146,6 +146,14 @@ describe("legacy Dysflow MCP parity inventory", () => {
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
+    await expect(tools.find((tool) => tool.name === "run_script")?.handler({ path: "fixtures.sql", apply: true })).resolves.toEqual({
+      isError: false,
+      content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
+    });
+    await expect(tools.find((tool) => tool.name === "teardown_fixture")?.handler({ tableName: "People", dryRun: false })).resolves.toEqual({
+      isError: false,
+      content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
+    });
     await expect(tools.find((tool) => tool.name === "verify_binary")?.handler({ moduleNames: ["Form_Main"], diff: true })).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_binary" }) }],
@@ -172,6 +180,8 @@ describe("legacy Dysflow MCP parity inventory", () => {
         allowTables: undefined,
         denyTables: undefined,
       },
+      expect.objectContaining({ action: "run_script", scriptPath: "fixtures.sql", dryRun: false }),
+      expect.objectContaining({ action: "teardown_fixture", tableName: "People", dryRun: false }),
     ]);
   });
 
