@@ -1,17 +1,29 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
 	handleInstallCommand,
+	handleUpdateCommand,
 	parseAgentList,
 	parseInstallArgs,
+	parseUpdateArgs,
+	compareVersions,
 	replaceCodexMcpSection,
 } from "../../src/cli/commands/install";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
 	const raw = await readFile(path, "utf8");
 	return JSON.parse(raw) as Record<string, unknown>;
+};
+
+const getLocalDysflowVersion = async (): Promise<string> => {
+	const sourcePackage = await readFile(
+		join(process.cwd(), "package.json"),
+		"utf8",
+	);
+	const parsed = JSON.parse(sourcePackage) as { version?: string };
+	return parsed.version ?? "0.1.0";
 };
 
 describe("install arg parsing", () => {
@@ -52,6 +64,24 @@ describe("install arg parsing", () => {
 				interactive: false,
 			},
 		});
+	});
+
+	it("parses update arguments", () => {
+		expect(
+			parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--force"]),
+		).toEqual({
+			ok: true,
+			options: {
+				runtimeDir: "C:/tmp/runtime",
+				force: true,
+			},
+		});
+	});
+
+	it("compares semantic versions", () => {
+		expect(compareVersions("0.1.0", "0.0.9")).toBe(1);
+		expect(compareVersions("0.0.9", "0.1.0")).toBe(-1);
+		expect(compareVersions("1.2.3", "1.2.3")).toBe(0);
 	});
 });
 
@@ -166,6 +196,104 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(
 			await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8"),
 		).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+
+		await rm(root, { recursive: true, force: true });
+	});
+});
+
+describe("handleUpdateCommand end-to-end", () => {
+	it("updates runtime when local version is newer", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const installedPackageJson = join(appDir, "package.json");
+		const oldPackageJson = {
+			name: "dysflow",
+			version: "0.0.1",
+			type: "module",
+		};
+		await mkdir(appDir, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify(oldPackageJson, null, 2),
+			"utf8",
+		);
+
+		const localVersion = await getLocalDysflowVersion();
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir]);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Dysflow runtime update:");
+		expect(result.stdout).toContain(`0.0.1 -> ${localVersion}`);
+		expect(await readFile(installedPackageJson, "utf8")).toContain(
+			`"version": "${localVersion}"`,
+		);
+
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("skips reinstall when runtime is up to date", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const appCli = join(appDir, "dist", "cli");
+		const installedPackageJson = join(appDir, "package.json");
+		const installedMarker = join(appCli, "index.js");
+		const localVersion = await getLocalDysflowVersion();
+		await mkdir(appCli, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify(
+				{ name: "dysflow", version: localVersion, type: "module" },
+				null,
+				2,
+			),
+			"utf8",
+		);
+		await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
+
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir]);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Dysflow runtime is up to date");
+		expect(await readFile(installedMarker, "utf8")).toBe("OLD_RUNTIME");
+
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("forces reinstall when --force is used", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const appCli = join(appDir, "dist", "cli");
+		const installedPackageJson = join(appDir, "package.json");
+		const installedMarker = join(appCli, "index.js");
+
+		const localVersion = await getLocalDysflowVersion();
+		await mkdir(appCli, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify(
+				{ name: "dysflow", version: localVersion, type: "module" },
+				null,
+				2,
+			),
+			"utf8",
+		);
+		await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
+
+		const result = await handleUpdateCommand([
+			"--runtime-dir",
+			runtimeDir,
+			"--force",
+		]);
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Dysflow runtime update:");
+		expect(result.stdout).toContain(`${localVersion} -> ${localVersion}`);
+		expect(await readFile(installedPackageJson, "utf8")).toContain(
+			`"version": "${localVersion}"`,
+		);
+		expect(await readFile(installedMarker, "utf8")).not.toBe("OLD_RUNTIME");
 
 		await rm(root, { recursive: true, force: true });
 	});

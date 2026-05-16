@@ -316,6 +316,7 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | `dysflow setup`  | Print resolved config (with redacted secrets) |
 | `dysflow doctor` | Run config + environment diagnostics          |
 | `dysflow install`| Install runtime + auto-wire MCP integrations  |
+| `dysflow update` | Reinstall runtime if source version is newer |
 | `dysflow tui`    | Interactive alias for `dysflow install`       |
 | `dysflow serve`  | Start local HTTP API                          |
 
