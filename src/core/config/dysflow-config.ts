@@ -132,8 +132,8 @@ export function redactDysflowConfig(config: DysflowConfig): RedactedDysflowConfi
 
   return {
     ...base,
-    ...(config.accessPassword !== undefined ? { accessPassword: REDACTED_SECRET } : {}),
-    ...(config.backendPassword !== undefined ? { backendPassword: REDACTED_SECRET } : {}),
+    ...(config.accessPassword === undefined ? {} : { accessPassword: REDACTED_SECRET }),
+    ...(config.backendPassword === undefined ? {} : { backendPassword: REDACTED_SECRET }),
   };
 }
 
@@ -218,7 +218,7 @@ function loadProjectConfigFromPath(
   const accessPassword = resolvePassword(
     input.accessPassword,
     pickFirstDefined(
-      accessPasswordEnv !== undefined ? env[accessPasswordEnv] : undefined,
+      accessPasswordEnv === undefined ? undefined : env[accessPasswordEnv],
       env.DYSFLOW_ACCESS_PASSWORD,
       env.DYSFLOW_ACCESS_PWD,
       env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
@@ -227,7 +227,7 @@ function loadProjectConfigFromPath(
   const backendPassword = resolvePassword(
     input.backendPassword,
     pickFirstDefined(
-      backendPasswordEnv !== undefined ? env[backendPasswordEnv] : undefined,
+      backendPasswordEnv === undefined ? undefined : env[backendPasswordEnv],
       env.DYSFLOW_BACKEND_PASSWORD,
       env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
     ),
@@ -254,7 +254,7 @@ function resolveProjectRoot(config: DysflowProjectConfig, configDir: string, exp
   const baseProjectRoot = basename(configDir).toLowerCase() === ".dysflow" ? dirname(configDir) : configDir;
   const rootValue = stringValue(explicitProjectRoot) ?? stringValue(config.projectRoot);
 
-  return rootValue !== undefined ? resolveProjectPath(rootValue, baseProjectRoot) ?? baseProjectRoot : baseProjectRoot;
+  return rootValue === undefined ? baseProjectRoot : resolveProjectPath(rootValue, baseProjectRoot) ?? baseProjectRoot;
 }
 
 function resolveProjectPath(value: string | undefined, projectRoot: string): string | undefined {
@@ -273,7 +273,7 @@ function resolveRegistryPath(explicitPath: string | undefined, cwd: string, env:
 
   const userProfile = stringValue(env.USERPROFILE);
   const appData = stringValue(env.APPDATA)
-    ?? (userProfile !== undefined ? resolve(userProfile, "AppData", "Roaming") : undefined);
+    ?? (userProfile === undefined ? undefined : resolve(userProfile, "AppData", "Roaming"));
   if (appData === undefined) return undefined;
   return resolve(appData, "dysflow", "projects.json");
 }
@@ -347,4 +347,3 @@ function resolveBackendPasswordEnv(config: DysflowProjectConfig): string | undef
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
   return values.find((value) => value !== undefined);
 }
-

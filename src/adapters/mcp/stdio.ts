@@ -142,7 +142,7 @@ export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLi
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
     }),
-    legacyToolService: new VbaSyncLegacyService(),
+    legacyToolService: new VbaSyncLegacyService({ processTimeoutMs: configResult.data.processTimeoutMs }),
   };
 
   for (const tool of createDysflowMcpTools(services)) {

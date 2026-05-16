@@ -13,6 +13,7 @@ export type VbaManagerExecutionRequest = {
   password?: string;
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
+  timeoutMs: number;
 };
 
 export type VbaManagerExecutionResult = {
@@ -20,6 +21,7 @@ export type VbaManagerExecutionResult = {
   stdout: string;
   stderr: string;
   durationMs: number;
+  timedOut: boolean;
 };
 
 export type VbaManagerExecutor = (request: VbaManagerExecutionRequest) => Promise<VbaManagerExecutionResult>;
@@ -29,6 +31,7 @@ export type VbaSyncLegacyServiceOptions = {
   scriptPath?: string;
   env?: Record<string, string | undefined>;
   cwd?: string;
+  processTimeoutMs?: number;
 };
 
 type DirectMapping = {
@@ -69,12 +72,14 @@ export class VbaSyncLegacyService {
   private readonly scriptPath: string;
   private readonly env: Record<string, string | undefined>;
   private readonly cwd: string;
+  private readonly processTimeoutMs: number;
 
   constructor(options: VbaSyncLegacyServiceOptions = {}) {
     this.env = options.env ?? process.env;
     this.executor = options.executor ?? spawnVbaManager;
     this.scriptPath = options.scriptPath ?? resolveDefaultVbaManagerScriptPath(this.env);
     this.cwd = options.cwd ?? process.cwd();
+    this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
   }
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
@@ -107,10 +112,17 @@ export class VbaSyncLegacyService {
       password,
       json: mapping.json ?? false,
       extra: mapping.extra(params),
+      timeoutMs: this.processTimeoutMs,
     };
 
-    const result = await this.executor(request);
+    const result = await this.executeWithTimeout(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
+    if (result.timedOut) {
+      return failureResult(
+        createDysflowError("VBA_MANAGER_TIMEOUT", `${toolName} timed out after ${result.durationMs}ms`, { retryable: true }),
+        { durationMs: result.durationMs },
+      );
+    }
     if (result.exitCode !== 0) {
       return failureResult(
         createDysflowError("VBA_MANAGER_FAILED", `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
@@ -119,6 +131,19 @@ export class VbaSyncLegacyService {
     }
 
     return successResult(parseOutput(result.stdout, secrets), { durationMs: result.durationMs });
+  }
+
+  private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<VbaManagerExecutionResult>((resolve) => {
+      timer = setTimeout(() => {
+        resolve({ exitCode: null, stdout: "", stderr: "", durationMs: request.timeoutMs, timedOut: true });
+      }, request.timeoutMs);
+    });
+    const execution = this.executor(request).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
+    return Promise.race([execution, timeout]);
   }
 
   private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
@@ -367,10 +392,10 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
   }
 }
 
-const spawnVbaManager: VbaManagerExecutor = (request) => {
+export const spawnVbaManager: VbaManagerExecutor = (request) => {
   const startedAt = Date.now();
   return new Promise((resolve) => {
-    const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
+    const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
     if (request.accessPath) args.push("-AccessPath", request.accessPath);
     if (request.moduleNames.length > 0) args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
     if (request.password) args.push("-Password", request.password);
@@ -381,12 +406,20 @@ const spawnVbaManager: VbaManagerExecutor = (request) => {
       args.push(flag, String(value));
     }
 
+    let timedOut = false;
     const child = spawn("powershell.exe", args, { windowsHide: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, request.timeoutMs);
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
     child.on("error", (error: Error) => { stderr += error.message; });
-    child.on("close", (exitCode) => resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt }));
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
+    });
   });
 };
