@@ -439,6 +439,14 @@ function Compare-BackendTables {
   }
 }
 
+function Format-SqlLiteral {
+  param($Value)
+  if ($null -eq $Value) { return "NULL" }
+  if ($Value -is [bool]) { if ($Value) { return "True" } else { return "False" } }
+  if ($Value -is [byte] -or $Value -is [int16] -or $Value -is [int] -or $Value -is [int64] -or $Value -is [single] -or $Value -is [double] -or $Value -is [decimal]) { return ([string]$Value) }
+  return "'" + ($Value.ToString().Replace("'", "''")) + "'"
+}
+
 function Invoke-WriteAction {
   param($Database, [string] $Action, $Payload)
 
@@ -517,7 +525,7 @@ function Invoke-WriteAction {
         foreach ($property in $row.PSObject.Properties) {
           $columns += "[$($property.Name)]"
           $value = $property.Value
-          if ($null -eq $value) { $values += "NULL" } else { $values += "'" + ($value.ToString().Replace("'", "''")) + "'" }
+          $values += Format-SqlLiteral $value
         }
         $sql = "INSERT INTO [$([string]$Payload.tableName)] (" + ($columns -join ", ") + ") VALUES (" + ($values -join ", ") + ")"
         if (-not $dryRun) { $Database.Execute($sql, 128) }
