@@ -20,6 +20,16 @@ describe("Access operation registry and cleanup safety", () => {
     expect(source).not.toContain("| string");
   });
 
+  it("evicts the oldest records when the configured max size is exceeded", async () => {
+    const registry = new InMemoryAccessOperationRegistry({ maxRecords: 2 });
+    await registry.create({ ...base, operationId: "old", status: "completed", accessPid: 1, processStartTime: "2026-05-15T10:00:00.000Z", updatedAt: "2026-05-15T10:00:00.000Z" });
+    await registry.create({ ...base, operationId: "middle", status: "completed", accessPid: 2, processStartTime: "2026-05-15T11:00:00.000Z", updatedAt: "2026-05-15T11:00:00.000Z" });
+    await registry.create({ ...base, operationId: "new", status: "completed", accessPid: 3, processStartTime: "2026-05-15T12:00:00.000Z", updatedAt: "2026-05-15T12:00:00.000Z" });
+
+    await expect(registry.get("old")).resolves.toBeUndefined();
+    await expect(registry.listRecent({ limit: 10 })).resolves.toMatchObject([{ operationId: "new" }, { operationId: "middle" }]);
+  });
+
   it("lists the latest operation including completed records", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({ ...base, operationId: "old", status: "completed", accessPid: 1, processStartTime: "2026-05-15T10:00:00.000Z", updatedAt: "2026-05-15T10:00:00.000Z" });

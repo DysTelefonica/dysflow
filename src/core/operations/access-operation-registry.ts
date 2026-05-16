@@ -42,12 +42,24 @@ export type AccessOperationRegistry = {
   listRecent(options?: { limit?: number }): Promise<AccessOperationRecord[]>;
 };
 
+export type InMemoryAccessOperationRegistryOptions = {
+  maxRecords?: number;
+};
+
+const DEFAULT_MAX_RECORDS = 1000;
+
 export class InMemoryAccessOperationRegistry implements AccessOperationRegistry {
   private readonly records = new Map<string, AccessOperationRecord>();
+  private readonly maxRecords: number;
+
+  constructor(options: InMemoryAccessOperationRegistryOptions = {}) {
+    this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
+  }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
     const stored = { ...record, metadata: { ...record.metadata } };
     this.records.set(stored.operationId, stored);
+    this.evictOldestRecords();
     return { ...stored, metadata: { ...stored.metadata } };
   }
 
@@ -70,6 +82,14 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, limit)
       .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+  }
+
+  private evictOldestRecords(): void {
+    while (this.records.size > this.maxRecords) {
+      const oldest = [...this.records.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))[0];
+      if (oldest === undefined) return;
+      this.records.delete(oldest.operationId);
+    }
   }
 }
 
