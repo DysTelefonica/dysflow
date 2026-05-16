@@ -33,7 +33,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 #### Known boundaries in v0.1.0
 
 - HTTP support is implemented for local use-cases with writes disabled by default.
-- `dysflow tui` is defined as planned and not yet implemented.
+- `dysflow tui` now delegates to `dysflow install` for interactive MCP setup.
 - Windows PowerShell 5.1 and local Access automation are required.
 
 ## What Dysflow is (and is not)
@@ -313,18 +313,21 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | Command          | Description                                   |
 | ---------------- | --------------------------------------------- |
 | `dysflow mcp`    | Start MCP stdio adapter                       |
-| `dysflow doctor` | Run config + environment diagnostics          |
 | `dysflow setup`  | Print resolved config (with redacted secrets) |
+| `dysflow doctor` | Run config + environment diagnostics          |
+| `dysflow install`| Install runtime + auto-wire MCP integrations  |
+| `dysflow tui`    | Interactive alias for `dysflow install`       |
 | `dysflow serve`  | Start local HTTP API                          |
-| `dysflow tui`    | Planned terminal UI                           |
 
 ### Common flow
 
-1. Validate config: `dysflow setup` or `dysflow doctor`
-2. Start MCP: `dysflow mcp`
-3. Run MCP client session (OpenCode, etc.)
-4. On automation error/timeouts, inspect `dysflow.access.operations.list`
-5. Clean up owned operation explicitly via `dysflow.access.cleanup`
+1. Install runtime + MCP integrations:
+   - `dysflow install --agent-all`
+2. Validate config: `dysflow setup` or `dysflow doctor`
+3. Start MCP: `dysflow mcp`
+4. Run MCP client session (OpenCode, etc.)
+5. On automation error/timeouts, inspect `dysflow.access.operations.list`
+6. Clean up owned operation explicitly via `dysflow.access.cleanup`
 
 ---
 
