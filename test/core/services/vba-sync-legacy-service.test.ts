@@ -41,13 +41,18 @@ describe("VbaSyncLegacyService", () => {
       json: false,
       extra: {},
       timeoutMs: 30_000,
+      signal: expect.any(AbortSignal),
     }]);
   });
 
-  it("timeout: executor that never exits resolves VBA_MANAGER_TIMEOUT", async () => {
+  it("timeout: executor receives a cancellation signal and resolves VBA_MANAGER_TIMEOUT", async () => {
     vi.useFakeTimers();
     try {
-      const executor: VbaManagerExecutor = () => new Promise(() => {});
+      let capturedSignal: AbortSignal | undefined;
+      const executor: VbaManagerExecutor = (request) => {
+        capturedSignal = request.signal;
+        return new Promise(() => {});
+      };
       const service = new VbaSyncLegacyService({
         executor,
         processTimeoutMs: 50,
@@ -58,6 +63,7 @@ describe("VbaSyncLegacyService", () => {
       const resultPromise = service.execute("export_all", {});
       await vi.advanceTimersByTimeAsync(50);
 
+      expect(capturedSignal?.aborted).toBe(true);
       await expect(resultPromise).resolves.toMatchObject({
         ok: false,
         error: { code: "VBA_MANAGER_TIMEOUT", retryable: true },

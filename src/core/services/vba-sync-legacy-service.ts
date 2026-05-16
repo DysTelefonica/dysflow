@@ -14,6 +14,7 @@ export type VbaManagerExecutionRequest = {
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
   timeoutMs: number;
+  signal?: AbortSignal;
 };
 
 export type VbaManagerExecutionResult = {
@@ -134,13 +135,16 @@ export class VbaSyncLegacyService {
   }
 
   private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
+    const controller = new AbortController();
+    const requestWithSignal = { ...request, signal: controller.signal };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<VbaManagerExecutionResult>((resolve) => {
       timer = setTimeout(() => {
+        controller.abort();
         resolve({ exitCode: null, stdout: "", stderr: "", durationMs: request.timeoutMs, timedOut: true });
       }, request.timeoutMs);
     });
-    const execution = this.executor(request).finally(() => {
+    const execution = this.executor(requestWithSignal).finally(() => {
       if (timer !== undefined) clearTimeout(timer);
     });
     return Promise.race([execution, timeout]);
@@ -408,17 +412,16 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
 
     let timedOut = false;
     const child = spawn("powershell.exe", args, { windowsHide: true });
-    const timer = setTimeout(() => {
+    request.signal?.addEventListener("abort", () => {
       timedOut = true;
       child.kill();
-    }, request.timeoutMs);
+    }, { once: true });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
     child.on("error", (error: Error) => { stderr += error.message; });
     child.on("close", (exitCode) => {
-      clearTimeout(timer);
       resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
     });
   });
