@@ -6,6 +6,125 @@ import { failureResult } from "../../../src/core/contracts/index";
 import { VbaSyncLegacyService, resolveDefaultVbaManagerScriptPath, type VbaManagerExecutor } from "../../../src/core/services/vba-sync-legacy-service";
 
 describe("VbaSyncLegacyService", () => {
+  it("rejects Access-touching legacy tools when only a stale session/env Access path is available", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: "{}", stderr: "", durationMs: 1 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: {
+        DYSFLOW_ACCESS_DB_PATH: "C:/Proyectos/dysflow/NoConformidades.accdb",
+        ACCESS_VBA_PASSWORD: "env-secret",
+      },
+      cwd: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+    });
+
+    await expect(service.execute("import_modules", {
+      destinationRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      moduleNames: ["Test_ManifestContracts"],
+      importMode: "Code",
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ACCESS_PATH_REQUIRED" },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects explicit Access paths outside the declared project root before invoking Access", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: "{}", stderr: "", durationMs: 1 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { ACCESS_VBA_PASSWORD: "env-secret" },
+      cwd: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+    });
+
+    await expect(service.execute("run_vba", {
+      accessPath: "C:/Proyectos/dysflow/NoConformidades.accdb",
+      projectRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      procedureName: "Smoke",
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ACCESS_PATH_PROJECT_MISMATCH" },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("supports explicit safe import_modules calls and resolves password only from ACCESS_VBA_PASSWORD", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: {
+        ACCESS_VBA_PASSWORD: "env-secret",
+        DYSFLOW_ACCESS_PASSWORD: "legacy-secret",
+      },
+      cwd: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+    });
+
+    await expect(service.execute("import_modules", {
+      accessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+      destinationRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      projectRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      moduleNames: ["Test_ManifestContracts"],
+      importMode: "Code",
+    })).resolves.toMatchObject({ ok: true, data: { ok: true } });
+
+    expect(calls).toEqual([expect.objectContaining({
+      action: "Import",
+      accessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+      destinationRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      moduleNames: ["Test_ManifestContracts"],
+      password: "env-secret",
+      extra: { importMode: "Code" },
+    })]);
+  });
+
+  it("supports explicit safe test_vba calls with testsPath, procedureName, compile and reuseInstance", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-safe-tests-"));
+    await mkdir(join(root, "tests"), { recursive: true });
+    await writeFile(join(root, "tests", "tests.vba.json"), JSON.stringify([{ procedure: "Test_ManifestContracts", args: [] }]), "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_ManifestContracts"}]', stderr: "", durationMs: 3 };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { ACCESS_VBA_PASSWORD: "env-secret" },
+      cwd: root,
+    });
+
+    await expect(service.execute("test_vba", {
+      accessPath: join(root, "Gestion_Riesgos.accdb"),
+      destinationRoot: root,
+      projectRoot: root,
+      testsPath: "tests/tests.vba.json",
+      procedureName: "Test_ManifestContracts",
+      compile: false,
+      reuseInstance: false,
+    })).resolves.toMatchObject({ ok: true });
+
+    expect(calls).toEqual([expect.objectContaining({
+      action: "Run-Tests",
+      accessPath: join(root, "Gestion_Riesgos.accdb"),
+      destinationRoot: root,
+      password: "env-secret",
+      extra: {
+        proceduresJson: JSON.stringify([{ procedure: "Test_ManifestContracts", args: [] }]),
+        reuseInstance: false,
+      },
+    })]);
+  });
+
   it("maps export_modules to a product-owned PowerShell runner invocation", async () => {
     const calls: unknown[] = [];
     const executor: VbaManagerExecutor = async (request) => {
@@ -15,10 +134,10 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor,
       scriptPath: "C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb", DYSFLOW_ACCESS_PASSWORD: "secret" },
+      env: { ACCESS_VBA_PASSWORD: "secret" },
     });
 
-    await expect(service.execute("export_modules", { moduleNames: ["Module1"], destinationRoot: "C:/repo/src" })).resolves.toMatchObject({
+    await expect(service.execute("export_modules", { accessPath: "C:/repo/front.accdb", projectRoot: "C:/repo", moduleNames: ["Module1"], destinationRoot: "C:/repo/src" })).resolves.toMatchObject({
       ok: true,
       data: { ok: true },
       durationMs: 12,
@@ -27,7 +146,7 @@ describe("VbaSyncLegacyService", () => {
     expect(calls).toEqual([{ 
       scriptPath: "C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1",
       action: "Export",
-      accessPath: "C:/db/front.accdb",
+      accessPath: "C:/repo/front.accdb",
       destinationRoot: "C:/repo/src",
       moduleNames: ["Module1"],
       password: "secret",
@@ -44,11 +163,12 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '{"exists":true}', stderr: "", durationMs: 1 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
+      cwd: "C:/db",
     });
 
-    await service.execute("exists", { moduleName: "Form_Main" });
-    await service.execute("list_objects", {});
+    await service.execute("exists", { accessPath: "C:/db/front.accdb", moduleName: "Form_Main" });
+    await service.execute("list_objects", { accessPath: "C:/db/front.accdb" });
 
     expect(calls).toEqual([
       expect.objectContaining({ action: "Exists", moduleNames: ["Form_Main"], json: true }),
@@ -64,10 +184,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 2 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
+      cwd: "C:/custom",
     });
 
-    await expect(service.execute("compile_vba", { accessPath: "C:/custom/front.accdb", destinationRoot: "C:/repo" })).resolves.toMatchObject({
+    await expect(service.execute("compile_vba", { accessPath: "C:/custom/front.accdb", destinationRoot: "C:/custom" })).resolves.toMatchObject({
       ok: true,
       data: { ok: true },
     });
@@ -76,7 +197,7 @@ describe("VbaSyncLegacyService", () => {
       expect.objectContaining({
         action: "Compile",
         accessPath: "C:/custom/front.accdb",
-        destinationRoot: "C:/repo",
+        destinationRoot: "C:/custom",
         moduleNames: [],
         json: true,
         extra: {},
@@ -92,10 +213,12 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_RunAll"}]', stderr: "", durationMs: 5 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
+      cwd: "C:/repo",
     });
 
     await expect(service.execute("test_vba", {
+      accessPath: "C:/repo/front.accdb",
       procedureName: "Test_RunAll",
       argsJson: "[\"fixture\", 1]",
       destinationRoot: "C:/repo",
@@ -137,11 +260,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Import"}]', stderr: "", durationMs: 7 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("test_vba", { testsPath: "tests.vba.json", filter: "smoke" })).resolves.toMatchObject({
+    await expect(service.execute("test_vba", { accessPath: join(root, "front.accdb"), testsPath: "tests.vba.json", filter: "smoke" })).resolves.toMatchObject({
       ok: true,
       data: {
         ok: true,
@@ -182,11 +305,11 @@ describe("VbaSyncLegacyService", () => {
         durationMs: 9,
       }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("test_vba", {})).resolves.toMatchObject({
+    await expect(service.execute("test_vba", { accessPath: join(root, "front.accdb") })).resolves.toMatchObject({
       ok: true,
       data: {
         ok: false,
@@ -216,11 +339,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: request.action === "Compile" ? '{"ok":true}' : '[{"ok":true}]', stderr: "", durationMs: 4 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("test_vba", { compile: true })).resolves.toMatchObject({ ok: true });
+    await expect(service.execute("test_vba", { accessPath: join(root, "front.accdb"), compile: true })).resolves.toMatchObject({ ok: true });
 
     expect(calls).toEqual([
       expect.objectContaining({ action: "Compile", json: true }),
@@ -322,11 +445,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 11 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("verify_binary", {})).resolves.toMatchObject({
+    await expect(service.execute("verify_binary", { accessPath: join(root, "front.accdb") })).resolves.toMatchObject({
       ok: true,
       data: {
         ok: false,
@@ -345,7 +468,7 @@ describe("VbaSyncLegacyService", () => {
     expect(calls).toEqual([
       expect.objectContaining({
         action: "Export",
-        accessPath: "C:/db/front.accdb",
+        accessPath: join(root, "front.accdb"),
         moduleNames: [],
         json: false,
       }),
@@ -365,11 +488,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 3 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("verify_binary", { moduleNames: ["Keep"] })).resolves.toMatchObject({
+    await expect(service.execute("verify_binary", { accessPath: join(root, "front.accdb"), moduleNames: ["Keep"] })).resolves.toMatchObject({
       ok: true,
       data: {
         ok: true,
@@ -392,11 +515,11 @@ describe("VbaSyncLegacyService", () => {
         return { exitCode: 0, stdout: "OK", stderr: "", durationMs: 6 };
       },
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      env: {},
       cwd: root,
     });
 
-    await expect(service.execute("reconcile_binary", {})).resolves.toMatchObject({
+    await expect(service.execute("reconcile_binary", { accessPath: join(root, "front.accdb") })).resolves.toMatchObject({
       ok: true,
       data: {
         ok: false,
@@ -427,10 +550,11 @@ describe("VbaSyncLegacyService", () => {
     const service = new VbaSyncLegacyService({
       executor: async () => ({ exitCode: 1, stdout: "", stderr: "bad password secret", durationMs: 3 }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb", DYSFLOW_ACCESS_PASSWORD: "secret" },
+      env: { ACCESS_VBA_PASSWORD: "secret" },
+      cwd: "C:/db",
     });
 
-    const result = await service.execute("export_all", {});
+    const result = await service.execute("export_all", { accessPath: "C:/db/front.accdb" });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.message).toContain("[REDACTED]");

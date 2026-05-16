@@ -18,9 +18,9 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 | Bin Dysflow | `C:\Users\adm1\AppData\Local\dysflow\bin\dysflow.cmd` |
 | OpenCode config | `C:\Users\adm1\.config\opencode\opencode.json` |
 | MCP command | `C:/Users/adm1/AppData/Local/dysflow/bin/dysflow.cmd mcp` |
-| Front Access | `C:\Proyectos\dysflow\NoConformidades.accdb` |
-| Backend Access | `C:\Proyectos\dysflow\NoConformidades_Datos.accdb` |
-| Password | `DYSFLOW_ACCESS_PASSWORD` configurado como secreto de usuario |
+| Front Access | `C:\Proyectos\dysflow\E2E_testing\NoConformidades.accdb` |
+| Backend Access | `C:\Proyectos\dysflow\E2E_testing\NoConformidades_Datos.accdb` |
+| Password | `ACCESS_VBA_PASSWORD` configurado como secreto de usuario |
 | PowerShell target | Windows PowerShell 5.1 vía `powershell.exe`, no `pwsh` |
 
 ## Preflight tras reabrir
@@ -28,9 +28,9 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 ```powershell
 Get-Command dysflow -All | Select-Object CommandType, Source
 [Environment]::GetEnvironmentVariable('DYSFLOW_HOME','User')
-[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User')
+[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User') # debe apuntar a E2E_testing\\NoConformidades.accdb
 [Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_BACKEND_PATH','User')
-[bool][Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User')
+[bool][Environment]::GetEnvironmentVariable('ACCESS_VBA_PASSWORD','User')
 ```
 
 Resultado esperado:
@@ -131,7 +131,7 @@ Resultado esperado:
 - `dysflow.access.operations.list` muestra una operación `diagnostics` reciente.
 - La operación contiene:
   - `operationId`
-  - `accessPath = C:\Proyectos\dysflow\NoConformidades.accdb`
+  - `accessPath = C:\Proyectos\dysflow\E2E_testing\NoConformidades.accdb`
   - `accessPid` numérico
   - `processStartTime`
   - `status = completed`
@@ -171,9 +171,9 @@ Resultado esperado:
 Dysflow abre el front. Para validar backend directamente usar la skill auxiliar de Access Query.
 
 ```powershell
-$env:ACCESS_QUERY_PASSWORD = [Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User')
+$env:ACCESS_QUERY_PASSWORD = [Environment]::GetEnvironmentVariable('ACCESS_VBA_PASSWORD','User')
 & 'C:\Users\adm1\.codex\skills\access-query\query-backend.ps1' `
-  -BackendPath 'C:\Proyectos\dysflow\NoConformidades_Datos.accdb' `
+  -BackendPath 'C:\Proyectos\dysflow\E2E_testing\NoConformidades_Datos.accdb' `
   -Password $env:ACCESS_QUERY_PASSWORD `
   -ListTables `
   -Json
@@ -226,7 +226,7 @@ Resultado esperado:
 Esta prueba se puede ejecutar con un registro inyectado en test unitario o provocando una operación donde no se capture PID. En E2E real, si aparece un registro `pid_unknown`:
 
 ```json
-{"jsonrpc":"2.0","id":60,"method":"tools/call","params":{"name":"dysflow.access.cleanup","arguments":{"operationId":"<pid_unknown_operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
+{"jsonrpc":"2.0","id":60,"method":"tools/call","params":{"name":"dysflow.access.cleanup","arguments":{"operationId":"<pid_unknown_operationId>","accessPath":"C:\\Proyectos\\dysflow\\E2E_testing\\NoConformidades.accdb","force":true}}}
 ```
 
 Resultado esperado:
@@ -239,7 +239,7 @@ Resultado esperado:
 > Ejecutar solo si hay una operación `timed_out`, `failed` o `cleanup_pending` cuyo `accessPid` siga vivo y pertenezca al Access abierto por Dysflow.
 
 ```json
-{"jsonrpc":"2.0","id":70,"method":"tools/call","params":{"name":"dysflow.access.cleanup","arguments":{"operationId":"<operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
+{"jsonrpc":"2.0","id":70,"method":"tools/call","params":{"name":"dysflow.access.cleanup","arguments":{"operationId":"<operationId>","accessPath":"C:\\Proyectos\\dysflow\\E2E_testing\\NoConformidades.accdb","force":true}}}
 ```
 
 Resultado esperado:
@@ -303,10 +303,10 @@ Resultado esperado:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File 'C:\Users\adm1\AppData\Local\dysflow\app\scripts\dysflow-access-runner.ps1' `
-  -AccessDbPath 'C:\Proyectos\dysflow\NoConformidades.accdb' `
+  -AccessDbPath 'C:\Proyectos\dysflow\E2E_testing\NoConformidades.accdb' `
   -Operation diagnostics `
   -PayloadJson '{}' `
-  -AccessPassword ([Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User'))
+  -AccessPassword ([Environment]::GetEnvironmentVariable('ACCESS_VBA_PASSWORD','User'))
 ```
 
 Resultado esperado:
@@ -323,8 +323,8 @@ Resultado esperado:
 | AppData runtime | `dysflow` resuelve desde `C:\Users\adm1\AppData\Local\dysflow\bin` |
 | OpenCode MCP | `dysflow connected` |
 | MCP stdio | `initialize`, `tools/list`, `tools/call` OK |
-| Front Access | `dysflow doctor` abre `NoConformidades.accdb` |
-| Backend Access | `access-query` lista tablas de `NoConformidades_Datos.accdb` |
+| Front Access | `dysflow doctor` abre `E2E_testing\\NoConformidades.accdb` |
+| Backend Access | `access-query` lista tablas de `E2E_testing\\NoConformidades_Datos.accdb` |
 | PID ownership | Operaciones Access registran PID y start time |
 | Cleanup seguro | Rechaza path incorrecto, pid_unknown, start time mismatch |
 | PS 5.1 | Runner funciona con `powershell.exe` |
@@ -340,8 +340,8 @@ opencode mcp list
 dysflow setup
 dysflow doctor
 [Environment]::GetEnvironmentVariable('DYSFLOW_HOME','User')
-[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User')
-[bool][Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD','User')
+[Environment]::GetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH','User') # debe apuntar a E2E_testing\\NoConformidades.accdb
+[bool][Environment]::GetEnvironmentVariable('ACCESS_VBA_PASSWORD','User')
 ```
 
 Y para fallos de ownership:

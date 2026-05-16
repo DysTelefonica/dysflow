@@ -22,7 +22,18 @@ export type McpToolResult = {
 export type DysflowMcpTool = {
   name: string;
   description: string;
+  inputSchema?: Record<string, unknown>;
   handler(input: unknown): Promise<McpToolResult>;
+};
+
+export type DysflowRuntimeContext = {
+  configuredAccessPath?: string;
+  resolvedAccessPath?: string;
+  backendPath?: string;
+  projectRoot?: string;
+  destinationRoot?: string;
+  sessionAccessPath?: string;
+  passwordSource: "env" | "missing";
 };
 
 export type DysflowMcpServices = {
@@ -38,6 +49,7 @@ export type DysflowMcpServices = {
   operationRegistry?: AccessOperationRegistry;
   cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
   legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
+  context?: DysflowRuntimeContext;
 };
 
 export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
@@ -58,6 +70,12 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
       handler: async (input) => translateCoreResultToMcpContent(await services.diagnosticsService.run(input as AccessDiagnosticsRequest)),
     },
     {
+      name: "dysflow.context",
+      description: "Report the active Dysflow Access/VBA context, resolved paths, password source, and cleanup safety without opening Access.",
+      inputSchema: objectSchema({}),
+      handler: async () => translateCoreResultToMcpContent(successResult(await buildRuntimeContext(services))),
+    },
+    {
       name: "dysflow.access.operations.list",
       description: "List recent Access operations tracked by Dysflow.",
       handler: async () => {
@@ -68,6 +86,11 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
     {
       name: "dysflow.access.cleanup",
       description: "Safely cleanup a registered Access operation by operationId and accessPath.",
+      inputSchema: objectSchema({
+        operationId: { type: "string" },
+        accessPath: { type: "string" },
+        force: { type: "boolean" },
+      }, ["operationId", "accessPath"]),
       handler: async (input) => {
         if (services.cleanupService === undefined) {
           return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
@@ -101,6 +124,11 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "cleanup_access_operation",
     description: "Legacy-compatible alias for safe Access operation cleanup.",
+    inputSchema: objectSchema({
+      operationId: { type: "string" },
+      accessPath: { type: "string" },
+      force: { type: "boolean" },
+    }, ["operationId", "accessPath"]),
     handler: async (input) => {
       if (services.cleanupService === undefined) {
         return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
@@ -112,7 +140,11 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "run_vba",
     description: "Legacy-compatible alias for executing a public VBA procedure.",
+    inputSchema: vbaToolSchema({ procedureName: { type: "string" }, argsJson: { type: "string" }, reuseInstance: { type: "boolean" } }),
     handler: async (input) => {
+      if (services.legacyToolService !== undefined) {
+        return translateCoreResultToMcpContent(await services.legacyToolService.execute("run_vba", input));
+      }
       const request = input as { procedureName: string; argsJson?: string };
       return translateCoreResultToMcpContent(await services.vbaService.execute({
         moduleName: "",
@@ -124,6 +156,12 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "query_sql",
     description: "Legacy-compatible alias for read-only Access SQL queries.",
+    inputSchema: objectSchema({
+      sql: { type: "string" },
+      query: { type: "string" },
+      backendPath: { type: "string" },
+      projectRoot: { type: "string" },
+    }),
     handler: async (input) => {
       const request = input as { sql?: string; query?: string };
       return translateCoreResultToMcpContent(await services.queryService.execute({ sql: request.sql ?? request.query ?? "", mode: "read" }));
@@ -141,6 +179,7 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
   return {
     name,
     description: `Legacy Dysflow MCP tool ${name}; tracked for parity and implemented by its dedicated slice.`,
+    inputSchema: schemaForLegacyTool(name),
     handler: async (input) => {
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
@@ -161,6 +200,88 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
 
 function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+async function buildRuntimeContext(services: DysflowMcpServices): Promise<Record<string, unknown>> {
+  const registry = services.operationRegistry ?? getDefaultAccessOperationRegistry();
+  const activeOperations = (await registry.listRecent({ limit: 50 })).map((record) => ({
+    operationId: record.operationId,
+    accessPath: record.accessPath,
+    accessPid: record.accessPid,
+    processStartTime: record.processStartTime,
+    status: record.status,
+    cleanupSafe: isCleanupSafe(record),
+  }));
+  return {
+    configuredAccessPath: services.context?.configuredAccessPath,
+    resolvedAccessPath: services.context?.resolvedAccessPath,
+    backendPath: services.context?.backendPath,
+    projectRoot: services.context?.projectRoot,
+    destinationRoot: services.context?.destinationRoot,
+    sessionAccessPath: services.context?.sessionAccessPath,
+    passwordSource: services.context?.passwordSource ?? "missing",
+    activeOperations,
+  };
+}
+
+function isCleanupSafe(record: AccessOperationRecord): boolean {
+  return record.accessPid !== null
+    && record.processStartTime !== null
+    && ["timed_out", "failed", "cleanup_pending"].includes(record.status);
+}
+
+function schemaForLegacyTool(name: LegacyDysflowMcpToolName): Record<string, unknown> | undefined {
+  if (["import_modules", "import_all"].includes(name)) {
+    return vbaToolSchema({
+      moduleNames: { type: "array", items: { type: "string" } },
+      importMode: { type: "string", enum: ["Auto", "Form", "Code"] },
+    });
+  }
+  if (name === "test_vba") {
+    return vbaToolSchema({
+      testsPath: { type: "string" },
+      procedureName: { type: "string" },
+      compile: { type: "boolean" },
+      reuseInstance: { type: "boolean" },
+      argsJson: { type: "string" },
+    });
+  }
+  if (["compile_vba", "delete_module", "verify_binary", "reconcile_binary"].includes(name)) {
+    return vbaToolSchema({
+      moduleNames: { type: "array", items: { type: "string" } },
+      compile: { type: "boolean" },
+      reuseInstance: { type: "boolean" },
+    });
+  }
+  if (isQuerySliceTool(name) || isWriteFixtureSliceTool(name)) {
+    return objectSchema({
+      sql: { type: "string" },
+      backendPath: { type: "string" },
+      projectRoot: { type: "string" },
+      tableName: { type: "string" },
+      columnName: { type: "string" },
+    });
+  }
+  return undefined;
+}
+
+function vbaToolSchema(properties: Record<string, unknown> = {}): Record<string, unknown> {
+  return objectSchema({
+    accessPath: { type: "string" },
+    backendPath: { type: "string" },
+    destinationRoot: { type: "string" },
+    projectRoot: { type: "string" },
+    ...properties,
+  }, ["accessPath", "destinationRoot"]);
+}
+
+function objectSchema(properties: Record<string, unknown>, required: string[] = []): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: true,
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+  };
 }
 
 function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {

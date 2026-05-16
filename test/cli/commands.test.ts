@@ -46,7 +46,7 @@ describe("dysflow command modules", () => {
     const result = await runCli(["setup"], {
       env: {
         DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb",
-        DYSFLOW_ACCESS_PASSWORD: "super-secret",
+        ACCESS_VBA_PASSWORD: "super-secret",
         DYSFLOW_TIMEOUT_MS: "1234",
       },
     });

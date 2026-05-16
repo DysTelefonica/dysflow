@@ -86,7 +86,7 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
         tools: [...this.tools.values()].map((tool) => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: { type: "object", additionalProperties: true },
+          inputSchema: tool.inputSchema ?? { type: "object", additionalProperties: true },
         })),
       };
     }
@@ -146,6 +146,14 @@ export async function startMcpStdioAdapter(runtime: McpStdioRuntime = new JsonLi
       processKiller: new WindowsProcessKiller(),
     }),
     legacyToolService: new VbaSyncLegacyService(),
+    context: {
+      configuredAccessPath: process.env.DYSFLOW_ACCESS_DB_PATH,
+      resolvedAccessPath: configResult.data.accessDbPath,
+      backendPath: process.env.DYSFLOW_ACCESS_BACKEND_PATH,
+      projectRoot: process.cwd(),
+      destinationRoot: process.cwd(),
+      passwordSource: process.env.ACCESS_VBA_PASSWORD !== undefined && process.env.ACCESS_VBA_PASSWORD.length > 0 ? "env" as const : "missing" as const,
+    },
   };
 
   for (const tool of createDysflowMcpTools(services)) {

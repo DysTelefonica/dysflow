@@ -97,7 +97,7 @@ Dysflow reads configuration from environment variables.
 |---|---:|---|
 | `DYSFLOW_HOME` | Yes for installed runtime | Runtime root, e.g. `C:\Users\adm1\AppData\Local\dysflow` |
 | `DYSFLOW_ACCESS_DB_PATH` | Yes | Frontend `.accdb/.mdb` opened by Dysflow |
-| `DYSFLOW_ACCESS_PASSWORD` | If protected | Access password; never printed in clear text |
+| `ACCESS_VBA_PASSWORD` | If protected | Access password; never printed in clear text |
 | `DYSFLOW_TIMEOUT_MS` | No | Operation timeout; default `30000` |
 | `DYSFLOW_ACCESS_BACKEND_PATH` | No | Backend path used by external test tooling/context |
 
@@ -106,7 +106,7 @@ Example:
 ```powershell
 [Environment]::SetEnvironmentVariable('DYSFLOW_HOME', "$env:LOCALAPPDATA\dysflow", 'User')
 [Environment]::SetEnvironmentVariable('DYSFLOW_ACCESS_DB_PATH', 'C:\path\Front.accdb', 'User')
-[Environment]::SetEnvironmentVariable('DYSFLOW_ACCESS_PASSWORD', '<secret>', 'User')
+[Environment]::SetEnvironmentVariable('ACCESS_VBA_PASSWORD', '<secret>', 'User')
 [Environment]::SetEnvironmentVariable('DYSFLOW_TIMEOUT_MS', '30000', 'User')
 ```
 

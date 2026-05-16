@@ -38,7 +38,7 @@ export function loadDysflowConfig(input: DysflowConfigInput = {}): OperationResu
     accessDbPath,
     timeoutMs,
   };
-  const accessPassword = input.accessPassword ?? env.DYSFLOW_ACCESS_PASSWORD;
+  const accessPassword = input.accessPassword ?? env.ACCESS_VBA_PASSWORD;
   if (accessPassword !== undefined && accessPassword.length > 0) {
     config.accessPassword = accessPassword;
   }

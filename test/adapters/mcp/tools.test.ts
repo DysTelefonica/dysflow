@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools, translateCoreResultToMcpContent } from "../../../src/adapters/mcp/tools";
 import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
@@ -33,6 +34,87 @@ class FakeDiagnosticsService {
 }
 
 describe("MCP tool registration over core services", () => {
+  it("exposes context with resolved paths, password source and cleanup safety without leaking secrets", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      operationId: "op-risk",
+      action: "vba",
+      accessPath: "C:/Proyectos/dysflow/NoConformidades.accdb",
+      projectRootAbs: "C:/Proyectos/dysflow",
+      destinationRootAbs: "C:/Proyectos/dysflow",
+      accessPid: 1234,
+      processStartTime: "2026-05-16T10:00:00.000Z",
+      status: "completed",
+      metadata: {},
+      updatedAt: "2026-05-16T10:00:00.000Z",
+    });
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: null })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      operationRegistry: registry,
+      context: {
+        configuredAccessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+        resolvedAccessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+        backendPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos_Datos.accdb",
+        projectRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+        destinationRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+        sessionAccessPath: undefined,
+        passwordSource: "env",
+      },
+    });
+
+    const result = await tools.find((tool) => tool.name === "dysflow.context")?.handler({});
+    expect(result?.isError).toBe(false);
+    const data = JSON.parse(result?.content[0]?.text ?? "{}") as Record<string, unknown>;
+
+    expect(data).toMatchObject({
+      configuredAccessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+      resolvedAccessPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos.accdb",
+      backendPath: "C:/00repos/codigo/00_GESTION_RIESGOS_develop/Gestion_Riesgos_Datos.accdb",
+      projectRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      destinationRoot: "C:/00repos/codigo/00_GESTION_RIESGOS_develop",
+      passwordSource: "env",
+    });
+    expect(JSON.stringify(data)).not.toContain("env-secret");
+    expect(data).toMatchObject({
+      activeOperations: [{
+        operationId: "op-risk",
+        accessPath: "C:/Proyectos/dysflow/NoConformidades.accdb",
+        accessPid: 1234,
+        cleanupSafe: false,
+      }],
+    });
+  });
+
+  it("publishes useful MCP input schemas for multi-project Access tools", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: null })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    expect(tools.find((tool) => tool.name === "import_modules")?.inputSchema).toMatchObject({
+      properties: {
+        accessPath: { type: "string" },
+        destinationRoot: { type: "string" },
+        moduleNames: { type: "array" },
+        importMode: { type: "string" },
+      },
+      required: ["accessPath", "destinationRoot"],
+    });
+    expect(tools.find((tool) => tool.name === "test_vba")?.inputSchema).toMatchObject({
+      properties: {
+        accessPath: { type: "string" },
+        destinationRoot: { type: "string" },
+        testsPath: { type: "string" },
+        procedureName: { type: "string" },
+        compile: { type: "boolean" },
+        reuseInstance: { type: "boolean" },
+      },
+    });
+  });
+
   it("registers protocol-safe MCP tools that invoke the matching core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "refreshed" }, { durationMs: 7 }));
     const query = new FakeQueryService(successResult({ rows: [{ id: 1, name: "Ada" }] }, { durationMs: 5 }));

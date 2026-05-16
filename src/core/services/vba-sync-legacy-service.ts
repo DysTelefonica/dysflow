@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 
 export type VbaManagerExecutionRequest = {
@@ -45,7 +45,8 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   import_all: mapping("Import"),
   list_objects: mapping("List-Objects", true),
   exists: mapping("Exists", true, (input) => { const moduleName = stringValue(input.moduleName); return moduleName ? [moduleName] : []; }),
-  test_vba: mapping("Run-Tests", true, () => [], (input) => ({ proceduresJson: directTestProceduresJson(input) })),
+  run_vba: mapping("Run-Procedure", true, () => [], (input) => ({ procedureName: stringValue(input.procedureName), argsJson: stringValue(input.argsJson), reuseInstance: booleanValue(input.reuseInstance) })),
+  test_vba: mapping("Run-Tests", true, () => [], (input) => ({ proceduresJson: directTestProceduresJson(input), reuseInstance: booleanValue(input.reuseInstance) })),
   compile_vba: mapping("Compile", true),
   fix_encoding: mapping("Fix-Encoding", false, (input) => stringArray(input.moduleNames), (input) => ({ location: stringValue(input.location) })),
   delete_module: mapping("Delete", true, (input) => stringArray(input.moduleNames)),
@@ -92,13 +93,14 @@ export class VbaSyncLegacyService {
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
-    const accessPath = stringValue(params.accessPath) || this.env.DYSFLOW_ACCESS_DB_PATH;
     const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const password = this.env.DYSFLOW_ACCESS_PASSWORD;
+    const accessContext = resolveSafeAccessContext(params, destinationRoot, this.cwd);
+    if (!accessContext.ok) return accessContext;
+    const password = this.env.ACCESS_VBA_PASSWORD;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
-      accessPath,
+      accessPath: accessContext.data.accessPath,
       destinationRoot,
       moduleNames: mapping.moduleNames(params),
       password,
@@ -210,7 +212,7 @@ export class VbaSyncLegacyService {
     const sourceRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const tempRoot = await mkdtemp(join(tmpdir(), "dysflow-verify-binary-"));
     try {
-      const exportResult = await this.executeMappedTool("export_all", { ...params, destinationRoot: tempRoot }, DIRECT_MAPPINGS.export_all);
+      const exportResult = await this.executeMappedTool("export_all", { ...params, projectRoot: sourceRoot, destinationRoot: tempRoot }, DIRECT_MAPPINGS.export_all);
       if (!exportResult.ok) return exportResult;
 
       const report = await buildBinaryVerificationReport({
@@ -267,6 +269,35 @@ function stringValue(value: unknown): string | undefined {
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
   return stringValue(input.proceduresJson);
+}
+
+function resolveSafeAccessContext(params: Record<string, unknown>, destinationRoot: string, cwd: string): OperationResult<{ accessPath: string; projectRoot: string }> {
+  const accessPath = stringValue(params.accessPath);
+  if (accessPath === undefined) {
+    return failureResult(createDysflowError(
+      "ACCESS_PATH_REQUIRED",
+      "Access-touching legacy tools require an explicit absolute accessPath in multi-project mode.",
+    ));
+  }
+  if (!isAbsolute(accessPath)) {
+    return failureResult(createDysflowError("ACCESS_PATH_NOT_ABSOLUTE", "accessPath must be absolute."));
+  }
+  const projectRoot = stringValue(params.projectRoot) || destinationRoot || cwd;
+  const resolvedProjectRoot = resolve(projectRoot);
+  const resolvedAccessPath = resolve(accessPath);
+  const rel = relative(resolvedProjectRoot, resolvedAccessPath);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return failureResult(createDysflowError(
+      "ACCESS_PATH_PROJECT_MISMATCH",
+      "Resolved accessPath is outside projectRoot/destinationRoot. Refusing to touch Access.",
+    ));
+  }
+  return successResult({ accessPath, projectRoot: resolvedProjectRoot });
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  return value === true || value === "true" || value === 1 || value === "1";
 }
 
 function parseArgsJson(value: unknown): unknown[] {

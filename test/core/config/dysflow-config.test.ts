@@ -32,7 +32,7 @@ describe("dysflow configuration", () => {
     const result = loadDysflowConfig({
       env: {
         DYSFLOW_ACCESS_DB_PATH: "D:/fixtures/demo.accdb",
-        DYSFLOW_ACCESS_PASSWORD: "env-secret",
+        ACCESS_VBA_PASSWORD: "env-secret",
         DYSFLOW_TIMEOUT_MS: "120000",
       },
     });
