@@ -52,7 +52,16 @@ describe("JsonLineMcpStdioRuntime", () => {
 
     await expect(collectOutput(output)).resolves.toEqual([
       expect.objectContaining({ id: 1, result: expect.objectContaining({ protocolVersion: expect.any(String), serverInfo: { name: "dysflow", version: packageVersion } }) }),
-      expect.objectContaining({ id: 2, result: { tools: [expect.objectContaining({ name: "dysflow.echo", description: "Echo test tool" })] } }),
+      expect.objectContaining({
+        id: 2,
+        result: {
+          tools: [expect.objectContaining({
+            name: "dysflow.echo",
+            description: "Echo test tool",
+            inputSchema: { type: "object", additionalProperties: false, properties: {} },
+          })],
+        },
+      }),
       expect.objectContaining({ id: 3, result: { content: [{ type: "text", text: '{"ok":true}' }], isError: false } }),
     ]);
   });
