@@ -261,7 +261,7 @@ describe("VbaSyncLegacyService", () => {
 
     expect(await service.execute("verify_binary", { diff: true })).toEqual(failureResult({
       code: "LEGACY_TOOL_NOT_IMPLEMENTED",
-      message: "verify_binary requires a higher-level source/binary comparison implementation and is tracked by #25.",
+      message: "verify_binary requires a higher-level source/binary comparison implementation before it can run through this service.",
       retryable: false,
     }));
   });

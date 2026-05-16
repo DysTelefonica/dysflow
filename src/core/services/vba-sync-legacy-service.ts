@@ -56,15 +56,15 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
 };
 
 const HIGHER_LEVEL_TOOLS: Record<string, string> = {
-  verify_code: "verify_code requires source document/code-behind comparison and is tracked by #25.",
-  verify_binary: "verify_binary requires a higher-level source/binary comparison implementation and is tracked by #25.",
-  reconcile_binary: "reconcile_binary requires source/binary reconciliation and is tracked by #25.",
-  init_project: "init_project requires project bootstrap orchestration and is tracked by #25.",
-  normalize_documents: "normalize_documents requires source document normalization and is tracked by #25.",
-  validate_form_spec: "validate_form_spec is tracked by #29 form generation parity.",
-  generate_form: "generate_form is tracked by #29 form generation parity.",
-  catalog_add_control: "catalog_add_control is tracked by #29 form generation parity.",
-  harvest_form_catalog: "harvest_form_catalog is tracked by #29 form generation parity.",
+  verify_code: "verify_code requires source document/code-behind comparison before it can run through this service.",
+  verify_binary: "verify_binary requires a higher-level source/binary comparison implementation before it can run through this service.",
+  reconcile_binary: "reconcile_binary requires source/binary reconciliation before it can run through this service.",
+  init_project: "init_project requires project bootstrap orchestration before it can run through this service.",
+  normalize_documents: "normalize_documents requires source document normalization before it can run through this service.",
+  validate_form_spec: "validate_form_spec requires form generation parity support before it can run through this service.",
+  generate_form: "generate_form requires form generation parity support before it can run through this service.",
+  catalog_add_control: "catalog_add_control requires form generation parity support before it can run through this service.",
+  harvest_form_catalog: "harvest_form_catalog requires form generation parity support before it can run through this service.",
 };
 
 export class VbaSyncLegacyService {
