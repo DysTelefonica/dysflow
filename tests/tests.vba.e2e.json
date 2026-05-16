@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "E2E entorno sandbox seguro",
+      "procedure": "Test_E2E_EnvConfig_ResuelveSandboxSeguro_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "env-config", "safe"]
+    },
+    {
+      "name": "E2E backend activo aplica ruta configurada",
+      "procedure": "Test_E2E_EnvConfig_AplicaBackendActivo_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "env-config", "write-controlled"]
+    },
+    {
+      "name": "E2E EnPruebas inválido bloqueado",
+      "procedure": "Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "env-config", "safe"]
+    }
+  ]
+}

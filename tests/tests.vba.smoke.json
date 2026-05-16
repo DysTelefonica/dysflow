@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Spec007 PA09 invalidate",
+      "procedure": "Test_Spec007_PA09_InvalidateNC_Atomic",
+      "expect": { "ok": true },
+      "tags": ["smoke", "spec007", "integration-light"]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "tests": [
+    {
+      "name": "KillSwitch estado inicial",
+      "procedure": "Test_KillSwitch_IsCacheEnabled_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "killswitch", "safe"]
+    },
+
+    {
+      "name": "Spec007b VM nil fallback",
+      "procedure": "Test_Spec007b_VMNil_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "spec007", "safe"]
+    },
+    {
+      "name": "Spec007b VM no cargado fallback",
+      "procedure": "Test_Spec007b_VMNoCargado_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "spec007", "safe"]
+    },
+    {
+      "name": "Spec007 PA10 VM seguro inexistente",
+      "procedure": "Test_Spec007_PA10_GetNCProyectoVMSeguro_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "spec007", "integration-light"]
+    }
+  ]
+}
