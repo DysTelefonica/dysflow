@@ -209,4 +209,69 @@ describe("VbaSyncLegacyService", () => {
   it("resolves installed script path from DYSFLOW_HOME", () => {
     expect(resolveDefaultVbaManagerScriptPath({ DYSFLOW_HOME: "C:/Users/alice/AppData/Local/dysflow" })).toBe("C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1");
   });
+
+  it("returns VBA_INVALID_TEST_PLAN when the test plan file is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-missing-"));
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    const result = await service.execute("test_vba", { testsPath: "nonexistent.json" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN when the test plan file contains malformed JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-malformed-"));
+    await writeFile(join(root, "tests.vba.json"), "{ not valid json }", "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    const result = await service.execute("test_vba", { testsPath: "tests.vba.json" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN when the test plan has an invalid structure (not an array)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-badstruct-"));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify("not-an-array"), "utf8");
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+      cwd: root,
+    });
+
+    const result = await service.execute("test_vba", { testsPath: "tests.vba.json" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+  });
+
+  it("succeeds with a valid inline procedureName (regression guard)", async () => {
+    const service = new VbaSyncLegacyService({
+      executor: async () => ({ exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Run"}]', stderr: "", durationMs: 2 }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: { DYSFLOW_ACCESS_DB_PATH: "C:/db/front.accdb" },
+    });
+
+    const result = await service.execute("test_vba", { procedureName: "Test_Run" });
+
+    expect(result).toMatchObject({ ok: true });
+  });
 });
