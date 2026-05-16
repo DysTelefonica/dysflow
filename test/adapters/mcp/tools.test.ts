@@ -216,4 +216,27 @@ describe("MCP tool registration over core services", () => {
       { action: "teardown_fixture", mode: "write", sql: undefined, tableName: "Fixture_Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: ["Fixture_Customers"], denyTables: undefined },
     ]);
   });
+
+  it("routes legacy linked-table maintenance tools through the query service with dry-run defaults", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: null })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await tools.find((tool) => tool.name === "list_links")?.handler({});
+    await tools.find((tool) => tool.name === "link_tables")?.handler({ tableName: "Customers", sourceTableName: "dbo_Customers", backendPath: "C:/data/backend.accdb" });
+    await tools.find((tool) => tool.name === "relink_tables")?.handler({ tableNames: ["Customers"], backendPath: "C:/data/new-backend.accdb", apply: true });
+    await tools.find((tool) => tool.name === "localize_backend_links")?.handler({ backendPath: "C:/data/local.accdb" });
+    await tools.find((tool) => tool.name === "unlink_table")?.handler({ tableName: "Customers", apply: true, allowTables: ["Customers"] });
+
+    expect(query.requests).toEqual([
+      { action: "list_links", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined },
+      { action: "link_tables", mode: "write", sql: undefined, tableName: "Customers", columnName: undefined, backendPath: "C:/data/backend.accdb", rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: true, allowTables: undefined, denyTables: undefined, sourceTableName: "dbo_Customers", tableNames: undefined },
+      { action: "relink_tables", mode: "write", sql: undefined, tableName: undefined, columnName: undefined, backendPath: "C:/data/new-backend.accdb", rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: undefined, denyTables: undefined, sourceTableName: undefined, tableNames: ["Customers"] },
+      { action: "localize_backend_links", mode: "write", sql: undefined, tableName: undefined, columnName: undefined, backendPath: "C:/data/local.accdb", rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: true, allowTables: undefined, denyTables: undefined, sourceTableName: undefined, tableNames: undefined },
+      { action: "unlink_table", mode: "write", sql: undefined, tableName: "Customers", columnName: undefined, backendPath: undefined, rootPath: undefined, scriptPath: undefined, definition: undefined, rows: undefined, dryRun: false, allowTables: ["Customers"], denyTables: undefined, sourceTableName: undefined, tableNames: undefined },
+    ]);
+  });
 });

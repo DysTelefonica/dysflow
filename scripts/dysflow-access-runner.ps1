@@ -96,6 +96,72 @@ function Convert-TableDefs {
   return @($tables | Sort-Object name)
 }
 
+function Convert-LinkedTableDefs {
+  param($Database)
+  @(Convert-TableDefs -Database $Database -Linked $true | ForEach-Object {
+    [ordered]@{
+      name = $_.name
+      sourceTableName = $_.sourceTableName
+      connect = $_.connect
+      backendPath = Get-BackendPathFromConnect -Connect ([string]$_.connect)
+    }
+  })
+}
+
+function Get-BackendPathFromConnect {
+  param([string] $Connect)
+  if ([string]::IsNullOrWhiteSpace($Connect)) { return $null }
+  $match = [regex]::Match($Connect, '(?i)(?:^|;)DATABASE=([^;]+)')
+  if (-not $match.Success) { return $null }
+  return $match.Groups[1].Value
+}
+
+function New-AccessBackendConnectString {
+  param([string] $BackendPath)
+  if ([string]::IsNullOrWhiteSpace($BackendPath)) { throw 'backendPath is required.' }
+  if (-not (Test-Path -LiteralPath $BackendPath)) { throw "Backend path not found: $BackendPath" }
+  return ';DATABASE=' + $BackendPath
+}
+
+function ConvertTo-LinkTablePlans {
+  param($Payload)
+  $plans = New-Object System.Collections.ArrayList
+  if ($Payload.tables) {
+    foreach ($item in @($Payload.tables)) {
+      [void]$plans.Add([ordered]@{
+        tableName = [string]$item.tableName
+        sourceTableName = if ([string]::IsNullOrWhiteSpace([string]$item.sourceTableName)) { [string]$item.tableName } else { [string]$item.sourceTableName }
+        backendPath = if ([string]::IsNullOrWhiteSpace([string]$item.backendPath)) { [string]$Payload.backendPath } else { [string]$item.backendPath }
+      })
+    }
+    return @($plans)
+  }
+  $tableName = [string]$Payload.tableName
+  [void]$plans.Add([ordered]@{
+    tableName = $tableName
+    sourceTableName = if ([string]::IsNullOrWhiteSpace([string]$Payload.sourceTableName)) { $tableName } else { [string]$Payload.sourceTableName }
+    backendPath = [string]$Payload.backendPath
+  })
+  return @($plans)
+}
+
+function Get-RequestedTableNames {
+  param($Payload)
+  $names = @(ConvertTo-StringArray $Payload.tableNames)
+  if ($names.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$Payload.tableName)) {
+    $names = @([string]$Payload.tableName)
+  }
+  return $names
+}
+
+function Select-LinkedTablesForPayload {
+  param($Database, $Payload)
+  $requested = @(Get-RequestedTableNames -Payload $Payload)
+  $links = @(Convert-LinkedTableDefs -Database $Database)
+  if ($requested.Count -eq 0) { return $links }
+  return @($links | Where-Object { $requested -contains $_.name })
+}
+
 function Convert-TableSchema {
   param($Database, [string] $TableName)
   $table = $Database.TableDefs.Item($TableName)
@@ -264,6 +330,10 @@ try {
       [ordered]@{ tables = (Convert-TableDefs -Database $db -Linked $true) } | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
+    if ($action -eq 'list_links') {
+      [ordered]@{ links = @(Convert-LinkedTableDefs -Database $db) } | ConvertTo-Json -Compress -Depth 20
+      exit 0
+    }
     if ($action -eq 'get_schema') {
       [ordered]@{ schema = (Convert-TableSchema -Database $db -TableName ([string]$payload.tableName)) } | ConvertTo-Json -Compress -Depth 20
       exit 0
@@ -312,6 +382,57 @@ try {
       } finally {
         if ($null -ne $other) { $other.Close() }
       }
+      exit 0
+    }
+
+    if ($action -eq 'link_tables') {
+      $plans = @(ConvertTo-LinkTablePlans -Payload $payload)
+      foreach ($plan in $plans) { Protect-AccessTableName -Payload $payload -TableName ([string]$plan.tableName) }
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; links = $plans } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      foreach ($plan in $plans) {
+        $connect = New-AccessBackendConnectString -BackendPath ([string]$plan.backendPath)
+        $tableDef = $db.CreateTableDef([string]$plan.tableName)
+        $tableDef.SourceTableName = [string]$plan.sourceTableName
+        $tableDef.Connect = $connect
+        $db.TableDefs.Append($tableDef)
+      }
+      [ordered]@{ applied = $true; links = $plans } | ConvertTo-Json -Compress -Depth 20
+      exit 0
+    }
+    if ($action -eq 'relink_tables' -or $action -eq 'localize_backend_links') {
+      $links = @(Select-LinkedTablesForPayload -Database $db -Payload $payload)
+      $backendPath = [string]$payload.backendPath
+      $plans = @($links | ForEach-Object {
+        [ordered]@{ tableName = $_.name; sourceTableName = $_.sourceTableName; from = $_.backendPath; to = $backendPath }
+      })
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; links = $plans } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $connect = New-AccessBackendConnectString -BackendPath $backendPath
+      foreach ($link in $links) {
+        Protect-AccessTableName -Payload $payload -TableName ([string]$link.name)
+        $tableDef = $db.TableDefs.Item([string]$link.name)
+        $tableDef.Connect = $connect
+        $tableDef.RefreshLink()
+      }
+      [ordered]@{ applied = $true; links = $plans } | ConvertTo-Json -Compress -Depth 20
+      exit 0
+    }
+    if ($action -eq 'unlink_table') {
+      $tableName = [string]$payload.tableName
+      Protect-AccessTableName -Payload $payload -TableName $tableName
+      if ($payload.dryRun -eq $true) {
+        [ordered]@{ applied = $false; tableName = $tableName } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+      $tableDef = $db.TableDefs.Item($tableName)
+      if ([string]::IsNullOrWhiteSpace([string]$tableDef.Connect)) { throw "Table is not linked: $tableName" }
+      $db.TableDefs.Delete($tableName)
+      [ordered]@{ applied = $true; tableName = $tableName } | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 

@@ -170,6 +170,7 @@ Legacy-compatible read-only query aliases are also exposed for agents migrating 
 | `compare_backends` | Compare table names with another backend | `{ "backendPath": "C:\\data\\Other.accdb" }` |
 | `list_access_files` | Find `.accdb` and `.mdb` files below a root | `{ "rootPath": "C:\\data" }` |
 | `get_relationships` | List Access relationships | `{}` |
+| `list_links` | List linked-table targets with backend paths | `{}` |
 
 Legacy-compatible guarded write and fixture aliases are also exposed. They default to dry-run unless called with `{ "apply": true }` or `{ "dryRun": false }`, and honor `allowTables`/`denyTables` safeguards:
 
@@ -181,6 +182,15 @@ Legacy-compatible guarded write and fixture aliases are also exposed. They defau
 | `drop_table` | Drop an allowed fixture table | `{ "tableName": "Fixture_Customers", "allowTables": ["Fixture_Customers"], "apply": true }` |
 | `seed_fixture` | Insert fixture rows | `{ "tableName": "Fixture_Customers", "rows": [{ "Id": 1 }] }` |
 | `teardown_fixture` | Delete rows from a fixture table | `{ "tableName": "Fixture_Customers", "allowTables": ["Fixture_Customers"], "apply": true }` |
+
+Legacy-compatible linked-table maintenance aliases also default to dry-run unless called with `{ "apply": true }` or `{ "dryRun": false }`:
+
+| Tool | Purpose | Typical input |
+|---|---|---|
+| `link_tables` | Create linked table definitions against a backend | `{ "tableName": "Customers", "sourceTableName": "Customers", "backendPath": "C:\\data\\Backend.accdb" }` |
+| `relink_tables` | Refresh selected linked tables to a new backend | `{ "tableNames": ["Customers"], "backendPath": "C:\\data\\Backend.accdb", "apply": true }` |
+| `localize_backend_links` | Repoint all linked tables to a local backend | `{ "backendPath": "C:\\data\\Backend.accdb" }` |
+| `unlink_table` | Delete a linked-table definition | `{ "tableName": "Customers", "allowTables": ["Customers"], "apply": true }` |
 
 ### `dysflow.doctor`
 
