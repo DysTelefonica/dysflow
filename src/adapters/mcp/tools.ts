@@ -8,6 +8,7 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, LEGACY_VBA_SYNC_TOOL_NAMES, type LegacyDysflowMcpToolName } from "./legacy-tool-inventory.js";
+import { getLegacyParityToolDefinition } from "./legacy-parity-registry.js";
 
 export type McpTextContent = {
   type: "text";
@@ -129,6 +130,36 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       return translateCoreResultToMcpContent(await services.queryService.execute({ sql: request.sql ?? request.query ?? "", mode: "read" }));
     },
   });
+  add({
+    name: "exec_sql",
+    description: "Legacy-compatible alias for executing guarded Access SQL writes.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+  });
+  add({
+    name: "run_script",
+    description: "Legacy-compatible alias for executing a guarded Access script.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+  });
+  add({
+    name: "create_table",
+    description: "Legacy-compatible alias for creating a table through guarded Access writes.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+  });
+  add({
+    name: "drop_table",
+    description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+  });
+  add({
+    name: "seed_fixture",
+    description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+  });
+  add({
+    name: "teardown_fixture",
+    description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
+    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+  });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
     add(createLegacyDispatchTool(legacyName, services));
@@ -138,12 +169,22 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
 }
 
 function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices): DysflowMcpTool {
+  const definition = getLegacyParityToolDefinition(name);
   return {
     name,
-    description: `Legacy Dysflow MCP tool ${name}; tracked for parity and implemented by its dedicated slice.`,
+    description: definition.description,
     handler: async (input) => {
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
+      }
+      if (isQueryMaintenanceSliceTool(name)) {
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyMaintenanceRequest(name, input)));
+      }
+      if (isQuerySliceTool(name)) {
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
+      }
+      if (isWriteFixtureSliceTool(name)) {
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)));
       }
       return {
         isError: true,
@@ -157,10 +198,114 @@ function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name);
 }
 
+function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_QUERY_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function isQueryMaintenanceSliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_QUERY_MAINTENANCE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
 function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
   if (argsJson === undefined || argsJson.trim().length === 0) return [];
   const parsed = JSON.parse(argsJson) as unknown;
   return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+  const params = isRecord(input) ? input : {};
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
+  const columnName = stringValue(params.columnName) ?? stringValue(params.column);
+  return {
+    action: name as AccessQueryRequest["action"],
+    mode: "read",
+    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
+    tableName,
+    columnName,
+    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
+    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
+    exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
+    importPath: stringValue(params.importPath) ?? stringValue(params.path),
+    queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
+  };
+}
+
+function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+  const params = isRecord(input) ? input : {};
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
+  return {
+    action: name as AccessQueryRequest["action"],
+    mode: "write",
+    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
+    tableName,
+    columnName: stringValue(params.columnName) ?? stringValue(params.column),
+    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
+    scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
+    definition: stringValue(params.definition) ?? stringValue(params.fields),
+    rows: rowsValue(params.rows),
+    dryRun: params.apply === true || params.dryRun === false ? false : true,
+    allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
+    denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
+  };
+}
+
+function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+  const params = isRecord(input) ? input : {};
+  const isReadOnly = name === "list_links" || name === "export_queries";
+  return {
+    action: name as AccessQueryRequest["action"],
+    mode: isReadOnly ? "read" : "write",
+    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
+    tableName: stringValue(params.tableName) ?? stringValue(params.table),
+    columnName: stringValue(params.columnName) ?? stringValue(params.column),
+    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
+    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
+    exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
+    importPath: stringValue(params.importPath) ?? stringValue(params.path),
+    queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
+    dryRun: params.dryRun === false ? false : true,
+  };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringArrayValue(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function singleStringArrayValue(value: unknown): string[] | undefined {
+  const single = stringValue(value);
+  return single === undefined ? undefined : [single];
+}
+
+function rowsValue(value: unknown): readonly Record<string, unknown>[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.filter(isRecord);
+  return rows.length > 0 ? rows : undefined;
+}
+
+function queryDefinitionsValue(value: unknown): readonly { name: string; sql: string }[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const definitions = value
+    .filter(isRecord)
+    .map((item) => ({ name: stringValue(item.name) ?? "", sql: stringValue(item.sql) ?? "" }))
+    .filter((item) => item.name.length > 0 && item.sql.length > 0);
+  return definitions.length > 0 ? definitions : undefined;
 }
 
 export function translateCoreResultToMcpContent<TData>(result: OperationResult<TData>): McpToolResult {
@@ -176,3 +321,41 @@ export function translateCoreResultToMcpContent<TData>(result: OperationResult<T
     isError: false,
   };
 }
+
+const LEGACY_QUERY_SLICE_TOOL_NAMES = [
+  "query_sql",
+  "list_tables",
+  "list_linked_tables",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "compare_backends",
+  "list_access_files",
+  "get_relationships",
+  "list_links",
+  "export_queries",
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "import_queries",
+  "compact_repair",
+] as const;
+
+const LEGACY_QUERY_MAINTENANCE_SLICE_TOOL_NAMES = [
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "import_queries",
+  "compact_repair",
+] as const;
+
+const LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES = [
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+] as const;
