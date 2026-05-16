@@ -145,6 +145,9 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
       }
+      if (isQuerySliceTool(name)) {
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
+      }
       return {
         isError: true,
         content: [{ type: "text", text: `LEGACY_TOOL_NOT_IMPLEMENTED: ${name} is tracked for legacy parity but not ported in this slice.` }],
@@ -157,11 +160,50 @@ function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
   return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name);
 }
 
+function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
+  return (LEGACY_QUERY_SLICE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+  const params = isRecord(input) ? input : {};
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
+  const columnName = stringValue(params.columnName) ?? stringValue(params.column);
+  return {
+    action: name as AccessQueryRequest["action"],
+    mode: "read",
+    sql: stringValue(params.sql) ?? stringValue(params.query),
+    tableName,
+    columnName,
+    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
+  };
+}
+
 function parseLegacyArgsJson(argsJson: string | undefined): unknown[] {
   if (argsJson === undefined || argsJson.trim().length === 0) return [];
   const parsed = JSON.parse(argsJson) as unknown;
   return Array.isArray(parsed) ? parsed : [parsed];
 }
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const LEGACY_QUERY_SLICE_TOOL_NAMES = [
+  "query_sql",
+  "list_tables",
+  "list_linked_tables",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "compare_backends",
+  "list_access_files",
+  "get_relationships",
+] as const;
 
 export function translateCoreResultToMcpContent<TData>(result: OperationResult<TData>): McpToolResult {
   if (!result.ok) {

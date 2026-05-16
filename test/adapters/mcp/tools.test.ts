@@ -73,4 +73,33 @@ describe("MCP tool registration over core services", () => {
       isError: true,
     });
   });
+
+  it("routes legacy read-only query and schema tools through the query service", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: null })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await tools.find((tool) => tool.name === "list_tables")?.handler({});
+    await tools.find((tool) => tool.name === "list_linked_tables")?.handler({});
+    await tools.find((tool) => tool.name === "get_schema")?.handler({ tableName: "Customers" });
+    await tools.find((tool) => tool.name === "count_rows")?.handler({ tableName: "Customers" });
+    await tools.find((tool) => tool.name === "distinct_values")?.handler({ table: "Customers", column: "Country" });
+    await tools.find((tool) => tool.name === "compare_backends")?.handler({ backendPath: "C:/data/other.accdb" });
+    await tools.find((tool) => tool.name === "list_access_files")?.handler({ rootPath: "C:/data" });
+    await tools.find((tool) => tool.name === "get_relationships")?.handler({});
+
+    expect(query.requests).toEqual([
+      { action: "list_tables", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined },
+      { action: "list_linked_tables", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined },
+      { action: "get_schema", mode: "read", sql: undefined, tableName: "Customers", columnName: undefined, backendPath: undefined, rootPath: undefined },
+      { action: "count_rows", mode: "read", sql: undefined, tableName: "Customers", columnName: undefined, backendPath: undefined, rootPath: undefined },
+      { action: "distinct_values", mode: "read", sql: undefined, tableName: "Customers", columnName: "Country", backendPath: undefined, rootPath: undefined },
+      { action: "compare_backends", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: "C:/data/other.accdb", rootPath: undefined },
+      { action: "list_access_files", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: "C:/data" },
+      { action: "get_relationships", mode: "read", sql: undefined, tableName: undefined, columnName: undefined, backendPath: undefined, rootPath: undefined },
+    ]);
+  });
 });

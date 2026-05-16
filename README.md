@@ -157,6 +157,20 @@ Dysflow exposes these MCP tools.
 | `dysflow.access.operations.list` | List recent Access operations | `{}` |
 | `dysflow.access.cleanup` | Safely cleanup a registered operation | `{ "operationId": "...", "accessPath": "...", "force": true }` |
 
+Legacy-compatible read-only query aliases are also exposed for agents migrating from the previous MCP:
+
+| Tool | Purpose | Typical input |
+|---|---|---|
+| `query_sql` | Execute a read-only SQL query | `{ "sql": "SELECT ..." }` |
+| `list_tables` | List local user tables | `{}` |
+| `list_linked_tables` | List linked tables and connection metadata | `{}` |
+| `get_schema` | Read fields for a table | `{ "tableName": "Customers" }` |
+| `count_rows` | Count rows in a table | `{ "tableName": "Customers" }` |
+| `distinct_values` | List distinct values for a column | `{ "tableName": "Customers", "columnName": "Country" }` |
+| `compare_backends` | Compare table names with another backend | `{ "backendPath": "C:\\data\\Other.accdb" }` |
+| `list_access_files` | Find `.accdb` and `.mdb` files below a root | `{ "rootPath": "C:\\data" }` |
+| `get_relationships` | List Access relationships | `{}` |
+
 ### `dysflow.doctor`
 
 Checks that Dysflow can resolve configuration and open Access.

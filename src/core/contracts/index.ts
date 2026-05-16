@@ -25,8 +25,13 @@ export type AccessVbaRequest = {
 };
 
 export type AccessQueryRequest = {
-  sql: string;
+  sql?: string;
   mode: "read" | "write";
+  action?: "query_sql" | "list_tables" | "list_linked_tables" | "get_schema" | "count_rows" | "distinct_values" | "compare_backends" | "list_access_files" | "get_relationships";
+  tableName?: string;
+  columnName?: string;
+  backendPath?: string;
+  rootPath?: string;
 };
 
 export function createDiagnostic(level: DiagnosticLevel, source: string, message: string): Diagnostic {
