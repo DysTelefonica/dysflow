@@ -4,137 +4,183 @@ import { handleDoctorCommand } from "../../src/cli/commands/doctor";
 import { handleServeCommand } from "../../src/cli/commands/serve";
 import { successResult } from "../../src/core/contracts/index";
 
-const plannedCommandCases = [
-  ["tui", "tui is planned; terminal UI is not implemented yet."],
-] as const;
+const plannedCommandCases = [["install", ""]] as const;
 
-const missingAccessError = "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH, define .dysflow/project.json, or pass accessDbPath/projectId.";
+const missingAccessError =
+	"CONFIG_MISSING_ACCESS_PATH: Access database path is required. Set DYSFLOW_ACCESS_DB_PATH, define .dysflow/project.json, or pass accessDbPath/projectId.";
 
 describe("dysflow command modules", () => {
-  it.each(plannedCommandCases)("dispatches %s through a dedicated planned handler", async (command, stdout) => {
-    const result = await runCli([command]);
+	it.each(
+		plannedCommandCases,
+	)("dispatches %s through dedicated handler", async (command) => {
+		const result = await runCli([command, "--help"]);
 
-    expect(result).toEqual({ exitCode: 0, stdout, stderr: "" });
-  });
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Usage: dysflow install");
+		expect(result.stderr).toBe("");
+	});
 
-  it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
-    const calls: unknown[] = [];
+	it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
+		const calls: unknown[] = [];
 
-    const result = await runCli(["mcp"], {
-      startMcpAdapter: async (...args: unknown[]) => {
-        calls.push(args[0]);
-      },
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-    });
+		const result = await runCli(["mcp"], {
+			startMcpAdapter: async (...args: unknown[]) => {
+				calls.push(args[0]);
+			},
+			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+		});
 
-    expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
-    expect(calls).toEqual([expect.objectContaining({ accessDbPath: "C:/data/app.accdb" })]);
-  });
+		expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+		expect(calls).toEqual([
+			expect.objectContaining({ accessDbPath: "C:/data/app.accdb" }),
+		]);
+	});
 
+	it("returns a clean MCP configuration error when Access path is missing", async () => {
+		const result = await runCli(["mcp"], {
+			env: {},
+		});
 
-  it("returns a clean MCP configuration error when Access path is missing", async () => {
-    const result = await runCli(["mcp"], {
-      env: {},
-    });
+		expect(result).toEqual({
+			exitCode: 1,
+			stdout: "",
+			stderr: missingAccessError,
+		});
+	});
 
-    expect(result).toEqual({
-      exitCode: 1,
-      stdout: "",
-      stderr: missingAccessError,
-    });
-  });
+	it("wires setup to core configuration and prints only redacted configuration", async () => {
+		const result = await runCli(["setup"], {
+			env: {
+				DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb",
+				DYSFLOW_ACCESS_PASSWORD: "super-secret",
+				DYSFLOW_TIMEOUT_MS: "1234",
+			},
+		});
 
-  it("wires setup to core configuration and prints only redacted configuration", async () => {
-    const result = await runCli(["setup"], {
-      env: {
-        DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb",
-        DYSFLOW_ACCESS_PASSWORD: "super-secret",
-        DYSFLOW_TIMEOUT_MS: "1234",
-      },
-    });
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Access database: C:/data/app.accdb");
+		expect(result.stdout).toContain("Timeout: 1234ms");
+		expect(result.stdout).toContain("Password: [REDACTED]");
+		expect(result.stdout).not.toContain("super-secret");
+		expect(result.stderr).toBe("");
+	});
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Access database: C:/data/app.accdb");
-    expect(result.stdout).toContain("Timeout: 1234ms");
-    expect(result.stdout).toContain("Password: [REDACTED]");
-    expect(result.stdout).not.toContain("super-secret");
-    expect(result.stderr).toBe("");
-  });
+	it("wires doctor to core diagnostics service", async () => {
+		const result = await runCli(["doctor"], {
+			diagnosticsService: {
+				run: async () =>
+					successResult({
+						checks: [
+							{ name: "access-db-path", ok: true, message: "configured" },
+						],
+					}),
+			},
+			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+		});
 
-  it("wires doctor to core diagnostics service", async () => {
-    const result = await runCli(["doctor"], {
-      diagnosticsService: {
-        run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }),
-      },
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-    });
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: "✓ access-db-path: configured",
+			stderr: "",
+		});
+	});
 
-    expect(result).toEqual({
-      exitCode: 0,
-      stdout: "✓ access-db-path: configured",
-      stderr: "",
-    });
-  });
+	it("returns a clean doctor error when configuration is missing", async () => {
+		const result = await runCli(["doctor"], { env: {} });
 
+		expect(result).toEqual({
+			exitCode: 1,
+			stdout: "",
+			stderr: missingAccessError,
+		});
+	});
 
-  it("returns a clean doctor error when configuration is missing", async () => {
-    const result = await runCli(["doctor"], { env: {} });
+	it("wires serve to the HTTP adapter with safe defaults", async () => {
+		const starts: unknown[] = [];
+		const result = await runCli(["serve", "--port", "0"], {
+			env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			startHttpAdapter: async (options) => {
+				starts.push(options);
+				return {
+					url: "http://127.0.0.1:17321",
+					host: "127.0.0.1",
+					port: 17321,
+					writesEnabled: false,
+				};
+			},
+		});
 
-    expect(result).toEqual({
-      exitCode: 1,
-      stdout: "",
-      stderr: missingAccessError,
-    });
-  });
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout:
+				"Dysflow HTTP API listening on http://127.0.0.1:17321 (writes disabled)",
+			stderr: "",
+		});
+		expect(starts).toEqual([
+			{
+				host: "127.0.0.1",
+				port: 0,
+				writesEnabled: false,
+				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			},
+		]);
+	});
 
-  it("wires serve to the HTTP adapter with safe defaults", async () => {
-    const starts: unknown[] = [];
-    const result = await runCli(["serve", "--port", "0"], {
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-      startHttpAdapter: async (options) => {
-        starts.push(options);
-        return { url: "http://127.0.0.1:17321", host: "127.0.0.1", port: 17321, writesEnabled: false };
-      },
-    });
+	it("requires an explicit flag before serve enables write routes", async () => {
+		const starts: unknown[] = [];
+		const result = await runCli(
+			["serve", "--host", "127.0.0.1", "--port", "0", "--enable-writes"],
+			{
+				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+				startHttpAdapter: async (options) => {
+					starts.push(options);
+					return {
+						url: "http://127.0.0.1:17321",
+						host: "127.0.0.1",
+						port: 17321,
+						writesEnabled: true,
+					};
+				},
+			},
+		);
 
-    expect(result).toEqual({
-      exitCode: 0,
-      stdout: "Dysflow HTTP API listening on http://127.0.0.1:17321 (writes disabled)",
-      stderr: "",
-    });
-    expect(starts).toEqual([{ host: "127.0.0.1", port: 0, writesEnabled: false, env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" } }]);
-  });
+		expect(result.stdout).toBe(
+			"Dysflow HTTP API listening on http://127.0.0.1:17321 (writes enabled)",
+		);
+		expect(starts).toEqual([
+			{
+				host: "127.0.0.1",
+				port: 0,
+				writesEnabled: true,
+				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			},
+		]);
+	});
 
-  it("requires an explicit flag before serve enables write routes", async () => {
-    const starts: unknown[] = [];
-    const result = await runCli(["serve", "--host", "127.0.0.1", "--port", "0", "--enable-writes"], {
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-      startHttpAdapter: async (options) => {
-        starts.push(options);
-        return { url: "http://127.0.0.1:17321", host: "127.0.0.1", port: 17321, writesEnabled: true };
-      },
-    });
+	it("exports command handlers as small modules", async () => {
+		await expect(
+			handleDoctorCommand([], {
+				diagnosticsService: {
+					run: async () =>
+						successResult({
+							checks: [
+								{ name: "access-db-path", ok: true, message: "configured" },
+							],
+						}),
+				},
+				env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
+			}),
+		).resolves.toEqual({
+			exitCode: 0,
+			stdout: "✓ access-db-path: configured",
+			stderr: "",
+		});
 
-    expect(result.stdout).toBe("Dysflow HTTP API listening on http://127.0.0.1:17321 (writes enabled)");
-    expect(starts).toEqual([{ host: "127.0.0.1", port: 0, writesEnabled: true, env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" } }]);
-  });
-
-  it("exports command handlers as small modules", async () => {
-    await expect(handleDoctorCommand([], {
-      diagnosticsService: {
-        run: async () => successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }),
-      },
-      env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
-    })).resolves.toEqual({
-      exitCode: 0,
-      stdout: "✓ access-db-path: configured",
-      stderr: "",
-    });
-
-    await expect(handleServeCommand(["--help"])).resolves.toEqual({
-      exitCode: 0,
-      stdout: "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]",
-      stderr: "",
-    });
-  });
+		await expect(handleServeCommand(["--help"])).resolves.toEqual({
+			exitCode: 0,
+			stdout:
+				"Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]",
+			stderr: "",
+		});
+	});
 });
