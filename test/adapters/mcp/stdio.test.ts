@@ -1,10 +1,36 @@
 import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { JsonLineMcpStdioRuntime } from "../../../src/adapters/mcp/stdio.js";
+import { successResult, type OperationResult } from "../../../src/core/contracts/index.js";
+import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
+import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
+import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";
 
 const packageVersion = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version;
 const stdioSource = readFileSync("src/adapters/mcp/stdio.ts", "utf8");
+
+class FakeVbaService {
+  public requests: unknown[] = [];
+  constructor(private readonly result: OperationResult<AccessVbaResult>) {}
+  async execute(request: unknown): Promise<OperationResult<AccessVbaResult>> {
+    this.requests.push(request);
+    return this.result;
+  }
+}
+
+class FakeQueryService {
+  async execute(): Promise<OperationResult<AccessQueryResult>> {
+    return successResult({ rows: [] });
+  }
+}
+
+class FakeDiagnosticsService {
+  async run(): Promise<OperationResult<AccessDiagnosticsResult>> {
+    return successResult({ checks: [] });
+  }
+}
 
 function writeMessage(input: PassThrough, message: unknown): void {
   input.write(`${JSON.stringify(message)}\n`);
@@ -64,6 +90,34 @@ describe("JsonLineMcpStdioRuntime", () => {
       }),
       expect.objectContaining({ id: 3, result: { content: [{ type: "text", text: '{"ok":true}' }], isError: false } }),
     ]);
+  });
+
+  it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const runtime = new JsonLineMcpStdioRuntime({ input, output });
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    for (const tool of createDysflowMcpTools({
+      vbaService: vba,
+      queryService: new FakeQueryService(),
+      diagnosticsService: new FakeDiagnosticsService(),
+    })) {
+      runtime.registerTool(tool);
+    }
+
+    const started = runtime.start();
+    writeMessage(input, { jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "run_vba", arguments: { procedureName: "Broken", argsJson: "[1," } } });
+    input.end();
+    await started;
+    output.end();
+
+    await expect(collectOutput(output)).resolves.toEqual([
+      expect.objectContaining({
+        id: 7,
+        result: { content: [{ type: "text", text: "MCP_INPUT_INVALID: argsJson must be valid JSON." }], isError: true },
+      }),
+    ]);
+    expect(vba.requests).toEqual([]);
   });
 
   it("returns JSON-RPC errors for unsupported methods", async () => {
