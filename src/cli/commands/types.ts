@@ -1,4 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
+import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { StartHttpAdapter } from "./serve.js";
 
@@ -10,7 +11,7 @@ export type CliResult = {
 
 export type CliCommandContext = {
   env?: Record<string, string | undefined>;
-  startMcpAdapter?: () => Promise<void>;
+  startMcpAdapter?: (config: DysflowConfig) => Promise<void>;
   diagnosticsService?: {
     run(request?: { includeEnvironment?: boolean }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };

@@ -18,17 +18,17 @@ describe("dysflow command modules", () => {
   });
 
   it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
-    const calls: string[] = [];
+    const calls: unknown[] = [];
 
     const result = await runCli(["mcp"], {
-      startMcpAdapter: async () => {
-        calls.push("started");
+      startMcpAdapter: async (...args: unknown[]) => {
+        calls.push(args[0]);
       },
       env: { DYSFLOW_ACCESS_DB_PATH: "C:/data/app.accdb" },
     });
 
     expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
-    expect(calls).toEqual(["started"]);
+    expect(calls).toEqual([expect.objectContaining({ accessDbPath: "C:/data/app.accdb" })]);
   });
 
 
