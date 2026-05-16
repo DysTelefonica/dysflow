@@ -1,9 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
+import { REDACTED_SECRET, isRecord, stringValue, readJsonFileSync } from "../utils/index.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const REDACTED_SECRET = "[REDACTED]";
 const DEFAULT_PROJECT_CONFIG_FILENAMES = [".dysflow/project.json", "dysflow.project.json"] as const;
 const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
@@ -69,20 +69,20 @@ export function loadDysflowConfig(input: DysflowConfigInput = {}): OperationResu
   const env = input.env ?? process.env;
   const cwd = resolve(input.cwd ?? process.cwd());
 
-  const explicitAccessDbPath = normalizePathValue(input.accessDbPath);
+  const explicitAccessDbPath = stringValue(input.accessDbPath);
   if (explicitAccessDbPath !== undefined) {
     return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
   }
 
-  const projectId = normalizePathValue(input.projectId)
-    ?? normalizePathValue(input.contextId)
-    ?? normalizePathValue(env.DYSFLOW_PROJECT_ID)
-    ?? normalizePathValue(env.DYSFLOW_CONTEXT_ID);
+  const projectId = stringValue(input.projectId)
+    ?? stringValue(input.contextId)
+    ?? stringValue(env.DYSFLOW_PROJECT_ID)
+    ?? stringValue(env.DYSFLOW_CONTEXT_ID);
   if (projectId !== undefined) {
     return loadProjectIdConfig(projectId, input, env, cwd);
   }
 
-  const projectConfigPath = normalizePathValue(input.projectConfigPath) ?? normalizePathValue(env.DYSFLOW_PROJECT_CONFIG_PATH);
+  const projectConfigPath = stringValue(input.projectConfigPath) ?? stringValue(env.DYSFLOW_PROJECT_CONFIG_PATH);
   if (projectConfigPath !== undefined) {
     return loadProjectConfigFromPath(projectConfigPath, input, env, cwd, "project-registry");
   }
@@ -92,7 +92,7 @@ export function loadDysflowConfig(input: DysflowConfigInput = {}): OperationResu
     return loadProjectConfigFromPath(worktreeConfigPath, input, env, cwd, "worktree-config");
   }
 
-  const legacyAccessDbPath = normalizePathValue(env.DYSFLOW_ACCESS_DB_PATH);
+  const legacyAccessDbPath = stringValue(env.DYSFLOW_ACCESS_DB_PATH);
   if (legacyAccessDbPath !== undefined) {
     return buildLegacyEnvConfig(input, env, cwd, legacyAccessDbPath);
   }
@@ -132,10 +132,10 @@ function buildExplicitConfig(input: DysflowConfigInput, env: Record<string, stri
   return successResult({
     configSource: "explicit-request",
     accessDbPath,
-    backendPath: normalizePathValue(input.backendPath) ?? normalizePathValue(env.DYSFLOW_BACKEND_PATH) ?? normalizePathValue(env.DYSFLOW_BACKEND_DB_PATH),
-    destinationRoot: normalizePathValue(input.destinationRoot) ?? normalizePathValue(env.DYSFLOW_DESTINATION_ROOT) ?? cwd,
-    projectRoot: normalizePathValue(input.projectRoot) ?? normalizePathValue(env.DYSFLOW_PROJECT_ROOT) ?? cwd,
-    projectId: normalizePathValue(input.projectId) ?? normalizePathValue(input.contextId) ?? normalizePathValue(env.DYSFLOW_PROJECT_ID) ?? normalizePathValue(env.DYSFLOW_CONTEXT_ID),
+    backendPath: stringValue(input.backendPath) ?? stringValue(env.DYSFLOW_BACKEND_PATH) ?? stringValue(env.DYSFLOW_BACKEND_DB_PATH),
+    destinationRoot: stringValue(input.destinationRoot) ?? stringValue(env.DYSFLOW_DESTINATION_ROOT) ?? cwd,
+    projectRoot: stringValue(input.projectRoot) ?? stringValue(env.DYSFLOW_PROJECT_ROOT) ?? cwd,
+    projectId: stringValue(input.projectId) ?? stringValue(input.contextId) ?? stringValue(env.DYSFLOW_PROJECT_ID) ?? stringValue(env.DYSFLOW_CONTEXT_ID),
     timeoutMs,
     processTimeoutMs: timeoutMs,
     accessPassword: resolvePassword(input.accessPassword, env.DYSFLOW_ACCESS_PASSWORD ?? env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV]),
@@ -148,10 +148,10 @@ function buildLegacyEnvConfig(input: DysflowConfigInput, env: Record<string, str
   return successResult({
     configSource: "legacy-env",
     accessDbPath,
-    backendPath: normalizePathValue(input.backendPath) ?? normalizePathValue(env.DYSFLOW_BACKEND_PATH) ?? normalizePathValue(env.DYSFLOW_BACKEND_DB_PATH),
-    destinationRoot: normalizePathValue(input.destinationRoot) ?? normalizePathValue(env.DYSFLOW_DESTINATION_ROOT) ?? cwd,
-    projectRoot: normalizePathValue(input.projectRoot) ?? normalizePathValue(env.DYSFLOW_PROJECT_ROOT) ?? cwd,
-    projectId: normalizePathValue(input.projectId) ?? normalizePathValue(input.contextId) ?? normalizePathValue(env.DYSFLOW_PROJECT_ID) ?? normalizePathValue(env.DYSFLOW_CONTEXT_ID),
+    backendPath: stringValue(input.backendPath) ?? stringValue(env.DYSFLOW_BACKEND_PATH) ?? stringValue(env.DYSFLOW_BACKEND_DB_PATH),
+    destinationRoot: stringValue(input.destinationRoot) ?? stringValue(env.DYSFLOW_DESTINATION_ROOT) ?? cwd,
+    projectRoot: stringValue(input.projectRoot) ?? stringValue(env.DYSFLOW_PROJECT_ROOT) ?? cwd,
+    projectId: stringValue(input.projectId) ?? stringValue(input.contextId) ?? stringValue(env.DYSFLOW_PROJECT_ID) ?? stringValue(env.DYSFLOW_CONTEXT_ID),
     timeoutMs,
     processTimeoutMs: timeoutMs,
     accessPassword: resolvePassword(input.accessPassword, env.DYSFLOW_ACCESS_PASSWORD ?? env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV]),
@@ -165,7 +165,7 @@ function loadProjectIdConfig(projectId: string, input: DysflowConfigInput, env: 
     return failureResult(createDysflowError("CONFIG_PROJECT_REGISTRY_MISSING", "Project registry not found. Set DYSFLOW_PROJECTS_REGISTRY_PATH or create %APPDATA%/dysflow/projects.json."));
   }
 
-  const registry = readJsonFile<DysflowProjectRegistry>(registryPath);
+  const registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
   const entry = registry.projects?.[projectId];
   if (entry === undefined) {
     return failureResult(createDysflowError("CONFIG_PROJECT_NOT_FOUND", `Project '${projectId}' was not found in ${registryPath}.`));
@@ -192,7 +192,7 @@ function loadProjectConfigFromPath(
     return failureResult(createDysflowError("CONFIG_PROJECT_FILE_NOT_FOUND", `Project config file not found: ${resolvedPath}`));
   }
 
-  const config = readJsonFile<DysflowProjectConfig>(resolvedPath);
+  const config = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
   const configDir = dirname(resolvedPath);
   const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
   const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs, env.DYSFLOW_TIMEOUT_MS);
@@ -229,7 +229,7 @@ function loadProjectConfigFromPath(
     backendPath,
     destinationRoot,
     projectRoot,
-    projectId: projectId ?? normalizeNameValue(config.id),
+    projectId: projectId ?? stringValue(config.id),
     timeoutMs,
     processTimeoutMs: timeoutMs,
     accessPassword,
@@ -242,13 +242,13 @@ function loadProjectConfigFromPath(
 
 function resolveProjectRoot(config: DysflowProjectConfig, configDir: string, explicitProjectRoot?: string): string {
   const baseProjectRoot = basename(configDir).toLowerCase() === ".dysflow" ? dirname(configDir) : configDir;
-  const rootValue = normalizePathValue(explicitProjectRoot) ?? normalizePathValue(config.projectRoot);
+  const rootValue = stringValue(explicitProjectRoot) ?? stringValue(config.projectRoot);
 
   return rootValue !== undefined ? resolveProjectPath(rootValue, baseProjectRoot) ?? baseProjectRoot : baseProjectRoot;
 }
 
 function resolveProjectPath(value: string | undefined, projectRoot: string): string | undefined {
-  const normalized = normalizePathValue(value);
+  const normalized = stringValue(value);
   if (normalized === undefined) return undefined;
   return isAbsolute(normalized) ? resolve(normalized) : resolve(projectRoot, normalized);
 }
@@ -258,11 +258,12 @@ function resolvePathMaybeRelative(value: string, cwd: string): string {
 }
 
 function resolveRegistryPath(explicitPath: string | undefined, cwd: string, env: Record<string, string | undefined>): string | undefined {
-  const direct = normalizePathValue(explicitPath);
+  const direct = stringValue(explicitPath);
   if (direct !== undefined) return isAbsolute(direct) ? resolve(direct) : resolve(cwd, direct);
 
-  const appData = normalizePathValue(env.APPDATA)
-    ?? (normalizePathValue(env.USERPROFILE) !== undefined ? resolve(env.USERPROFILE, "AppData", "Roaming") : undefined);
+  const userProfile = stringValue(env.USERPROFILE);
+  const appData = stringValue(env.APPDATA)
+    ?? (userProfile !== undefined ? resolve(userProfile, "AppData", "Roaming") : undefined);
   if (appData === undefined) return undefined;
   return resolve(appData, "dysflow", "projects.json");
 }
@@ -274,13 +275,13 @@ function resolveProjectConfigPathFromRegistryEntry(entry: string | { configPath?
 
   if (!isRecord(entry)) return undefined;
 
-  const entryPath = normalizeNameValue(entry.configPath) ?? normalizeNameValue(entry.path);
+  const entryPath = stringValue(entry.configPath) ?? stringValue(entry.path);
   if (entryPath === undefined) return undefined;
   return resolvePathRelativeToRegistry(entryPath, registryPath);
 }
 
 function resolvePathRelativeToRegistry(value: string, registryPath: string): string {
-  const normalized = normalizePathValue(value);
+  const normalized = stringValue(value);
   if (normalized === undefined) return value;
   return isAbsolute(normalized) ? resolve(normalized) : resolve(dirname(registryPath), normalized);
 }
@@ -310,42 +311,24 @@ function parseTimeout(value: string | undefined): number {
 }
 
 function resolvePassword(explicitPassword: string | undefined, envPassword: string | undefined): string | undefined {
-  return normalizeNameValue(explicitPassword) ?? normalizeNameValue(envPassword);
-}
-
-function normalizePathValue(value: string | undefined): string | undefined {
-  return normalizeNameValue(value);
-}
-
-function normalizeNameValue(value: string | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  return stringValue(explicitPassword) ?? stringValue(envPassword);
 }
 
 function resolvePasswordEnv(config: DysflowProjectConfig): string | undefined {
-  return normalizeNameValue(config.passwordEnv)
-    ?? normalizeNameValue(config.accessPasswordEnv)
-    ?? normalizeNameValue(config.frontendPasswordEnv)
-    ?? normalizeNameValue(config.backendPasswordEnv);
+  return stringValue(config.passwordEnv)
+    ?? stringValue(config.accessPasswordEnv)
+    ?? stringValue(config.frontendPasswordEnv)
+    ?? stringValue(config.backendPasswordEnv);
 }
 
 function resolveBackendPasswordEnv(config: DysflowProjectConfig): string | undefined {
-  return normalizeNameValue(config.backendPasswordEnv)
-    ?? normalizeNameValue(config.passwordEnv)
-    ?? normalizeNameValue(config.accessPasswordEnv)
-    ?? normalizeNameValue(config.frontendPasswordEnv);
+  return stringValue(config.backendPasswordEnv)
+    ?? stringValue(config.passwordEnv)
+    ?? stringValue(config.accessPasswordEnv)
+    ?? stringValue(config.frontendPasswordEnv);
 }
 
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
   return values.find((value) => value !== undefined);
 }
 
-function isRecord(value: unknown): value is { [key: string]: unknown } {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readJsonFile<T>(path: string): T {
-  const raw = readFileSync(path, "utf8");
-  return JSON.parse(raw) as T;
-}
