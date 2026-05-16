@@ -363,9 +363,7 @@ pnpm build
 
 Current test baseline:
 
-```txt
-48 passing tests
-```
+Run `pnpm test` before release; keep the suite green.
 
 ## Safety contract for AI agents
 
