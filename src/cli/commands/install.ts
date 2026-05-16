@@ -7,6 +7,7 @@ import type { CliResult } from "./types.js";
 
 const INSTALL_USAGE =
 	"Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--no-tui]";
+const UPDATE_USAGE = "Usage: dysflow update [--runtime-dir <dir>] [--force]";
 
 export type AgentName = "codex" | "opencode" | "claude" | "pi";
 const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
@@ -15,6 +16,11 @@ type InstallOptions = {
 	runtimeDir?: string;
 	agentNames: AgentName[];
 	interactive: boolean;
+};
+
+type UpdateOptions = {
+	runtimeDir?: string;
+	force: boolean;
 };
 
 type RuntimePaths = {
@@ -108,6 +114,42 @@ export function parseInstallArgs(
 		}
 
 		return { ok: false, message: `Unsupported install option: ${arg}` };
+	}
+
+	return { ok: true, options };
+}
+
+export function parseUpdateArgs(
+	args: readonly string[],
+): { ok: true; options: UpdateOptions } | { ok: false; message: string } {
+	if (args.includes("--help") || args.includes("-h")) {
+		return { ok: false, message: UPDATE_USAGE };
+	}
+
+	const options: UpdateOptions = {
+		runtimeDir: undefined,
+		force: false,
+	};
+
+	for (let index = 0; index < args.length; index += 1) {
+		const arg = args[index];
+
+		if (arg === "--runtime-dir") {
+			const runtimeDir = args[index + 1];
+			if (runtimeDir === undefined || runtimeDir.startsWith("--")) {
+				return { ok: false, message: "Missing value for --runtime-dir." };
+			}
+			options.runtimeDir = runtimeDir;
+			index += 1;
+			continue;
+		}
+
+		if (arg === "--force") {
+			options.force = true;
+			continue;
+		}
+
+		return { ok: false, message: `Unsupported update option: ${arg}` };
 	}
 
 	return { ok: true, options };
@@ -372,6 +414,46 @@ async function copyDocs(
 	}
 }
 
+async function installRuntime(
+	runtimePaths: RuntimePaths,
+	packageRoot: string,
+): Promise<void> {
+	await copyRuntime(runtimePaths);
+	await copyDocs(runtimePaths, packageRoot);
+	await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
+}
+
+function parseVersionValue(value: string): number[] {
+	const clean = value.split(/[-+]/)[0].trim();
+	if (clean.length === 0) {
+		return [0];
+	}
+
+	return clean
+		.split(".")
+		.map((part) => Number.parseInt(part, 10))
+		.map((part) => (Number.isNaN(part) ? 0 : part));
+}
+
+export function compareVersions(a: string, b: string): number {
+	const partsA = parseVersionValue(a);
+	const partsB = parseVersionValue(b);
+	const maxLength = Math.max(partsA.length, partsB.length);
+
+	for (let index = 0; index < maxLength; index += 1) {
+		const left = partsA[index] ?? 0;
+		const right = partsB[index] ?? 0;
+		if (left > right) {
+			return 1;
+		}
+		if (left < right) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 function createInstallReport(
 	runtimeDir: string,
 	configuredAgents: readonly AgentName[],
@@ -386,6 +468,33 @@ function createInstallReport(
 			path.join(runtimeDir, "bin", "dysflow.cmd"),
 		"- Re-run `dysflow install` to refresh runtime + integrations.",
 	].join("\n");
+}
+
+function createNoUpdateReport(
+	runtimeDir: string,
+	localVersion: string,
+): string {
+	return `Dysflow runtime is up to date in ${runtimeDir} (v${localVersion}).`;
+}
+
+async function readPackageJsonVersion(
+	packagePath: string,
+): Promise<string | undefined> {
+	const raw = await readFile(packagePath, "utf8").catch(() => undefined);
+	if (raw === undefined) {
+		return undefined;
+	}
+
+	try {
+		const parsed = JSON.parse(raw) as { version?: string };
+		if (typeof parsed.version === "string" && parsed.version.length > 0) {
+			return parsed.version;
+		}
+	} catch {
+		return undefined;
+	}
+
+	return undefined;
 }
 
 async function resolveClaudeConfigPath(
@@ -483,9 +592,7 @@ export async function handleInstallCommand(
 			agents = await selectAgentsInteractive(ALL_AGENTS);
 		}
 
-		await copyRuntime(runtimePaths);
-		await copyDocs(runtimePaths, packageRoot);
-		await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
+		await installRuntime(runtimePaths, packageRoot);
 
 		for (const agent of agents) {
 			if (agent === "codex") {
@@ -517,6 +624,75 @@ export async function handleInstallCommand(
 			error instanceof Error
 				? error.message
 				: "Failed to install Dysflow runtime.";
+		return {
+			exitCode: 1,
+			stdout: "",
+			stderr: message,
+		};
+	}
+}
+
+export async function handleUpdateCommand(
+	args: readonly string[],
+	context: { env?: NodeJS.ProcessEnv } = {},
+): Promise<CliResult> {
+	const parsed = parseUpdateArgs(args);
+	if (!parsed.ok) {
+		const isUsage = parsed.message === UPDATE_USAGE;
+		return {
+			exitCode: isUsage ? 0 : 1,
+			stdout: isUsage ? UPDATE_USAGE : "",
+			stderr: isUsage ? "" : parsed.message,
+		};
+	}
+
+	const env = context.env ?? process.env;
+	const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
+	const packageRoot = resolvePackageRoot();
+	const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
+	const localVersion = await readPackageJsonVersion(
+		runtimePaths.packageJsonSource,
+	);
+	if (localVersion === undefined) {
+		return {
+			exitCode: 1,
+			stdout: "",
+			stderr:
+				"Unable to determine local version for dysflow update. Missing package.json in CLI runtime source.",
+		};
+	}
+
+	const installedVersion = await readPackageJsonVersion(
+		runtimePaths.packageJsonDest,
+	);
+	const isUpdateNeeded =
+		parsed.options.force ||
+		installedVersion === undefined ||
+		compareVersions(localVersion, installedVersion) > 0;
+
+	if (!isUpdateNeeded) {
+		return {
+			exitCode: 0,
+			stdout: createNoUpdateReport(runtimeDir, localVersion),
+			stderr: "",
+		};
+	}
+
+	const previousVersion = installedVersion ?? "not installed";
+	try {
+		await installRuntime(runtimePaths, packageRoot);
+		return {
+			exitCode: 0,
+			stdout:
+				`Dysflow runtime update: ${previousVersion} -> ${localVersion}\n` +
+				createInstallReport(runtimeDir, []),
+			stderr: "",
+		};
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to update Dysflow runtime.";
 		return {
 			exitCode: 1,
 			stdout: "",

@@ -28,6 +28,7 @@ export const HELP_TEXT = [
 	"  setup   Prepare local Dysflow configuration",
 	"  doctor  Check local Dysflow requirements",
 	"  install Run Dysflow installer (interactive MCP wiring + runtime copy)",
+	"  update  Reinstall runtime when source version is newer",
 	"  tui     Open the Dysflow terminal UI",
 	"  serve   Start local HTTP API",
 ].join("\n");

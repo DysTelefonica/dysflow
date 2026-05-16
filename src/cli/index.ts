@@ -4,7 +4,10 @@ import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleMcpCommand } from "./commands/mcp.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
-import { handleInstallCommand } from "./commands/install.js";
+import {
+	handleInstallCommand,
+	handleUpdateCommand,
+} from "./commands/install.js";
 import { handleTuiCommand } from "./commands/tui.js";
 import {
 	HELP_TEXT,
@@ -21,6 +24,7 @@ const COMMANDS = new Map<string, CommandHandler>([
 	["doctor", handleDoctorCommand],
 	["tui", handleTuiCommand],
 	["install", handleInstallCommand],
+	["update", handleUpdateCommand],
 	["serve", handleServeCommand],
 ]);
 export async function runCli(
