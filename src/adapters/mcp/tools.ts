@@ -21,10 +21,71 @@ export type McpToolResult = {
   isError: boolean;
 };
 
+export type JsonSchemaPrimitiveType = "string" | "boolean" | "number" | "array" | "object";
+
+export type JsonSchemaProperty = {
+  type: JsonSchemaPrimitiveType;
+  description?: string;
+  items?: JsonSchemaProperty;
+  additionalProperties?: boolean;
+  properties?: Record<string, JsonSchemaProperty>;
+};
+
+export type JsonObjectSchema = {
+  type: "object";
+  description?: string;
+  required?: readonly string[];
+  additionalProperties: boolean;
+  properties: Record<string, JsonSchemaProperty>;
+};
+
 export type DysflowMcpTool = {
   name: string;
   description: string;
+  inputSchema?: JsonObjectSchema;
   handler(input: unknown): Promise<McpToolResult>;
+};
+
+const NO_INPUT_SCHEMA: JsonObjectSchema = { type: "object", additionalProperties: false, properties: {} };
+
+const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["procedureName"],
+  additionalProperties: false,
+  properties: {
+    moduleName: { type: "string", description: "Optional VBA module name." },
+    procedureName: { type: "string", description: "Public VBA procedure to execute." },
+    arguments: { type: "array", description: "Procedure arguments." },
+  },
+};
+
+const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["sql", "mode"],
+  additionalProperties: false,
+  properties: {
+    sql: { type: "string", description: "Access SQL to execute." },
+    mode: { type: "string", description: "Execution mode: read or write." },
+  },
+};
+
+const DOCTOR_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    includeEnvironment: { type: "boolean", description: "Include environment diagnostics when supported." },
+  },
+};
+
+const CLEANUP_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["operationId", "accessPath"],
+  additionalProperties: false,
+  properties: {
+    operationId: { type: "string", description: "Dysflow-owned Access operation id." },
+    accessPath: { type: "string", description: "Access database path associated with the operation." },
+    force: { type: "boolean", description: "Force cleanup when supported." },
+  },
 };
 
 export type DysflowMcpServices = {
@@ -42,26 +103,162 @@ export type DysflowMcpServices = {
   legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
 };
 
+function invalidInput(message: string): McpToolResult {
+  return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
+}
+
+function validateInput(input: unknown, schema: JsonObjectSchema): string | undefined {
+  const params = input === undefined ? {} : input;
+  if (!isRecord(params)) return "input must be an object.";
+
+  for (const required of schema.required ?? []) {
+    if (params[required] === undefined) return `${required} is required.`;
+  }
+
+  if (schema.additionalProperties === false) {
+    for (const key of Object.keys(params)) {
+      if (schema.properties[key] === undefined) return `${key} is not allowed.`;
+    }
+  }
+
+  for (const [key, property] of Object.entries(schema.properties)) {
+    const value = params[key];
+    if (value === undefined) continue;
+    if (!matchesJsonSchemaType(value, property.type)) return `${key} must be ${articleFor(property.type)} ${property.type}.`;
+  }
+
+  return undefined;
+}
+
+function matchesJsonSchemaType(value: unknown, type: JsonSchemaPrimitiveType): boolean {
+  switch (type) {
+    case "array": return Array.isArray(value);
+    case "object": return isRecord(value);
+    case "boolean": return typeof value === "boolean";
+    case "number": return typeof value === "number";
+    case "string": return typeof value === "string";
+  }
+}
+
+function articleFor(type: JsonSchemaPrimitiveType): "a" | "an" {
+  return type === "object" || type === "array" ? "an" : "a";
+}
+
+function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query_sql" | "cleanup_access_operation"): JsonObjectSchema {
+  const properties: Record<string, JsonSchemaProperty> = {
+    accessPath: { type: "string", description: "Access frontend database path." },
+    allowTable: { type: "string", description: "Single allowed table." },
+    allowTables: { type: "array", description: "Allowed tables." },
+    apply: { type: "boolean", description: "Apply a write instead of dry run." },
+    argsJson: { type: "string", description: "JSON encoded argument array." },
+    backendPath: { type: "string", description: "Access backend database path." },
+    comparePath: { type: "string", description: "Backend comparison path." },
+    column: { type: "string", description: "Column name alias." },
+    backup: { type: "boolean", description: "Create a backup before destructive changes." },
+    backupFirst: { type: "boolean", description: "Create a backup before compact/repair." },
+    catalogPath: { type: "string", description: "Form control catalog path." },
+    columnName: { type: "string", description: "Column name." },
+    compile: { type: "boolean", description: "Compile before running." },
+    databasePath: { type: "string", description: "Database path." },
+    definition: { type: "string", description: "Table definition or fields." },
+    destinationRoot: { type: "string", description: "Source/export root directory." },
+    diff: { type: "boolean", description: "Include a diff when supported." },
+    erdPath: { type: "string", description: "ERD output path." },
+    denyTable: { type: "string", description: "Single denied table." },
+    denyTables: { type: "array", description: "Denied tables." },
+    directory: { type: "string", description: "Directory path alias." },
+    dryRun: { type: "boolean", description: "Run without applying writes." },
+    exportPath: { type: "string", description: "Export path." },
+    fields: { type: "string", description: "Table definition alias." },
+    force: { type: "boolean", description: "Force operation when supported." },
+    filter: { type: "string", description: "Test or object filter." },
+    includeQueries: { type: "boolean", description: "Include saved queries." },
+    importMode: { type: "string", description: "VBA import mode." },
+    limit: { type: "number", description: "Maximum number of items or diff lines." },
+    importPath: { type: "string", description: "Import path." },
+    moduleName: { type: "string", description: "VBA module name." },
+    moduleNames: { type: "array", description: "VBA module names." },
+    name: { type: "string", description: "Object or generated form name." },
+    operationId: { type: "string", description: "Dysflow operation id." },
+    path: { type: "string", description: "Path alias." },
+    proceduresJson: { type: "string", description: "JSON encoded VBA test procedures." },
+    projectRoot: { type: "string", description: "Project root path." },
+    procedureName: { type: "string", description: "Public VBA procedure name." },
+    query: { type: "string", description: "SQL query alias." },
+    queryDefinitions: { type: "array", description: "Query definitions." },
+    replace: { type: "boolean", description: "Replace existing resources." },
+    queries: { type: "array", description: "Query definitions alias." },
+    rootPath: { type: "string", description: "Root directory path." },
+    strict: { type: "boolean", description: "Use strict comparison or validation." },
+    strictWrite: { type: "boolean", description: "Use strict write guards." },
+    rows: { type: "array", description: "Fixture rows." },
+    scriptPath: { type: "string", description: "SQL script path." },
+    sourcePath: { type: "string", description: "Source path alias." },
+    spec: { type: "object", description: "Form/report specification object." },
+    specPath: { type: "string", description: "Form/report specification path." },
+    sql: { type: "string", description: "SQL text." },
+    table: { type: "string", description: "Table name alias." },
+    tableName: { type: "string", description: "Table name." },
+    testsPath: { type: "string", description: "VBA test plan path." },
+    top: { type: "number", description: "Maximum returned rows." },
+    type: { type: "string", description: "Control type alias." },
+    controlName: { type: "string", description: "Control name." },
+    controlType: { type: "string", description: "Control type." },
+    kind: { type: "string", description: "Form/report kind." },
+    location: { type: "string", description: "Encoding fix location." },
+  };
+
+  if (name === "run_vba") {
+    return { type: "object", required: ["procedureName"], additionalProperties: false, properties: { procedureName: properties.procedureName, argsJson: { type: "string", description: "JSON encoded argument array." } } };
+  }
+  if (name === "cleanup_access_operation") {
+    return { type: "object", required: ["operationId"], additionalProperties: false, properties: { operationId: properties.operationId, accessPath: properties.accessPath, force: properties.force } };
+  }
+  return { type: "object", additionalProperties: false, properties };
+}
+
+async function handleValidatedLegacyQuery<TData>(input: unknown, schema: JsonObjectSchema, execute: () => Promise<OperationResult<TData>>): Promise<McpToolResult> {
+  const validation = validateInput(input, schema);
+  if (validation !== undefined) return invalidInput(validation);
+  return translateCoreResultToMcpContent(await execute());
+}
+
 export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow.vba.execute",
       description: "Execute a VBA procedure through Dysflow core services.",
-      handler: async (input) => translateCoreResultToMcpContent(await services.vbaService.execute(input as AccessVbaRequest)),
+      inputSchema: VBA_EXECUTE_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, VBA_EXECUTE_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+        return translateCoreResultToMcpContent(await services.vbaService.execute(input as AccessVbaRequest));
+      },
     },
     {
       name: "dysflow.query.execute",
       description: "Execute an Access SQL query through Dysflow core services.",
-      handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest)),
+      inputSchema: QUERY_EXECUTE_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+        return translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest));
+      },
     },
     {
       name: "dysflow.doctor",
       description: "Run Dysflow diagnostics through core services.",
-      handler: async (input) => translateCoreResultToMcpContent(await services.diagnosticsService.run(input as AccessDiagnosticsRequest)),
+      inputSchema: DOCTOR_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, DOCTOR_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+        return translateCoreResultToMcpContent(await services.diagnosticsService.run(input as AccessDiagnosticsRequest));
+      },
     },
     {
       name: "dysflow.access.operations.list",
       description: "List recent Access operations tracked by Dysflow.",
+      inputSchema: NO_INPUT_SCHEMA,
       handler: async () => {
         const registry = services.operationRegistry ?? getDefaultAccessOperationRegistry();
         return translateCoreResultToMcpContent(successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })));
@@ -70,7 +267,10 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
     {
       name: "dysflow.access.cleanup",
       description: "Safely cleanup a registered Access operation by operationId and accessPath.",
+      inputSchema: CLEANUP_SCHEMA,
       handler: async (input) => {
+        const validation = validateInput(input, CLEANUP_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
         if (services.cleanupService === undefined) {
           return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
         }
@@ -95,6 +295,7 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "list_access_operations",
     description: "Legacy-compatible alias for listing Dysflow Access operations.",
+    inputSchema: NO_INPUT_SCHEMA,
     handler: async () => {
       const registry = services.operationRegistry ?? getDefaultAccessOperationRegistry();
       return translateCoreResultToMcpContent(successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })));
@@ -103,7 +304,10 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "cleanup_access_operation",
     description: "Legacy-compatible alias for safe Access operation cleanup.",
+    inputSchema: legacySchemaForTool("cleanup_access_operation"),
     handler: async (input) => {
+      const validation = validateInput(input, legacySchemaForTool("cleanup_access_operation"));
+      if (validation !== undefined) return invalidInput(validation);
       if (services.cleanupService === undefined) {
         return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
       }
@@ -114,7 +318,10 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "run_vba",
     description: "Legacy-compatible alias for executing a public VBA procedure.",
+    inputSchema: legacySchemaForTool("run_vba"),
     handler: async (input) => {
+      const validation = validateInput(input, legacySchemaForTool("run_vba"));
+      if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
       return translateCoreResultToMcpContent(await services.vbaService.execute({
         moduleName: "",
@@ -126,7 +333,10 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "query_sql",
     description: "Legacy-compatible alias for read-only Access SQL queries.",
+    inputSchema: legacySchemaForTool("query_sql"),
     handler: async (input) => {
+      const validation = validateInput(input, legacySchemaForTool("query_sql"));
+      if (validation !== undefined) return invalidInput(validation);
       const request = input as { sql?: string; query?: string };
       return translateCoreResultToMcpContent(await services.queryService.execute({ sql: request.sql ?? request.query ?? "", mode: "read" }));
     },
@@ -134,32 +344,38 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+    inputSchema: legacySchemaForTool("exec_sql"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("exec_sql"), () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
   });
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+    inputSchema: legacySchemaForTool("run_script"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("run_script"), () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
   });
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+    inputSchema: legacySchemaForTool("create_table"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("create_table"), () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
   });
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+    inputSchema: legacySchemaForTool("drop_table"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("drop_table"), () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
   });
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+    inputSchema: legacySchemaForTool("seed_fixture"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("seed_fixture"), () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
   });
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
-    handler: async (input) => translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+    inputSchema: legacySchemaForTool("teardown_fixture"),
+    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("teardown_fixture"), () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
@@ -174,7 +390,10 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
   return {
     name,
     description: definition.description,
+    inputSchema: legacySchemaForTool(name),
     handler: async (input) => {
+      const validation = validateInput(input, legacySchemaForTool(name));
+      if (validation !== undefined) return invalidInput(validation);
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
       }

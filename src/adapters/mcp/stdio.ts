@@ -92,7 +92,7 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
         tools: [...this.tools.values()].map((tool) => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: { type: "object", additionalProperties: true },
+          inputSchema: tool.inputSchema ?? { type: "object", additionalProperties: false, properties: {} },
         })),
       };
     }

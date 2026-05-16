@@ -44,6 +44,16 @@ describe("MCP tool registration over core services", () => {
     const toolNames = tools.map((tool) => tool.name);
 
     expect(toolNames).toEqual(expect.arrayContaining(["dysflow.vba.execute", "dysflow.query.execute", "dysflow.doctor", "dysflow.access.operations.list", "dysflow.access.cleanup"]));
+    expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["procedureName"],
+      additionalProperties: false,
+      properties: {
+        moduleName: { type: "string" },
+        procedureName: { type: "string" },
+        arguments: { type: "array" },
+      },
+    });
     await expect(tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
@@ -60,6 +70,46 @@ describe("MCP tool registration over core services", () => {
     expect(vba.requests).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }]);
     expect(query.requests).toEqual([{ sql: "SELECT id, name FROM People", mode: "read" }]);
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
+  });
+
+  it("rejects invalid MCP inputs before calling core services", async () => {
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.handler({ moduleName: "Automation" })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
+      isError: true,
+    });
+    await expect(tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: sql must be a string." }],
+      isError: true,
+    });
+    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], dryRun: true })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
+      isError: false,
+    });
+    expect(tools.find((tool) => tool.name === "catalog_add_control")?.inputSchema?.properties).toHaveProperty("catalogPath");
+
+    expect(vba.requests).toEqual([]);
+    expect(query.requests).toEqual([expect.objectContaining({ action: "seed_fixture", tableName: "People", allowTables: ["People"] })]);
+  });
+
+  it("declares explicit JSON schemas for every MCP tool", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    for (const tool of tools) {
+      expect(tool.inputSchema, `${tool.name} should declare inputSchema`).toMatchObject({ type: "object", properties: expect.any(Object) });
+      expect(tool.inputSchema).not.toEqual({ type: "object", additionalProperties: true });
+    }
   });
 
   it("translates core failures to safe MCP errors without leaking diagnostics or protocol details", () => {
