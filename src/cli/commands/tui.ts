@@ -1,8 +1,10 @@
-import { plannedCommandResult } from "./planned.js";
+import { handleInstallCommand } from "./install.js";
 import type { CliResult } from "./types.js";
 
-export async function handleTuiCommand(_args: readonly string[]): Promise<CliResult> {
-  return plannedCommandResult("tui", "is planned; terminal UI is not implemented yet.");
+export async function handleTuiCommand(
+	args: readonly string[],
+): Promise<CliResult> {
+	return handleInstallCommand(args, {
+		env: process.env,
+	});
 }
-
-
