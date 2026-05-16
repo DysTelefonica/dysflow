@@ -27,7 +27,7 @@ describe("Access operation registry and cleanup safety", () => {
     const service = new AccessOperationCleanupService({
       registry,
       processInspector: { getProcess: async () => ({ pid: 1234, name: "MSACCESS.EXE", startTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/data/app.accdb"' }) },
-      processKiller: { kill: async (pid) => killed.push(pid) },
+      processKiller: { kill: async (pid) => { killed.push(pid); } },
     });
 
     const result = await service.cleanup({ operationId: "op-1", accessPath: "C:/data/app.accdb" });
@@ -35,6 +35,22 @@ describe("Access operation registry and cleanup safety", () => {
     expect(result.ok).toBe(true);
     expect(killed).toEqual([1234]);
     await expect(registry.get("op-1")).resolves.toMatchObject({ status: "cleaned" });
+  });
+
+  it("accepts cleanup when accessPath differs only by case", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({ ...base, status: "timed_out", accessPid: 1234, processStartTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"', updatedAt: "2026-05-15T10:00:00.000Z" });
+    const killed: number[] = [];
+    const service = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => ({ pid: 1234, name: "MSACCESS.EXE", startTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"' }) },
+      processKiller: { kill: async (pid) => { killed.push(pid); } },
+    });
+
+    const result = await service.cleanup({ operationId: "op-1", accessPath: "c:/DATA/APP.accdb" });
+
+    expect(result.ok).toBe(true);
+    expect(killed).toEqual([1234]);
   });
 
   it("refuses cleanup when accessPath does not match", async () => {
