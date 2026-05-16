@@ -5,6 +5,14 @@ import type { AccessRunner } from "../runner/access-runner.js";
 export type AccessQueryResult = {
   rows?: readonly Record<string, unknown>[];
   affectedRows?: number;
+  tables?: readonly string[];
+  links?: readonly Record<string, unknown>[];
+  queries?: readonly Record<string, unknown>[];
+  schema?: readonly Record<string, unknown>[];
+  files?: readonly string[];
+  relationships?: readonly Record<string, unknown>[];
+  comparison?: Record<string, unknown>;
+  plan?: Record<string, unknown>;
 };
 
 export type AccessQueryServiceOptions = {

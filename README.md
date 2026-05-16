@@ -157,6 +157,16 @@ Dysflow exposes these MCP tools.
 | `dysflow.access.operations.list` | List recent Access operations | `{}` |
 | `dysflow.access.cleanup` | Safely cleanup a registered operation | `{ "operationId": "...", "accessPath": "...", "force": true }` |
 
+### Legacy parity extensions
+
+Dysflow also keeps legacy-compatible tool names for the remaining Access/VBA parity slices:
+
+- Query / maintenance: `list_links`, `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `export_queries`, `import_queries`, `compact_repair`
+- Form tooling: `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`
+
+These legacy names resolve through the same safe core services as the production MCP tools. For maintenance operations, keep using explicit paths when the tool accepts them; for form tooling, prefer a local spec/catal
+og workflow under the project worktree.
+
 ### `dysflow.doctor`
 
 Checks that Dysflow can resolve configuration and open Access.
@@ -363,9 +373,7 @@ pnpm build
 
 Current test baseline:
 
-```txt
-48 passing tests
-```
+Run `pnpm test` before release; keep the suite green.
 
 ## Safety contract for AI agents
 
