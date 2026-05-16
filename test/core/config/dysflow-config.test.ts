@@ -152,6 +152,29 @@ describe("dysflow configuration", () => {
     }
   });
 
+  it("does not share generic passwordEnv with backend passwords", () => {
+    const workspace = createTempWorkspace();
+    try {
+      mkdirSync(join(workspace.root, ".dysflow"), { recursive: true });
+      writeFileSync(
+        join(workspace.root, ".dysflow", "project.json"),
+        JSON.stringify({ accessPath: "front.accdb", backendPath: "backend.accdb", passwordEnv: "SHARED_PASSWORD" }, null, 2),
+        "utf8",
+      );
+      writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
+      writeFileSync(join(workspace.root, "backend.accdb"), "", "utf8");
+
+      const result = loadDysflowConfig({ cwd: workspace.root, env: { SHARED_PASSWORD: "shared-secret" } });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected config success");
+      expect(result.data.accessPassword).toBe("shared-secret");
+      expect(result.data.backendPassword).toBeUndefined();
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   it("returns CONFIG_AMBIGUOUS_PROJECT_FILE when both .dysflow/project.json and dysflow.project.json exist", () => {
     const workspace = createTempWorkspace();
     try {
