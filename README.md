@@ -196,14 +196,55 @@ The runtime installation directory is only for executable code (`DYSFLOW_HOME`).
 
 Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state. Only secrets may come from environment variables.
 
+### Local project setup
+
+Create the repo-local config once from the target project root:
+
+```powershell
+cd C:\00repos\codigo\00_NO_CONFORMIDADES_staging
+dysflow setup --write-project --project-id 00-no-conformidades-staging-clean `
+  --access-path .\NoConformidades.accdb `
+  --backend-path .\NoConformidades_Datos.accdb
+```
+
+This writes `.dysflow/project.json` with repo-relative paths and default `destinationRoot: "src"`:
+
+```json
+{
+  "id": "00-no-conformidades-staging-clean",
+  "accessPath": "NoConformidades.accdb",
+  "backendPath": "NoConformidades_Datos.accdb",
+  "destinationRoot": "src"
+}
+```
+
+Normal calls should stay short and use the active repo/worktree config:
+
+```text
+dysflow.doctor { "contextId": "00-no-conformidades-staging-clean" }
+```
+
+Do not inject these on every call when they are already in `.dysflow/project.json`:
+
+| Repeated call field       | Put it in                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------- |
+| `accessPath`              | `.dysflow/project.json` → `accessPath`                                                              |
+| `backendPath`             | `.dysflow/project.json` → `backendPath`                                                             |
+| `destinationRoot`         | `.dysflow/project.json` → `destinationRoot` (usually `src`)                                         |
+| `projectRoot`             | active repo/worktree; optional `.dysflow/project.json` → `projectRoot` only for non-standard layout |
+| `projectId` / `contextId` | `.dysflow/project.json` → `id`; call-level `contextId` is only traceability                         |
+| password                  | environment secret named by `passwordEnv`, or `DYSFLOW_ACCESS_PASSWORD`                             |
+
+Call-level path/root fields are still supported as explicit one-off overrides, and when provided they take precedence over `.dysflow/project.json`. Use them only for deliberate cross-project or exceptional operations.
+
 ### Environment variables
 
-| Variable                                           | Purpose                                                          |
-| -------------------------------------------------- | ---------------------------------------------------------------- |
-| `DYSFLOW_HOME`                                     | Runtime root (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
-| `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD`   | Access DB password fallback                                      |
-| `DYSFLOW_BACKEND_PASSWORD`                         | Backend DB password fallback                                     |
-| `ACCESS_VBA_PASSWORD`                              | Legacy fallback password env                                     |
+| Variable                                         | Purpose                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `DYSFLOW_HOME`                                   | Runtime root (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
+| `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD` | Access DB password fallback                                      |
+| `DYSFLOW_BACKEND_PASSWORD`                       | Backend DB password fallback                                     |
+| `ACCESS_VBA_PASSWORD`                            | Legacy fallback password env                                     |
 
 ### Project config examples
 
@@ -226,7 +267,7 @@ Environment variables do not select projects, Access database paths, backend pat
 Bootstrap a repo-local config explicitly:
 
 ```powershell
-dysflow setup --write-project --access-path .\src\ProjectABC.accdb --backend-path .\src\ProjectABC_Datos.accdb
+dysflow setup --write-project --project-id project-abc --access-path .\src\ProjectABC.accdb --backend-path .\src\ProjectABC_Datos.accdb
 ```
 
 ### Runtime operation state
