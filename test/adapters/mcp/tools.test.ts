@@ -32,7 +32,31 @@ class FakeDiagnosticsService {
   }
 }
 
+function collectArraySchemasMissingItems(schema: unknown, path = "schema"): string[] {
+  if (typeof schema !== "object" || schema === null) return [];
+  const record = schema as Record<string, unknown>;
+  const missing = record.type === "array" && record.items === undefined ? [path] : [];
+  for (const [key, value] of Object.entries(record)) {
+    missing.push(...collectArraySchemasMissingItems(value, `${path}.${key}`));
+  }
+  return missing;
+}
+
 describe("MCP tool registration over core services", () => {
+  it("declares items for every array in every MCP input schema", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const missingItems = tools.flatMap((tool) =>
+      collectArraySchemasMissingItems(tool.inputSchema, tool.name),
+    );
+
+    expect(missingItems).toEqual([]);
+  });
+
   it("registers protocol-safe MCP tools that invoke the matching core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "refreshed" }, { durationMs: 7 }));
     const query = new FakeQueryService(successResult({ rows: [{ id: 1, name: "Ada" }] }, { durationMs: 5 }));

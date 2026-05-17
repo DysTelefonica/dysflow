@@ -5,11 +5,7 @@ import type { CliCommandContext, CliResult } from "./types.js";
 export async function handleMcpCommand(_args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
   try {
     const configResult = loadDysflowConfig({ env: context.env, cwd: context.cwd });
-    if (!configResult.ok) {
-      return { exitCode: 1, stdout: "", stderr: `${configResult.error.code}: ${configResult.error.message}` };
-    }
-
-    await (context.startMcpAdapter ?? startMcpStdioAdapter)(configResult.data);
+    await (context.startMcpAdapter ?? startMcpStdioAdapter)(configResult.ok ? configResult.data : undefined);
     return { exitCode: 0, stdout: "", stderr: "" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start MCP stdio adapter.";

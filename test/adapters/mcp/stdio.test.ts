@@ -165,6 +165,40 @@ describe("JsonLineMcpStdioRuntime", () => {
 		]);
 	});
 
+	it("returns thrown tool failures as MCP tool results instead of JSON-RPC internal errors", async () => {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const runtime = new JsonLineMcpStdioRuntime({ input, output });
+		runtime.registerTool({
+			name: "dysflow.boom",
+			description: "Throwing test tool",
+			handler: async () => {
+				throw new Error("simulated tool failure");
+			},
+		});
+
+		const started = runtime.start();
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: 6,
+			method: "tools/call",
+			params: { name: "dysflow.boom", arguments: {} },
+		});
+		input.end();
+		await started;
+		output.end();
+
+		await expect(collectOutput(output)).resolves.toEqual([
+			expect.objectContaining({
+				id: 6,
+				result: {
+					content: [{ type: "text", text: "MCP_TOOL_ERROR: simulated tool failure" }],
+					isError: true,
+				},
+			}),
+		]);
+	});
+
 	it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
 		const input = new PassThrough();
 		const output = new PassThrough();

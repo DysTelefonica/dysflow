@@ -24,7 +24,7 @@ export type McpToolResult = {
 export type JsonSchemaPrimitiveType = "string" | "boolean" | "number" | "array" | "object";
 
 export type JsonSchemaProperty = {
-  type: JsonSchemaPrimitiveType;
+  type?: JsonSchemaPrimitiveType;
   description?: string;
   enum?: readonly string[];
   items?: JsonSchemaProperty;
@@ -62,7 +62,7 @@ const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
     ...CONTEXT_PROPERTIES,
     moduleName: { type: "string", description: "Optional VBA module name." },
     procedureName: { type: "string", description: "Public VBA procedure to execute." },
-    arguments: { type: "array", description: "Procedure arguments." },
+    arguments: { type: "array", items: {}, description: "Procedure arguments." },
   },
 };
 
@@ -142,6 +142,7 @@ function validateInput(input: unknown, schema: JsonObjectSchema): string | undef
 }
 
 function validateJsonSchemaProperty(value: unknown, property: JsonSchemaProperty, path: string): string | undefined {
+  if (property.type === undefined) return undefined;
   if (!matchesJsonSchemaType(value, property.type)) return `${path} must be ${articleFor(property.type)} ${property.type}.`;
 
   if (property.enum !== undefined) {
@@ -234,7 +235,7 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     rootPath: { type: "string", description: "Optional override for root directory. Normal calls use .dysflow/project.json destinationRoot." },
     strict: { type: "boolean", description: "Use strict comparison or validation." },
     strictWrite: { type: "boolean", description: "Use strict write guards." },
-    rows: { type: "array", description: "Fixture rows." },
+    rows: { type: "array", items: { type: "object", additionalProperties: true }, description: "Fixture rows." },
     scriptPath: { type: "string", description: "SQL script path." },
     sourcePath: { type: "string", description: "Source path alias." },
     spec: { type: "object", description: "Form/report specification object." },
@@ -607,15 +608,6 @@ const LEGACY_QUERY_SLICE_TOOL_NAMES = [
   "get_relationships",
   "list_links",
   "export_queries",
-  "link_tables",
-  "relink_tables",
-  "localize_backend_links",
-  "unlink_table",
-  "import_queries",
-  "compact_repair",
-] as const;
-
-const LEGACY_QUERY_MAINTENANCE_SLICE_TOOL_NAMES = [
   "link_tables",
   "relink_tables",
   "localize_backend_links",

@@ -72,16 +72,20 @@ describe("dysflow command modules", () => {
 		}
 	});
 
-	it("returns a clean MCP configuration error when Access path is missing", async () => {
+	it("starts MCP in degraded mode when Access path is missing", async () => {
+		const calls: unknown[] = [];
 		const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
 		try {
-			const result = await runCli(["mcp"], { env: {}, cwd: workspace });
-
-			expect(result).toEqual({
-				exitCode: 1,
-				stdout: "",
-				stderr: missingAccessError,
+			const result = await runCli(["mcp"], {
+				env: {},
+				cwd: workspace,
+				startMcpAdapter: async (...args: unknown[]) => {
+					calls.push(args[0]);
+				},
 			});
+
+			expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+			expect(calls).toEqual([undefined]);
 		} finally {
 			rmSync(workspace, { recursive: true, force: true });
 		}

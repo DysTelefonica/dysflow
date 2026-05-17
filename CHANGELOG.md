@@ -6,6 +6,14 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.1.2] - 2026-05-17
+
+### Fixed
+
+- Hardened MCP tool schemas so every array declares `items`, including legacy `rows` and VBA `arguments`, preventing OpenCode schema-load failures.
+- Returned thrown tool-call failures as MCP `isError` tool results instead of JSON-RPC internal errors, keeping the AI session informed and connected.
+- Allowed `dysflow mcp` to start in degraded mode when `.dysflow/project.json` is missing so clients can list tools and receive configuration errors per call.
+
 ## [0.1.1] - 2026-05-17
 
 ### Fixed

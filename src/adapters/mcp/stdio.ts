@@ -11,8 +11,9 @@ import { AccessDiagnosticsService } from "../../core/services/diagnostics-servic
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
-import { createDysflowMcpTools, type DysflowMcpTool, type McpToolResult } from "./tools.js";
+import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool, type McpToolResult } from "./tools.js";
 import { isRecord } from "../../core/utils/index.js";
+import { failureResult, type DysflowError } from "../../core/contracts/index.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../../../package.json") as { version?: unknown };
@@ -119,7 +120,12 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
     if (tool === undefined) {
       throw new JsonRpcMethodNotFound(`tool ${name}`);
     }
-    return tool.handler(call.arguments);
+    try {
+      return await tool.handler(call.arguments);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Tool call failed.";
+      return { content: [{ type: "text", text: `MCP_TOOL_ERROR: ${message}` }], isError: true };
+    }
   }
 
   private writeResponse(id: string | number | null, error?: { code: number; message: string }, result?: unknown): void {
@@ -144,16 +150,22 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
   const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
   const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
   const configResult = config === undefined ? loadDysflowConfig() : { ok: true as const, data: config };
-  if (!configResult.ok) {
-    throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
+  const services = configResult.ok ? createConfiguredServices(configResult.data) : createUnavailableServices(configResult.error);
+
+  for (const tool of createDysflowMcpTools(services)) {
+    activeRuntime.registerTool(tool);
   }
 
-  const operationRegistry = createProjectOperationRegistry(configResult.data);
+  await activeRuntime.start();
+}
+
+function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
+  const operationRegistry = createProjectOperationRegistry(config);
   const runner = new AccessPowerShellRunner({ operationRegistry });
-  const services = {
-    vbaService: new AccessVbaService({ runner, config: configResult.data }),
-    queryService: new AccessQueryService({ runner, config: configResult.data }),
-    diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
+  return {
+    vbaService: new AccessVbaService({ runner, config }),
+    queryService: new AccessQueryService({ runner, config }),
+    diagnosticsService: new AccessDiagnosticsService({ runner, config }),
     operationRegistry,
     cleanupService: new AccessOperationCleanupService({
       registry: operationRegistry,
@@ -161,18 +173,28 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
       processKiller: new WindowsProcessKiller(),
     }),
     legacyToolService: new VbaSyncLegacyService({
-      processTimeoutMs: configResult.data.processTimeoutMs,
-      accessPath: configResult.data.accessDbPath,
-      destinationRoot: configResult.data.destinationRoot,
-      accessPassword: configResult.data.accessPassword,
+      processTimeoutMs: config.processTimeoutMs,
+      accessPath: config.accessDbPath,
+      destinationRoot: config.destinationRoot,
+      accessPassword: config.accessPassword,
     }),
   };
+}
 
-  for (const tool of createDysflowMcpTools(services)) {
-    activeRuntime.registerTool(tool);
-  }
-
-  await activeRuntime.start();
+function createUnavailableServices(error: DysflowError): DysflowMcpServices {
+  const unavailable = async () => failureResult(error);
+  return {
+    vbaService: { execute: unavailable },
+    queryService: { execute: unavailable },
+    diagnosticsService: {
+      run: async () => failureResult({
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+      }),
+    },
+    legacyToolService: { execute: async () => failureResult(error) },
+  };
 }
 
 export function resolveProjectOperationRegistryPath(config: Pick<DysflowConfig, "projectRoot">): string {
