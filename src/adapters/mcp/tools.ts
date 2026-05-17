@@ -49,11 +49,17 @@ export type DysflowMcpTool = {
 
 const NO_INPUT_SCHEMA: JsonObjectSchema = { type: "object", additionalProperties: false, properties: {} };
 
+const CONTEXT_PROPERTIES: Record<string, JsonSchemaProperty> = {
+  contextId: { type: "string", description: "Optional project/context id for traceability. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+  projectId: { type: "string", description: "Optional project id alias for traceability. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+};
+
 const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: ["procedureName"],
   additionalProperties: false,
   properties: {
+    ...CONTEXT_PROPERTIES,
     moduleName: { type: "string", description: "Optional VBA module name." },
     procedureName: { type: "string", description: "Public VBA procedure to execute." },
     arguments: { type: "array", description: "Procedure arguments." },
@@ -65,6 +71,7 @@ const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   required: ["sql", "mode"],
   additionalProperties: false,
   properties: {
+    ...CONTEXT_PROPERTIES,
     sql: { type: "string", description: "Access SQL to execute." },
     mode: { type: "string", enum: ["read", "write"], description: "Execution mode: read or write." },
   },
@@ -74,6 +81,7 @@ const DOCTOR_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
+    ...CONTEXT_PROPERTIES,
     includeEnvironment: { type: "boolean", description: "Include environment diagnostics when supported." },
   },
 };
@@ -180,12 +188,13 @@ function articleFor(type: JsonSchemaPrimitiveType): "a" | "an" {
 
 function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query_sql" | "cleanup_access_operation"): JsonObjectSchema {
   const properties: Record<string, JsonSchemaProperty> = {
-    accessPath: { type: "string", description: "Access frontend database path." },
+    ...CONTEXT_PROPERTIES,
+    accessPath: { type: "string", description: "Optional override for Access frontend database path. Normal calls use .dysflow/project.json." },
     allowTable: { type: "string", description: "Single allowed table." },
     allowTables: { type: "array", items: { type: "string" }, description: "Allowed tables." },
     apply: { type: "boolean", description: "Apply a write instead of dry run." },
     argsJson: { type: "string", description: "JSON encoded argument array." },
-    backendPath: { type: "string", description: "Access backend database path." },
+    backendPath: { type: "string", description: "Optional override for Access backend database path. Normal calls use .dysflow/project.json." },
     comparePath: { type: "string", description: "Backend comparison path." },
     column: { type: "string", description: "Column name alias." },
     backup: { type: "boolean", description: "Create a backup before destructive changes." },
@@ -195,7 +204,7 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     compile: { type: "boolean", description: "Compile before running." },
     databasePath: { type: "string", description: "Database path." },
     definition: { type: "string", description: "Table definition or fields." },
-    destinationRoot: { type: "string", description: "Source/export root directory." },
+    destinationRoot: { type: "string", description: "Optional override for source/export root. Normal calls use .dysflow/project.json destinationRoot, typically src." },
     diff: { type: "boolean", description: "Include a diff when supported." },
     erdPath: { type: "string", description: "ERD output path." },
     denyTable: { type: "string", description: "Single denied table." },
@@ -216,13 +225,13 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     operationId: { type: "string", description: "Dysflow operation id." },
     path: { type: "string", description: "Path alias." },
     proceduresJson: { type: "string", description: "JSON encoded VBA test procedures." },
-    projectRoot: { type: "string", description: "Project root path." },
+    projectRoot: { type: "string", description: "Optional override for project root. Normal calls use the active repo/worktree and .dysflow/project.json." },
     procedureName: { type: "string", description: "Public VBA procedure name." },
     query: { type: "string", description: "SQL query alias." },
     queryDefinitions: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions." },
     replace: { type: "boolean", description: "Replace existing resources." },
     queries: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions alias." },
-    rootPath: { type: "string", description: "Root directory path." },
+    rootPath: { type: "string", description: "Optional override for root directory. Normal calls use .dysflow/project.json destinationRoot." },
     strict: { type: "boolean", description: "Use strict comparison or validation." },
     strictWrite: { type: "boolean", description: "Use strict write guards." },
     rows: { type: "array", description: "Fixture rows." },

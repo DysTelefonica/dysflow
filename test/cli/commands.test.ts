@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -25,7 +31,10 @@ function createRepoConfigWorkspace(): { root: string; cleanup(): void } {
 		"utf8",
 	);
 	writeFileSync(join(root, "front.accdb"), "", "utf8");
-	return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+	return {
+		root,
+		cleanup: () => rmSync(root, { recursive: true, force: true }),
+	};
 }
 
 describe("dysflow command modules", () => {
@@ -54,7 +63,9 @@ describe("dysflow command modules", () => {
 
 			expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
 			expect(calls).toEqual([
-				expect.objectContaining({ accessDbPath: join(workspace.root, "front.accdb") }),
+				expect.objectContaining({
+					accessDbPath: join(workspace.root, "front.accdb"),
+				}),
 			]);
 		} finally {
 			workspace.cleanup();
@@ -85,7 +96,9 @@ describe("dysflow command modules", () => {
 			});
 
 			expect(result.exitCode).toBe(0);
-			expect(result.stdout).toContain(`Access database: ${join(workspace.root, "front.accdb")}`);
+			expect(result.stdout).toContain(
+				`Access database: ${join(workspace.root, "front.accdb")}`,
+			);
 			expect(result.stdout).toContain("Timeout: 30000ms");
 			expect(result.stdout).toContain("Password: [REDACTED]");
 			expect(result.stdout).not.toContain("super-secret");
@@ -95,18 +108,26 @@ describe("dysflow command modules", () => {
 		}
 	});
 
-	it("writes portable project config with only db filenames when --write-project is used", async () => {
+	it("writes repo-relative project config with default src destination when --write-project is used", async () => {
 		const workspace = mkdtempSync(join(tmpdir(), "dysflow-setup-"));
 		const projectPath = join(workspace, ".dysflow", "project.json");
-		const accessPath = join(workspace, "front.accdb");
-		const backendPath = join(workspace, "backend.accdb");
+		const dataDir = join(workspace, "E2E_testing");
+		const accessPath = join(dataDir, "front.accdb");
+		const backendPath = join(dataDir, "backend.accdb");
 
 		try {
+			mkdirSync(dataDir, { recursive: true });
 			writeFileSync(accessPath, "", "utf8");
 			writeFileSync(backendPath, "", "utf8");
 
 			const result = await handleSetupCommand(
-				["--write-project", "--access-path", accessPath, "--backend-path", backendPath],
+				[
+					"--write-project",
+					"--access-path",
+					accessPath,
+					"--backend-path",
+					backendPath,
+				],
 				{ env: {}, cwd: workspace },
 			);
 
@@ -118,8 +139,9 @@ describe("dysflow command modules", () => {
 				`${JSON.stringify(
 					{
 						id: basename(workspace),
-						accessPath: "front.accdb",
-						backendPath: "backend.accdb",
+						accessPath: "E2E_testing/front.accdb",
+						backendPath: "E2E_testing/backend.accdb",
+						destinationRoot: "src",
 					},
 					null,
 					2,

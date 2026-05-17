@@ -72,6 +72,25 @@ describe("MCP tool registration over core services", () => {
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
   });
 
+  it("accepts contextId/projectId on short core calls without requiring local path injection", async () => {
+    const diagnostics = new FakeDiagnosticsService(successResult({ checks: [] }));
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: query,
+      diagnosticsService: diagnostics,
+    });
+
+    await expect(tools.find((tool) => tool.name === "dysflow.doctor")?.handler({ contextId: "00-no-conformidades-staging-clean" })).resolves.toMatchObject({ isError: false });
+    await expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" })).resolves.toMatchObject({ isError: false });
+    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" })).resolves.toMatchObject({ isError: false });
+
+    expect(diagnostics.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean" }]);
+    expect(vba.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" }]);
+    expect(query.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" }]);
+  });
+
   it("rejects invalid MCP inputs before calling core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));

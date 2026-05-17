@@ -1,5 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+} from "node:path";
 import {
 	loadDysflowConfig,
 	redactDysflowConfig,
@@ -7,7 +14,8 @@ import {
 } from "../../core/config/dysflow-config.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
-const HELP_TEXT = "Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--help]";
+const HELP_TEXT =
+	"Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--help]";
 
 type SetupOptions = {
 	writeProject: boolean;
@@ -109,11 +117,20 @@ function parseSetupArgs(
 	return { ok: true, options };
 }
 
-function toPortableDbFileName(value: string | undefined): string | undefined {
+function toPortableProjectPath(
+	value: string | undefined,
+	projectRoot: string,
+): string | undefined {
 	if (value === undefined) {
 		return undefined;
 	}
-	return basename(value);
+	const absolutePath = isAbsolute(value)
+		? resolve(value)
+		: resolve(projectRoot, value);
+	const projectRelative = relative(projectRoot, absolutePath);
+	return projectRelative.length === 0
+		? basename(absolutePath)
+		: projectRelative.replaceAll("\\", "/");
 }
 
 async function writeRelativeProjectConfig(
@@ -125,10 +142,13 @@ async function writeRelativeProjectConfig(
 	const projectId = config.projectId ?? basename(projectRoot);
 	const projectJson = {
 		id: projectId,
-		accessPath: toPortableDbFileName(config.accessDbPath),
+		accessPath: toPortableProjectPath(config.accessDbPath, projectRoot),
 		...(config.backendPath === undefined
 			? {}
-			: { backendPath: toPortableDbFileName(config.backendPath) }),
+			: {
+					backendPath: toPortableProjectPath(config.backendPath, projectRoot),
+				}),
+		destinationRoot: "src",
 	};
 
 	await mkdir(dirname(projectPath), { recursive: true });
