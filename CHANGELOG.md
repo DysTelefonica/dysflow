@@ -6,6 +6,12 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.4] - 2026-05-17
+
+### Fixed
+
+- Allowed registered-project import dry-runs to resolve by `projectId`/`contextId` even when the MCP server starts outside a Dysflow repo.
+
 ## [0.2.3] - 2026-05-17
 
 ### Fixed
