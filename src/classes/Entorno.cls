@@ -744,7 +744,7 @@ errores:
 End Property
 Public Property Get URLDirAplicacion() As String
     
-    Dim m_URLAplicaciones As String
+    Dim m_URLConfigurada As String
     
     On Error GoTo errores
 
@@ -755,16 +755,12 @@ Public Property Get URLDirAplicacion() As String
         URLDirAplicacion = m_sURLDirAplicacion
         Exit Property
     End If
-    m_URLAplicaciones = Me.URLDirectorioAplicaciones
-    m_Error = Me.Error
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Application.TempVars("EnPruebas") = "Sí" Then
-        m_sURLDirAplicacion = m_URLAplicaciones & "No Conformidades Prueba\"
+    If Nz(Application.TempVars("DatosEnLocal"), "") = "Sí" Then
+        m_URLConfigurada = m_URLRutaAplicacionLocal
     Else
-        m_sURLDirAplicacion = m_URLAplicaciones & "No Conformidades\"
+        m_URLConfigurada = m_URLRutaAplicacionRemota
     End If
+    m_sURLDirAplicacion = NormalizarURLFolder(m_URLConfigurada)
     
     If FormatoCorrectoURL(m_sURLDirAplicacion) = EnumSino.No Then
         m_Error = "No es alcanzable el archivo URLDirAplicacion" & vbNewLine & m_sURLDirAplicacion
@@ -787,6 +783,71 @@ errores:
     End If
     m_Error = Me.Error
 End Property
+
+Public Function ValidarInfraCritica(Optional ByRef p_Error As String) As Boolean
+    On Error GoTo errores
+
+    Dim m_Diag As String
+    Dim m_URL As String
+
+    p_Error = ""
+    m_Diag = ""
+
+    m_URL = ""
+    m_URL = Me.URLDirAplicacion
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "RutaDirectorioAplicacion", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirRecursos
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirRecursos", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacion
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacion", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    If m_Diag <> "" Then
+        p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & m_Diag
+        ValidarInfraCritica = False
+    Else
+        ValidarInfraCritica = True
+    End If
+
+    Exit Function
+errores:
+    If p_Error = "" Then p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & "- Campo=InfraStartup; Ruta=; Causa=" & Err.Description
+    ValidarInfraCritica = False
+End Function
+
+Private Function NormalizarURLFolder(ByVal p_URL As String) As String
+    Dim m_URL As String
+    m_URL = Trim$(Nz(p_URL, ""))
+    If m_URL = "" Then Exit Function
+    m_URL = Replace$(m_URL, "/", "\")
+    If Right$(m_URL, 1) <> "\" Then m_URL = m_URL & "\"
+    NormalizarURLFolder = m_URL
+End Function
+
+Private Sub AppendInfraDiag(ByRef p_Diag As String, ByVal p_Field As String, ByVal p_Ruta As String, ByVal p_Causa As String)
+    Dim m_Causa As String
+    Dim m_Linea As String
+
+    m_Causa = Replace$(Replace$(Trim$(Nz(p_Causa, "")), vbCr, " "), vbLf, " ")
+    m_Linea = "- Campo=" & p_Field & "; Ruta=" & p_Ruta & "; Causa=" & m_Causa
+    If p_Diag = "" Then
+        p_Diag = m_Linea
+    Else
+        p_Diag = p_Diag & vbNewLine & m_Linea
+    End If
+End Sub
 
 
 Public Property Get URLArchivoCSS() As String
@@ -1194,11 +1255,7 @@ Public Property Get URLDirectorioLocal() As String
     If Not fso.FolderExists(m_URLDirectorioAplicaciones) Then
         fso.CreateFolder m_URLDirectorioAplicaciones
     End If
-    If Application.TempVars("EnPruebas") = "Sí" Then
-        m_sURLDirectorioLocal = m_URLDirectorioAplicaciones & "No Conformidades Prueba\"
-    Else
-        m_sURLDirectorioLocal = m_URLDirectorioAplicaciones & "No Conformidades\"
-    End If
+    m_sURLDirectorioLocal = m_URLDirectorioAplicaciones & "No Conformidades\"
     
     
     If Not fso.FolderExists(m_sURLDirectorioLocal) Then

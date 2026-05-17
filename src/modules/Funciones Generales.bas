@@ -3355,6 +3355,10 @@ Public Function EnviarCorreoAltaNCProyecto( _
     If p_Error <> "" Then
         Err.Raise 1000
     End If
+    m_mensaje = AgregarCabeceraCorreoPruebas(p_Mensaje:=m_mensaje, p_Error:=p_Error)
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     If m_ObjUsuarioConectado.UsuarioRed = "adm" And Application.TempVars("EnPruebas") = "Sí" Then
         HTMLENTXT p_HTML:=m_mensaje, p_Error:=p_Error
         If p_Error <> "" Then
@@ -3397,6 +3401,10 @@ Public Function EnviarCorreoAltaNCAuditoria( _
     If p_Error <> "" Then
         Err.Raise 1000
     End If
+    m_mensaje = AgregarCabeceraCorreoPruebas(p_Mensaje:=m_mensaje, p_Error:=p_Error)
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     If m_ObjUsuarioConectado.UsuarioRed = "adm" And Application.TempVars("EnPruebas") = "Sí" Then
         HTMLENTXT p_HTML:=m_mensaje, p_Error:=p_Error
         If p_Error <> "" Then
@@ -3426,6 +3434,27 @@ errores:
     If Err.Number <> 1000 Then
         p_Error = "El metodo EnviarCorreoAltaNCAuditoria ha devuelto el error: " & vbNewLine & Err.Description
     End If
+End Function
+
+Private Function AgregarCabeceraCorreoPruebas( _
+                                            p_Mensaje As String, _
+                                            Optional ByRef p_Error As String _
+                                            ) As String
+    Dim m_DestinatariosProduccion As String
+
+    On Error GoTo errores
+
+    If Application.TempVars("EnPruebas") <> "Sí" Then
+        AgregarCabeceraCorreoPruebas = p_Mensaje
+        Exit Function
+    End If
+
+    m_DestinatariosProduccion = m_ObjEntorno.CadenaCorreosCalidad
+    AgregarCabeceraCorreoPruebas = "<p><strong>Este correo en producción hubiera ido a:</strong> " & m_DestinatariosProduccion & "</p>" & p_Mensaje
+    Exit Function
+errores:
+    p_Error = "El método AgregarCabeceraCorreoPruebas ha devuelto el error: " & vbNewLine & Err.Description
+    AgregarCabeceraCorreoPruebas = p_Mensaje
 End Function
 
 Public Function getAlgunaAccionPteReplanificar( _

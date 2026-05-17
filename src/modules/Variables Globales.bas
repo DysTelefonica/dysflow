@@ -183,6 +183,11 @@ Public Function LeeConfiguracionLocal( _
     Dim m_IDAplicacionCfg As Variant
     Dim m_RutaProd As String
     Dim m_RutaLocal As String
+    Dim m_BackendPathActivo As String
+    Dim m_NombreCampoBackendActivo As String
+    Dim m_RutaAplicacionActiva As String
+    Dim m_NombreCampoRutaActiva As String
+    Dim m_DiagInfra As String
 
     On Error GoTo errores
 
@@ -208,20 +213,56 @@ Public Function LeeConfiguracionLocal( _
 
     If m_BackendActivo = "PROD" Then
         Application.TempVars("DatosEnLocal") = "No"
-        Application.TempVars("BackendPathConfigurado") = m_BackendProduccion
     ElseIf m_BackendActivo = "LOCAL" Or m_BackendActivo = "SANDBOX" Then
         Application.TempVars("DatosEnLocal") = "Sí"
-        Application.TempVars("BackendPathConfigurado") = m_BackendSandbox
     Else
         p_Error = "BackendActivo inválido en TbConfiguracionBackends. Use PROD/LOCAL/SANDBOX"
         Err.Raise 1000
     End If
 
+    m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
+    m_RutaAplicacionActiva = SelectAppPathFromActiveProfile(m_BackendActivo, m_RutaProd, m_RutaLocal, m_NombreCampoRutaActiva)
+
+    m_RutaProd = NormalizeFolderPath(m_RutaProd)
+    m_RutaLocal = NormalizeFolderPath(m_RutaLocal)
+    m_RutaAplicacionActiva = NormalizeFolderPath(m_RutaAplicacionActiva)
+
+    Application.TempVars("BackendPathConfigurado") = m_BackendPathActivo
+
+    Application.TempVars("BackendPathProduccion") = m_BackendProduccion
+    Application.TempVars("BackendPathSandbox") = m_BackendSandbox
+
     Application.TempVars("BackendActivo") = m_BackendActivo
     Application.TempVars("EnPruebas") = m_EnPruebas
 
-    If m_RutaProd <> "" Then m_URLRutaAplicacionRemota = m_RutaProd
-    If m_RutaLocal <> "" Then m_URLRutaAplicacionLocal = m_RutaLocal
+    m_URLRutaAplicacionRemota = m_RutaProd
+    m_URLRutaAplicacionLocal = m_RutaLocal
+    If m_BackendActivo = "PROD" Then
+        m_URLRutaAplicacionRemota = m_RutaAplicacionActiva
+    Else
+        m_URLRutaAplicacionLocal = m_RutaAplicacionActiva
+    End If
+
+    m_URLRutaAplicacionesRemotas = GetParentFolderPath(m_URLRutaAplicacionRemota)
+    m_URLRutaAplicacionesLocal = GetParentFolderPath(m_URLRutaAplicacionLocal)
+
+    m_DiagInfra = ""
+    If m_BackendPathActivo = "" Then
+        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoBackendActivo, m_BackendPathActivo, "Ruta vacía")
+    ElseIf Not fso.FileExists(m_BackendPathActivo) Then
+        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoBackendActivo, m_BackendPathActivo, "File not found")
+    End If
+
+    If m_RutaAplicacionActiva = "" Then
+        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoRutaActiva, m_RutaAplicacionActiva, "Ruta vacía")
+    ElseIf Not fso.FolderExists(m_RutaAplicacionActiva) Then
+        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoRutaActiva, m_RutaAplicacionActiva, "Folder not found")
+    End If
+
+    If m_DiagInfra <> "" Then
+        p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & m_DiagInfra
+        Err.Raise 1000
+    End If
 
     If CLng(m_IDAplicacionCfg) > 0 Then
         IDAplicacion = CStr(m_IDAplicacionCfg)
@@ -255,6 +296,61 @@ errores:
         p_Error = errDescription
     End If
 End Function
+
+Private Function NormalizeFolderPath(ByVal p_Path As String) As String
+    Dim m_Path As String
+    m_Path = Trim$(Nz(p_Path, ""))
+    If m_Path = "" Then Exit Function
+    m_Path = Replace$(m_Path, "/", "\")
+    If Right$(m_Path, 1) <> "\" Then m_Path = m_Path & "\"
+    NormalizeFolderPath = m_Path
+End Function
+
+Private Function GetParentFolderPath(ByVal p_AppPath As String) As String
+    Dim m_AppPath As String
+    Dim m_Folder As String
+
+    m_AppPath = NormalizeFolderPath(p_AppPath)
+    If m_AppPath = "" Then Exit Function
+
+    On Error GoTo salida
+    m_Folder = fso.GetParentFolderName(Left$(m_AppPath, Len(m_AppPath) - 1))
+    If m_Folder <> "" Then
+        If Right$(m_Folder, 1) <> "\" Then m_Folder = m_Folder & "\"
+        GetParentFolderPath = m_Folder
+    End If
+salida:
+End Function
+
+Private Function SelectBackendPathFromActiveProfile(ByVal p_BackendActivo As String, ByVal p_BackendProduccion As String, ByVal p_BackendSandbox As String, ByRef p_FieldName As String) As String
+    If UCase$(Trim$(p_BackendActivo)) = "PROD" Then
+        p_FieldName = "BackendProduccion"
+        SelectBackendPathFromActiveProfile = Trim$(Nz(p_BackendProduccion, ""))
+    Else
+        p_FieldName = "BackendSandbox"
+        SelectBackendPathFromActiveProfile = Trim$(Nz(p_BackendSandbox, ""))
+    End If
+End Function
+
+Private Function SelectAppPathFromActiveProfile(ByVal p_BackendActivo As String, ByVal p_RutaProd As String, ByVal p_RutaLocal As String, ByRef p_FieldName As String) As String
+    If UCase$(Trim$(p_BackendActivo)) = "PROD" Then
+        p_FieldName = "RutaDirectorioAplicacion_PROD"
+        SelectAppPathFromActiveProfile = Trim$(Nz(p_RutaProd, ""))
+    Else
+        p_FieldName = "RutaDirectorioAplicacion_LOCAL"
+        SelectAppPathFromActiveProfile = Trim$(Nz(p_RutaLocal, ""))
+    End If
+End Function
+
+Private Sub AppendInfraDiagnostic(ByRef p_Diagnostic As String, ByVal p_FieldName As String, ByVal p_Path As String, ByVal p_Cause As String)
+    Dim m_Line As String
+    m_Line = "- Campo=" & p_FieldName & "; Ruta=" & p_Path & "; Causa=" & p_Cause
+    If p_Diagnostic = "" Then
+        p_Diagnostic = m_Line
+    Else
+        p_Diagnostic = p_Diagnostic & vbNewLine & m_Line
+    End If
+End Sub
 Public Function getdbNCPruebas( _
                         Optional ByRef p_Error As String _
                         ) As DAO.Database
@@ -262,7 +358,21 @@ Public Function getdbNCPruebas( _
     Dim m_URL As String
     On Error GoTo errores
     
-    m_URL = "\\datoste\aplicaciones_dys\Aplicaciones PpD\No Conformidades Prueba\NoConformidades_Datos.accdb"
+    If Nz(Application.TempVars("BackendPathSandbox"), "") = "" Or Nz(Application.TempVars("BackendPathConfigurado"), "") = "" Then
+        Call LeeConfiguracionLocal(p_Error)
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+    End If
+
+    m_URL = Nz(Application.TempVars("BackendPathSandbox"), "")
+    If m_URL = "" Then
+        m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
+    End If
+    If m_URL = "" Then
+        p_Error = "No se puede resolver la ruta BackendPathSandbox para pruebas"
+        Err.Raise 1000
+    End If
     
     Set wks = DBEngine.Workspaces(0)
     Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
@@ -275,13 +385,27 @@ errores:
     End If
 End Function
 Public Function getdbNCProduccion( _
-                                    Optional ByRef p_Error As String _
-                                    ) As DAO.Database
+                                     Optional ByRef p_Error As String _
+                                     ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
     
-    m_URL = "\\datoste\aplicaciones_dys\Aplicaciones PpD\No Conformidades\NoConformidades_Datos.accdb"
+    If Nz(Application.TempVars("BackendPathProduccion"), "") = "" Or Nz(Application.TempVars("BackendPathConfigurado"), "") = "" Then
+        Call LeeConfiguracionLocal(p_Error)
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+    End If
+
+    m_URL = Nz(Application.TempVars("BackendPathProduccion"), "")
+    If m_URL = "" Then
+        m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
+    End If
+    If m_URL = "" Then
+        p_Error = "No se puede resolver la ruta BackendPathProduccion"
+        Err.Raise 1000
+    End If
     
     Set wks = DBEngine.Workspaces(0)
     Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
@@ -445,31 +569,9 @@ Public Function EVE(Optional ByRef p_Error As String) As String
     End If
     
     Set m_ObjEntorno = New Entorno
-    If m_URLRutaAplicacionesRemotas = "" Then
-        m_URLRutaAplicacionesRemotas = "\\datoste\aplicaciones_dys\Aplicaciones PpD\"
-    End If
-    If Application.TempVars("EnPruebas") = "Sí" Then
-        m_NombreCarpeta = "No Conformidades PRUEBA"
-    Else
-        m_NombreCarpeta = "No Conformidades"
-    End If
-    
-    If m_URLRutaAplicacionRemota = "" Then
-        m_URLRutaAplicacionRemota = m_URLRutaAplicacionesRemotas & m_NombreCarpeta & "\"
-    End If
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        If m_URLRutaAplicacionesLocal = "" Then
-            m_URLRutaAplicacionesLocal = getRutaAplicacionesLocal(p_Error)
-        End If
-        If m_URLRutaAplicacionesLocal <> "" Then
-            If m_URLRutaAplicacionLocal = "" Then
-                m_URLRutaAplicacionLocal = m_URLRutaAplicacionesLocal & m_NombreCarpeta & "\"
-            End If
-        End If
-    Else
-       m_URLRutaAplicacionesLocal = ""
-       m_URLRutaAplicacionLocal = ""
-    End If
+    p_Error = ""
+    Call m_ObjEntorno.ValidarInfraCritica(p_Error)
+    If p_Error <> "" Then Err.Raise 1000
     m_Command = Nz(VBA.Command, "")
     Avance "Obteniendo variables de Entorno... En Oficina"
     
