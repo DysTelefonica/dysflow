@@ -5,6 +5,7 @@ build/
 .env.*
 *.log
 .DS_Store
+.dysflow/runtime/
 Thumbs.db
 
 # Real Access E2E fixtures may live under E2E_testing/, but source code there must stay tracked/reviewable.

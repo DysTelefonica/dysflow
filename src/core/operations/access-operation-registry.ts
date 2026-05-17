@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 export type AccessOperationStatus =
   | "starting"
@@ -46,7 +48,89 @@ export type InMemoryAccessOperationRegistryOptions = {
   maxRecords?: number;
 };
 
+export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistryOptions & {
+  filePath: string;
+};
+
 const DEFAULT_MAX_RECORDS = 1000;
+const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
+
+export class FileAccessOperationRegistry implements AccessOperationRegistry {
+  private readonly filePath: string;
+  private readonly maxRecords: number;
+
+  constructor(options: FileAccessOperationRegistryOptions) {
+    this.filePath = options.filePath;
+    this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
+  }
+
+  async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
+    const records = await this.readRecords();
+    const stored = { ...record, metadata: { ...record.metadata } };
+    if (!PURGED_PERSISTENT_STATUSES.has(stored.status)) {
+      records.set(stored.operationId, stored);
+      this.evictOldestRecords(records);
+      await this.writeRecords(records);
+    }
+    return { ...stored, metadata: { ...stored.metadata } };
+  }
+
+  async update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined> {
+    const records = await this.readRecords();
+    const current = records.get(operationId);
+    if (current === undefined) return undefined;
+    const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };
+    if (PURGED_PERSISTENT_STATUSES.has(next.status)) {
+      records.delete(operationId);
+    } else {
+      records.set(operationId, next);
+      this.evictOldestRecords(records);
+    }
+    await this.writeRecords(records);
+    return { ...next, metadata: { ...next.metadata } };
+  }
+
+  async get(operationId: string): Promise<AccessOperationRecord | undefined> {
+    const record = (await this.readRecords()).get(operationId);
+    return record ? { ...record, metadata: { ...record.metadata } } : undefined;
+  }
+
+  async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
+    const limit = options.limit ?? 50;
+    return [...(await this.readRecords()).values()]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+  }
+
+  private async readRecords(): Promise<Map<string, AccessOperationRecord>> {
+    const raw = await readFile(this.filePath, "utf8").catch(() => undefined);
+    if (raw === undefined || raw.trim().length === 0) return new Map();
+    try {
+      const parsed = JSON.parse(raw) as { records?: AccessOperationRecord[] } | AccessOperationRecord[];
+      const records = Array.isArray(parsed) ? parsed : parsed.records ?? [];
+      return new Map(records.map((record) => [record.operationId, { ...record, metadata: { ...record.metadata } }]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  private async writeRecords(records: Map<string, AccessOperationRecord>): Promise<void> {
+    await mkdir(dirname(this.filePath), { recursive: true });
+    const payload = {
+      records: [...records.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    };
+    await writeFile(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  }
+
+  private evictOldestRecords(records: Map<string, AccessOperationRecord>): void {
+    while (records.size > this.maxRecords) {
+      const oldest = [...records.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))[0];
+      if (oldest === undefined) return;
+      records.delete(oldest.operationId);
+    }
+  }
+}
 
 export class InMemoryAccessOperationRegistry implements AccessOperationRegistry {
   private readonly records = new Map<string, AccessOperationRecord>();

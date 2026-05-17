@@ -62,13 +62,18 @@ describe("dysflow command modules", () => {
 	});
 
 	it("returns a clean MCP configuration error when Access path is missing", async () => {
-		const result = await runCli(["mcp"], { env: {} });
+		const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
+		try {
+			const result = await runCli(["mcp"], { env: {}, cwd: workspace });
 
-		expect(result).toEqual({
-			exitCode: 1,
-			stdout: "",
-			stderr: missingAccessError,
-		});
+			expect(result).toEqual({
+				exitCode: 1,
+				stdout: "",
+				stderr: missingAccessError,
+			});
+		} finally {
+			rmSync(workspace, { recursive: true, force: true });
+		}
 	});
 
 	it("wires setup to core configuration and prints only redacted configuration", async () => {
@@ -146,15 +151,21 @@ describe("dysflow command modules", () => {
 	});
 
 	it("returns a clean doctor error when configuration is missing", async () => {
-		const result = await runCli(["doctor"], {
-			env: {},
-		});
+		const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
+		try {
+			const result = await runCli(["doctor"], {
+				env: {},
+				cwd: workspace,
+			});
 
-		expect(result).toEqual({
-			exitCode: 1,
-			stdout: "",
-			stderr: missingAccessError,
-		});
+			expect(result).toEqual({
+				exitCode: 1,
+				stdout: "",
+				stderr: missingAccessError,
+			});
+		} finally {
+			rmSync(workspace, { recursive: true, force: true });
+		}
 	});
 
 	it("wires serve to the HTTP adapter with safe defaults", async () => {
