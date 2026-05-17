@@ -6,6 +6,15 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.2] - 2026-05-17
+
+### Fixed
+
+- Clarified `projectId` as the canonical Engram-aligned project identity and `contextId` as optional run context.
+- Added `dysflow setup --set-project-id <id>` to update `.dysflow/project.json` trace identity.
+- Fixed multi-worktree project resolution so explicit registered `projectId`/`contextId` does not silently fall back to cwd.
+- Added dry-run plan mode and strict context diagnostics for Access import operations.
+
 ## [0.2.1] - 2026-05-17
 
 ### Fixed

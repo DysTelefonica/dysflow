@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
 	basename,
 	dirname,
@@ -10,18 +10,21 @@ import {
 import {
 	loadDysflowConfig,
 	redactDysflowConfig,
+	resolveProjectRegistryPath,
 	type DysflowConfig,
+	type DysflowProjectRegistry,
 } from "../../core/config/dysflow-config.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 const HELP_TEXT =
-	"Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--help]";
+	"Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--set-project-id <id>] [--help]";
 
 type SetupOptions = {
 	writeProject: boolean;
 	accessPath?: string;
 	backendPath?: string;
 	projectId?: string;
+	setProjectId?: string;
 };
 
 export async function handleSetupCommand(
@@ -35,6 +38,19 @@ export async function handleSetupCommand(
 	const parsed = parseSetupArgs(args);
 	if (!parsed.ok) {
 		return { exitCode: 1, stdout: "", stderr: parsed.message };
+	}
+
+	if (parsed.options.setProjectId !== undefined) {
+		try {
+			return {
+				exitCode: 0,
+				stdout: await updateProjectConfigId(parsed.options.setProjectId, context),
+				stderr: "",
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Failed to update project id.";
+			return { exitCode: 1, stdout: "", stderr: message };
+		}
 	}
 
 	const configResult = loadDysflowConfig({
@@ -55,9 +71,13 @@ export async function handleSetupCommand(
 	const redacted = redactDysflowConfig(configResult.data);
 	let extraOutput: string[] = [];
 	if (parsed.options.writeProject) {
-		extraOutput = [
-			await writeRelativeProjectConfig(configResult.data, context.cwd),
-		];
+		const writeResult = await writeRelativeProjectConfig(configResult.data, context.cwd);
+		const registerResult = await registerProjectConfig(
+			configResult.data.projectId ?? basename(context.cwd ?? process.cwd()),
+			writeResult.projectPath,
+			context,
+		);
+		extraOutput = [writeResult.message, registerResult];
 	}
 
 	return {
@@ -111,6 +131,15 @@ function parseSetupArgs(
 			index += 1;
 			continue;
 		}
+		if (arg === "--set-project-id") {
+			const value = args[index + 1];
+			if (value === undefined || value.startsWith("--")) {
+				return { ok: false, message: "Missing value for --set-project-id." };
+			}
+			options.setProjectId = value;
+			index += 1;
+			continue;
+		}
 		return { ok: false, message: `Unsupported setup option: ${arg}` };
 	}
 
@@ -133,10 +162,44 @@ function toPortableProjectPath(
 		: projectRelative.replaceAll("\\", "/");
 }
 
+async function updateProjectConfigId(
+	projectId: string,
+	context: Pick<CliCommandContext, "cwd" | "env">,
+): Promise<string> {
+	const projectRoot = context.cwd ?? process.cwd();
+	const projectPath = join(projectRoot, ".dysflow", "project.json");
+	const raw = await readFile(projectPath, "utf8").catch(() => "{}");
+	let parsed: Record<string, unknown>;
+	try {
+		parsed = JSON.parse(raw) as Record<string, unknown>;
+	} catch {
+		throw new Error(`Invalid .dysflow/project.json: ${projectPath}`);
+	}
+	parsed.id = projectId;
+	await mkdir(dirname(projectPath), { recursive: true });
+	await writeFile(projectPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+	const registerResult = await registerProjectConfig(projectId, projectPath, context);
+	return [`Updated project id in .dysflow/project.json: ${projectId}`, registerResult].join("\n");
+}
+
+async function registerProjectConfig(
+	projectId: string,
+	projectPath: string,
+	context: Pick<CliCommandContext, "cwd" | "env">,
+): Promise<string> {
+	const registryPath = resolveProjectRegistryPath({}, context.env, context.cwd);
+	const raw = await readFile(registryPath, "utf8").catch(() => "{}");
+	const registry = JSON.parse(raw) as DysflowProjectRegistry;
+	registry.projects = { ...(registry.projects ?? {}), [projectId]: { configPath: projectPath } };
+	await mkdir(dirname(registryPath), { recursive: true });
+	await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+	return `Registered project id ${projectId} in ${registryPath}`;
+}
+
 async function writeRelativeProjectConfig(
 	config: DysflowConfig,
 	cwd?: string,
-): Promise<string> {
+): Promise<{ message: string; projectPath: string }> {
 	const projectRoot = cwd ?? process.cwd();
 	const projectPath = join(projectRoot, ".dysflow", "project.json");
 	const projectId = config.projectId ?? basename(projectRoot);
@@ -157,5 +220,5 @@ async function writeRelativeProjectConfig(
 		`${JSON.stringify(projectJson, null, 2)}\n`,
 		"utf8",
 	);
-	return `Wrote portable project config to ${projectPath}`;
+	return { message: `Wrote portable project config to ${projectPath}`, projectPath };
 }

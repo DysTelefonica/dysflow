@@ -165,6 +165,31 @@ describe("dysflow configuration", () => {
 		}
 	});
 
+	it("uses explicit projectId as canonical trace identity ahead of contextId", () => {
+		const result = loadDysflowConfig({
+			accessDbPath: "C:/data/app.accdb",
+			projectId: "engram-canonical-project",
+			contextId: "run-context-only",
+			env: {},
+		});
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected config success");
+		expect(result.data.projectId).toBe("engram-canonical-project");
+	});
+
+	it("falls back to contextId only when no projectId exists", () => {
+		const result = loadDysflowConfig({
+			accessDbPath: "C:/data/app.accdb",
+			contextId: "context-fallback-project",
+			env: {},
+		});
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected config success");
+		expect(result.data.projectId).toBe("context-fallback-project");
+	});
+
 	it("does not let env path variables override repo config", () => {
 		const workspace = createTempWorkspace();
 		try {

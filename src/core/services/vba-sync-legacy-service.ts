@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { extname, isAbsolute, parse, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync } from "../utils/index.js";
+import { loadDysflowConfig, type DysflowConfig } from "../config/dysflow-config.js";
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
@@ -26,6 +27,25 @@ export type VbaManagerExecutionResult = {
 };
 
 export type VbaManagerExecutor = (request: VbaManagerExecutionRequest) => Promise<VbaManagerExecutionResult>;
+
+export type ImportPlanResult = {
+  operation: "import_all" | "import_modules";
+  dryRun: true;
+  willModifyAccess: false;
+  requestedProjectId?: string;
+  requestedContextId?: string;
+  resolvedProjectId?: string;
+  configSource: string;
+  projectRoot?: string;
+  accessPath?: string;
+  backendPath?: string;
+  destinationRoot: string;
+  importMode?: string;
+  modulesPlanned: readonly string[];
+  modulesCount: number;
+  warnings: readonly string[];
+  errors: readonly string[];
+};
 
 export type VbaSyncLegacyServiceOptions = {
   executor?: VbaManagerExecutor;
@@ -110,8 +130,16 @@ export class VbaSyncLegacyService {
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
-    const accessPath = stringValue(params.accessPath) ?? this.accessPath;
-    const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
+    if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {
+      return this.planImport(toolName, params);
+    }
+
+    const target = this.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+    const accessPath = target.data.accessPath;
+    const destinationRoot = target.data.destinationRoot;
     const password = this.accessPassword;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
@@ -140,7 +168,114 @@ export class VbaSyncLegacyService {
       );
     }
 
-    return successResult(parseOutput(result.stdout, secrets), { durationMs: result.durationMs });
+    const parsedOutput = parseOutput(result.stdout, secrets);
+    if (toolName === "import_all" || toolName === "import_modules") {
+      return successResult({
+        result: parsedOutput,
+        ...buildTargetDiagnostics(toolName, params, target.data, true),
+      }, { durationMs: result.durationMs });
+    }
+
+    return successResult(parsedOutput, { durationMs: result.durationMs });
+  }
+
+  private resolveExecutionTarget(params: Record<string, unknown>): OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource"> & { accessPath?: string; destinationRoot: string }> {
+    const hasExplicitConfigOverride = stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
+    const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
+    if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
+      const config = loadDysflowConfig({
+        env: this.env,
+        cwd: this.cwd,
+        accessDbPath: stringValue(params.accessPath),
+        backendPath: stringValue(params.backendPath),
+        destinationRoot: stringValue(params.destinationRoot),
+        projectRoot: stringValue(params.projectRoot),
+        projectId: stringValue(params.projectId),
+        contextId: stringValue(params.contextId),
+      });
+      if (!config.ok) return config;
+      return successResult({
+        ...config.data,
+        accessPath: config.data.accessDbPath,
+        destinationRoot: stringValue(params.destinationRoot) ?? config.data.destinationRoot ?? config.data.projectRoot ?? this.cwd,
+      });
+    }
+
+    const repoConfig = loadDysflowConfig({ env: this.env, cwd: this.cwd });
+    if (repoConfig.ok) {
+      return successResult({
+        ...repoConfig.data,
+        accessPath: repoConfig.data.accessDbPath,
+        destinationRoot: stringValue(params.destinationRoot) ?? repoConfig.data.destinationRoot ?? repoConfig.data.projectRoot ?? this.cwd,
+      });
+    }
+
+    const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
+    return successResult({
+      configSource: "repo-config",
+      accessDbPath: this.accessPath ?? "",
+      accessPath: this.accessPath,
+      destinationRoot,
+      projectRoot: stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd,
+      projectId: undefined,
+      timeoutMs: this.processTimeoutMs,
+      processTimeoutMs: this.processTimeoutMs,
+    });
+  }
+
+  private validateStrictContext(params: Record<string, unknown>, target: { accessPath?: string; destinationRoot: string; projectRoot?: string }): OperationResult<undefined> {
+    if (!truthy(params.strictContext) && !truthy(params.strictWrite)) return successResult(undefined);
+    const checks: Array<[string, string | undefined, string | undefined]> = [
+      ["expectedAccessPath", stringValue(params.expectedAccessPath), target.accessPath],
+      ["expectedDestinationRoot", stringValue(params.expectedDestinationRoot), target.destinationRoot],
+      ["expectedProjectRoot", stringValue(params.expectedProjectRoot), target.projectRoot],
+    ];
+    for (const [name, expected, actual] of checks) {
+      if (expected !== undefined && actual === undefined) {
+        return failureResult(createDysflowError("STRICT_CONTEXT_MISMATCH", `${name} was provided but the resolved target has no matching value.`));
+      }
+      if (expected !== undefined && actual !== undefined && resolve(expected) !== resolve(actual)) {
+        return failureResult(createDysflowError("STRICT_CONTEXT_MISMATCH", `${name} does not match resolved target. Expected ${expected}; resolved ${actual}.`));
+      }
+    }
+    return successResult(undefined);
+  }
+
+  private async planImport(toolName: "import_all" | "import_modules", params: Record<string, unknown>): Promise<OperationResult<ImportPlanResult>> {
+    const target = this.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    const requestedModules = stringArray(params.moduleNames);
+    const modulesPlanned = toolName === "import_modules"
+      ? requestedModules
+      : await discoverImportModules(target.data.destinationRoot);
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    await stat(target.data.destinationRoot).catch(() => errors.push(`destinationRoot not found: ${target.data.destinationRoot}`));
+    if (target.data.accessPath !== undefined) {
+      await stat(target.data.accessPath).catch(() => errors.push(`accessPath not found: ${target.data.accessPath}`));
+    }
+
+    return successResult({
+      operation: toolName,
+      dryRun: true,
+      willModifyAccess: false,
+      requestedProjectId: stringValue(params.projectId),
+      requestedContextId: stringValue(params.contextId),
+      resolvedProjectId: target.data.projectId,
+      configSource: target.data.configSource === "explicit-request" ? "explicit-overrides" : target.data.configSource,
+      projectRoot: target.data.projectRoot,
+      accessPath: target.data.accessPath,
+      backendPath: target.data.backendPath,
+      destinationRoot: target.data.destinationRoot,
+      importMode: stringValue(params.importMode),
+      modulesPlanned,
+      modulesCount: modulesPlanned.length,
+      warnings,
+      errors,
+    });
   }
 
   private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
@@ -351,6 +486,40 @@ function mapping(
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+async function discoverImportModules(destinationRoot: string): Promise<string[]> {
+  const modules: string[] = [];
+  for (const folder of [destinationRoot, resolve(destinationRoot, "modules"), resolve(destinationRoot, "classes"), resolve(destinationRoot, "forms")]) {
+    const entries = await readdir(folder).catch(() => []);
+    for (const entry of entries) {
+      const extension = extname(entry).toLowerCase();
+      if (![".bas", ".cls", ".frm"].includes(extension)) continue;
+      modules.push(parse(entry).name);
+    }
+  }
+  return Array.from(new Set(modules)).sort();
+}
+
+function buildTargetDiagnostics(
+  operation: string,
+  params: Record<string, unknown>,
+  target: Pick<DysflowConfig, "backendPath" | "configSource" | "projectId" | "projectRoot"> & { accessPath?: string; destinationRoot: string },
+  willModifyAccess: boolean,
+): Record<string, unknown> {
+  return {
+    operation,
+    dryRun: false,
+    willModifyAccess,
+    requestedProjectId: stringValue(params.projectId),
+    requestedContextId: stringValue(params.contextId),
+    resolvedProjectId: target.projectId,
+    configSource: target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
+    projectRoot: target.projectRoot,
+    accessPath: target.accessPath,
+    backendPath: target.backendPath,
+    destinationRoot: target.destinationRoot,
+  };
 }
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {

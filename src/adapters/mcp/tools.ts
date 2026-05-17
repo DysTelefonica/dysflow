@@ -50,8 +50,8 @@ export type DysflowMcpTool = {
 const NO_INPUT_SCHEMA: JsonObjectSchema = { type: "object", additionalProperties: false, properties: {} };
 
 const CONTEXT_PROPERTIES: Record<string, JsonSchemaProperty> = {
-  contextId: { type: "string", description: "Optional project/context id for traceability. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
-  projectId: { type: "string", description: "Optional project id alias for traceability. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+  projectId: { type: "string", description: "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+  contextId: { type: "string", description: "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known." },
 };
 
 const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
@@ -234,7 +234,11 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
     queries: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions alias." },
     rootPath: { type: "string", description: "Optional override for root directory. Normal calls use .dysflow/project.json destinationRoot." },
     strict: { type: "boolean", description: "Use strict comparison or validation." },
+    strictContext: { type: "boolean", description: "Abort before opening Access if resolved target does not match expected paths." },
     strictWrite: { type: "boolean", description: "Use strict write guards." },
+    expectedAccessPath: { type: "string", description: "Expected resolved Access database path for strictContext." },
+    expectedProjectRoot: { type: "string", description: "Expected resolved project root for strictContext." },
+    expectedDestinationRoot: { type: "string", description: "Expected resolved destination root for strictContext." },
     rows: { type: "array", items: { type: "object", additionalProperties: true }, description: "Fixture rows." },
     scriptPath: { type: "string", description: "SQL script path." },
     sourcePath: { type: "string", description: "Source path alias." },

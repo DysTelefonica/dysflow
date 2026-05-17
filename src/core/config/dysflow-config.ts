@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
 	createDysflowError,
 	failureResult,
@@ -16,7 +16,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
 const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
-export type DysflowConfigSource = "explicit-request" | "repo-config";
+export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-registry";
 
 export type DysflowProjectConfig = {
 	id?: string;
@@ -89,6 +89,32 @@ export function loadDysflowConfig(
 	const explicitAccessDbPath = stringValue(input.accessDbPath);
 	if (explicitAccessDbPath !== undefined) {
 		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
+	}
+
+	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+	if (requestedProjectId !== undefined) {
+		const registeredConfigPath = resolveRegisteredProjectConfigPath(
+			requestedProjectId,
+			input,
+			env,
+			cwd,
+		);
+		if (registeredConfigPath === undefined) {
+			return failureResult(
+				createDysflowError(
+					"CONFIG_PROJECT_NOT_REGISTERED",
+					`Project '${requestedProjectId}' is not registered. Refusing to fall back to cwd.`,
+				),
+			);
+		}
+		return loadProjectConfigFromPath(
+			registeredConfigPath,
+			input,
+			env,
+			cwd,
+			"global-registry",
+			requestedProjectId,
+		);
 	}
 
 	const repoConfigPath = findRepoProjectConfigPath(cwd);
@@ -276,6 +302,39 @@ function resolveProjectPath(
 
 function resolvePathMaybeRelative(value: string, cwd: string): string {
 	return isAbsolute(value) ? resolve(value) : resolve(cwd, value);
+}
+
+function resolveRegisteredProjectConfigPath(
+	projectId: string,
+	input: DysflowConfigInput,
+	env: Record<string, string | undefined>,
+	cwd: string,
+): string | undefined {
+	const registryPath = resolveProjectRegistryPath(input, env, cwd);
+	if (!existsSync(registryPath)) return undefined;
+	const registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
+	const entry = registry.projects?.[projectId];
+	if (entry === undefined) return undefined;
+	const registryDir = dirname(registryPath);
+	if (typeof entry === "string") return resolvePathMaybeRelative(entry, registryDir);
+	const configPath = stringValue(entry.configPath);
+	if (configPath !== undefined) return resolvePathMaybeRelative(configPath, registryDir);
+	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
+	if (projectRoot !== undefined) {
+		return resolve(resolvePathMaybeRelative(projectRoot, registryDir), DEFAULT_PROJECT_CONFIG_PATH);
+	}
+	return undefined;
+}
+
+export function resolveProjectRegistryPath(
+	input: Pick<DysflowConfigInput, "projectRegistryPath"> = {},
+	env: Record<string, string | undefined> = process.env,
+	cwd: string = process.cwd(),
+): string {
+	const explicit = stringValue(input.projectRegistryPath) ?? stringValue(env.DYSFLOW_PROJECT_REGISTRY_PATH);
+	if (explicit !== undefined) return resolvePathMaybeRelative(explicit, cwd);
+	const home = stringValue(env.LOCALAPPDATA) ?? stringValue(env.HOME) ?? cwd;
+	return join(home, "dysflow", "projects.json");
 }
 
 function findRepoProjectConfigPath(cwd: string): string | undefined {
