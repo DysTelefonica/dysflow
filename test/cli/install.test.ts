@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, mkdir, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -11,6 +11,8 @@ import {
 	compareVersions,
 	replaceCodexMcpSection,
 	resolvePackageRoot,
+	hasDysflowMcpConfig,
+	removeDysflowMcpConfig,
 } from "../../src/cli/commands/install";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
@@ -119,6 +121,95 @@ describe("codex toml serialization", () => {
 		expect(updated).toContain("[mcp_servers.other]");
 		expect(updated).toContain("command = 'C:/dysflow/bin/dysflow.cmd'");
 		expect(updated).not.toContain("command = 'old'");
+	});
+});
+
+describe("Dysflow MCP config state", () => {
+	it("detects and removes only Dysflow MCP entries while preserving unrelated config", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-config-state-"));
+		try {
+			const codexConfig = join(root, "codex.toml");
+			await writeFile(
+				codexConfig,
+				[
+					"[mcp_servers.other]",
+					"command = 'other'",
+					"",
+					"[mcp_servers.dysflow]",
+					"command = 'C:/dysflow/bin/dysflow.cmd'",
+					'args = ["mcp"]',
+					"startup_timeout_sec = 60.0",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+
+			const jsonConfig = join(root, "opencode.json");
+			await writeFile(
+				jsonConfig,
+				`${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" }, dysflow: { enabled: true, type: "local", command: ["C:/dysflow/bin/dysflow.cmd", "mcp"] } } }, null, 2)}\n`,
+				"utf8",
+			);
+
+			expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(true);
+			expect(await hasDysflowMcpConfig("opencode", jsonConfig)).toBe(true);
+
+			await removeDysflowMcpConfig("codex", codexConfig);
+			await removeDysflowMcpConfig("opencode", jsonConfig);
+
+			expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(false);
+			expect(await readFile(codexConfig, "utf8")).toContain("[mcp_servers.other]");
+
+			const updatedJson = await readJson(jsonConfig);
+			expect((updatedJson.mcp as Record<string, unknown>).other).toEqual({ type: "remote", url: "https://example.test" });
+			expect((updatedJson.mcp as Record<string, unknown>).dysflow).toBeUndefined();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not create config files when removing absent Dysflow entries", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-config-absent-"));
+		try {
+			const missingCodex = join(root, "missing-codex.toml");
+			const missingOpenCode = join(root, "missing-opencode.json");
+
+			await removeDysflowMcpConfig("codex", missingCodex);
+			await removeDysflowMcpConfig("opencode", missingOpenCode);
+
+			await expect(access(missingCodex)).rejects.toThrow();
+			await expect(access(missingOpenCode)).rejects.toThrow();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("removes nested Codex Dysflow tables with the parent section", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-codex-nested-"));
+		try {
+			const codexConfig = join(root, "config.toml");
+			await writeFile(
+				codexConfig,
+				[
+					"[mcp_servers.dysflow]",
+					"command = 'C:/dysflow/bin/dysflow.cmd'",
+					"[mcp_servers.dysflow.env]",
+					"DYSFLOW_HOME = 'C:/Users/me/AppData/Local/dysflow'",
+					"[mcp_servers.other]",
+					"command = 'other'",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+
+			await removeDysflowMcpConfig("codex", codexConfig);
+
+			const updated = await readFile(codexConfig, "utf8");
+			expect(updated).not.toContain("mcp_servers.dysflow");
+			expect(updated).toContain("[mcp_servers.other]");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });
 

@@ -282,6 +282,65 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
 	await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+export async function hasDysflowMcpConfig(
+	agent: AgentName,
+	filePath: string,
+): Promise<boolean> {
+	if (agent === "codex") {
+		const raw = await readFile(filePath, "utf8").catch(() => "");
+		return raw.replace(/\r\n/g, "\n").split("\n").some((line) => line.trim() === "[mcp_servers.dysflow]");
+	}
+
+	const root = await readJson(filePath);
+	const container = agent === "opencode" ? ensureObject(root.mcp) : ensureObject(root.mcpServers);
+	return container.dysflow !== undefined;
+}
+
+export async function removeDysflowMcpConfig(
+	agent: AgentName,
+	filePath: string,
+): Promise<void> {
+	if (!(await fileExists(filePath))) return;
+
+	if (agent === "codex") {
+		const raw = await readFile(filePath, "utf8");
+		const updated = removeCodexMcpSection(raw);
+		if (updated === raw) return;
+		await mkdir(path.dirname(filePath), { recursive: true });
+		await writeFile(filePath, updated, "utf8");
+		return;
+	}
+
+	const root = await readJson(filePath);
+	const key = agent === "opencode" ? "mcp" : "mcpServers";
+	const container = ensureObject(root[key]);
+	if (container.dysflow === undefined) return;
+	delete container.dysflow;
+	root[key] = container;
+	await writeJson(filePath, root);
+}
+
+function removeCodexMcpSection(content: string): string {
+	const lines = content.replace(/\r\n/g, "\n").split("\n");
+	const sectionHeader = "[mcp_servers.dysflow]";
+	const start = lines.findIndex((line) => line.trim() === sectionHeader);
+	if (start === -1) return `${lines.join("\n").trimEnd()}\n`;
+
+	let end = lines.length;
+	for (let index = start + 1; index < lines.length; index += 1) {
+		const line = lines[index].trim();
+		if (!line.startsWith("#") && line.startsWith("[") && line.endsWith("]")) {
+			const sectionName = line.slice(1, -1);
+			if (!sectionName.startsWith("mcp_servers.dysflow")) {
+				end = index;
+				break;
+			}
+		}
+	}
+
+	return `${[...lines.slice(0, start), ...lines.slice(end)].join("\n").trimEnd()}\n`;
+}
+
 export function replaceCodexMcpSection(
 	content: string,
 	commandPath: string,
