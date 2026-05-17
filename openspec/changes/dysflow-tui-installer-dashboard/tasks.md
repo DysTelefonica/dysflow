@@ -53,12 +53,12 @@ Goal: wire the feature end-to-end.
 
 Strict TDD:
 
-- [ ] RED: no-arg `runCli([])` dispatches TUI instead of help.
-- [ ] RED: explicit `--help` still prints help.
-- [ ] RED: applying integration selection installs selected and uninstalls unselected agents.
-- [ ] GREEN: implement interactive dashboard/install flow.
-- [ ] GREEN: update docs and bump version to `0.2.0`.
-- [ ] Verify: `pnpm test && pnpm build`.
+- [x] RED: no-arg `runCli([])` dispatches TUI instead of help.
+- [x] RED: explicit `--help` still prints help.
+- [x] RED: applying integration selection installs selected and uninstalls unselected agents.
+- [x] GREEN: implement dashboard entry flow.
+- [x] GREEN: update docs and bump version to `0.2.0`.
+- [x] Verify: `pnpm test && pnpm build`.
 
 Expected branch: `feat/tui-dashboard-flow`
 Base: `feat/tui-dashboard-render`

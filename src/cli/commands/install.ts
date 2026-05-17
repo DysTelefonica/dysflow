@@ -288,11 +288,17 @@ export async function hasDysflowMcpConfig(
 ): Promise<boolean> {
 	if (agent === "codex") {
 		const raw = await readFile(filePath, "utf8").catch(() => "");
-		return raw.replace(/\r\n/g, "\n").split("\n").some((line) => line.trim() === "[mcp_servers.dysflow]");
+		return raw
+			.replace(/\r\n/g, "\n")
+			.split("\n")
+			.some((line) => line.trim() === "[mcp_servers.dysflow]");
 	}
 
 	const root = await readJson(filePath);
-	const container = agent === "opencode" ? ensureObject(root.mcp) : ensureObject(root.mcpServers);
+	const container =
+		agent === "opencode"
+			? ensureObject(root.mcp)
+			: ensureObject(root.mcpServers);
 	return container.dysflow !== undefined;
 }
 
@@ -435,6 +441,82 @@ async function configurePi(
 	await writeJson(filePath, root);
 }
 
+export async function applyIntegrationSelection(
+	selectedAgents: readonly AgentName[],
+	options: {
+		env?: NodeJS.ProcessEnv;
+		runtimeDir?: string;
+		packageRoot?: string;
+	} = {},
+): Promise<CliResult> {
+	const env = options.env ?? process.env;
+	const runtimeDir = resolveRuntimeDir(options.runtimeDir, env);
+	const packageRoot = options.packageRoot ?? resolvePackageRoot();
+	const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
+	const agentConfigPaths = resolveAgentConfigPaths(getHome(env));
+	const commandPath = commandPathForConfig(runtimeDir);
+	const selected = new Set(selectedAgents);
+
+	try {
+		await installRuntime(runtimePaths, packageRoot);
+		for (const agent of ALL_AGENTS) {
+			if (selected.has(agent)) {
+				await configureAgent(agent, agentConfigPaths, commandPath);
+				continue;
+			}
+			await removeAgentConfig(agent, agentConfigPaths);
+		}
+		return {
+			exitCode: 0,
+			stdout: createInstallReport(runtimeDir, [...selected]),
+			stderr: "",
+		};
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Failed to apply Dysflow integrations.";
+		return { exitCode: 1, stdout: "", stderr: message };
+	}
+}
+
+async function configureAgent(
+	agent: AgentName,
+	agentConfigPaths: AgentConfigPaths,
+	commandPath: string,
+): Promise<void> {
+	if (agent === "codex")
+		return configureCodex(agentConfigPaths.codex, commandPath);
+	if (agent === "opencode")
+		return configureOpencode(agentConfigPaths.opencode, commandPath);
+	if (agent === "claude")
+		return configureClaude(
+			await resolveClaudeConfigPath(agentConfigPaths),
+			commandPath,
+		);
+	return configurePi(agentConfigPaths.pi, commandPath);
+}
+
+async function removeAgentConfig(
+	agent: AgentName,
+	agentConfigPaths: AgentConfigPaths,
+): Promise<void> {
+	if (agent === "codex") {
+		await removeDysflowMcpConfig(agent, agentConfigPaths.codex);
+		return;
+	}
+	if (agent === "opencode") {
+		await removeDysflowMcpConfig(agent, agentConfigPaths.opencode);
+		return;
+	}
+	if (agent === "claude") {
+		await removeDysflowMcpConfig(agent, agentConfigPaths.claudeSettings);
+		await removeDysflowMcpConfig(agent, agentConfigPaths.claudeDesktop);
+		return;
+	}
+	await removeDysflowMcpConfig(agent, agentConfigPaths.pi);
+}
+
 async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
 	await mkdir(runtimePaths.appDir, { recursive: true });
 	await mkdir(runtimePaths.binDir, { recursive: true });
@@ -445,22 +527,34 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
 		);
 	}
 
-	await copyIfDifferent(runtimePaths.distSource, path.join(runtimePaths.appDir, "dist"), {
-		recursive: true,
-		force: true,
-	});
-
-	if (await fileExists(runtimePaths.scriptsSource)) {
-		await copyIfDifferent(runtimePaths.scriptsSource, runtimePaths.scriptsDest, {
+	await copyIfDifferent(
+		runtimePaths.distSource,
+		path.join(runtimePaths.appDir, "dist"),
+		{
 			recursive: true,
 			force: true,
-		});
+		},
+	);
+
+	if (await fileExists(runtimePaths.scriptsSource)) {
+		await copyIfDifferent(
+			runtimePaths.scriptsSource,
+			runtimePaths.scriptsDest,
+			{
+				recursive: true,
+				force: true,
+			},
+		);
 	}
 
 	if (await fileExists(runtimePaths.packageJsonSource)) {
-		await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
-			force: true,
-		});
+		await copyIfDifferent(
+			runtimePaths.packageJsonSource,
+			runtimePaths.packageJsonDest,
+			{
+				force: true,
+			},
+		);
 	}
 }
 
