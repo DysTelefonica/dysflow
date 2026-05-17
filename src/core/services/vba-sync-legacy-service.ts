@@ -212,7 +212,7 @@ export class VbaSyncLegacyService {
 
     const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
     return successResult({
-      configSource: "repo-config",
+      configSource: "runtime-default",
       accessDbPath: this.accessPath ?? "",
       accessPath: this.accessPath,
       destinationRoot,
