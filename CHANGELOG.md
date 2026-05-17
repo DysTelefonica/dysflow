@@ -6,6 +6,12 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.1.3] - 2026-05-17
+
+### Fixed
+
+- Fixed `dysflow install` package-root detection so a globally/profile-installed Dysflow can reinstall from any current working directory instead of looking for `./dist`.
+
 ## [0.1.2] - 2026-05-17
 
 ### Fixed
@@ -60,4 +66,3 @@ Initial production release focused on making Access automation safe, observable 
 - Added protocol maintenance guide: `docs/testing/mcp-protocol-maintenance.md`.
 - Added HTTP API reference: `docs/api/http-api.md`.
 - Added E2E MCP reference: `docs/testing/mcp-access-e2e.md`.
-

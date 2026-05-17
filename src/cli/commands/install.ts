@@ -178,15 +178,18 @@ function getHome(env: NodeJS.ProcessEnv): string {
 	return env.USERPROFILE ?? env.HOME ?? env.USER ?? "";
 }
 
-function resolvePackageRoot(): string {
-	const commandPath = fileURLToPath(import.meta.url);
+export function resolvePackageRoot(
+	options: { moduleUrl?: string; cwd?: string } = {},
+): string {
+	const commandPath = fileURLToPath(options.moduleUrl ?? import.meta.url);
 	let currentDir = path.dirname(commandPath);
 
 	for (let depth = 0; depth < 12; depth += 1) {
 		const packageJson = path.join(currentDir, "package.json");
 		const tsConfig = path.join(currentDir, "tsconfig.json");
+		const distDir = path.join(currentDir, "dist");
 
-		if (hasPath(packageJson) && hasPath(tsConfig)) {
+		if (hasPath(packageJson) && (hasPath(tsConfig) || hasPath(distDir))) {
 			return currentDir;
 		}
 
@@ -197,7 +200,7 @@ function resolvePackageRoot(): string {
 		currentDir = parent;
 	}
 
-	return process.cwd();
+	return path.resolve(options.cwd ?? process.cwd());
 }
 
 function hasPath(candidate: string): boolean {

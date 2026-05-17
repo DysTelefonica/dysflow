@@ -10,6 +10,7 @@ import {
 	parseUpdateArgs,
 	compareVersions,
 	replaceCodexMcpSection,
+	resolvePackageRoot,
 } from "../../src/cli/commands/install";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
@@ -118,6 +119,30 @@ describe("codex toml serialization", () => {
 		expect(updated).toContain("[mcp_servers.other]");
 		expect(updated).toContain("command = 'C:/dysflow/bin/dysflow.cmd'");
 		expect(updated).not.toContain("command = 'old'");
+	});
+});
+
+describe("resolvePackageRoot", () => {
+	it("uses the installed package app root even when cwd is a project subfolder", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-package-root-"));
+		const installedApp = join(root, "installed", "app");
+		const installedCliDir = join(installedApp, "dist", "cli", "commands");
+		const projectSubfolder = join(root, "project", "E2E_testing");
+
+		try {
+			await mkdir(installedCliDir, { recursive: true });
+			await mkdir(projectSubfolder, { recursive: true });
+			await writeFile(join(installedApp, "package.json"), '{"name":"dysflow"}\n', "utf8");
+
+			expect(
+				resolvePackageRoot({
+					moduleUrl: `file:///${join(installedCliDir, "install.js").replaceAll("\\", "/")}`,
+					cwd: projectSubfolder,
+				}),
+			).toBe(installedApp);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });
 
