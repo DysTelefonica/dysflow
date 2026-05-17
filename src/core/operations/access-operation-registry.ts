@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 
 export type AccessOperationStatus =
   | "starting"
@@ -56,51 +56,75 @@ const DEFAULT_MAX_RECORDS = 1000;
 const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
 
 export class FileAccessOperationRegistry implements AccessOperationRegistry {
+  private static readonly fileLocks = new Map<string, Promise<unknown>>();
+
   private readonly filePath: string;
   private readonly maxRecords: number;
 
   constructor(options: FileAccessOperationRegistryOptions) {
-    this.filePath = options.filePath;
+    this.filePath = resolve(options.filePath);
     this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
   }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
-    const records = await this.readRecords();
-    const stored = { ...record, metadata: { ...record.metadata } };
-    if (!PURGED_PERSISTENT_STATUSES.has(stored.status)) {
-      records.set(stored.operationId, stored);
-      this.evictOldestRecords(records);
-      await this.writeRecords(records);
-    }
-    return { ...stored, metadata: { ...stored.metadata } };
+    return this.withFileLock(async () => {
+      const records = await this.readRecords();
+      const stored = { ...record, metadata: { ...record.metadata } };
+      if (!PURGED_PERSISTENT_STATUSES.has(stored.status)) {
+        records.set(stored.operationId, stored);
+        this.evictOldestRecords(records);
+        await this.writeRecords(records);
+      }
+      return { ...stored, metadata: { ...stored.metadata } };
+    });
   }
 
   async update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined> {
-    const records = await this.readRecords();
-    const current = records.get(operationId);
-    if (current === undefined) return undefined;
-    const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };
-    if (PURGED_PERSISTENT_STATUSES.has(next.status)) {
-      records.delete(operationId);
-    } else {
-      records.set(operationId, next);
-      this.evictOldestRecords(records);
-    }
-    await this.writeRecords(records);
-    return { ...next, metadata: { ...next.metadata } };
+    return this.withFileLock(async () => {
+      const records = await this.readRecords();
+      const current = records.get(operationId);
+      if (current === undefined) return undefined;
+      const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };
+      if (PURGED_PERSISTENT_STATUSES.has(next.status)) {
+        records.delete(operationId);
+      } else {
+        records.set(operationId, next);
+        this.evictOldestRecords(records);
+      }
+      await this.writeRecords(records);
+      return { ...next, metadata: { ...next.metadata } };
+    });
   }
 
   async get(operationId: string): Promise<AccessOperationRecord | undefined> {
-    const record = (await this.readRecords()).get(operationId);
-    return record ? { ...record, metadata: { ...record.metadata } } : undefined;
+    return this.withFileLock(async () => {
+      const record = (await this.readRecords()).get(operationId);
+      return record ? { ...record, metadata: { ...record.metadata } } : undefined;
+    });
   }
 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
-    const limit = options.limit ?? 50;
-    return [...(await this.readRecords()).values()]
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
-      .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+    return this.withFileLock(async () => {
+      const limit = options.limit ?? 50;
+      return [...(await this.readRecords()).values()]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, limit)
+        .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+    });
+  }
+
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = FileAccessOperationRegistry.fileLocks.get(this.filePath) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    const settled = current.catch(() => undefined);
+    FileAccessOperationRegistry.fileLocks.set(this.filePath, settled);
+    try {
+      return await current;
+    } finally {
+      if (FileAccessOperationRegistry.fileLocks.get(this.filePath) === settled) {
+        FileAccessOperationRegistry.fileLocks.delete(this.filePath);
+      }
+    }
   }
 
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {

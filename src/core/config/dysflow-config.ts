@@ -16,7 +16,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
 const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
-export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-registry";
+export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-registry" | "runtime-default";
 
 export type DysflowProjectConfig = {
 	id?: string;

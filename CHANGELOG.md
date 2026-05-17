@@ -6,6 +6,14 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.5] - 2026-05-17
+
+### Fixed
+
+- Serialized file-backed Access operation registry updates to avoid losing records under concurrent requests.
+- Recorded resolved project and destination roots in Access operation metadata instead of the process working directory.
+- Reported runtime fallback config source truthfully when no repo project config is loaded.
+
 ## [0.2.4] - 2026-05-17
 
 ### Fixed

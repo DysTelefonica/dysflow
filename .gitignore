@@ -14,3 +14,7 @@ E2E_testing/**/*.mdb
 E2E_testing/**/*.accde
 E2E_testing/**/*.mde
 E2E_testing/**/*.laccdb
+# Local Pi runtime state
+.atl/
+.pi/
+.pi-lens/
