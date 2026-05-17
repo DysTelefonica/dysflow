@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-17
+
+### Added
+
+- Added `dysflow --version` and `dysflow -v` for direct CLI/runtime version verification.
+
 - Next milestones and features will be tracked in future releases.
 
 ## [0.2.5] - 2026-05-17

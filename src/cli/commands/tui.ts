@@ -1,13 +1,8 @@
-import { createRequire } from "node:module";
 import readline from "node:readline";
 import { applyIntegrationSelection, handleInstallCommand } from "./install.js";
 import { renderDashboard } from "../tui/render.js";
 import type { CliCommandContext, CliResult, TuiKey } from "./types.js";
-
-const require = createRequire(import.meta.url);
-const packageJson = require("../../../package.json") as { version?: unknown };
-const PACKAGE_VERSION =
-	typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+import { PACKAGE_VERSION } from "./version.js";
 
 export async function handleTuiCommand(
 	args: readonly string[],

@@ -1,5 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../../src/cli/index";
+
+function getPackageVersion(): string {
+	const packageJson = JSON.parse(
+		readFileSync(join(process.cwd(), "package.json"), "utf8"),
+	) as { version?: string };
+	return packageJson.version ?? "0.0.0";
+}
 
 describe("dysflow CLI help", () => {
 	it("prints the available command surface for --help", async () => {
@@ -22,6 +31,19 @@ describe("dysflow CLI help", () => {
 				"  tui     Open the Dysflow terminal UI",
 				"  serve   Start local HTTP API",
 			].join("\n"),
+			stderr: "",
+		});
+	});
+
+	it.each([
+		["--version"],
+		["-v"],
+	])("prints the package version for %s", async (flag) => {
+		const result = await runCli([flag]);
+
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: getPackageVersion(),
 			stderr: "",
 		});
 	});
