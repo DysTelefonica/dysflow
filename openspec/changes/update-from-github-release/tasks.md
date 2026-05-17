@@ -26,17 +26,17 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: RED Tests
 
-- [ ] 1.1 Add test: newer release provider installs provider package version.
-- [ ] 1.2 Add test: equal latest release skips without `--force`.
-- [ ] 1.3 Add test: `--force` reinstalls equal latest release.
-- [ ] 1.4 Add test: provider failure returns actionable update error.
+- [x] 1.1 Add test: newer release provider installs provider package version.
+- [x] 1.2 Add test: equal latest release skips without `--force`.
+- [x] 1.3 Add test: `--force` reinstalls equal latest release.
+- [x] 1.4 Add test: provider failure returns actionable update error.
 
 ## Phase 2: GREEN Implementation
 
-- [ ] 2.1 Add `ReleaseUpdateProvider` and injected context support in `install.ts`.
-- [ ] 2.2 Update `handleUpdateCommand` to compare installed version with provider latest version.
-- [ ] 2.3 Implement default GitHub provider using temporary release source/build workspace.
-- [ ] 2.4 Ensure provider cleanup runs after success and failure.
+- [x] 2.1 Add `ReleaseUpdateProvider` and injected context support in `install.ts`.
+- [x] 2.2 Update `handleUpdateCommand` to compare installed version with provider latest version.
+- [x] 2.3 Implement default GitHub provider using temporary release source/build workspace.
+- [x] 2.4 Ensure provider cleanup runs after success and failure.
 
 ## Phase 3: Docs and Release Prep
 

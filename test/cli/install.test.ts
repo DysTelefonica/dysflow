@@ -37,6 +37,23 @@ const getLocalDysflowVersion = async (): Promise<string> => {
 	return parsed.version ?? "0.1.0";
 };
 
+async function createPackageRoot(
+	root: string,
+	version: string,
+	marker: string,
+): Promise<string> {
+	const packageRoot = join(root, `package-${version}`);
+	const distCli = join(packageRoot, "dist", "cli");
+	await mkdir(distCli, { recursive: true });
+	await writeFile(join(distCli, "index.js"), marker, "utf8");
+	await writeFile(
+		join(packageRoot, "package.json"),
+		JSON.stringify({ name: "dysflow", version, type: "module" }, null, 2),
+		"utf8",
+	);
+	return packageRoot;
+}
+
 describe("install arg parsing", () => {
 	it("parses known agents from --agents", () => {
 		expect(parseAgentList("codex,opencode")).toEqual({
@@ -463,6 +480,142 @@ describe("handleInstallCommand end-to-end", () => {
 });
 
 describe("handleUpdateCommand end-to-end", () => {
+	it("updates runtime from a newer GitHub release package provider", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-release-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const installedPackageJson = join(appDir, "package.json");
+		const releasePackageRoot = await createPackageRoot(
+			root,
+			"9.9.9",
+			"RELEASE_RUNTIME",
+		);
+		await mkdir(appDir, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify({ name: "dysflow", version: "1.0.0", type: "module" }, null, 2),
+			"utf8",
+		);
+
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			releaseUpdateProvider: {
+				resolveLatestRelease: async () => ({ version: "9.9.9" }),
+				preparePackage: async () => ({
+					packageRoot: releasePackageRoot,
+				}),
+			},
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Dysflow runtime update:");
+		expect(result.stdout).toContain("1.0.0 -> 9.9.9");
+		expect(await readFile(installedPackageJson, "utf8")).toContain(
+			`"version": "9.9.9"`,
+		);
+		expect(
+			await readFile(join(appDir, "dist", "cli", "index.js"), "utf8"),
+		).toBe("RELEASE_RUNTIME");
+
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("skips GitHub release reinstall when installed runtime matches latest", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-current-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const appCli = join(appDir, "dist", "cli");
+		const installedPackageJson = join(appDir, "package.json");
+		const releasePackageRoot = await createPackageRoot(
+			root,
+			"9.9.9",
+			"NEW_RUNTIME",
+		);
+		await mkdir(appCli, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify({ name: "dysflow", version: "9.9.9", type: "module" }, null, 2),
+			"utf8",
+		);
+		await writeFile(join(appCli, "index.js"), "OLD_RUNTIME", "utf8");
+
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			releaseUpdateProvider: {
+				resolveLatestRelease: async () => ({ version: "9.9.9" }),
+				preparePackage: async () => ({
+					packageRoot: releasePackageRoot,
+				}),
+			},
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Dysflow runtime is up to date");
+		expect(await readFile(join(appCli, "index.js"), "utf8")).toBe("OLD_RUNTIME");
+
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("forces GitHub release reinstall when latest version is already installed", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-force-release-"));
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const appCli = join(appDir, "dist", "cli");
+		const installedPackageJson = join(appDir, "package.json");
+		const releasePackageRoot = await createPackageRoot(
+			root,
+			"9.9.9",
+			"REINSTALLED_RUNTIME",
+		);
+		await mkdir(appCli, { recursive: true });
+		await writeFile(
+			installedPackageJson,
+			JSON.stringify({ name: "dysflow", version: "9.9.9", type: "module" }, null, 2),
+			"utf8",
+		);
+		await writeFile(join(appCli, "index.js"), "OLD_RUNTIME", "utf8");
+
+		const result = await handleUpdateCommand(
+			["--runtime-dir", runtimeDir, "--force"],
+			{
+				releaseUpdateProvider: {
+					resolveLatestRelease: async () => ({ version: "9.9.9" }),
+					preparePackage: async () => ({
+						packageRoot: releasePackageRoot,
+					}),
+				},
+			},
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("9.9.9 -> 9.9.9");
+		expect(await readFile(join(appCli, "index.js"), "utf8")).toBe(
+			"REINSTALLED_RUNTIME",
+		);
+
+		await rm(root, { recursive: true, force: true });
+	});
+
+	it("returns an actionable error when GitHub release update resolution fails", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-update-fail-"));
+		const runtimeDir = join(root, "runtime");
+
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			releaseUpdateProvider: {
+				resolveLatestRelease: async () => {
+					throw new Error("GitHub release lookup failed");
+				},
+				preparePackage: async () => ({ packageRoot: root }),
+			},
+		});
+
+		expect(result).toEqual({
+			exitCode: 1,
+			stdout: "",
+			stderr: "Failed to update Dysflow runtime: GitHub release lookup failed",
+		});
+
+		await rm(root, { recursive: true, force: true });
+	});
+
 	it("updates runtime when local version is newer", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
 		const runtimeDir = join(root, "runtime");
@@ -481,7 +634,12 @@ describe("handleUpdateCommand end-to-end", () => {
 		);
 
 		const localVersion = await getLocalDysflowVersion();
-		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir]);
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			releaseUpdateProvider: {
+				resolveLatestRelease: async () => ({ version: localVersion }),
+				preparePackage: async () => ({ packageRoot: process.cwd() }),
+			},
+		});
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Dysflow runtime update:");
@@ -513,7 +671,12 @@ describe("handleUpdateCommand end-to-end", () => {
 		);
 		await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
 
-		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir]);
+		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			releaseUpdateProvider: {
+				resolveLatestRelease: async () => ({ version: localVersion }),
+				preparePackage: async () => ({ packageRoot: process.cwd() }),
+			},
+		});
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Dysflow runtime is up to date");
@@ -543,11 +706,15 @@ describe("handleUpdateCommand end-to-end", () => {
 		);
 		await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
 
-		const result = await handleUpdateCommand([
-			"--runtime-dir",
-			runtimeDir,
-			"--force",
-		]);
+		const result = await handleUpdateCommand(
+			["--runtime-dir", runtimeDir, "--force"],
+			{
+				releaseUpdateProvider: {
+					resolveLatestRelease: async () => ({ version: localVersion }),
+					preparePackage: async () => ({ packageRoot: process.cwd() }),
+				},
+			},
+		);
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Dysflow runtime update:");
 		expect(result.stdout).toContain(`${localVersion} -> ${localVersion}`);
