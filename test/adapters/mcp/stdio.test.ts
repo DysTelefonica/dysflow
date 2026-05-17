@@ -1,8 +1,12 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import {
+	createUnavailableServices,
 	JsonLineMcpStdioRuntime,
 	MCP_PROTOCOL_VERSION,
 	resolveProjectOperationRegistryPath,
@@ -197,6 +201,55 @@ describe("JsonLineMcpStdioRuntime", () => {
 				},
 			}),
 		]);
+	});
+
+	it("resolves registered import dry-run even when MCP startup cwd has no project config", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-startup-"));
+		const startup = join(root, "startup");
+		const project = join(root, "project");
+		const registryPath = join(root, "projects.json");
+		mkdirSync(join(project, ".dysflow"), { recursive: true });
+		mkdirSync(join(project, "src", "modules"), { recursive: true });
+		writeFileSync(join(project, "front.accdb"), "", "utf8");
+		writeFileSync(join(project, "src", "modules", "Entorno.bas"), "", "utf8");
+		writeFileSync(join(project, ".dysflow", "project.json"), JSON.stringify({ id: "registered-project", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+		writeFileSync(registryPath, JSON.stringify({ projects: { "registered-project": { configPath: join(project, ".dysflow", "project.json") } } }), "utf8");
+
+		const services = createUnavailableServices(
+			{ code: "CONFIG_MISSING_ACCESS_PATH", message: "startup cwd has no project", retryable: false },
+			{ cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
+		);
+		const result = await services.legacyToolService?.execute("import_all", {
+			contextId: "registered-project",
+			dryRun: true,
+			importMode: "Code",
+		});
+
+		expect(result?.ok).toBe(true);
+		if (result === undefined || !result.ok) throw new Error("expected dry-run plan");
+		expect(result.data).toMatchObject({
+			operation: "import_all",
+			dryRun: true,
+			willModifyAccess: false,
+			requestedContextId: "registered-project",
+			resolvedProjectId: "registered-project",
+			accessPath: join(project, "front.accdb"),
+			destinationRoot: join(project, "src"),
+			modulesPlanned: ["Entorno"],
+		});
+	});
+
+	it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {
+		const services = createUnavailableServices(
+			{ code: "CONFIG_MISSING_ACCESS_PATH", message: "startup cwd has no project", retryable: false },
+			{ cwd: "C:/missing", env: {} },
+		);
+
+		const result = await services.legacyToolService?.execute("import_all", { dryRun: false, projectId: "registered-project" });
+
+		expect(result?.ok).toBe(false);
+		if (result === undefined || result.ok) throw new Error("expected startup failure");
+		expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
 	});
 
 	it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {

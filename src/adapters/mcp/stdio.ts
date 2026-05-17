@@ -181,7 +181,10 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   };
 }
 
-function createUnavailableServices(error: DysflowError): DysflowMcpServices {
+export function createUnavailableServices(
+  error: DysflowError,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+): DysflowMcpServices {
   const unavailable = async () => failureResult(error);
   return {
     vbaService: { execute: unavailable },
@@ -193,7 +196,27 @@ function createUnavailableServices(error: DysflowError): DysflowMcpServices {
         retryable: error.retryable,
       }),
     },
-    legacyToolService: { execute: async () => failureResult(error) },
+    legacyToolService: createUnavailableLegacyToolService(error, options),
+  };
+}
+
+function createUnavailableLegacyToolService(
+  error: DysflowError,
+  options: { cwd?: string; env?: Record<string, string | undefined> },
+): NonNullable<DysflowMcpServices["legacyToolService"]> {
+  const fallback = new VbaSyncLegacyService({
+    cwd: options.cwd ?? process.cwd(),
+    env: options.env ?? process.env,
+  });
+  return {
+    execute: async (toolName, input) => {
+      const params = isRecord(input) ? input : {};
+      const isSafeImportDryRun =
+        (toolName === "import_all" || toolName === "import_modules") &&
+        (params.dryRun === true || params.dryRun === "true");
+      if (isSafeImportDryRun) return fallback.execute(toolName, input);
+      return failureResult(error);
+    },
   };
 }
 
