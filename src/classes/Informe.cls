@@ -551,7 +551,7 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
                                                     ) As Object
     Dim tblDatos As Object
     On Error GoTo errores
-   Set tblDatos = wordDoc.Tables.Add(rng, 4, 2)
+   Set tblDatos = wordDoc.Tables.Add(rng, 5, 2)
     
     With tblDatos
         .Borders.Enable = True
@@ -617,6 +617,23 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
+        ' HOTFIX-20260517: restaurar motivo de control de eficacia no requerida en informes.
+        If p_NC.RequiereControlEficacia = "No" Then
+            With .Cell(5, 1).Range
+                .Text = "Motivo C.Eficacia No Requerida"
+                .Font.Bold = True
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 102, 255)
+                .ParagraphFormat.Alignment = 0
+            End With
+            With .Cell(5, 2).Range
+                .Text = p_NC.MotivoNoRequiereControlEficacia
+                .Font.Bold = False
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 0, 0)
+                .ParagraphFormat.Alignment = 0
+            End With
+        End If
         .AutoFitBehavior 2
     End With
     Set getTb2DatosPrincipalesNCProyecto = tblDatos
@@ -688,11 +705,13 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
     
     On Error GoTo errores
     
-    If p_NC.RequiereAccionCorrectiva = "Sí" Then
-        Set tblDatos = wordDoc.Tables.Add(rng, 5, 2)
-    Else
-        Set tblDatos = wordDoc.Tables.Add(rng, 6, 2)
-    End If
+    Dim numFilas As Integer
+    numFilas = 5
+    If p_NC.RequiereAccionCorrectiva = "No" Then numFilas = numFilas + 1
+    If p_NC.RequiereControlEficacia = "No" Then numFilas = numFilas + 1
+    Set tblDatos = wordDoc.Tables.Add(rng, numFilas, 2)
+    Dim fila As Integer
+    fila = 1
     With tblDatos
         .Borders.Enable = True
         .PreferredWidth = 100
@@ -701,86 +720,109 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
         .Columns(2).PreferredWidthType = 2
         .Columns(1).PreferredWidth = 15
         .Columns(2).PreferredWidth = 85
-        With .Cell(1, 1).Range
+        With .Cell(fila, 1).Range
             .Text = "Descripción"
             .Font.Bold = True
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 102, 255)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(1, 2).Range
+        With .Cell(fila, 2).Range
             .Text = p_NC.Descripcion
             .Font.Bold = False
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(2, 1).Range
+        fila = fila + 1
+        With .Cell(fila, 1).Range
             .Text = "Causa"
             .Font.Bold = True
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 102, 255)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(2, 2).Range
+        With .Cell(fila, 2).Range
             .Text = p_NC.CAUSARAIZ
             .Font.Bold = False
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(3, 1).Range
+        fila = fila + 1
+        With .Cell(fila, 1).Range
             .Text = "Resp. Implant."
             .Font.Bold = True
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 102, 255)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(3, 2).Range
+        With .Cell(fila, 2).Range
             .Text = p_NC.RESPONSABLEIMPLANTACION
             .Font.Bold = False
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(4, 1).Range
+        fila = fila + 1
+        With .Cell(fila, 1).Range
             .Text = "Notas"
             .Font.Bold = True
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 102, 255)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(4, 2).Range
+        With .Cell(fila, 2).Range
             .Text = p_NC.Notas
             .Font.Bold = False
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(5, 1).Range
+        fila = fila + 1
+        With .Cell(fila, 1).Range
             .Text = "C.Eficacia"
             .Font.Bold = True
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 102, 255)
             .ParagraphFormat.Alignment = 0
         End With
-        With .Cell(5, 2).Range
+        With .Cell(fila, 2).Range
             .Text = p_NC.ControlEficacia
             .Font.Bold = False
             .Font.Name = "Segoe UI"
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
+        fila = fila + 1
         If p_NC.RequiereAccionCorrectiva = "No" Then
-            With .Cell(6, 1).Range
+            With .Cell(fila, 1).Range
                 .Text = "Motivo No AC"
                 .Font.Bold = True
                 .Font.Name = "Segoe UI"
                 .Font.Color = RGB(0, 102, 255)
                 .ParagraphFormat.Alignment = 0
             End With
-            With .Cell(6, 2).Range
+            With .Cell(fila, 2).Range
                 .Text = p_NC.MotivoNoAccionCorrectiva
+                .Font.Bold = False
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 0, 0)
+                .ParagraphFormat.Alignment = 0
+            End With
+            fila = fila + 1
+        End If
+        ' HOTFIX-20260517: restaurar motivo de control de eficacia no requerida en informes.
+        If p_NC.RequiereControlEficacia = "No" Then
+            With .Cell(fila, 1).Range
+                .Text = "Motivo C.Eficacia No Requerida"
+                .Font.Bold = True
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 102, 255)
+                .ParagraphFormat.Alignment = 0
+            End With
+            With .Cell(fila, 2).Range
+                .Text = p_NC.MotivoNoRequiereControlEficacia
                 .Font.Bold = False
                 .Font.Name = "Segoe UI"
                 .Font.Color = RGB(0, 0, 0)
