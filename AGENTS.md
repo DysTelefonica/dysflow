@@ -5,8 +5,10 @@ Proyecto Microsoft Access/VBA para la gestión de no conformidades en Telefónic
 El código generado se trabaja mediante exportación a `src/` y validación posterior en Access.
 
 ## dysflow MCP — Este proyecto
-- `accessPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES\NoConformidades.accdb`
-- `backendPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES\NoConformidades_Datos.accdb`
+- `accessPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES_staging\NoConformidades.accdb`
+- `backendPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES_staging\NoConformidades_Datos.accdb`
+- Contexto registrado: `00-no-conformidades-staging-clean`. En llamadas normales a dysflow usar solo `contextId`/`projectId`; no repetir `accessPath`, `backendPath` ni `destinationRoot` salvo override explícito contra otra base.
+- Si `.dysflow/project.json` no existe o el contexto no está registrado, primero hay que provisionar/registrar el proyecto con esos paths y recién después operar contra Access. No usar variables heredadas ni paths implícitos como autorización para abrir bases.
 
 ## Alcance del repositorio principal
 Este repositorio main debe contener solo lo imprescindible para operar y evolucionar el proyecto:
