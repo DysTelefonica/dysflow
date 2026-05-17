@@ -6,6 +6,12 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.1.4] - 2026-05-17
+
+### Fixed
+
+- Fixed self-reinstall from the profile runtime launcher by skipping runtime copy operations whose source and destination are the same path.
+
 ## [0.1.3] - 2026-05-17
 
 ### Fixed

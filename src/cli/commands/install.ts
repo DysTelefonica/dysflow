@@ -445,23 +445,32 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
 		);
 	}
 
-	await cp(runtimePaths.distSource, path.join(runtimePaths.appDir, "dist"), {
+	await copyIfDifferent(runtimePaths.distSource, path.join(runtimePaths.appDir, "dist"), {
 		recursive: true,
 		force: true,
 	});
 
 	if (await fileExists(runtimePaths.scriptsSource)) {
-		await cp(runtimePaths.scriptsSource, runtimePaths.scriptsDest, {
+		await copyIfDifferent(runtimePaths.scriptsSource, runtimePaths.scriptsDest, {
 			recursive: true,
 			force: true,
 		});
 	}
 
 	if (await fileExists(runtimePaths.packageJsonSource)) {
-		await cp(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
+		await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
 			force: true,
 		});
 	}
+}
+
+async function copyIfDifferent(
+	source: string,
+	destination: string,
+	options: Parameters<typeof cp>[2],
+): Promise<void> {
+	if (path.resolve(source) === path.resolve(destination)) return;
+	await cp(source, destination, options);
 }
 
 async function copyDocs(
@@ -629,7 +638,7 @@ export async function writeRuntimeLaunchers(
 
 export async function handleInstallCommand(
 	args: readonly string[],
-	context: { env?: NodeJS.ProcessEnv } = {},
+	context: { env?: NodeJS.ProcessEnv; packageRoot?: string } = {},
 ): Promise<CliResult> {
 	const parsed = parseInstallArgs(args);
 	if (!parsed.ok) {
@@ -643,7 +652,7 @@ export async function handleInstallCommand(
 
 	const env = context.env ?? process.env;
 	const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
-	const packageRoot = resolvePackageRoot();
+	const packageRoot = context.packageRoot ?? resolvePackageRoot();
 	const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
 	const agentConfigPaths = resolveAgentConfigPaths(getHome(env));
 	const commandPath = commandPathForConfig(runtimeDir);
