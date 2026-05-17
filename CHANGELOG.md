@@ -6,6 +6,14 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.0] - 2026-05-17
+
+### Added
+
+- Added the first Dysflow TUI dashboard path: running `dysflow` with no command opens a branded dashboard with local/latest version status and integration menu affordances.
+- Added pure TUI render helpers for the framed Dysflow header, update guidance, and integration checkbox lists.
+- Added safe Dysflow MCP config detection/removal helpers for future TUI install selection flows.
+
 ## [0.1.4] - 2026-05-17
 
 ### Fixed

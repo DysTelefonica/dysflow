@@ -38,6 +38,41 @@ function createRepoConfigWorkspace(): { root: string; cleanup(): void } {
 }
 
 describe("dysflow command modules", () => {
+	it("opens the TUI by default when no command is provided", async () => {
+		const result = await runCli([], {
+			runTui: async () => ({ exitCode: 0, stdout: "TUI_OPENED", stderr: "" }),
+		});
+
+		expect(result).toEqual({ exitCode: 0, stdout: "TUI_OPENED", stderr: "" });
+	});
+
+	it("applies TUI integration selection when provided by the interactive flow", async () => {
+		const calls: unknown[] = [];
+		const result = await runCli([], {
+			tuiSelectedAgents: ["opencode"],
+			runTui: async (_args, context) => {
+				calls.push(context?.tuiSelectedAgents);
+				return { exitCode: 0, stdout: "APPLIED", stderr: "" };
+			},
+		});
+
+		expect(result).toEqual({ exitCode: 0, stdout: "APPLIED", stderr: "" });
+		expect(calls).toEqual([["opencode"]]);
+	});
+
+	it.each([
+		["--help"],
+		["-h"],
+	])("keeps explicit %s help output available", async (flag) => {
+		const result = await runCli([flag], {
+			runTui: async () => ({ exitCode: 0, stdout: "TUI_OPENED", stderr: "" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("Usage: dysflow [command]");
+		expect(result.stdout).not.toContain("TUI_OPENED");
+	});
+
 	it.each(
 		plannedCommandCases,
 	)("dispatches %s through dedicated handler", async (command) => {

@@ -33,7 +33,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 #### Known boundaries in v0.1.0
 
 - HTTP support is implemented for local use-cases with writes disabled by default.
-- `dysflow tui` now delegates to `dysflow install` for interactive MCP setup.
+- `dysflow tui` delegates to `dysflow install` for interactive MCP setup.
 - Windows PowerShell 5.1 and local Access automation are required.
 
 ## What Dysflow is (and is not)
@@ -140,7 +140,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.1.0"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.2.0"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -355,23 +355,26 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 
 | Command           | Description                                   |
 | ----------------- | --------------------------------------------- |
+| `dysflow`         | Open the Dysflow TUI dashboard                |
 | `dysflow mcp`     | Start MCP stdio adapter                       |
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |
 | `dysflow update`  | Reinstall runtime if source version is newer  |
-| `dysflow tui`     | Interactive alias for `dysflow install`       |
+| `dysflow tui`     | Open the Dysflow TUI dashboard                |
 | `dysflow serve`   | Start local HTTP API                          |
 
 ### Common flow
 
-1. Install runtime + MCP integrations:
+1. Open the dashboard:
+   - `dysflow`
+2. Install runtime + MCP integrations:
    - `dysflow install --agent-all`
-2. Validate config: `dysflow setup` or `dysflow doctor`
-3. Start MCP: `dysflow mcp`
-4. Run MCP client session (OpenCode, etc.)
-5. On automation error/timeouts, inspect `dysflow.access.operations.list`
-6. Clean up owned operation explicitly via `dysflow.access.cleanup`
+3. Validate config: `dysflow setup` or `dysflow doctor`
+4. Start MCP: `dysflow mcp`
+5. Run MCP client session (OpenCode, etc.)
+6. On automation error/timeouts, inspect `dysflow.access.operations.list`
+7. Clean up owned operation explicitly via `dysflow.access.cleanup`
 
 ---
 
