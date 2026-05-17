@@ -10,7 +10,7 @@ const INSTALL_USAGE =
 const UPDATE_USAGE = "Usage: dysflow update [--runtime-dir <dir>] [--force]";
 
 export type AgentName = "codex" | "opencode" | "claude" | "pi";
-const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
+export const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
 
 type InstallOptions = {
 	runtimeDir?: string;

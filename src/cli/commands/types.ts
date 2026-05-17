@@ -10,7 +10,7 @@ export type CliResult = {
 	stderr: string;
 };
 
-export type TuiKey = "up" | "down" | "enter" | "q";
+export type TuiKey = "up" | "down" | "enter" | "space" | "q";
 
 export type CliCommandContext = {
 	env?: Record<string, string | undefined>;
@@ -29,6 +29,9 @@ export type CliCommandContext = {
 	localVersion?: string;
 	latestVersion?: string;
 	tuiSelectedAgents?: readonly AgentName[];
+	tuiApplyIntegrationSelection?: (
+		agents: readonly AgentName[],
+	) => Promise<CliResult> | CliResult;
 	tuiInteractive?: boolean;
 	readTuiKey?: () => Promise<TuiKey>;
 	writeTuiFrame?: (frame: string) => void;
