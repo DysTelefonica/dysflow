@@ -8,7 +8,10 @@ describe("dysflow CLI help", () => {
 		expect(result).toEqual({
 			exitCode: 0,
 			stdout: [
-				"Usage: dysflow <command>",
+				"Usage: dysflow [command]",
+				"",
+				"Default:",
+				"  dysflow Open the Dysflow terminal UI dashboard",
 				"",
 				"Commands:",
 				"  mcp     Start the MCP stdio adapter",
@@ -29,6 +32,6 @@ describe("dysflow CLI help", () => {
 		expect(result.exitCode).toBe(1);
 		expect(result.stdout).toBe("");
 		expect(result.stderr).toContain("Unsupported command: unknown");
-		expect(result.stderr).toContain("Usage: dysflow <command>");
+		expect(result.stderr).toContain("Usage: dysflow [command]");
 	});
 });
