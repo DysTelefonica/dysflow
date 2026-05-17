@@ -2,6 +2,16 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [Unreleased]
+
+- Next milestones and features will be tracked in future releases.
+
+## [0.1.1] - 2026-05-17
+
+### Fixed
+
+- Corrected the OpenCode MCP installer output to use the current local-server schema with `enabled`, `type`, and argv-array `command`.
+
 ## [0.1.0] - 2026-05-16
 
 ### Dysflow v0.1.0 — Initial Release: MCP Safety Baseline
@@ -43,6 +53,3 @@ Initial production release focused on making Access automation safe, observable 
 - Added HTTP API reference: `docs/api/http-api.md`.
 - Added E2E MCP reference: `docs/testing/mcp-access-e2e.md`.
 
-## [Unreleased]
-
-- Next milestones and features will be tracked in future releases.

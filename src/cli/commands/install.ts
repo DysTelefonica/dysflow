@@ -336,7 +336,11 @@ async function configureOpencode(
 ): Promise<void> {
 	const root = await readJson(filePath);
 	const mcp = ensureObject(root.mcp);
-	mcp.dysflow = { command: commandPath, args: ["mcp"] };
+	mcp.dysflow = {
+		enabled: true,
+		type: "local",
+		command: [commandPath, "mcp"],
+	};
 	root.mcp = mcp;
 	await writeJson(filePath, root);
 }

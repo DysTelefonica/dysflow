@@ -383,11 +383,12 @@ Point OpenCode to the installed runtime binary, e.g.:
 {
   "mcp": {
     "dysflow": {
+      "enabled": true,
+      "type": "local",
       "command": [
         "C:/Users/<user>/AppData/Local/dysflow/bin/dysflow.cmd",
         "mcp"
-      ],
-      "type": "local"
+      ]
     }
   }
 }

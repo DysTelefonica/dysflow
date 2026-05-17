@@ -178,8 +178,10 @@ describe("handleInstallCommand end-to-end", () => {
 		const opencode = await readJson(opencodeConfig);
 		const opencodeMcp = opencode.mcp as Record<string, unknown>;
 		const opencodeDysflow = opencodeMcp.dysflow as Record<string, unknown>;
-		expect(opencodeDysflow.command).toBe(expectedCmd);
-		expect(opencodeDysflow.args).toEqual(["mcp"]);
+		expect(opencodeDysflow.enabled).toBe(true);
+		expect(opencodeDysflow.type).toBe("local");
+		expect(opencodeDysflow.command).toEqual([expectedCmd, "mcp"]);
+		expect(opencodeDysflow).not.toHaveProperty("args");
 
 		const claude = await readJson(claudeSettings);
 		const claudeMcpServers = claude.mcpServers as Record<string, unknown>;
