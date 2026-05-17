@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import {
+	mkdtemp,
+	readFile,
+	rm,
+	writeFile,
+	mkdir,
+	access,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -11,6 +18,9 @@ import {
 	compareVersions,
 	replaceCodexMcpSection,
 	resolvePackageRoot,
+	hasDysflowMcpConfig,
+	removeDysflowMcpConfig,
+	applyIntegrationSelection,
 } from "../../src/cli/commands/install";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
@@ -122,6 +132,173 @@ describe("codex toml serialization", () => {
 	});
 });
 
+describe("Dysflow MCP config state", () => {
+	it("detects and removes only Dysflow MCP entries while preserving unrelated config", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-config-state-"));
+		try {
+			const codexConfig = join(root, "codex.toml");
+			await writeFile(
+				codexConfig,
+				[
+					"[mcp_servers.other]",
+					"command = 'other'",
+					"",
+					"[mcp_servers.dysflow]",
+					"command = 'C:/dysflow/bin/dysflow.cmd'",
+					'args = ["mcp"]',
+					"startup_timeout_sec = 60.0",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+
+			const jsonConfig = join(root, "opencode.json");
+			await writeFile(
+				jsonConfig,
+				`${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" }, dysflow: { enabled: true, type: "local", command: ["C:/dysflow/bin/dysflow.cmd", "mcp"] } } }, null, 2)}\n`,
+				"utf8",
+			);
+
+			expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(true);
+			expect(await hasDysflowMcpConfig("opencode", jsonConfig)).toBe(true);
+
+			await removeDysflowMcpConfig("codex", codexConfig);
+			await removeDysflowMcpConfig("opencode", jsonConfig);
+
+			expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(false);
+			expect(await readFile(codexConfig, "utf8")).toContain(
+				"[mcp_servers.other]",
+			);
+
+			const updatedJson = await readJson(jsonConfig);
+			expect((updatedJson.mcp as Record<string, unknown>).other).toEqual({
+				type: "remote",
+				url: "https://example.test",
+			});
+			expect(
+				(updatedJson.mcp as Record<string, unknown>).dysflow,
+			).toBeUndefined();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not create config files when removing absent Dysflow entries", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-config-absent-"));
+		try {
+			const missingCodex = join(root, "missing-codex.toml");
+			const missingOpenCode = join(root, "missing-opencode.json");
+
+			await removeDysflowMcpConfig("codex", missingCodex);
+			await removeDysflowMcpConfig("opencode", missingOpenCode);
+
+			await expect(access(missingCodex)).rejects.toThrow();
+			await expect(access(missingOpenCode)).rejects.toThrow();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("removes nested Codex Dysflow tables with the parent section", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-codex-nested-"));
+		try {
+			const codexConfig = join(root, "config.toml");
+			await writeFile(
+				codexConfig,
+				[
+					"[mcp_servers.dysflow]",
+					"command = 'C:/dysflow/bin/dysflow.cmd'",
+					"[mcp_servers.dysflow.env]",
+					"DYSFLOW_HOME = 'C:/Users/me/AppData/Local/dysflow'",
+					"[mcp_servers.other]",
+					"command = 'other'",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+
+			await removeDysflowMcpConfig("codex", codexConfig);
+
+			const updated = await readFile(codexConfig, "utf8");
+			expect(updated).not.toContain("mcp_servers.dysflow");
+			expect(updated).toContain("[mcp_servers.other]");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("applies selected integrations and removes unselected Dysflow entries", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-apply-selection-"));
+		const home = join(root, "home");
+		const runtimeDir = join(root, "runtime");
+		const packageRoot = join(root, "package");
+		const distCli = join(packageRoot, "dist", "cli");
+		const codexConfig = join(home, ".codex", "config.toml");
+		const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
+		const claudeDesktopConfig = join(
+			home,
+			"AppData",
+			"Roaming",
+			"Claude",
+			"claude_desktop_config.json",
+		);
+
+		try {
+			await mkdir(distCli, { recursive: true });
+			await writeFile(join(distCli, "index.js"), "runCli", "utf8");
+			await writeFile(
+				join(packageRoot, "package.json"),
+				'{"name":"dysflow","version":"0.2.0"}\n',
+				"utf8",
+			);
+			await mkdir(join(home, ".codex"), { recursive: true });
+			await writeFile(
+				codexConfig,
+				"[mcp_servers.dysflow]\ncommand = 'old'\n",
+				"utf8",
+			);
+			await mkdir(join(home, ".config", "opencode"), { recursive: true });
+			await writeFile(
+				opencodeConfig,
+				`${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" } } }, null, 2)}\n`,
+				"utf8",
+			);
+			await mkdir(join(home, "AppData", "Roaming", "Claude"), {
+				recursive: true,
+			});
+			await writeFile(
+				claudeDesktopConfig,
+				`${JSON.stringify({ mcpServers: { other: { command: "other" }, dysflow: { command: "old", args: ["mcp"] } } }, null, 2)}\n`,
+				"utf8",
+			);
+
+			const result = await applyIntegrationSelection(["opencode"], {
+				env: { USERPROFILE: home },
+				runtimeDir,
+				packageRoot,
+			});
+
+			expect(result.exitCode).toBe(0);
+			expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(false);
+			expect(await hasDysflowMcpConfig("opencode", opencodeConfig)).toBe(true);
+			expect(
+				await hasDysflowMcpConfig("claude", claudeDesktopConfig),
+			).toBe(false);
+			const updatedClaude = await readJson(claudeDesktopConfig);
+			expect((updatedClaude.mcpServers as Record<string, unknown>).other).toEqual({
+				command: "other",
+			});
+			const updatedOpenCode = await readJson(opencodeConfig);
+			expect((updatedOpenCode.mcp as Record<string, unknown>).other).toEqual({
+				type: "remote",
+				url: "https://example.test",
+			});
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("resolvePackageRoot", () => {
 	it("uses the installed package app root even when cwd is a project subfolder", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-package-root-"));
@@ -132,7 +309,11 @@ describe("resolvePackageRoot", () => {
 		try {
 			await mkdir(installedCliDir, { recursive: true });
 			await mkdir(projectSubfolder, { recursive: true });
-			await writeFile(join(installedApp, "package.json"), '{"name":"dysflow"}\n', "utf8");
+			await writeFile(
+				join(installedApp, "package.json"),
+				'{"name":"dysflow"}\n',
+				"utf8",
+			);
 
 			expect(
 				resolvePackageRoot({
@@ -161,7 +342,11 @@ describe("handleInstallCommand end-to-end", () => {
 			await mkdir(appScripts, { recursive: true });
 			await writeFile(join(appCli, "index.js"), "SELF_RUNTIME", "utf8");
 			await writeFile(join(appScripts, "runner.ps1"), "SELF_SCRIPT", "utf8");
-			await writeFile(join(appDir, "package.json"), '{"name":"dysflow","version":"0.1.3"}\n', "utf8");
+			await writeFile(
+				join(appDir, "package.json"),
+				'{"name":"dysflow","version":"0.1.3"}\n',
+				"utf8",
+			);
 
 			const result = await handleInstallCommand(
 				["--runtime-dir", runtimeDir, "--agents", "opencode", "--no-tui"],
@@ -170,10 +355,23 @@ describe("handleInstallCommand end-to-end", () => {
 
 			expect(result.stderr).toBe("");
 			expect(result.exitCode).toBe(0);
-			expect(await readFile(join(appCli, "index.js"), "utf8")).toBe("SELF_RUNTIME");
-			const opencode = await readJson(join(home, ".config", "opencode", "opencode.json"));
-			expect(((opencode.mcp as Record<string, unknown>).dysflow as Record<string, unknown>).type).toBe("local");
-			expect(await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8")).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+			expect(await readFile(join(appCli, "index.js"), "utf8")).toBe(
+				"SELF_RUNTIME",
+			);
+			const opencode = await readJson(
+				join(home, ".config", "opencode", "opencode.json"),
+			);
+			expect(
+				(
+					(opencode.mcp as Record<string, unknown>).dysflow as Record<
+						string,
+						unknown
+					>
+				).type,
+			).toBe("local");
+			expect(
+				await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8"),
+			).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

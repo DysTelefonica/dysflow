@@ -33,7 +33,11 @@ export async function runCli(
 ): Promise<CliResult> {
 	const [command, ...commandArgs] = args;
 
-	if (command === undefined || command === "--help" || command === "-h") {
+	if (command === undefined) {
+		return (context.runTui ?? handleTuiCommand)([], context);
+	}
+
+	if (command === "--help" || command === "-h") {
 		return { exitCode: 0, stdout: HELP_TEXT, stderr: "" };
 	}
 

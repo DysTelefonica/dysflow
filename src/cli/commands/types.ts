@@ -2,6 +2,7 @@ import type { OperationResult } from "../../core/contracts/index.js";
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { StartHttpAdapter } from "./serve.js";
+import type { AgentName } from "./install.js";
 
 export type CliResult = {
 	exitCode: number;
@@ -19,10 +20,20 @@ export type CliCommandContext = {
 		}): Promise<OperationResult<AccessDiagnosticsResult>>;
 	};
 	startHttpAdapter?: StartHttpAdapter;
+	runTui?: (
+		args: readonly string[],
+		context?: CliCommandContext,
+	) => Promise<CliResult> | CliResult;
+	localVersion?: string;
+	latestVersion?: string;
+	tuiSelectedAgents?: readonly AgentName[];
 };
 
 export const HELP_TEXT = [
-	"Usage: dysflow <command>",
+	"Usage: dysflow [command]",
+	"",
+	"Default:",
+	"  dysflow Open the Dysflow terminal UI dashboard",
 	"",
 	"Commands:",
 	"  mcp     Start the MCP stdio adapter",
