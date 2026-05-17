@@ -4,6 +4,13 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-17
+
+### Added
+
+- Made `dysflow update` fetch the latest GitHub release, build it in a temporary workspace, and install it into the local runtime.
+- Added release-update coverage for newer releases, current releases, forced reinstalls, and GitHub/provider failures.
+
 ## [0.3.1] - 2026-05-17
 
 ### Fixed
