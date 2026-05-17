@@ -9,6 +9,7 @@ import {
 	handleUpdateCommand,
 } from "./commands/install.js";
 import { handleTuiCommand } from "./commands/tui.js";
+import { handleVersionCommand } from "./commands/version.js";
 import {
 	HELP_TEXT,
 	type CliCommandContext,
@@ -39,6 +40,10 @@ export async function runCli(
 
 	if (command === "--help" || command === "-h") {
 		return { exitCode: 0, stdout: HELP_TEXT, stderr: "" };
+	}
+
+	if (command === "--version" || command === "-v") {
+		return handleVersionCommand();
 	}
 
 	const handler = COMMANDS.get(command);
