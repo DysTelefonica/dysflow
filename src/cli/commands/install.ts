@@ -1,8 +1,19 @@
-import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+	access,
+	cp,
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { accessSync, constants } from "node:fs";
+import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import type { CliResult } from "./types.js";
 
 const INSTALL_USAGE =
@@ -11,6 +22,25 @@ const UPDATE_USAGE = "Usage: dysflow update [--runtime-dir <dir>] [--force]";
 
 export type AgentName = "codex" | "opencode" | "claude" | "pi";
 export const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
+const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
+const GITHUB_LATEST_RELEASE_API =
+	"https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
+const execFileAsync = promisify(execFile);
+
+export type ReleaseInfo = {
+	version: string;
+	tagName?: string;
+};
+
+export type PreparedReleasePackage = {
+	packageRoot: string;
+	cleanup?: () => Promise<void>;
+};
+
+export type ReleaseUpdateProvider = {
+	resolveLatestRelease(): Promise<ReleaseInfo>;
+	preparePackage(release: ReleaseInfo): Promise<PreparedReleasePackage>;
+};
 
 type InstallOptions = {
 	runtimeDir?: string;
@@ -666,6 +696,91 @@ async function readPackageJsonVersion(
 	return undefined;
 }
 
+type GitHubLatestReleaseResponse = {
+	tag_name?: unknown;
+	name?: unknown;
+};
+
+function normalizeReleaseVersion(value: string): string {
+	return value.startsWith("v") ? value.slice(1) : value;
+}
+
+function createCommandError(command: string, error: unknown): Error {
+	if (error instanceof Error) {
+		return new Error(`${command} failed: ${error.message}`);
+	}
+	return new Error(`${command} failed.`);
+}
+
+async function runCommand(
+	command: string,
+	args: readonly string[],
+	cwd: string,
+): Promise<void> {
+	try {
+		await execFileAsync(command, [...args], {
+			cwd,
+			windowsHide: true,
+			maxBuffer: 10 * 1024 * 1024,
+		});
+	} catch (error) {
+		throw createCommandError(`${command} ${args.join(" ")}`, error);
+	}
+}
+
+function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
+	return {
+		async resolveLatestRelease(): Promise<ReleaseInfo> {
+			const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+				headers: {
+					Accept: "application/vnd.github+json",
+					"User-Agent": "dysflow-updater",
+				},
+			});
+			if (!response.ok) {
+				throw new Error(
+					`GitHub latest release lookup failed with HTTP ${response.status}.`,
+				);
+			}
+
+			const body = (await response.json()) as GitHubLatestReleaseResponse;
+			if (typeof body.tag_name !== "string" || body.tag_name.length === 0) {
+				throw new Error("GitHub latest release response did not include tag_name.");
+			}
+
+			return {
+				tagName: body.tag_name,
+				version: normalizeReleaseVersion(body.tag_name),
+			};
+		},
+
+		async preparePackage(
+			release: ReleaseInfo,
+		): Promise<PreparedReleasePackage> {
+			const tagName = release.tagName ?? `v${release.version}`;
+			const tempRoot = await mkdtemp(path.join(tmpdir(), "dysflow-update-"));
+			const packageRoot = path.join(tempRoot, "source");
+			const cleanup = async (): Promise<void> => {
+				await rm(tempRoot, { recursive: true, force: true });
+			};
+
+			try {
+				await runCommand(
+					"git",
+					["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
+					tempRoot,
+				);
+				await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
+				await runCommand("pnpm", ["build"], packageRoot);
+				return { packageRoot, cleanup };
+			} catch (error) {
+				await cleanup();
+				throw error;
+			}
+		},
+	};
+}
+
 async function resolveClaudeConfigPath(
 	paths: Pick<AgentConfigPaths, "claudeDesktop" | "claudeSettings">,
 ): Promise<string> {
@@ -803,7 +918,11 @@ export async function handleInstallCommand(
 
 export async function handleUpdateCommand(
 	args: readonly string[],
-	context: { env?: NodeJS.ProcessEnv } = {},
+	context: {
+		env?: NodeJS.ProcessEnv;
+		releaseUpdateProvider?: ReleaseUpdateProvider;
+		packageRoot?: string;
+	} = {},
 ): Promise<CliResult> {
 	const parsed = parseUpdateArgs(args);
 	if (!parsed.ok) {
@@ -817,43 +936,54 @@ export async function handleUpdateCommand(
 
 	const env = context.env ?? process.env;
 	const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
-	const packageRoot = resolvePackageRoot();
-	const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
-	const localVersion = await readPackageJsonVersion(
-		runtimePaths.packageJsonSource,
-	);
-	if (localVersion === undefined) {
-		return {
-			exitCode: 1,
-			stdout: "",
-			stderr:
-				"Unable to determine local version for dysflow update. Missing package.json in CLI runtime source.",
-		};
-	}
+	const localPackageRoot = context.packageRoot ?? resolvePackageRoot();
+	const runtimePaths = resolveRuntimePaths(runtimeDir, localPackageRoot);
 
 	const installedVersion = await readPackageJsonVersion(
 		runtimePaths.packageJsonDest,
 	);
+	const provider =
+		context.releaseUpdateProvider ?? createGitHubReleaseUpdateProvider();
+
+	let latestRelease: ReleaseInfo;
+	try {
+		latestRelease = await provider.resolveLatestRelease();
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unable to resolve latest release.";
+		return {
+			exitCode: 1,
+			stdout: "",
+			stderr: `Failed to update Dysflow runtime: ${message}`,
+		};
+	}
+
 	const isUpdateNeeded =
 		parsed.options.force ||
 		installedVersion === undefined ||
-		compareVersions(localVersion, installedVersion) > 0;
+		compareVersions(latestRelease.version, installedVersion) > 0;
 
 	if (!isUpdateNeeded) {
 		return {
 			exitCode: 0,
-			stdout: createNoUpdateReport(runtimeDir, localVersion),
+			stdout: createNoUpdateReport(runtimeDir, latestRelease.version),
 			stderr: "",
 		};
 	}
 
 	const previousVersion = installedVersion ?? "not installed";
+	let preparedPackage: PreparedReleasePackage | undefined;
 	try {
-		await installRuntime(runtimePaths, packageRoot);
+		preparedPackage = await provider.preparePackage(latestRelease);
+		const releaseRuntimePaths = resolveRuntimePaths(
+			runtimeDir,
+			preparedPackage.packageRoot,
+		);
+		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot);
 		return {
 			exitCode: 0,
 			stdout:
-				`Dysflow runtime update: ${previousVersion} -> ${localVersion}\n` +
+				`Dysflow runtime update: ${previousVersion} -> ${latestRelease.version}\n` +
 				createInstallReport(runtimeDir, []),
 			stderr: "",
 		};
@@ -865,8 +995,10 @@ export async function handleUpdateCommand(
 		return {
 			exitCode: 1,
 			stdout: "",
-			stderr: message,
+			stderr: `Failed to update Dysflow runtime: ${message}`,
 		};
+	} finally {
+		await preparedPackage?.cleanup?.();
 	}
 }
 
