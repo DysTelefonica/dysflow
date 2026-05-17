@@ -98,6 +98,44 @@ describe("dysflow command modules", () => {
 		expect(result.stderr).toBe("");
 	});
 
+	it("updates .dysflow project id for Engram traceability", async () => {
+		const workspace = createRepoConfigWorkspace();
+		try {
+			const result = await runCli(
+				["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+				{ cwd: workspace.root, env: {} },
+			);
+
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toContain(
+				"Updated project id in .dysflow/project.json: 00-no-conformidades-staging-clean",
+			);
+			const config = JSON.parse(
+				readFileSync(join(workspace.root, ".dysflow", "project.json"), "utf8"),
+			) as { id?: string };
+			expect(config.id).toBe("00-no-conformidades-staging-clean");
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("returns a CLI error when project config id update finds malformed JSON", async () => {
+		const workspace = createRepoConfigWorkspace();
+		try {
+			writeFileSync(join(workspace.root, ".dysflow", "project.json"), "{bad", "utf8");
+
+			const result = await runCli(
+				["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+				{ cwd: workspace.root, env: {} },
+			);
+
+			expect(result.exitCode).toBe(1);
+			expect(result.stderr).toContain("Invalid .dysflow/project.json");
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
 	it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
 		const calls: unknown[] = [];
 

@@ -218,10 +218,16 @@ This writes `.dysflow/project.json` with repo-relative paths and default `destin
 }
 ```
 
-Normal calls should stay short and use the active repo/worktree config:
+Normal calls should stay short and use the active repo/worktree config. `projectId` is the canonical trace identity and should match the Engram project name when Engram is available. `contextId` is only for a distinct run/context id; do not duplicate `projectId` and `contextId` with the same value.
 
 ```text
-dysflow.doctor { "contextId": "00-no-conformidades-staging-clean" }
+dysflow.doctor { "projectId": "00-no-conformidades-staging-clean" }
+```
+
+To align an existing repo config with the Engram project name, run:
+
+```powershell
+dysflow setup --set-project-id 00-no-conformidades-staging-clean
 ```
 
 Do not inject these on every call when they are already in `.dysflow/project.json`:
@@ -232,7 +238,8 @@ Do not inject these on every call when they are already in `.dysflow/project.jso
 | `backendPath`             | `.dysflow/project.json` → `backendPath`                                                             |
 | `destinationRoot`         | `.dysflow/project.json` → `destinationRoot` (usually `src`)                                         |
 | `projectRoot`             | active repo/worktree; optional `.dysflow/project.json` → `projectRoot` only for non-standard layout |
-| `projectId` / `contextId` | `.dysflow/project.json` → `id`; call-level `contextId` is only traceability                         |
+| `projectId`               | `.dysflow/project.json` → `id`; should match the Engram project name when available                 |
+| `contextId`               | call-level run/context id only; omit it when it would duplicate `projectId`                         |
 | password                  | environment secret named by `passwordEnv`, or `DYSFLOW_ACCESS_PASSWORD`                             |
 
 Call-level path/root fields are still supported as explicit one-off overrides, and when provided they take precedence over `.dysflow/project.json`. Use them only for deliberate cross-project or exceptional operations.

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
@@ -44,6 +44,201 @@ describe("VbaSyncLegacyService", () => {
       timeoutMs: 30_000,
       signal: expect.any(AbortSignal),
     }]);
+  });
+
+  it("dry-run import_all resolves explicit registered project instead of cwd and does not open Access", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-"));
+    const staging = join(root, "staging");
+    const develop = join(root, "develop");
+    const registryPath = join(root, "projects.json");
+    await mkdir(join(staging, ".dysflow"), { recursive: true });
+    await mkdir(join(develop, ".dysflow"), { recursive: true });
+    await mkdir(join(develop, "src", "modules"), { recursive: true });
+    await writeFile(join(staging, "front.accdb"), "", "utf8");
+    await writeFile(join(develop, "front.accdb"), "", "utf8");
+    await writeFile(join(develop, "src", "modules", "Entorno.bas"), "Attribute VB_Name = \"Entorno\"", "utf8");
+    await writeFile(join(staging, ".dysflow", "project.json"), JSON.stringify({ id: "staging", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    await writeFile(join(develop, ".dysflow", "project.json"), JSON.stringify({ id: "develop", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    await writeFile(registryPath, JSON.stringify({ projects: { develop: { configPath: join(develop, ".dysflow", "project.json") } } }), "utf8");
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({ cwd: staging, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath }, executor: async (request) => {
+      calls.push(request);
+      return { exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false };
+    } });
+
+    const result = await service.execute("import_all", { projectId: "develop", dryRun: true, importMode: "Code" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      operation: "import_all",
+      dryRun: true,
+      willModifyAccess: false,
+      requestedProjectId: "develop",
+      resolvedProjectId: "develop",
+      configSource: "global-registry",
+      accessPath: join(develop, "front.accdb"),
+      destinationRoot: join(develop, "src"),
+      modulesPlanned: ["Entorno"],
+      modulesCount: 1,
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("dry-run import_all fails unknown explicit project without cwd fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-missing-"));
+    const staging = join(root, "staging");
+    await mkdir(join(staging, ".dysflow"), { recursive: true });
+    await writeFile(join(staging, "front.accdb"), "", "utf8");
+    await writeFile(join(staging, ".dysflow", "project.json"), JSON.stringify({ id: "staging", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    const service = new VbaSyncLegacyService({ cwd: staging, env: { DYSFLOW_PROJECT_REGISTRY_PATH: join(root, "missing-projects.json") } });
+
+    const result = await service.execute("import_all", { projectId: "missing-project", dryRun: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+    expect(result.error.message).toContain("Refusing to fall back to cwd");
+  });
+
+  it("dry-run explicit overrides win over requested project id", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-overrides-"));
+    const staging = join(root, "staging");
+    const develop = join(root, "develop");
+    await mkdir(join(develop, "src", "modules"), { recursive: true });
+    await writeFile(join(develop, "front.accdb"), "", "utf8");
+    await writeFile(join(develop, "src", "modules", "Variables Globales.bas"), "", "utf8");
+    const service = new VbaSyncLegacyService({ cwd: staging, env: {} });
+
+    const result = await service.execute("import_all", { projectId: "staging", dryRun: true, accessPath: join(develop, "front.accdb"), destinationRoot: join(develop, "src") });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      configSource: "explicit-overrides",
+      accessPath: join(develop, "front.accdb"),
+      destinationRoot: join(develop, "src"),
+      modulesPlanned: ["Variables Globales"],
+    });
+  });
+
+  it("dry-run import_modules only plans requested modules", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-modules-"));
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    const service = new VbaSyncLegacyService({ cwd: root, accessPath: join(root, "front.accdb"), destinationRoot: root });
+
+    const result = await service.execute("import_modules", { dryRun: true, moduleNames: ["Entorno", "Variables Globales"], importMode: "Code" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      operation: "import_modules",
+      modulesPlanned: ["Entorno", "Variables Globales"],
+      modulesCount: 2,
+      willModifyAccess: false,
+    });
+  });
+
+  it("dry-run without explicit project loads cwd project config identity", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-cwd-project-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await mkdir(join(root, "src", "modules"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(root, "src", "modules", "Entorno.bas"), "", "utf8");
+    await writeFile(join(root, ".dysflow", "project.json"), JSON.stringify({ id: "cwd-project", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+
+    const result = await service.execute("import_all", { dryRun: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      resolvedProjectId: "cwd-project",
+      accessPath: join(root, "front.accdb"),
+      destinationRoot: join(root, "src"),
+      modulesPlanned: ["Entorno"],
+    });
+  });
+
+  it("strictContext fails when an expected path has no resolved actual value", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-strict-missing-"));
+    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+
+    const result = await service.execute("import_all", { dryRun: true, strictContext: true, expectedAccessPath: join(root, "front.accdb") });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected strict failure");
+    expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+  });
+
+  it("destinationRoot override wins even when projectId is registered", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-dest-registered-"));
+    const project = join(root, "project");
+    const overrideRoot = join(root, "override-src");
+    const registryPath = join(root, "projects.json");
+    await mkdir(join(project, ".dysflow"), { recursive: true });
+    await mkdir(join(project, "src", "modules"), { recursive: true });
+    await mkdir(join(overrideRoot, "modules"), { recursive: true });
+    await writeFile(join(project, "front.accdb"), "", "utf8");
+    await writeFile(join(project, "src", "modules", "Wrong.bas"), "", "utf8");
+    await writeFile(join(overrideRoot, "modules", "Right.bas"), "", "utf8");
+    await writeFile(join(project, ".dysflow", "project.json"), JSON.stringify({ id: "registered", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    await writeFile(registryPath, JSON.stringify({ projects: { registered: { configPath: join(project, ".dysflow", "project.json") } } }), "utf8");
+    const service = new VbaSyncLegacyService({ cwd: root, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } });
+
+    const result = await service.execute("import_all", { projectId: "registered", dryRun: true, destinationRoot: overrideRoot });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      destinationRoot: overrideRoot,
+      modulesPlanned: ["Right"],
+    });
+  });
+
+  it("destinationRoot-only override wins over configured cwd project", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-dest-override-"));
+    const overrideRoot = join(root, "override-src");
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await mkdir(join(root, "src", "modules"), { recursive: true });
+    await mkdir(join(overrideRoot, "modules"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(root, "src", "modules", "Wrong.bas"), "", "utf8");
+    await writeFile(join(overrideRoot, "modules", "Right.bas"), "", "utf8");
+    await writeFile(join(root, ".dysflow", "project.json"), JSON.stringify({ id: "cwd-project", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+
+    const result = await service.execute("import_all", { dryRun: true, destinationRoot: overrideRoot });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      destinationRoot: overrideRoot,
+      modulesPlanned: ["Right"],
+    });
+  });
+
+  it("real import returns target diagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-real-diag-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(root, ".dysflow", "project.json"), JSON.stringify({ id: "real-project", accessPath: "front.accdb", destinationRoot: "src" }), "utf8");
+    const service = new VbaSyncLegacyService({ cwd: root, env: {}, executor: async () => ({ exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false }) });
+
+    const result = await service.execute("import_modules", { moduleNames: ["Entorno"] });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import success");
+    expect(result.data).toMatchObject({
+      operation: "import_modules",
+      dryRun: false,
+      willModifyAccess: true,
+      resolvedProjectId: "real-project",
+      accessPath: join(root, "front.accdb"),
+      destinationRoot: join(root, "src"),
+      result: { ok: true },
+    });
   });
 
   it("timeout: executor receives a cancellation signal and resolves VBA_MANAGER_TIMEOUT", async () => {
@@ -304,7 +499,7 @@ describe("VbaSyncLegacyService", () => {
   it("returns VBA_INVALID_TEST_PLAN when the test plan file is missing", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-missing-"));
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -323,7 +518,7 @@ describe("VbaSyncLegacyService", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-malformed-"));
     await writeFile(join(root, "tests.vba.json"), "{ not valid json }", "utf8");
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -342,7 +537,7 @@ describe("VbaSyncLegacyService", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-badstruct-"));
     await writeFile(join(root, "tests.vba.json"), JSON.stringify("not-an-array"), "utf8");
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1 }),
+      executor: async () => ({ exitCode: 0, stdout: "[]", stderr: "", durationMs: 1, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -359,7 +554,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("succeeds with a valid inline procedureName (regression guard)", async () => {
     const service = new VbaSyncLegacyService({
-      executor: async () => ({ exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Run"}]', stderr: "", durationMs: 2 }),
+      executor: async () => ({ exitCode: 0, stdout: '[{"ok":true,"procedure":"Test_Run"}]', stderr: "", durationMs: 2, timedOut: false }),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},

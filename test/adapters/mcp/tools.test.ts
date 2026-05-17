@@ -96,6 +96,20 @@ describe("MCP tool registration over core services", () => {
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
   });
 
+  it("describes projectId as canonical trace identity and contextId as optional run context", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    const schema = tools.find((tool) => tool.name === "dysflow.vba.execute")?.inputSchema;
+
+    expect(schema?.properties.projectId.description).toContain("canonical project identity");
+    expect(schema?.properties.projectId.description).toContain("Engram");
+    expect(schema?.properties.contextId.description).toContain("run/context id");
+    expect(schema?.properties.contextId.description).toContain("Do not duplicate projectId");
+  });
+
   it("accepts contextId/projectId on short core calls without requiring local path injection", async () => {
     const diagnostics = new FakeDiagnosticsService(successResult({ checks: [] }));
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
