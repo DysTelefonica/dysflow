@@ -46,6 +46,21 @@ describe("dysflow command modules", () => {
 		expect(result).toEqual({ exitCode: 0, stdout: "TUI_OPENED", stderr: "" });
 	});
 
+	it("keeps the default TUI open until the user exits", async () => {
+		const frames: string[] = [];
+		const keys: Array<"down" | "q"> = ["down", "q"];
+		const result = await runCli([], {
+			tuiInteractive: true,
+			readTuiKey: async () => keys.shift() ?? "q",
+			writeTuiFrame: (frame) => frames.push(frame),
+		});
+
+		expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+		expect(frames).toHaveLength(2);
+		expect(frames[0]).toContain("▸ Install / Integrations");
+		expect(frames[1]).toContain("▸ Doctor");
+	});
+
 	it("applies TUI integration selection when provided by the interactive flow", async () => {
 		const calls: unknown[] = [];
 		const result = await runCli([], {

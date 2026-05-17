@@ -6,6 +6,12 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.1] - 2026-05-17
+
+### Fixed
+
+- Kept the default TUI dashboard open in interactive terminals so arrow-key navigation works until the user exits.
+
 ## [0.2.0] - 2026-05-17
 
 ### Added
