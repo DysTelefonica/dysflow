@@ -6,6 +6,12 @@ All notable changes to Dysflow will be documented in this file.
 
 - Next milestones and features will be tracked in future releases.
 
+## [0.2.3] - 2026-05-17
+
+### Fixed
+
+- Fixed the generated PowerShell launcher so custom `--runtime-dir` installs set `DYSFLOW_HOME` to the selected runtime directory.
+
 ## [0.2.2] - 2026-05-17
 
 ### Fixed

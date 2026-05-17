@@ -450,9 +450,13 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(piDysflow.command).toBe(expectedCmd);
 		expect(piDysflow.args).toEqual(["mcp"]);
 
-		expect(
-			await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8"),
-		).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+		const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
+		expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+		const ps1Launcher = await readFile(join(runtimeDir, "bin", "dysflow.ps1"), "utf8");
+		expect(ps1Launcher).toContain(
+			`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`,
+		);
+		expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
 
 		await rm(root, { recursive: true, force: true });
 	});

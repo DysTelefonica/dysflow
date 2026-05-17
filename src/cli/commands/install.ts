@@ -720,7 +720,7 @@ export async function writeRuntimeLaunchers(
 
 	const ps1Content = [
 		'$ErrorActionPreference = "Stop"',
-		'$env:DYSFLOW_HOME = "$env:LOCALAPPDATA\\dysflow"',
+		`$env:DYSFLOW_HOME = "${normalizedRuntimeDir}"`,
 		`& node (Join-Path $env:DYSFLOW_HOME "app\\dist\\cli\\index.js") @args`,
 		"exit $LASTEXITCODE",
 		"",
