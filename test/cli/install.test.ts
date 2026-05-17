@@ -147,6 +147,38 @@ describe("resolvePackageRoot", () => {
 });
 
 describe("handleInstallCommand end-to-end", () => {
+	it("reinstalling from the installed runtime app refreshes integrations without self-copy failure", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-self-install-"));
+		const home = join(root, "home");
+		const runtimeDir = join(root, "runtime");
+		const appDir = join(runtimeDir, "app");
+		const appDist = join(appDir, "dist");
+		const appCli = join(appDist, "cli");
+		const appScripts = join(appDir, "scripts");
+
+		try {
+			await mkdir(appCli, { recursive: true });
+			await mkdir(appScripts, { recursive: true });
+			await writeFile(join(appCli, "index.js"), "SELF_RUNTIME", "utf8");
+			await writeFile(join(appScripts, "runner.ps1"), "SELF_SCRIPT", "utf8");
+			await writeFile(join(appDir, "package.json"), '{"name":"dysflow","version":"0.1.3"}\n', "utf8");
+
+			const result = await handleInstallCommand(
+				["--runtime-dir", runtimeDir, "--agents", "opencode", "--no-tui"],
+				{ env: { USERPROFILE: home }, packageRoot: appDir },
+			);
+
+			expect(result.stderr).toBe("");
+			expect(result.exitCode).toBe(0);
+			expect(await readFile(join(appCli, "index.js"), "utf8")).toBe("SELF_RUNTIME");
+			const opencode = await readJson(join(home, ".config", "opencode", "opencode.json"));
+			expect(((opencode.mcp as Record<string, unknown>).dysflow as Record<string, unknown>).type).toBe("local");
+			expect(await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8")).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("installs runtime to requested path and configures selected agents", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-install-"));
 		const home = join(root, "home");
