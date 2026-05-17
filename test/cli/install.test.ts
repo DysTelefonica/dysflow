@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
 	handleInstallCommand,
 	handleUpdateCommand,
+	createGitHubReleaseRequestHeaders,
 	parseAgentList,
 	parseInstallArgs,
 	parseUpdateArgs,
@@ -55,6 +56,16 @@ async function createPackageRoot(
 }
 
 describe("install arg parsing", () => {
+	it("adds GitHub authorization headers for release lookup when a token is available", () => {
+		expect(
+			createGitHubReleaseRequestHeaders({ GH_TOKEN: "secret-token" }),
+		).toEqual({
+			Accept: "application/vnd.github+json",
+			Authorization: "Bearer secret-token",
+			"User-Agent": "dysflow-updater",
+		});
+	});
+
 	it("parses known agents from --agents", () => {
 		expect(parseAgentList("codex,opencode")).toEqual({
 			ok: true,

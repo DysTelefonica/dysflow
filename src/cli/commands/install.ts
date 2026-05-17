@@ -705,6 +705,19 @@ function normalizeReleaseVersion(value: string): string {
 	return value.startsWith("v") ? value.slice(1) : value;
 }
 
+export function createGitHubReleaseRequestHeaders(
+	env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+	const token = env.GH_TOKEN ?? env.GITHUB_TOKEN;
+	return {
+		Accept: "application/vnd.github+json",
+		...(token !== undefined && token.length > 0
+			? { Authorization: `Bearer ${token}` }
+			: {}),
+		"User-Agent": "dysflow-updater",
+	};
+}
+
 function createCommandError(command: string, error: unknown): Error {
 	if (error instanceof Error) {
 		return new Error(`${command} failed: ${error.message}`);
@@ -728,19 +741,52 @@ async function runCommand(
 	}
 }
 
+async function runCommandOutput(
+	command: string,
+	args: readonly string[],
+	cwd: string,
+): Promise<string> {
+	try {
+		const { stdout } = await execFileAsync(command, [...args], {
+			cwd,
+			windowsHide: true,
+			maxBuffer: 10 * 1024 * 1024,
+		});
+		return String(stdout).trim();
+	} catch (error) {
+		throw createCommandError(`${command} ${args.join(" ")}`, error);
+	}
+}
+
+async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
+	const tagName = await runCommandOutput(
+		"gh",
+		["release", "view", "--repo", "DysTelefonica/dysflow", "--json", "tagName", "--jq", ".tagName"],
+		process.cwd(),
+	);
+	if (tagName.length === 0) {
+		throw new Error("gh release view did not return a tagName.");
+	}
+	return {
+		tagName,
+		version: normalizeReleaseVersion(tagName),
+	};
+}
+
 function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 	return {
 		async resolveLatestRelease(): Promise<ReleaseInfo> {
 			const response = await fetch(GITHUB_LATEST_RELEASE_API, {
-				headers: {
-					Accept: "application/vnd.github+json",
-					"User-Agent": "dysflow-updater",
-				},
+				headers: createGitHubReleaseRequestHeaders(),
 			});
 			if (!response.ok) {
-				throw new Error(
-					`GitHub latest release lookup failed with HTTP ${response.status}.`,
-				);
+				try {
+					return await resolveLatestReleaseWithGh();
+				} catch {
+					throw new Error(
+						`GitHub latest release lookup failed with HTTP ${response.status}.`,
+					);
+				}
 			}
 
 			const body = (await response.json()) as GitHubLatestReleaseResponse;
