@@ -40,6 +40,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Docs and Release Prep
 
-- [ ] 3.1 Update README `dysflow update` docs.
-- [ ] 3.2 Bump package minor version and changelog.
-- [ ] 3.3 Run `pnpm test`, `pnpm build`, and `git diff --check`.
+- [x] 3.1 Update README `dysflow update` docs.
+- [x] 3.2 Bump package minor version and changelog.
+- [x] 3.3 Run `pnpm test`, `pnpm build`, and `git diff --check`.

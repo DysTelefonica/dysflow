@@ -367,8 +367,8 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |
-| `dysflow --version` | Print the installed Dysflow CLI version |
-| `dysflow update`  | Reinstall runtime if source version is newer  |
+| `dysflow --version` | Print the installed Dysflow CLI version       |
+| `dysflow update`  | Update runtime from the latest GitHub release |
 | `dysflow tui`     | Open the Dysflow TUI dashboard                |
 | `dysflow serve`   | Start local HTTP API                          |
 
@@ -383,6 +383,25 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 5. Run MCP client session (OpenCode, etc.)
 6. On automation error/timeouts, inspect `dysflow.access.operations.list`
 7. Clean up owned operation explicitly via `dysflow.access.cleanup`
+
+### Updating Dysflow
+
+Use the installed CLI to update itself from the latest published GitHub release:
+
+```powershell
+dysflow update
+```
+
+`dysflow update` checks the latest GitHub release, skips reinstall when the
+installed runtime is current, and installs the newer release when available.
+Use `--force` to reinstall the latest release even when versions match:
+
+```powershell
+dysflow update --force
+```
+
+The updater builds the release source in a temporary workspace, so local `git`,
+`pnpm`, and network access to GitHub must be available.
 
 ---
 
