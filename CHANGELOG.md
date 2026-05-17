@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-17
+
+### Fixed
+
+- Made TUI dashboard Enter actions execute the selected option: integration selection opens/applies selected agents and Doctor runs diagnostics.
+
 ## [0.3.0] - 2026-05-17
 
 ### Added

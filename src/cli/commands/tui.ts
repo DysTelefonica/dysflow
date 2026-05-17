@@ -1,6 +1,15 @@
 import readline from "node:readline";
-import { applyIntegrationSelection, handleInstallCommand } from "./install.js";
-import { renderDashboard } from "../tui/render.js";
+import {
+	ALL_AGENTS,
+	applyIntegrationSelection,
+	handleInstallCommand,
+	type AgentName,
+} from "./install.js";
+import { handleDoctorCommand } from "./doctor.js";
+import {
+	renderDashboard,
+	renderIntegrationSelection,
+} from "../tui/render.js";
 import type { CliCommandContext, CliResult, TuiKey } from "./types.js";
 import { PACKAGE_VERSION } from "./version.js";
 
@@ -38,14 +47,13 @@ export async function handleTuiCommand(
 		};
 	}
 
-	await runDashboardLoop({
+	return runDashboardLoop({
 		localVersion,
 		latestVersion,
 		readKey: context.readTuiKey ?? readProcessTuiKey,
 		writeFrame: context.writeTuiFrame ?? writeProcessFrame,
+		context,
 	});
-
-	return { exitCode: 0, stdout: "", stderr: "" };
 }
 
 async function runDashboardLoop(options: {
@@ -53,7 +61,8 @@ async function runDashboardLoop(options: {
 	latestVersion?: string;
 	readKey: () => Promise<TuiKey>;
 	writeFrame: (frame: string) => void;
-}): Promise<void> {
+	context: CliCommandContext;
+}): Promise<CliResult> {
 	let cursor = 0;
 	const menuSize = 3;
 
@@ -67,10 +76,60 @@ async function runDashboardLoop(options: {
 		);
 
 		const key = await options.readKey();
-		if (key === "q") return;
+		if (key === "q") return { exitCode: 0, stdout: "", stderr: "" };
 		if (key === "up") cursor = (cursor + menuSize - 1) % menuSize;
 		if (key === "down") cursor = (cursor + 1) % menuSize;
-		if (key === "enter" && cursor === menuSize - 1) return;
+		if (key === "enter" && cursor === 0) {
+			return runIntegrationSelectionLoop(options);
+		}
+		if (key === "enter" && cursor === 1) {
+			return handleDoctorCommand([], options.context);
+		}
+		if (key === "enter" && cursor === menuSize - 1) {
+			return { exitCode: 0, stdout: "", stderr: "" };
+		}
+	}
+}
+
+async function runIntegrationSelectionLoop(options: {
+	readKey: () => Promise<TuiKey>;
+	writeFrame: (frame: string) => void;
+	context: CliCommandContext;
+}): Promise<CliResult> {
+	let cursor = 0;
+	const selected = new Set<AgentName>(ALL_AGENTS);
+
+	while (true) {
+		options.writeFrame(
+			renderIntegrationSelection({
+				agents: ALL_AGENTS,
+				selectedAgents: [...selected],
+				cursor,
+			}),
+		);
+
+		const key = await options.readKey();
+		if (key === "q") return { exitCode: 0, stdout: "", stderr: "" };
+		if (key === "up") cursor = (cursor + ALL_AGENTS.length - 1) % ALL_AGENTS.length;
+		if (key === "down") cursor = (cursor + 1) % ALL_AGENTS.length;
+		if (key === "space") {
+			const agent = ALL_AGENTS[cursor];
+			if (selected.has(agent)) {
+				selected.delete(agent);
+			} else {
+				selected.add(agent);
+			}
+		}
+		if (key === "enter") {
+			const agents = ALL_AGENTS.filter((agent) => selected.has(agent));
+			return (
+				options.context.tuiApplyIntegrationSelection ??
+				((selectedAgents) =>
+					applyIntegrationSelection(selectedAgents, {
+						env: options.context.env ?? process.env,
+					}))
+			)(agents);
+		}
 	}
 }
 
@@ -116,6 +175,7 @@ function mapKeypress(key: readline.Key): TuiKey | undefined {
 	if (key.name === "up") return "up";
 	if (key.name === "down") return "down";
 	if (key.name === "return") return "enter";
+	if (key.name === "space") return "space";
 	if (key.name === "escape" || key.name === "q") return "q";
 	return undefined;
 }

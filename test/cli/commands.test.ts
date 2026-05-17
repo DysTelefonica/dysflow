@@ -61,6 +61,57 @@ describe("dysflow command modules", () => {
 		expect(frames[1]).toContain("▸ Doctor");
 	});
 
+	it("runs Doctor when Enter is pressed on the Doctor dashboard option", async () => {
+		const frames: string[] = [];
+		const keys: Array<"down" | "enter"> = ["down", "enter"];
+
+		const result = await runCli([], {
+			tuiInteractive: true,
+			readTuiKey: async () => keys.shift() ?? "enter",
+			writeTuiFrame: (frame) => frames.push(frame),
+			diagnosticsService: {
+				run: async () =>
+					successResult({
+						checks: [
+							{ name: "access-db-path", ok: true, message: "configured" },
+						],
+					}),
+			},
+		});
+
+		expect(frames.at(-1)).toContain("▸ Doctor");
+		expect(result).toEqual({
+			exitCode: 0,
+			stdout: "✓ access-db-path: configured",
+			stderr: "",
+		});
+	});
+
+	it("opens integration selection and applies selected agents from the TUI", async () => {
+		const frames: string[] = [];
+		const keys: Array<"enter" | "down" | "space"> = [
+			"enter",
+			"down",
+			"space",
+			"enter",
+		];
+		const applied: unknown[] = [];
+
+		const result = await runCli([], {
+			tuiInteractive: true,
+			readTuiKey: async () => keys.shift() ?? "enter",
+			writeTuiFrame: (frame) => frames.push(frame),
+			tuiApplyIntegrationSelection: async (agents) => {
+				applied.push([...agents]);
+				return { exitCode: 0, stdout: "APPLIED", stderr: "" };
+			},
+		});
+
+		expect(frames.some((frame) => frame.includes("Select Dysflow MCP integrations"))).toBe(true);
+		expect(applied).toEqual([["codex", "claude", "pi"]]);
+		expect(result).toEqual({ exitCode: 0, stdout: "APPLIED", stderr: "" });
+	});
+
 	it("applies TUI integration selection when provided by the interactive flow", async () => {
 		const calls: unknown[] = [];
 		const result = await runCli([], {
