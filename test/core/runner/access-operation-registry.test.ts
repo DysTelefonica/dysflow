@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	FileAccessOperationRegistry,
 	InMemoryAccessOperationRegistry,
@@ -27,6 +27,18 @@ describe("Access operation registry and cleanup safety", () => {
 
 		expect(source).toContain("export type AccessOperationAction =");
 		expect(source).not.toContain("| string");
+	});
+
+	it("does not use reclaim or pending marker protocols for registry locks", () => {
+		const source = readFileSync(
+			"src/core/operations/access-operation-registry.ts",
+			"utf8",
+		);
+
+		expect(source).not.toContain("LOCK_RECLAIM");
+		expect(source).not.toContain("dysflow-registry-reclaim");
+		expect(source).not.toContain("createReclaimMarker");
+		expect(source).not.toContain(".pending");
 	});
 
 	it("evicts the oldest records when the configured max size is exceeded", async () => {
@@ -87,6 +99,256 @@ describe("Access operation registry and cleanup safety", () => {
 				20,
 			);
 		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("acquires and releases a registry mutation lock around successful writes", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-lock-release-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 100,
+			});
+			await registry.create({
+				...base,
+				operationId: "op-lock-release",
+				status: "starting",
+				accessPid: null,
+				processStartTime: null,
+				updatedAt: "2026-05-15T10:00:00.000Z",
+			});
+
+			expect(existsSync(lockPath)).toBe(false);
+			await expect(readFile(registryPath, "utf8")).resolves.toContain(
+				"op-lock-release",
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("fails safely without partial writes when a competing writer holds the lock past timeout", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-lock-timeout-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			await mkdir(lockPath, { recursive: true });
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 25,
+				staleLockMs: 60_000,
+			});
+
+			await expect(
+				registry.create({
+					...base,
+					operationId: "op-blocked",
+					status: "starting",
+					accessPid: null,
+					processStartTime: null,
+					updatedAt: "2026-05-15T10:00:00.000Z",
+				}),
+			).rejects.toThrow(/Timed out acquiring operation registry lock/);
+			expect(existsSync(registryPath)).toBe(false);
+			expect(existsSync(lockPath)).toBe(true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("times out on stale owner locks instead of deleting ambiguous owners", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-stale-owner-timeout-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		const ownerPath = join(lockPath, "owner");
+		try {
+			await mkdir(lockPath, { recursive: true });
+			await writeFile(ownerPath, "stale-owner", "utf8");
+			const staleTime = new Date("2026-05-15T10:00:00.000Z");
+			await utimes(lockPath, staleTime, staleTime);
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 25,
+				staleLockMs: 1,
+			});
+
+			await expect(
+				registry.create({
+					...base,
+					operationId: "op-ambiguous-stale-owner",
+					status: "starting",
+					accessPid: null,
+					processStartTime: null,
+					updatedAt: "2026-05-15T10:01:00.000Z",
+				}),
+			).rejects.toThrow(/Timed out acquiring operation registry lock/);
+			await expect(readFile(ownerPath, "utf8")).resolves.toBe("stale-owner");
+			expect(existsSync(registryPath)).toBe(false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reclaims stale ownerless empty lock directories before writing", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-ownerless-empty-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			await mkdir(lockPath, { recursive: true });
+			const staleTime = new Date("2026-05-15T10:00:00.000Z");
+			await utimes(lockPath, staleTime, staleTime);
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 50,
+				staleLockMs: 1,
+			});
+
+			await expect(
+				registry.create({
+					...base,
+					operationId: "op-after-ownerless-empty",
+					status: "starting",
+					accessPid: null,
+					processStartTime: null,
+					updatedAt: "2026-05-15T10:01:00.000Z",
+				}),
+			).resolves.toMatchObject({
+				operationId: "op-after-ownerless-empty",
+			});
+			expect(existsSync(lockPath)).toBe(false);
+			await expect(readFile(registryPath, "utf8")).resolves.toContain(
+				"op-after-ownerless-empty",
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("times out on stale ownerless non-empty lock directories without deleting unknown contents", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-ownerless-unknown-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		const unknownPath = join(lockPath, "unknown");
+		try {
+			await mkdir(lockPath, { recursive: true });
+			await writeFile(unknownPath, "not-created-by-dysflow", "utf8");
+			const staleTime = new Date("2026-05-15T10:00:00.000Z");
+			await utimes(lockPath, staleTime, staleTime);
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 25,
+				staleLockMs: 1,
+			});
+
+			await expect(
+				registry.create({
+					...base,
+					operationId: "op-ownerless-unknown",
+					status: "starting",
+					accessPid: null,
+					processStartTime: null,
+					updatedAt: "2026-05-15T10:01:00.000Z",
+				}),
+			).rejects.toThrow(/Timed out acquiring operation registry lock/);
+			await expect(readFile(unknownPath, "utf8")).resolves.toBe(
+				"not-created-by-dysflow",
+			);
+			expect(existsSync(registryPath)).toBe(false);
+			expect(existsSync(lockPath)).toBe(true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("uses a new owner token for each acquisition by the same registry instance", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-per-acquisition-token-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		const ownerPath = join(lockPath, "owner");
+		type RegistryLock = { ownerToken: string };
+		type RegistryInternals = {
+			acquireRegistryMutationLock: () => Promise<RegistryLock>;
+			releaseRegistryMutationLock: (lock: RegistryLock) => Promise<void>;
+		};
+		try {
+			const registry = new FileAccessOperationRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 100,
+			});
+			const internals = registry as unknown as RegistryInternals;
+			const firstLock = await internals.acquireRegistryMutationLock();
+			await expect(readFile(ownerPath, "utf8")).resolves.toBe(
+				firstLock.ownerToken,
+			);
+			await internals.releaseRegistryMutationLock(firstLock);
+
+			const secondLock = await internals.acquireRegistryMutationLock();
+			try {
+				expect(secondLock.ownerToken).not.toBe(firstLock.ownerToken);
+				await expect(readFile(ownerPath, "utf8")).resolves.toBe(
+					secondLock.ownerToken,
+				);
+			} finally {
+				await internals.releaseRegistryMutationLock(secondLock).catch(() => undefined);
+			}
+			expect(existsSync(lockPath)).toBe(false);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("does not mask a successful write when release cleanup fails", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-ops-release-fails-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			let releaseCleanupFailures = 0;
+			vi.resetModules();
+			vi.doMock("node:fs/promises", async () => {
+				const actual = await vi.importActual<typeof import("node:fs/promises")>(
+					"node:fs/promises",
+				);
+				return {
+					...actual,
+					rmdir: async (
+						path: Parameters<typeof actual.rmdir>[0],
+						options?: Parameters<typeof actual.rmdir>[1],
+					) => {
+						if (path === lockPath) {
+							releaseCleanupFailures += 1;
+							throw new Error("simulated release cleanup failure");
+						}
+						return actual.rmdir(path, options);
+					},
+				};
+			});
+			const { FileAccessOperationRegistry: ReleaseFailureRegistry } =
+				await import("../../../src/core/operations/access-operation-registry.js");
+			const registry = new ReleaseFailureRegistry({
+				filePath: registryPath,
+				lockTimeoutMs: 100,
+			});
+
+			await expect(
+				registry.create({
+					...base,
+					operationId: "op-release-cleanup-failed",
+					status: "starting",
+					accessPid: null,
+					processStartTime: null,
+					updatedAt: "2026-05-15T10:01:00.000Z",
+				}),
+			).resolves.toMatchObject({ operationId: "op-release-cleanup-failed" });
+			expect(releaseCleanupFailures).toBe(1);
+			await expect(readFile(registryPath, "utf8")).resolves.toContain(
+				"op-release-cleanup-failed",
+			);
+		} finally {
+			vi.doUnmock("node:fs/promises");
+			vi.resetModules();
 			await rm(root, { recursive: true, force: true });
 		}
 	});

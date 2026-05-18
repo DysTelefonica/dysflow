@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 
 export type AccessOperationStatus =
   | "starting"
@@ -50,20 +50,37 @@ export type InMemoryAccessOperationRegistryOptions = {
 
 export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistryOptions & {
   filePath: string;
+  lockTimeoutMs?: number;
+  staleLockMs?: number;
 };
 
 const DEFAULT_MAX_RECORDS = 1000;
+const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
+const DEFAULT_STALE_LOCK_MS = 120_000;
+const LOCK_RETRY_INTERVAL_MS = 10;
 const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
+
+type RegistryMutationLock = {
+  ownerToken: string;
+};
 
 export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private static readonly fileLocks = new Map<string, Promise<unknown>>();
 
   private readonly filePath: string;
+  private readonly lockPath: string;
+  private readonly lockOwnerPath: string;
   private readonly maxRecords: number;
+  private readonly lockTimeoutMs: number;
+  private readonly staleLockMs: number;
 
   constructor(options: FileAccessOperationRegistryOptions) {
     this.filePath = resolve(options.filePath);
+    this.lockPath = `${this.filePath}.lock`;
+    this.lockOwnerPath = join(this.lockPath, "owner");
     this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
+    this.lockTimeoutMs = Math.max(1, Math.floor(options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS));
+    this.staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
   }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
@@ -115,7 +132,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
 
   private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
     const previous = FileAccessOperationRegistry.fileLocks.get(this.filePath) ?? Promise.resolve();
-    const current = previous.catch(() => undefined).then(operation);
+    const current = previous.catch(() => undefined).then(() => this.withRegistryMutationLock(operation));
     const settled = current.catch(() => undefined);
     FileAccessOperationRegistry.fileLocks.set(this.filePath, settled);
     try {
@@ -125,6 +142,99 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
         FileAccessOperationRegistry.fileLocks.delete(this.filePath);
       }
     }
+  }
+
+  private async withRegistryMutationLock<T>(operation: () => Promise<T>): Promise<T> {
+    const lock = await this.acquireRegistryMutationLock();
+    try {
+      return await operation();
+    } finally {
+      await this.releaseRegistryMutationLock(lock).catch(() => undefined);
+    }
+  }
+
+  private async acquireRegistryMutationLock(): Promise<RegistryMutationLock> {
+    const deadline = Date.now() + this.lockTimeoutMs;
+    await mkdir(dirname(this.lockPath), { recursive: true });
+    while (true) {
+      const ownerToken = this.createLockOwnerToken();
+      try {
+        await mkdir(this.lockPath);
+      } catch (error) {
+        if (!isFileExistsError(error)) throw error;
+        await this.removeLockIfStale();
+        if (Date.now() >= deadline) {
+          throw new Error(`Timed out acquiring operation registry lock: ${this.lockPath}`);
+        }
+        await sleep(Math.min(LOCK_RETRY_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+        continue;
+      }
+
+      try {
+        await writeFile(this.lockOwnerPath, ownerToken, { flag: "wx" });
+        return { ownerToken };
+      } catch (error) {
+        await this.removeOwnerlessLockDirectory().catch(() => undefined);
+        if (!isPathMissingError(error) && !isErrorWithCode(error, "EEXIST")) throw error;
+        await this.removeLockIfStale();
+        if (Date.now() >= deadline) {
+          throw new Error(`Timed out acquiring operation registry lock: ${this.lockPath}`);
+        }
+        await sleep(Math.min(LOCK_RETRY_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+        continue;
+      }
+    }
+  }
+
+  private async removeLockIfStale(): Promise<void> {
+    if ((await this.readLockOwnerToken()) !== undefined) return;
+    if (!(await this.isLockStale())) return;
+    if ((await this.readLockOwnerToken()) !== undefined) return;
+
+    await this.removeOwnerlessLockDirectory();
+  }
+
+  private async removeOwnerlessLockDirectory(): Promise<void> {
+    if ((await this.readLockOwnerToken()) !== undefined) return;
+    try {
+      await rmdir(this.lockPath);
+    } catch (error) {
+      if (isPathMissingError(error) || isDirectoryNotEmptyError(error)) return;
+      throw error;
+    }
+  }
+
+  private async releaseRegistryMutationLock(lock: RegistryMutationLock): Promise<void> {
+    if ((await this.readLockOwnerToken()) !== lock.ownerToken) return;
+    if ((await this.readLockOwnerToken()) !== lock.ownerToken) return;
+    await rm(this.lockOwnerPath, { force: true });
+    try {
+      await rmdir(this.lockPath);
+    } catch (error) {
+      if (isPathMissingError(error)) return;
+      throw error;
+    }
+  }
+
+  private async readLockOwnerToken(): Promise<string | undefined> {
+    try {
+      return await readFile(this.lockOwnerPath, "utf8");
+    } catch (error) {
+      if (isPathMissingError(error)) return undefined;
+      throw error;
+    }
+  }
+
+  private async isLockStale(): Promise<boolean> {
+    const lockStat = await stat(this.lockPath).catch((error: unknown) => {
+      if (isPathMissingError(error)) return undefined;
+      throw error;
+    });
+    return lockStat !== undefined && Date.now() - lockStat.mtimeMs >= this.staleLockMs;
+  }
+
+  private createLockOwnerToken(): string {
+    return `${process.pid}:${randomUUID()}`;
   }
 
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {
@@ -144,7 +254,14 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     const payload = {
       records: [...records.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     };
-    await writeFile(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    const tempPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      await rename(tempPath, this.filePath);
+    } catch (error) {
+      await rm(tempPath, { force: true });
+      throw error;
+    }
   }
 
   private evictOldestRecords(records: Map<string, AccessOperationRecord>): void {
@@ -199,6 +316,26 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
       this.records.delete(oldest.operationId);
     }
   }
+}
+
+function isFileExistsError(error: unknown): boolean {
+  return isErrorWithCode(error, "EEXIST");
+}
+
+function isPathMissingError(error: unknown): boolean {
+  return isErrorWithCode(error, "ENOENT");
+}
+
+function isDirectoryNotEmptyError(error: unknown): boolean {
+  return isErrorWithCode(error, "ENOTEMPTY") || isErrorWithCode(error, "EEXIST");
+}
+
+function isErrorWithCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
 export function createAccessOperationId(): string {

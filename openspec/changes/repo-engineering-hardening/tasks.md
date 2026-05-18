@@ -41,10 +41,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Registry Concurrency Safety
 
-- [ ] 3.1 RED: add `test/core/runner/access-operation-registry.test.ts` cases for lock acquire/release and competing writer timeout/fail-safe behavior.
-- [ ] 3.2 GREEN: add dependency-free file locking and atomic write flow in `src/core/operations/access-operation-registry.ts`.
-- [ ] 3.3 Preserve existing in-process queue and constructor defaults; add optional `lockTimeoutMs`/`staleLockMs` only internally.
-- [ ] 3.4 REFACTOR: keep locking helpers small and protocol-neutral; rerun `pnpm test` and `pnpm build`.
+- [x] 3.1 RED: add `test/core/runner/access-operation-registry.test.ts` cases for lock acquire/release and competing writer timeout/fail-safe behavior.
+- [x] 3.2 GREEN: add dependency-free file locking and atomic write flow in `src/core/operations/access-operation-registry.ts`.
+- [x] 3.3 Preserve existing in-process queue and constructor defaults; add optional `lockTimeoutMs`/`staleLockMs` only internally.
+- [x] 3.4 REFACTOR: keep locking helpers small and protocol-neutral; rerun `pnpm test` and `pnpm build`.
 
 ## Phase 4: Legacy Service Characterization Seam
 
