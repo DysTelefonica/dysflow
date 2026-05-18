@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
@@ -13,11 +12,10 @@ import { AccessVbaService } from "../../core/services/vba-service.js";
 import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
 import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool, type McpToolResult } from "./tools.js";
 import { isRecord } from "../../core/utils/index.js";
+import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { failureResult, type DysflowError } from "../../core/contracts/index.js";
 
-const require = createRequire(import.meta.url);
-const packageJson = require("../../../package.json") as { version?: unknown };
-const SERVER_VERSION = typeof packageJson.version === "string" ? packageJson.version : "0.0.0";
+const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 
 /**
  * MCP protocol version intentionally targeted by Dysflow's hand-written stdio runtime.

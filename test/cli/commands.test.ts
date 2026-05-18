@@ -108,7 +108,7 @@ describe("dysflow command modules", () => {
 		});
 
 		expect(frames.some((frame) => frame.includes("Select Dysflow MCP integrations"))).toBe(true);
-		expect(applied).toEqual([["codex", "claude", "pi"]]);
+		expect(applied).toEqual([["opencode"]]);
 		expect(result).toEqual({ exitCode: 0, stdout: "APPLIED", stderr: "" });
 	});
 
@@ -184,6 +184,27 @@ describe("dysflow command modules", () => {
 			expect(result.stderr).toContain("Invalid .dysflow/project.json");
 		} finally {
 			workspace.cleanup();
+		}
+	});
+
+	it("returns a CLI error when project registry JSON is malformed", async () => {
+		const workspace = createRepoConfigWorkspace();
+		const home = mkdtempSync(join(tmpdir(), "dysflow-registry-home-"));
+		try {
+			const registryPath = join(home, "dysflow", "projects.json");
+			mkdirSync(join(home, "dysflow"), { recursive: true });
+			writeFileSync(registryPath, "{bad", "utf8");
+
+			const result = await runCli(
+				["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+				{ cwd: workspace.root, env: { LOCALAPPDATA: home } },
+			);
+
+			expect(result.exitCode).toBe(1);
+			expect(result.stderr).toContain("Invalid Dysflow project registry JSON");
+		} finally {
+			workspace.cleanup();
+			rmSync(home, { recursive: true, force: true });
 		}
 	});
 

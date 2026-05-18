@@ -288,6 +288,34 @@ describe("AccessPowerShellRunner", () => {
 			operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
 		});
 	});
+
+	it("maps malformed successful PowerShell JSON to a typed runner failure", async () => {
+		const executor: PowerShellExecutor = async () => ({
+			exitCode: 0,
+			stdout: "WARNING: noisy output\n{not json",
+			stderr: "",
+			durationMs: 44,
+			timedOut: false,
+		});
+		const runner = new AccessPowerShellRunner({
+			executor,
+			scriptPath: "C:/tools/run.ps1",
+		});
+
+		const result = await runner.run(
+			{ kind: "diagnostics", request: { includeEnvironment: true } },
+			config,
+		);
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: {
+				code: "RUNNER_INVALID_JSON",
+				message: "PowerShell runner produced invalid JSON output.",
+			},
+			durationMs: 44,
+		});
+	});
 });
 
 describe("sanitizePowerShellOutput", () => {

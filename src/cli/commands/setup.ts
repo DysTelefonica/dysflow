@@ -189,7 +189,12 @@ async function registerProjectConfig(
 ): Promise<string> {
 	const registryPath = resolveProjectRegistryPath({}, context.env, context.cwd);
 	const raw = await readFile(registryPath, "utf8").catch(() => "{}");
-	const registry = JSON.parse(raw) as DysflowProjectRegistry;
+	let registry: DysflowProjectRegistry;
+	try {
+		registry = JSON.parse(raw) as DysflowProjectRegistry;
+	} catch {
+		throw new Error(`Invalid Dysflow project registry JSON: ${registryPath}`);
+	}
 	registry.projects = { ...(registry.projects ?? {}), [projectId]: { configPath: projectPath } };
 	await mkdir(dirname(registryPath), { recursive: true });
 	await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");

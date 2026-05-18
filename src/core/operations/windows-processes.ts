@@ -9,7 +9,12 @@ export class WindowsMsAccessProcessInspector implements ProcessInspector {
     const script = `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object ProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress`;
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true });
     if (stdout.trim().length === 0) return undefined;
-    const parsed = JSON.parse(stdout) as { ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string };
+    let parsed: { ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string };
+    try {
+      parsed = JSON.parse(stdout) as { ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string };
+    } catch {
+      return undefined;
+    }
     return { pid: parsed.ProcessId, name: parsed.Name, startTime: parsed.CreationDate ?? "", commandLine: parsed.CommandLine };
   }
 }

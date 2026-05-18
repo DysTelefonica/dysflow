@@ -4,6 +4,17 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-05-18
+
+### Fixed
+
+- Hardened audit findings around malformed JSON handling, Windows CLI entrypoint URLs, TUI close/default selection safety, and degraded HTTP startup.
+- Removed fragile package-version `createRequire` lookups and moved shared version comparison out of install command internals.
+
+### Changed
+
+- Cached legacy MCP schemas during tool registration and removed unused planned command dead code.
+
 ## [0.4.1] - 2026-05-17
 
 ### Fixed

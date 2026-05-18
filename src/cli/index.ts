@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from "node:url";
 import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleMcpCommand } from "./commands/mcp.js";
 import { handleServeCommand } from "./commands/serve.js";
@@ -73,7 +74,7 @@ async function main(): Promise<void> {
 }
 
 const entrypoint = process.argv[1]
-	? new URL(`file://${process.argv[1]}`).href
+	? pathToFileURL(process.argv[1]).href
 	: undefined;
 if (entrypoint === import.meta.url) {
 	void main();
