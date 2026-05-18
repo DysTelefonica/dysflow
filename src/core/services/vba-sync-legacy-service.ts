@@ -158,6 +158,9 @@ export class VbaSyncLegacyService {
     const accessPath = target.data.accessPath;
     const destinationRoot = target.data.destinationRoot;
     const password = this.accessPassword;
+    const effectiveTimeoutMs = typeof params.timeoutMs === "number" && params.timeoutMs > 0
+      ? params.timeoutMs
+      : target.data.processTimeoutMs;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
@@ -167,7 +170,7 @@ export class VbaSyncLegacyService {
       password,
       json: mapping.json ?? false,
       extra: mapping.extra(params),
-      timeoutMs: this.processTimeoutMs,
+      timeoutMs: effectiveTimeoutMs,
       env: password === undefined ? undefined : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
     };
     const extraValidation = validateVbaManagerExtra(request.extra);
@@ -199,7 +202,7 @@ export class VbaSyncLegacyService {
     return successResult(parsedOutput, { durationMs: result.durationMs });
   }
 
-  private resolveExecutionTarget(params: Record<string, unknown>): OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource"> & { accessPath?: string; destinationRoot: string }> {
+  private resolveExecutionTarget(params: Record<string, unknown>): OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource" | "timeoutMs" | "processTimeoutMs"> & { accessPath?: string; destinationRoot: string }> {
     const hasExplicitConfigOverride = stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
     const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
     if (hasExplicitConfigOverride || requestedProjectId !== undefined) {

@@ -4,6 +4,16 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-05-18
+
+### Fixed
+
+- Legacy VBA sync tools (`test_vba`, `compile_vba`, `import_modules`, etc.) now honour `timeoutMs` from `.dysflow/project.json` instead of always using the service-level 30 000 ms default. Explicit per-call `timeoutMs` in tool params still takes precedence.
+
+### Added
+
+- Documented the timeout resolution order (per-call > project config > service default) in `docs/architecture/dysflow-core-and-adapters.md`.
+
 ## [0.4.4] - 2026-05-18
 
 ### Fixed

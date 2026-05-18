@@ -560,6 +560,71 @@ describe("VbaSyncLegacyService", () => {
 		}
 	});
 
+	it("timeout: project config timeoutMs is used instead of service default for legacy VBA tools", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-"));
+		await mkdir(join(root, ".dysflow"), { recursive: true });
+		await writeFile(
+			join(root, ".dysflow", "project.json"),
+			JSON.stringify({ id: "myproject", accessPath: "front.accdb", destinationRoot: "src", timeoutMs: 180_000 }),
+			"utf8",
+		);
+
+		const capturedTimeouts: number[] = [];
+		const executor: VbaManagerExecutor = async (request) => {
+			capturedTimeouts.push(request.timeoutMs);
+			return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+		};
+		const service = new VbaSyncLegacyService({ executor, scriptPath: "scripts/dysflow-vba-manager.ps1", cwd: root, env: {} });
+
+		await service.execute("export_all", {});
+		await service.execute("compile_vba", {});
+
+		expect(capturedTimeouts).toEqual([180_000, 180_000]);
+	});
+
+	it("timeout: explicit per-call timeoutMs overrides project config timeout", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-"));
+		await mkdir(join(root, ".dysflow"), { recursive: true });
+		await writeFile(
+			join(root, ".dysflow", "project.json"),
+			JSON.stringify({ id: "myproject", accessPath: "front.accdb", destinationRoot: "src", timeoutMs: 180_000 }),
+			"utf8",
+		);
+
+		let capturedTimeout = 0;
+		const executor: VbaManagerExecutor = async (request) => {
+			capturedTimeout = request.timeoutMs;
+			return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+		};
+		const service = new VbaSyncLegacyService({ executor, scriptPath: "scripts/dysflow-vba-manager.ps1", cwd: root, env: {} });
+
+		await service.execute("export_all", { timeoutMs: 90_000 });
+
+		expect(capturedTimeout).toBe(90_000);
+	});
+
+	it("timeout: falls back to service processTimeoutMs when no project config defines timeoutMs", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-"));
+
+		let capturedTimeout = 0;
+		const executor: VbaManagerExecutor = async (request) => {
+			capturedTimeout = request.timeoutMs;
+			return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+		};
+		const service = new VbaSyncLegacyService({
+			executor,
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			processTimeoutMs: 45_000,
+			cwd: root,
+			env: {},
+		});
+
+		await service.execute("export_all", {});
+
+		expect(capturedTimeout).toBe(45_000);
+	});
+
 	it("-NonInteractive present in spawned args at correct position", async () => {
 		let capturedArgs: readonly string[] = [];
 		let capturedEnv: Record<string, string | undefined> | undefined;
