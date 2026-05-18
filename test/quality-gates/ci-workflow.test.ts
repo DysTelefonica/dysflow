@@ -37,6 +37,19 @@ describe("repository quality gates", () => {
 		);
 	});
 
+	it("uses Node 24-capable GitHub Actions while preserving Node 20 product runtime (#190)", async () => {
+		const workflow = await readText(".github/workflows/ci.yml");
+		const packageJson = JSON.parse(await readText("package.json")) as {
+			engines?: Record<string, string>;
+		};
+
+		expect(workflow).toContain("uses: actions/checkout@v5");
+		expect(workflow).toContain("uses: actions/setup-node@v5");
+		expect(workflow).toContain("uses: pnpm/action-setup@v6");
+		expect(workflow).toContain("node-version: 20");
+		expect(packageJson.engines?.node).toBe(">=20.0.0");
+	});
+
 	it("exposes package scripts for lint and coverage gates", async () => {
 		const packageJson = JSON.parse(await readText("package.json")) as {
 			packageManager?: string;
