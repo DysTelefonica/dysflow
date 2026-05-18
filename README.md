@@ -196,6 +196,8 @@ The runtime installation directory is only for executable code (`DYSFLOW_HOME`).
 
 Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state. Only secrets may come from environment variables.
 
+Secrets can also be supplied through a local `.secrets.json` for legacy VBA manager workflows. Keep that file outside git, restrict its ACL to the current user, and prefer environment variables (`DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`) for automated runs so passwords do not appear in command-line process listings.
+
 ### Local project setup
 
 Create the repo-local config once from the target project root:
@@ -300,6 +302,12 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
+Write-capable SQL tools are disabled by default on MCP, matching the HTTP safety model. Start MCP with `--enable-writes` only for trusted local maintenance sessions:
+
+```powershell
+dysflow mcp --enable-writes
+```
+
 ### Core MCP tools
 
 | Tool                             | Purpose                                            |
@@ -363,7 +371,7 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | Command           | Description                                   |
 | ----------------- | --------------------------------------------- |
 | `dysflow`         | Open the Dysflow TUI dashboard                |
-| `dysflow mcp`     | Start MCP stdio adapter                       |
+| `dysflow mcp`     | Start MCP stdio adapter (`--enable-writes` enables guarded SQL writes) |
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |

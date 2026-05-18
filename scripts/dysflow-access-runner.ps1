@@ -10,6 +10,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if ([string]::IsNullOrEmpty($AccessPassword)) {
+  $AccessPassword = $env:DYSFLOW_ACCESS_PASSWORD
+}
+if ([string]::IsNullOrEmpty($AccessPassword)) {
+  $AccessPassword = $env:ACCESS_VBA_PASSWORD
+}
+
 function ConvertTo-IsoStartTime {
   param($CreationDate)
   if ($null -eq $CreationDate) { return $null }
@@ -169,12 +176,20 @@ function Resolve-QueryDefinitions {
 }
 
 function Export-QueryDefinitions {
-  param($Database, $Payload)
+  param($Database, $Payload, [string]$AccessDbPath)
   $queries = @(Resolve-QueryDefinitions -Database $Database -Payload $Payload)
   $exportPath = [string]$Payload.exportPath
   if (-not [string]::IsNullOrWhiteSpace($exportPath)) {
+    $basePath = [string]$Payload.rootPath
+    if ([string]::IsNullOrWhiteSpace($basePath)) { $basePath = Split-Path -Path $AccessDbPath -Parent }
+    $baseFull = [System.IO.Path]::GetFullPath($basePath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $exportFull = [System.IO.Path]::GetFullPath($exportPath)
+    if (-not ($exportFull.Equals($baseFull, [System.StringComparison]::OrdinalIgnoreCase) -or $exportFull.StartsWith($baseFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $exportFull.StartsWith($baseFull + [System.IO.Path]::AltDirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))) {
+      throw "exportPath must stay inside the resolved export root."
+    }
     $json = [ordered]@{ queries = $queries } | ConvertTo-Json -Compress -Depth 20
-    [System.IO.File]::WriteAllText($exportPath, $json, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($exportFull, $json, [System.Text.Encoding]::UTF8)
+    $exportPath = $exportFull
   }
   return [ordered]@{
     exportPath = $exportPath
@@ -729,7 +744,7 @@ try {
     }
 
     if ($action -eq 'export_queries') {
-      $result = Export-QueryDefinitions -Database $db -Payload $payload
+      $result = Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }

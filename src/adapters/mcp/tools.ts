@@ -98,6 +98,7 @@ const CLEANUP_SCHEMA: JsonObjectSchema = {
 };
 
 export type DysflowMcpServices = {
+  writesEnabled?: boolean;
   vbaService: {
     execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>>;
   };
@@ -112,6 +113,10 @@ export type DysflowMcpServices = {
   cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
   legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
 };
+
+function writesDisabled(): McpToolResult {
+  return { content: [{ type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." }], isError: true };
+}
 
 function invalidInput(message: string): McpToolResult {
   return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
@@ -274,7 +279,15 @@ async function handleValidatedLegacyQuery<TData>(input: unknown, schema: JsonObj
   return translateCoreResultToMcpContent(await execute());
 }
 
+async function handleValidatedLegacyWrite<TData>(input: unknown, schema: JsonObjectSchema, writesEnabled: boolean, execute: () => Promise<OperationResult<TData>>): Promise<McpToolResult> {
+  const validation = validateInput(input, schema);
+  if (validation !== undefined) return invalidInput(validation);
+  if (!writesEnabled) return writesDisabled();
+  return translateCoreResultToMcpContent(await execute());
+}
+
 export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
+  const writesEnabled = services.writesEnabled ?? false;
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow.vba.execute",
@@ -293,6 +306,7 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
       handler: async (input) => {
         const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
+        if ((input as AccessQueryRequest).mode === "write" && !writesEnabled) return writesDisabled();
         return translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest));
       },
     },
@@ -330,10 +344,10 @@ export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpT
     },
   ];
 
-  return appendLegacyCompatibilityTools(currentTools, services);
+  return appendLegacyCompatibilityTools(currentTools, services, writesEnabled);
 }
 
-function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services: DysflowMcpServices): DysflowMcpTool[] {
+function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool[] {
   const tools = [...currentTools];
   const names = new Set(tools.map((tool) => tool.name));
   const add = (tool: DysflowMcpTool): void => {
@@ -400,52 +414,52 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
     inputSchema: execSqlSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, execSqlSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, execSqlSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
   });
   const runScriptSchema = legacySchemaForTool("run_script");
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
     inputSchema: runScriptSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, runScriptSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, runScriptSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
   });
   const createTableSchema = legacySchemaForTool("create_table");
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
     inputSchema: createTableSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, createTableSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, createTableSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
   });
   const dropTableSchema = legacySchemaForTool("drop_table");
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
     inputSchema: dropTableSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, dropTableSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, dropTableSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
   });
   const seedFixtureSchema = legacySchemaForTool("seed_fixture");
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
     inputSchema: seedFixtureSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, seedFixtureSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, seedFixtureSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
   });
   const teardownFixtureSchema = legacySchemaForTool("teardown_fixture");
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
     inputSchema: teardownFixtureSchema,
-    handler: async (input) => handleValidatedLegacyQuery(input, teardownFixtureSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, teardownFixtureSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
-    add(createLegacyDispatchTool(legacyName, services));
+    add(createLegacyDispatchTool(legacyName, services, writesEnabled));
   }
 
   return tools;
 }
 
-function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices): DysflowMcpTool {
+function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
   const schema = legacySchemaForTool(name);
   return {
@@ -455,6 +469,9 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
+      if (!writesEnabled && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write")) {
+        return writesDisabled();
+      }
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
       }

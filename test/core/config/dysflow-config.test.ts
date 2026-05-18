@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
 	loadDysflowConfig,
 	redactDysflowConfig,
+	resolveProjectRegistryPath,
 } from "../../../src/core/config/dysflow-config";
 
 function createTempWorkspace(): { root: string; cleanup(): void } {
@@ -243,6 +244,38 @@ describe("dysflow configuration", () => {
 			if (!result.ok) throw new Error("expected config success");
 			expect(result.data.accessPassword).toBe("shared-secret");
 			expect(result.data.backendPassword).toBeUndefined();
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("rejects relative project registry entries that escape the registry directory", () => {
+		const workspace = createTempWorkspace();
+		try {
+			const registryDir = join(workspace.root, "registry");
+			const outside = join(workspace.root, "outside");
+			mkdirSync(registryDir, { recursive: true });
+			mkdirSync(outside, { recursive: true });
+			writeRepoProjectConfig(outside, { accessPath: "front.accdb" });
+			writeFileSync(join(outside, "front.accdb"), "", "utf8");
+			const registryPath = join(registryDir, "projects.json");
+			writeFileSync(
+				registryPath,
+				JSON.stringify({ projects: { escaped: "../outside/.dysflow/project.json" } }, null, 2),
+				"utf8",
+			);
+
+			const result = loadDysflowConfig({
+				projectId: "escaped",
+				projectRegistryPath: registryPath,
+				env: {},
+				cwd: workspace.root,
+			});
+
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("expected config failure");
+			expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+			expect(resolveProjectRegistryPath({ projectRegistryPath: registryPath }, {}, workspace.root)).toBe(registryPath);
 		} finally {
 			workspace.cleanup();
 		}

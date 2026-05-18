@@ -21,4 +21,11 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain("$statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))");
     expect(script).not.toContain(".Split([char]\";\")");
   });
+
+  it("reads Access passwords from environment variables and constrains query export paths", () => {
+    expect(script).toContain("$AccessPassword = $env:DYSFLOW_ACCESS_PASSWORD");
+    expect(script).toContain("$AccessPassword = $env:ACCESS_VBA_PASSWORD");
+    expect(script).toContain("exportPath must stay inside the resolved export root.");
+    expect(script).toContain("Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath");
+  });
 });

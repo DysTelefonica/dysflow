@@ -199,8 +199,10 @@ function isReadOnlySql(sql: string): boolean {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .trim()
     .toLowerCase();
+  const tokenText = normalized.replace(/'([^']|'')*'/g, "''").replace(/"([^"]|"")*"/g, "\"\"");
+  const firstToken = normalized.match(/^[a-z]+/)?.[0];
 
-  return normalized.startsWith("select") && !normalized.includes(";") && !/\binto\b/.test(normalized);
+  return firstToken === "select" && !normalized.includes(";") && !/\binto\b/.test(tokenText) && !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(tokenText);
 }
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
@@ -276,5 +278,6 @@ function sendOperationResult<TData>(response: ServerResponse, result: OperationR
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.statusCode = statusCode;
   response.setHeader("content-type", "application/json; charset=utf-8");
+  response.setHeader("x-content-type-options", "nosniff");
   response.end(JSON.stringify(body));
 }

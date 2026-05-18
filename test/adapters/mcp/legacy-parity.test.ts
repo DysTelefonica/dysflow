@@ -118,6 +118,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
     const legacyCalls: unknown[] = [];
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools({
+      writesEnabled: true,
       vbaService: new FakeVbaService(),
       queryService: {
         execute: async (request: unknown) => {
@@ -195,6 +196,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
   it("dispatches maintenance query tools to the configured query service", async () => {
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools({
+      writesEnabled: true,
       vbaService: new FakeVbaService(),
       queryService: {
         execute: async (request: unknown) => {

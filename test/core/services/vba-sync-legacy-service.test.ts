@@ -137,10 +137,14 @@ describe("VbaSyncLegacyService", () => {
 				moduleNames: ["Module1"],
 				password: "secret",
 				json: false,
-				extra: {},
-				timeoutMs: 30_000,
-				signal: expect.any(AbortSignal),
+			extra: {},
+			env: {
+				DYSFLOW_ACCESS_PASSWORD: "secret",
+				ACCESS_VBA_PASSWORD: "secret",
 			},
+			timeoutMs: 30_000,
+			signal: expect.any(AbortSignal),
+		},
 		]);
 	});
 
@@ -558,9 +562,11 @@ describe("VbaSyncLegacyService", () => {
 
 	it("-NonInteractive present in spawned args at correct position", async () => {
 		let capturedArgs: readonly string[] = [];
+		let capturedEnv: Record<string, string | undefined> | undefined;
 		spawnMock.mockImplementationOnce(
-			(_command: string, args: readonly string[]) => {
+			(_command: string, args: readonly string[], options?: { env?: Record<string, string | undefined> }) => {
 				capturedArgs = args;
+				capturedEnv = options?.env;
 				const child = new EventEmitter() as EventEmitter & {
 					stdout: EventEmitter;
 					stderr: EventEmitter;
@@ -582,6 +588,8 @@ describe("VbaSyncLegacyService", () => {
 			moduleNames: [],
 			json: false,
 			extra: {},
+			password: "super-secret",
+			env: { DYSFLOW_ACCESS_PASSWORD: "super-secret", ACCESS_VBA_PASSWORD: "super-secret" },
 			timeoutMs: 1_000,
 		});
 
@@ -591,6 +599,12 @@ describe("VbaSyncLegacyService", () => {
 			"-ExecutionPolicy",
 			"Bypass",
 		]);
+		expect(capturedArgs).not.toContain("-Password");
+		expect(capturedArgs).not.toContain("super-secret");
+		expect(capturedEnv).toMatchObject({
+			DYSFLOW_ACCESS_PASSWORD: "super-secret",
+			ACCESS_VBA_PASSWORD: "super-secret",
+		});
 	});
 
 	it("maps legacy list/exists tools with JSON output enabled", async () => {

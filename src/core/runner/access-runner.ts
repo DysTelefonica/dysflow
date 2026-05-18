@@ -30,6 +30,7 @@ export type PowerShellExecutorOptions = {
   timeoutMs: number;
   operationId: string;
   accessPath: string;
+  env?: Record<string, string | undefined>;
   onAccessProcessCaptured(process: AccessProcessOwnership): Promise<void>;
 };
 export type PowerShellExecutor = (command: string, args: readonly string[], options: PowerShellExecutorOptions) => Promise<PowerShellExecutionResult>;
@@ -87,6 +88,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       timeoutMs: config.timeoutMs,
       operationId,
       accessPath: config.accessDbPath,
+      env: buildPowerShellEnvironment(config),
       onAccessProcessCaptured: async (process) => {
         try {
           record = (await this.operationRegistry.update(operationId, {
@@ -101,7 +103,7 @@ export class AccessPowerShellRunner implements AccessRunner {
         }
       },
     });
-    const secrets = [config.accessPassword].filter((secret): secret is string => Boolean(secret));
+    const secrets = [config.accessPassword, config.backendPassword].filter((secret): secret is string => Boolean(secret));
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
@@ -151,8 +153,12 @@ export class AccessPowerShellRunner implements AccessRunner {
 
 function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOperation, config: DysflowConfig, operationId: string): string[] {
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-AccessDbPath", config.accessDbPath, "-Operation", operation.kind, "-PayloadJson", JSON.stringify(operation.request), "-OperationId", operationId];
-  if (config.accessPassword !== undefined) args.push("-AccessPassword", config.accessPassword);
   return args;
+}
+
+function buildPowerShellEnvironment(config: DysflowConfig): Record<string, string | undefined> | undefined {
+  if (config.accessPassword === undefined) return undefined;
+  return { DYSFLOW_ACCESS_PASSWORD: config.accessPassword, ACCESS_VBA_PASSWORD: config.accessPassword };
 }
 
 function collectDiagnostics(execution: PowerShellExecutionResult, secrets: readonly string[]): Diagnostic[] {
@@ -183,7 +189,7 @@ export function resolveDefaultRunnerScriptPath(env: Record<string, string | unde
 const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
   const startedAt = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(command, args, { shell: false, windowsHide: true });
+    const child = spawn(command, args, { shell: false, windowsHide: true, env: { ...process.env, ...options.env } });
     let stdout = "";
     let stderr = "";
     let timedOut = false;

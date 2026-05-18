@@ -15,7 +15,7 @@ export type TuiKey = "up" | "down" | "enter" | "space" | "q";
 export type CliCommandContext = {
 	env?: Record<string, string | undefined>;
 	cwd?: string;
-	startMcpAdapter?: (config?: DysflowConfig) => Promise<void>;
+	startMcpAdapter?: (config?: DysflowConfig, options?: { writesEnabled?: boolean }) => Promise<void>;
 	diagnosticsService?: {
 		run(request?: {
 			includeEnvironment?: boolean;

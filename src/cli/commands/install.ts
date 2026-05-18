@@ -675,6 +675,13 @@ function normalizeReleaseVersion(value: string): string {
 	return value.startsWith("v") ? value.slice(1) : value;
 }
 
+export function validateReleaseTagName(tagName: string): string {
+	if (!/^v\d+\.\d+\.\d+$/.test(tagName)) {
+		throw new Error(`Invalid Dysflow release tag: ${tagName}`);
+	}
+	return tagName;
+}
+
 export function createGitHubReleaseRequestHeaders(
 	env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
@@ -737,6 +744,7 @@ async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
 	if (tagName.length === 0) {
 		throw new Error("gh release view did not return a tagName.");
 	}
+	validateReleaseTagName(tagName);
 	return {
 		tagName,
 		version: normalizeReleaseVersion(tagName),
@@ -763,6 +771,7 @@ function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 			if (typeof body.tag_name !== "string" || body.tag_name.length === 0) {
 				throw new Error("GitHub latest release response did not include tag_name.");
 			}
+			validateReleaseTagName(body.tag_name);
 
 			return {
 				tagName: body.tag_name,
@@ -773,7 +782,7 @@ function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 		async preparePackage(
 			release: ReleaseInfo,
 		): Promise<PreparedReleasePackage> {
-			const tagName = release.tagName ?? `v${release.version}`;
+			const tagName = validateReleaseTagName(release.tagName ?? `v${release.version}`);
 			const tempRoot = await mkdtemp(path.join(tmpdir(), "dysflow-update-"));
 			const packageRoot = path.join(tempRoot, "source");
 			const cleanup = async (): Promise<void> => {
@@ -840,10 +849,12 @@ export async function writeRuntimeLaunchers(
 	runtimeDir: string,
 ): Promise<void> {
 	const normalizedRuntimeDir = runtimeDir.replaceAll("\\", "\\\\");
+	const cmdRuntimeDir = escapeCmdSetValue(normalizedRuntimeDir);
+	const psRuntimeDir = escapePowerShellDoubleQuotedString(normalizedRuntimeDir);
 	const cmdContent = [
 		"@echo off",
 		"setlocal",
-		`set "DYSFLOW_HOME=${normalizedRuntimeDir}"`,
+		`set "DYSFLOW_HOME=${cmdRuntimeDir}"`,
 		'node "%DYSFLOW_HOME%\\app\\dist\\cli\\index.js" %*',
 		"exit /b %ERRORLEVEL%",
 		"",
@@ -851,7 +862,7 @@ export async function writeRuntimeLaunchers(
 
 	const ps1Content = [
 		'$ErrorActionPreference = "Stop"',
-		`$env:DYSFLOW_HOME = "${normalizedRuntimeDir}"`,
+		`$env:DYSFLOW_HOME = "${psRuntimeDir}"`,
 		`& node (Join-Path $env:DYSFLOW_HOME "app\\dist\\cli\\index.js") @args`,
 		"exit $LASTEXITCODE",
 		"",
@@ -859,6 +870,14 @@ export async function writeRuntimeLaunchers(
 
 	await writeFile(path.join(binDir, "dysflow.cmd"), cmdContent, "utf8");
 	await writeFile(path.join(binDir, "dysflow.ps1"), ps1Content, "utf8");
+}
+
+function escapeCmdSetValue(value: string): string {
+	return value.replaceAll("%", "%%").replaceAll('"', '^"');
+}
+
+function escapePowerShellDoubleQuotedString(value: string): string {
+	return value.replaceAll("`", "``").replaceAll("$", "`$").replaceAll('"', '`"');
 }
 
 export async function handleInstallCommand(

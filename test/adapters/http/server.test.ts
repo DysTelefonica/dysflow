@@ -52,7 +52,7 @@ async function readJson(url: string, init?: RequestInit) {
   return { response, body: await response.json() };
 }
 
-async function postChunkedJson(url: string, chunks: readonly string[]) {
+async function postChunkedJson(url: string, chunks: readonly string[], headers: Record<string, string> = {}) {
   const target = new URL(url);
   return new Promise<{ statusCode: number; body: unknown }>((resolve, reject) => {
     const request = httpRequest({
@@ -60,7 +60,7 @@ async function postChunkedJson(url: string, chunks: readonly string[]) {
       port: Number(target.port),
       path: target.pathname,
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
     }, (response) => {
       let raw = "";
       response.setEncoding("utf8");
@@ -89,6 +89,7 @@ describe("Dysflow HTTP adapter", () => {
     const { response, body } = await readJson(`${server.url}/health`);
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(body).toEqual({ ok: true, service: "dysflow", writesEnabled: false });
   });
 
@@ -174,6 +175,8 @@ describe("Dysflow HTTP adapter", () => {
     "/* leading comment */\nUPDATE People SET name='Ada'",
     "WITH changed AS (DELETE FROM People RETURNING *) SELECT * FROM changed",
     "EXEC dangerous_procedure",
+    "selection FROM People",
+    "SELECT * FROM People DROP TABLE People",
   ])("rejects non-read SQL edge case: %s", async (sql) => {
     const services = createFakeServices();
     const server = await startTestServer({ services });

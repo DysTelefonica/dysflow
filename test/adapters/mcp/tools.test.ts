@@ -133,6 +133,7 @@ describe("MCP tool registration over core services", () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
+      writesEnabled: true,
       vbaService: vba,
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
@@ -169,6 +170,10 @@ describe("MCP tool registration over core services", () => {
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
       isError: true,
     });
+    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
+      content: [{ type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." }],
+      isError: true,
+    });
     await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "People", allowTables: ["People", 7], rows: [{ id: 1 }] })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: allowTables[1] must be a string." }],
       isError: true,
@@ -180,6 +185,23 @@ describe("MCP tool registration over core services", () => {
 
     expect(vba.requests).toEqual([]);
     expect(query.requests).toEqual([]);
+  });
+
+  it("allows MCP write queries only when writes are explicitly enabled", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      writesEnabled: true,
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
+      isError: false,
+    });
+
+    expect(query.requests).toEqual([{ sql: "UPDATE People SET name='Ada'", mode: "write" }]);
   });
 
   it("handles legacy run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {

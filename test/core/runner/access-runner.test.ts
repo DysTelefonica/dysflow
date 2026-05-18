@@ -11,6 +11,7 @@ const config: DysflowConfig = {
 	configSource: "explicit-request",
 	accessDbPath: "C:/data/finance.accdb",
 	accessPassword: "super-secret",
+	backendPassword: "backend-secret",
 	timeoutMs: 1_500,
 	processTimeoutMs: 1_500,
 };
@@ -21,9 +22,10 @@ describe("AccessPowerShellRunner", () => {
 			command: string;
 			args: readonly string[];
 			timeoutMs: number;
+			env?: Record<string, string | undefined>;
 		}> = [];
 		const executor: PowerShellExecutor = async (command, args, options) => {
-			calls.push({ command, args, timeoutMs: options.timeoutMs });
+			calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
 			return {
 				exitCode: 0,
 				stdout: '{"returnValue":42}',
@@ -75,11 +77,47 @@ describe("AccessPowerShellRunner", () => {
 					'{"moduleName":"Main Module","procedureName":"Run-It","arguments":["a;b","$(nope)"]}',
 					"-OperationId",
 					expect.stringMatching(/^dysflow-/),
-					"-AccessPassword",
-					"super-secret",
 				],
+				env: {
+					DYSFLOW_ACCESS_PASSWORD: "super-secret",
+					ACCESS_VBA_PASSWORD: "super-secret",
+				},
 			},
 		]);
+	});
+
+	it("redacts backend passwords from diagnostics and runner failures", async () => {
+		const executor: PowerShellExecutor = async () => ({
+			exitCode: 7,
+			stdout: "",
+			stderr: "DAO failed with connection string ;PWD=backend-secret",
+			durationMs: 33,
+			timedOut: false,
+		});
+		const runner = new AccessPowerShellRunner({
+			executor,
+			scriptPath: "C:/tools/run.ps1",
+		});
+
+		const result = await runner.run(
+			{ kind: "diagnostics", request: { includeEnvironment: true } },
+			config,
+		);
+
+		expect(JSON.stringify(result)).not.toContain("backend-secret");
+		expect(result).toMatchObject({
+			ok: false,
+			error: {
+				message:
+					"PowerShell runner failed with exit code 7: DAO failed with connection string ;PWD=[REDACTED]",
+			},
+			diagnostics: [
+				expect.objectContaining({
+					message: "DAO failed with connection string ;PWD=[REDACTED]",
+				}),
+				expect.any(Object),
+			],
+		});
 	});
 
 	it("resolves the production runner script from DYSFLOW_HOME", () => {

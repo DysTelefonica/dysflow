@@ -142,13 +142,15 @@ class JsonRpcMethodNotFound extends Error {
 }
 
 export async function startMcpStdioAdapter(runtime?: McpStdioRuntime): Promise<void>;
-export async function startMcpStdioAdapter(config?: DysflowConfig, runtime?: McpStdioRuntime): Promise<void>;
-export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | McpStdioRuntime, runtime?: McpStdioRuntime): Promise<void> {
-  const suppliedRuntime = isMcpStdioRuntime(configOrRuntime) ? configOrRuntime : runtime;
+export async function startMcpStdioAdapter(config?: DysflowConfig, options?: { writesEnabled?: boolean }, runtime?: McpStdioRuntime): Promise<void>;
+export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | McpStdioRuntime, optionsOrRuntime?: { writesEnabled?: boolean } | McpStdioRuntime, runtime?: McpStdioRuntime): Promise<void> {
+  const suppliedRuntime = isMcpStdioRuntime(configOrRuntime) ? configOrRuntime : isMcpStdioRuntime(optionsOrRuntime) ? optionsOrRuntime : runtime;
+  const options = isMcpStdioRuntime(optionsOrRuntime) ? undefined : optionsOrRuntime;
   const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
   const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
   const configResult = config === undefined ? loadDysflowConfig() : { ok: true as const, data: config };
   const services = configResult.ok ? createConfiguredServices(configResult.data) : createUnavailableServices(configResult.error);
+  services.writesEnabled = options?.writesEnabled ?? false;
 
   for (const tool of createDysflowMcpTools(services)) {
     activeRuntime.registerTool(tool);

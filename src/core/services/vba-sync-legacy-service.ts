@@ -15,6 +15,7 @@ export type VbaManagerExecutionRequest = {
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
   timeoutMs: number;
+  env?: Record<string, string | undefined>;
   signal?: AbortSignal;
 };
 
@@ -93,6 +94,8 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   generate_erd: mapping("Generate-ERD", false, () => [], (input) => ({ backendPath: stringValue(input.backendPath), erdPath: stringValue(input.erdPath) })),
 };
 
+const VBA_MANAGER_EXTRA_KEYS = new Set(["backendPath", "erdPath", "importMode", "location", "proceduresJson"]);
+
 const HIGHER_LEVEL_TOOLS: Record<string, string> = {
   verify_code: "verify_code requires source document/code-behind comparison before it can run through this service.",
   verify_binary: "verify_binary requires a higher-level source/binary comparison implementation before it can run through this service.",
@@ -165,7 +168,10 @@ export class VbaSyncLegacyService {
       json: mapping.json ?? false,
       extra: mapping.extra(params),
       timeoutMs: this.processTimeoutMs,
+      env: password === undefined ? undefined : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
     };
+    const extraValidation = validateVbaManagerExtra(request.extra);
+    if (!extraValidation.ok) return extraValidation;
 
     const result = await this.executeWithTimeout(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
@@ -471,6 +477,15 @@ export class VbaSyncLegacyService {
   }
 }
 
+function validateVbaManagerExtra(extra: Record<string, string | boolean | number | undefined>): OperationResult<undefined> {
+  for (const key of Object.keys(extra)) {
+    if (!VBA_MANAGER_EXTRA_KEYS.has(key)) {
+      return failureResult(createDysflowError("VBA_MANAGER_EXTRA_NOT_ALLOWED", `Unsupported VBA manager option: ${key}.`));
+    }
+  }
+  return successResult(undefined);
+}
+
 export function buildImportPlanResult(options: BuildImportPlanResultOptions): ImportPlanResult {
   const { toolName, params, target, modulesPlanned, warnings, errors } = options;
   return {
@@ -606,7 +621,6 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
     const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
     if (request.accessPath) args.push("-AccessPath", request.accessPath);
     if (request.moduleNames.length > 0) args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
-    if (request.password) args.push("-Password", request.password);
     if (request.json) args.push("-Json");
     for (const [key, value] of Object.entries(request.extra)) {
       if (value === undefined) continue;
@@ -615,7 +629,7 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
     }
 
     let timedOut = false;
-    const child = spawn("powershell.exe", args, { windowsHide: true });
+    const child = spawn("powershell.exe", args, { windowsHide: true, env: { ...process.env, ...request.env } });
     request.signal?.addEventListener("abort", () => {
       timedOut = true;
       child.kill();

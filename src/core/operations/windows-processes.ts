@@ -21,6 +21,9 @@ export class WindowsMsAccessProcessInspector implements ProcessInspector {
 
 export class WindowsProcessKiller implements ProcessKiller {
   async kill(pid: number): Promise<void> {
+    if (!Number.isSafeInteger(pid) || pid <= 0) {
+      throw new Error("Process id must be a positive safe integer.");
+    }
     await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Stop-Process -Id ${pid} -Force`], { windowsHide: true });
   }
 }

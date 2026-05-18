@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
 	createDysflowError,
 	failureResult,
@@ -316,14 +316,28 @@ function resolveRegisteredProjectConfigPath(
 	const entry = registry.projects?.[projectId];
 	if (entry === undefined) return undefined;
 	const registryDir = dirname(registryPath);
-	if (typeof entry === "string") return resolvePathMaybeRelative(entry, registryDir);
+	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
 	const configPath = stringValue(entry.configPath);
-	if (configPath !== undefined) return resolvePathMaybeRelative(configPath, registryDir);
+	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
 	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
 	if (projectRoot !== undefined) {
-		return resolve(resolvePathMaybeRelative(projectRoot, registryDir), DEFAULT_PROJECT_CONFIG_PATH);
+		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
+		return resolvedProjectRoot === undefined
+			? undefined
+			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
 	}
 	return undefined;
+}
+
+function resolveRegisteredPath(value: string, registryDir: string): string | undefined {
+	const resolved = resolvePathMaybeRelative(value, registryDir);
+	if (isAbsolute(value)) return resolved;
+	return isPathInside(resolved, registryDir) ? resolved : undefined;
+}
+
+function isPathInside(candidate: string, base: string): boolean {
+	const relativePath = relative(resolve(base), resolve(candidate));
+	return relativePath.length === 0 || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 export function resolveProjectRegistryPath(

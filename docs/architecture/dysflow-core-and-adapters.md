@@ -26,7 +26,7 @@ MCP startup must not write product logs to stdout. Stdout belongs to the stdio p
 
 ## CLI wiring
 
-- `dysflow mcp` starts the MCP stdio adapter and returns empty CLI stdout.
+- `dysflow mcp` starts the MCP stdio adapter and returns empty CLI stdout. SQL write tools are disabled by default and require `dysflow mcp --enable-writes`.
 - `dysflow setup` resolves core configuration and prints only redacted values.
 - `dysflow doctor` calls core diagnostics and formats check results.
 - `dysflow serve` stays planned until the HTTP adapter phase.

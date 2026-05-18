@@ -14,6 +14,7 @@ import {
 	handleInstallCommand,
 	handleUpdateCommand,
 	createGitHubReleaseRequestHeaders,
+	validateReleaseTagName,
 	parseAgentList,
 	parseInstallArgs,
 	parseUpdateArgs,
@@ -22,6 +23,7 @@ import {
 	hasDysflowMcpConfig,
 	removeDysflowMcpConfig,
 	applyIntegrationSelection,
+	writeRuntimeLaunchers,
 } from "../../src/cli/commands/install";
 import { compareVersions } from "../../src/core/utils/version";
 
@@ -57,6 +59,12 @@ async function createPackageRoot(
 }
 
 describe("install arg parsing", () => {
+	it("rejects release tags that are not exact semantic version tags", () => {
+		expect(validateReleaseTagName("v1.2.3")).toBe("v1.2.3");
+		expect(() => validateReleaseTagName("v1.2.3;calc")).toThrow("Invalid Dysflow release tag");
+		expect(() => validateReleaseTagName("main")).toThrow("Invalid Dysflow release tag");
+	});
+
 	it("adds GitHub authorization headers for release lookup when a token is available", () => {
 		expect(
 			createGitHubReleaseRequestHeaders({ GH_TOKEN: "secret-token" }),
@@ -488,6 +496,23 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
 
 		await rm(root, { recursive: true, force: true });
+	});
+
+	it("escapes launcher paths for cmd and PowerShell string contexts", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-launcher-"));
+		const binDir = join(root, "bin");
+		try {
+			await mkdir(binDir, { recursive: true });
+			await writeRuntimeLaunchers(binDir, 'C:\\foo"&calc\\$home`dir%TMP%');
+
+			const cmdLauncher = await readFile(join(binDir, "dysflow.cmd"), "utf8");
+			const ps1Launcher = await readFile(join(binDir, "dysflow.ps1"), "utf8");
+
+			expect(cmdLauncher).toContain('set "DYSFLOW_HOME=C:\\\\foo^"&calc\\\\$home`dir%%TMP%%"');
+			expect(ps1Launcher).toContain('$env:DYSFLOW_HOME = "C:\\\\foo`"&calc\\\\`$home``dir%TMP%"');
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });
 
