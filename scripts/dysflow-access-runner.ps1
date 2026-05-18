@@ -644,7 +644,7 @@ try {
       if ($payload.mode -eq 'read') {
         $rs = $db.OpenRecordset([string]$payload.sql)
         try {
-          $rows = Convert-RecordsetRows $rs
+          $rows = @(Convert-RecordsetRows $rs)
           [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
         } finally {
           if ($null -ne $rs) { $rs.Close() }
@@ -677,7 +677,7 @@ try {
       if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for count_rows." }
       $rs = $db.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$payload.tableName)]")
       try {
-        $rows = Convert-RecordsetRows $rs
+        $rows = @(Convert-RecordsetRows $rs)
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }
@@ -690,7 +690,7 @@ try {
       if ([string]::IsNullOrWhiteSpace([string]$payload.columnName)) { throw "columnName is required for distinct_values." }
       $rs = $db.OpenRecordset("SELECT DISTINCT [$([string]$payload.columnName)] AS Value FROM [$([string]$payload.tableName)]")
       try {
-        $rows = Convert-RecordsetRows $rs
+        $rows = @(Convert-RecordsetRows $rs)
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }

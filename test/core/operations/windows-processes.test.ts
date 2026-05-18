@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { WindowsProcessKiller } from "../../../src/core/operations/windows-processes";
+import { WindowsProcessKiller, parseCimDateTimeToIso } from "../../../src/core/operations/windows-processes";
+
+describe("parseCimDateTimeToIso", () => {
+  it("converts a DMTF CIM datetime string to ISO 8601 UTC", () => {
+    expect(parseCimDateTimeToIso("20240315143000.000000+000")).toBe("2024-03-15T14:30:00.000Z");
+  });
+
+  it("converts a DMTF string with non-zero milliseconds", () => {
+    expect(parseCimDateTimeToIso("20260518123456.123000+000")).toBe("2026-05-18T12:34:56.123Z");
+  });
+
+  it("passes through a value that is already ISO 8601", () => {
+    const iso = "2024-03-15T14:30:00.000Z";
+    expect(parseCimDateTimeToIso(iso)).toBe(iso);
+  });
+
+  it("returns empty string for null/undefined input", () => {
+    expect(parseCimDateTimeToIso(undefined)).toBe("");
+    expect(parseCimDateTimeToIso(null)).toBe("");
+  });
+
+  it("returns empty string for empty string input", () => {
+    expect(parseCimDateTimeToIso("")).toBe("");
+  });
+
+  it("returns empty string for a malformed DMTF string that cannot be parsed", () => {
+    expect(parseCimDateTimeToIso("not-a-date")).toBe("");
+  });
+});
 
 describe("WindowsProcessKiller", () => {
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(

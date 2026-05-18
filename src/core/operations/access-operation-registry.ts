@@ -114,20 +114,16 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   async get(operationId: string): Promise<AccessOperationRecord | undefined> {
-    return this.withFileLock(async () => {
-      const record = (await this.readRecords()).get(operationId);
-      return record ? { ...record, metadata: { ...record.metadata } } : undefined;
-    });
+    const record = (await this.readRecordsUnlocked()).get(operationId);
+    return record ? { ...record, metadata: { ...record.metadata } } : undefined;
   }
 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
-    return this.withFileLock(async () => {
-      const limit = options.limit ?? 50;
-      return [...(await this.readRecords()).values()]
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, limit)
-        .map((record) => ({ ...record, metadata: { ...record.metadata } }));
-    });
+    const limit = options.limit ?? 50;
+    return [...(await this.readRecordsUnlocked()).values()]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map((record) => ({ ...record, metadata: { ...record.metadata } }));
   }
 
   private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -235,6 +231,11 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
 
   private createLockOwnerToken(): string {
     return `${process.pid}:${randomUUID()}`;
+  }
+
+  /** Read the registry file directly without acquiring any lock. Safe for readers because writes are atomic (temp-file rename). */
+  private readRecordsUnlocked(): Promise<Map<string, AccessOperationRecord>> {
+    return this.readRecords();
   }
 
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {

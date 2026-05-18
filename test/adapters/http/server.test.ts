@@ -285,4 +285,62 @@ describe("Dysflow HTTP adapter", () => {
     expect(services.calls.queries).toEqual([{ sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write" }]);
     expect(services.calls.vba).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }]);
   });
+
+  it("accepts SELECT with a semicolon inside a string literal", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT * FROM T WHERE col = 'foo;bar'" }),
+    });
+
+    expect(response.response.status).toBe(200);
+    expect(services.calls.queries).toHaveLength(1);
+  });
+
+  it("accepts a SELECT with multiple semicolons embedded inside string literals", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT * FROM T WHERE name = 'val;ue;with;many'" }),
+    });
+
+    expect(response.response.status).toBe(200);
+    expect(services.calls.queries).toHaveLength(1);
+  });
+
+  it("rejects two real statements separated by a top-level semicolon (SELECT then INSERT)", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT 1; INSERT INTO T VALUES(1)" }),
+    });
+
+    expect(response.response.status).toBe(400);
+    expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
+  });
+
+  it("rejects INSERT followed by DELETE separated by a top-level semicolon", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "INSERT INTO T VALUES (1); DELETE FROM T" }),
+    });
+
+    expect(response.response.status).toBe(400);
+    expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
+  });
 });
