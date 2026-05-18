@@ -7,6 +7,7 @@ import {
 	access,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
@@ -345,7 +346,7 @@ describe("resolvePackageRoot", () => {
 
 			expect(
 				resolvePackageRoot({
-					moduleUrl: `file:///${join(installedCliDir, "install.js").replaceAll("\\", "/")}`,
+					moduleUrl: pathToFileURL(join(installedCliDir, "install.js")).href,
 					cwd: projectSubfolder,
 				}),
 			).toBe(installedApp);

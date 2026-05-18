@@ -4,12 +4,15 @@
   "description": "Dysflow Access automation product foundation.",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@10.17.1",
   "bin": {
     "dysflow": "./dist/cli/index.js"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "coverage": "vitest run --coverage",
     "prepare": "pnpm build",
     "prepack": "pnpm build",
     "postinstall": "pnpm build"
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "@vitest/coverage-v8": "1.6.1",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
   }
