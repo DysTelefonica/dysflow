@@ -84,7 +84,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(diagnostics.response.status).toBe(200);
       expect(diagnostics.body).toMatchObject({ ok: true });
       expect(query.response.status).toBe(200);
-      expect(query.body).toMatchObject({ ok: true, data: { rows: { One: 1 } } });
+      expect(query.body).toMatchObject({ ok: true, data: { rows: [{ One: 1 }] } });
     } finally {
       workspace.cleanup();
     }
