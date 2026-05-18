@@ -106,7 +106,9 @@ describe("Dysflow HTTP adapter", () => {
     expect(health.response.status).toBe(200);
     expect(health.body).toEqual({ ok: true, service: "dysflow", writesEnabled: false });
     expect(diagnostics.response.status).toBe(500);
-    expect(diagnostics.body.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+    expect(diagnostics.body.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(diagnostics.body.error.message).not.toContain("/");
+    expect(diagnostics.body.error.message).not.toContain("\\");
   });
 
   it("serves diagnostics and read query routes through core services", async () => {

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
-import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult, type DysflowError } from "../../core/contracts/index.js";
+import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult } from "../../core/contracts/index.js";
 import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import { AccessOperationCleanupService, type AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import type { AccessOperationRecord, AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
@@ -74,7 +74,8 @@ export async function startDysflowHttpServer(
 function createCoreServices(env?: Record<string, string | undefined>): DysflowHttpServices {
   const configResult = loadDysflowConfig({ env });
   if (!configResult.ok) {
-    return createUnavailableHttpServices(configResult.error);
+    process.stderr.write(`[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`);
+    return createUnavailableHttpServices();
   }
 
   const runner = new AccessPowerShellRunner();
@@ -91,8 +92,9 @@ function createCoreServices(env?: Record<string, string | undefined>): DysflowHt
   };
 }
 
-function createUnavailableHttpServices(error: DysflowError): DysflowHttpServices {
-  const unavailable = async () => failureResult(error);
+function createUnavailableHttpServices(): DysflowHttpServices {
+  const unavailable = async () =>
+    failureResult(createDysflowError("SERVICE_UNAVAILABLE", "Service is unavailable. Check the server configuration."));
   return {
     diagnosticsService: { run: unavailable },
     queryService: { execute: unavailable },

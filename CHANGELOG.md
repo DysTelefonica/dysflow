@@ -4,6 +4,13 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-05-18
+
+### Fixed
+
+- HTTP server no longer returns raw config error (with internal filesystem paths) to callers when starting in degraded mode — now returns a generic `SERVICE_UNAVAILABLE` and logs the original error to stderr. Closes #159.
+- CLI setup command no longer includes the registry file path in the malformed-JSON error message. Closes #160.
+
 ## [0.4.2] - 2026-05-18
 
 ### Fixed

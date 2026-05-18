@@ -193,7 +193,7 @@ async function registerProjectConfig(
 	try {
 		registry = JSON.parse(raw) as DysflowProjectRegistry;
 	} catch {
-		throw new Error(`Invalid Dysflow project registry JSON: ${registryPath}`);
+		throw new Error("Invalid Dysflow project registry JSON");
 	}
 	registry.projects = { ...(registry.projects ?? {}), [projectId]: { configPath: projectPath } };
 	await mkdir(dirname(registryPath), { recursive: true });
