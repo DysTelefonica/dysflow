@@ -4,6 +4,16 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-05-18
+
+### Fixed
+
+- Closed the v0.4.3 security audit by hardening secret redaction, password transport, Windows command/path validation, MCP write gates, HTTP response headers, release tag validation, and Access query export boundaries. Closes #167, #168, #169, #170, #171.
+
+### Added
+
+- Added a real Access fixture E2E test that exercises HTTP diagnostics and read SQL through the production PowerShell/Access runner when local Access fixtures and Access COM are available.
+
 ## [0.4.3] - 2026-05-18
 
 ### Fixed
