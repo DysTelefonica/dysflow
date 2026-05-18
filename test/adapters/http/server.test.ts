@@ -1,6 +1,10 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { request as httpRequest, type Server } from "node:http";
 import { startDysflowHttpServer } from "../../../src/adapters/http/server";
+import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
 import { failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest } from "../../../src/core/contracts/index";
 
 const startedServers: Server[] = [];
@@ -327,6 +331,38 @@ describe("Dysflow HTTP adapter", () => {
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
     expect(services.calls.queries).toEqual([]);
+  });
+
+  it("exposes operations from an injected FileAccessOperationRegistry via GET /access/operations (#176)", async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), "dysflow-http-registry-"));
+    const registryPath = join(tmpDir, "operations.json");
+    const operationRegistry = new FileAccessOperationRegistry({ filePath: registryPath });
+
+    const operationRecord = {
+      operationId: "op-test-http-shared-registry",
+      action: "query" as const,
+      accessPath: "C:/test/front.accdb",
+      accessPid: null,
+      processStartTime: null,
+      status: "running" as const,
+      metadata: {},
+      updatedAt: new Date().toISOString(),
+    };
+    await operationRegistry.create(operationRecord);
+
+    const server = await startDysflowHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      services: { ...createFakeServices(), operationRegistry },
+    });
+    startedServers.push(server.server);
+
+    const { response, body } = await readJson(`${server.url}/access/operations`);
+    const result = body as { ok: boolean; data: Array<{ operationId: string }> };
+
+    expect(response.status).toBe(200);
+    expect(result.ok).toBe(true);
+    expect(result.data.some((op) => op.operationId === "op-test-http-shared-registry")).toBe(true);
   });
 
   it("rejects INSERT followed by DELETE separated by a top-level semicolon", async () => {
