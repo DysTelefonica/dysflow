@@ -35,9 +35,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Issue #160 Reconciliation
 
-- [ ] 2.1 RED: ensure `test/cli/commands.test.ts` asserts malformed registry errors omit filesystem paths.
-- [ ] 2.2 GREEN: adjust `src/cli/commands/setup.ts` only if the sanitized `Invalid Dysflow project registry JSON` behavior regressed.
-- [ ] 2.3 Add concise issue/docs note recording close/update/follow-up status for #160.
+- [x] 2.1 RED: ensure `test/cli/commands.test.ts` asserts malformed registry errors omit filesystem paths.
+- [x] 2.2 GREEN: adjust `src/cli/commands/setup.ts` only if the sanitized `Invalid Dysflow project registry JSON` behavior regressed.
+- [x] 2.3 Add concise issue/docs note recording close/update/follow-up status for #160.
 
 ## Phase 3: Registry Concurrency Safety
 
