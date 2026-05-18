@@ -469,7 +469,8 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
-      if (!writesEnabled && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write")) {
+      const isDryRun = isRecord(input) && input.dryRun === true;
+      if (!writesEnabled && !isDryRun && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write")) {
         return writesDisabled();
       }
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {

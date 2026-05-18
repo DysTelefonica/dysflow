@@ -261,4 +261,58 @@ describe("MCP tool registration over core services", () => {
       isError: true,
     });
   });
+
+  // Issue #184: dryRun:true must bypass the write guard for relink_tables
+  it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      writesEnabled: false,
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    const relinkTool = tools.find((tool) => tool.name === "relink_tables");
+
+    // dryRun:true — must NOT be blocked by write guard
+    const dryRunResult = await relinkTool?.handler({ dryRun: true });
+    expect(dryRunResult?.isError).toBe(false);
+    expect(dryRunResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    // Query service must have been called (the dry-run plan passes through)
+    expect(query.requests.length).toBeGreaterThan(0);
+    const dryRunRequest = query.requests[0] as Record<string, unknown>;
+    expect(dryRunRequest.dryRun).toBe(true);
+  });
+
+  it("blocks relink_tables with dryRun:false when writes are disabled (issue #184)", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      writesEnabled: false,
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    const relinkTool = tools.find((tool) => tool.name === "relink_tables");
+
+    // dryRun:false — must be blocked by write guard when writes are disabled
+    const writeResult = await relinkTool?.handler({ dryRun: false });
+    expect(writeResult?.isError).toBe(true);
+    expect(writeResult?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(query.requests).toEqual([]);
+  });
+
+  it("allows relink_tables with dryRun:false when writes are enabled (issue #184)", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      writesEnabled: true,
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    const relinkTool = tools.find((tool) => tool.name === "relink_tables");
+
+    const writeResult = await relinkTool?.handler({ dryRun: false });
+    expect(writeResult?.isError).toBe(false);
+    expect(writeResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(query.requests.length).toBeGreaterThan(0);
+  });
 });
