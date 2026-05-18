@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools, translateCoreResultToMcpContent } from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS } from "../../../src/adapters/mcp/tools";
 import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
@@ -248,6 +248,79 @@ describe("MCP tool registration over core services", () => {
       expect(tool.inputSchema, `${tool.name} should declare inputSchema`).toMatchObject({ type: "object", properties: expect.any(Object) });
       expect(tool.inputSchema).not.toEqual({ type: "object", additionalProperties: true });
     }
+  });
+
+  describe("stub tool visibility (#175)", () => {
+    const STUB_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary", "init_project", "normalize_documents"] as const;
+
+    function makeServices() {
+      return {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      };
+    }
+
+    it("marks stub (not-implemented) tools as hidden so they are excluded from tools/list projection", () => {
+      const tools = createDysflowMcpTools(makeServices());
+      for (const stub of STUB_TOOL_NAMES) {
+        const tool = tools.find((t) => t.name === stub);
+        expect(tool, `${stub} must be present in tool registry`).toBeDefined();
+        expect(tool?.hidden, `${stub} must be marked hidden: true`).toBe(true);
+      }
+    });
+
+    it("stub tools retain callable handlers that return LEGACY_TOOL_NOT_IMPLEMENTED", async () => {
+      const tools = createDysflowMcpTools(makeServices());
+      for (const stub of STUB_TOOL_NAMES) {
+        const tool = tools.find((t) => t.name === stub);
+        if (tool === undefined) continue;
+        const result = await tool.handler({});
+        expect(result.isError, `${stub} handler should return isError: true`).toBe(true);
+        expect(result.content[0]?.text, `${stub} handler should return LEGACY_TOOL_NOT_IMPLEMENTED`).toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
+      }
+    });
+  });
+
+  describe("per-tool input schemas (#177)", () => {
+    function makeServices() {
+      return {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      };
+    }
+
+    it("every registered legacy tool has an entry in LEGACY_TOOL_SCHEMAS", () => {
+      const tools = createDysflowMcpTools(makeServices());
+      // Legacy tools are those without a 'dysflow.' prefix (they use legacySchemaForTool)
+      const legacyTools = tools.filter((t) => !t.name.startsWith("dysflow."));
+      for (const tool of legacyTools) {
+        expect(LEGACY_TOOL_SCHEMAS, `${tool.name} must have an entry in LEGACY_TOOL_SCHEMAS`).toHaveProperty(tool.name);
+      }
+    });
+
+    it("list_tables schema does not include rows property", () => {
+      const schema = LEGACY_TOOL_SCHEMAS["list_tables"];
+      expect(schema).toBeDefined();
+      expect(schema?.properties).not.toHaveProperty("rows");
+    });
+
+    it("seed_fixture schema does not include query property", () => {
+      const schema = LEGACY_TOOL_SCHEMAS["seed_fixture"];
+      expect(schema).toBeDefined();
+      expect(schema?.properties).not.toHaveProperty("query");
+    });
+
+    it("passing a property not in a tool-specific schema returns MCP_INPUT_INVALID", async () => {
+      const tools = createDysflowMcpTools(makeServices());
+      // list_tables should not accept rows — passing rows should produce a validation error
+      const listTables = tools.find((t) => t.name === "list_tables");
+      expect(listTables).toBeDefined();
+      const result = await listTables!.handler({ rows: [{ id: 1 }] });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    });
   });
 
   it("translates core failures to safe MCP errors without leaking diagnostics, protocol details, or local paths", () => {

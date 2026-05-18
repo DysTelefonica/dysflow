@@ -3,11 +3,12 @@ import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
 import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult } from "../../core/contracts/index.js";
 import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import { AccessOperationCleanupService, type AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
-import type { AccessOperationRecord, AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { FileAccessOperationRegistry, type AccessOperationRecord, type AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
 import { AccessDiagnosticsService, type AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService, type AccessQueryResult } from "../../core/services/query-service.js";
 import { AccessVbaService, type AccessVbaResult } from "../../core/services/vba-service.js";
+import { resolveProjectOperationRegistryPath } from "../mcp/stdio.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17_321;
@@ -78,14 +79,17 @@ function createCoreServices(env?: Record<string, string | undefined>): DysflowHt
     return createUnavailableHttpServices();
   }
 
-  const runner = new AccessPowerShellRunner();
+  const operationRegistry = new FileAccessOperationRegistry({
+    filePath: resolveProjectOperationRegistryPath(configResult.data),
+  });
+  const runner = new AccessPowerShellRunner({ operationRegistry });
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
     queryService: new AccessQueryService({ runner, config: configResult.data }),
     vbaService: new AccessVbaService({ runner, config: configResult.data }),
-    operationRegistry: getDefaultAccessOperationRegistry(),
+    operationRegistry,
     cleanupService: new AccessOperationCleanupService({
-      registry: getDefaultAccessOperationRegistry(),
+      registry: operationRegistry,
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
     }),
