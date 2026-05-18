@@ -10,9 +10,17 @@ Owner: repo-engineering-hardening
   (`tsc --noEmit`).
 - `pnpm coverage` runs Vitest coverage for `src/**/*.ts`.
 
-## Follow-up
+## Coverage thresholds
 
-Coverage starts at a 0% floor so the first CI slice is enforceable without
-blocking unrelated hardening work. Raise the threshold after the baseline is
-stable, and replace the TypeScript-only lint gate with a dedicated style linter
-when the team chooses one.
+Thresholds are set at measured baseline minus 2 percentage points (ADR-6).
+Current floors (set on PR2 of product-quality-fixes):
+
+| Metric     | Floor |
+|------------|-------|
+| statements | 86%   |
+| branches   | 75%   |
+| functions  | 88%   |
+| lines      | 86%   |
+
+Raise the thresholds after significant coverage improvements, and replace the
+TypeScript-only lint gate with a dedicated style linter when the team chooses one.

@@ -11,10 +11,10 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["dist/**", "test/**", "**/*.test.ts", "vitest.config.ts"],
       thresholds: {
-        statements: 0,
-        branches: 0,
-        functions: 0,
-        lines: 0
+        statements: 86,
+        branches: 75,
+        functions: 88,
+        lines: 86
       }
     }
   }

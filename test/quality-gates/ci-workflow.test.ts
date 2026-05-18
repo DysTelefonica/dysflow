@@ -51,6 +51,18 @@ describe("repository quality gates", () => {
 
 		expect(docs).toContain("Owner: repo-engineering-hardening");
 		expect(docs).toContain("Lint currently uses TypeScript strict checking");
-		expect(docs).toContain("Coverage starts at a 0% floor");
+		expect(docs).not.toContain("Coverage starts at a 0% floor");
+	});
+
+	it("sets non-zero coverage thresholds in vitest.config.ts (#178)", async () => {
+		const config = await readText("vitest.config.ts");
+
+		// Extract threshold values — all must be > 0
+		const thresholdMatches = [...config.matchAll(/(?:statements|branches|functions|lines):\s*(\d+(?:\.\d+)?)/g)];
+		expect(thresholdMatches.length, "vitest.config.ts must declare all four threshold fields").toBeGreaterThanOrEqual(4);
+		for (const match of thresholdMatches) {
+			const value = Number(match[1]);
+			expect(value, `threshold for ${match[0].split(":")[0].trim()} must be > 0`).toBeGreaterThan(0);
+		}
 	});
 });
