@@ -143,7 +143,14 @@ export class VbaSyncLegacyService {
       return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
     }
 
-    return this.executeMappedTool(toolName, params, mapping);
+    // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
+    // the caller-specified directory instead of the project's default src/ folder (issue #185).
+    const exportPath = stringValue(params.exportPath);
+    const effectiveParams = (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
+      ? { ...params, destinationRoot: exportPath }
+      : params;
+
+    return this.executeMappedTool(toolName, effectiveParams, mapping);
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
