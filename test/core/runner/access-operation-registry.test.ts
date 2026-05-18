@@ -622,3 +622,95 @@ describe("Access operation registry and cleanup safety", () => {
 		});
 	});
 });
+
+describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
+	it("get() does not acquire the file-system lock directory", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-lockfree-get-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			// Seed the registry with one record
+			const writer = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 100 });
+			await writer.create({
+				...base,
+				operationId: "op-seed",
+				status: "starting",
+				accessPid: null,
+				processStartTime: null,
+				updatedAt: "2026-05-18T10:00:00.000Z",
+			});
+
+			// Hold the file-system lock manually (simulates another process writing)
+			await mkdir(lockPath, { recursive: true });
+			await writeFile(join(lockPath, "owner"), "external-owner", "utf8");
+
+			// With a very short lockTimeoutMs, a lock-acquiring get() would time out; lock-free should not
+			const reader = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 50, staleLockMs: 120_000 });
+			const result = await reader.get("op-seed");
+
+			// Lock-free: should return the previously written record without timing out
+			expect(result).toMatchObject({ operationId: "op-seed" });
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("listRecent() does not acquire the file-system lock directory", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-lockfree-list-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		const lockPath = `${registryPath}.lock`;
+		try {
+			const writer = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 100 });
+			await writer.create({
+				...base,
+				operationId: "op-list-seed",
+				status: "starting",
+				accessPid: null,
+				processStartTime: null,
+				updatedAt: "2026-05-18T10:00:00.000Z",
+			});
+
+			await mkdir(lockPath, { recursive: true });
+			await writeFile(join(lockPath, "owner"), "external-owner", "utf8");
+
+			const reader = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 50, staleLockMs: 120_000 });
+			const records = await reader.listRecent({ limit: 10 });
+
+			expect(records).toHaveLength(1);
+			expect(records[0]).toMatchObject({ operationId: "op-list-seed" });
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("concurrent get() calls all resolve without deadlock", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-lockfree-concurrent-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		try {
+			const writer = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 200 });
+			await writer.create({
+				...base,
+				operationId: "op-concurrent",
+				status: "running",
+				accessPid: 9999,
+				processStartTime: "2026-05-18T10:00:00.000Z",
+				updatedAt: "2026-05-18T10:00:00.000Z",
+			});
+
+			const reader = new FileAccessOperationRegistry({ filePath: registryPath, lockTimeoutMs: 200 });
+			// Fire N concurrent reads while a write is happening
+			const [results] = await Promise.all([
+				Promise.all(Array.from({ length: 20 }, () => reader.get("op-concurrent"))),
+				writer.update("op-concurrent", { status: "completed", updatedAt: "2026-05-18T10:01:00.000Z" }),
+			]);
+
+			// All reads must return state N or N+1 (either "running" or "completed"), never undefined
+			for (const result of results) {
+				expect(result).not.toBeUndefined();
+				expect(["running", "completed"]).toContain(result?.status);
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
