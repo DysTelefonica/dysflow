@@ -1288,10 +1288,10 @@ Public Function CorreoAlAdministrador( _
     m_Destinatarios = "ardelperal@gmail.com;andres.romandelperal@telefonica.com"
    
     
-    m_IDCorreo = getID("TbCorreosEnviados", "IDCorreo", getdbCorreo())
+    m_IDCorreo = getID("TbCorreosEnviados", "IDCorreo", getdb())
     
     m_SQL = "TbCorreosEnviados"
-    Set rcdDatos = getdbCorreo().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         .AddNew
             .Fields("IDCorreo") = m_IDCorreo

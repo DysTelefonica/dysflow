@@ -7,7 +7,9 @@ El código generado se trabaja mediante exportación a `src/` y validación post
 ## dysflow MCP — Este proyecto
 - `accessPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES_staging\NoConformidades.accdb`
 - `backendPath`: `C:\00repos\codigo\00_NO_CONFORMIDADES_staging\NoConformidades_Datos.accdb`
-- Contexto registrado: `00-no-conformidades-staging-clean`. En llamadas normales a dysflow usar solo `contextId`/`projectId`; no repetir `accessPath`, `backendPath` ni `destinationRoot` salvo override explícito contra otra base.
+- Contexto registrado: `00-no-conformidades-staging-clean`. En llamadas normales a dysflow usar **solo** `projectId: "00-no-conformidades-staging-clean"`; no repetir `accessPath`, `backendPath`, `destinationRoot` ni `strictContext` salvo override explícito contra otra base.
+- Si hace falta inspeccionar otra `.accdb` puntual, tratarlo como excepción explícita y mantener la llamada mínima; no mezclar parámetros redundantes en operaciones normales.
+- No usar `projectId: "no_conformidades"` para dysflow en este worktree: puede resolver a otro entorno. El identificador operativo seguro para Access es `00-no-conformidades-staging-clean`.
 - Si `.dysflow/project.json` no existe o el contexto no está registrado, primero hay que provisionar/registrar el proyecto con esos paths y recién después operar contra Access. No usar variables heredadas ni paths implícitos como autorización para abrir bases.
 
 ## Alcance del repositorio principal

@@ -257,7 +257,7 @@ End Function
 '            "INNER JOIN TbExpedientesResponsables ON TbExpedientes.IDExpediente = TbExpedientesResponsables.IdExpediente) " & _
 '            "INNER JOIN TbUsuariosAplicaciones ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
 '            "SET TbNoConformidades.RESPONSABLETELEFONICA = [TbUsuariosAplicaciones].[UsuarioRed];"
-'    getdbNoConformidades().Execute m_SQL
+'    getdb().Execute m_SQL
 '
 '
 '    Exit Function
@@ -2641,7 +2641,7 @@ Public Function CargarDatosDeTbOriginalAPruebas( _
     On Error GoTo errores
     m_SQL = "DELETE * " & _
             "FROM TbNoConformidades;"
-    getdbNCPruebas.Execute m_SQL
+    getdb.Execute m_SQL
     
     
     Exit Function

@@ -751,6 +751,113 @@ EH:
     End If
 End Function
 
+Public Function Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim originalState As Boolean
+    Dim opErr As String
+    Dim cfgErr As String
+    Dim assertError As String
+
+    Set logs = TestHelper.NewLogs
+    Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
+
+    opErr = ""
+    Call TestHelper.AssertTrue(SetCacheHabilitadaMandatory(True, opErr), "Set CacheHabilitada=True para RED/GREEN", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    AplicarCache = False
+    TestHelper.AddLog logs, "Precondición determinística: AplicarCache=False antes de LeeConfiguracionLocal"
+
+    cfgErr = ""
+    Call LeeConfiguracionLocal(cfgErr)
+    Call TestHelper.AssertTrue(cfgErr = "", "LeeConfiguracionLocal sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call TestHelper.AssertTrue(AplicarCache = True, "AplicarCache debe sincronizarse desde TbConfiguracion.CacheHabilitada", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    If opErr <> "" Then
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(opErr, logs)
+    Else
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonOk(logs, "cache_mirror_ok")
+    End If
+    Exit Function
+
+Fail:
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
+    Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If opErr <> "" Then
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
+    Else
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    End If
+End Function
+
+Public Function Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim originalState As Boolean
+    Dim opErr As String
+    Dim eveErr As String
+    Dim assertError As String
+
+    Set logs = TestHelper.NewLogs
+    Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
+
+    opErr = ""
+    Call TestHelper.AssertTrue(SetCacheHabilitadaMandatory(True, opErr), "Set CacheHabilitada=True previo a EVE", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    AplicarCache = False
+    TestHelper.AddLog logs, "Precondición determinística: AplicarCache=False antes de EVE"
+
+    eveErr = ""
+    Call EVE(eveErr)
+    If eveErr <> "" Then TestHelper.AddLog logs, "Detalle eveErr: " & eveErr
+    Call TestHelper.AssertTrue(eveErr = "", "EVE debe ejecutarse sin error para validar sincronización de cache", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call TestHelper.AssertTrue(AplicarCache = True, "EVE no debe sobreescribir AplicarCache si configuración indica True", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    If opErr <> "" Then
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(opErr, logs)
+    Else
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonOk(logs, "eve_cache_respected")
+    End If
+    Exit Function
+
+Fail:
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
+    Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    Call RestoreCacheStateMandatory(originalState, logs, opErr)
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    If opErr <> "" Then
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
+    Else
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    End If
+End Function
+
 Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     On Error GoTo EH
 
@@ -1092,4 +1199,92 @@ Private Sub RestoreTbConfiguracionBackends(ByRef p_Rs As DAO.Recordset, ByVal p_
     p_Rs.Fields("RutaDirectorioAplicacion_LOCAL").Value = p_RutaLocal
     p_Rs.Update
     TestHelper.AddLog p_Logs, "Rollback defensivo de TbConfiguracionBackends aplicado"
+End Sub
+
+Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+
+    On Error GoTo EH
+    ReadCacheHabilitadaMandatory = False
+    p_Error = ""
+    p_Value = False
+
+    Set db = getdb(p_Error)
+    If db Is Nothing Then
+        If p_Error = "" Then p_Error = "No se pudo abrir backend configurado vía getdb()"
+        GoTo CleanExit
+    End If
+
+    Set rs = db.OpenRecordset("SELECT TOP 1 CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
+
+    If rs.EOF Then
+        p_Error = "Contrato obligatorio incumplido: falta TbConfiguracion.ID=1"
+        GoTo CleanExit
+    End If
+
+    p_Value = CBool(Nz(rs.Fields("CacheHabilitada").Value, False))
+    ReadCacheHabilitadaMandatory = True
+
+CleanExit:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    If Not db Is Nothing Then db.Close
+    Set db = Nothing
+    Exit Function
+
+EH:
+    p_Error = "Contrato obligatorio incumplido en TbConfiguracion.CacheHabilitada: " & Err.Description
+    Resume CleanExit
+End Function
+
+Private Function SetCacheHabilitadaMandatory(ByVal p_Enabled As Boolean, ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim rowsAffected As Long
+
+    On Error GoTo EH
+    SetCacheHabilitadaMandatory = False
+    p_Error = ""
+
+    Set db = getdb(p_Error)
+    If db Is Nothing Then
+        If p_Error = "" Then p_Error = "No se pudo abrir backend configurado vía getdb()"
+        GoTo CleanExit
+    End If
+
+    db.Execute "UPDATE TbConfiguracion SET CacheHabilitada=" & CStr(Abs(p_Enabled)) & " WHERE ID=1", dbFailOnError
+    rowsAffected = db.RecordsAffected
+    If rowsAffected <> 1 Then
+        p_Error = "Contrato obligatorio incumplido: UPDATE TbConfiguracion.ID=1 afectó " & CStr(rowsAffected) & " fila(s)"
+        GoTo CleanExit
+    End If
+
+    SetCacheHabilitadaMandatory = True
+
+CleanExit:
+    On Error Resume Next
+    If Not db Is Nothing Then db.Close
+    Set db = Nothing
+    Exit Function
+
+EH:
+    p_Error = "Contrato obligatorio incumplido al escribir TbConfiguracion.CacheHabilitada: " & Err.Description
+    Resume CleanExit
+End Function
+
+Private Sub RestoreCacheStateMandatory(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
+    Dim opError As String
+    Dim ok As Boolean
+
+    opError = ""
+    ok = SetCacheHabilitadaMandatory(p_Enabled, opError)
+    If ok Then
+        p_Error = ""
+        TestHelper.AddLog p_Logs, "Estado restaurado a " & CStr(p_Enabled)
+    Else
+        p_Error = "No se pudo restaurar estado de caché"
+        If opError <> "" Then p_Error = p_Error & " | " & opError
+        TestHelper.AddLog p_Logs, p_Error
+    End If
 End Sub

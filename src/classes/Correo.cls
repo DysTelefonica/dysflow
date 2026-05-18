@@ -35,7 +35,7 @@ Public Property Get IDCorreoCalculado() As String
     
     Me.Error = ""
     m_Error = ""
-    m_sIDCorreoCalculado = constructor.getID("TbCorreosEnviados", "IDCorreo", getdbCorreo, m_Error)
+    m_sIDCorreoCalculado = constructor.getID("TbCorreosEnviados", "IDCorreo", getdb, m_Error)
     If Me.Error <> "" Then
         Err.Raise 1000
     End If
@@ -118,7 +118,7 @@ Public Function Registrar(Optional ByRef p_Error As String) As String
     Me.FechaGrabacion = Now
     Me.Originador = m_ObjUsuarioConectado.UsuarioRed
     m_SQL = "TbCorreosEnviados"
-    Set rcdDatos = getdbCorreo().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         .AddNew
             .Fields("IDCorreo") = Me.IDCorreo

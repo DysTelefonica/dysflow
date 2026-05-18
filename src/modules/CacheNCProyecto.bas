@@ -1246,10 +1246,10 @@ Private Function GenerarJSONRiesgos( _
           "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
           "WHERE L.IDNC = " & p_IDNC
     
-    ' Usamos getdbRiesgos() para acceder a la BD de riesgos.
+    ' Usamos getdb() para acceder al backend configurado.
     ' Si el backend vinculado de Riesgos no está disponible, la caché de NC no debe bloquearse:
     ' se cachean los datos principales y se deja Riesgos como objeto vacío.
-    Set dbRiesgos = getdbRiesgos(errRiesgos)
+    Set dbRiesgos = getdb(errRiesgos)
     If dbRiesgos Is Nothing Then
         p_Error = ""
         GenerarJSONRiesgos = "{}"

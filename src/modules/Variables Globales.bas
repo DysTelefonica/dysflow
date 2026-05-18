@@ -1,4 +1,4 @@
-Attribute VB_Name = "Variables Globales"
+﻿Attribute VB_Name = "Variables Globales"
 Option Compare Database
 Option Explicit
 
@@ -139,14 +139,17 @@ Public m_ColFiltradoTareasNCProyectos As Scripting.Dictionary
     
     
 Public Function getdb( _
-                        Optional ByRef p_Error As String _
+                        Optional ByRef p_Error As String, _
+                        Optional ByVal p_SkipConfigLoad As Boolean = False _
                         ) As DAO.Database
     
     Dim m_URL As String
     On Error GoTo errores
     
-    Call LeeConfiguracionLocal(p_Error)
-    If p_Error <> "" Then Err.Raise 1000
+    If Not p_SkipConfigLoad Then
+        Call LeeConfiguracionLocal(p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+    End If
 
     m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
     If m_URL = "" Then
@@ -264,6 +267,10 @@ Public Function LeeConfiguracionLocal( _
         Err.Raise 1000
     End If
 
+    If Not ResolveCacheHabilitadaFromConfig(AplicarCache, p_Error) Then
+        Err.Raise 1000
+    End If
+
     If CLng(m_IDAplicacionCfg) > 0 Then
         IDAplicacion = CStr(m_IDAplicacionCfg)
     ElseIf Application.TempVars("EnPruebas") = "Sí" Then
@@ -295,6 +302,43 @@ errores:
     ElseIf p_Error = "" Then
         p_Error = errDescription
     End If
+End Function
+
+Private Function ResolveCacheHabilitadaFromConfig(ByRef p_AplicarCache As Boolean, ByRef p_Error As String) As Boolean
+    Dim m_Db As DAO.Database
+    Dim m_RsCfg As DAO.Recordset
+
+    On Error GoTo errores
+    ResolveCacheHabilitadaFromConfig = False
+    p_AplicarCache = False
+
+    Set m_Db = getdb(p_Error, True)
+    If m_Db Is Nothing Then
+        If p_Error = "" Then p_Error = "No se pudo abrir backend configurado con getdb() para resolver TbConfiguracion.CacheHabilitada"
+        GoTo salida
+    End If
+
+    Set m_RsCfg = m_Db.OpenRecordset("SELECT TOP 1 CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
+
+    If m_RsCfg.EOF Then
+        p_Error = "TbConfiguracion.ID=1 no existe en backend configurado"
+        GoTo salida
+    End If
+
+    p_AplicarCache = CBool(Nz(m_RsCfg.Fields("CacheHabilitada").Value, False))
+    ResolveCacheHabilitadaFromConfig = True
+
+salida:
+    On Error Resume Next
+    If Not m_RsCfg Is Nothing Then m_RsCfg.Close
+    If Not m_Db Is Nothing Then m_Db.Close
+    Set m_RsCfg = Nothing
+    Set m_Db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "ResolveCacheHabilitadaFromConfig ha devuelto el error: " & Err.Description
+    Resume salida
 End Function
 
 Private Function NormalizeFolderPath(ByVal p_Path As String) As String
@@ -350,177 +394,6 @@ Private Sub AppendInfraDiagnostic(ByRef p_Diagnostic As String, ByVal p_FieldNam
     Else
         p_Diagnostic = p_Diagnostic & vbNewLine & m_Line
     End If
-End Sub
-Public Function getdbNCPruebas( _
-                        Optional ByRef p_Error As String _
-                        ) As DAO.Database
-    
-    Dim m_URL As String
-    On Error GoTo errores
-    
-    If Nz(Application.TempVars("BackendPathSandbox"), "") = "" Or Nz(Application.TempVars("BackendPathConfigurado"), "") = "" Then
-        Call LeeConfiguracionLocal(p_Error)
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-    End If
-
-    m_URL = Nz(Application.TempVars("BackendPathSandbox"), "")
-    If m_URL = "" Then
-        m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
-    End If
-    If m_URL = "" Then
-        p_Error = "No se puede resolver la ruta BackendPathSandbox para pruebas"
-        Err.Raise 1000
-    End If
-    
-    Set wks = DBEngine.Workspaces(0)
-    Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbNCPruebas = db
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbNCPruebas ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-Public Function getdbNCProduccion( _
-                                     Optional ByRef p_Error As String _
-                                     ) As DAO.Database
-    
-    Dim m_URL As String
-    On Error GoTo errores
-    
-    If Nz(Application.TempVars("BackendPathProduccion"), "") = "" Or Nz(Application.TempVars("BackendPathConfigurado"), "") = "" Then
-        Call LeeConfiguracionLocal(p_Error)
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-    End If
-
-    m_URL = Nz(Application.TempVars("BackendPathProduccion"), "")
-    If m_URL = "" Then
-        m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
-    End If
-    If m_URL = "" Then
-        p_Error = "No se puede resolver la ruta BackendPathProduccion"
-        Err.Raise 1000
-    End If
-    
-    Set wks = DBEngine.Workspaces(0)
-    Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbNCProduccion = db
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbNCProduccion ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-Public Function getdbLanzadera( _
-                                Optional ByRef p_Error As String _
-                                ) As DAO.Database
-    
-    Dim m_URL As String
-    On Error GoTo errores
-    
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\Lanzadera_Datos.accdb"
-    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-        m_URL = m_URLRutaAplicacionesRemotas & "0Lanzadera\Lanzadera_Datos.accdb"
-    Else
-        p_Error = "No se conoce el origen de los datos"
-        Err.Raise 1000
-    End If
-   
-    
-    
-    Set wks = DBEngine.Workspaces(0)
-    Set db1 = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbLanzadera = db1
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbLanzadera ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-
-Public Function getdbCorreo( _
-                                Optional ByRef p_Error As String _
-                                ) As DAO.Database
-    
-    Dim m_URL As String
-        
-    On Error GoTo errores
-    
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\Correos_datos.accdb"
-    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-        m_URL = m_URLRutaAplicacionesRemotas & "00Recursos\Correos_datos.accdb"
-    Else
-        p_Error = "No se sabe si se está usando en local o en remoto"
-        Err.Raise 1000
-    End If
-    
-       
-    If Not fso.FileExists(m_URL) Then
-        p_Error = "No se alcanza la URL de los datos: " & vbNewLine & m_URL
-        Err.Raise 1000
-    End If
-    
-    Set wks = DBEngine.Workspaces(0)
-    Set db1 = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbCorreo = db1
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbCorreo ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-Public Function getdbExpedientes(Optional ByRef p_Error As String) As DAO.Database
-    Dim m_URL As String
-    On Error GoTo errores
-   
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\Expedientes_datos.accdb"
-    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-        m_URL = m_URLRutaAplicacionesRemotas & "EXPEDIENTES\Expedientes_datos.accdb"
-    Else
-        p_Error = "No se conoce el origen de los datos"
-        Err.Raise 1000
-    End If
-    Set wks = DBEngine.Workspaces(0)
-    Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbExpedientes = db
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-
-Public Function getdbRiesgos(Optional ByRef p_Error As String) As DAO.Database
-    Dim m_URL As String
-    On Error GoTo errores
-   
-    If Application.TempVars("DatosEnLocal") = "Sí" Then
-        m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\Gestion_Riesgos_Datos.accdb"
-    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-        m_URL = m_URLRutaAplicacionesRemotas & "GESTION RIESGOS\Gestion_Riesgos_Datos.accdb"
-    Else
-        p_Error = "No se conoce el origen de los datos"
-        Err.Raise 1000
-    End If
-    Set wks = DBEngine.Workspaces(0)
-    Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdbRiesgos = db
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdbRiesgos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
 End Function
 Public Function EVE(Optional ByRef p_Error As String) As String
 
@@ -556,7 +429,6 @@ Public Function EVE(Optional ByRef p_Error As String) As String
     'Application.TempVars("CadenaCorreosCalidadEnPruebas") = "andres.romandelperal@telefonica.com"
     Application.TempVars("NombreCSSEnPruebas") = "CSS_pruebas.txt"
     Application.TempVars("NombreCSSNoPruebas") = "CSS.txt"
-    AplicarCache = False
     'AplicarCache = True
     Call LeeConfiguracionLocal(p_Error)
     If p_Error <> "" Then Err.Raise 1000
@@ -740,8 +612,3 @@ errores:
         p_Error = "LeerIni ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
-
-
-
-
-
