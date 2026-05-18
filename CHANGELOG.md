@@ -4,6 +4,29 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-18
+
+### Fixed
+
+- `WindowsMsAccessProcessInspector` now converts WMI DMTF datetime to ISO 8601 before returning, preventing false `CLEANUP_PROCESS_START_TIME_MISMATCH` rejections during cleanup. Closes #172.
+- `isReadOnlySql` rewritten with a token-aware parser that strips string literals before checking for top-level statement separators, so valid queries with semicolons in literals are accepted. Closes #173.
+- E2E fixture test now asserts `rows` as an array; fixed `Convert-RecordsetRows` in the PowerShell runner to always serialize single-element results as a JSON array (not object). Closes #174.
+- `dryRun: true` in `relink_tables` and other write tools is no longer blocked by the `MCP_WRITES_DISABLED` guard — dry-run operations are treated as reads and always permitted. Closes #184.
+- `export_modules` and `export_all` now respect the `exportPath` parameter when provided, instead of always writing to the project `destinationRoot`/`src/`. Closes #185.
+- HTTP adapter now uses `FileAccessOperationRegistry` (same as the MCP adapter), so `GET /access/operations` reflects operations from both adapters. Closes #176.
+
+### Added
+
+- Path sandboxing in `dysflow-access-runner.ps1` extracted into a reusable `Resolve-SandboxedPath` helper, extended to cover `importPath`, `targetPath` (compact-repair), and `scriptPath` (run_script). Significantly reduces path traversal surface.
+- Oversized-line handling in the MCP stdio runtime now uses per-chunk byte counting, correctly reporting the error and continuing to process subsequent frames.
+- Per-tool input schemas for all 46 legacy MCP tools: each tool now exposes only its own parameters. Closes #177.
+- Coverage thresholds raised from 0% to measured baseline (statements 86%, branches 75%, functions 88%, lines 86%). CI now blocks regressions. Closes #178.
+
+### Changed
+
+- Unimplemented stub tools (`verify_code`, `verify_binary`, `reconcile_binary`, `init_project`, `normalize_documents`) are now hidden from `tools/list`. Agents no longer see tools that always return an error. Closes #175.
+- `FileAccessOperationRegistry.get()` and `listRecent()` now bypass the write lock, eliminating unnecessary contention when agents poll for operation status. Closes #179.
+
 ## [0.4.5] - 2026-05-18
 
 ### Fixed
