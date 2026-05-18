@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
+import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult } from "../../core/contracts/index.js";
 import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import { AccessOperationCleanupService, type AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
@@ -54,7 +54,7 @@ export async function startDysflowHttpServer(
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
-  const services = options.services ?? createCoreServices(options.env);
+  const services = options.services ?? await createCoreServices(options.env);
   const server = createServer((request, response) => {
     void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
   });
@@ -72,8 +72,8 @@ export async function startDysflowHttpServer(
   return { server, host, port: resolvedPort, url: `http://${host}:${resolvedPort}`, writesEnabled };
 }
 
-function createCoreServices(env?: Record<string, string | undefined>): DysflowHttpServices {
-  const configResult = loadDysflowConfig({ env });
+async function createCoreServices(env?: Record<string, string | undefined>): Promise<DysflowHttpServices> {
+  const configResult = await loadDysflowConfigAsync({ env });
   if (!configResult.ok) {
     process.stderr.write(`[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`);
     return createUnavailableHttpServices();

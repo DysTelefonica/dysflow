@@ -8,7 +8,7 @@ import {
 	resolve,
 } from "node:path";
 import {
-	loadDysflowConfig,
+	loadDysflowConfigAsync,
 	redactDysflowConfig,
 	resolveProjectRegistryPath,
 	type DysflowConfig,
@@ -53,7 +53,7 @@ export async function handleSetupCommand(
 		}
 	}
 
-	const configResult = loadDysflowConfig({
+	const configResult = await loadDysflowConfigAsync({
 		env: context.env,
 		cwd: context.cwd,
 		accessDbPath: parsed.options.accessPath,

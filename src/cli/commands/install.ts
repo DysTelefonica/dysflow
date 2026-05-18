@@ -35,6 +35,7 @@ export type ReleaseInfo = {
 
 export type PreparedReleasePackage = {
 	packageRoot: string;
+	commitSha?: string;
 	cleanup?: () => Promise<void>;
 };
 
@@ -751,6 +752,15 @@ async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
 	};
 }
 
+async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> {
+	try {
+		const sha = await runCommandOutput("git", ["rev-parse", "HEAD"], cwd);
+		return /^[0-9a-f]{40}$/i.test(sha) ? sha : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 	return {
 		async resolveLatestRelease(): Promise<ReleaseInfo> {
@@ -795,9 +805,10 @@ function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 					["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
 					tempRoot,
 				);
+				const commitSha = await tryResolveGitCommitSha(packageRoot);
 				await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
 				await runCommand("pnpm", ["build"], packageRoot);
-				return { packageRoot, cleanup };
+				return { packageRoot, commitSha, cleanup };
 			} catch (error) {
 				await cleanup();
 				throw error;
@@ -1019,6 +1030,9 @@ export async function handleUpdateCommand(
 			exitCode: 0,
 			stdout:
 				`Dysflow runtime update: ${previousVersion} -> ${latestRelease.version}\n` +
+				(preparedPackage.commitSha === undefined
+					? ""
+					: `Installed release commit: ${preparedPackage.commitSha}\n`) +
 				createInstallReport(runtimeDir, []),
 			stderr: "",
 		};

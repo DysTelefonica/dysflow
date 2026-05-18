@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
-import { loadDysflowConfig, type DysflowConfig } from "../../core/config/dysflow-config.js";
+import { loadDysflowConfigAsync, type DysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
 import { FileAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
@@ -208,7 +208,7 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
   const options = isMcpStdioRuntime(optionsOrRuntime) ? undefined : optionsOrRuntime;
   const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
   const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
-  const configResult = config === undefined ? loadDysflowConfig() : { ok: true as const, data: config };
+  const configResult = config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   const services = configResult.ok ? createConfiguredServices(configResult.data) : createUnavailableServices(configResult.error);
   services.writesEnabled = options?.writesEnabled ?? false;
 

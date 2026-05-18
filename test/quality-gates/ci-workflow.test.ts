@@ -25,6 +25,18 @@ describe("repository quality gates", () => {
 		expect(commands).toContain("pnpm coverage");
 	});
 
+	it("runs Windows PowerShell smoke coverage for Access-facing paths (#182)", async () => {
+		const workflow = await readText(".github/workflows/ci.yml");
+		const commands = workflowRunCommands(workflow);
+
+		expect(workflow).toContain("windows-integration-smoke:");
+		expect(workflow).toContain("runs-on: windows-latest");
+		expect(workflow).toContain("Get-Command powershell.exe");
+		expect(commands).toContain(
+			"pnpm vitest run test/e2e/access-fixture.e2e.test.ts test/scripts-access-runner.test.ts",
+		);
+	});
+
 	it("exposes package scripts for lint and coverage gates", async () => {
 		const packageJson = JSON.parse(await readText("package.json")) as {
 			packageManager?: string;

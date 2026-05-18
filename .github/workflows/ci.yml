@@ -40,3 +40,34 @@ jobs:
 
       - name: Coverage
         run: pnpm coverage
+
+  windows-integration-smoke:
+    name: Windows PowerShell/Access smoke
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Windows PowerShell host
+        shell: pwsh
+        run: |
+          Get-Command powershell.exe
+          powershell.exe -NoProfile -NonInteractive -Command "$PSVersionTable.PSVersion.ToString()"
+
+      - name: Run Access/PowerShell integration tests
+        run: pnpm vitest run test/e2e/access-fixture.e2e.test.ts test/scripts-access-runner.test.ts

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
 	createDysflowError,
@@ -9,6 +10,7 @@ import {
 import {
 	REDACTED_SECRET,
 	stringValue,
+	readJsonFileAsync,
 	readJsonFileSync,
 } from "../utils/index.js";
 
@@ -120,6 +122,63 @@ export function loadDysflowConfig(
 	const repoConfigPath = findRepoProjectConfigPath(cwd);
 	if (repoConfigPath !== undefined) {
 		return loadProjectConfigFromPath(
+			repoConfigPath,
+			input,
+			env,
+			cwd,
+			"repo-config",
+		);
+	}
+
+	return failureResult(
+		createDysflowError(
+			"CONFIG_MISSING_ACCESS_PATH",
+			"Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+		),
+	);
+}
+
+
+export async function loadDysflowConfigAsync(
+	input: DysflowConfigInput = {},
+): Promise<OperationResult<DysflowConfig>> {
+	const env = input.env ?? process.env;
+	const cwd = resolve(input.cwd ?? process.cwd());
+
+	const explicitAccessDbPath = stringValue(input.accessDbPath);
+	if (explicitAccessDbPath !== undefined) {
+		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
+	}
+
+	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+	if (requestedProjectId !== undefined) {
+		const registeredConfigPath = await resolveRegisteredProjectConfigPathAsync(
+			requestedProjectId,
+			input,
+			env,
+			cwd,
+		);
+		if (registeredConfigPath === undefined) {
+			return failureResult(
+				createDysflowError(
+					"CONFIG_PROJECT_NOT_REGISTERED",
+					`Project '${requestedProjectId}' is not registered. Refusing to fall back to cwd.`,
+				),
+			);
+		}
+		return loadProjectConfigFromPathAsync(
+			registeredConfigPath,
+			input,
+			env,
+			cwd,
+			"global-registry",
+			requestedProjectId,
+		);
+	}
+
+	const repoConfigPath = await findRepoProjectConfigPathAsync(cwd);
+	if (repoConfigPath !== undefined) {
+		return loadProjectConfigFromPathAsync(
 			repoConfigPath,
 			input,
 			env,
@@ -272,6 +331,88 @@ function loadProjectConfigFromPath(
 	});
 }
 
+
+async function loadProjectConfigFromPathAsync(
+	configPath: string,
+	input: DysflowConfigInput,
+	env: Record<string, string | undefined>,
+	cwd: string,
+	configSource: DysflowConfigSource,
+	projectId?: string,
+): Promise<OperationResult<DysflowConfig>> {
+	const resolvedPath = resolvePathMaybeRelative(configPath, cwd);
+	if (!(await pathExists(resolvedPath))) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_FILE_NOT_FOUND",
+				`Project config file not found: ${resolvedPath}`,
+			),
+		);
+	}
+
+	const config = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
+	const configDir = dirname(resolvedPath);
+	const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
+	const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs);
+	const accessDbPath = resolveProjectPath(
+		config.accessPath ?? input.accessDbPath,
+		projectRoot,
+	);
+	if (accessDbPath === undefined) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_MISSING_ACCESS_PATH",
+				`Project config ${resolvedPath} is missing accessPath.`,
+			),
+		);
+	}
+
+	const backendPath = resolveProjectPath(
+		config.backendPath ?? input.backendPath,
+		projectRoot,
+	);
+	const destinationRoot =
+		resolveProjectPath(
+			config.destinationRoot ?? input.destinationRoot ?? "src",
+			projectRoot,
+		) ?? projectRoot;
+	const accessPasswordEnv = resolvePasswordEnv(config);
+	const backendPasswordEnv = resolveBackendPasswordEnv(config);
+	const accessPassword = resolvePassword(
+		input.accessPassword,
+		pickFirstDefined(
+			accessPasswordEnv === undefined ? undefined : env[accessPasswordEnv],
+			env.DYSFLOW_ACCESS_PASSWORD,
+			env.DYSFLOW_ACCESS_PWD,
+			env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+		),
+	);
+	const backendPassword = resolvePassword(
+		input.backendPassword,
+		pickFirstDefined(
+			backendPasswordEnv === undefined ? undefined : env[backendPasswordEnv],
+			env.DYSFLOW_BACKEND_PASSWORD,
+			env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+		),
+	);
+
+	return successResult({
+		configSource,
+		accessDbPath,
+		backendPath,
+		destinationRoot,
+		projectRoot,
+		projectId: projectId ?? stringValue(config.id),
+		timeoutMs,
+		processTimeoutMs: timeoutMs,
+		accessPassword,
+		backendPassword,
+		accessPasswordEnv,
+		backendPasswordEnv,
+		configPath: resolvedPath,
+	});
+}
+
 function resolveProjectRoot(
 	config: DysflowProjectConfig,
 	configDir: string,
@@ -327,6 +468,46 @@ function resolveRegisteredProjectConfigPath(
 			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
 	}
 	return undefined;
+}
+
+
+async function resolveRegisteredProjectConfigPathAsync(
+	projectId: string,
+	input: DysflowConfigInput,
+	env: Record<string, string | undefined>,
+	cwd: string,
+): Promise<string | undefined> {
+	const registryPath = resolveProjectRegistryPath(input, env, cwd);
+	if (!(await pathExists(registryPath))) return undefined;
+	const registry = await readJsonFileAsync<DysflowProjectRegistry>(registryPath);
+	const entry = registry.projects?.[projectId];
+	if (entry === undefined) return undefined;
+	const registryDir = dirname(registryPath);
+	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
+	const configPath = stringValue(entry.configPath);
+	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
+	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
+	if (projectRoot !== undefined) {
+		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
+		return resolvedProjectRoot === undefined
+			? undefined
+			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
+	}
+	return undefined;
+}
+
+async function findRepoProjectConfigPathAsync(cwd: string): Promise<string | undefined> {
+	const candidate = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
+	return (await pathExists(candidate)) ? candidate : undefined;
+}
+
+async function pathExists(candidate: string): Promise<boolean> {
+	try {
+		await access(candidate);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function resolveRegisteredPath(value: string, registryDir: string): string | undefined {
