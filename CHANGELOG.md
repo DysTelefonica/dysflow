@@ -4,6 +4,15 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-18
+
+### Fixed
+
+- Extracted shared PowerShell execution for Access runner and legacy VBA manager paths, reducing duplicated timeout/stdout/stderr process handling. Closes #180.
+- Added async project configuration loading for production CLI, HTTP, MCP, and legacy VBA paths while keeping the existing sync API for compatibility. Closes #181.
+- Added Windows CI smoke coverage for PowerShell/Access-facing integration paths. Closes #182.
+- `dysflow update` now reports the installed release commit SHA when installing from a GitHub release clone. Closes #183.
+
 ## [0.5.0] - 2026-05-18
 
 ### Fixed
