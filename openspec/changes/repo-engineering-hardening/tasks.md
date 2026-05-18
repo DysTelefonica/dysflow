@@ -48,6 +48,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Legacy Service Characterization Seam
 
-- [ ] 4.1 RED: add characterization coverage in `test/core/services/vba-sync-legacy-service.test.ts` for one import-planning or form-catalog path.
-- [ ] 4.2 GREEN: extract one helper group inside `src/core/services/vba-sync-legacy-service.ts` behind existing `execute` behavior.
-- [ ] 4.3 REFACTOR: verify observable runner calls and protocol-neutral results stay equivalent.
+- [x] 4.1 RED: add characterization coverage in `test/core/services/vba-sync-legacy-service.test.ts` for one import-planning or form-catalog path.
+- [x] 4.2 GREEN: extract one helper group inside `src/core/services/vba-sync-legacy-service.ts` behind existing `execute` behavior.
+- [x] 4.3 REFACTOR: verify observable runner calls and protocol-neutral results stay equivalent.

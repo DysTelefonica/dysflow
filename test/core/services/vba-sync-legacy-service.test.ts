@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
 import {
+	buildImportPlanResult,
 	VbaSyncLegacyService,
 	resolveDefaultVbaManagerScriptPath,
 	spawnVbaManager,
@@ -18,6 +19,83 @@ vi.mock("node:child_process", () => ({
 }));
 
 describe("VbaSyncLegacyService", () => {
+	it("characterizes import plan result shaping for explicit overrides", () => {
+		const result = buildImportPlanResult({
+			toolName: "import_all",
+			params: {
+				projectId: "develop",
+				contextId: "ctx-develop",
+				importMode: "Code",
+			},
+			target: {
+				configSource: "explicit-request",
+				projectId: "develop",
+				projectRoot: "C:/repo",
+				accessDbPath: "C:/repo/front.accdb",
+				accessPath: "C:/repo/front.accdb",
+				backendPath: "C:/repo/backend.accdb",
+				destinationRoot: "C:/repo/src",
+			},
+			modulesPlanned: ["Entorno", "Variables Globales"],
+			warnings: ["preview warning"],
+			errors: [],
+		});
+
+		expect(result).toEqual({
+			operation: "import_all",
+			dryRun: true,
+			willModifyAccess: false,
+			requestedProjectId: "develop",
+			requestedContextId: "ctx-develop",
+			resolvedProjectId: "develop",
+			configSource: "explicit-overrides",
+			projectRoot: "C:/repo",
+			accessPath: "C:/repo/front.accdb",
+			backendPath: "C:/repo/backend.accdb",
+			destinationRoot: "C:/repo/src",
+			importMode: "Code",
+			modulesPlanned: ["Entorno", "Variables Globales"],
+			modulesCount: 2,
+			warnings: ["preview warning"],
+			errors: [],
+		});
+	});
+
+	it("characterizes import module dry-run result shaping with diagnostics", () => {
+		const result = buildImportPlanResult({
+			toolName: "import_modules",
+			params: {},
+			target: {
+				configSource: "runtime-default",
+				projectRoot: "C:/repo",
+				accessDbPath: "",
+				destinationRoot: "C:/repo/src",
+			},
+			modulesPlanned: [],
+			warnings: [],
+			errors: ["destinationRoot not found: C:/repo/src"],
+		});
+
+		expect(result).toEqual({
+			operation: "import_modules",
+			dryRun: true,
+			willModifyAccess: false,
+			requestedProjectId: undefined,
+			requestedContextId: undefined,
+			resolvedProjectId: undefined,
+			configSource: "runtime-default",
+			projectRoot: "C:/repo",
+			accessPath: undefined,
+			backendPath: undefined,
+			destinationRoot: "C:/repo/src",
+			importMode: undefined,
+			modulesPlanned: [],
+			modulesCount: 0,
+			warnings: [],
+			errors: ["destinationRoot not found: C:/repo/src"],
+		});
+	});
+
 	it("maps export_modules to a product-owned PowerShell runner invocation", async () => {
 		const calls: unknown[] = [];
 		const executor: VbaManagerExecutor = async (request) => {

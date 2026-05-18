@@ -47,6 +47,20 @@ export type ImportPlanResult = {
   errors: readonly string[];
 };
 
+export type ImportPlanTarget = Pick<DysflowConfig, "accessDbPath" | "backendPath" | "projectRoot" | "projectId" | "configSource"> & {
+  accessPath?: string;
+  destinationRoot: string;
+};
+
+export type BuildImportPlanResultOptions = {
+  toolName: "import_all" | "import_modules";
+  params: Record<string, unknown>;
+  target: ImportPlanTarget;
+  modulesPlanned: readonly string[];
+  warnings: readonly string[];
+  errors: readonly string[];
+};
+
 export type VbaSyncLegacyServiceOptions = {
   executor?: VbaManagerExecutor;
   scriptPath?: string;
@@ -258,24 +272,14 @@ export class VbaSyncLegacyService {
       await stat(target.data.accessPath).catch(() => errors.push(`accessPath not found: ${target.data.accessPath}`));
     }
 
-    return successResult({
-      operation: toolName,
-      dryRun: true,
-      willModifyAccess: false,
-      requestedProjectId: stringValue(params.projectId),
-      requestedContextId: stringValue(params.contextId),
-      resolvedProjectId: target.data.projectId,
-      configSource: target.data.configSource === "explicit-request" ? "explicit-overrides" : target.data.configSource,
-      projectRoot: target.data.projectRoot,
-      accessPath: target.data.accessPath,
-      backendPath: target.data.backendPath,
-      destinationRoot: target.data.destinationRoot,
-      importMode: stringValue(params.importMode),
+    return successResult(buildImportPlanResult({
+      toolName,
+      params,
+      target: target.data,
       modulesPlanned,
-      modulesCount: modulesPlanned.length,
       warnings,
       errors,
-    });
+    }));
   }
 
   private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
@@ -465,6 +469,28 @@ export class VbaSyncLegacyService {
       return [];
     }
   }
+}
+
+export function buildImportPlanResult(options: BuildImportPlanResultOptions): ImportPlanResult {
+  const { toolName, params, target, modulesPlanned, warnings, errors } = options;
+  return {
+    operation: toolName,
+    dryRun: true,
+    willModifyAccess: false,
+    requestedProjectId: stringValue(params.projectId),
+    requestedContextId: stringValue(params.contextId),
+    resolvedProjectId: target.projectId,
+    configSource: target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
+    projectRoot: target.projectRoot,
+    accessPath: target.accessPath,
+    backendPath: target.backendPath,
+    destinationRoot: target.destinationRoot,
+    importMode: stringValue(params.importMode),
+    modulesPlanned,
+    modulesCount: modulesPlanned.length,
+    warnings,
+    errors,
+  };
 }
 
 export function resolveDefaultVbaManagerScriptPath(env: Record<string, string | undefined> = process.env): string {
