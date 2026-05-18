@@ -201,7 +201,9 @@ describe("dysflow command modules", () => {
 			);
 
 			expect(result.exitCode).toBe(1);
-			expect(result.stderr).toContain("Invalid Dysflow project registry JSON");
+			expect(result.stderr).toBe("Invalid Dysflow project registry JSON");
+			expect(result.stderr).not.toContain(registryPath);
+			expect(result.stderr).not.toContain(home);
 		} finally {
 			workspace.cleanup();
 			rmSync(home, { recursive: true, force: true });
