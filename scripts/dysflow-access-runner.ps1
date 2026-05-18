@@ -70,6 +70,20 @@ function ConvertFrom-JsonCompat {
   return $Json | ConvertFrom-Json
 }
 
+function Resolve-SandboxedPath {
+  param(
+    [Parameter(Mandatory = $true)] [string] $RawPath,
+    [Parameter(Mandatory = $true)] [string] $RootPath,
+    [Parameter(Mandatory = $true)] [string] $Label
+  )
+  $baseFull = [System.IO.Path]::GetFullPath($RootPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+  $resolved = [System.IO.Path]::GetFullPath($RawPath)
+  if (-not ($resolved.Equals($baseFull, [System.StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($baseFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith($baseFull + [System.IO.Path]::AltDirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))) {
+    throw "$Label must stay inside the resolved root."
+  }
+  return $resolved
+}
+
 function Convert-RecordsetRows {
   param($Recordset)
   $rows = New-Object System.Collections.ArrayList
@@ -182,11 +196,7 @@ function Export-QueryDefinitions {
   if (-not [string]::IsNullOrWhiteSpace($exportPath)) {
     $basePath = [string]$Payload.rootPath
     if ([string]::IsNullOrWhiteSpace($basePath)) { $basePath = Split-Path -Path $AccessDbPath -Parent }
-    $baseFull = [System.IO.Path]::GetFullPath($basePath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    $exportFull = [System.IO.Path]::GetFullPath($exportPath)
-    if (-not ($exportFull.Equals($baseFull, [System.StringComparison]::OrdinalIgnoreCase) -or $exportFull.StartsWith($baseFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or $exportFull.StartsWith($baseFull + [System.IO.Path]::AltDirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))) {
-      throw "exportPath must stay inside the resolved export root."
-    }
+    $exportFull = Resolve-SandboxedPath -RawPath $exportPath -RootPath $basePath -Label "exportPath"
     $json = [ordered]@{ queries = $queries } | ConvertTo-Json -Compress -Depth 20
     [System.IO.File]::WriteAllText($exportFull, $json, [System.Text.Encoding]::UTF8)
     $exportPath = $exportFull
@@ -200,10 +210,18 @@ function Export-QueryDefinitions {
 function Import-QueryDefinitions {
   param($Database, $Payload)
   $definitions = @()
+  $basePath = [string]$Payload.rootPath
+  if ([string]::IsNullOrWhiteSpace($basePath)) {
+    $basePath = Split-Path -Path $AccessDbPath -Parent
+  }
   if ($Payload.queryDefinitions) {
     $definitions = @($Payload.queryDefinitions)
   } elseif (-not [string]::IsNullOrWhiteSpace([string]$Payload.importPath)) {
-    $raw = Get-Content -LiteralPath ([string]$Payload.importPath) -Raw
+    $importFull = Resolve-SandboxedPath -RawPath ([string]$Payload.importPath) -RootPath $basePath -Label "importPath"
+    if ([System.IO.Path]::GetExtension($importFull).ToLowerInvariant() -ne ".json") {
+      throw "importPath extension must be .json."
+    }
+    $raw = Get-Content -LiteralPath $importFull -Raw
     $parsed = $raw | ConvertFrom-Json
     $definitions = if ($parsed.queries) { @($parsed.queries) } else { @($parsed) }
   }
@@ -374,6 +392,9 @@ function Compact-RepairDatabase {
     $base = [System.IO.Path]::GetFileNameWithoutExtension($sourceFull)
     $ext = [System.IO.Path]::GetExtension($sourceFull)
     $targetPath = [System.IO.Path]::Combine($folder, "$base.compacted$ext")
+  } else {
+    $folder = [System.IO.Path]::GetDirectoryName($sourceFull)
+    $targetPath = Resolve-SandboxedPath -RawPath $targetPath -RootPath $folder -Label "targetPath"
   }
 
   if ($dryRun) {
@@ -533,7 +554,9 @@ function Invoke-WriteAction {
     }
     "run_script" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.scriptPath)) { throw "scriptPath is required for run_script." }
-      $scriptPath = [string]$Payload.scriptPath
+      $rootPath = [string]$Payload.rootPath
+      if ([string]::IsNullOrWhiteSpace($rootPath)) { $rootPath = Split-Path -Path $AccessDbPath -Parent }
+      $scriptPath = Resolve-SandboxedPath -RawPath ([string]$Payload.scriptPath) -RootPath $rootPath -Label "scriptPath"
       if (-not (Test-Path -LiteralPath $scriptPath)) { throw "Script file not found: $scriptPath" }
       $statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))
       $executed = New-Object System.Collections.ArrayList
