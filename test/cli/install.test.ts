@@ -539,6 +539,7 @@ describe("handleUpdateCommand end-to-end", () => {
 				resolveLatestRelease: async () => ({ version: "9.9.9" }),
 				preparePackage: async () => ({
 					packageRoot: releasePackageRoot,
+					commitSha: "0123456789abcdef0123456789abcdef01234567",
 				}),
 			},
 		});
@@ -546,6 +547,9 @@ describe("handleUpdateCommand end-to-end", () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Dysflow runtime update:");
 		expect(result.stdout).toContain("1.0.0 -> 9.9.9");
+		expect(result.stdout).toContain(
+			"Installed release commit: 0123456789abcdef0123456789abcdef01234567",
+		);
 		expect(await readFile(installedPackageJson, "utf8")).toContain(
 			`"version": "9.9.9"`,
 		);

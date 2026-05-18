@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	loadDysflowConfig,
+	loadDysflowConfigAsync,
 	redactDysflowConfig,
 	resolveProjectRegistryPath,
 } from "../../../src/core/config/dysflow-config";
@@ -244,6 +245,33 @@ describe("dysflow configuration", () => {
 			if (!result.ok) throw new Error("expected config success");
 			expect(result.data.accessPassword).toBe("shared-secret");
 			expect(result.data.backendPassword).toBeUndefined();
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("loads repo project config asynchronously for production request paths (#181)", async () => {
+		const workspace = createTempWorkspace();
+		try {
+			writeRepoProjectConfig(workspace.root, {
+				id: "async-project",
+				accessPath: "front.accdb",
+				destinationRoot: "src",
+			});
+			writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
+
+			const result = await loadDysflowConfigAsync({
+				cwd: workspace.root,
+				env: {},
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error("expected async config success");
+			expect(result.data).toMatchObject({
+				configSource: "repo-config",
+				projectId: "async-project",
+				accessDbPath: resolve(workspace.root, "front.accdb"),
+			});
 		} finally {
 			workspace.cleanup();
 		}

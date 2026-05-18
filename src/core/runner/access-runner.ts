@@ -1,14 +1,13 @@
-import { spawn } from "node:child_process";
 import { createDiagnostic, createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
+import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 import { sanitizeSecrets } from "../utils/index.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
-const POWERSHELL_COMMAND = "powershell.exe";
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 
 export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
@@ -84,7 +83,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     });
 
     const captureDiagnostics: Diagnostic[] = [];
-    const execution = await this.executor(POWERSHELL_COMMAND, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
+    const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
       timeoutMs: config.timeoutMs,
       operationId,
       accessPath: config.accessDbPath,
@@ -187,17 +186,14 @@ export function resolveDefaultRunnerScriptPath(env: Record<string, string | unde
 }
 
 const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
-  const startedAt = Date.now();
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { shell: false, windowsHide: true, env: { ...process.env, ...options.env } });
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const captureTasks: Promise<void>[] = [];
-    const timer = setTimeout(() => { timedOut = true; child.kill(); }, options.timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf8");
+  const captureTasks: Promise<void>[] = [];
+  let stderr = "";
+  return spawnPowerShellProcess({
+    command,
+    args,
+    timeoutMs: options.timeoutMs,
+    env: options.env,
+    onStderr: (text) => {
       const nonMarkerLines: string[] = [];
       for (const line of text.split(/\r?\n/)) {
         if (line.startsWith(ACCESS_PROCESS_MARKER)) {
@@ -213,13 +209,9 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
       }
       const nonMarkerText = nonMarkerLines.filter((line) => line.length > 0).join("\n");
       if (nonMarkerText.length > 0) stderr += nonMarkerText;
-    });
-    child.on("error", (error: Error) => { stderr += error.message; });
-    child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      void Promise.allSettled(captureTasks).then(() => {
-        resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
-      });
-    });
+    },
+  }).then(async (result) => {
+    await Promise.allSettled(captureTasks);
+    return { ...result, stderr };
   });
 };

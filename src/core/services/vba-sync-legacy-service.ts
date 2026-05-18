@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, parse, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync } from "../utils/index.js";
-import { loadDysflowConfig, type DysflowConfig } from "../config/dysflow-config.js";
+import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
+import { POWERSHELL_EXE, spawnPowerShellProcess } from "../runner/powershell-executor.js";
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
@@ -158,7 +158,7 @@ export class VbaSyncLegacyService {
       return this.planImport(toolName, params);
     }
 
-    const target = this.resolveExecutionTarget(params);
+    const target = await this.resolveExecutionTarget(params);
     if (!target.ok) return target;
     const strict = this.validateStrictContext(params, target.data);
     if (!strict.ok) return strict;
@@ -209,11 +209,11 @@ export class VbaSyncLegacyService {
     return successResult(parsedOutput, { durationMs: result.durationMs });
   }
 
-  private resolveExecutionTarget(params: Record<string, unknown>): OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource" | "timeoutMs" | "processTimeoutMs"> & { accessPath?: string; destinationRoot: string }> {
+  private async resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource" | "timeoutMs" | "processTimeoutMs"> & { accessPath?: string; destinationRoot: string }>> {
     const hasExplicitConfigOverride = stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
     const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
     if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
-      const config = loadDysflowConfig({
+      const config = await loadDysflowConfigAsync({
         env: this.env,
         cwd: this.cwd,
         accessDbPath: stringValue(params.accessPath),
@@ -231,13 +231,15 @@ export class VbaSyncLegacyService {
       });
     }
 
-    const repoConfig = loadDysflowConfig({ env: this.env, cwd: this.cwd });
-    if (repoConfig.ok) {
-      return successResult({
-        ...repoConfig.data,
-        accessPath: repoConfig.data.accessDbPath,
-        destinationRoot: stringValue(params.destinationRoot) ?? repoConfig.data.destinationRoot ?? repoConfig.data.projectRoot ?? this.cwd,
-      });
+    if (this.accessPath === undefined) {
+      const repoConfig = await loadDysflowConfigAsync({ env: this.env, cwd: this.cwd });
+      if (repoConfig.ok) {
+        return successResult({
+          ...repoConfig.data,
+          accessPath: repoConfig.data.accessDbPath,
+          destinationRoot: stringValue(params.destinationRoot) ?? repoConfig.data.destinationRoot ?? repoConfig.data.projectRoot ?? this.cwd,
+        });
+      }
     }
 
     const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
@@ -272,7 +274,7 @@ export class VbaSyncLegacyService {
   }
 
   private async planImport(toolName: "import_all" | "import_modules", params: Record<string, unknown>): Promise<OperationResult<ImportPlanResult>> {
-    const target = this.resolveExecutionTarget(params);
+    const target = await this.resolveExecutionTarget(params);
     if (!target.ok) return target;
     const strict = this.validateStrictContext(params, target.data);
     if (!strict.ok) return strict;
@@ -626,31 +628,21 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
 }
 
 export const spawnVbaManager: VbaManagerExecutor = (request) => {
-  const startedAt = Date.now();
-  return new Promise((resolve) => {
-    const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
-    if (request.accessPath) args.push("-AccessPath", request.accessPath);
-    if (request.moduleNames.length > 0) args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
-    if (request.json) args.push("-Json");
-    for (const [key, value] of Object.entries(request.extra)) {
-      if (value === undefined) continue;
-      const flag = `-${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-      args.push(flag, String(value));
-    }
+  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
+  if (request.accessPath) args.push("-AccessPath", request.accessPath);
+  if (request.moduleNames.length > 0) args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
+  if (request.json) args.push("-Json");
+  for (const [key, value] of Object.entries(request.extra)) {
+    if (value === undefined) continue;
+    const flag = `-${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+    args.push(flag, String(value));
+  }
 
-    let timedOut = false;
-    const child = spawn("powershell.exe", args, { windowsHide: true, env: { ...process.env, ...request.env } });
-    request.signal?.addEventListener("abort", () => {
-      timedOut = true;
-      child.kill();
-    }, { once: true });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
-    child.on("error", (error: Error) => { stderr += error.message; });
-    child.on("close", (exitCode) => {
-      resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
-    });
+  return spawnPowerShellProcess({
+    command: POWERSHELL_EXE,
+    args,
+    timeoutMs: request.timeoutMs,
+    env: request.env,
+    signal: request.signal,
   });
 };
