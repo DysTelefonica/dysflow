@@ -53,6 +53,18 @@
       "procedure": "Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
+    },
+    {
+      "name": "ConfigCore LeeConfiguracionLocal sincroniza cache",
+      "procedure": "Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "config-core", "issue-8", "pr1"]
+    },
+    {
+      "name": "ConfigCore EVE no sobreescribe cache",
+      "procedure": "Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "config-core", "issue-8", "pr1"]
     }
   ]
 }

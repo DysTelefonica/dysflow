@@ -14,13 +14,12 @@ Public Function GetRiesgosAsociados(ByVal p_IDNC As Long, ByRef p_Error As Strin
     Set m_Col = New Scripting.Dictionary
     m_Col.CompareMode = TextCompare
     
-    ' Nota: Consultamos la tabla de unión TbRiesgosNC en la BD local de NC
-    ' pero traemos los datos descriptivos de la BD de Riesgos mediante getdbRiesgos
+    ' Nota: Consultamos la tabla de unión TbRiesgosNC y los datos descriptivos mediante getdb().
     m_SQL = "SELECT R.* FROM TbRiesgos AS R " & _
             "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
             "WHERE L.IDNC = " & p_IDNC
             
-    Set rcd = getdbRiesgos().OpenRecordset(m_SQL)
+    Set rcd = getdb().OpenRecordset(m_SQL)
     
     Do While Not rcd.EOF
         Set m_Riesgo = New riesgo
@@ -60,7 +59,7 @@ Public Function GetRiesgosDisponibles(ByVal p_IDExpediente As Long, ByRef p_Erro
                     "ON E.IDProyecto = P.IDProyecto WHERE P.IDExpediente =" & p_IDExpediente & ")) " & _
                     "AND ((R.FechaRetirado) Is Null));"
     
-    Set rcd = getdbRiesgos().OpenRecordset(m_SQL)
+    Set rcd = getdb().OpenRecordset(m_SQL)
     
     Do While Not rcd.EOF
         Set m_Riesgo = New riesgo
@@ -89,7 +88,7 @@ Public Sub GuardarAsociaciones(ByVal p_IDNC As Long, ByRef p_ColIDs As Collectio
     On Error GoTo errores
     
     ' 1. Obtener conexión al repositorio externo (Fuente: 03_Environment_Config)
-    Set dbRiesgos = getdbRiesgos()
+    Set dbRiesgos = getdb()
     
     ' 2. Limpiar asociaciones previas
     ' Nota: Validar si el campo es IDNC o IDNoConformidad según el esquema físico

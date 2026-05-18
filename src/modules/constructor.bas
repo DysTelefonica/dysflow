@@ -1,4 +1,4 @@
-Attribute VB_Name = "constructor"
+﻿Attribute VB_Name = "constructor"
 Option Compare Database
 Option Explicit
 Public Function getRiesgosNC(p_IDNC As Long, Optional ByRef p_Error As String) As Scripting.Dictionary
@@ -59,7 +59,7 @@ Public Function getUsuariosTecnicos( _
                 "ORDER BY Nombre;"
     End If
     
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -164,7 +164,7 @@ Public Function getUsuario( _
         m_Where = m_NombreCampoID & "='" & m_ValorID & "';"
     End If
     m_SQL = m_SQLInicial & "WHERE " & m_Where
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             Exit Function
@@ -207,7 +207,7 @@ Public Function getAplicacionesPermisos( _
     m_SQL = "SELECT TbUsuariosAplicacionesPermisos.* " & _
             "FROM TbUsuariosAplicacionesPermisos " & _
             "WHERE CorreoUsuario='" & p_CorreoUsuario & "';"
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -320,7 +320,7 @@ Public Function getListaUsuarios( _
             "TbUsuariosAplicacionesPermisos.IDAplicacion=" & IDAplicacion & " AND " & _
             m_Particula & ";"
     m_SQL = m_SQLInicial & m_Where
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -380,7 +380,7 @@ Public Function getUsuariosCalidad( _
             "ON TbUsuariosAplicaciones.CorreoUsuario = TbUsuariosAplicacionesPermisos.CorreoUsuario " & _
             "WHERE (((TbUsuariosAplicacionesPermisos.IDAplicacion)=" & IDAplicacion & _
             ") AND ((TbUsuariosAplicacionesPermisos.EsUsuarioCalidad)='Sí'));"
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1460,7 +1460,7 @@ Public Function getExpedientes( _
     
     On Error GoTo errores
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     m_SQL = "TbExpedientes"
    
@@ -2194,7 +2194,7 @@ Public Function getExpedienteJuridicas( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbJuridicas.* " & _
             "FROM TbExpedientesJuridicas INNER JOIN TbJuridicas " & _
@@ -2253,7 +2253,7 @@ Public Function getExpediente( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     m_SQL = "S"
     m_SQL = "SELECT * " & _
@@ -2301,7 +2301,7 @@ Public Function getExpedientePorCodigo( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
@@ -2351,7 +2351,7 @@ Public Function getExpedienteResponsables( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
@@ -2416,7 +2416,7 @@ Public Function getExpedientesBusqueda( _
                 "FROM TbExpedientes;"
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbExpedientes()
+        Set p_Db = getdb()
     End If
     Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
@@ -2733,7 +2733,7 @@ Public Function getRiesgo( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbRiesgos()
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbRiesgos.* " & _
             "FROM TbRiesgos " & _
@@ -2787,7 +2787,7 @@ Public Function getRiesgosDeExpediente( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbRiesgos()
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbRiesgos.* " & _
             "FROM TbRiesgos " & _
@@ -2848,7 +2848,7 @@ Public Function getUltimoProyecto( _
         Exit Function
     End If
     If p_Db Is Nothing Then
-        Set p_Db = getdbRiesgos()
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT IDProyecto " & _
             "FROM TbProyectos " & _
