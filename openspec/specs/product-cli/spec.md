@@ -7,8 +7,8 @@ Define the Dysflow command surface without coupling commands to adapters.
 ## Requirements
 
 ### Requirement: Command Surface
-
-The system MUST expose a default `dysflow` dashboard entrypoint plus `dysflow mcp`, `setup`, `doctor`, `install`, `update`, `tui`, and planned `serve` commands through a single CLI entrypoint.
+The system MUST expose a default `dysflow` dashboard entrypoint plus `dysflow mcp`, `setup`, `doctor`, `install`, `update`, `tui`, and planned `serve` commands through a single CLI entrypoint, and CI quality gates MUST NOT change command dispatch behavior.
+(Previously: defined command dispatch without CI-preservation expectation.)
 
 #### Scenario: Default TUI dispatch
 - GIVEN no command arguments
@@ -24,7 +24,7 @@ The system MUST expose a default `dysflow` dashboard entrypoint plus `dysflow mc
 
 #### Scenario: Known command dispatch
 - GIVEN a supported command
-- WHEN the CLI runs
+- WHEN the CLI runs under local execution or CI validation
 - THEN it SHALL dispatch to that command handler
 - AND return a structured exit result
 
