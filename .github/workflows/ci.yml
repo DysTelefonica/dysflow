@@ -67,7 +67,7 @@ jobs:
         shell: pwsh
         run: |
           Get-Command powershell.exe
-          powershell.exe -NoProfile -NonInteractive -Command "$PSVersionTable.PSVersion.ToString()"
+          powershell.exe -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
 
       - name: Run Access/PowerShell integration tests
         run: pnpm vitest run test/e2e/access-fixture.e2e.test.ts test/scripts-access-runner.test.ts
