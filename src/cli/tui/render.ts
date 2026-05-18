@@ -1,4 +1,5 @@
-import { compareVersions, type AgentName } from "../commands/install.js";
+import { compareVersions } from "../../core/utils/version.js";
+import type { AgentName } from "../commands/install.js";
 
 const MENU_OPTIONS = ["Install / Integrations", "Doctor", "Exit"] as const;
 const UPDATE_COMMAND_PREFIX =

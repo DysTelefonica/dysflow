@@ -121,7 +121,14 @@ export class AccessPowerShellRunner implements AccessRunner {
       );
     }
 
-    return successResult(parseRunnerData<TData>(execution.stdout, secrets), { diagnostics, durationMs: execution.durationMs, operation: operationMetadata });
+    try {
+      return successResult(parseRunnerData<TData>(execution.stdout, secrets), { diagnostics, durationMs: execution.durationMs, operation: operationMetadata });
+    } catch {
+      return failureResult(
+        createDysflowError("RUNNER_INVALID_JSON", "PowerShell runner produced invalid JSON output."),
+        { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+      );
+    }
   }
 
   private async updateOperationFromExecution(record: AccessOperationRecord, execution: PowerShellExecutionResult): Promise<AccessOperationRecord> {

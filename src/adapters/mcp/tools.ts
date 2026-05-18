@@ -265,6 +265,9 @@ function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query
   return { type: "object", additionalProperties: false, properties };
 }
 
+const CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA = legacySchemaForTool("cleanup_access_operation");
+const RUN_VBA_LEGACY_SCHEMA = legacySchemaForTool("run_vba");
+
 async function handleValidatedLegacyQuery<TData>(input: unknown, schema: JsonObjectSchema, execute: () => Promise<OperationResult<TData>>): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) return invalidInput(validation);
@@ -352,9 +355,9 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "cleanup_access_operation",
     description: "Legacy-compatible alias for safe Access operation cleanup.",
-    inputSchema: legacySchemaForTool("cleanup_access_operation"),
+    inputSchema: CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA,
     handler: async (input) => {
-      const validation = validateInput(input, legacySchemaForTool("cleanup_access_operation"));
+      const validation = validateInput(input, CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA);
       if (validation !== undefined) return invalidInput(validation);
       if (services.cleanupService === undefined) {
         return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
@@ -366,9 +369,9 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "run_vba",
     description: "Legacy-compatible alias for executing a public VBA procedure.",
-    inputSchema: legacySchemaForTool("run_vba"),
+    inputSchema: RUN_VBA_LEGACY_SCHEMA,
     handler: async (input) => {
-      const validation = validateInput(input, legacySchemaForTool("run_vba"));
+      const validation = validateInput(input, RUN_VBA_LEGACY_SCHEMA);
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
       const parsedArgs = parseLegacyArgsJson(request.argsJson);
@@ -380,52 +383,59 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       }));
     },
   });
+  const querySqlSchema = legacySchemaForTool("query_sql");
   add({
     name: "query_sql",
     description: "Legacy-compatible alias for read-only Access SQL queries.",
-    inputSchema: legacySchemaForTool("query_sql"),
+    inputSchema: querySqlSchema,
     handler: async (input) => {
-      const validation = validateInput(input, legacySchemaForTool("query_sql"));
+      const validation = validateInput(input, querySqlSchema);
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { sql?: string; query?: string };
       return translateCoreResultToMcpContent(await services.queryService.execute({ sql: request.sql ?? request.query ?? "", mode: "read" }));
     },
   });
+  const execSqlSchema = legacySchemaForTool("exec_sql");
   add({
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
-    inputSchema: legacySchemaForTool("exec_sql"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("exec_sql"), () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+    inputSchema: execSqlSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, execSqlSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
   });
+  const runScriptSchema = legacySchemaForTool("run_script");
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
-    inputSchema: legacySchemaForTool("run_script"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("run_script"), () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+    inputSchema: runScriptSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, runScriptSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
   });
+  const createTableSchema = legacySchemaForTool("create_table");
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
-    inputSchema: legacySchemaForTool("create_table"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("create_table"), () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+    inputSchema: createTableSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, createTableSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
   });
+  const dropTableSchema = legacySchemaForTool("drop_table");
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
-    inputSchema: legacySchemaForTool("drop_table"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("drop_table"), () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+    inputSchema: dropTableSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, dropTableSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
   });
+  const seedFixtureSchema = legacySchemaForTool("seed_fixture");
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
-    inputSchema: legacySchemaForTool("seed_fixture"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("seed_fixture"), () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+    inputSchema: seedFixtureSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, seedFixtureSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
   });
+  const teardownFixtureSchema = legacySchemaForTool("teardown_fixture");
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
-    inputSchema: legacySchemaForTool("teardown_fixture"),
-    handler: async (input) => handleValidatedLegacyQuery(input, legacySchemaForTool("teardown_fixture"), () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+    inputSchema: teardownFixtureSchema,
+    handler: async (input) => handleValidatedLegacyQuery(input, teardownFixtureSchema, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
@@ -437,12 +447,13 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
 
 function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
+  const schema = legacySchemaForTool(name);
   return {
     name,
     description: definition.description,
-    inputSchema: legacySchemaForTool(name),
+    inputSchema: schema,
     handler: async (input) => {
-      const validation = validateInput(input, legacySchemaForTool(name));
+      const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));

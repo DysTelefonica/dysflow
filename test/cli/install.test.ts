@@ -16,13 +16,13 @@ import {
 	parseAgentList,
 	parseInstallArgs,
 	parseUpdateArgs,
-	compareVersions,
 	replaceCodexMcpSection,
 	resolvePackageRoot,
 	hasDysflowMcpConfig,
 	removeDysflowMcpConfig,
 	applyIntegrationSelection,
 } from "../../src/cli/commands/install";
+import { compareVersions } from "../../src/core/utils/version";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
 	const raw = await readFile(path, "utf8");

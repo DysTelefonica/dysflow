@@ -92,6 +92,23 @@ describe("Dysflow HTTP adapter", () => {
     expect(body).toEqual({ ok: true, service: "dysflow", writesEnabled: false });
   });
 
+  it("starts in degraded mode when project config is unavailable", async () => {
+    const server = await startDysflowHttpServer({
+      host: "127.0.0.1",
+      port: 0,
+      env: {},
+    });
+    startedServers.push(server.server);
+
+    const health = await readJson(`${server.url}/health`);
+    const diagnostics = await readJson(`${server.url}/diagnostics`);
+
+    expect(health.response.status).toBe(200);
+    expect(health.body).toEqual({ ok: true, service: "dysflow", writesEnabled: false });
+    expect(diagnostics.response.status).toBe(500);
+    expect(diagnostics.body.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+  });
+
   it("serves diagnostics and read query routes through core services", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
@@ -144,6 +161,25 @@ describe("Dysflow HTTP adapter", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT * INTO ArchivedPeople FROM People" }),
+    });
+
+    expect(response.response.status).toBe(400);
+    expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
+  });
+
+  it.each([
+    "/* leading comment */\nUPDATE People SET name='Ada'",
+    "WITH changed AS (DELETE FROM People RETURNING *) SELECT * FROM changed",
+    "EXEC dangerous_procedure",
+  ])("rejects non-read SQL edge case: %s", async (sql) => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql }),
     });
 
     expect(response.response.status).toBe(400);

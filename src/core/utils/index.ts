@@ -24,10 +24,18 @@ export function sanitizeSecrets(value: string, secrets: readonly string[]): stri
 
 export function readJsonFileSync<T>(path: string): T {
   const raw = readFileSync(path, "utf8");
-  return JSON.parse(raw) as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(`Invalid JSON file: ${path}`);
+  }
 }
 
 export async function readJsonFileAsync<T>(path: string): Promise<T> {
   const raw = await readFile(path, "utf8");
-  return JSON.parse(raw) as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(`Invalid JSON file: ${path}`);
+  }
 }

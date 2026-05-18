@@ -97,7 +97,7 @@ async function runIntegrationSelectionLoop(options: {
 	context: CliCommandContext;
 }): Promise<CliResult> {
 	let cursor = 0;
-	const selected = new Set<AgentName>(ALL_AGENTS);
+	const selected = new Set<AgentName>();
 
 	while (true) {
 		options.writeFrame(
@@ -149,8 +149,15 @@ function readProcessTuiKey(): Promise<TuiKey> {
 
 		const cleanup = (): void => {
 			input.off("keypress", onKeypress);
+			input.off("close", onClose);
+			input.off("end", onClose);
 			if (input.isTTY) input.setRawMode(wasRaw);
 			if (wasPaused) input.pause();
+		};
+
+		const onClose = (): void => {
+			cleanup();
+			resolve("q");
 		};
 
 		const onKeypress = (_chunk: string, key: readline.Key): void => {
@@ -168,6 +175,8 @@ function readProcessTuiKey(): Promise<TuiKey> {
 		};
 
 		input.on("keypress", onKeypress);
+		input.once("close", onClose);
+		input.once("end", onClose);
 	});
 }
 
