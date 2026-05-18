@@ -144,6 +144,28 @@ errores:
     EnsureCacheSchemaReadiness = False
 End Function
 
+Public Function MigrarConfigCoreTbConfiguracion(Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+
+    On Error GoTo errores
+    p_Error = ""
+    MigrarConfigCoreTbConfiguracion = False
+
+    Set db = getdb()
+    If Not EnsureTbConfiguracion(db, p_Error) Then GoTo salida
+
+    MigrarConfigCoreTbConfiguracion = True
+
+salida:
+    Set db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "MigrarConfigCoreTbConfiguracion: " & Err.Description
+    Set db = Nothing
+    MigrarConfigCoreTbConfiguracion = False
+End Function
+
 Private Function EnsureTbConfiguracion(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
     Dim rsSeed As DAO.Recordset
     On Error GoTo errores
