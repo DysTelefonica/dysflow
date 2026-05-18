@@ -250,6 +250,38 @@ describe("MCP tool registration over core services", () => {
     }
   });
 
+  describe("stub tool visibility (#175)", () => {
+    const STUB_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary", "init_project", "normalize_documents"] as const;
+
+    function makeServices() {
+      return {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      };
+    }
+
+    it("marks stub (not-implemented) tools as hidden so they are excluded from tools/list projection", () => {
+      const tools = createDysflowMcpTools(makeServices());
+      for (const stub of STUB_TOOL_NAMES) {
+        const tool = tools.find((t) => t.name === stub);
+        expect(tool, `${stub} must be present in tool registry`).toBeDefined();
+        expect(tool?.hidden, `${stub} must be marked hidden: true`).toBe(true);
+      }
+    });
+
+    it("stub tools retain callable handlers that return LEGACY_TOOL_NOT_IMPLEMENTED", async () => {
+      const tools = createDysflowMcpTools(makeServices());
+      for (const stub of STUB_TOOL_NAMES) {
+        const tool = tools.find((t) => t.name === stub);
+        if (tool === undefined) continue;
+        const result = await tool.handler({});
+        expect(result.isError, `${stub} handler should return isError: true`).toBe(true);
+        expect(result.content[0]?.text, `${stub} handler should return LEGACY_TOOL_NOT_IMPLEMENTED`).toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
+      }
+    });
+  });
+
   it("translates core failures to safe MCP errors without leaking diagnostics, protocol details, or local paths", () => {
     const result = failureResult(
       { code: "RUNNER_FAILED", message: "PowerShell runner failed for C:\\Users\\Jane Doe\\NoConformidades.accdb and /Users/Jane Doe/db.accdb: password=[REDACTED]", retryable: false },

@@ -44,6 +44,12 @@ export type DysflowMcpTool = {
   name: string;
   description: string;
   inputSchema?: JsonObjectSchema;
+  /**
+   * When true, this tool is excluded from the tools/list MCP projection.
+   * The handler remains callable via tools/call for backwards compatibility.
+   * Used for stub tools that always return LEGACY_TOOL_NOT_IMPLEMENTED.
+   */
+  hidden?: boolean;
   handler(input: unknown): Promise<McpToolResult>;
 };
 
@@ -459,6 +465,19 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   return tools;
 }
 
+/**
+ * Tools that always return LEGACY_TOOL_NOT_IMPLEMENTED.
+ * They are hidden from tools/list to avoid advertising unworkable operations,
+ * but remain registered so direct calls return a clear error rather than a routing failure.
+ */
+const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
+  "verify_code",
+  "verify_binary",
+  "reconcile_binary",
+  "init_project",
+  "normalize_documents",
+]);
+
 function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
   const schema = legacySchemaForTool(name);
@@ -466,6 +485,7 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
     name,
     description: definition.description,
     inputSchema: schema,
+    hidden: HIDDEN_STUB_TOOL_NAMES.has(name) ? true : undefined,
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
