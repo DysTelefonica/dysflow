@@ -1,4 +1,3 @@
-import { createInterface } from "node:readline";
 import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { loadDysflowConfig, type DysflowConfig } from "../../core/config/dysflow-config.js";
@@ -22,6 +21,7 @@ const SERVER_VERSION = readPackageVersionNear(import.meta.url);
  * When MCP protocol support changes, update this constant and the protocol maintenance tests together.
  */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
+const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
 
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;
@@ -38,16 +38,19 @@ type JsonRpcRequest = {
 type JsonLineMcpStdioRuntimeOptions = {
   input?: Readable;
   output?: Writable;
+  maxRequestBytes?: number;
 };
 
 export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
   private readonly tools = new Map<string, DysflowMcpTool>();
   private readonly input: Readable;
   private readonly output: Writable;
+  private readonly maxRequestBytes: number;
 
   constructor(options: JsonLineMcpStdioRuntimeOptions = {}) {
     this.input = options.input ?? process.stdin;
     this.output = options.output ?? process.stdout;
+    this.maxRequestBytes = Math.max(1, Math.floor(options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES));
   }
 
   registerTool(tool: DysflowMcpTool): void {
@@ -55,10 +58,65 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
   }
 
   async start(): Promise<void> {
-    const lines = createInterface({ input: this.input, crlfDelay: Infinity });
-    for await (const line of lines) {
-      if (line.trim().length === 0) continue;
-      await this.handleLine(line);
+    let buffer = "";
+    let pendingBytes = 0;
+    let droppingOversizedLine = false;
+
+    for await (const chunk of this.input) {
+      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      const chunkLength = text.length;
+      let cursor = 0;
+      while (cursor < chunkLength) {
+        const nextNewline = text.indexOf("\n", cursor);
+        if (nextNewline === -1) {
+          if (!droppingOversizedLine) {
+            const tail = text.slice(cursor);
+            buffer += tail;
+            pendingBytes += Buffer.byteLength(tail, "utf8");
+            if (pendingBytes > this.maxRequestBytes) {
+              this.writeResponse(null, { code: -32700, message: `Request line exceeds ${this.maxRequestBytes} bytes.` });
+              droppingOversizedLine = true;
+              buffer = "";
+              pendingBytes = 0;
+            }
+          }
+          break;
+        }
+
+        if (!droppingOversizedLine) {
+          const chunkLine = text.slice(cursor, nextNewline);
+          buffer += chunkLine;
+          pendingBytes += Buffer.byteLength(chunkLine, "utf8");
+          if (buffer.trim().length === 0) {
+            buffer = "";
+            pendingBytes = 0;
+          } else if (pendingBytes > this.maxRequestBytes) {
+            this.writeResponse(null, { code: -32700, message: `Request line exceeds ${this.maxRequestBytes} bytes.` });
+            droppingOversizedLine = true;
+            buffer = "";
+            pendingBytes = 0;
+          } else {
+            const line = buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
+            await this.handleLine(line);
+            buffer = "";
+            pendingBytes = 0;
+          }
+        }
+
+        if (droppingOversizedLine) {
+          droppingOversizedLine = false;
+        }
+        cursor = nextNewline + 1;
+      }
+    }
+
+    if (!droppingOversizedLine && buffer.trim().length > 0) {
+      if (pendingBytes > this.maxRequestBytes) {
+        this.writeResponse(null, { code: -32700, message: `Request line exceeds ${this.maxRequestBytes} bytes.` });
+      } else {
+        const line = buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
+        await this.handleLine(line);
+      }
     }
   }
 

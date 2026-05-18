@@ -203,6 +203,41 @@ describe("JsonLineMcpStdioRuntime", () => {
 		]);
 	});
 
+	it("rejects oversized JSON-RPC lines before parsing and continues processing subsequent frames", async () => {
+		const input = new PassThrough();
+		const output = new PassThrough();
+		const runtime = new JsonLineMcpStdioRuntime({ input, output, maxRequestBytes: 64 });
+
+		const started = runtime.start();
+		input.write(`${"a".repeat(200)}\n`);
+		writeMessage(input, {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "initialize",
+			params: {},
+		});
+		input.end();
+		await started;
+		output.end();
+
+		await expect(collectOutput(output)).resolves.toEqual([
+			expect.objectContaining({
+				id: null,
+				error: expect.objectContaining({
+					code: -32700,
+					message: "Request line exceeds 64 bytes.",
+				}),
+			}),
+			expect.objectContaining({
+				id: 1,
+				result: expect.objectContaining({
+					protocolVersion: MCP_PROTOCOL_VERSION,
+					serverInfo: { name: "dysflow", version: packageVersion },
+				}),
+			}),
+		]);
+	});
+
 	it("resolves registered import dry-run even when MCP startup cwd has no project config", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-startup-"));
 		const startup = join(root, "startup");
