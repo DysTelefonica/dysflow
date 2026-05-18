@@ -194,15 +194,26 @@ async function routeRequest(
 }
 
 function isReadOnlySql(sql: string): boolean {
-  const normalized = sql
+  // Step 1: strip line comments and block comments
+  const withoutComments = sql
     .replace(/--.*$/gm, "")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .trim()
     .toLowerCase();
-  const tokenText = normalized.replace(/'([^']|'')*'/g, "''").replace(/"([^"]|"")*"/g, "\"\"");
-  const firstToken = normalized.match(/^[a-z]+/)?.[0];
 
-  return firstToken === "select" && !normalized.includes(";") && !/\binto\b/.test(tokenText) && !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(tokenText);
+  // Step 2: strip string literals so that ; or keywords inside them are invisible
+  const tokenized = withoutComments
+    .replace(/'([^']|'')*'/g, "''")
+    .replace(/"([^"]|"")*"/g, '""');
+
+  // Step 3: split on top-level semicolons and filter empty fragments
+  const statements = tokenized.split(";").map((s) => s.trim()).filter((s) => s.length > 0);
+
+  // Step 4: must be exactly one non-empty statement
+  if (statements.length !== 1) return false;
+
+  const firstToken = statements[0].match(/^[a-z]+/)?.[0];
+  return firstToken === "select" && !/\binto\b/.test(tokenized) && !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(tokenized);
 }
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
