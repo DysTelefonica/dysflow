@@ -1,4 +1,5 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -307,5 +308,125 @@ describe("dysflow configuration", () => {
 		} finally {
 			workspace.cleanup();
 		}
+	});
+
+	// #193 RED: loadProjectConfigFromPath must return OperationResult failure for malformed JSON (not throw)
+	describe("readJsonFile call-site guards (#193)", () => {
+		it("loadDysflowConfig returns CONFIG_PROJECT_FILE_INVALID for malformed repo project JSON (sync)", () => {
+			const workspace = createTempWorkspace();
+			try {
+				mkdirSync(join(workspace.root, ".dysflow"), { recursive: true });
+				writeFileSync(
+					join(workspace.root, ".dysflow", "project.json"),
+					"{ this is not valid json }",
+					"utf8",
+				);
+
+				const result = loadDysflowConfig({ cwd: workspace.root, env: {} });
+
+				expect(result.ok).toBe(false);
+				if (result.ok) throw new Error("expected failure");
+				expect(result.error.code).toBe("CONFIG_PROJECT_FILE_INVALID");
+			} finally {
+				workspace.cleanup();
+			}
+		});
+
+		it("loadDysflowConfigAsync returns CONFIG_PROJECT_FILE_INVALID for malformed repo project JSON (async)", async () => {
+			const root = await mkdtemp(join(tmpdir(), "dysflow-malformed-async-"));
+			try {
+				await mkdir(join(root, ".dysflow"), { recursive: true });
+				await writeFile(
+					join(root, ".dysflow", "project.json"),
+					"{ this is not valid json }",
+					"utf8",
+				);
+
+				const result = await loadDysflowConfigAsync({ cwd: root, env: {} });
+
+				expect(result.ok).toBe(false);
+				if (result.ok) throw new Error("expected failure");
+				expect(result.error.code).toBe("CONFIG_PROJECT_FILE_INVALID");
+			} finally {
+				rmSync(root, { recursive: true, force: true });
+			}
+		});
+
+		it("loadDysflowConfig returns CONFIG_PROJECT_FILE_INVALID for malformed global-registry project JSON (sync)", () => {
+			const workspace = createTempWorkspace();
+			try {
+				const registryDir = join(workspace.root, "registry");
+				const projectDir = join(workspace.root, "project");
+				mkdirSync(registryDir, { recursive: true });
+				mkdirSync(join(projectDir, ".dysflow"), { recursive: true });
+				// Write malformed project config
+				writeFileSync(
+					join(projectDir, ".dysflow", "project.json"),
+					"{ malformed json }",
+					"utf8",
+				);
+				const registryPath = join(registryDir, "projects.json");
+				writeFileSync(
+					registryPath,
+					JSON.stringify({
+						projects: {
+							myproject: { configPath: join(projectDir, ".dysflow", "project.json") },
+						},
+					}),
+					"utf8",
+				);
+
+				const result = loadDysflowConfig({
+					projectId: "myproject",
+					projectRegistryPath: registryPath,
+					env: {},
+					cwd: workspace.root,
+				});
+
+				expect(result.ok).toBe(false);
+				if (result.ok) throw new Error("expected failure");
+				expect(result.error.code).toBe("CONFIG_PROJECT_FILE_INVALID");
+			} finally {
+				workspace.cleanup();
+			}
+		});
+
+		it("loadDysflowConfigAsync returns CONFIG_PROJECT_FILE_INVALID for malformed global-registry project JSON (async)", async () => {
+			const root = await mkdtemp(join(tmpdir(), "dysflow-registry-malformed-async-"));
+			try {
+				const registryDir = join(root, "registry");
+				const projectDir = join(root, "project");
+				await mkdir(join(projectDir, ".dysflow"), { recursive: true });
+				await writeFile(
+					join(projectDir, ".dysflow", "project.json"),
+					"{ malformed json }",
+					"utf8",
+				);
+				const registryPath = join(registryDir, "projects.json");
+				await mkdir(registryDir, { recursive: true });
+				await writeFile(
+					registryPath,
+					JSON.stringify({
+						projects: {
+							myproject: { configPath: join(projectDir, ".dysflow", "project.json") },
+						},
+					}),
+					"utf8",
+				);
+
+				const result = await loadDysflowConfigAsync({
+					projectId: "myproject",
+					projectRegistryPath: registryPath,
+					env: {},
+					cwd: root,
+				});
+
+				expect(result.ok).toBe(false);
+				if (result.ok) throw new Error("expected failure");
+				expect(result.error.code).toBe("CONFIG_PROJECT_FILE_INVALID");
+			} finally {
+				rmSync(root, { recursive: true, force: true });
+			}
+		});
 	});
 });
