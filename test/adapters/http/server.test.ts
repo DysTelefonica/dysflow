@@ -8,8 +8,10 @@ import { FileAccessOperationRegistry } from "../../../src/core/operations/access
 import { failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest } from "../../../src/core/contracts/index";
 
 const startedServers: Server[] = [];
+type HttpServerOptions = NonNullable<Parameters<typeof startDysflowHttpServer>[0]>;
+type HttpServices = NonNullable<HttpServerOptions["services"]>;
 
-async function startTestServer(options: Parameters<typeof startDysflowHttpServer>[0] = {}) {
+async function startTestServer(options: HttpServerOptions = {}) {
   const server = await startDysflowHttpServer({
     host: "127.0.0.1",
     port: 0,
@@ -20,7 +22,7 @@ async function startTestServer(options: Parameters<typeof startDysflowHttpServer
   return server;
 }
 
-function createFakeServices(overrides: Partial<Parameters<typeof startDysflowHttpServer>[0]["services"]> = {}) {
+function createFakeServices(overrides: Partial<HttpServices> = {}) {
   const calls: { queries: AccessQueryRequest[]; vba: AccessVbaRequest[]; diagnostics: number } = {
     queries: [],
     vba: [],
@@ -51,9 +53,9 @@ function createFakeServices(overrides: Partial<Parameters<typeof startDysflowHtt
   };
 }
 
-async function readJson(url: string, init?: RequestInit) {
+async function readJson<TBody = any>(url: string, init?: RequestInit): Promise<{ response: Response; body: TBody }> {
   const response = await fetch(url, init);
-  return { response, body: await response.json() };
+  return { response, body: await response.json() as TBody };
 }
 
 async function postChunkedJson(url: string, chunks: readonly string[], headers: Record<string, string> = {}) {

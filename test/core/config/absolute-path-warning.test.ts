@@ -26,7 +26,7 @@ function createRegistryWorkspace(): {
 }
 
 describe("resolveRegisteredPath — absolute path warn-on-escape (#205)", () => {
-  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: any;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -60,9 +60,9 @@ describe("resolveRegisteredPath — absolute path warn-on-escape (#205)", () => 
       });
 
       // Assert that console.warn was called with a message mentioning the path
-      const warnCalls = warnSpy.mock.calls.map((args) => String(args[0]));
+      const warnCalls = warnSpy.mock.calls.map((args: unknown[]) => String(args[0]));
       const pathWarnCall = warnCalls.find(
-        (msg) => msg.includes("absolute") || msg.includes("escapes") || msg.includes("outside"),
+        (msg: string) => msg.includes("absolute") || msg.includes("escapes") || msg.includes("outside"),
       );
       expect(pathWarnCall).toBeDefined();
       expect(pathWarnCall).toContain(outsidePath);
@@ -96,9 +96,9 @@ describe("resolveRegisteredPath — absolute path warn-on-escape (#205)", () => 
       });
 
       // No path-escape warnings should be emitted for relative paths inside the dir
-      const warnCalls = warnSpy.mock.calls.map((args) => String(args[0]));
+      const warnCalls = warnSpy.mock.calls.map((args: unknown[]) => String(args[0]));
       const pathWarnCall = warnCalls.find(
-        (msg) => msg.includes("absolute") || msg.includes("escapes") || msg.includes("outside"),
+        (msg: string) => msg.includes("absolute") || msg.includes("escapes") || msg.includes("outside"),
       );
       expect(pathWarnCall).toBeUndefined();
     } finally {

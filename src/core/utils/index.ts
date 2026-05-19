@@ -13,6 +13,10 @@ export function stringValue(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function truthy(value: unknown): boolean {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 export function sanitizeSecrets(value: string, secrets: readonly string[]): string {
   let result = value;
   for (const secret of secrets) {

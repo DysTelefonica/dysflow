@@ -12,7 +12,7 @@ function workflowRunCommands(workflow: string): string[] {
 }
 
 describe("repository quality gates", () => {
-	it("runs install, test, build, lint, and coverage in CI", async () => {
+	it("runs install, lint, test, build, and coverage in CI", async () => {
 		const workflow = await readText(".github/workflows/ci.yml");
 		const commands = workflowRunCommands(workflow);
 
@@ -23,6 +23,12 @@ describe("repository quality gates", () => {
 		expect(commands).toContain("pnpm build");
 		expect(commands).toContain("pnpm lint");
 		expect(commands).toContain("pnpm coverage");
+		expect(commands.indexOf("pnpm lint")).toBeLessThan(
+			commands.indexOf("pnpm test"),
+		);
+		expect(commands.indexOf("pnpm lint")).toBeLessThan(
+			commands.indexOf("pnpm build"),
+		);
 	});
 
 	it("runs Windows PowerShell smoke coverage for Access-facing paths (#182)", async () => {
@@ -57,8 +63,25 @@ describe("repository quality gates", () => {
 		};
 
 		expect(packageJson.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
-		expect(packageJson.scripts?.lint).toBe("tsc -p tsconfig.json --noEmit");
+		expect(packageJson.scripts?.lint).toBe(
+			"tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+		);
 		expect(packageJson.scripts?.coverage).toBe("vitest run --coverage");
+		expect(packageJson.scripts).not.toHaveProperty("postinstall");
+	});
+
+	it("type-checks tests through a dedicated TypeScript config", async () => {
+		const testConfig = JSON.parse(await readText("tsconfig.test.json")) as {
+			extends?: string;
+			compilerOptions?: Record<string, unknown>;
+			include?: string[];
+		};
+
+		expect(testConfig.extends).toBe("./tsconfig.json");
+		expect(testConfig.compilerOptions?.noEmit).toBe(true);
+		expect(testConfig.compilerOptions?.rootDir).toBe(".");
+		expect(testConfig.compilerOptions?.moduleResolution).toBe("Bundler");
+		expect(testConfig.include).toEqual(["src/**/*.ts", "test/**/*.ts"]);
 	});
 
 	it("configures Vitest coverage for source files without generated output", async () => {

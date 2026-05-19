@@ -6,6 +6,7 @@ import {
   REDACTED_SECRET,
   isRecord,
   stringValue,
+  truthy,
   sanitizeSecrets,
   readJsonFileSync,
   readJsonFileAsync,
@@ -98,6 +99,26 @@ describe("stringValue", () => {
 
   it("returns undefined for an object input", () => {
     expect(stringValue({ key: "val" })).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// truthy
+// ---------------------------------------------------------------------------
+describe("truthy", () => {
+  it("accepts the strict truthy values used by legacy VBA sync params", () => {
+    expect(truthy(true)).toBe(true);
+    expect(truthy("true")).toBe(true);
+    expect(truthy(1)).toBe(true);
+    expect(truthy("1")).toBe(true);
+  });
+
+  it("rejects non-truthy values without coercing arbitrary strings", () => {
+    expect(truthy(false)).toBe(false);
+    expect(truthy("false")).toBe(false);
+    expect(truthy(0)).toBe(false);
+    expect(truthy("yes")).toBe(false);
+    expect(truthy(undefined)).toBe(false);
   });
 });
 

@@ -3,7 +3,12 @@ import { AccessPowerShellRunner, type PowerShellExecutor } from "../../../src/co
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 
-const config: DysflowConfig = { accessDbPath: "C:/data/app.accdb", timeoutMs: 100 };
+const config: DysflowConfig = {
+  configSource: "explicit-request",
+  accessDbPath: "C:/data/app.accdb",
+  timeoutMs: 100,
+  processTimeoutMs: 100,
+};
 
 describe("AccessPowerShellRunner operation ownership", () => {
   it("records operationId/accessPid/processStartTime on successful calls and returns operation metadata", async () => {
