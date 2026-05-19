@@ -322,6 +322,13 @@ export class VbaSyncLegacyService {
       if (!compileResult.ok) return compileResult;
     }
 
+    const directProceduresJson = stringValue(params.proceduresJson);
+    if (directProceduresJson !== undefined) {
+      const directPlan = validateTestProceduresJson(directProceduresJson);
+      if (!directPlan.ok) return directPlan;
+      return this.executeMappedTool("test_vba", { ...params, proceduresJson: directPlan.data }, DIRECT_MAPPINGS.test_vba);
+    }
+
     const planResult = await this.resolveTestProceduresJson(params);
     if (!planResult.ok) return planResult;
     return this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba);
@@ -336,17 +343,19 @@ export class VbaSyncLegacyService {
         return successResult(JSON.stringify([{ procedure: procedureName, args: parsed.value }]));
       }
 
-      const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+      const projectRoot = stringValue(params.projectRoot) || this.cwd;
       const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
-      const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(destinationRoot, testsPath);
+      const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(projectRoot, testsPath);
       const parsed = await readJsonFileAsync<unknown>(resolvedPath);
       const tests = normalizeTestPlan(parsed);
-      const filterText = stringValue(params.filter)?.toLowerCase();
-      const selected = filterText === undefined ? tests : tests.filter((test) =>
-        test.name.toLowerCase().includes(filterText)
-        || test.procedure.toLowerCase().includes(filterText)
-        || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
-      );
+      const filterParts = parseTestFilter(params.filter);
+      const selected = filterParts === undefined ? tests : tests.filter((test) => matchesTestFilter(test, filterParts));
+      if (selected.length === 0) {
+        return failureResult(createDysflowError(
+          "VBA_NO_TESTS_SELECTED",
+          `No VBA tests selected from ${resolvedPath}${stringValue(params.filter) !== undefined ? ` with filter "${stringValue(params.filter)}"` : ""}.`,
+        ));
+      }
       return successResult(JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))));
     } catch (err) {
       return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
@@ -623,6 +632,36 @@ function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
       tags,
     };
   });
+}
+
+function validateTestProceduresJson(proceduresJson: string): OperationResult<string> {
+  try {
+    const procedures = normalizeTestPlan(JSON.parse(proceduresJson));
+    if (procedures.length === 0) {
+      return failureResult(createDysflowError("VBA_NO_TESTS_SELECTED", "proceduresJson must contain at least one VBA test procedure."));
+    }
+    return successResult(JSON.stringify(procedures.map((test) => ({ procedure: test.procedure, args: test.args }))));
+  } catch (err) {
+    return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
+  }
+}
+
+function parseTestFilter(value: unknown): string[] | undefined {
+  const filterText = stringValue(value);
+  if (filterText === undefined) return undefined;
+  const parts = filterText
+    .split("|")
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part.length > 0);
+  return parts.length > 0 ? parts : undefined;
+}
+
+function matchesTestFilter(test: VbaTestPlanEntry, filterParts: readonly string[]): boolean {
+  return filterParts.some((filterText) =>
+    test.name.toLowerCase().includes(filterText)
+    || test.procedure.toLowerCase().includes(filterText)
+    || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
+  );
 }
 
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
