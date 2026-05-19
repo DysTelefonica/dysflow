@@ -84,15 +84,6 @@ function Resolve-SandboxedPath {
   return $resolved
 }
 
-function Sanitize-DysflowErrorMessage {
-  param([string] $Message)
-  if ([string]::IsNullOrWhiteSpace($Message)) { return "Unknown error." }
-  $sanitized = $Message
-  $sanitized = [System.Text.RegularExpressions.Regex]::Replace($sanitized, '[A-Za-z]:\\[^\r\n]*', '[PATH]', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-  $sanitized = [System.Text.RegularExpressions.Regex]::Replace($sanitized, '(?:/[^\s:]+)+', '[PATH]', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-  return $sanitized
-}
-
 function Convert-RecordsetRows {
   param($Recordset)
   $rows = New-Object System.Collections.ArrayList
@@ -203,7 +194,8 @@ function Export-QueryDefinitions {
   $queries = @(Resolve-QueryDefinitions -Database $Database -Payload $Payload)
   $exportPath = [string]$Payload.exportPath
   if (-not [string]::IsNullOrWhiteSpace($exportPath)) {
-    $basePath = Split-Path -Path $AccessDbPath -Parent
+    $basePath = [string]$Payload.rootPath
+    if ([string]::IsNullOrWhiteSpace($basePath)) { $basePath = Split-Path -Path $AccessDbPath -Parent }
     $exportFull = Resolve-SandboxedPath -RawPath $exportPath -RootPath $basePath -Label "exportPath"
     $json = [ordered]@{ queries = $queries } | ConvertTo-Json -Compress -Depth 20
     [System.IO.File]::WriteAllText($exportFull, $json, [System.Text.Encoding]::UTF8)
@@ -218,7 +210,10 @@ function Export-QueryDefinitions {
 function Import-QueryDefinitions {
   param($Database, $Payload)
   $definitions = @()
-  $basePath = Split-Path -Path $AccessDbPath -Parent
+  $basePath = [string]$Payload.rootPath
+  if ([string]::IsNullOrWhiteSpace($basePath)) {
+    $basePath = Split-Path -Path $AccessDbPath -Parent
+  }
   if ($Payload.queryDefinitions) {
     $definitions = @($Payload.queryDefinitions)
   } elseif (-not [string]::IsNullOrWhiteSpace([string]$Payload.importPath)) {
@@ -800,7 +795,7 @@ try {
 
   throw "Unsupported operation: $Operation"
 } catch {
-  [Console]::Error.WriteLine((Sanitize-DysflowErrorMessage $_.Exception.Message))
+  [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
 } finally {
   if ($null -ne $access) {

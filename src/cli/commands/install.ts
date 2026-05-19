@@ -861,13 +861,6 @@ export async function writeRuntimeLaunchers(
 	binDir: string,
 	runtimeDir: string,
 ): Promise<void> {
-	const resolvedBinDir = path.resolve(binDir);
-	const resolvedRuntimeDir = path.resolve(runtimeDir);
-	const expectedRoot = path.resolve(resolvedBinDir, "..");
-	if (!isPathInsideOrEqual(resolvedRuntimeDir, expectedRoot)) {
-		throw new Error(`runtimeDir must stay within ${expectedRoot}.`);
-	}
-
 	const normalizedRuntimeDir = runtimeDir.replaceAll("\\", "\\\\");
 	const cmdRuntimeDir = escapeCmdSetValue(normalizedRuntimeDir);
 	const psRuntimeDir = escapePowerShellDoubleQuotedString(normalizedRuntimeDir);
@@ -890,11 +883,6 @@ export async function writeRuntimeLaunchers(
 
 	await writeFile(path.join(binDir, "dysflow.cmd"), cmdContent, "utf8");
 	await writeFile(path.join(binDir, "dysflow.ps1"), ps1Content, "utf8");
-}
-
-function isPathInsideOrEqual(candidate: string, root: string): boolean {
-	const relative = path.relative(root, candidate);
-	return relative.length === 0 || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function escapeCmdSetValue(value: string): string {

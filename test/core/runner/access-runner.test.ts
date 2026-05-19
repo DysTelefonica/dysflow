@@ -232,41 +232,6 @@ describe("AccessPowerShellRunner", () => {
 		);
 	});
 
-	it("returns typed failure when operation registry create throws (issue #233)", async () => {
-		const runner = new AccessPowerShellRunner({
-			executor: async () => ({
-				exitCode: 0,
-				stdout: "{}",
-				stderr: "",
-				durationMs: 1,
-				timedOut: false,
-			}),
-			operationRegistry: {
-				create: async () => {
-					throw new Error("registry lock timeout");
-				},
-				update: async () => undefined,
-				get: async () => undefined,
-				listRecent: async () => [],
-			},
-			scriptPath: "C:/tools/run.ps1",
-		});
-
-		const result = await runner.run(
-			{ kind: "diagnostics", request: { includeEnvironment: true } },
-			config,
-		);
-
-		expect(result).toMatchObject({
-			ok: false,
-			error: {
-				code: "OPERATION_REGISTRY_UNAVAILABLE",
-				message: "Failed to create Access operation marker: registry lock timeout",
-				retryable: true,
-			},
-		});
-	});
-
 	it("maps timed-out execution to a retryable timeout error with sanitized diagnostics", async () => {
 		const executor: PowerShellExecutor = async () => ({
 			exitCode: null,

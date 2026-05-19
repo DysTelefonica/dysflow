@@ -52,16 +52,13 @@ export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistry
   filePath: string;
   lockTimeoutMs?: number;
   staleLockMs?: number;
-  staleFailurePurgeMs?: number;
 };
 
 const DEFAULT_MAX_RECORDS = 1000;
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 120_000;
-const DEFAULT_STALE_FAILURE_PURGE_MS = 7 * 24 * 60 * 60 * 1000;
 const LOCK_RETRY_INTERVAL_MS = 10;
 const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
-const FAILURE_STATUSES = new Set<AccessOperationStatus>(["failed", "timed_out"]);
 
 type RegistryMutationLock = {
   ownerToken: string;
@@ -76,7 +73,6 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private readonly maxRecords: number;
   private readonly lockTimeoutMs: number;
   private readonly staleLockMs: number;
-  private readonly staleFailurePurgeMs: number;
 
   constructor(options: FileAccessOperationRegistryOptions) {
     this.filePath = resolve(options.filePath);
@@ -85,15 +81,11 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
     this.lockTimeoutMs = Math.max(1, Math.floor(options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS));
     this.staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
-    this.staleFailurePurgeMs = options.staleFailurePurgeMs === undefined
-      ? DEFAULT_STALE_FAILURE_PURGE_MS
-      : Math.max(1, Math.floor(options.staleFailurePurgeMs));
   }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
     return this.withFileLock(async () => {
       const records = await this.readRecords();
-      this.purgeStaleFailures(records);
       const stored = { ...record, metadata: { ...record.metadata } };
       if (!PURGED_PERSISTENT_STATUSES.has(stored.status)) {
         records.set(stored.operationId, stored);
@@ -107,7 +99,6 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   async update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined> {
     return this.withFileLock(async () => {
       const records = await this.readRecords();
-      this.purgeStaleFailures(records);
       const current = records.get(operationId);
       if (current === undefined) return undefined;
       const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };
@@ -254,38 +245,18 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     }
   }
 
-  private purgeStaleFailures(records: Map<string, AccessOperationRecord>): void {
-    if (!Number.isFinite(this.staleFailurePurgeMs)) return;
-    const now = Date.now();
-    for (const [operationId, record] of records.entries()) {
-      if (!FAILURE_STATUSES.has(record.status)) continue;
-      const updatedAtMs = Date.parse(record.updatedAt);
-      if (!Number.isFinite(updatedAtMs)) continue;
-      if (now - updatedAtMs >= this.staleFailurePurgeMs) records.delete(operationId);
-    }
-  }
-
   private async writeRecords(records: Map<string, AccessOperationRecord>): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     const payload = {
       records: [...records.values()].sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0)),
     };
     const tempPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
-    const serializedPayload = `${JSON.stringify(payload, null, 2)}\n`;
     try {
-      await writeFile(tempPath, serializedPayload, "utf8");
+      await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
       await rename(tempPath, this.filePath);
-      await this.verifyWriteIntegrity(serializedPayload);
     } catch (error) {
-      await rm(tempPath, { force: true }).catch(() => undefined);
+      await rm(tempPath, { force: true });
       throw error;
-    }
-  }
-
-  private async verifyWriteIntegrity(expectedPayload: string): Promise<void> {
-    const persisted = await readFile(this.filePath, "utf8");
-    if (persisted !== expectedPayload) {
-      throw new Error(`Operation registry integrity verification failed after write: ${this.filePath}`);
     }
   }
 

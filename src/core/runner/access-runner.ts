@@ -4,7 +4,6 @@ import type { DysflowConfig } from "../config/dysflow-config.js";
 import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 import { sanitizeSecrets } from "../utils/index.js";
-import { validateAccessIdentifier, validateAccessRowKeys } from "../security/access-sql.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
@@ -69,35 +68,19 @@ export class AccessPowerShellRunner implements AccessRunner {
       return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
     }
 
-    const validation = validateOperationIdentifiers(operation);
-    if (!validation.ok) {
-      return failureResult(validation.error);
-    }
-
     const operationId = this.operationIdFactory();
-    let record: AccessOperationRecord;
-    try {
-      record = await this.operationRegistry.create({
-        operationId,
-        action: operation.kind,
-        accessPath: config.accessDbPath,
-        projectRootAbs: config.projectRoot ?? process.cwd(),
-        destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
-        accessPid: null,
-        processStartTime: null,
-        status: "starting",
-        metadata: operation.request as Record<string, unknown>,
-        updatedAt: this.clock(),
-      });
-    } catch (error) {
-      return failureResult(
-        createDysflowError(
-          "OPERATION_REGISTRY_UNAVAILABLE",
-          `Failed to create Access operation marker: ${error instanceof Error ? error.message : String(error)}`,
-          { retryable: true },
-        ),
-      );
-    }
+    let record = await this.operationRegistry.create({
+      operationId,
+      action: operation.kind,
+      accessPath: config.accessDbPath,
+      projectRootAbs: config.projectRoot ?? process.cwd(),
+      destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
+      accessPid: null,
+      processStartTime: null,
+      status: "starting",
+      metadata: operation.request as Record<string, unknown>,
+      updatedAt: this.clock(),
+    });
 
     const captureDiagnostics: Diagnostic[] = [];
     const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
@@ -121,17 +104,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     });
     const secrets = [config.accessPassword, config.backendPassword].filter((secret): secret is string => Boolean(secret));
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
-    try {
-      record = await this.updateOperationFromExecution(record, execution);
-    } catch (error) {
-      diagnostics.push(
-        createDiagnostic(
-          "error",
-          "access.registry",
-          `Failed to update Access operation marker: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      );
-    }
+    record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
 
     if (execution.timedOut) {
@@ -175,24 +148,6 @@ export class AccessPowerShellRunner implements AccessRunner {
       updatedAt: this.clock(),
     })) ?? record;
   }
-}
-
-function validateOperationIdentifiers(operation: AccessRunnerOperation): OperationResult<void> {
-  if (operation.kind !== "query") return successResult(undefined);
-  const request = operation.request;
-  if (request.tableName !== undefined) {
-    const table = validateAccessIdentifier(request.tableName, "tableName");
-    if (!table.ok) return failureResult(table.error);
-  }
-  if (request.columnName !== undefined) {
-    const column = validateAccessIdentifier(request.columnName, "columnName");
-    if (!column.ok) return failureResult(column.error);
-  }
-  if (request.rows !== undefined) {
-    const rowKeys = validateAccessRowKeys(request.rows, "rows");
-    if (!rowKeys.ok) return failureResult(rowKeys.error);
-  }
-  return successResult(undefined);
 }
 
 function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOperation, config: DysflowConfig, operationId: string): string[] {

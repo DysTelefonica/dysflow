@@ -1,5 +1,5 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, parse, resolve } from "node:path";
+import { extname, isAbsolute, parse, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
@@ -146,30 +146,11 @@ export class VbaSyncLegacyService {
     // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
     // the caller-specified directory instead of the project's default src/ folder (issue #185).
     const exportPath = stringValue(params.exportPath);
-    if ((toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined) {
-      const validatedExportPath = this.validateExportPathInSandbox(params, exportPath);
-      if (!validatedExportPath.ok) return validatedExportPath;
-      return this.executeMappedTool(toolName, { ...params, destinationRoot: validatedExportPath.data }, mapping);
-    }
+    const effectiveParams = (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
+      ? { ...params, destinationRoot: exportPath }
+      : params;
 
-    return this.executeMappedTool(toolName, params, mapping);
-  }
-
-  private validateExportPathInSandbox(params: Record<string, unknown>, exportPath: string): OperationResult<string> {
-    const resolvedAccessPath = stringValue(params.accessPath) ?? this.accessPath;
-    if (resolvedAccessPath === undefined || resolvedAccessPath.trim().length === 0) {
-      return successResult(exportPath);
-    }
-
-    const sandboxRoot = resolve(dirname(resolvedAccessPath));
-    const candidate = resolve(exportPath);
-    const rootLower = sandboxRoot.toLowerCase();
-    const pathLower = candidate.toLowerCase();
-    if (pathLower !== rootLower && !pathLower.startsWith(`${rootLower}/`) && !pathLower.startsWith(`${rootLower}\\`)) {
-      return failureResult(createDysflowError("SANDBOX_PATH_ESCAPE", "exportPath must stay inside the Access sandbox root."));
-    }
-
-    return successResult(candidate);
+    return this.executeMappedTool(toolName, effectiveParams, mapping);
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
@@ -615,56 +596,15 @@ function directTestProceduresJson(input: Record<string, unknown>): string | unde
 
 type ParseArgsJsonResult = { ok: true; value: unknown[] } | { ok: false; error: string };
 
-const MAX_ARGS_JSON_BYTES = 64 * 1024;
-const MAX_ARGS_JSON_DEPTH = 64;
-
 export function parseArgsJson(value: unknown): ParseArgsJsonResult {
   const text = stringValue(value);
   if (text === undefined) return { ok: true, value: [] };
-  if (Buffer.byteLength(text, "utf8") > MAX_ARGS_JSON_BYTES) {
-    return { ok: false, error: `argsJson payload is too large (max ${MAX_ARGS_JSON_BYTES} bytes).` };
-  }
-  if (estimateJsonDepth(text) > MAX_ARGS_JSON_DEPTH) {
-    return { ok: false, error: `argsJson payload is too deeply nested (max depth ${MAX_ARGS_JSON_DEPTH}).` };
-  }
   try {
     const parsed = JSON.parse(text) as unknown;
     return { ok: true, value: Array.isArray(parsed) ? parsed : [parsed] };
   } catch {
     return { ok: false, error: "argsJson must be valid JSON." };
   }
-}
-
-function estimateJsonDepth(text: string): number {
-  let depth = 0;
-  let maxDepth = 0;
-  let inString = false;
-  let escaping = false;
-  for (const char of text) {
-    if (inString) {
-      if (escaping) {
-        escaping = false;
-      } else if (char === "\\") {
-        escaping = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-    if (char === "[" || char === "{") {
-      depth += 1;
-      maxDepth = Math.max(maxDepth, depth);
-      continue;
-    }
-    if (char === "]" || char === "}") {
-      depth = Math.max(0, depth - 1);
-    }
-  }
-  return maxDepth;
 }
 
 type VbaTestPlanEntry = {

@@ -51,26 +51,10 @@ export class WindowsMsAccessProcessInspector implements ProcessInspector {
 }
 
 export class WindowsProcessKiller implements ProcessKiller {
-  async kill(pid: number, expectedStartTime?: string): Promise<void> {
+  async kill(pid: number): Promise<void> {
     if (!Number.isSafeInteger(pid) || pid <= 0) {
       throw new Error("Process id must be a positive safe integer.");
     }
-    const script = buildStopProcessScript(pid, expectedStartTime);
-    await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true });
+    await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Stop-Process -Id ${pid} -Force`], { windowsHide: true });
   }
-}
-
-export function buildStopProcessScript(pid: number, expectedStartTime?: string): string {
-  if (expectedStartTime === undefined || expectedStartTime.length === 0) {
-    return `Stop-Process -Id ${pid} -Force`;
-  }
-  const expected = expectedStartTime.replaceAll("'", "''");
-  return [
-    `$proc = Get-CimInstance Win32_Process -Filter \"ProcessId=${pid}\"`,
-    "if ($null -eq $proc) { throw 'Process not found.' }",
-    "$actual = [Management.ManagementDateTimeConverter]::ToDateTime($proc.CreationDate).ToUniversalTime().ToString('o')",
-    `$expected = '${expected}'`,
-    "if ($actual -ne $expected) { throw 'Process start time mismatch.' }",
-    `Stop-Process -Id ${pid} -Force`,
-  ].join("; ");
 }

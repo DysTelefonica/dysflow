@@ -4,6 +4,13 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-19
+
+### Fixed
+
+- Rollback release: restored the runtime behavior from `v0.5.3` after unreleased security-hardening changes on `main` caused MCP project resolution and write-gating regressions in Access/VBA worktrees.
+- This release intentionally preserves the stable `v0.5.3` functionality while giving `dysflow update` a newer version to reinstall cleanly.
+
 ## [0.5.3] - 2026-05-19
 
 ### Fixed

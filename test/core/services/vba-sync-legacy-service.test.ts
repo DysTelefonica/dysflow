@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { failureResult } from "../../../src/core/contracts/index";
 import {
@@ -382,72 +382,6 @@ describe("VbaSyncLegacyService", () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected strict failure");
 		expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
-	});
-
-	it("rejects export_modules exportPath that escapes the Access sandbox root (issue #224)", async () => {
-		const calls: unknown[] = [];
-		const service = new VbaSyncLegacyService({
-			executor: async (request) => {
-				calls.push(request);
-				return {
-					exitCode: 0,
-					stdout: "{}",
-					stderr: "",
-					durationMs: 1,
-					timedOut: false,
-				};
-			},
-			scriptPath: "scripts/dysflow-vba-manager.ps1",
-			accessPath: "C:/repo/Frontend.accdb",
-			destinationRoot: "C:/repo/src",
-			env: {},
-		});
-
-		await expect(
-			service.execute("export_modules", {
-				exportPath: "C:/outside/export",
-				moduleNames: ["Module1"],
-			}),
-		).resolves.toMatchObject({
-			ok: false,
-			error: {
-				code: "SANDBOX_PATH_ESCAPE",
-			},
-		});
-		expect(calls).toHaveLength(0);
-	});
-
-	it("maps export_all exportPath to destinationRoot when path stays inside Access sandbox root (issue #224)", async () => {
-		const calls: unknown[] = [];
-		const service = new VbaSyncLegacyService({
-			executor: async (request) => {
-				calls.push(request);
-				return {
-					exitCode: 0,
-					stdout: '{"ok":true}',
-					stderr: "",
-					durationMs: 1,
-					timedOut: false,
-				};
-			},
-			scriptPath: "scripts/dysflow-vba-manager.ps1",
-			accessPath: "C:/repo/Frontend.accdb",
-			destinationRoot: "C:/repo/src",
-			env: {},
-		});
-
-		await expect(
-			service.execute("export_all", {
-				exportPath: "C:/repo/exports",
-			}),
-		).resolves.toMatchObject({ ok: true });
-
-		expect(calls).toEqual([
-			expect.objectContaining({
-				action: "Export",
-				destinationRoot: resolve("C:/repo/exports"),
-			}),
-		]);
 	});
 
 	it("destinationRoot override wins even when projectId is registered", async () => {
@@ -1328,7 +1262,7 @@ describe("VbaSyncLegacyService", () => {
 	});
 
 	// #192 RED: parseArgsJson returns discriminated union instead of throwing
-		describe("parseArgsJson discriminated union (#192)", () => {
+	describe("parseArgsJson discriminated union (#192)", () => {
 		it("returns { ok: false, error } for invalid JSON instead of throwing", () => {
 			const result = parseArgsJson("{ not valid json }");
 			expect(result).toMatchObject({ ok: false });
@@ -1348,18 +1282,6 @@ describe("VbaSyncLegacyService", () => {
 		it("wraps a non-array JSON value in an array", () => {
 			const result = parseArgsJson('"single"');
 			expect(result).toMatchObject({ ok: true, value: ["single"] });
-		});
-
-		it("rejects payloads that exceed the JSON size limit", () => {
-			const oversized = `"${"a".repeat(200_000)}"`;
-			const result = parseArgsJson(oversized);
-			expect(result).toMatchObject({ ok: false, error: expect.stringContaining("too large") });
-		});
-
-		it("rejects deeply nested JSON payloads", () => {
-			const deepArray = `${"[".repeat(80)}0${"]".repeat(80)}`;
-			const result = parseArgsJson(deepArray);
-			expect(result).toMatchObject({ ok: false, error: expect.stringContaining("too deeply nested") });
 		});
 	});
 

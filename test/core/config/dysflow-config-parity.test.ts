@@ -205,8 +205,8 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
   it("global registry entry resolution — both variants resolve to the same config", async () => {
     const ws = createTempWorkspace();
     try {
+      const projectDir = join(ws.root, "myproject");
       const registryDir = join(ws.root, "registry");
-      const projectDir = join(registryDir, "myproject");
 
       writeProjectConfig(projectDir, {
         id: "registry-project",
@@ -219,7 +219,7 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       writeRegistryWithProject(
         registryPath,
         "registry-project",
-        "myproject/.dysflow/project.json",
+        join(projectDir, ".dysflow", "project.json"),
       );
 
       const input = {
@@ -249,15 +249,15 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
   it("global registry with malformed project JSON — both variants return CONFIG_PROJECT_FILE_INVALID", async () => {
     const ws = createTempWorkspace();
     try {
+      const projectDir = join(ws.root, "badproject");
       const registryDir = join(ws.root, "registry");
-      const projectDir = join(registryDir, "badproject");
       const configFilePath = join(projectDir, ".dysflow", "project.json");
 
       mkdirSync(join(projectDir, ".dysflow"), { recursive: true });
       writeFileSync(configFilePath, "{ bad json here }", "utf8");
 
       const registryPath = join(registryDir, "projects.json");
-      writeRegistryWithProject(registryPath, "bad-project", "badproject/.dysflow/project.json");
+      writeRegistryWithProject(registryPath, "bad-project", configFilePath);
 
       const input = {
         projectId: "bad-project",

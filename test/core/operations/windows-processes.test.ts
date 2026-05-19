@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStopProcessScript, WindowsProcessKiller, parseCimDateTimeToIso } from "../../../src/core/operations/windows-processes";
+import { WindowsProcessKiller, parseCimDateTimeToIso } from "../../../src/core/operations/windows-processes";
 
 describe("parseCimDateTimeToIso", () => {
   it("converts a DMTF CIM datetime string to ISO 8601 UTC", () => {
@@ -38,12 +38,4 @@ describe("WindowsProcessKiller", () => {
       await expect(killer.kill(pid)).rejects.toThrow("Process id must be a positive safe integer.");
     },
   );
-
-  it("builds a kill script with start-time ownership checks", () => {
-    const script = buildStopProcessScript(1234, "2026-05-19T12:00:00.000Z");
-    expect(script).toContain("Get-CimInstance Win32_Process");
-    expect(script).toContain("ProcessId=1234");
-    expect(script).toContain("CreationDate");
-    expect(script).toContain("Stop-Process -Id 1234 -Force");
-  });
 });

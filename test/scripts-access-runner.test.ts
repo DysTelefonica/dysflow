@@ -33,22 +33,4 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain('Resolve-SandboxedPath -RawPath $targetPath -RootPath $folder -Label "targetPath"');
     expect(script).toContain("Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath");
   });
-
-  it("does not trust payload.rootPath for export/import query sandbox roots (issue #224)", () => {
-    expect(script).toContain('$basePath = Split-Path -Path $AccessDbPath -Parent');
-    expect(script).not.toContain('$basePath = [string]$Payload.rootPath');
-  });
-
-  it("sanitizes catch stderr output before printing errors (issue #237)", () => {
-    expect(script).toContain("Sanitize-DysflowErrorMessage");
-    expect(script).toContain('[Console]::Error.WriteLine((Sanitize-DysflowErrorMessage $_.Exception.Message))');
-    expect(script).toContain("[A-Za-z]:\\\\[^\\r\\n]*");
-    expect(script).toContain("(?:/[^\\s:]+)+");
-    expect(script).not.toContain("(accdb|mdb|accde|mde|laccdb)");
-  });
-
-	it("redacts generic filesystem paths such as C:\\temp\\file.sql in sanitizer regex (issue #237)", () => {
-		expect(script).toContain("[A-Za-z]:\\\\[^\\r\\n]*");
-		expect(script).toContain("(?:/[^\\s:]+)+");
-	});
 });

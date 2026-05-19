@@ -510,29 +510,13 @@ describe("handleInstallCommand end-to-end", () => {
 		const binDir = join(root, "bin");
 		try {
 			await mkdir(binDir, { recursive: true });
-			await writeRuntimeLaunchers(binDir, join(root, 'foo"&calc', '$home`dir%TMP%'));
+			await writeRuntimeLaunchers(binDir, 'C:\\foo"&calc\\$home`dir%TMP%');
 
 			const cmdLauncher = await readFile(join(binDir, "dysflow.cmd"), "utf8");
 			const ps1Launcher = await readFile(join(binDir, "dysflow.ps1"), "utf8");
 
-			expect(cmdLauncher).toContain("^\"&calc");
-			expect(cmdLauncher).toContain("%%TMP%%");
-			expect(ps1Launcher).toContain("`\"&calc");
-			expect(ps1Launcher).toContain("`$home``dir%TMP%\"");
-		} finally {
-			await rm(root, { recursive: true, force: true });
-		}
-	});
-
-	it("rejects launcher writes when runtimeDir escapes binDir parent containment", async () => {
-		const root = await mkdtemp(join(tmpdir(), "dysflow-launcher-containment-"));
-		const binDir = join(root, "bin");
-		const escapedRuntimeDir = join(root, "..", "elsewhere");
-		try {
-			await mkdir(binDir, { recursive: true });
-			await expect(writeRuntimeLaunchers(binDir, escapedRuntimeDir)).rejects.toThrow(
-				"runtimeDir must stay within",
-			);
+			expect(cmdLauncher).toContain('set "DYSFLOW_HOME=C:\\\\foo^"&calc\\\\$home`dir%%TMP%%"');
+			expect(ps1Launcher).toContain('$env:DYSFLOW_HOME = "C:\\\\foo`"&calc\\\\`$home``dir%TMP%"');
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

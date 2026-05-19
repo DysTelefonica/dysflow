@@ -86,61 +86,6 @@ afterEach(async () => {
 });
 
 describe("Dysflow HTTP adapter", () => {
-  it("requires bearer auth for non-health routes when HTTP token is configured", async () => {
-    const services = createFakeServices();
-    const server = await startTestServer({ services, env: { DYSFLOW_HTTP_TOKEN: "top-secret" } });
-
-    const unauthorized = await readJson(`${server.url}/diagnostics`);
-    const authorized = await readJson(`${server.url}/diagnostics`, {
-      headers: { authorization: "Bearer top-secret" },
-    });
-
-    expect(unauthorized.response.status).toBe(401);
-    expect(unauthorized.body.error.code).toBe("HTTP_UNAUTHORIZED");
-    expect(services.calls.diagnostics).toBe(1);
-    expect(authorized.response.status).toBe(200);
-  });
-
-  it("rate limits bursts per client key", async () => {
-    const services = createFakeServices();
-    const server = await startTestServer({
-      services,
-      env: {
-        DYSFLOW_HTTP_TOKEN: "burst-token",
-        DYSFLOW_HTTP_RATE_LIMIT_MAX: "2",
-        DYSFLOW_HTTP_RATE_LIMIT_WINDOW_MS: "60000",
-      },
-    });
-
-    const headers = { "content-type": "application/json", authorization: "Bearer burst-token" };
-    const r1 = await readJson(`${server.url}/query/read`, { method: "POST", headers, body: JSON.stringify({ sql: "SELECT 1" }) });
-    const r2 = await readJson(`${server.url}/query/read`, { method: "POST", headers, body: JSON.stringify({ sql: "SELECT 1" }) });
-    const r3 = await readJson(`${server.url}/query/read`, { method: "POST", headers, body: JSON.stringify({ sql: "SELECT 1" }) });
-
-    expect(r1.response.status).toBe(200);
-    expect(r2.response.status).toBe(200);
-    expect(r3.response.status).toBe(429);
-    expect(r3.body.error.code).toBe("HTTP_RATE_LIMITED");
-  });
-
-  it("does not expose environment diagnostics without explicit auth", async () => {
-    const services = createFakeServices({
-      diagnosticsService: {
-        run: async (request) => {
-          return successResult({ checks: [{ name: "environment", ok: request?.includeEnvironment === true, message: String(request?.includeEnvironment) }] });
-        },
-      },
-    });
-    const server = await startTestServer({ services, env: { DYSFLOW_HTTP_TOKEN: "diag-token" } });
-
-    const denied = await readJson(`${server.url}/diagnostics`);
-    const allowed = await readJson(`${server.url}/diagnostics`, { headers: { authorization: "Bearer diag-token" } });
-
-    expect(denied.response.status).toBe(401);
-    expect(allowed.response.status).toBe(200);
-    expect(allowed.body.data.checks[0]).toEqual({ name: "environment", ok: true, message: "true" });
-  });
-
   it("defaults to 127.0.0.1 with writes disabled and exposes JSON health", async () => {
     const server = await startTestServer();
 

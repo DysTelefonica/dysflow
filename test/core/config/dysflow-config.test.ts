@@ -303,94 +303,8 @@ describe("dysflow configuration", () => {
 
 			expect(result.ok).toBe(false);
 			if (result.ok) throw new Error("expected config failure");
-			expect(result.error.code).toBe("CONFIG_REGISTRY_PATH_OUTSIDE_ROOT");
+			expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
 			expect(resolveProjectRegistryPath({ projectRegistryPath: registryPath }, {}, workspace.root)).toBe(registryPath);
-		} finally {
-			workspace.cleanup();
-		}
-	});
-
-	it("allows absolute registry entries to repo-local .dysflow/project.json files outside registry root", () => {
-		const workspace = createTempWorkspace();
-		try {
-			const registryDir = join(workspace.root, "registry");
-			const outside = join(workspace.root, "outside-project");
-			mkdirSync(registryDir, { recursive: true });
-			mkdirSync(outside, { recursive: true });
-			writeRepoProjectConfig(outside, { accessPath: "front.accdb" });
-			writeFileSync(join(outside, "front.accdb"), "", "utf8");
-			const registryPath = join(registryDir, "projects.json");
-			writeFileSync(
-				registryPath,
-				JSON.stringify({ projects: { escaped: join(outside, ".dysflow", "project.json") } }, null, 2),
-				"utf8",
-			);
-
-			const result = loadDysflowConfig({
-				projectId: "escaped",
-				projectRegistryPath: registryPath,
-				env: {},
-				cwd: workspace.root,
-			});
-
-			expect(result.ok).toBe(true);
-			if (!result.ok) throw new Error("expected config success");
-			expect(result.data.accessDbPath).toBe(resolve(outside, "front.accdb"));
-			expect(result.data.configSource).toBe("global-registry");
-		} finally {
-			workspace.cleanup();
-		}
-	});
-
-	it("rejects absolute registry entries that point to arbitrary non-project files", () => {
-		const workspace = createTempWorkspace();
-		try {
-			const registryDir = join(workspace.root, "registry");
-			const outside = join(workspace.root, "outside-project");
-			mkdirSync(registryDir, { recursive: true });
-			mkdirSync(outside, { recursive: true });
-			writeFileSync(join(outside, "hosts"), "127.0.0.1 localhost", "utf8");
-			const registryPath = join(registryDir, "projects.json");
-			writeFileSync(
-				registryPath,
-				JSON.stringify({ projects: { escaped: join(outside, "hosts") } }, null, 2),
-				"utf8",
-			);
-
-			const result = loadDysflowConfig({
-				projectId: "escaped",
-				projectRegistryPath: registryPath,
-				env: {},
-				cwd: workspace.root,
-			});
-
-			expect(result.ok).toBe(false);
-			if (result.ok) throw new Error("expected config failure");
-			expect(result.error.code).toBe("CONFIG_REGISTRY_PATH_OUTSIDE_ROOT");
-		} finally {
-			workspace.cleanup();
-		}
-	});
-
-	it("rejects legacy plaintext password fallback in project config", () => {
-		const workspace = createTempWorkspace();
-		try {
-			writeRepoProjectConfig(workspace.root, {
-				accessPath: "front.accdb",
-				accessPassword: "plaintext-secret",
-			});
-			writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
-
-			const result = loadDysflowConfig({
-				cwd: workspace.root,
-				env: {},
-			});
-
-			expect(result.ok).toBe(false);
-			if (result.ok) throw new Error("expected config failure");
-			expect(result.error.code).toBe("CONFIG_SECRET_FILE_FALLBACK_DEPRECATED");
-			expect(result.error.message).toContain("environment variables");
-			expect(result.error.message).not.toContain("plaintext-secret");
 		} finally {
 			workspace.cleanup();
 		}
@@ -442,7 +356,7 @@ describe("dysflow configuration", () => {
 			const workspace = createTempWorkspace();
 			try {
 				const registryDir = join(workspace.root, "registry");
-				const projectDir = join(registryDir, "project");
+				const projectDir = join(workspace.root, "project");
 				mkdirSync(registryDir, { recursive: true });
 				mkdirSync(join(projectDir, ".dysflow"), { recursive: true });
 				// Write malformed project config
@@ -456,7 +370,7 @@ describe("dysflow configuration", () => {
 					registryPath,
 					JSON.stringify({
 						projects: {
-						myproject: { configPath: "project/.dysflow/project.json" },
+							myproject: { configPath: join(projectDir, ".dysflow", "project.json") },
 						},
 					}),
 					"utf8",
@@ -481,7 +395,7 @@ describe("dysflow configuration", () => {
 			const root = await mkdtemp(join(tmpdir(), "dysflow-registry-malformed-async-"));
 			try {
 				const registryDir = join(root, "registry");
-				const projectDir = join(registryDir, "project");
+				const projectDir = join(root, "project");
 				await mkdir(join(projectDir, ".dysflow"), { recursive: true });
 				await writeFile(
 					join(projectDir, ".dysflow", "project.json"),
@@ -494,7 +408,7 @@ describe("dysflow configuration", () => {
 					registryPath,
 					JSON.stringify({
 						projects: {
-						myproject: { configPath: "project/.dysflow/project.json" },
+							myproject: { configPath: join(projectDir, ".dysflow", "project.json") },
 						},
 					}),
 					"utf8",

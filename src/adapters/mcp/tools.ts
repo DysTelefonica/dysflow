@@ -10,7 +10,6 @@ import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, LEGACY_VBA_SYNC_TOOL_NAMES, type LegacyDysflowMcpToolName } from "./legacy-tool-inventory.js";
 import { getLegacyParityToolDefinition } from "./legacy-parity-registry.js";
 import { stringValue, isRecord } from "../../core/utils/index.js";
-import { validateAccessIdentifier } from "../../core/security/access-sql.js";
 
 export type McpTextContent = {
   type: "text";
@@ -560,17 +559,9 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyMaintenanceRequest(name, input)));
       }
       if (isQuerySliceTool(name)) {
-        const identifierError = validateLegacyIdentifierInput(input);
-        if (identifierError !== undefined) {
-          return { isError: true, content: [{ type: "text", text: identifierError }] };
-        }
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
       }
       if (isWriteFixtureSliceTool(name)) {
-        const identifierError = validateLegacyIdentifierInput(input);
-        if (identifierError !== undefined) {
-          return { isError: true, content: [{ type: "text", text: identifierError }] };
-        }
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)));
       }
       return {
@@ -611,25 +602,10 @@ function parseLegacyArgsJson(argsJson: string | undefined): LegacyArgsJsonParseR
   }
 }
 
-function validateLegacyIdentifierInput(input: unknown): string | undefined {
-  const params = isRecord(input) ? input : {};
-  const tableName = normalizeIdentifier(stringValue(params.tableName) ?? stringValue(params.table));
-  if (tableName !== undefined) {
-    const tableValidation = validateAccessIdentifier(tableName, "tableName");
-    if (!tableValidation.ok) return `${tableValidation.error.code}: ${tableValidation.error.message}`;
-  }
-  const columnName = normalizeIdentifier(stringValue(params.columnName) ?? stringValue(params.column));
-  if (columnName !== undefined) {
-    const columnValidation = validateAccessIdentifier(columnName, "columnName");
-    if (!columnValidation.ok) return `${columnValidation.error.code}: ${columnValidation.error.message}`;
-  }
-  return undefined;
-}
-
 function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
-  const tableName = normalizeIdentifier(stringValue(params.tableName) ?? stringValue(params.table));
-  const columnName = normalizeIdentifier(stringValue(params.columnName) ?? stringValue(params.column));
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
+  const columnName = stringValue(params.columnName) ?? stringValue(params.column);
   return {
     action: name as AccessQueryRequest["action"],
     mode: "read",
@@ -647,13 +623,13 @@ function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): A
 
 function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
-  const tableName = normalizeIdentifier(stringValue(params.tableName) ?? stringValue(params.table));
+  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
   return {
     action: name as AccessQueryRequest["action"],
     mode: "write",
     sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
     tableName,
-    columnName: normalizeIdentifier(stringValue(params.columnName) ?? stringValue(params.column)),
+    columnName: stringValue(params.columnName) ?? stringValue(params.column),
     backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
     rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
     scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
@@ -672,8 +648,8 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     action: name as AccessQueryRequest["action"],
     mode: queryMode,
     sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
-    tableName: normalizeIdentifier(stringValue(params.tableName) ?? stringValue(params.table)),
-    columnName: normalizeIdentifier(stringValue(params.columnName) ?? stringValue(params.column)),
+    tableName: stringValue(params.tableName) ?? stringValue(params.table),
+    columnName: stringValue(params.columnName) ?? stringValue(params.column),
     backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
     rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
     databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
@@ -682,10 +658,6 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
     dryRun: params.dryRun === false ? false : true,
   };
-}
-
-function normalizeIdentifier(value: string | undefined): string | undefined {
-  return value === undefined ? undefined : value.trim();
 }
 
 function stringArrayValue(value: unknown): string[] | undefined {
