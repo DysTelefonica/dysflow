@@ -32,6 +32,7 @@ Public ACR As String
 Public MotivoBorrado As String
 Public RequiereControlEficacia As String
 Public ControlEficacia As String
+Public MotivoNoRequiereControlEficacia As String
 Public FechaControlEficacia As String
 Public FechaPrevistaControlEficacia As String
 Public ResultadoControlEficacia As String
@@ -1714,6 +1715,7 @@ Public Property Get ColCampos() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
+        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1768,6 +1770,7 @@ Public Property Get ColCamposParaCopiarDeVinculada() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
+        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1879,6 +1882,10 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         getPropiedad = Me.RequiereControlEficacia
+        Exit Function
+    End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        getPropiedad = Me.MotivoNoRequiereControlEficacia
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then
@@ -2055,6 +2062,10 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         Me.RequiereControlEficacia = m_ValorPropiedad
+        Exit Function
+    End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        Me.MotivoNoRequiereControlEficacia = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then

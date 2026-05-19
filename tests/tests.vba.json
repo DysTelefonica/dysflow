@@ -65,6 +65,24 @@
       "procedure": "Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "config-core", "issue-8", "pr1"]
+    },
+    {
+      "name": "Motivo no requiere control eficacia campos dominio",
+      "procedure": "Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "domain", "motivo-no-requiere-ce", "issue-3"]
+    },
+    {
+      "name": "Motivo no requiere control eficacia persiste en NC proyecto",
+      "procedure": "Test_E2E_MotivoPersistencia_NCProyecto_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "e2e", "domain", "motivo-no-requiere-ce", "issue-3"]
+    },
+    {
+      "name": "Motivo no requiere control eficacia persiste en NC auditoría",
+      "procedure": "Test_E2E_MotivoPersistencia_NCAuditoria_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "e2e", "domain", "motivo-no-requiere-ce", "issue-3"]
     }
   ]
 }

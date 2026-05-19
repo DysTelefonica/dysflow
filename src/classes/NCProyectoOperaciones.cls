@@ -118,6 +118,11 @@ Private Function MotivoAltaDatosUnicosNoOK( _
                 Exit Function
             End If
             
+        ElseIf .RequiereControlEficacia = "No" Then
+            If .MotivoNoRequiereControlEficacia = "" Then
+                MotivoAltaDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+                Exit Function
+            End If
         End If
         
         
@@ -183,6 +188,16 @@ Private Function MotivoEdicionDatosUnicosNoOK( _
                 Exit Function
             End If
             
+        End If
+        If .RequiereControlEficacia <> "Sí" And .RequiereControlEficacia <> "No" Then
+            MotivoEdicionDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
+            Exit Function
+        End If
+        If .RequiereControlEficacia = "No" Then
+            If .MotivoNoRequiereControlEficacia = "" Then
+                MotivoEdicionDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+                Exit Function
+            End If
         End If
         
         
@@ -297,6 +312,11 @@ Private Function MotivoDatosUnicosNoOK( _
                 Exit Function
             End If
             
+        ElseIf .RequiereControlEficacia = "No" Then
+            If .MotivoNoRequiereControlEficacia = "" Then
+                MotivoDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+                Exit Function
+            End If
         End If
         If Not IsDate(.FechaApertura) Then
             MotivoDatosUnicosNoOK = "No se conoce la fecha de apertura"
@@ -420,6 +440,9 @@ Public Function RegistrarDatosUnicos( _
                 rcdDatos.Fields("RESPONSABLETELEFONICA") = Me.nc.ResponsableTelefonica
             End If
             rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
+            If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
+                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
+            End If
             
             
             rcdDatos.Fields("FECHAAPERTURA") = Me.nc.FechaApertura
@@ -508,6 +531,11 @@ Public Function RegistrarDatosUnicos( _
             
             
             rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
+            If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
+                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
+            Else
+                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Null
+            End If
             If Me.nc.RequiereControlEficacia <> "Sí" Then
                 Me.nc.FechaPrevistaControlEficacia = ""
                 Me.nc.ControlEficacia = ""
@@ -668,6 +696,10 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
         If Me.nc.FPREVCIERRE <> "" Then
             rcdDatos.Fields("FPREVCIERRE") = Me.nc.FPREVCIERRE
         End If
+        rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
+        If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
+            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
+        End If
         If Me.nc.FECHACIERRE <> "" Then
             rcdDatos.Fields("FECHACIERRE") = Me.nc.FECHACIERRE
         End If
@@ -795,6 +827,12 @@ Public Function RegistrarCambiosDatosUnicosConVinculoNC( _
             rcdDatos.Fields("CodConcesionAsociada") = Null
         End If
         rcdDatos.Fields("FechaApertura") = Me.nc.FechaApertura
+        rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
+        If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
+            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
+        Else
+            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Null
+        End If
         
     rcdDatos.Update
     

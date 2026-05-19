@@ -108,6 +108,38 @@ Cleanup:
     Set db = Nothing
 End Function
 
+Public Function Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic() As String
+    On Error GoTo EH
+
+    Dim logs As Collection
+    Dim ncProyecto As NCProyecto
+    Dim ncAuditoria As NCAuditoria
+    Dim assertError As String
+
+    Set logs = TestHelper.NewLogs
+    Set ncProyecto = New NCProyecto
+    Set ncAuditoria = New NCAuditoria
+
+    ncProyecto.MotivoNoRequiereControlEficacia = "Motivo proyecto test"
+    ncAuditoria.MotivoNoRequiereControlEficacia = "Motivo auditoria test"
+
+    Call TestHelper.AssertTrue(ncProyecto.MotivoNoRequiereControlEficacia = "Motivo proyecto test", "NCProyecto expone MotivoNoRequiereControlEficacia", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(ncAuditoria.MotivoNoRequiereControlEficacia = "Motivo auditoria test", "NCAuditoria expone MotivoNoRequiereControlEficacia", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic = TestHelper.BuildJsonOk(logs, "domain_fields_ok")
+    Exit Function
+
+Fail:
+    Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Exit Function
+
+EH:
+    TestHelper.AddLog logs, "Error: " & Err.Description
+    Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
 Public Function Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic() As String
     On Error GoTo EH
 
@@ -879,9 +911,13 @@ Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     Dim motivoLeido As String
     Dim requiere As String
     Dim assertError As String
+    Dim ncLoaded As NCProyecto
+    Dim loadError As String
 
     Set logs = TestHelper.NewLogs
     Set db = getdb()
+
+    If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
 
     sqlDelete = "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY
     db.Execute sqlDelete, dbFailOnError
@@ -905,6 +941,15 @@ Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     Call TestHelper.AssertTrue(motivoLeido = TEST_MOTIVO, "MotivoNoRequiereControlEficacia debe persistir texto exacto", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
+    loadError = ""
+    Set ncLoaded = constructor.getNCProyecto(p_IDNC:=CStr(TEST_ID_NC_PROY), p_Error:=loadError)
+    Call TestHelper.AssertTrue(loadError = "", "constructor.getNCProyecto debe cargar sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(Not ncLoaded Is Nothing, "constructor.getNCProyecto debe devolver objeto", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(ncLoaded.MotivoNoRequiereControlEficacia = TEST_MOTIVO, "constructor.getNCProyecto debe hidratar MotivoNoRequiereControlEficacia", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
     Test_E2E_MotivoPersistencia_NCProyecto_Atomic = TestHelper.BuildJsonOk(logs, motivoLeido)
     GoTo Cleanup
 
@@ -921,6 +966,7 @@ Cleanup:
     db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY, dbFailOnError
     If Not rs Is Nothing Then rs.Close
     Set rs = Nothing
+    Set ncLoaded = Nothing
     Set db = Nothing
 End Function
 
@@ -934,9 +980,13 @@ Public Function Test_E2E_MotivoPersistencia_NCAuditoria_Atomic() As String
     Dim motivoLeido As String
     Dim requiere As String
     Dim assertError As String
+    Dim ncLoaded As NCAuditoria
+    Dim loadError As String
 
     Set logs = TestHelper.NewLogs
     Set db = getdb()
+
+    If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
 
     db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD, dbFailOnError
     db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
@@ -962,6 +1012,15 @@ Public Function Test_E2E_MotivoPersistencia_NCAuditoria_Atomic() As String
     Call TestHelper.AssertTrue(motivoLeido = TEST_MOTIVO, "MotivoNoRequiereControlEficacia auditoría debe persistir texto exacto", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
+    loadError = ""
+    Set ncLoaded = constructor.getNCAuditoria(p_IDNC:=CStr(TEST_ID_NC_AUD), p_Error:=loadError)
+    Call TestHelper.AssertTrue(loadError = "", "constructor.getNCAuditoria debe cargar sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(Not ncLoaded Is Nothing, "constructor.getNCAuditoria debe devolver objeto", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(ncLoaded.MotivoNoRequiereControlEficacia = TEST_MOTIVO, "constructor.getNCAuditoria debe hidratar MotivoNoRequiereControlEficacia", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
     Test_E2E_MotivoPersistencia_NCAuditoria_Atomic = TestHelper.BuildJsonOk(logs, motivoLeido)
     GoTo Cleanup
 
@@ -979,7 +1038,46 @@ Cleanup:
     db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
     If Not rs Is Nothing Then rs.Close
     Set rs = Nothing
+    Set ncLoaded = Nothing
     Set db = Nothing
+End Function
+
+Private Function EnsureMotivoNoRequiereControlEficaciaSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_Error As String) As Boolean
+    On Error GoTo EH
+
+    EnsureMotivoNoRequiereControlEficaciaSchema = False
+
+    If Not TableHasField(p_Db, "TbNoConformidades", "MotivoNoRequiereControlEficacia") Then
+        p_Db.TableDefs("TbNoConformidades").Fields.Append p_Db.TableDefs("TbNoConformidades").CreateField("MotivoNoRequiereControlEficacia", dbMemo)
+        TestHelper.AddLog p_Logs, "Campo MotivoNoRequiereControlEficacia creado en TbNoConformidades"
+    End If
+
+    If Not TableHasField(p_Db, "TbNoConformidadesAuditoria", "MotivoNoRequiereControlEficacia") Then
+        p_Db.TableDefs("TbNoConformidadesAuditoria").Fields.Append p_Db.TableDefs("TbNoConformidadesAuditoria").CreateField("MotivoNoRequiereControlEficacia", dbMemo)
+        TestHelper.AddLog p_Logs, "Campo MotivoNoRequiereControlEficacia creado en TbNoConformidadesAuditoria"
+    End If
+
+    EnsureMotivoNoRequiereControlEficaciaSchema = True
+    Exit Function
+
+EH:
+    p_Error = "EnsureMotivoNoRequiereControlEficaciaSchema: " & Err.Description
+End Function
+
+Private Function TableHasField(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_FieldName As String) As Boolean
+    Dim fld As DAO.Field
+
+    On Error GoTo EH
+    For Each fld In p_Db.TableDefs(p_TableName).Fields
+        If StrComp(fld.Name, p_FieldName, vbTextCompare) = 0 Then
+            TableHasField = True
+            Exit Function
+        End If
+    Next fld
+    Exit Function
+
+EH:
+    TableHasField = False
 End Function
 
 Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As String
