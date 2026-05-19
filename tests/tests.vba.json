@@ -83,6 +83,60 @@
       "procedure": "Test_E2E_MotivoPersistencia_NCAuditoria_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "e2e", "domain", "motivo-no-requiere-ce", "issue-3"]
+    },
+    {
+      "name": "Indicadores calcular mixed dataset",
+      "procedure": "Test_Indicadores_Calcular_MixedDataset_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-15"]
+    },
+    {
+      "name": "Indicadores calcular zero case",
+      "procedure": "Test_Indicadores_Calcular_ZeroCase_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-15"]
+    },
+    {
+      "name": "Indicadores calcular proyecto solo parcial",
+      "procedure": "Test_Indicadores_Calcular_ProyectoSolo_Parcial_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-15", "issue-16"]
+    },
+    {
+      "name": "Indicadores build datos proyecto solo objetos",
+      "procedure": "Test_Indicadores_BuildDatos_ProyectoSolo_Objetos_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-16"]
+    },
+    {
+      "name": "Indicadores calcular desde colecciones proyecto solo",
+      "procedure": "Test_Indicadores_CalcularDesdeColecciones_ProyectoSolo_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-16"]
+    },
+    {
+      "name": "Indicadores caption formato",
+      "procedure": "Test_Indicadores_FormatearCaption_Totales_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-15"]
+    },
+    {
+      "name": "Indicadores caption zero",
+      "procedure": "Test_Indicadores_FormatearCaption_ZeroCase_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-15"]
+    },
+    {
+      "name": "Indicadores mensaje avance proyecto",
+      "procedure": "Test_Indicadores_MensajeAvance_Proyecto_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-16"]
+    },
+    {
+      "name": "Indicadores mensaje avance auditoria y default",
+      "procedure": "Test_Indicadores_MensajeAvance_AuditoriaYDefault_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-characterization", "issue-16"]
     }
   ]
 }

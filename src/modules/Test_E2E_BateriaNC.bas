@@ -5,6 +5,7 @@ Option Explicit
 Private Const TEST_ID_NC_PROY As Long = 900001
 Private Const TEST_ID_NC_AUD As Long = 900002
 Private Const TEST_ID_AUDITORIA As Long = 900003
+Private Const TEST_ID_NC_CACHE As Long = 900004
 Private Const TEST_MOTIVO As String = "Motivo E2E control eficacia no requerido"
 
 
@@ -23,10 +24,15 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     Dim originalRutaLocal As String
     Dim cfgErr As String
     Dim assertError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -52,7 +58,7 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     rs.Fields("EnPruebas").Value = "No"
     rs.Update
     TestHelper.AddLog logs, "Configurado BackendActivo=PROD, EnPruebas=No"
-    Call TestHelper.AssertTrue(m_TestingMode, "TestHelper.NewLogs debe activar m_TestingMode para cualquier test", logs, assertError)
+    Call TestHelper.AssertTrue(m_TestingMode, "BeginTestSession debe activar m_TestingMode", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
     cfgErr = ""
@@ -81,22 +87,19 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     Call TestHelper.AssertTrue(Nz(Application.TempVars("BackendPathConfigurado"), "") = originalBackendSandbox, "BackendPathConfigurado debe usar BackendSandbox", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
-    m_TestingMode = False
-    m_BackendSandboxURL = ""
+    Call TestHelper.EndTestSession(logs)
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonOk(logs, "backend_switch_ok")
     GoTo Cleanup
 
 Fail:
-    m_TestingMode = False
-    m_BackendSandboxURL = ""
+    Call TestHelper.EndTestSession(logs)
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     GoTo Cleanup
 
 EH:
-    m_TestingMode = False
-    m_BackendSandboxURL = ""
+    Call TestHelper.EndTestSession(logs)
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     TestHelper.AddLog logs, "Error: " & Err.Description
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
@@ -158,7 +161,7 @@ Public Function Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic() As String
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -222,7 +225,7 @@ Public Function Test_E2E_EnvConfig_ResuelveSandboxSeguro_Atomic() As String
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 BackendActivo, BackendSandbox, EnPruebas FROM TbConfiguracionBackends ORDER BY ID", dbOpenSnapshot)
+    Set rs = db.OpenRecordset("SELECT BackendActivo, BackendSandbox, EnPruebas FROM TbConfiguracionBackends WHERE ID = 1", dbOpenSnapshot)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_ResuelveSandboxSeguro_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -286,7 +289,7 @@ Public Function Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_At
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -365,7 +368,7 @@ Public Function Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_At
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -453,7 +456,7 @@ Public Function Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic() As String
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -534,7 +537,7 @@ Public Function Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic() As Strin
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
@@ -610,10 +613,10 @@ Public Function Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic() As Stri
 
     Set logs = TestHelper.NewLogs
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
-        Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
+        Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin fila ID=1", logs)
         GoTo Cleanup
     End If
 
@@ -681,8 +684,13 @@ Public Function Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic() As 
     Dim nuevoValor As Boolean
     Dim actual As Boolean
     Dim assertError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = getdb()
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracion WHERE ID = 1", dbOpenDynaset)
 
@@ -699,7 +707,7 @@ Public Function Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic() As 
     nuevoValor = Not CBool(Nz(originalCache, False))
     rs.Edit
     rs.Fields("CacheHabilitada").Value = nuevoValor
-    rs.Fields("FechaCambioCache").Value = Now
+    rs.Fields("FechaCambioCache").Value = DateSerial(2026, 1, 1)
     rs.Fields("UsuarioCambioCache").Value = "TEST_E2E"
     rs.Fields("MotivoCambioCache").Value = "E2E toggle controlado"
     rs.Update
@@ -734,6 +742,7 @@ EH:
 Cleanup:
     On Error Resume Next
     If Not rs Is Nothing Then rs.Close
+    Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
     Set db = Nothing
 End Function
@@ -746,8 +755,13 @@ Public Function Test_E2E_KillSwitch_OffOnOff_Restore_Atomic() As String
     Dim assertError As String
     Dim opError As String
     Dim restoreErr As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
     originalState = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(originalState)
 
@@ -775,12 +789,14 @@ Public Function Test_E2E_KillSwitch_OffOnOff_Restore_Atomic() As String
     Else
         Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonOk(logs, "off_on_off_restore_ok")
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreCacheStateE2E(originalState, logs, restoreErr)
     If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
     Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 EH:
@@ -791,6 +807,7 @@ EH:
     Else
         Test_E2E_KillSwitch_OffOnOff_Restore_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic() As String
@@ -801,8 +818,13 @@ Public Function Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache
     Dim opErr As String
     Dim cfgErr As String
     Dim assertError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
     Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
     If assertError <> "" Then GoTo Fail
     TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
@@ -828,12 +850,14 @@ Public Function Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache
     Else
         Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonOk(logs, "cache_mirror_ok")
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreCacheStateMandatory(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 EH:
@@ -844,6 +868,7 @@ EH:
     Else
         Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic() As String
@@ -854,8 +879,13 @@ Public Function Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic() As S
     Dim opErr As String
     Dim eveErr As String
     Dim assertError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
     Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
     If assertError <> "" Then GoTo Fail
     TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
@@ -882,12 +912,14 @@ Public Function Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic() As S
     Else
         Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonOk(logs, "eve_cache_respected")
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreCacheStateMandatory(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 EH:
@@ -898,6 +930,7 @@ EH:
     Else
         Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
@@ -913,8 +946,13 @@ Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     Dim assertError As String
     Dim ncLoaded As NCProyecto
     Dim loadError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_MotivoPersistencia_NCProyecto_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = getdb()
 
     If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
@@ -965,6 +1003,7 @@ Cleanup:
     On Error Resume Next
     db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY, dbFailOnError
     If Not rs Is Nothing Then rs.Close
+    Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
     Set ncLoaded = Nothing
     Set db = Nothing
@@ -982,8 +1021,13 @@ Public Function Test_E2E_MotivoPersistencia_NCAuditoria_Atomic() As String
     Dim assertError As String
     Dim ncLoaded As NCAuditoria
     Dim loadError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_MotivoPersistencia_NCAuditoria_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = getdb()
 
     If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
@@ -1037,6 +1081,7 @@ Cleanup:
     db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD, dbFailOnError
     db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
     If Not rs Is Nothing Then rs.Close
+    Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
     Set ncLoaded = Nothing
     Set db = Nothing
@@ -1048,13 +1093,15 @@ Private Function EnsureMotivoNoRequiereControlEficaciaSchema(ByVal p_Db As DAO.D
     EnsureMotivoNoRequiereControlEficaciaSchema = False
 
     If Not TableHasField(p_Db, "TbNoConformidades", "MotivoNoRequiereControlEficacia") Then
-        p_Db.TableDefs("TbNoConformidades").Fields.Append p_Db.TableDefs("TbNoConformidades").CreateField("MotivoNoRequiereControlEficacia", dbMemo)
-        TestHelper.AddLog p_Logs, "Campo MotivoNoRequiereControlEficacia creado en TbNoConformidades"
+        p_Error = "Contrato de esquema incumplido: falta TbNoConformidades.MotivoNoRequiereControlEficacia"
+        TestHelper.AddLog p_Logs, p_Error
+        Exit Function
     End If
 
     If Not TableHasField(p_Db, "TbNoConformidadesAuditoria", "MotivoNoRequiereControlEficacia") Then
-        p_Db.TableDefs("TbNoConformidadesAuditoria").Fields.Append p_Db.TableDefs("TbNoConformidadesAuditoria").CreateField("MotivoNoRequiereControlEficacia", dbMemo)
-        TestHelper.AddLog p_Logs, "Campo MotivoNoRequiereControlEficacia creado en TbNoConformidadesAuditoria"
+        p_Error = "Contrato de esquema incumplido: falta TbNoConformidadesAuditoria.MotivoNoRequiereControlEficacia"
+        TestHelper.AddLog p_Logs, p_Error
+        Exit Function
     End If
 
     EnsureMotivoNoRequiereControlEficaciaSchema = True
@@ -1093,13 +1140,17 @@ Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As St
     Dim ok As Boolean
     Dim cacheCount As Long
     Dim logCount As Long
+    Dim fixtureDesc As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = getdb()
 
-    idNC = ObtenerIDNCControlado(db)
-    Call TestHelper.AssertTrue(idNC > 0, "Debe existir al menos una NC activa para test controlado", logs, assertError)
-    If assertError <> "" Then GoTo Fail
+    If Not EnsureCacheTestNCFixture(db, logs, idNC, fixtureDesc, assertError) Then GoTo Fail
 
     originalState = IsCacheEnabled()
     opErr = ""
@@ -1135,13 +1186,13 @@ Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As St
     Else
         Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonOk(logs, cacheCount)
     End If
-    Exit Function
+    GoTo Cleanup
 
 Fail:
     Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(assertError, logs)
-    Exit Function
+    GoTo Cleanup
 
 EH:
     Call RestoreCacheStateE2E(originalState, logs, opErr)
@@ -1151,6 +1202,14 @@ EH:
     Else
         Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If Not rs Is Nothing Then rs.Close
+    Call TestHelper.EndTestSession(logs)
+    Set rs = Nothing
+    Set db = Nothing
 End Function
 
 Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
@@ -1166,17 +1225,20 @@ Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
     Dim opErr As String
     Dim assertError As String
     Dim ok As Boolean
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        GoTo Cleanup
+    End If
     Set db = getdb()
 
-    idNC = ObtenerIDNCControlado(db)
-    Call TestHelper.AssertTrue(idNC > 0, "Debe existir una NC activa para invalidación controlada", logs, assertError)
-    If assertError <> "" Then GoTo Fail
+    If Not EnsureCacheTestNCFixture(db, logs, idNC, originalDesc, assertError) Then GoTo Fail
 
     originalState = IsCacheEnabled()
     originalDesc = ObtenerDescripcionNC(db, idNC)
-    mutatedDesc = "E2E-CACHE-" & CStr(idNC) & "-" & Format$(Now, "yyyymmddhhnnss")
+    mutatedDesc = "E2E-CACHE-" & CStr(idNC) & "-MUTATED"
 
     opErr = ""
     ok = CacheConfig_SetEnabled(True, opErr)
@@ -1207,7 +1269,7 @@ Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
     Else
         Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonOk(logs, cacheDesc)
     End If
-    Exit Function
+    GoTo Cleanup
 
 Fail:
     On Error Resume Next
@@ -1216,7 +1278,7 @@ Fail:
     Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(assertError, logs)
-    Exit Function
+    GoTo Cleanup
 
 EH:
     On Error Resume Next
@@ -1229,32 +1291,46 @@ EH:
     Else
         Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    Call TestHelper.EndTestSession(logs)
+    Set db = Nothing
 End Function
 
-Private Function ObtenerIDNCControlado(ByVal p_Db As DAO.Database) As Long
-    Dim rs As DAO.Recordset
+Private Function EnsureCacheTestNCFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_IDNC As Long, ByRef p_Descripcion As String, ByRef p_Error As String) As Boolean
     On Error GoTo EH
 
-    Set rs = p_Db.OpenRecordset("SELECT TOP 1 IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado,0)=0 ORDER BY IDNoConformidad", dbOpenSnapshot)
-    If Not rs.EOF Then ObtenerIDNCControlado = CLng(Nz(rs.Fields("IDNoConformidad").Value, 0))
-    rs.Close: Set rs = Nothing
+    Dim sqlInsert As String
+    p_IDNC = TEST_ID_NC_CACHE
+    p_Descripcion = "Fixture E2E cache " & CStr(TEST_ID_NC_CACHE)
+    p_Error = ""
+
+    p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    sqlInsert = "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, PROYECTO, DESCRIPCION, CAUSA, FECHAAPERTURA, TIPO, RequiereControlEficacia, MotivoNoRequiereControlEficacia, Borrado) " & _
+                "VALUES (" & TEST_ID_NC_CACHE & ", " & TestHelper.SqlText("E2E-CACHE-" & CStr(TEST_ID_NC_CACHE)) & ", " & TestHelper.SqlText("E2E-EXP") & ", " & TestHelper.SqlText("E2E-PROY") & ", " & TestHelper.SqlText(p_Descripcion) & ", " & TestHelper.SqlText("Causa E2E cache") & ", Date(), " & TestHelper.SqlText("Proyecto") & ", 'No', " & TestHelper.SqlText("Fixture cache") & ", 0)"
+    p_Db.Execute sqlInsert, dbFailOnError
+    TestHelper.AddLog p_Logs, "Fixture NC cache insertado ID=" & CStr(TEST_ID_NC_CACHE)
+
+    EnsureCacheTestNCFixture = True
     Exit Function
+
 EH:
-    If Not rs Is Nothing Then rs.Close
-    Set rs = Nothing
-    ObtenerIDNCControlado = 0
+    p_Error = "No se pudo crear fixture NC cache ID=" & CStr(TEST_ID_NC_CACHE) & ": " & Err.Description
+    TestHelper.AddLog p_Logs, p_Error
 End Function
 
 Private Function ObtenerDescripcionNC(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long) As String
     Dim rs As DAO.Recordset
-    Set rs = p_Db.OpenRecordset("SELECT TOP 1 Descripcion FROM TbNoConformidades WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
+    Set rs = p_Db.OpenRecordset("SELECT Descripcion FROM TbNoConformidades WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
     If Not rs.EOF Then ObtenerDescripcionNC = Nz(rs.Fields("Descripcion").Value, "")
     rs.Close: Set rs = Nothing
 End Function
 
 Private Function ObtenerDescripcionCacheListado(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long) As String
     Dim rs As DAO.Recordset
-    Set rs = p_Db.OpenRecordset("SELECT TOP 1 Descripcion FROM TbCacheListadoNC WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
+    Set rs = p_Db.OpenRecordset("SELECT Descripcion FROM TbCacheListadoNC WHERE IDNoConformidad=" & p_IDNC, dbOpenSnapshot)
     If Not rs.EOF Then ObtenerDescripcionCacheListado = Nz(rs.Fields("Descripcion").Value, "")
     rs.Close: Set rs = Nothing
 End Function
@@ -1324,7 +1400,7 @@ Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, Optional
         GoTo CleanExit
     End If
 
-    Set rs = db.OpenRecordset("SELECT TOP 1 CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
+    Set rs = db.OpenRecordset("SELECT CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
 
     If rs.EOF Then
         p_Error = "Contrato obligatorio incumplido: falta TbConfiguracion.ID=1"
