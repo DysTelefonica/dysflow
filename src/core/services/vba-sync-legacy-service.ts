@@ -4,6 +4,8 @@ import { createDysflowError, failureResult, successResult, type OperationResult 
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../runner/powershell-executor.js";
+import { AccessOperationPreflightCleanupService, diagnosticsFromPreflightCleanup, type AccessOperationPreflightCleanup, type AccessOperationPreflightCleanupResult } from "../operations/access-operation-preflight.js";
+import { FileAccessOperationRegistry, resolveProjectOperationRegistryPath } from "../operations/access-operation-registry.js";
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
@@ -64,6 +66,7 @@ export type BuildImportPlanResultOptions = {
 
 export type VbaSyncLegacyServiceOptions = {
   executor?: VbaManagerExecutor;
+  preflightCleanup?: AccessOperationPreflightCleanup;
   scriptPath?: string;
   env?: Record<string, string | undefined>;
   cwd?: string;
@@ -110,6 +113,7 @@ const HIGHER_LEVEL_TOOLS: Record<string, string> = {
 
 export class VbaSyncLegacyService {
   private readonly executor: VbaManagerExecutor;
+  private readonly preflightCleanup?: AccessOperationPreflightCleanup;
   private readonly scriptPath: string;
   private readonly env: Record<string, string | undefined>;
   private readonly cwd: string;
@@ -121,6 +125,7 @@ export class VbaSyncLegacyService {
   constructor(options: VbaSyncLegacyServiceOptions = {}) {
     this.env = options.env ?? process.env;
     this.executor = options.executor ?? spawnVbaManager;
+    this.preflightCleanup = options.preflightCleanup;
     this.scriptPath = options.scriptPath ?? resolveDefaultVbaManagerScriptPath(this.env);
     this.cwd = options.cwd ?? process.cwd();
     this.accessPath = stringValue(options.accessPath);
@@ -183,18 +188,19 @@ export class VbaSyncLegacyService {
     const extraValidation = validateVbaManagerExtra(request.extra);
     if (!extraValidation.ok) return extraValidation;
 
+    const preflightDiagnostics = diagnosticsFromPreflightCleanup(await this.runPreflightCleanup(target.data));
     const result = await this.executeWithTimeout(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
       return failureResult(
         createDysflowError("VBA_MANAGER_TIMEOUT", `${toolName} timed out after ${result.durationMs}ms`, { retryable: true }),
-        { durationMs: result.durationMs },
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
     if (result.exitCode !== 0) {
       return failureResult(
         createDysflowError("VBA_MANAGER_FAILED", `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
-        { durationMs: result.durationMs },
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
 
@@ -203,10 +209,26 @@ export class VbaSyncLegacyService {
       return successResult({
         result: parsedOutput,
         ...buildTargetDiagnostics(toolName, params, target.data, true),
-      }, { durationMs: result.durationMs });
+      }, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
     }
 
-    return successResult(parsedOutput, { durationMs: result.durationMs });
+    return successResult(parsedOutput, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
+  }
+
+  private async runPreflightCleanup(target: { accessPath?: string; projectRoot?: string }): Promise<AccessOperationPreflightCleanupResult> {
+    if (target.accessPath === undefined) return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+    const projectRoot = target.projectRoot ?? this.cwd;
+    try {
+      const cleanup = this.preflightCleanup ?? await createDefaultPreflightCleanup(projectRoot);
+      return await cleanup.cleanup({ accessPath: target.accessPath, projectRoot });
+    } catch (error) {
+      return {
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [{ operationId: "preflight", message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}` }],
+      };
+    }
   }
 
   private async resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource" | "timeoutMs" | "processTimeoutMs"> & { accessPath?: string; destinationRoot: string }>> {
@@ -550,6 +572,16 @@ function mapping(
   extra: (input: Record<string, unknown>) => Record<string, string | boolean | number | undefined> = () => ({}),
 ): DirectMapping {
   return { action, json, moduleNames, extra };
+}
+
+async function createDefaultPreflightCleanup(projectRoot: string): Promise<AccessOperationPreflightCleanup> {
+  const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } = await import("../operations/windows-processes.js");
+  return new AccessOperationPreflightCleanupService({
+    registry: new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath({ projectRoot }) }),
+    processInspector: new WindowsMsAccessProcessInspector(),
+    processKiller: new WindowsProcessKiller(),
+    processScanner: new WindowsMsAccessProcessScanner(),
+  });
 }
 
 function stringArray(value: unknown): string[] {

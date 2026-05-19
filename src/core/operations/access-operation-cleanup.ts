@@ -16,6 +16,10 @@ export type ProcessKiller = {
   kill(pid: number): Promise<void>;
 };
 
+export type ProcessScanner = {
+  listProcesses(): Promise<OsProcessInfo[]>;
+};
+
 export type AccessCleanupResult = {
   operationId: string;
   accessPid: number;

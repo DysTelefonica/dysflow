@@ -6,6 +6,7 @@ import {
 	type PowerShellExecutor,
 } from "../../../src/core/runner/access-runner.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
+import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 
 const config: DysflowConfig = {
 	configSource: "explicit-request",
@@ -132,6 +133,13 @@ describe("AccessPowerShellRunner", () => {
 
 	it("records operation roots from resolved config instead of process cwd", async () => {
 		const records: unknown[] = [];
+		const events: string[] = [];
+		const preflight: AccessOperationPreflightCleanup = {
+			cleanup: async (request) => {
+				events.push(`preflight:${request.accessPath}:${request.projectRoot}`);
+				return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+			},
+		};
 		const runner = new AccessPowerShellRunner({
 			executor: async () => ({
 				exitCode: 0,
@@ -142,6 +150,7 @@ describe("AccessPowerShellRunner", () => {
 			}),
 			operationRegistry: {
 				create: async (record) => {
+					events.push("create");
 					records.push(record);
 					return record;
 				},
@@ -150,6 +159,7 @@ describe("AccessPowerShellRunner", () => {
 				listRecent: async () => [],
 			},
 			operationIdFactory: () => "op-roots",
+			preflightCleanup: preflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 
@@ -168,6 +178,45 @@ describe("AccessPowerShellRunner", () => {
 				destinationRootAbs: "C:/repo/project/src",
 			}),
 		]);
+		expect(events).toEqual([
+			"preflight:C:/data/finance.accdb:C:/repo/project",
+			"create",
+		]);
+	});
+
+	it("continues and emits a diagnostic when preflight cleanup throws", async () => {
+		const runner = new AccessPowerShellRunner({
+			executor: async () => ({
+				exitCode: 0,
+				stdout: "{}",
+				stderr: "",
+				durationMs: 1,
+				timedOut: false,
+			}),
+			operationRegistry: {
+				create: async (record) => record,
+				update: async () => undefined,
+				get: async () => undefined,
+				listRecent: async () => [],
+			},
+			operationIdFactory: () => "op-preflight-error",
+			preflightCleanup: {
+				cleanup: async () => {
+					throw new Error("registry locked");
+				},
+			},
+			scriptPath: "C:/tools/run.ps1",
+		});
+
+		const result = await runner.run({ kind: "diagnostics", request: {} }, config);
+
+		expect(result.ok).toBe(true);
+		expect(result.diagnostics).toContainEqual(
+			expect.objectContaining({
+				source: "access.preflight",
+				message: "preflight: Pre-flight cleanup failed: registry locked",
+			}),
+		);
 	});
 
 	it("surfaces access process capture failures as diagnostics", async () => {
