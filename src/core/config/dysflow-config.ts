@@ -250,40 +250,29 @@ function buildExplicitConfig(
 	});
 }
 
-function loadProjectConfigFromPath(
-	configPath: string,
-	input: DysflowConfigInput,
-	env: Record<string, string | undefined>,
-	cwd: string,
-	configSource: DysflowConfigSource,
-	projectId?: string,
+/**
+ * Pure transformation: given a parsed project config object and the resolved
+ * file path it was loaded from, produce the full DysflowConfig.
+ *
+ * This helper is shared by the sync and async loader variants so that the
+ * transformation logic lives in exactly one place (#195).
+ */
+function buildProjectConfig(
+	raw: DysflowProjectConfig,
+	opts: {
+		resolvedPath: string;
+		configSource: DysflowConfigSource;
+		projectIdOverride: string | undefined;
+		input: DysflowConfigInput;
+		env: Record<string, string | undefined>;
+	},
 ): OperationResult<DysflowConfig> {
-	const resolvedPath = resolvePathMaybeRelative(configPath, cwd);
-	if (!existsSync(resolvedPath)) {
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_FILE_NOT_FOUND",
-				`Project config file not found: ${resolvedPath}`,
-			),
-		);
-	}
-
-	let config: DysflowProjectConfig;
-	try {
-		config = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
-	} catch (err) {
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_FILE_INVALID",
-				`Project config file is not valid JSON: ${resolvedPath}. ${err instanceof Error ? err.message : String(err)}`,
-			),
-		);
-	}
+	const { resolvedPath, configSource, projectIdOverride, input, env } = opts;
 	const configDir = dirname(resolvedPath);
-	const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
-	const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs);
+	const projectRoot = resolveProjectRoot(raw, configDir, input.projectRoot);
+	const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
 	const accessDbPath = resolveProjectPath(
-		config.accessPath ?? input.accessDbPath,
+		raw.accessPath ?? input.accessDbPath,
 		projectRoot,
 	);
 	if (accessDbPath === undefined) {
@@ -296,16 +285,16 @@ function loadProjectConfigFromPath(
 	}
 
 	const backendPath = resolveProjectPath(
-		config.backendPath ?? input.backendPath,
+		raw.backendPath ?? input.backendPath,
 		projectRoot,
 	);
 	const destinationRoot =
 		resolveProjectPath(
-			config.destinationRoot ?? input.destinationRoot ?? "src",
+			raw.destinationRoot ?? input.destinationRoot ?? "src",
 			projectRoot,
 		) ?? projectRoot;
-	const accessPasswordEnv = resolvePasswordEnv(config);
-	const backendPasswordEnv = resolveBackendPasswordEnv(config);
+	const accessPasswordEnv = resolvePasswordEnv(raw);
+	const backendPasswordEnv = resolveBackendPasswordEnv(raw);
 	const accessPassword = resolvePassword(
 		input.accessPassword,
 		pickFirstDefined(
@@ -330,7 +319,7 @@ function loadProjectConfigFromPath(
 		backendPath,
 		destinationRoot,
 		projectRoot,
-		projectId: projectId ?? stringValue(config.id),
+		projectId: projectIdOverride ?? stringValue(raw.id),
 		timeoutMs,
 		processTimeoutMs: timeoutMs,
 		accessPassword,
@@ -338,6 +327,45 @@ function loadProjectConfigFromPath(
 		accessPasswordEnv,
 		backendPasswordEnv,
 		configPath: resolvedPath,
+	});
+}
+
+function loadProjectConfigFromPath(
+	configPath: string,
+	input: DysflowConfigInput,
+	env: Record<string, string | undefined>,
+	cwd: string,
+	configSource: DysflowConfigSource,
+	projectId?: string,
+): OperationResult<DysflowConfig> {
+	const resolvedPath = resolvePathMaybeRelative(configPath, cwd);
+	if (!existsSync(resolvedPath)) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_FILE_NOT_FOUND",
+				`Project config file not found: ${resolvedPath}`,
+			),
+		);
+	}
+
+	let raw: DysflowProjectConfig;
+	try {
+		raw = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
+	} catch (err) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_FILE_INVALID",
+				`Project config file is not valid JSON: ${resolvedPath}. ${err instanceof Error ? err.message : String(err)}`,
+			),
+		);
+	}
+
+	return buildProjectConfig(raw, {
+		resolvedPath,
+		configSource,
+		projectIdOverride: projectId,
+		input,
+		env,
 	});
 }
 
@@ -360,9 +388,9 @@ async function loadProjectConfigFromPathAsync(
 		);
 	}
 
-	let config: DysflowProjectConfig;
+	let raw: DysflowProjectConfig;
 	try {
-		config = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
+		raw = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
 	} catch (err) {
 		return failureResult(
 			createDysflowError(
@@ -371,65 +399,13 @@ async function loadProjectConfigFromPathAsync(
 			),
 		);
 	}
-	const configDir = dirname(resolvedPath);
-	const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
-	const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs);
-	const accessDbPath = resolveProjectPath(
-		config.accessPath ?? input.accessDbPath,
-		projectRoot,
-	);
-	if (accessDbPath === undefined) {
-		return failureResult(
-			createDysflowError(
-				"CONFIG_MISSING_ACCESS_PATH",
-				`Project config ${resolvedPath} is missing accessPath.`,
-			),
-		);
-	}
 
-	const backendPath = resolveProjectPath(
-		config.backendPath ?? input.backendPath,
-		projectRoot,
-	);
-	const destinationRoot =
-		resolveProjectPath(
-			config.destinationRoot ?? input.destinationRoot ?? "src",
-			projectRoot,
-		) ?? projectRoot;
-	const accessPasswordEnv = resolvePasswordEnv(config);
-	const backendPasswordEnv = resolveBackendPasswordEnv(config);
-	const accessPassword = resolvePassword(
-		input.accessPassword,
-		pickFirstDefined(
-			accessPasswordEnv === undefined ? undefined : env[accessPasswordEnv],
-			env.DYSFLOW_ACCESS_PASSWORD,
-			env.DYSFLOW_ACCESS_PWD,
-			env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
-		),
-	);
-	const backendPassword = resolvePassword(
-		input.backendPassword,
-		pickFirstDefined(
-			backendPasswordEnv === undefined ? undefined : env[backendPasswordEnv],
-			env.DYSFLOW_BACKEND_PASSWORD,
-			env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
-		),
-	);
-
-	return successResult({
+	return buildProjectConfig(raw, {
+		resolvedPath,
 		configSource,
-		accessDbPath,
-		backendPath,
-		destinationRoot,
-		projectRoot,
-		projectId: projectId ?? stringValue(config.id),
-		timeoutMs,
-		processTimeoutMs: timeoutMs,
-		accessPassword,
-		backendPassword,
-		accessPasswordEnv,
-		backendPasswordEnv,
-		configPath: resolvedPath,
+		projectIdOverride: projectId,
+		input,
+		env,
 	});
 }
 
@@ -465,6 +441,30 @@ function resolvePathMaybeRelative(value: string, cwd: string): string {
 	return isAbsolute(value) ? resolve(value) : resolve(cwd, value);
 }
 
+/**
+ * Pure transformation: given a registry entry and the directory that contains
+ * the registry file, resolve the absolute path to the project config file.
+ *
+ * This helper is shared by the sync and async registry-resolution variants so
+ * that the lookup logic lives in exactly one place (#195).
+ */
+function resolveRegistryEntry(
+	entry: string | { configPath?: string; path?: string; projectRoot?: string },
+	registryDir: string,
+): string | undefined {
+	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
+	const configPath = stringValue(entry.configPath);
+	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
+	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
+	if (projectRoot !== undefined) {
+		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
+		return resolvedProjectRoot === undefined
+			? undefined
+			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
+	}
+	return undefined;
+}
+
 function resolveRegisteredProjectConfigPath(
 	projectId: string,
 	input: DysflowConfigInput,
@@ -482,18 +482,7 @@ function resolveRegisteredProjectConfigPath(
 	}
 	const entry = registry.projects?.[projectId];
 	if (entry === undefined) return undefined;
-	const registryDir = dirname(registryPath);
-	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
-	const configPath = stringValue(entry.configPath);
-	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
-	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
-	if (projectRoot !== undefined) {
-		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
-		return resolvedProjectRoot === undefined
-			? undefined
-			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
-	}
-	return undefined;
+	return resolveRegistryEntry(entry, dirname(registryPath));
 }
 
 
@@ -514,18 +503,7 @@ async function resolveRegisteredProjectConfigPathAsync(
 	}
 	const entry = registry.projects?.[projectId];
 	if (entry === undefined) return undefined;
-	const registryDir = dirname(registryPath);
-	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
-	const configPath = stringValue(entry.configPath);
-	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
-	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
-	if (projectRoot !== undefined) {
-		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
-		return resolvedProjectRoot === undefined
-			? undefined
-			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
-	}
-	return undefined;
+	return resolveRegistryEntry(entry, dirname(registryPath));
 }
 
 async function findRepoProjectConfigPathAsync(cwd: string): Promise<string | undefined> {
