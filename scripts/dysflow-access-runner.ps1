@@ -592,6 +592,8 @@ function Invoke-WriteAction {
     "seed_fixture" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for seed_fixture." }
       Assert-TableAllowed ([string]$Payload.tableName)
+      $tableName = [string]$Payload.tableName
+      if ($tableName -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') { throw "Invalid table name: $tableName" }
       $rows = @($Payload.rows)
       if ($rows.Count -eq 0) { throw "rows are required for seed_fixture." }
       $count = 0
@@ -599,15 +601,17 @@ function Invoke-WriteAction {
         $columns = @()
         $values = @()
         foreach ($property in $row.PSObject.Properties) {
-          $columns += "[$($property.Name)]"
+          $colName = $property.Name
+          if ($colName -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') { throw "Invalid column name: $colName" }
+          $columns += "[$colName]"
           $value = $property.Value
           $values += Format-SqlLiteral $value
         }
-        $sql = "INSERT INTO [$([string]$Payload.tableName)] (" + ($columns -join ", ") + ") VALUES (" + ($values -join ", ") + ")"
+        $sql = "INSERT INTO [$tableName] (" + ($columns -join ", ") + ") VALUES (" + ($values -join ", ") + ")"
         if (-not $dryRun) { $Database.Execute($sql, 128) }
         $count++
       }
-      return [ordered]@{ dryRun = $dryRun; affectedRows = $count; tableName = [string]$Payload.tableName }
+      return [ordered]@{ dryRun = $dryRun; affectedRows = $count; tableName = $tableName }
     }
     "teardown_fixture" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for teardown_fixture." }
