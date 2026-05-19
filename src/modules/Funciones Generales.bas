@@ -74,6 +74,7 @@ errores:
 End Function
 Public Function PintarIndicadores( _
                                     Optional p_Reiniciando As EnumSino = EnumSino.No, _
+                                    Optional ByVal p_Modo As String = "AMBOS", _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
@@ -95,42 +96,10 @@ Public Function PintarIndicadores( _
     
   
     
-    Dim m_Col As Scripting.Dictionary
-    
-    Dim NTareasProyectoPteReplanificar As Long
-    Dim NNCsProyectoRegistradas As Long
-    Dim NNCsProyectoAccionesSinTareas As Long
-    Dim NNCsProyectoPteCE As Long
-    Dim NNCsProyectoCECaducada As Long
-    Dim NNCsProyectoCENoConforme As Long
-    
-    Dim NTareasProyectoPteReplanificarUsuario As Long
-    Dim NNCsProyectoRegistradasUsuario As Long
-    Dim NNCsProyectoAccionesSinTareasUsuario As Long
-    Dim NNCsProyectoPteCEUsuario As Long
-    Dim NNCsProyectoCECaducadaUsuario As Long
-    Dim NNCsProyectoCENoConformeUsuario As Long
-   
-    Dim NTareasAuditoriaPteReplanificar As Long
-    Dim NNCsAuditoriaRegistradas As Long
-    Dim NNCsAuditoriaAccionesSinTareas As Long
-    Dim NNCsAuditoriaPteCE As Long
-    Dim NNCsAuditoriaCECaducada As Long
-    Dim NNCsAuditoriaCENoConforme As Long
-    
-    Dim NTareasAuditoriaPteReplanificarUsuario As Long
-    Dim NNCsAuditoriaRegistradasUsuario As Long
-    Dim NNCsAuditoriaAccionesSinTareasUsuario As Long
-    Dim NNCsAuditoriaPteCEUsuario As Long
-    Dim NNCsAuditoriaCECaducadaUsuario As Long
-    Dim NNCsAuditoriaCENoConformeUsuario As Long
-    
-    Dim NIndicadorProyectoTotal As Long
-    Dim NIndicadorAuditoriaTotal As Long
-    
-    Dim NIndicadorProyectoUsuario As Long
-    Dim NIndicadorAuditoriaUsuario As Long
+    Dim m_Resultados As Scripting.Dictionary
     Dim m_Usuario As usuario
+    Dim m_IncluirProyecto As Boolean
+    Dim m_IncluirAuditoria As Boolean
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -142,185 +111,67 @@ Public Function PintarIndicadores( _
             Err.Raise 1000
         End If
     End If
+
+    m_IncluirProyecto = (UCase$(Trim$(p_Modo)) <> "AUDITORIA")
+    m_IncluirAuditoria = (UCase$(Trim$(p_Modo)) <> "PROYECTO")
     
-    
-    'TOTALES
-    Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
-    If Not m_ColSegsTareasProyectoPteReplanificar Is Nothing Then
-        NTareasProyectoPteReplanificar = m_ColSegsTareasProyectoPteReplanificar.count
+    ' Contrato baseline de indicadores (caracterización previa a optimización):
+    ' - Null collection => cuenta como 0.
+    ' - Totales Proyecto/Auditoría = suma de 6 buckets cada uno.
+    ' - Filtro por usuario exige coincidencia exacta con usuario.Nombre.
+    ' - Caption exacto: "Seguimiento X / Y".
+    ' - m_ColSegsTareasProyectoIrregulares se consulta por compatibilidad pero NO suma.
+
+    If m_IncluirProyecto Then
+        Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
+        Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
+        Set m_ColSegsNCProyectoRegistradas = m_ObjEntorno.ColSegsNCProyectoRegistradas
+        Set m_ColSegsNCProyectoAccionesSinTareas = m_ObjEntorno.ColSegsNCProyectoAccionesSinTareas
+        Set m_ColSegsNCProyectoPteCE = m_ObjEntorno.ColSegsNCProyectoPteCE
+        Set m_ColSegsNCProyectoCECaducada = m_ObjEntorno.ColSegsNCProyectoCECaducada
+        Set m_ColSegsNCProyectoCENoConforme = m_ObjEntorno.ColSegsNCProyectoCENoConforme
     End If
-    
-    Set m_ColSegsNCProyectoRegistradas = m_ObjEntorno.ColSegsNCProyectoRegistradas
-    If Not m_ColSegsNCProyectoRegistradas Is Nothing Then
-        NNCsProyectoRegistradas = m_ColSegsNCProyectoRegistradas.count
+
+    If m_IncluirAuditoria Then
+        Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
+        Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
+        Set m_ColSegsNCAuditoriaAccionesSinTareas = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
+        Set m_ColSegsNCAuditoriaPteCE = m_ObjEntorno.ColSegsNCAuditoriaPteCE
+        Set m_ColSegsNCAuditoriaCECaducada = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
+        Set m_ColSegsNCAuditoriaCENoConforme = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
     End If
-    Set m_ColSegsNCProyectoAccionesSinTareas = m_ObjEntorno.ColSegsNCProyectoAccionesSinTareas
-    If Not m_ColSegsNCProyectoAccionesSinTareas Is Nothing Then
-        NNCsProyectoAccionesSinTareas = m_ColSegsNCProyectoAccionesSinTareas.count
-    End If
-    Set m_ColSegsNCProyectoPteCE = m_ObjEntorno.ColSegsNCProyectoPteCE
-    If Not m_ColSegsNCProyectoPteCE Is Nothing Then
-        NNCsProyectoPteCE = m_ColSegsNCProyectoPteCE.count
-    End If
-    Set m_ColSegsNCProyectoCECaducada = m_ObjEntorno.ColSegsNCProyectoCECaducada
-    If Not m_ColSegsNCProyectoCECaducada Is Nothing Then
-        NNCsProyectoCECaducada = m_ColSegsNCProyectoCECaducada.count
-    End If
-    Set m_ColSegsNCProyectoCENoConforme = m_ObjEntorno.ColSegsNCProyectoCENoConforme
-    If Not m_ColSegsNCProyectoCENoConforme Is Nothing Then
-        NNCsProyectoCENoConforme = m_ColSegsNCProyectoCENoConforme.count
-    End If
-    
-    
-    NIndicadorProyectoTotal = NTareasProyectoPteReplanificar + NNCsProyectoAccionesSinTareas + _
-                                 NNCsProyectoRegistradas + NNCsProyectoPteCE + _
-                              NNCsProyectoCECaducada + NNCsProyectoCENoConforme
-                              
-                              
-                              
-                              
-                              
-    'TOTALES
-    Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
-    If Not m_ColSegsTareasAuditoriaPteReplanificar Is Nothing Then
-        NTareasAuditoriaPteReplanificar = m_ColSegsTareasAuditoriaPteReplanificar.count
-    End If
-    
-    Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
-    If Not m_ColSegsNCAuditoriaRegistradas Is Nothing Then
-        NNCsAuditoriaRegistradas = m_ColSegsNCAuditoriaRegistradas.count
-    End If
-    Set m_ColSegsNCAuditoriaAccionesSinTareas = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
-    If Not m_ColSegsNCAuditoriaAccionesSinTareas Is Nothing Then
-        NNCsAuditoriaAccionesSinTareas = m_ColSegsNCAuditoriaAccionesSinTareas.count
-    End If
-    Set m_ColSegsNCAuditoriaPteCE = m_ObjEntorno.ColSegsNCAuditoriaPteCE
-    If Not m_ColSegsNCAuditoriaPteCE Is Nothing Then
-        NNCsAuditoriaPteCE = m_ColSegsNCAuditoriaPteCE.count
-    End If
-    Set m_ColSegsNCAuditoriaCECaducada = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
-    If Not m_ColSegsNCAuditoriaCECaducada Is Nothing Then
-        NNCsAuditoriaCECaducada = m_ColSegsNCAuditoriaCECaducada.count
-    End If
-    Set m_ColSegsNCAuditoriaCENoConforme = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
-    If Not m_ColSegsNCAuditoriaCENoConforme Is Nothing Then
-        NNCsAuditoriaCENoConforme = m_ColSegsNCAuditoriaCENoConforme.count
-    End If
-    
-    
-    NIndicadorAuditoriaTotal = NTareasAuditoriaPteReplanificar + NNCsAuditoriaAccionesSinTareas + _
-                                 NNCsAuditoriaRegistradas + NNCsAuditoriaPteCE + _
-                              NNCsAuditoriaCECaducada + NNCsAuditoriaCENoConforme
-    'USUARIO
+
     Set m_Usuario = m_ObjUsuarioConectado
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsTareasProyectoPteReplanificar, m_Usuario, p_Error)
+    Set m_Resultados = Indicadores_CalcularDesdeColecciones( _
+                        m_Usuario, _
+                        m_ColSegsTareasProyectoPteReplanificar, _
+                        m_ColSegsTareasProyectoIrregulares, _
+                        m_ColSegsNCProyectoRegistradas, _
+                        m_ColSegsNCProyectoAccionesSinTareas, _
+                        m_ColSegsNCProyectoPteCE, _
+                        m_ColSegsNCProyectoCECaducada, _
+                        m_ColSegsNCProyectoCENoConforme, _
+                        m_ColSegsTareasAuditoriaPteReplanificar, _
+                        m_ColSegsNCAuditoriaRegistradas, _
+                        m_ColSegsNCAuditoriaAccionesSinTareas, _
+                        m_ColSegsNCAuditoriaPteCE, _
+                        m_ColSegsNCAuditoriaCECaducada, _
+                        m_ColSegsNCAuditoriaCENoConforme, _
+                        p_Modo, _
+                        p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
-    If Not m_Col Is Nothing Then
-        NTareasProyectoPteReplanificarUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsTareasProyectoIrregulares, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCProyectoRegistradas, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsProyectoRegistradasUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCProyectoAccionesSinTareas, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsProyectoAccionesSinTareasUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCProyectoPteCE, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsProyectoPteCEUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCProyectoCECaducada, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsProyectoCECaducadaUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCProyectoCENoConforme, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsProyectoCENoConformeUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsTareasAuditoriaPteReplanificar, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NTareasAuditoriaPteReplanificarUsuario = m_Col.count
-    End If
-    
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCAuditoriaRegistradas, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsAuditoriaRegistradasUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCAuditoriaAccionesSinTareas, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsAuditoriaAccionesSinTareasUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCAuditoriaPteCE, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsAuditoriaPteCEUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCAuditoriaCECaducada, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsAuditoriaCECaducadaUsuario = m_Col.count
-    End If
-    Set m_Col = getColSeguimientoPorUsuario(m_ColSegsNCAuditoriaCENoConforme, m_Usuario, p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        NNCsAuditoriaCENoConformeUsuario = m_Col.count
-    End If
-    NIndicadorProyectoUsuario = NTareasProyectoPteReplanificarUsuario + NNCsProyectoAccionesSinTareasUsuario + _
-                                 NNCsProyectoRegistradasUsuario + NNCsProyectoPteCEUsuario + _
-                              NNCsProyectoCECaducadaUsuario + NNCsProyectoCENoConformeUsuario
+                               
     
     
-    NIndicadorAuditoriaUsuario = NTareasAuditoriaPteReplanificarUsuario + NNCsAuditoriaAccionesSinTareasUsuario + _
-                                 NNCsAuditoriaRegistradasUsuario + NNCsAuditoriaPteCEUsuario + _
-                              NNCsAuditoriaCECaducadaUsuario + NNCsAuditoriaCENoConformeUsuario
-                              
-    
-    
-    If FormularioAbierto("Form0BDOpcionesParteProyectos") Then
-        Forms("Form0BDOpcionesParteProyectos").Controls("lblSeguimientos").Caption = "Seguimiento " & _
-                                        NIndicadorProyectoUsuario & " / " & NIndicadorProyectoTotal
+    If m_IncluirProyecto And FormularioAbierto("Form0BDOpcionesParteProyectos") Then
+        Forms("Form0BDOpcionesParteProyectos").Controls("lblSeguimientos").Caption = _
+            Indicadores_FormatearCaption(CLng(m_Resultados("ProyectoUsuario")), CLng(m_Resultados("ProyectoTotal")))
     End If
-    If FormularioAbierto("Form0BDOpcionesAuditorias") Then
-        Forms("Form0BDOpcionesAuditorias").Controls("lblSeguimientos").Caption = "Seguimiento " & _
-                                        NIndicadorAuditoriaUsuario & " / " & NIndicadorAuditoriaTotal
+    If m_IncluirAuditoria And FormularioAbierto("Form0BDOpcionesAuditorias") Then
+        Forms("Form0BDOpcionesAuditorias").Controls("lblSeguimientos").Caption = _
+            Indicadores_FormatearCaption(CLng(m_Resultados("AuditoriaUsuario")), CLng(m_Resultados("AuditoriaTotal")))
     End If
     If FormularioAbierto("FormNCProyectoSeguimiento") Then
         If Forms("FormNCProyectoSeguimiento").Controls("FrmDetalle").SourceObject = "FormNCProyectoSeguimientoNC" Then
@@ -341,6 +192,250 @@ Public Function PintarIndicadores( _
 errores:
     If Err.Number <> 1000 Then
         p_Error = "El método PintarIndicadores ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Public Function Indicadores_MensajeAvance( _
+                                    Optional ByVal p_Modo As String = "AMBOS", _
+                                    Optional ByVal p_Etapa As String = "INICIO" _
+                                    ) As String
+    Dim m_Modo As String
+    Dim m_Etapa As String
+
+    m_Modo = UCase$(Trim$(p_Modo))
+    m_Etapa = UCase$(Trim$(p_Etapa))
+    If m_Modo = "" Then m_Modo = "AMBOS"
+    If m_Etapa = "" Then m_Etapa = "INICIO"
+
+    Select Case m_Etapa
+        Case "INICIO"
+            Select Case m_Modo
+                Case "PROYECTO"
+                    Indicadores_MensajeAvance = "Calculando indicadores de proyectos..."
+                Case "AUDITORIA"
+                    Indicadores_MensajeAvance = "Calculando indicadores de auditorías..."
+                Case Else
+                    Indicadores_MensajeAvance = "Calculando indicadores..."
+            End Select
+        Case "APLICAR"
+            Select Case m_Modo
+                Case "PROYECTO"
+                    Indicadores_MensajeAvance = "Actualizando seguimiento de proyectos..."
+                Case "AUDITORIA"
+                    Indicadores_MensajeAvance = "Actualizando seguimiento de auditorías..."
+                Case Else
+                    Indicadores_MensajeAvance = "Actualizando seguimiento..."
+            End Select
+        Case Else
+            Indicadores_MensajeAvance = "Calculando indicadores..."
+    End Select
+End Function
+
+Public Function Indicadores_BuildDatos( _
+                                    ByVal p_ColSegsTareasProyectoPteReplanificar As Scripting.Dictionary, _
+                                    ByVal p_ColSegsTareasProyectoIrregulares As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoRegistradas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoAccionesSinTareas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoPteCE As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoCECaducada As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoCENoConforme As Scripting.Dictionary, _
+                                    ByVal p_ColSegsTareasAuditoriaPteReplanificar As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaRegistradas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaAccionesSinTareas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaPteCE As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaCECaducada As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaCENoConforme As Scripting.Dictionary, _
+                                    Optional ByVal p_Modo As String = "AMBOS", _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Datos As Scripting.Dictionary
+    Dim m_IncluirProyecto As Boolean
+    Dim m_IncluirAuditoria As Boolean
+    On Error GoTo errores
+
+    m_IncluirProyecto = (UCase$(Trim$(p_Modo)) <> "AUDITORIA")
+    m_IncluirAuditoria = (UCase$(Trim$(p_Modo)) <> "PROYECTO")
+
+    Set m_Datos = New Scripting.Dictionary
+    m_Datos.CompareMode = TextCompare
+
+    If m_IncluirProyecto Then
+        m_Datos.Add "ProyectoTareasPteReplanificar", p_ColSegsTareasProyectoPteReplanificar
+        m_Datos.Add "ProyectoTareasIrregulares", p_ColSegsTareasProyectoIrregulares
+        m_Datos.Add "ProyectoNCRegistradas", p_ColSegsNCProyectoRegistradas
+        m_Datos.Add "ProyectoNCAccionesSinTareas", p_ColSegsNCProyectoAccionesSinTareas
+        m_Datos.Add "ProyectoNCPteCE", p_ColSegsNCProyectoPteCE
+        m_Datos.Add "ProyectoNCCECaducada", p_ColSegsNCProyectoCECaducada
+        m_Datos.Add "ProyectoNCCENoConforme", p_ColSegsNCProyectoCENoConforme
+    End If
+
+    If m_IncluirAuditoria Then
+        m_Datos.Add "AuditoriaTareasPteReplanificar", p_ColSegsTareasAuditoriaPteReplanificar
+        m_Datos.Add "AuditoriaNCRegistradas", p_ColSegsNCAuditoriaRegistradas
+        m_Datos.Add "AuditoriaNCAccionesSinTareas", p_ColSegsNCAuditoriaAccionesSinTareas
+        m_Datos.Add "AuditoriaNCPteCE", p_ColSegsNCAuditoriaPteCE
+        m_Datos.Add "AuditoriaNCCECaducada", p_ColSegsNCAuditoriaCECaducada
+        m_Datos.Add "AuditoriaNCCENoConforme", p_ColSegsNCAuditoriaCENoConforme
+    End If
+
+    Set Indicadores_BuildDatos = m_Datos
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_BuildDatos ha devuelto el error: " & vbNewLine & Err.Description
+End Function
+
+Public Function Indicadores_CalcularDesdeColecciones( _
+                                    ByVal p_Usuario As usuario, _
+                                    ByVal p_ColSegsTareasProyectoPteReplanificar As Scripting.Dictionary, _
+                                    ByVal p_ColSegsTareasProyectoIrregulares As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoRegistradas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoAccionesSinTareas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoPteCE As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoCECaducada As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCProyectoCENoConforme As Scripting.Dictionary, _
+                                    ByVal p_ColSegsTareasAuditoriaPteReplanificar As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaRegistradas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaAccionesSinTareas As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaPteCE As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaCECaducada As Scripting.Dictionary, _
+                                    ByVal p_ColSegsNCAuditoriaCENoConforme As Scripting.Dictionary, _
+                                    Optional ByVal p_Modo As String = "AMBOS", _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Datos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set m_Datos = Indicadores_BuildDatos( _
+                    p_ColSegsTareasProyectoPteReplanificar, _
+                    p_ColSegsTareasProyectoIrregulares, _
+                    p_ColSegsNCProyectoRegistradas, _
+                    p_ColSegsNCProyectoAccionesSinTareas, _
+                    p_ColSegsNCProyectoPteCE, _
+                    p_ColSegsNCProyectoCECaducada, _
+                    p_ColSegsNCProyectoCENoConforme, _
+                    p_ColSegsTareasAuditoriaPteReplanificar, _
+                    p_ColSegsNCAuditoriaRegistradas, _
+                    p_ColSegsNCAuditoriaAccionesSinTareas, _
+                    p_ColSegsNCAuditoriaPteCE, _
+                    p_ColSegsNCAuditoriaCECaducada, _
+                    p_ColSegsNCAuditoriaCENoConforme, _
+                    p_Modo, _
+                    p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+
+    Set Indicadores_CalcularDesdeColecciones = Indicadores_Calcular(m_Datos, p_Usuario, p_Error, p_Modo)
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Indicadores_CalcularDesdeColecciones ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Public Function Indicadores_Calcular( _
+                                    ByVal p_Datos As Scripting.Dictionary, _
+                                    ByVal p_Usuario As usuario, _
+                                    Optional ByRef p_Error As String, _
+                                    Optional ByVal p_Modo As String = "AMBOS" _
+                                    ) As Scripting.Dictionary
+    Dim m_Resultados As Scripting.Dictionary
+    Dim m_ProyectoUsuario As Long
+    Dim m_AuditoriaUsuario As Long
+    Dim m_IncluirProyecto As Boolean
+    Dim m_IncluirAuditoria As Boolean
+    On Error GoTo errores
+
+    m_IncluirProyecto = (UCase$(Trim$(p_Modo)) <> "AUDITORIA")
+    m_IncluirAuditoria = (UCase$(Trim$(p_Modo)) <> "PROYECTO")
+
+    Set m_Resultados = New Scripting.Dictionary
+    m_Resultados.CompareMode = TextCompare
+
+    If m_IncluirProyecto Then
+        m_Resultados("ProyectoTotal") = Indicadores_CountDictionary(p_Datos, "ProyectoTareasPteReplanificar") + _
+                                        Indicadores_CountDictionary(p_Datos, "ProyectoNCAccionesSinTareas") + _
+                                        Indicadores_CountDictionary(p_Datos, "ProyectoNCRegistradas") + _
+                                        Indicadores_CountDictionary(p_Datos, "ProyectoNCPteCE") + _
+                                        Indicadores_CountDictionary(p_Datos, "ProyectoNCCECaducada") + _
+                                        Indicadores_CountDictionary(p_Datos, "ProyectoNCCENoConforme")
+
+        m_ProyectoUsuario = Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoTareasPteReplanificar"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoTareasIrregulares"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoNCRegistradas"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoNCAccionesSinTareas"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoNCPteCE"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoNCCECaducada"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_ProyectoUsuario = m_ProyectoUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "ProyectoNCCENoConforme"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_Resultados("ProyectoUsuario") = m_ProyectoUsuario
+    End If
+
+    If m_IncluirAuditoria Then
+        m_Resultados("AuditoriaTotal") = Indicadores_CountDictionary(p_Datos, "AuditoriaTareasPteReplanificar") + _
+                                         Indicadores_CountDictionary(p_Datos, "AuditoriaNCAccionesSinTareas") + _
+                                         Indicadores_CountDictionary(p_Datos, "AuditoriaNCRegistradas") + _
+                                         Indicadores_CountDictionary(p_Datos, "AuditoriaNCPteCE") + _
+                                         Indicadores_CountDictionary(p_Datos, "AuditoriaNCCECaducada") + _
+                                         Indicadores_CountDictionary(p_Datos, "AuditoriaNCCENoConforme")
+
+        m_AuditoriaUsuario = Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaTareasPteReplanificar"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_AuditoriaUsuario = m_AuditoriaUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaNCRegistradas"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_AuditoriaUsuario = m_AuditoriaUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaNCAccionesSinTareas"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_AuditoriaUsuario = m_AuditoriaUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaNCPteCE"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_AuditoriaUsuario = m_AuditoriaUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaNCCECaducada"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_AuditoriaUsuario = m_AuditoriaUsuario + Indicadores_CountUsuario(Indicadores_GetDictionary(p_Datos, "AuditoriaNCCENoConforme"), p_Usuario, p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+        m_Resultados("AuditoriaUsuario") = m_AuditoriaUsuario
+    End If
+
+    Set Indicadores_Calcular = m_Resultados
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Indicadores_Calcular ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Public Function Indicadores_FormatearCaption(ByVal p_Usuario As Long, ByVal p_Total As Long) As String
+    Indicadores_FormatearCaption = "Seguimiento " & CStr(p_Usuario) & " / " & CStr(p_Total)
+End Function
+
+Private Function Indicadores_GetDictionary(ByVal p_Datos As Scripting.Dictionary, ByVal p_Key As String) As Scripting.Dictionary
+    If p_Datos Is Nothing Then Exit Function
+    If Not p_Datos.Exists(p_Key) Then Exit Function
+    If IsObject(p_Datos(p_Key)) Then
+        Set Indicadores_GetDictionary = p_Datos(p_Key)
+    End If
+End Function
+
+Private Function Indicadores_CountDictionary(ByVal p_Datos As Scripting.Dictionary, ByVal p_Key As String) As Long
+    Dim m_Col As Scripting.Dictionary
+    Set m_Col = Indicadores_GetDictionary(p_Datos, p_Key)
+    If Not m_Col Is Nothing Then
+        Indicadores_CountDictionary = m_Col.count
+    End If
+End Function
+
+Private Function Indicadores_CountUsuario( _
+                                        ByVal p_ColTotal As Scripting.Dictionary, _
+                                        ByVal p_Usuario As usuario, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Long
+    Dim m_Col As Scripting.Dictionary
+    Set m_Col = getColSeguimientoPorUsuario(p_ColTotal, p_Usuario, p_Error)
+    If p_Error <> "" Then Exit Function
+    If Not m_Col Is Nothing Then
+        Indicadores_CountUsuario = m_Col.count
     End If
 End Function
 Public Function ResetearColTareas( _
