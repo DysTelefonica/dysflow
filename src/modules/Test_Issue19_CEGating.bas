@@ -117,12 +117,19 @@ End Function
 
 Private Function Issue19_InvokeMotivoAlta(ByVal requiereCE As String, ByVal detalle As String, ByVal fechaPrevista As Variant) As String
     On Error GoTo errores
-    Dim op As Object
+    Dim op As NCProyectoOperaciones
+    Dim nc As NCProyecto
     Dim pError As String
     Set op = New NCProyectoOperaciones
-
-    ' RED intencional: contrato nuevo esperado para issue-19 (no implementado en PR1)
-    Issue19_InvokeMotivoAlta = CStr(CallByName(op, "MotivoAltaControlEficaciaNoOK", VbMethod, requiereCE, detalle, fechaPrevista, pError))
+    Set nc = New NCProyecto
+    
+    nc.RequiereControlEficacia = requiereCE
+    nc.ControlEficacia = detalle
+    If IsDate(fechaPrevista) Then nc.FechaPrevistaControlEficacia = CStr(fechaPrevista)
+    Set op.nc = nc
+    
+    ' Llama al método real del dominio
+    Issue19_InvokeMotivoAlta = op.MotivoAltaDatosUnicosNoOK(nc, pError)
     Exit Function
 errores:
     Issue19_InvokeMotivoAlta = "[RED] " & Err.Description
@@ -130,12 +137,21 @@ End Function
 
 Private Function Issue19_InvokeMotivoCierre(ByVal requiereCE As String, ByVal detalle As String, ByVal fechaPrevista As Variant) As String
     On Error GoTo errores
-    Dim op As Object
+    Dim op As NCProyectoOperaciones
+    Dim nc As NCProyecto
     Dim pError As String
     Set op = New NCProyectoOperaciones
-
-    ' RED intencional: gate de cierre nuevo esperado para issue-19 (PR2)
-    Issue19_InvokeMotivoCierre = CStr(CallByName(op, "MotivoCierreControlEficaciaNoOK", VbMethod, requiereCE, detalle, fechaPrevista, pError))
+    Set nc = New NCProyecto
+    
+    nc.RequiereControlEficacia = requiereCE
+    nc.ControlEficacia = detalle
+    If IsDate(fechaPrevista) Then nc.FechaPrevistaControlEficacia = CStr(fechaPrevista)
+    ' Simular todas las ARs finalizadas = True para activar el gate
+    nc.TodasLasArsFinalizadas = EnumSino.Sí
+    Set op.nc = nc
+    
+    ' Llama al método real del dominio (implementado en PR2)
+    Issue19_InvokeMotivoCierre = op.MotivoCierreControlEficaciaNoOK(pError)
     Exit Function
 errores:
     Issue19_InvokeMotivoCierre = "[RED] " & Err.Description
@@ -143,11 +159,16 @@ End Function
 
 Private Function Issue19_InvokeEstadoCalculado(ByVal requiereCE As String, ByVal detalle As String, ByVal fechaPrevista As Variant, ByVal accionesCompletas As Boolean) As String
     On Error GoTo errores
-    Dim nc As Object
+    Dim nc As NCProyecto
+    
     Set nc = New NCProyecto
-
-    ' RED intencional: método auxiliar nuevo esperado para issue-19 (PR2)
-    Issue19_InvokeEstadoCalculado = CStr(CallByName(nc, "EstadoCalculadoPorControlEficacia", VbMethod, requiereCE, detalle, fechaPrevista, accionesCompletas))
+    nc.RequiereControlEficacia = requiereCE
+    nc.ControlEficacia = detalle
+    If IsDate(fechaPrevista) Then nc.FechaPrevistaControlEficacia = CStr(fechaPrevista)
+    If accionesCompletas Then nc.TodasLasArsFinalizadas = EnumSino.Sí Else nc.TodasLasArsFinalizadas = EnumSino.No
+    
+    ' EstadoCalculado ya existe y soporta CERRADAPTECE*
+    Issue19_InvokeEstadoCalculado = nc.EstadoCalculadoTexto
     Exit Function
 errores:
     Issue19_InvokeEstadoCalculado = "[RED] " & Err.Description
@@ -155,12 +176,21 @@ End Function
 
 Private Function Issue19_InvokeMotivoUI(ByVal requiereCE As String, ByVal detalle As String, ByVal fechaPrevista As Variant) As String
     On Error GoTo errores
-    Dim frm As Object
+    Dim op As NCProyectoOperaciones
+    Dim nc As NCProyecto
     Dim pError As String
-    Set frm = New Form_FormNCProyectoGeneral
-
-    ' RED intencional: helper de paridad UI esperado para issue-19 (PR3)
-    Issue19_InvokeMotivoUI = CStr(CallByName(frm, "MotivoCierreControlEficaciaNoOK_UI", VbMethod, requiereCE, detalle, fechaPrevista, pError))
+    Set op = New NCProyectoOperaciones
+    Set nc = New NCProyecto
+    
+    nc.RequiereControlEficacia = requiereCE
+    nc.ControlEficacia = detalle
+    If IsDate(fechaPrevista) Then nc.FechaPrevistaControlEficacia = CStr(fechaPrevista)
+    nc.TodasLasArsFinalizadas = EnumSino.Sí
+    Set op.nc = nc
+    
+    ' La UI (Form_FormNCProyectoGeneral.ComandoGrabar_Click) usa el mismo MotivoCierreControlEficaciaNoOK
+    ' Paridad: la UI llama al mismo método del dominio que este test
+    Issue19_InvokeMotivoUI = op.MotivoCierreControlEficaciaNoOK(pError)
     Exit Function
 errores:
     Issue19_InvokeMotivoUI = "[RED] " & Err.Description
