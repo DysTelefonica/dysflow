@@ -392,3 +392,194 @@ Private Sub AddSegNCAuditoria(ByVal pCol As Scripting.Dictionary, ByVal pID As S
     item.Responsable = pResp
     pCol.Add pID & "|" & CStr(pCol.count + 1), item
 End Sub
+
+' ============================================================
+' TESTS DE SINCRONIZACION DE CACHE — ModuloCacheIndicadores
+' Verifica que el cache global de indicadores funciona correctamente
+' y no corrompe datos al invalidar/recargar.
+' ============================================================
+
+Public Function Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic() As String
+    ' Test: el cache delegate en Entorno devuelve el mismo resultado
+    ' que el constructor, y resetear fuerza recalculado.
+    Dim logs As Collection
+    Dim assertError As String
+    Dim usr As usuario
+    Dim col1 As Scripting.Dictionary
+    Dim col2 As Scripting.Dictionary
+    Dim col3 As Scripting.Dictionary
+    Dim pError As String
+    Dim dict1 As Scripting.Dictionary
+    Dim dict2 As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Set logs = TestHelper.NewLogs
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+    
+    ' 1.Primera carga via Entorno (delega a cache)
+    Set col1 = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
+    AddLog logs, "Primera carga via Entorno, count=" & col1.Count
+    
+    ' 2.Segunda carga via cache directo (debe ser la misma referencia)
+    Set dict1 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache_Indicadores_Proyecto no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not dict1 Is Nothing, "Cache no debe ser Nothing tras carga via Entorno", logs, assertError)
+    Call TestHelper.AssertTrue(col1 Is dict1, "Cache directo y via Entorno deben devolver la misma referencia", logs, assertError)
+    
+    ' 3.Resetear cache
+    Call Cache_InvalidarProyecto(pError:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
+    AddLog logs, "Cache invalidado"
+    
+    ' 4.Reset=True obliga a recalcular (nueva referencia)
+    Set dict2 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Recalculo con reset no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not dict2 Is Nothing, "Tras reset, cache debe tener datos", logs, assertError)
+    
+    ' 5.Loading indicator state
+    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), "Cache debe estar marcado como cargado", logs, assertError)
+    
+    If assertError <> "" Then
+        Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonOk(logs, "cache_delegacion_reset_ok")
+    End If
+    Exit Function
+errores:
+    Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Public Function Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic() As String
+    ' Test: InvalidarTodo limpia ambos caches independientemente.
+    ' Cada cache debe poder existir sin interferir con el otro.
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim dictProy As Scripting.Dictionary
+    Dim dictAud As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Set logs = TestHelper.NewLogs
+    
+    ' Cargar ambos caches
+    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    If pError <> "" Then GoTo errores
+    Set dictAud = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    If pError <> "" Then GoTo errores
+    
+    AddLog logs, "Ambos caches cargados. EstaCargado proy=" & Cache_Proyecto_EstaCargado() & _
+                 " aud=" & Cache_Auditoria_EstaCargado()
+    
+    ' Invalidar TODO
+    Call Cache_InvalidarTodo(pError:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarTodo no debe fallar", logs, assertError)
+    
+    ' Ambos deben estar limpiados
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), _
+        "Tras InvalidarTodo, proyecto no debe estar cargado", logs, assertError)
+    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), _
+        "Tras InvalidarTodo, auditoria no debe estar cargada", logs, assertError)
+    
+    If assertError <> "" Then
+        Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonOk(logs, "invalidate_todo_separation_ok")
+    End If
+    Exit Function
+errores:
+    Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Public Function Test_Cache_InvalidacionSelectiva_Atomic() As String
+    ' Test: InvalidarProyecto solo limpia cache proyecto,
+    ' invalidar auditoria solo limpia cache auditoria.
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim dictProy As Scripting.Dictionary
+    Dim dictAud As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Set logs = TestHelper.NewLogs
+    
+    ' Cargar ambos
+    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    If pError <> "" Then GoTo errores
+    Set dictAud = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    If pError <> "" Then GoTo errores
+    
+    ' Invalidar solo proyecto
+    Call Cache_InvalidarProyecto(pError:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
+    
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), _
+        "Proyecto debe estar descargado", logs, assertError)
+    Call TestHelper.AssertTrue(Cache_Auditoria_EstaCargado(), _
+        "Auditoria debe seguir cargada (inval. selectiva)", logs, assertError)
+    
+    ' Recargar proyecto
+    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Recarga proyecto no debe fallar", logs, assertError)
+    
+    ' Invalidar solo auditoria
+    Call Cache_InvalidarAuditoria(pError:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarAuditoria no debe fallar", logs, assertError)
+    
+    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), _
+        "Proyecto sigue cargado", logs, assertError)
+    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), _
+        "Auditoria debe estar descargada", logs, assertError)
+    
+    If assertError <> "" Then
+        Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonOk(logs, "inval_selectiva_ok")
+    End If
+    Exit Function
+errores:
+    Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Public Function Test_Cache_ConsistenciaConEntorno_Atomic() As String
+    ' Test: los datos devueltos por cache y por Entorno son consistentes.
+    ' Tras cargar via Entorno, el cache debe tener los mismos datos.
+    Dim logs As Collection
+    Dim assertError As String
+    Dim usr As usuario
+    Dim colEntorno As Scripting.Dictionary
+    Dim colCache As Scripting.Dictionary
+    Dim resultadosEntorno As Scripting.Dictionary
+    Dim resultadosCache As Scripting.Dictionary
+    Dim pError As String
+    On Error GoTo errores
+    
+    Set logs = TestHelper.NewLogs
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+    
+    ' Limpiar cache primero para test limpio
+    Call Cache_InvalidarProyecto(pError:=pError)
+    
+    ' Cargar via Entorno (delega a cache internamente)
+    Set colEntorno = m_ObjEntorno.ColSegsNCProyectoRegistradas
+    AddLog logs, "Entorno carga NCProyectoRegistradas, count=" & colEntorno.Count
+    
+    ' Obtener via cache directo
+    Set colCache = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Cache no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not colCache Is Nothing, "Cache no debe ser Nothing", logs, assertError)
+    
+    ' Deben ser la misma referencia
+    Call TestHelper.AssertTrue(colEntorno Is colCache, _
+        "Entorno y Cache deben devolver misma referencia para mismo bucket", logs, assertError)
+    
+    If assertError <> "" Then
+        Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonOk(logs, "consistencia_entorno_cache_ok")
+    End If
+    Exit Function
+errores:
+    Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function

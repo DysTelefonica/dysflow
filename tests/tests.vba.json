@@ -137,6 +137,30 @@
       "procedure": "Test_Indicadores_MensajeAvance_AuditoriaYDefault_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "indicator-characterization", "issue-16"]
+    },
+    {
+      "name": "Cache proyecto delegacion y reset",
+      "procedure": "Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-sync", "issue-18"]
+    },
+    {
+      "name": "Cache invalidar todo separa proyecto y auditoria",
+      "procedure": "Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-sync", "issue-18"]
+    },
+    {
+      "name": "Cache invalidacion selectiva proyecto/auditoria",
+      "procedure": "Test_Cache_InvalidacionSelectiva_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-sync", "issue-18"]
+    },
+    {
+      "name": "Cache consistencia Entorno y cache directo",
+      "procedure": "Test_Cache_ConsistenciaConEntorno_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-sync", "issue-18"]
     }
   ]
 }
