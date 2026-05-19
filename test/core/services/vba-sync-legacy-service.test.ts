@@ -228,7 +228,7 @@ describe("VbaSyncLegacyService", () => {
 		});
 	});
 
-	it("dry-run import_all resolves explicit registered project instead of cwd and does not open Access", async () => {
+	it("dry-run import_all with registered projectId returns CONFIG_PROJECT_NOT_REGISTERED (global registry deprecated)", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-"));
 		const staging = join(root, "staging");
 		const develop = join(root, "develop");
@@ -292,20 +292,10 @@ describe("VbaSyncLegacyService", () => {
 			importMode: "Code",
 		});
 
-		expect(result.ok).toBe(true);
-		if (!result.ok) throw new Error("expected dry-run success");
-		expect(result.data).toMatchObject({
-			operation: "import_all",
-			dryRun: true,
-			willModifyAccess: false,
-			requestedProjectId: "develop",
-			resolvedProjectId: "develop",
-			configSource: "global-registry",
-			accessPath: join(develop, "front.accdb"),
-			destinationRoot: join(develop, "src"),
-			modulesPlanned: ["Entorno"],
-			modulesCount: 1,
-		});
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected failure");
+		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+		expect(result.error.message).toContain("deprecated");
 		expect(calls).toEqual([]);
 	});
 
@@ -338,7 +328,7 @@ describe("VbaSyncLegacyService", () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected failure");
 		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
-		expect(result.error.message).toContain("Refusing to fall back to cwd");
+		expect(result.error.message).toContain("deprecated");
 	});
 
 	it("dry-run explicit overrides win over requested project id", async () => {
@@ -503,12 +493,10 @@ describe("VbaSyncLegacyService", () => {
 			destinationRoot: overrideRoot,
 		});
 
-		expect(result.ok).toBe(true);
-		if (!result.ok) throw new Error("expected dry-run success");
-		expect(result.data).toMatchObject({
-			destinationRoot: overrideRoot,
-			modulesPlanned: ["Right"],
-		});
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected registry deprecation failure");
+		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+		expect(result.error.message).toContain("deprecated");
 	});
 
 	it("destinationRoot-only override wins over configured cwd project", async () => {

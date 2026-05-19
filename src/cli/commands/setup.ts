@@ -10,9 +10,7 @@ import {
 import {
 	loadDysflowConfigAsync,
 	redactDysflowConfig,
-	resolveProjectRegistryPath,
 	type DysflowConfig,
-	type DysflowProjectRegistry,
 } from "../../core/config/dysflow-config.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
@@ -72,12 +70,7 @@ export async function handleSetupCommand(
 	let extraOutput: string[] = [];
 	if (parsed.options.writeProject) {
 		const writeResult = await writeRelativeProjectConfig(configResult.data, context.cwd);
-		const registerResult = await registerProjectConfig(
-			configResult.data.projectId ?? basename(context.cwd ?? process.cwd()),
-			writeResult.projectPath,
-			context,
-		);
-		extraOutput = [writeResult.message, registerResult];
+		extraOutput = [writeResult.message];
 	}
 
 	return {
@@ -178,27 +171,7 @@ async function updateProjectConfigId(
 	parsed.id = projectId;
 	await mkdir(dirname(projectPath), { recursive: true });
 	await writeFile(projectPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-	const registerResult = await registerProjectConfig(projectId, projectPath, context);
-	return [`Updated project id in .dysflow/project.json: ${projectId}`, registerResult].join("\n");
-}
-
-async function registerProjectConfig(
-	projectId: string,
-	projectPath: string,
-	context: Pick<CliCommandContext, "cwd" | "env">,
-): Promise<string> {
-	const registryPath = resolveProjectRegistryPath({}, context.env, context.cwd);
-	const raw = await readFile(registryPath, "utf8").catch(() => "{}");
-	let registry: DysflowProjectRegistry;
-	try {
-		registry = JSON.parse(raw) as DysflowProjectRegistry;
-	} catch {
-		throw new Error("Invalid Dysflow project registry JSON");
-	}
-	registry.projects = { ...(registry.projects ?? {}), [projectId]: { configPath: projectPath } };
-	await mkdir(dirname(registryPath), { recursive: true });
-	await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
-	return `Registered project id ${projectId} in ${registryPath}`;
+	return `Updated project id in .dysflow/project.json: ${projectId}`;
 }
 
 async function writeRelativeProjectConfig(

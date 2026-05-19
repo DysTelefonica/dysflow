@@ -202,7 +202,7 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
     }
   });
 
-  it("global registry entry resolution — both variants resolve to the same config", async () => {
+  it("global registry projectId returns CONFIG_PROJECT_NOT_REGISTERED with deprecation message", async () => {
     const ws = createTempWorkspace();
     try {
       const projectDir = join(ws.root, "myproject");
@@ -233,46 +233,10 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       const asyncResult = await loadDysflowConfigAsync(input);
 
       expect(syncResult).toEqual(asyncResult);
-      expect(syncResult.ok).toBe(true);
-      if (!syncResult.ok) throw new Error("expected success");
-      expect(syncResult.data).toMatchObject({
-        configSource: "global-registry",
-        projectId: "registry-project",
-        accessDbPath: resolve(projectDir, "app.accdb"),
-        timeoutMs: 20_000,
-      });
-    } finally {
-      ws.cleanup();
-    }
-  });
-
-  it("global registry with malformed project JSON — both variants return CONFIG_PROJECT_FILE_INVALID", async () => {
-    const ws = createTempWorkspace();
-    try {
-      const projectDir = join(ws.root, "badproject");
-      const registryDir = join(ws.root, "registry");
-      const configFilePath = join(projectDir, ".dysflow", "project.json");
-
-      mkdirSync(join(projectDir, ".dysflow"), { recursive: true });
-      writeFileSync(configFilePath, "{ bad json here }", "utf8");
-
-      const registryPath = join(registryDir, "projects.json");
-      writeRegistryWithProject(registryPath, "bad-project", configFilePath);
-
-      const input = {
-        projectId: "bad-project",
-        projectRegistryPath: registryPath,
-        env: {},
-        cwd: ws.root,
-      };
-
-      const syncResult = loadDysflowConfig(input);
-      const asyncResult = await loadDysflowConfigAsync(input);
-
-      expect(syncResult).toEqual(asyncResult);
       expect(syncResult.ok).toBe(false);
       if (syncResult.ok) throw new Error("expected failure");
-      expect(syncResult.error.code).toBe("CONFIG_PROJECT_FILE_INVALID");
+      expect(syncResult.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+      expect(syncResult.error.message).toContain("deprecated");
     } finally {
       ws.cleanup();
     }

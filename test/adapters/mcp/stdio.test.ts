@@ -240,7 +240,7 @@ describe("JsonLineMcpStdioRuntime", () => {
 		]);
 	});
 
-	it("resolves registered import dry-run even when MCP startup cwd has no project config", async () => {
+	it("rejects registered import dry-run after global registry deprecation", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-startup-"));
 		const startup = join(root, "startup");
 		const project = join(root, "project");
@@ -263,21 +263,13 @@ describe("JsonLineMcpStdioRuntime", () => {
 			importMode: "Code",
 		});
 
-		expect(result?.ok).toBe(true);
-		if (result === undefined || !result.ok) throw new Error("expected dry-run plan");
-		expect(result.data).toMatchObject({
-			operation: "import_all",
-			dryRun: true,
-			willModifyAccess: false,
-			requestedContextId: "registered-project",
-			resolvedProjectId: "registered-project",
-			accessPath: join(project, "front.accdb"),
-			destinationRoot: join(project, "src"),
-			modulesPlanned: ["Entorno"],
-		});
+		expect(result?.ok).toBe(false);
+		if (result === undefined || result.ok) throw new Error("expected registry deprecation failure");
+		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+		expect(result.error.message).toContain("deprecated");
 	});
 
-	it("resolves registered read query by projectId even when MCP startup cwd has no project config", async () => {
+	it("rejects registered read query by projectId after global registry deprecation", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-read-startup-"));
 		const startup = join(root, "startup");
 		const project = join(root, "project");
@@ -315,10 +307,8 @@ describe("JsonLineMcpStdioRuntime", () => {
 			mode: "read",
 		} as unknown as Parameters<typeof services.queryService.execute>[0]);
 
-		expect(result.ok).toBe(true);
-		expect(query.requests).toEqual([
-			expect.objectContaining({ projectId: "lanzadera", sql: "SELECT 1", mode: "read" }),
-		]);
+		expect(result.ok).toBe(false);
+		expect(query.requests).toEqual([]);
 	}, 15_000);
 
 	it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {

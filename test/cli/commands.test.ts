@@ -187,7 +187,7 @@ describe("dysflow command modules", () => {
 		}
 	});
 
-	it("returns a CLI error when project registry JSON is malformed", async () => {
+	it("ignores malformed global project registry when setting repo project id", async () => {
 		const workspace = createRepoConfigWorkspace();
 		const home = mkdtempSync(join(tmpdir(), "dysflow-registry-home-"));
 		try {
@@ -200,10 +200,9 @@ describe("dysflow command modules", () => {
 				{ cwd: workspace.root, env: { LOCALAPPDATA: home } },
 			);
 
-			expect(result.exitCode).toBe(1);
-			expect(result.stderr).toBe("Invalid Dysflow project registry JSON");
-			expect(result.stderr).not.toContain(registryPath);
-			expect(result.stderr).not.toContain(home);
+			expect(result.exitCode).toBe(0);
+			expect(result.stderr).toBe("");
+			expect(result.stdout).toContain("Updated project id in .dysflow/project.json");
 		} finally {
 			workspace.cleanup();
 			rmSync(home, { recursive: true, force: true });

@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-19
+
+### Changed
+
+- Deprecated the global `%APPDATA%/dysflow/projects.json` registry path. Dysflow now relies on per-repository `.dysflow/project.json` configuration and no longer reads or writes the global registry. Closes #249.
+
 ## [0.6.1] - 2026-05-19
 
 ### Fixed

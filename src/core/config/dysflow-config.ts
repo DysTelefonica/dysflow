@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import {
 	createDysflowError,
 	failureResult,
@@ -19,7 +19,7 @@ const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
 const LEGACY_PROJECT_CONFIG_PATH = "dysflow.project.json";
 const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
-export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-registry" | "runtime-default";
+export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-default";
 
 export type DysflowProjectConfig = {
 	id?: string;
@@ -34,13 +34,6 @@ export type DysflowProjectConfig = {
 	backendPasswordEnv?: string;
 	frontendPasswordEnv?: string;
 	passwordEnv?: string;
-};
-
-export type DysflowProjectRegistry = {
-	projects?: Record<
-		string,
-		string | { configPath?: string; path?: string; projectRoot?: string }
-	>;
 };
 
 export type DysflowConfig = {
@@ -77,7 +70,6 @@ export type DysflowConfigInput = {
 	contextId?: string;
 	projectConfig?: DysflowProjectConfig;
 	projectConfigPath?: string;
-	projectRegistryPath?: string;
 	accessPassword?: string;
 	backendPassword?: string;
 	timeoutMs?: number;
@@ -98,27 +90,13 @@ export function loadDysflowConfig(
 
 	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 	if (requestedProjectId !== undefined) {
-		const registeredConfigPath = resolveRegisteredProjectConfigPath(
-			requestedProjectId,
-			input,
-			env,
-			cwd,
-		);
-		if (registeredConfigPath === undefined) {
-			return failureResult(
-				createDysflowError(
-					"CONFIG_PROJECT_NOT_REGISTERED",
-					`Project '${requestedProjectId}' is not registered. Refusing to fall back to cwd.`,
-				),
-			);
-		}
-		return loadProjectConfigFromPath(
-			registeredConfigPath,
-			input,
-			env,
-			cwd,
-			"global-registry",
-			requestedProjectId,
+		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_NOT_REGISTERED",
+				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
+				{ retryable: false },
+			),
 		);
 	}
 
@@ -165,27 +143,13 @@ export async function loadDysflowConfigAsync(
 
 	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 	if (requestedProjectId !== undefined) {
-		const registeredConfigPath = await resolveRegisteredProjectConfigPathAsync(
-			requestedProjectId,
-			input,
-			env,
-			cwd,
-		);
-		if (registeredConfigPath === undefined) {
-			return failureResult(
-				createDysflowError(
-					"CONFIG_PROJECT_NOT_REGISTERED",
-					`Project '${requestedProjectId}' is not registered. Refusing to fall back to cwd.`,
-				),
-			);
-		}
-		return loadProjectConfigFromPathAsync(
-			registeredConfigPath,
-			input,
-			env,
-			cwd,
-			"global-registry",
-			requestedProjectId,
+		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_NOT_REGISTERED",
+				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
+				{ retryable: false },
+			),
 		);
 	}
 
@@ -467,71 +431,6 @@ function resolvePathMaybeRelative(value: string, cwd: string): string {
 	return isAbsolute(value) ? resolve(value) : resolve(cwd, value);
 }
 
-/**
- * Pure transformation: given a registry entry and the directory that contains
- * the registry file, resolve the absolute path to the project config file.
- *
- * This helper is shared by the sync and async registry-resolution variants so
- * that the lookup logic lives in exactly one place (#195).
- */
-function resolveRegistryEntry(
-	entry: string | { configPath?: string; path?: string; projectRoot?: string },
-	registryDir: string,
-): string | undefined {
-	if (typeof entry === "string") return resolveRegisteredPath(entry, registryDir);
-	const configPath = stringValue(entry.configPath);
-	if (configPath !== undefined) return resolveRegisteredPath(configPath, registryDir);
-	const projectRoot = stringValue(entry.projectRoot) ?? stringValue(entry.path);
-	if (projectRoot !== undefined) {
-		const resolvedProjectRoot = resolveRegisteredPath(projectRoot, registryDir);
-		return resolvedProjectRoot === undefined
-			? undefined
-			: resolve(resolvedProjectRoot, DEFAULT_PROJECT_CONFIG_PATH);
-	}
-	return undefined;
-}
-
-function resolveRegisteredProjectConfigPath(
-	projectId: string,
-	input: DysflowConfigInput,
-	env: Record<string, string | undefined>,
-	cwd: string,
-): string | undefined {
-	const registryPath = resolveProjectRegistryPath(input, env, cwd);
-	if (!existsSync(registryPath)) return undefined;
-	let registry: DysflowProjectRegistry;
-	try {
-		registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
-	} catch (err) {
-		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
-		return undefined;
-	}
-	const entry = registry.projects?.[projectId];
-	if (entry === undefined) return undefined;
-	return resolveRegistryEntry(entry, dirname(registryPath));
-}
-
-
-async function resolveRegisteredProjectConfigPathAsync(
-	projectId: string,
-	input: DysflowConfigInput,
-	env: Record<string, string | undefined>,
-	cwd: string,
-): Promise<string | undefined> {
-	const registryPath = resolveProjectRegistryPath(input, env, cwd);
-	if (!(await pathExists(registryPath))) return undefined;
-	let registry: DysflowProjectRegistry;
-	try {
-		registry = await readJsonFileAsync<DysflowProjectRegistry>(registryPath);
-	} catch (err) {
-		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
-		return undefined;
-	}
-	const entry = registry.projects?.[projectId];
-	if (entry === undefined) return undefined;
-	return resolveRegistryEntry(entry, dirname(registryPath));
-}
-
 async function findRepoProjectConfigPathAsync(cwd: string): Promise<{ found: "none" } | { found: "legacy" | "standard", path: string } | { found: "ambiguous", paths: [string, string] }> {
 	const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
 	const legacy = resolve(cwd, LEGACY_PROJECT_CONFIG_PATH);
@@ -557,36 +456,6 @@ async function pathExists(candidate: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
-}
-
-function resolveRegisteredPath(value: string, registryDir: string): string | undefined {
-	const resolved = resolvePathMaybeRelative(value, registryDir);
-	if (isAbsolute(value)) {
-		if (!isPathInside(resolved, registryDir)) {
-			// ADR-7: warn-only (back-compat). Future versions may hard-block this.
-			console.warn(
-				`[dysflow] registry entry uses absolute path outside registry directory — consider using a relative path: ${resolved}`,
-			);
-		}
-		return resolved;
-	}
-	return isPathInside(resolved, registryDir) ? resolved : undefined;
-}
-
-function isPathInside(candidate: string, base: string): boolean {
-	const relativePath = relative(resolve(base), resolve(candidate));
-	return relativePath.length === 0 || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
-}
-
-export function resolveProjectRegistryPath(
-	input: Pick<DysflowConfigInput, "projectRegistryPath"> = {},
-	env: Record<string, string | undefined> = process.env,
-	cwd: string = process.cwd(),
-): string {
-	const explicit = stringValue(input.projectRegistryPath) ?? stringValue(env.DYSFLOW_PROJECT_REGISTRY_PATH);
-	if (explicit !== undefined) return resolvePathMaybeRelative(explicit, cwd);
-	const home = stringValue(env.LOCALAPPDATA) ?? stringValue(env.HOME) ?? cwd;
-	return join(home, "dysflow", "projects.json");
 }
 
 function findRepoProjectConfigPath(cwd: string): { found: "none" } | { found: "legacy" | "standard", path: string } | { found: "ambiguous", paths: [string, string] } {
