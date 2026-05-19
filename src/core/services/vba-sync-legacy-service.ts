@@ -1,5 +1,5 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { extname, isAbsolute, parse, resolve } from "node:path";
+import { dirname, extname, isAbsolute, parse, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
@@ -146,11 +146,30 @@ export class VbaSyncLegacyService {
     // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
     // the caller-specified directory instead of the project's default src/ folder (issue #185).
     const exportPath = stringValue(params.exportPath);
-    const effectiveParams = (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
-      ? { ...params, destinationRoot: exportPath }
-      : params;
+    if ((toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined) {
+      const validatedExportPath = this.validateExportPathInSandbox(params, exportPath);
+      if (!validatedExportPath.ok) return validatedExportPath;
+      return this.executeMappedTool(toolName, { ...params, destinationRoot: validatedExportPath.data }, mapping);
+    }
 
-    return this.executeMappedTool(toolName, effectiveParams, mapping);
+    return this.executeMappedTool(toolName, params, mapping);
+  }
+
+  private validateExportPathInSandbox(params: Record<string, unknown>, exportPath: string): OperationResult<string> {
+    const resolvedAccessPath = stringValue(params.accessPath) ?? this.accessPath;
+    if (resolvedAccessPath === undefined || resolvedAccessPath.trim().length === 0) {
+      return successResult(exportPath);
+    }
+
+    const sandboxRoot = resolve(dirname(resolvedAccessPath));
+    const candidate = resolve(exportPath);
+    const rootLower = sandboxRoot.toLowerCase();
+    const pathLower = candidate.toLowerCase();
+    if (pathLower !== rootLower && !pathLower.startsWith(`${rootLower}/`) && !pathLower.startsWith(`${rootLower}\\`)) {
+      return failureResult(createDysflowError("SANDBOX_PATH_ESCAPE", "exportPath must stay inside the Access sandbox root."));
+    }
+
+    return successResult(candidate);
   }
 
   private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
