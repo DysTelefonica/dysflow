@@ -166,43 +166,43 @@
       "name": "Issue19 CE alta si sin detalle no bloquea",
       "procedure": "Test_Issue19_CE_Alta_Si_SinDetalle_NoBloquea",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE alta si con detalle pasa",
       "procedure": "Test_Issue19_CE_Alta_Si_ConDetalle_Pasa",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE alta no ignora detalle",
       "procedure": "Test_Issue19_CE_Alta_No_IgnoraDetalle",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE cierre sin detalle bloquea",
       "procedure": "Test_Issue19_CE_Cierre_SinDetalle_Bloquea",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE cierre con detalle permite cierre",
       "procedure": "Test_Issue19_CE_Cierre_ConDetalle_PermiteCierre",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE estado calculado pendiente",
       "procedure": "Test_Issue19_CE_EstadoCalculado_Pendiente",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 CE estado calculado sin pendiente",
       "procedure": "Test_Issue19_CE_EstadoCalculado_SinPendiente",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-19", "ce-gating", "red"]
+      "tags": ["atomic", "issue-19", "ce-gating"]
     },
     {
       "name": "Issue19 paridad UI dominio",
