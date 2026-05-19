@@ -442,9 +442,15 @@ Public Function ResetearColTareas( _
                                     Optional ByRef p_Error As String _
                                     ) As String
 
-   
+    
     
     On Error GoTo errores
+    ' Invalida cache global de indicadores antes de resetear propiedades de Entorno
+    Cache_InvalidarTodo p_Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
     With m_ObjEntorno
         Set .ColSegsTareasProyecto = Nothing
         Set .ColSegsTareasProyectoActivas = Nothing

@@ -1791,10 +1791,19 @@ Public Property Set ColSegsTareasProyectoActivas(ByVal objNewValue As Variant)
 
 End Property
 Public Property Get ColSegsTareasProyectoPteReplanificar() As Scripting.Dictionary
-   
+    
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsTareasProyectoPteReplanificar = m_Cached
+    End If
     If Not m_objColSegsTareasProyectoPteReplanificar Is Nothing Then
         Set ColSegsTareasProyectoPteReplanificar = m_objColSegsTareasProyectoPteReplanificar
         Exit Property
@@ -1803,6 +1812,8 @@ Public Property Get ColSegsTareasProyectoPteReplanificar() As Scripting.Dictiona
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsTareasProyectoPteReplanificar = m_objColSegsTareasProyectoPteReplanificar
     Exit Property
 errores:
@@ -1823,6 +1834,15 @@ Public Property Get ColSegsNCProyectoRegistradas() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoRegistradas = m_Cached
+    End If
     If Not m_objColSegsNCProyectoRegistradas Is Nothing Then
         Set ColSegsNCProyectoRegistradas = m_objColSegsNCProyectoRegistradas
         Exit Property
@@ -1831,6 +1851,8 @@ Public Property Get ColSegsNCProyectoRegistradas() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCProyectoRegistradas = m_objColSegsNCProyectoRegistradas
     Exit Property
 errores:
@@ -1875,6 +1897,15 @@ Public Property Get ColSegsNCProyectoAccionesSinTareas() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_SIN_TAREAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoAccionesSinTareas = m_Cached
+    End If
     If Not m_objColSegsNCProyectoAccionesSinTareas Is Nothing Then
         Set ColSegsNCProyectoAccionesSinTareas = m_objColSegsNCProyectoAccionesSinTareas
         Exit Property
@@ -1883,6 +1914,8 @@ Public Property Get ColSegsNCProyectoAccionesSinTareas() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_SIN_TAREAS, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCProyectoAccionesSinTareas = m_objColSegsNCProyectoAccionesSinTareas
     Exit Property
 errores:
@@ -1901,6 +1934,15 @@ Public Property Get ColSegsNCProyectoPteCE() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_PTE_CE, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoPteCE = m_Cached
+    End If
     If Not m_objColSegsNCProyectoPteCE Is Nothing Then
         Set ColSegsNCProyectoPteCE = m_objColSegsNCProyectoPteCE
         Exit Property
@@ -1909,6 +1951,8 @@ Public Property Get ColSegsNCProyectoPteCE() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_PTE_CE, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCProyectoPteCE = m_objColSegsNCProyectoPteCE
     Exit Property
 errores:
@@ -1927,6 +1971,15 @@ Public Property Get ColSegsNCProyectoCECaducada() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_CADUCADA, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoCECaducada = m_Cached
+    End If
     If Not m_objColSegsNCProyectoCECaducada Is Nothing Then
         Set ColSegsNCProyectoCECaducada = m_objColSegsNCProyectoCECaducada
         Exit Property
@@ -1935,6 +1988,8 @@ Public Property Get ColSegsNCProyectoCECaducada() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_CADUCADA, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCProyectoCECaducada = m_objColSegsNCProyectoCECaducada
     Exit Property
 errores:
@@ -1954,6 +2009,15 @@ Public Property Get ColSegsNCProyectoCENoConforme() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_NO_CONFORME, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoCENoConforme = m_Cached
+    End If
     If Not m_objColSegsNCProyectoCENoConforme Is Nothing Then
         Set ColSegsNCProyectoCENoConforme = m_objColSegsNCProyectoCENoConforme
         Exit Property
@@ -1962,6 +2026,8 @@ Public Property Get ColSegsNCProyectoCENoConforme() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_NO_CONFORME, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCProyectoCENoConforme = m_objColSegsNCProyectoCENoConforme
     Exit Property
 errores:
@@ -2032,6 +2098,15 @@ Public Property Get ColSegsTareasAuditoriaPteReplanificar() As Scripting.Diction
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsTareasAuditoriaPteReplanificar = m_Cached
+    End If
     If Not m_objColSegsTareasAuditoriaPteReplanificar Is Nothing Then
         Set ColSegsTareasAuditoriaPteReplanificar = m_objColSegsTareasAuditoriaPteReplanificar
         Exit Property
@@ -2040,6 +2115,8 @@ Public Property Get ColSegsTareasAuditoriaPteReplanificar() As Scripting.Diction
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsTareasAuditoriaPteReplanificar = m_objColSegsTareasAuditoriaPteReplanificar
     Exit Property
 errores:
@@ -2084,6 +2161,15 @@ Public Property Get ColSegsNCAuditoriaRegistradas() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_REGISTRADAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaRegistradas = m_Cached
+    End If
     If Not m_objColSegsNCAuditoriaRegistradas Is Nothing Then
         Set ColSegsNCAuditoriaRegistradas = m_objColSegsNCAuditoriaRegistradas
         Exit Property
@@ -2092,6 +2178,8 @@ Public Property Get ColSegsNCAuditoriaRegistradas() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_REGISTRADAS, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCAuditoriaRegistradas = m_objColSegsNCAuditoriaRegistradas
     Exit Property
 errores:
@@ -2136,6 +2224,15 @@ Public Property Get ColSegsNCAuditoriaAccionesSinTareas() As Scripting.Dictionar
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_SIN_TAREAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaAccionesSinTareas = m_Cached
+    End If
     If Not m_objColSegsNCAuditoriaAccionesSinTareas Is Nothing Then
         Set ColSegsNCAuditoriaAccionesSinTareas = m_objColSegsNCAuditoriaAccionesSinTareas
         Exit Property
@@ -2144,6 +2241,8 @@ Public Property Get ColSegsNCAuditoriaAccionesSinTareas() As Scripting.Dictionar
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_SIN_TAREAS, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCAuditoriaAccionesSinTareas = m_objColSegsNCAuditoriaAccionesSinTareas
     Exit Property
 errores:
@@ -2162,6 +2261,15 @@ Public Property Get ColSegsNCAuditoriaPteCE() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_PTE_CE, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaPteCE = m_Cached
+    End If
     If Not m_objColSegsNCAuditoriaPteCE Is Nothing Then
         Set ColSegsNCAuditoriaPteCE = m_objColSegsNCAuditoriaPteCE
         Exit Property
@@ -2170,6 +2278,8 @@ Public Property Get ColSegsNCAuditoriaPteCE() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_PTE_CE, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCAuditoriaPteCE = m_objColSegsNCAuditoriaPteCE
     Exit Property
 errores:
@@ -2188,6 +2298,15 @@ Public Property Get ColSegsNCAuditoriaCECaducada() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_CADUCADA, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaCECaducada = m_Cached
+    End If
     If Not m_objColSegsNCAuditoriaCECaducada Is Nothing Then
         Set ColSegsNCAuditoriaCECaducada = m_objColSegsNCAuditoriaCECaducada
         Exit Property
@@ -2196,6 +2315,8 @@ Public Property Get ColSegsNCAuditoriaCECaducada() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_CADUCADA, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCAuditoriaCECaducada = m_objColSegsNCAuditoriaCECaducada
     Exit Property
 errores:
@@ -2214,6 +2335,15 @@ Public Property Get ColSegsNCAuditoriaCENoConforme() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_NO_CONFORME, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaCENoConforme = m_Cached
+    End If
     If Not m_objColSegsNCAuditoriaCENoConforme Is Nothing Then
         Set ColSegsNCAuditoriaCENoConforme = m_objColSegsNCAuditoriaCENoConforme
         Exit Property
@@ -2222,6 +2352,8 @@ Public Property Get ColSegsNCAuditoriaCENoConforme() As Scripting.Dictionary
     If m_Error <> "" Then
         Err.Raise 1000
     End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_NO_CONFORME, p_Reset:=True, p_Error:=m_Error)
     Set ColSegsNCAuditoriaCENoConforme = m_objColSegsNCAuditoriaCENoConforme
     Exit Property
 errores:
