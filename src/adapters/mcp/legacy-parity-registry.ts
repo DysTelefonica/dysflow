@@ -30,10 +30,34 @@ const maintenanceQueryModes: Partial<Record<LegacyDysflowMcpToolName, LegacyQuer
 };
 
 const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
+  // alias tools (direct handler routes)
   "list_access_operations",
   "cleanup_access_operation",
   "run_vba",
   "query_sql",
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+  // VBA sync tools — routed to legacyToolService when configured
+  "export_modules",
+  "export_all",
+  "import_modules",
+  "import_all",
+  "list_objects",
+  "exists",
+  "test_vba",
+  "compile_vba",
+  "delete_module",
+  "generate_erd",
+  "fix_encoding",
+  "validate_form_spec",
+  "generate_form",
+  "catalog_add_control",
+  "harvest_form_catalog",
+  // query slice tools — routed to queryService
   "list_tables",
   "list_linked_tables",
   "get_schema",
@@ -42,12 +66,6 @@ const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
   "compare_backends",
   "list_access_files",
   "get_relationships",
-  "exec_sql",
-  "run_script",
-  "create_table",
-  "drop_table",
-  "seed_fixture",
-  "teardown_fixture",
   "list_links",
   "link_tables",
   "relink_tables",
@@ -56,10 +74,6 @@ const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
   "export_queries",
   "import_queries",
   "compact_repair",
-  "validate_form_spec",
-  "generate_form",
-  "catalog_add_control",
-  "harvest_form_catalog",
 ]);
 
 function buildDescription(name: LegacyDysflowMcpToolName, slice: LegacyParitySlice, status: LegacyParityStatus): string {

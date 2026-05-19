@@ -547,8 +547,9 @@ function appendLegacyCompatibilityTools(
  * Tools that always return LEGACY_TOOL_NOT_IMPLEMENTED.
  * They are hidden from tools/list to avoid advertising unworkable operations,
  * but remain registered so direct calls return a clear error rather than a routing failure.
+ * Exported for contract testing.
  */
-const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
+export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
   "verify_code",
   "verify_binary",
   "reconcile_binary",
