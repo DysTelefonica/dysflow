@@ -75,18 +75,29 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
 
     const operationId = this.operationIdFactory();
-    let record = await this.operationRegistry.create({
-      operationId,
-      action: operation.kind,
-      accessPath: config.accessDbPath,
-      projectRootAbs: config.projectRoot ?? process.cwd(),
-      destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
-      accessPid: null,
-      processStartTime: null,
-      status: "starting",
-      metadata: operation.request as Record<string, unknown>,
-      updatedAt: this.clock(),
-    });
+    let record: AccessOperationRecord;
+    try {
+      record = await this.operationRegistry.create({
+        operationId,
+        action: operation.kind,
+        accessPath: config.accessDbPath,
+        projectRootAbs: config.projectRoot ?? process.cwd(),
+        destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
+        accessPid: null,
+        processStartTime: null,
+        status: "starting",
+        metadata: operation.request as Record<string, unknown>,
+        updatedAt: this.clock(),
+      });
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "OPERATION_REGISTRY_UNAVAILABLE",
+          `Failed to create Access operation marker: ${error instanceof Error ? error.message : String(error)}`,
+          { retryable: true },
+        ),
+      );
+    }
 
     const captureDiagnostics: Diagnostic[] = [];
     const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
@@ -110,7 +121,17 @@ export class AccessPowerShellRunner implements AccessRunner {
     });
     const secrets = [config.accessPassword, config.backendPassword].filter((secret): secret is string => Boolean(secret));
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
-    record = await this.updateOperationFromExecution(record, execution);
+    try {
+      record = await this.updateOperationFromExecution(record, execution);
+    } catch (error) {
+      diagnostics.push(
+        createDiagnostic(
+          "error",
+          "access.registry",
+          `Failed to update Access operation marker: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
     const operationMetadata = toOperationMetadata(record);
 
     if (execution.timedOut) {
