@@ -40,10 +40,14 @@ describe("dysflow configuration", () => {
 			ok: true,
 			data: {
 				configSource: "explicit-request",
+				allowWrites: false,
 				accessDbPath: "C:/data/app.accdb",
+				backendPath: undefined,
 				timeoutMs: 45_000,
 				processTimeoutMs: 45_000,
 				accessPassword: "super-secret",
+				backendPassword: undefined,
+				projectId: undefined,
 				projectRoot: expect.any(String),
 				destinationRoot: expect.any(String),
 			},
@@ -55,6 +59,7 @@ describe("dysflow configuration", () => {
 		if (!result.ok) throw new Error("expected config success");
 		expect(redactDysflowConfig(result.data)).toMatchObject({
 			accessDbPath: "C:/data/app.accdb",
+			allowWrites: false,
 			timeoutMs: 45_000,
 			processTimeoutMs: 45_000,
 			accessPassword: "[REDACTED]",
@@ -131,6 +136,7 @@ describe("dysflow configuration", () => {
 				id: "proyecto-demo",
 				accessPath: "front.accdb",
 				backendPath: "backend.accdb",
+				allowWrites: true,
 				destinationRoot: "src",
 				projectRoot: ".",
 				timeoutMs: 12_000,
@@ -156,6 +162,7 @@ describe("dysflow configuration", () => {
 				configSource: "repo-config",
 				accessDbPath: resolve(workspace.root, "front.accdb"),
 				backendPath: resolve(workspace.root, "backend.accdb"),
+				allowWrites: true,
 				destinationRoot: resolve(workspace.root, "src"),
 				projectRoot: resolve(workspace.root),
 				projectId: "proyecto-demo",

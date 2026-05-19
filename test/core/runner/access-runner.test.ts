@@ -10,6 +10,7 @@ import type { AccessOperationPreflightCleanup } from "../../../src/core/operatio
 
 const config: DysflowConfig = {
 	configSource: "explicit-request",
+	allowWrites: false,
 	accessDbPath: "C:/data/finance.accdb",
 	accessPassword: "super-secret",
 	backendPassword: "backend-secret",

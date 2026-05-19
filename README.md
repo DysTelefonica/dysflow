@@ -267,6 +267,7 @@ Call-level path/root fields are still supported as explicit one-off overrides, a
   "backendPath": "src/ProjectABC_Datos.accdb",
   "destinationRoot": "src",
   "projectRoot": ".",
+  "allowWrites": false,
   "timeoutMs": 120000,
   "passwordEnv": "PROJECTABC_ACCESS_PASSWORD",
   "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD"
@@ -307,6 +308,8 @@ Write-capable SQL tools are disabled by default on MCP, matching the HTTP safety
 ```powershell
 dysflow mcp --enable-writes
 ```
+
+Project-scoped override: when a call resolves a registered/repo `.dysflow/project.json` with `"allowWrites": true`, write tools are enabled for that project even if MCP was started without `--enable-writes`. `dryRun` operations remain allowed in all modes.
 
 ### Core MCP tools
 

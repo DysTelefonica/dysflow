@@ -274,6 +274,41 @@ describe("JsonLineMcpStdioRuntime", () => {
 		});
 	});
 
+	it("resolves registered read query by projectId even when MCP startup cwd has no project config", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-read-startup-"));
+		const startup = join(root, "startup");
+		const project = join(root, "project");
+		const registryPath = join(root, "projects.json");
+		mkdirSync(join(project, ".dysflow"), { recursive: true });
+		writeFileSync(join(project, "front.accdb"), "", "utf8");
+		writeFileSync(
+			join(project, ".dysflow", "project.json"),
+			JSON.stringify({ id: "lanzadera", accessPath: "front.accdb" }),
+			"utf8",
+		);
+		writeFileSync(
+			registryPath,
+			JSON.stringify({ projects: { lanzadera: { configPath: join(project, ".dysflow", "project.json") } } }),
+			"utf8",
+		);
+
+		const services = createUnavailableServices(
+			{ code: "CONFIG_MISSING_ACCESS_PATH", message: "startup cwd has no project", retryable: false },
+			{ cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
+		);
+		const result = await services.queryService.execute({
+			projectId: "lanzadera",
+			sql: "SELECT 1",
+			mode: "read",
+		} as unknown as Parameters<typeof services.queryService.execute>[0]);
+
+		if (!result.ok) {
+			expect(result.error.code).not.toBe("CONFIG_MISSING_ACCESS_PATH");
+		} else {
+			expect(result.ok).toBe(true);
+		}
+	});
+
 	it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {
 		const services = createUnavailableServices(
 			{ code: "CONFIG_MISSING_ACCESS_PATH", message: "startup cwd has no project", retryable: false },

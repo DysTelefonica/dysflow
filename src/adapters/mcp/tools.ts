@@ -119,6 +119,8 @@ export type DysflowMcpServices = {
   legacyToolService?: { execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>> };
 };
 
+export type McpWriteAccessResolver = (input: unknown) => Promise<boolean>;
+
 function writesDisabled(): McpToolResult {
   return { content: [{ type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." }], isError: true };
 }
@@ -350,14 +352,25 @@ async function handleValidatedLegacyQuery<TData>(input: unknown, schema: JsonObj
   return translateCoreResultToMcpContent(await execute());
 }
 
-async function handleValidatedLegacyWrite<TData>(input: unknown, schema: JsonObjectSchema, writesEnabled: boolean, execute: () => Promise<OperationResult<TData>>): Promise<McpToolResult> {
+async function handleValidatedLegacyWrite<TData>(
+  input: unknown,
+  schema: JsonObjectSchema,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
+  execute: () => Promise<OperationResult<TData>>,
+): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) return invalidInput(validation);
-  if (!writesEnabled) return writesDisabled();
+  const isDryRun = isLegacyWriteDryRun(input);
+  if (!isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) return writesDisabled();
   return translateCoreResultToMcpContent(await execute());
 }
 
-export function createDysflowMcpTools(services: DysflowMcpServices, writesEnabled = false): DysflowMcpTool[] {
+export function createDysflowMcpTools(
+  services: DysflowMcpServices,
+  writesEnabled = false,
+  writeAccessResolver?: McpWriteAccessResolver,
+): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow.vba.execute",
@@ -376,7 +389,9 @@ export function createDysflowMcpTools(services: DysflowMcpServices, writesEnable
       handler: async (input) => {
         const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
-        if ((input as AccessQueryRequest).mode === "write" && !writesEnabled) return writesDisabled();
+        if ((input as AccessQueryRequest).mode === "write") {
+          if (!(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) return writesDisabled();
+        }
         return translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest));
       },
     },
@@ -414,10 +429,15 @@ export function createDysflowMcpTools(services: DysflowMcpServices, writesEnable
     },
   ];
 
-  return appendLegacyCompatibilityTools(currentTools, services, writesEnabled);
+  return appendLegacyCompatibilityTools(currentTools, services, writesEnabled, writeAccessResolver);
 }
 
-function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool[] {
+function appendLegacyCompatibilityTools(
+  currentTools: DysflowMcpTool[],
+  services: DysflowMcpServices,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
+): DysflowMcpTool[] {
   const tools = [...currentTools];
   const names = new Set(tools.map((tool) => tool.name));
   const add = (tool: DysflowMcpTool): void => {
@@ -483,41 +503,41 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
     inputSchema: LEGACY_TOOL_SCHEMAS["exec_sql"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["exec_sql"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["exec_sql"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
   });
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
     inputSchema: LEGACY_TOOL_SCHEMAS["run_script"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["run_script"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["run_script"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
   });
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
     inputSchema: LEGACY_TOOL_SCHEMAS["create_table"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["create_table"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["create_table"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
   });
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
     inputSchema: LEGACY_TOOL_SCHEMAS["drop_table"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["drop_table"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["drop_table"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
   });
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
     inputSchema: LEGACY_TOOL_SCHEMAS["seed_fixture"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["seed_fixture"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["seed_fixture"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
   });
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
     inputSchema: LEGACY_TOOL_SCHEMAS["teardown_fixture"]!,
-    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["teardown_fixture"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["teardown_fixture"]!, writesEnabled, writeAccessResolver, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
-    add(createLegacyDispatchTool(legacyName, services, writesEnabled));
+    add(createLegacyDispatchTool(legacyName, services, writesEnabled, writeAccessResolver));
   }
 
   return tools;
@@ -536,7 +556,12 @@ const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
   "normalize_documents",
 ]);
 
-function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool {
+function createLegacyDispatchTool(
+  name: LegacyDysflowMcpToolName,
+  services: DysflowMcpServices,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
+): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
   // LEGACY_TOOL_SCHEMAS is the sole source of truth for all legacy tool schemas (#200).
   const schema = LEGACY_TOOL_SCHEMAS[name]!;
@@ -549,7 +574,7 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
       const isDryRun = isRecord(input) && input.dryRun === true;
-      if (!writesEnabled && !isDryRun && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write")) {
+      if (!isDryRun && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write") && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
         return writesDisabled();
       }
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
@@ -570,6 +595,22 @@ function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: Dysf
       };
     },
   };
+}
+
+async function isWriteAllowed(
+  input: unknown,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
+): Promise<boolean> {
+  if (writesEnabled) return true;
+  if (writeAccessResolver === undefined) return false;
+  return await writeAccessResolver(input);
+}
+
+function isLegacyWriteDryRun(input: unknown): boolean {
+  if (!isRecord(input)) return true;
+  if (input.apply === true || input.dryRun === false) return false;
+  return true;
 }
 
 function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
