@@ -714,3 +714,110 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
 		}
 	});
 });
+
+describe("PR4 — registry mechanical fixes (#198 #202 #204)", () => {
+	it("#202 — readRecordsUnlocked does not exist in the registry source", () => {
+		const source = readFileSync(
+			"src/core/operations/access-operation-registry.ts",
+			"utf8",
+		);
+		expect(source).not.toContain("readRecordsUnlocked");
+	});
+
+	it("#204 — ISO sort uses direct comparison, not localeCompare", () => {
+		const source = readFileSync(
+			"src/core/operations/access-operation-registry.ts",
+			"utf8",
+		);
+		expect(source).not.toContain("localeCompare");
+	});
+
+	it("#204 — listRecent returns newest records first (ISO sort correctness)", async () => {
+		const registry = new InMemoryAccessOperationRegistry();
+		const dates = [
+			"2024-01-01T00:00:00.000Z",
+			"2024-06-15T12:00:00.000Z",
+			"2024-03-10T06:00:00.000Z",
+		];
+		for (const [i, updatedAt] of dates.entries()) {
+			await registry.create({
+				...base,
+				operationId: `op-sort-${i}`,
+				status: "running",
+				accessPid: i + 1,
+				processStartTime: updatedAt,
+				updatedAt,
+			});
+		}
+		const result = await registry.listRecent({ limit: 3 });
+		expect(result[0]?.operationId).toBe("op-sort-1"); // 2024-06-15 newest
+		expect(result[1]?.operationId).toBe("op-sort-2"); // 2024-03-10 middle
+		expect(result[2]?.operationId).toBe("op-sort-0"); // 2024-01-01 oldest
+	});
+
+	it("#198 — InMemoryRegistry evicts oldest 5 when maxRecords+5 entries added", async () => {
+		const maxRecords = 3;
+		const registry = new InMemoryAccessOperationRegistry({ maxRecords });
+		const entries = [
+			{ operationId: "oldest-1", updatedAt: "2024-01-01T00:00:00.000Z" },
+			{ operationId: "oldest-2", updatedAt: "2024-01-02T00:00:00.000Z" },
+			{ operationId: "oldest-3", updatedAt: "2024-01-03T00:00:00.000Z" },
+			{ operationId: "newest-1", updatedAt: "2024-06-01T00:00:00.000Z" },
+			{ operationId: "newest-2", updatedAt: "2024-06-02T00:00:00.000Z" },
+			{ operationId: "newest-3", updatedAt: "2024-06-03T00:00:00.000Z" },
+			{ operationId: "newest-4", updatedAt: "2024-06-04T00:00:00.000Z" },
+			{ operationId: "newest-5", updatedAt: "2024-06-05T00:00:00.000Z" },
+		];
+		for (const { operationId, updatedAt } of entries) {
+			await registry.create({
+				...base,
+				operationId,
+				status: "running",
+				accessPid: 1,
+				processStartTime: updatedAt,
+				updatedAt,
+			});
+		}
+		// After 8 inserts with maxRecords=3, the 5 oldest should be evicted
+		for (const id of ["oldest-1", "oldest-2", "oldest-3", "newest-1", "newest-2"]) {
+			await expect(registry.get(id)).resolves.toBeUndefined();
+		}
+		// The 3 newest should still be present
+		for (const id of ["newest-3", "newest-4", "newest-5"]) {
+			await expect(registry.get(id)).resolves.toMatchObject({ operationId: id });
+		}
+	});
+
+	it("#198 — FileRegistry evicts oldest records when maxRecords exceeded", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-evict-file-"));
+		const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+		try {
+			const registry = new FileAccessOperationRegistry({ filePath: registryPath, maxRecords: 3 });
+			const entries = [
+				{ operationId: "f-oldest-1", updatedAt: "2024-01-01T00:00:00.000Z" },
+				{ operationId: "f-oldest-2", updatedAt: "2024-01-02T00:00:00.000Z" },
+				{ operationId: "f-newest-1", updatedAt: "2024-06-01T00:00:00.000Z" },
+				{ operationId: "f-newest-2", updatedAt: "2024-06-02T00:00:00.000Z" },
+				{ operationId: "f-newest-3", updatedAt: "2024-06-03T00:00:00.000Z" },
+			];
+			for (const { operationId, updatedAt } of entries) {
+				await registry.create({
+					...base,
+					operationId,
+					status: "running",
+					accessPid: 1,
+					processStartTime: updatedAt,
+					updatedAt,
+				});
+			}
+			// Oldest 2 evicted, newest 3 remain
+			await expect(registry.get("f-oldest-1")).resolves.toBeUndefined();
+			await expect(registry.get("f-oldest-2")).resolves.toBeUndefined();
+			for (const id of ["f-newest-1", "f-newest-2", "f-newest-3"]) {
+				await expect(registry.get(id)).resolves.toMatchObject({ operationId: id });
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});

@@ -704,7 +704,7 @@ function sanitizeErrorMessage(message: string): string {
   return message
     .replace(/[A-Za-z]:\\[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
     .replace(/\/[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
-    .replace(/[A-Za-z]:\\(?:[^\\\s:]+\\)*[^\\\s:]+/g, "[PATH]")
+    .replace(/[A-Za-z]:\\(?:[^\\\s:]+(?:\\[^\\\s:]+)*)?/g, "[PATH]")
     .replace(/(?:\/[^/\s:]+)+/g, "[PATH]");
 }
 
