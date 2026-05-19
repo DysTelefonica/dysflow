@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
 	createDysflowError,
 	failureResult,
@@ -32,6 +32,8 @@ export type DysflowProjectConfig = {
 	backendPasswordEnv?: string;
 	frontendPasswordEnv?: string;
 	passwordEnv?: string;
+	accessPassword?: string;
+	backendPassword?: string;
 };
 
 export type DysflowProjectRegistry = {
@@ -101,7 +103,10 @@ export function loadDysflowConfig(
 			env,
 			cwd,
 		);
-		if (registeredConfigPath === undefined) {
+		if (!registeredConfigPath.ok) {
+			return failureResult(registeredConfigPath.error);
+		}
+		if (registeredConfigPath.data === undefined) {
 			return failureResult(
 				createDysflowError(
 					"CONFIG_PROJECT_NOT_REGISTERED",
@@ -110,7 +115,7 @@ export function loadDysflowConfig(
 			);
 		}
 		return loadProjectConfigFromPath(
-			registeredConfigPath,
+			registeredConfigPath.data,
 			input,
 			env,
 			cwd,
@@ -158,7 +163,10 @@ export async function loadDysflowConfigAsync(
 			env,
 			cwd,
 		);
-		if (registeredConfigPath === undefined) {
+		if (!registeredConfigPath.ok) {
+			return failureResult(registeredConfigPath.error);
+		}
+		if (registeredConfigPath.data === undefined) {
 			return failureResult(
 				createDysflowError(
 					"CONFIG_PROJECT_NOT_REGISTERED",
@@ -167,7 +175,7 @@ export async function loadDysflowConfigAsync(
 			);
 		}
 		return loadProjectConfigFromPathAsync(
-			registeredConfigPath,
+			registeredConfigPath.data,
 			input,
 			env,
 			cwd,
@@ -268,8 +276,22 @@ function buildProjectConfig(
 	},
 ): OperationResult<DysflowConfig> {
 	const { resolvedPath, configSource, projectIdOverride, input, env } = opts;
+	const legacySecretValidation = validateLegacySecretFallback(raw);
+	if (!legacySecretValidation.ok) return legacySecretValidation;
+
 	const configDir = dirname(resolvedPath);
 	const projectRoot = resolveProjectRoot(raw, configDir, input.projectRoot);
+	if (configSource === "global-registry") {
+		const expectedConfigPath = resolve(projectRoot, DEFAULT_PROJECT_CONFIG_PATH);
+		if (resolve(resolvedPath) !== expectedConfigPath) {
+			return failureResult(
+				createDysflowError(
+					"CONFIG_REGISTRY_PATH_OUTSIDE_ROOT",
+					`Registered config path is inconsistent with projectRoot. Expected ${expectedConfigPath} but received ${resolvedPath}.`,
+				),
+			);
+		}
+	}
 	const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
 	const accessDbPath = resolveProjectPath(
 		raw.accessPath ?? input.accessDbPath,
@@ -470,19 +492,28 @@ function resolveRegisteredProjectConfigPath(
 	input: DysflowConfigInput,
 	env: Record<string, string | undefined>,
 	cwd: string,
-): string | undefined {
+): OperationResult<string | undefined> {
 	const registryPath = resolveProjectRegistryPath(input, env, cwd);
-	if (!existsSync(registryPath)) return undefined;
+	if (!existsSync(registryPath)) return successResult(undefined);
 	let registry: DysflowProjectRegistry;
 	try {
 		registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
 	} catch (err) {
 		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
-		return undefined;
+		return successResult(undefined);
 	}
 	const entry = registry.projects?.[projectId];
-	if (entry === undefined) return undefined;
-	return resolveRegistryEntry(entry, dirname(registryPath));
+	if (entry === undefined) return successResult(undefined);
+	const resolved = resolveRegistryEntry(entry, dirname(registryPath));
+	if (resolved === undefined) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_REGISTRY_PATH_OUTSIDE_ROOT",
+				`Registered path for project '${projectId}' escapes the registry root and was rejected.`,
+			),
+		);
+	}
+	return successResult(resolved);
 }
 
 
@@ -491,19 +522,28 @@ async function resolveRegisteredProjectConfigPathAsync(
 	input: DysflowConfigInput,
 	env: Record<string, string | undefined>,
 	cwd: string,
-): Promise<string | undefined> {
+): Promise<OperationResult<string | undefined>> {
 	const registryPath = resolveProjectRegistryPath(input, env, cwd);
-	if (!(await pathExists(registryPath))) return undefined;
+	if (!(await pathExists(registryPath))) return successResult(undefined);
 	let registry: DysflowProjectRegistry;
 	try {
 		registry = await readJsonFileAsync<DysflowProjectRegistry>(registryPath);
 	} catch (err) {
 		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
-		return undefined;
+		return successResult(undefined);
 	}
 	const entry = registry.projects?.[projectId];
-	if (entry === undefined) return undefined;
-	return resolveRegistryEntry(entry, dirname(registryPath));
+	if (entry === undefined) return successResult(undefined);
+	const resolved = resolveRegistryEntry(entry, dirname(registryPath));
+	if (resolved === undefined) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_REGISTRY_PATH_OUTSIDE_ROOT",
+				`Registered path for project '${projectId}' escapes the registry root and was rejected.`,
+			),
+		);
+	}
+	return successResult(resolved);
 }
 
 async function findRepoProjectConfigPathAsync(cwd: string): Promise<string | undefined> {
@@ -522,16 +562,33 @@ async function pathExists(candidate: string): Promise<boolean> {
 
 function resolveRegisteredPath(value: string, registryDir: string): string | undefined {
 	const resolved = resolvePathMaybeRelative(value, registryDir);
-	if (isAbsolute(value)) {
-		if (!isPathInside(resolved, registryDir)) {
-			// ADR-7: warn-only (back-compat). Future versions may hard-block this.
-			console.warn(
-				`[dysflow] registry entry uses absolute path outside registry directory — consider using a relative path: ${resolved}`,
-			);
-		}
+	if (!isAbsolute(value)) {
+		return isPathInside(resolved, registryDir) ? resolved : undefined;
+	}
+
+	const projectConfigSuffix = `${sep}.dysflow${sep}project.json`;
+	if (resolve(resolved).endsWith(projectConfigSuffix)) {
 		return resolved;
 	}
-	return isPathInside(resolved, registryDir) ? resolved : undefined;
+
+	const nestedConfigPath = resolve(resolved, DEFAULT_PROJECT_CONFIG_PATH);
+	if (existsSync(nestedConfigPath)) {
+		return nestedConfigPath;
+	}
+
+	return undefined;
+}
+
+function validateLegacySecretFallback(config: DysflowProjectConfig): OperationResult<void> {
+	if (stringValue(config.accessPassword) !== undefined || stringValue(config.backendPassword) !== undefined) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_SECRET_FILE_FALLBACK_DEPRECATED",
+				"Legacy plaintext password fallback is no longer supported. Configure environment variables (passwordEnv/accessPasswordEnv/backendPasswordEnv).",
+			),
+		);
+	}
+	return successResult(undefined);
 }
 
 function isPathInside(candidate: string, base: string): boolean {

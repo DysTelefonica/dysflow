@@ -108,26 +108,8 @@ function Write-DysflowOperationMarker {
     }
 }
 
+if (-not $Password) { $Password = $env:DYSFLOW_ACCESS_PASSWORD }
 if (-not $Password) { $Password = $env:ACCESS_VBA_PASSWORD }
-if (-not $Password) {
-    # Resolve-SecretsPath: check ProjectRoot first, then ScriptDir
-    $resolvedSecretsPath = $null
-    if (-not [string]::IsNullOrWhiteSpace($ProjectRoot)) {
-        $candidate = Join-Path $ProjectRoot '.secrets.json'
-        if (Test-Path $candidate) { $resolvedSecretsPath = $candidate }
-    }
-    if (-not $resolvedSecretsPath) {
-        $candidate = Join-Path $PSScriptRoot '.secrets.json'
-        if (Test-Path $candidate) { $resolvedSecretsPath = $candidate }
-    }
-    if ($resolvedSecretsPath) {
-        try {
-            $secrets = Get-Content $resolvedSecretsPath -Raw | ConvertFrom-Json
-            if ($secrets.PSObject.Properties['access_password']) { $Password = [string]$secrets.access_password }
-            elseif ($secrets.PSObject.Properties['AccessVbaPassword']) { $Password = [string]$secrets.AccessVbaPassword }
-        } catch { }
-    }
-}
 
 function Write-Status {
     Param(
