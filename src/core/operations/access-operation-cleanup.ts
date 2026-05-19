@@ -13,7 +13,7 @@ export type ProcessInspector = {
 };
 
 export type ProcessKiller = {
-  kill(pid: number): Promise<void>;
+  kill(pid: number, expectedStartTime?: string): Promise<void>;
 };
 
 export type AccessCleanupResult = {
@@ -69,7 +69,7 @@ export class AccessOperationCleanupService {
       return failureResult(createDysflowError("CLEANUP_COMMAND_LINE_MISMATCH", "Cleanup refused because commandLine is not compatible with the registered Access path."));
     }
 
-    await this.options.processKiller.kill(record.accessPid);
+    await this.options.processKiller.kill(record.accessPid, record.processStartTime);
     await this.options.registry.update(record.operationId, { status: "cleaned", updatedAt: new Date().toISOString() });
     return successResult({ operationId: record.operationId, accessPid: record.accessPid, status: "cleaned" });
   }

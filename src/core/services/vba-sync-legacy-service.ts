@@ -615,15 +615,56 @@ function directTestProceduresJson(input: Record<string, unknown>): string | unde
 
 type ParseArgsJsonResult = { ok: true; value: unknown[] } | { ok: false; error: string };
 
+const MAX_ARGS_JSON_BYTES = 64 * 1024;
+const MAX_ARGS_JSON_DEPTH = 64;
+
 export function parseArgsJson(value: unknown): ParseArgsJsonResult {
   const text = stringValue(value);
   if (text === undefined) return { ok: true, value: [] };
+  if (Buffer.byteLength(text, "utf8") > MAX_ARGS_JSON_BYTES) {
+    return { ok: false, error: `argsJson payload is too large (max ${MAX_ARGS_JSON_BYTES} bytes).` };
+  }
+  if (estimateJsonDepth(text) > MAX_ARGS_JSON_DEPTH) {
+    return { ok: false, error: `argsJson payload is too deeply nested (max depth ${MAX_ARGS_JSON_DEPTH}).` };
+  }
   try {
     const parsed = JSON.parse(text) as unknown;
     return { ok: true, value: Array.isArray(parsed) ? parsed : [parsed] };
   } catch {
     return { ok: false, error: "argsJson must be valid JSON." };
   }
+}
+
+function estimateJsonDepth(text: string): number {
+  let depth = 0;
+  let maxDepth = 0;
+  let inString = false;
+  let escaping = false;
+  for (const char of text) {
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "[" || char === "{") {
+      depth += 1;
+      maxDepth = Math.max(maxDepth, depth);
+      continue;
+    }
+    if (char === "]" || char === "}") {
+      depth = Math.max(0, depth - 1);
+    }
+  }
+  return maxDepth;
 }
 
 type VbaTestPlanEntry = {

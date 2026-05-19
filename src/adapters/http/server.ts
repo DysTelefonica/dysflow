@@ -37,6 +37,14 @@ export type StartDysflowHttpServerOptions = {
   env?: Record<string, string | undefined>;
 };
 
+type HttpSecurityConfig = {
+  token?: string;
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
+};
+
+type RateState = Map<string, { count: number; windowStart: number }>;
+
 export type StartedDysflowHttpServer = {
   server: Server;
   host: string;
@@ -54,9 +62,11 @@ export async function startDysflowHttpServer(
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
+  const security = resolveHttpSecurity(options.env);
+  const rateState: RateState = new Map();
   const services = options.services ?? await createCoreServices(options.env);
   const server = createServer((request, response) => {
-    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
+    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes, security, rateState });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -110,7 +120,7 @@ function createUnavailableHttpServices(): DysflowHttpServices {
 async function routeRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  context: { services: DysflowHttpServices; writesEnabled: boolean; maxBodyBytes: number },
+  context: { services: DysflowHttpServices; writesEnabled: boolean; maxBodyBytes: number; security: HttpSecurityConfig; rateState: RateState },
 ): Promise<void> {
   const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
     sendOperationResult(response, body, bodyReadFailureStatus(body));
@@ -120,6 +130,17 @@ async function routeRequest(
 
   if (method === "GET" && path === "/health") {
     sendJson(response, 200, { ok: true, service: "dysflow", writesEnabled: context.writesEnabled });
+    return;
+  }
+
+  if (!isAuthorizedRequest(request, context.security.token)) {
+    sendOperationResult(response, failureResult(createDysflowError("HTTP_UNAUTHORIZED", "Missing or invalid bearer token.")), 401);
+    return;
+  }
+
+  const limited = applyRateLimit(request, context.security, context.rateState);
+  if (!limited.ok) {
+    sendOperationResult(response, limited.result, 429);
     return;
   }
 
@@ -259,6 +280,46 @@ async function readJsonBody(request: IncomingMessage, maxBodyBytes: number): Pro
 
 function normalizeMaxBodyBytes(value: number | undefined): number {
   return Math.max(1, Math.floor(value ?? DEFAULT_HTTP_MAX_BODY_BYTES));
+}
+
+function resolveHttpSecurity(env: Record<string, string | undefined> | undefined): HttpSecurityConfig {
+  const token = env?.DYSFLOW_HTTP_TOKEN?.trim();
+  return {
+    token: token && token.length > 0 ? token : undefined,
+    rateLimitMax: parsePositiveInt(env?.DYSFLOW_HTTP_RATE_LIMIT_MAX, 60),
+    rateLimitWindowMs: parsePositiveInt(env?.DYSFLOW_HTTP_RATE_LIMIT_WINDOW_MS, 60_000),
+  };
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function isAuthorizedRequest(request: IncomingMessage, token: string | undefined): boolean {
+  if (token === undefined) return true;
+  const auth = request.headers.authorization;
+  if (typeof auth !== "string") return false;
+  return auth === `Bearer ${token}`;
+}
+
+function applyRateLimit(
+  request: IncomingMessage,
+  security: HttpSecurityConfig,
+  state: RateState,
+): { ok: true } | { ok: false; result: OperationResult<never> } {
+  const key = `${request.socket.remoteAddress ?? "unknown"}:${request.headers.authorization ?? "anon"}`;
+  const now = Date.now();
+  const bucket = state.get(key);
+  if (bucket === undefined || now - bucket.windowStart >= security.rateLimitWindowMs) {
+    state.set(key, { count: 1, windowStart: now });
+    return { ok: true };
+  }
+  if (bucket.count >= security.rateLimitMax) {
+    return { ok: false, result: failureResult(createDysflowError("HTTP_RATE_LIMITED", "Too many requests. Please retry later.")) };
+  }
+  bucket.count += 1;
+  return { ok: true };
 }
 
 function bodyTooLarge(maxBodyBytes: number): OperationResult<JsonBody> {
