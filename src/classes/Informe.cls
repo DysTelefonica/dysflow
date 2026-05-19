@@ -1,4 +1,4 @@
-VERSION 1.0 CLASS
+﻿VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
@@ -16,7 +16,7 @@ Public Function GenerarWordNoConformidades( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional p_col As Scripting.Dictionary, _
                                             Optional p_NC As Object, _
-                                            Optional p_Error As String _
+                                            Optional ByRef p_Error As String _
                                             ) As String
     
     Dim m_ID As Variant
@@ -124,7 +124,7 @@ errores:
 End Function
 Public Function PrepararPlantilla( _
                                     p_EsDeProyecto As EnumSino, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As String
     
     Dim m_URLServidor As String
@@ -169,7 +169,7 @@ errores:
     
     
 End Function
-Private Function CrearEncabezado(wordDoc As Object, p_Nombre As String, Optional p_Error As String) As String
+Private Function CrearEncabezado(wordDoc As Object, p_Nombre As String, Optional ByRef p_Error As String) As String
    
     
     
@@ -265,7 +265,7 @@ Private Function InsertarTablaTareas( _
                                     wordDoc As Object, _
                                     m_AC As Object, _
                                     rng As Object, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As Object
     Dim m_AR As Object
     Dim m_Col As Scripting.Dictionary
@@ -357,7 +357,7 @@ Private Function InsertarAccionesCorrectivas( _
                                                 wordDoc As Object, _
                                                 p_NC As Object, _
                                                 rng As Object, _
-                                                Optional p_Error As String _
+                                                Optional ByRef p_Error As String _
                                                 ) As String
     Dim m_Col As Scripting.Dictionary
     Dim m_ID As Variant
@@ -463,7 +463,7 @@ Private Function getTb1DatosPrincipalesNCProyecto( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     On Error GoTo errores
@@ -547,7 +547,7 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     On Error GoTo errores
@@ -648,7 +648,7 @@ Private Function getTb1DatosPrincipalesNCAudoria( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     
@@ -699,7 +699,7 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     
@@ -844,7 +844,7 @@ Private Function InsertarNoConformidad( _
                                         p_EsDeProyecto As EnumSino, _
                                         wordDoc As Object, _
                                         p_NC As Object, _
-                                        Optional p_Error As String _
+                                        Optional ByRef p_Error As String _
                                         ) As String
     
    
@@ -934,7 +934,7 @@ errores:
         p_Error = "El método Informe.InsertarNoConformidad ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
-Private Function InsertarSeparadorNoConformidad(wordDoc As Object, Optional p_Error As String) As String
+Private Function InsertarSeparadorNoConformidad(wordDoc As Object, Optional ByRef p_Error As String) As String
     Dim rng As Object
     On Error GoTo errores
     ' Posicionar al final del documento
@@ -959,7 +959,7 @@ errores:
         p_Error = "El método Informe.InsertarSeparadorNoConformidad ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
-Private Function CrearPiePaginaSimple(wordDoc As Object, Optional p_Error As String) As String
+Private Function CrearPiePaginaSimple(wordDoc As Object, Optional ByRef p_Error As String) As String
     Dim footerRange As Object
     On Error GoTo errores
     ' Configurar el pie de página para todas las páginas

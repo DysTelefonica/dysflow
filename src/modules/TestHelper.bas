@@ -3,6 +3,7 @@ Option Compare Database
 Option Explicit
 
 Public Function NewLogs() As Collection
+    m_TestingMode = True
     Set NewLogs = New Collection
 End Function
 

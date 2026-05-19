@@ -1,5 +1,4 @@
 Attribute VB_Name = "CacheNCProyecto"
-
 Option Compare Database
 Option Explicit
 
@@ -129,8 +128,8 @@ Public Function EnsureCacheSchemaReadiness(Optional ByRef p_Error As String) As 
 
     Set db = getdb()
 
-    If Not EnsureTbConfiguracion(db, p_Error) Then GoTo salida
-    If Not EnsureTbCacheListadoNC(db, p_Error) Then GoTo salida
+    If Not EnsureTbConfiguracion(db, p_Error) Then Err.Raise 1000
+    If Not EnsureTbCacheListadoNC(db, p_Error) Then Err.Raise 1000
 
     EnsureCacheSchemaReadiness = True
 
@@ -139,7 +138,11 @@ salida:
     Exit Function
 
 errores:
-    p_Error = "EnsureCacheSchemaReadiness: " & Err.Description
+    If Err.Number <> 1000 Then
+        p_Error = "EnsureCacheSchemaReadiness: " & Err.Description
+    ElseIf p_Error = "" Then
+        p_Error = Err.Description
+    End If
     Set db = Nothing
     EnsureCacheSchemaReadiness = False
 End Function
@@ -152,7 +155,7 @@ Public Function MigrarConfigCoreTbConfiguracion(Optional ByRef p_Error As String
     MigrarConfigCoreTbConfiguracion = False
 
     Set db = getdb()
-    If Not EnsureTbConfiguracion(db, p_Error) Then GoTo salida
+    If Not EnsureTbConfiguracion(db, p_Error) Then Err.Raise 1000
 
     MigrarConfigCoreTbConfiguracion = True
 
@@ -161,12 +164,16 @@ salida:
     Exit Function
 
 errores:
-    p_Error = "MigrarConfigCoreTbConfiguracion: " & Err.Description
+    If Err.Number <> 1000 Then
+        p_Error = "MigrarConfigCoreTbConfiguracion: " & Err.Description
+    ElseIf p_Error = "" Then
+        p_Error = Err.Description
+    End If
     Set db = Nothing
     MigrarConfigCoreTbConfiguracion = False
 End Function
 
-Private Function EnsureTbConfiguracion(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
+Private Function EnsureTbConfiguracion(ByVal p_Db As DAO.Database, Optional ByRef p_Error As String) As Boolean
     Dim rsSeed As DAO.Recordset
     On Error GoTo errores
 
@@ -210,7 +217,7 @@ errores:
     EnsureTbConfiguracion = False
 End Function
 
-Private Function EnsureTbCacheListadoNC(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
+Private Function EnsureTbCacheListadoNC(ByVal p_Db As DAO.Database, Optional ByRef p_Error As String) As Boolean
     Dim pkExists As Boolean
 
     On Error GoTo errores
@@ -559,19 +566,19 @@ Public Function GenerarCacheCompleto( _
     
     ' 2. Generar todos los JSONs
     jsonNC = GenerarJSONNC(p_IDNC, p_Error)
-    If p_Error <> "" Then Exit Function
+    If p_Error <> "" Then Err.Raise 1000
     
     jsonACs = GenerarJSONACs(p_IDNC, p_Error)
-    If p_Error <> "" Then Exit Function
+    If p_Error <> "" Then Err.Raise 1000
     
     jsonARs = GenerarJSONARs(p_IDNC, p_Error)
-    If p_Error <> "" Then Exit Function
+    If p_Error <> "" Then Err.Raise 1000
     
     jsonReplanif = GenerarJSONReplanificaciones(p_IDNC, p_Error)
-    If p_Error <> "" Then Exit Function
+    If p_Error <> "" Then Err.Raise 1000
     
     jsonRiesgos = GenerarJSONRiesgos(p_IDNC, p_Error)
-    If p_Error <> "" Then Exit Function
+    If p_Error <> "" Then Err.Raise 1000
     
     ' Calcular tamaño para el log
     tamanioBytes = Len(jsonNC) + Len(jsonACs) + Len(jsonARs) + _
@@ -627,7 +634,11 @@ Public Function GenerarCacheCompleto( _
     Exit Function
     
 errores:
-    p_Error = "Error en CacheNCProyecto.GenerarCacheCompleto (DAO): " & Err.Description
+    If Err.Number <> 1000 Then
+        p_Error = "Error en CacheNCProyecto.GenerarCacheCompleto (DAO): " & Err.Description
+    ElseIf p_Error = "" Then
+        p_Error = Err.Description
+    End If
     
     ' Limpieza segura
     If Not rcd Is Nothing Then
@@ -1319,7 +1330,9 @@ errores:
     If Not rcd Is Nothing Then rcd.Close
     Set rcd = Nothing
     Set dbRiesgos = Nothing
-    p_Error = "Error en GenerarJSONRiesgos: " & Err.Description
+    ' Riesgos es una dependencia externa/vinculada. Si no está disponible,
+    ' no debe bloquear la generación del caché de No Conformidades.
+    p_Error = ""
     GenerarJSONRiesgos = "{}"
 End Function
 
@@ -1586,7 +1599,7 @@ Public Function GetListadoFiltradoSQL( _
                                 Optional ByRef p_Error As String _
                             ) As Collection
 
-    Dim rs As dao.Recordset
+    Dim rs As DAO.Recordset
     Dim SQL As String
     Dim col As Collection
     Dim vm As NCProyectoListItemVM
@@ -1700,7 +1713,7 @@ Public Function InvalidateList_Cache( _
                             Optional ByRef p_Error As String _
                         ) As Boolean
     
-    Dim qdf As dao.QueryDef
+    Dim qdf As DAO.QueryDef
     
     On Error GoTo errores
     
@@ -1740,9 +1753,9 @@ Public Function InvalidateListItem( _
                             Optional ByRef p_Error As String _
                         ) As Boolean
     
-    Dim qdf As dao.QueryDef
-    Dim rs As dao.Recordset
-    Dim sql As String
+    Dim qdf As DAO.QueryDef
+    Dim rs As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
@@ -1791,8 +1804,8 @@ Public Function RebuildCacheLista( _
                             Optional ByRef p_Error As String _
                         ) As Boolean
     
-    Dim rs As dao.Recordset
-    Dim sql As String
+    Dim rs As DAO.Recordset
+    Dim SQL As String
     Dim contador As Long
     Dim inicio As Long
     Dim erroresRebuild As Long
@@ -1813,8 +1826,8 @@ Public Function RebuildCacheLista( _
     erroresRebuild = 0
     
     ' Obtener todos los IDs de NC
-    sql = "SELECT IDNoConformidad FROM TbNoConformidades ORDER BY IDNoConformidad"
-    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    SQL = "SELECT IDNoConformidad FROM TbNoConformidades ORDER BY IDNoConformidad"
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rs.EOF Then
         rs.MoveFirst
@@ -1928,13 +1941,13 @@ End Function
 
 ' Helper: Obtiene ID de NC padre desde un AC
 Private Function ObtenerIDNCDesdeAC(ByVal p_IDAC As Long) As String
-    Dim rs As dao.Recordset
-    Dim sql As String
+    Dim rs As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
-    sql = "SELECT IDNoConformidad FROM TbNCAccionCorrectivas WHERE IdAccionCorrectiva = " & p_IDAC
-    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    SQL = "SELECT IDNoConformidad FROM TbNCAccionCorrectivas WHERE IdAccionCorrectiva = " & p_IDAC
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rs.EOF Then
         ObtenerIDNCDesdeAC = CStr(Nz(rs!IDNoConformidad, ""))
@@ -1953,15 +1966,15 @@ End Function
 
 ' Helper: Obtiene ID de NC padre desde un AR
 Private Function ObtenerIDNCDesdeAR(ByVal p_IDAR As Long) As String
-    Dim rs As dao.Recordset
-    Dim sql As String
+    Dim rs As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
-    sql = "SELECT AC.IDNoConformidad FROM TbNCAccionesRealizadas AR " & _
+    SQL = "SELECT AC.IDNoConformidad FROM TbNCAccionesRealizadas AR " & _
           "INNER JOIN TbNCAccionCorrectivas AC ON AR.IdAccionCorrectiva = AC.IdAccionCorrectiva " & _
           "WHERE AR.IDAccionRealizada = " & p_IDAR
-    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rs.EOF Then
         ObtenerIDNCDesdeAR = CStr(Nz(rs!IDNoConformidad, ""))
@@ -2094,7 +2107,7 @@ Public Function SincronizarCache(Optional ByRef p_Error As String) As Boolean
     Next idNC
     
     ' 6. Procesar FALTAN: regenerar registro en detalle + upsert en listado
-    For i = 1 To colFaltan.Count
+    For i = 1 To colFaltan.count
         idNC = colFaltan(i)
         If Not RegenerarRegistro(CStr(idNC), errItem) Then
             erroresCount = erroresCount + 1
@@ -2108,7 +2121,7 @@ Public Function SincronizarCache(Optional ByRef p_Error As String) As Boolean
     Dim cacheRepo As CacheNCCacheRepositorio
     Set cacheRepo = New CacheNCCacheRepositorio
     
-    For i = 1 To colSobran.Count
+    For i = 1 To colSobran.count
         idNC = colSobran(i)
         
         ' DELETE de TbCacheNCProyecto (detalle)
@@ -2135,7 +2148,7 @@ Public Function SincronizarCache(Optional ByRef p_Error As String) As Boolean
     duracion = (Timer - inicio) * 1000
     
     Dim detalleLog As String
-    detalleLog = "Sincronizacion completada. Faltan: " & colFaltan.Count & ", Sobran: " & colSobran.Count & ", Errores: " & erroresCount
+    detalleLog = "Sincronizacion completada. Faltan: " & colFaltan.count & ", Sobran: " & colSobran.count & ", Errores: " & erroresCount
     
     If erroresCount = 0 Then
         LogCacheOperacion "0", "Sincronizar", detalleLog, usuarios, True, duracion
@@ -2157,14 +2170,14 @@ End Function
 
 ' Helper: verifica si un ID no existe en la colección
 Private Function NotExisteEnColeccion( _
-    ByRef p_Col As Collection, _
+    ByRef p_col As Collection, _
     ByVal p_ID As String _
 ) As Boolean
     
     Dim item As Variant
     NotExisteEnColeccion = True
     
-    For Each item In p_Col
+    For Each item In p_col
         If CStr(item) = p_ID Then
             NotExisteEnColeccion = False
             Exit Function
@@ -2174,16 +2187,16 @@ End Function
 
 ' Helper: Obtiene ID de NC desde un Riesgo (vía tabla de link TbRiesgosNC)
 Private Function ObtenerIDNCDesdeRiesgo(ByVal p_IDRiesgo As Long) As String
-    Dim rs As dao.Recordset
-    Dim sql As String
+    Dim rs As DAO.Recordset
+    Dim SQL As String
     
     On Error GoTo errores
     
-    sql = "SELECT IDNC FROM TbRiesgosNC WHERE IDRiesgo = " & p_IDRiesgo
-    Set rs = getdb().OpenRecordset(sql, dbOpenSnapshot)
+    SQL = "SELECT IDNC FROM TbRiesgosNC WHERE IDRiesgo = " & p_IDRiesgo
+    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rs.EOF Then
-        ObtenerIDNCDesdeRiesgo = CStr(Nz(rs!IDNC, ""))
+        ObtenerIDNCDesdeRiesgo = CStr(Nz(rs!idNC, ""))
     Else
         ObtenerIDNCDesdeRiesgo = ""
     End If
@@ -2248,7 +2261,7 @@ Public Function PrecalentarCacheCompleto( _
     ' Obtener total de NCs
     SQL = "SELECT COUNT(*) AS Total FROM TbNoConformidades"
     Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
-    totalNCs = rs!Total
+    totalNCs = rs!total
     rs.Close
     Set rs = Nothing
     
@@ -2394,12 +2407,12 @@ Public Function LimpiarCacheCompleta(Optional ByRef p_Error As String) As Boolea
     ' Contar registros antes de borrar
     Dim rs As DAO.Recordset
     Set rs = getdb().OpenRecordset("SELECT COUNT(*) FROM " & NOMBRE_TABLA_CACHE, dbOpenSnapshot)
-    registrosDetalle = rs!Total
+    registrosDetalle = rs!total
     rs.Close
     Set rs = Nothing
     
     Set rs = getdb().OpenRecordset("SELECT COUNT(*) FROM " & NOMBRE_TABLA_LISTADO, dbOpenSnapshot)
-    registrosListado = rs!Total
+    registrosListado = rs!total
     rs.Close
     Set rs = Nothing
     
@@ -2462,5 +2475,3 @@ Private Function LogCacheOperacion( _
            
     getdb().Execute SQL
 End Function
-
-

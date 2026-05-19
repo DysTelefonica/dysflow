@@ -300,7 +300,7 @@ EH:
     TableHasField = False
 End Function
 
-Private Sub RestoreState(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
+Private Sub RestoreState(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, Optional ByRef p_Error As String)
     Dim ok As Boolean
     Dim opError As String
 

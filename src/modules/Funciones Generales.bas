@@ -1,4 +1,4 @@
-Attribute VB_Name = "Funciones Generales"
+﻿Attribute VB_Name = "Funciones Generales"
 Option Compare Database
 Option Explicit
 ' Asegúrate de activar la referencia "Microsoft Scripting Runtime" en Herramientas > Referencias
@@ -995,7 +995,7 @@ Public Function RegistrarLogProyecto( _
                                     Optional p_Linea As String, _
                                     Optional p_Objeto As Object, _
                                     Optional p_ObjetoAlInicio As Object, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As String
     Dim m_Log As LogNCProyecto
     Dim m_Linea As Variant
@@ -1100,7 +1100,7 @@ Public Function RegistrarLogAuditoria( _
                                     Optional p_Linea As String, _
                                     Optional p_Objeto As Object, _
                                     Optional p_ObjetoAlInicio As Object, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As String
     Dim m_Log As LogNCAuditoria
     Dim m_Linea As Variant

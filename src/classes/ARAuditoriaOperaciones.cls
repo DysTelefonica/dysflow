@@ -1,4 +1,4 @@
-VERSION 1.0 CLASS
+﻿VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
@@ -358,7 +358,7 @@ errores:
 End Function
 
 Private Function BuenaFecha( _
-                            Optional p_Error As String _
+                            Optional ByRef p_Error As String _
                             ) As String
     
     
@@ -400,7 +400,7 @@ errores:
 End Function
 Private Function AccionRepetida( _
                                 p_AR As String, _
-                                Optional p_Error As String _
+                                Optional ByRef p_Error As String _
                                 ) As EnumSino
         
     Dim m_ID As Variant

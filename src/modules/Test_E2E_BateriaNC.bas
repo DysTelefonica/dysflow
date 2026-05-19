@@ -52,14 +52,18 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     rs.Fields("EnPruebas").Value = "No"
     rs.Update
     TestHelper.AddLog logs, "Configurado BackendActivo=PROD, EnPruebas=No"
+    Call TestHelper.AssertTrue(m_TestingMode, "TestHelper.NewLogs debe activar m_TestingMode para cualquier test", logs, assertError)
+    If assertError <> "" Then GoTo Fail
 
     cfgErr = ""
     Call LeeConfiguracionLocal(cfgErr)
-    Call TestHelper.AssertTrue(cfgErr = "", "LeeConfiguracionLocal(PROD) sin error", logs, assertError)
+    Call TestHelper.AssertTrue(cfgErr = "", "LeeConfiguracionLocal(PROD) en modo test sin error", logs, assertError)
     If assertError <> "" Then GoTo Fail
-    Call TestHelper.AssertTrue(Nz(Application.TempVars("DatosEnLocal"), "") = "No", "DatosEnLocal debe ser 'No' para PROD", logs, assertError)
+    Call TestHelper.AssertTrue(Nz(Application.TempVars("DatosEnLocal"), "") = "Sí", "DatosEnLocal debe forzarse a 'Sí' en modo test aunque BackendActivo sea PROD", logs, assertError)
     If assertError <> "" Then GoTo Fail
-    Call TestHelper.AssertTrue(Nz(Application.TempVars("BackendPathConfigurado"), "") = originalBackendProduccion, "BackendPathConfigurado debe usar BackendProduccion", logs, assertError)
+    Call TestHelper.AssertTrue(Nz(Application.TempVars("BackendPathConfigurado"), "") = originalBackendSandbox, "BackendPathConfigurado debe usar BackendSandbox en modo test", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call TestHelper.AssertTrue(m_BackendSandboxURL = originalBackendSandbox, "m_BackendSandboxURL debe registrar el backend local de test", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
     rs.Edit
@@ -77,16 +81,22 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     Call TestHelper.AssertTrue(Nz(Application.TempVars("BackendPathConfigurado"), "") = originalBackendSandbox, "BackendPathConfigurado debe usar BackendSandbox", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
+    m_TestingMode = False
+    m_BackendSandboxURL = ""
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonOk(logs, "backend_switch_ok")
     GoTo Cleanup
 
 Fail:
+    m_TestingMode = False
+    m_BackendSandboxURL = ""
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     GoTo Cleanup
 
 EH:
+    m_TestingMode = False
+    m_BackendSandboxURL = ""
     Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     TestHelper.AddLog logs, "Error: " & Err.Description
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
@@ -1168,7 +1178,7 @@ Private Sub RestaurarConfiguracionDesdeSnapshot(ByRef p_Rs As DAO.Recordset, ByV
     TestHelper.AddLog p_Logs, "Rollback defensivo de TbConfiguracion aplicado"
 End Sub
 
-Private Sub RestoreCacheStateE2E(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
+Private Sub RestoreCacheStateE2E(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, Optional ByRef p_Error As String)
     Dim opError As String
     Dim ok As Boolean
 
@@ -1201,7 +1211,7 @@ Private Sub RestoreTbConfiguracionBackends(ByRef p_Rs As DAO.Recordset, ByVal p_
     TestHelper.AddLog p_Logs, "Rollback defensivo de TbConfiguracionBackends aplicado"
 End Sub
 
-Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, ByRef p_Error As String) As Boolean
+Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
     Dim rs As DAO.Recordset
 
@@ -1239,7 +1249,7 @@ EH:
     Resume CleanExit
 End Function
 
-Private Function SetCacheHabilitadaMandatory(ByVal p_Enabled As Boolean, ByRef p_Error As String) As Boolean
+Private Function SetCacheHabilitadaMandatory(ByVal p_Enabled As Boolean, Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
     Dim rowsAffected As Long
 
@@ -1273,7 +1283,7 @@ EH:
     Resume CleanExit
 End Function
 
-Private Sub RestoreCacheStateMandatory(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, ByRef p_Error As String)
+Private Sub RestoreCacheStateMandatory(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, Optional ByRef p_Error As String)
     Dim opError As String
     Dim ok As Boolean
 

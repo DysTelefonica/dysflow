@@ -134,6 +134,8 @@ Public m_SQLAlInicioSegTareasAuditorias As String
 Public m_SQLAlInicioSegNCProyectos As String
 Public AplicarCache As Boolean
 Public m_ColFiltradoTareasNCProyectos As Scripting.Dictionary
+Public m_TestingMode As Boolean
+Public m_BackendSandboxURL As String
 
 
     
@@ -223,6 +225,14 @@ Public Function LeeConfiguracionLocal( _
         Err.Raise 1000
     End If
 
+    ' HOTFIX-20260519: los tests siempre deben usar BackendSandbox aunque BackendActivo sea PROD.
+    If m_TestingMode Then
+        m_BackendSandboxURL = m_BackendSandbox
+        m_BackendActivo = "SANDBOX"
+        m_EnPruebas = "Sí"
+        Application.TempVars("DatosEnLocal") = "Sí"
+    End If
+
     m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
     m_RutaAplicacionActiva = SelectAppPathFromActiveProfile(m_BackendActivo, m_RutaProd, m_RutaLocal, m_NombreCampoRutaActiva)
 
@@ -304,7 +314,7 @@ errores:
     End If
 End Function
 
-Private Function ResolveCacheHabilitadaFromConfig(ByRef p_AplicarCache As Boolean, ByRef p_Error As String) As Boolean
+Private Function ResolveCacheHabilitadaFromConfig(ByRef p_AplicarCache As Boolean, Optional ByRef p_Error As String) As Boolean
     Dim m_Db As DAO.Database
     Dim m_RsCfg As DAO.Recordset
 
@@ -394,7 +404,7 @@ Private Sub AppendInfraDiagnostic(ByRef p_Diagnostic As String, ByVal p_FieldNam
     Else
         p_Diagnostic = p_Diagnostic & vbNewLine & m_Line
     End If
-End Function
+End Sub
 Public Function EVE(Optional ByRef p_Error As String) As String
 
     Dim m_NombreCarpeta As String
