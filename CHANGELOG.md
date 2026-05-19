@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-19
+
+### Fixed
+
+- `loadDysflowConfig` and `loadDysflowConfigAsync` now return `CONFIG_AMBIGUOUS_PROJECT_FILE` when both `.dysflow/project.json` and `dysflow.project.json` coexist in the same directory, instead of silently preferring one. Closes #61.
+
 ## [0.6.0] - 2026-05-19
 
 ### Added
