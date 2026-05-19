@@ -268,7 +268,17 @@ function loadProjectConfigFromPath(
 		);
 	}
 
-	const config = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
+	let config: DysflowProjectConfig;
+	try {
+		config = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
+	} catch (err) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_FILE_INVALID",
+				`Project config file is not valid JSON: ${resolvedPath}. ${err instanceof Error ? err.message : String(err)}`,
+			),
+		);
+	}
 	const configDir = dirname(resolvedPath);
 	const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
 	const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs);
@@ -350,7 +360,17 @@ async function loadProjectConfigFromPathAsync(
 		);
 	}
 
-	const config = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
+	let config: DysflowProjectConfig;
+	try {
+		config = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
+	} catch (err) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_FILE_INVALID",
+				`Project config file is not valid JSON: ${resolvedPath}. ${err instanceof Error ? err.message : String(err)}`,
+			),
+		);
+	}
 	const configDir = dirname(resolvedPath);
 	const projectRoot = resolveProjectRoot(config, configDir, input.projectRoot);
 	const timeoutMs = resolveTimeout(input.timeoutMs ?? config.timeoutMs);
@@ -453,7 +473,13 @@ function resolveRegisteredProjectConfigPath(
 ): string | undefined {
 	const registryPath = resolveProjectRegistryPath(input, env, cwd);
 	if (!existsSync(registryPath)) return undefined;
-	const registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
+	let registry: DysflowProjectRegistry;
+	try {
+		registry = readJsonFileSync<DysflowProjectRegistry>(registryPath);
+	} catch (err) {
+		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
+		return undefined;
+	}
 	const entry = registry.projects?.[projectId];
 	if (entry === undefined) return undefined;
 	const registryDir = dirname(registryPath);
@@ -479,7 +505,13 @@ async function resolveRegisteredProjectConfigPathAsync(
 ): Promise<string | undefined> {
 	const registryPath = resolveProjectRegistryPath(input, env, cwd);
 	if (!(await pathExists(registryPath))) return undefined;
-	const registry = await readJsonFileAsync<DysflowProjectRegistry>(registryPath);
+	let registry: DysflowProjectRegistry;
+	try {
+		registry = await readJsonFileAsync<DysflowProjectRegistry>(registryPath);
+	} catch (err) {
+		console.warn(`[dysflow] Project registry file is not valid JSON: ${registryPath}. ${err instanceof Error ? err.message : String(err)}`);
+		return undefined;
+	}
 	const entry = registry.projects?.[projectId];
 	if (entry === undefined) return undefined;
 	const registryDir = dirname(registryPath);

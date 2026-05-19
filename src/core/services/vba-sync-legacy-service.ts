@@ -331,7 +331,9 @@ export class VbaSyncLegacyService {
     try {
       const procedureName = stringValue(params.procedureName);
       if (procedureName !== undefined) {
-        return successResult(JSON.stringify([{ procedure: procedureName, args: parseArgsJson(params.argsJson) }]));
+        const parsed = parseArgsJson(params.argsJson);
+        if (!parsed.ok) return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", parsed.error));
+        return successResult(JSON.stringify([{ procedure: procedureName, args: parsed.value }]));
       }
 
       const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
@@ -406,8 +408,12 @@ export class VbaSyncLegacyService {
     });
     forms[spec.data.name] = controls;
     const updated = { ...catalog, forms };
-    await mkdir(resolve(catalogPath, ".."), { recursive: true }).catch(() => {});
-    await writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");
+    try {
+      await mkdir(resolve(catalogPath, ".."), { recursive: true });
+      await writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");
+    } catch (err) {
+      return failureResult(createDysflowError("VBA_CATALOG_WRITE_FAILED", err instanceof Error ? err.message : String(err)));
+    }
 
     return successResult({
       catalogPath,
@@ -579,11 +585,17 @@ function directTestProceduresJson(input: Record<string, unknown>): string | unde
   return stringValue(input.proceduresJson);
 }
 
-function parseArgsJson(value: unknown): unknown[] {
+type ParseArgsJsonResult = { ok: true; value: unknown[] } | { ok: false; error: string };
+
+export function parseArgsJson(value: unknown): ParseArgsJsonResult {
   const text = stringValue(value);
-  if (text === undefined) return [];
-  const parsed = JSON.parse(text) as unknown;
-  return Array.isArray(parsed) ? parsed : [parsed];
+  if (text === undefined) return { ok: true, value: [] };
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return { ok: true, value: Array.isArray(parsed) ? parsed : [parsed] };
+  } catch {
+    return { ok: false, error: "argsJson must be valid JSON." };
+  }
 }
 
 type VbaTestPlanEntry = {

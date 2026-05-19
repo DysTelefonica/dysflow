@@ -9,6 +9,7 @@ import {
 	VbaSyncLegacyService,
 	resolveDefaultVbaManagerScriptPath,
 	spawnVbaManager,
+	parseArgsJson,
 	type VbaManagerExecutor,
 } from "../../../src/core/services/vba-sync-legacy-service";
 
@@ -1056,5 +1057,91 @@ describe("VbaSyncLegacyService", () => {
 		});
 
 		expect(result).toMatchObject({ ok: true });
+	});
+
+	// #192 RED: parseArgsJson returns discriminated union instead of throwing
+	describe("parseArgsJson discriminated union (#192)", () => {
+		it("returns { ok: false, error } for invalid JSON instead of throwing", () => {
+			const result = parseArgsJson("{ not valid json }");
+			expect(result).toMatchObject({ ok: false });
+			expect(typeof (result as { ok: false; error: string }).error).toBe("string");
+		});
+
+		it("returns { ok: true, value: [] } for undefined input", () => {
+			const result = parseArgsJson(undefined);
+			expect(result).toMatchObject({ ok: true, value: [] });
+		});
+
+		it("returns { ok: true, value: [...] } for valid JSON array", () => {
+			const result = parseArgsJson('["fixture", 1]');
+			expect(result).toMatchObject({ ok: true, value: ["fixture", 1] });
+		});
+
+		it("wraps a non-array JSON value in an array", () => {
+			const result = parseArgsJson('"single"');
+			expect(result).toMatchObject({ ok: true, value: ["single"] });
+		});
+	});
+
+	// #192 integration: test_vba with invalid argsJson returns VBA_INVALID_TEST_PLAN (not a thrown error)
+	it("returns VBA_INVALID_TEST_PLAN when argsJson contains invalid JSON (#192)", async () => {
+		const service = new VbaSyncLegacyService({
+			executor: async () => ({
+				exitCode: 0,
+				stdout: "[]",
+				stderr: "",
+				durationMs: 1,
+				timedOut: false,
+			}),
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+		});
+
+		const result = await service.execute("test_vba", {
+			procedureName: "Test_Run",
+			argsJson: "{ not valid json }",
+		});
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: { code: "VBA_INVALID_TEST_PLAN" },
+		});
+	});
+
+	// #194 RED: catalogAddControl propagates mkdir errors (no more .catch(() => {}))
+	describe("catalogAddControl mkdir error propagation (#194)", () => {
+		it("propagates mkdir failure as VBA_CATALOG_WRITE_FAILED when catalog parent dir cannot be created", async () => {
+			// Create a FILE at the path that catalogPath's parent would need to be,
+			// so mkdir(..., { recursive: true }) throws ENOTDIR.
+			const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-mkdir-fail-"));
+			// Create a FILE named "forms" so mkdir("forms") fails with ENOTDIR
+			const formsFile = join(root, "forms");
+			await writeFile(formsFile, "I am a file not a dir", "utf8");
+			// catalogPath = root/forms/catalog.json → mkdir(root/forms) → ENOTDIR
+			const catalogPath = join(root, "forms", "catalog.json");
+
+			const service = new VbaSyncLegacyService({
+				scriptPath: "scripts/dysflow-vba-manager.ps1",
+				accessPath: "C:/db/front.accdb",
+				env: {},
+				cwd: root,
+			});
+
+			// Pass spec inline so resolveFormSpec doesn't need a file read
+			const result = await service.execute("catalog_add_control", {
+				spec: { name: "TestForm", kind: "Form", controls: [] },
+				catalogPath,
+				controlName: "btnOK",
+				controlType: "CommandButton",
+			});
+
+			// Currently .catch(() => {}) swallows the error → test fails RED
+			// After fix: mkdir propagates → VBA_CATALOG_WRITE_FAILED
+			expect(result).toMatchObject({
+				ok: false,
+				error: { code: "VBA_CATALOG_WRITE_FAILED" },
+			});
+		});
 	});
 });
