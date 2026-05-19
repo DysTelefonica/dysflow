@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AccessPowerShellRunner, type PowerShellExecutor } from "../../../src/core/runner/access-runner.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
+import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
@@ -9,6 +10,10 @@ const config: DysflowConfig = {
   accessDbPath: "C:/data/app.accdb",
   timeoutMs: 100,
   processTimeoutMs: 100,
+};
+
+const noOpPreflight: AccessOperationPreflightCleanup = {
+  cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
 };
 
 describe("AccessPowerShellRunner operation ownership", () => {
@@ -26,7 +31,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       accessProcess: { pid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/data/app.accdb"' },
     };
     };
-    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-success" });
+    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-success", preflightCleanup: noOpPreflight });
 
     const result = await runner.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
 
@@ -44,7 +49,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       timedOut: true,
       accessProcess: { pid: 4568, processStartTime: "2026-05-15T10:01:00.000Z" },
     });
-    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-timeout" });
+    const runner = new AccessPowerShellRunner({ executor, operationRegistry: registry, operationIdFactory: () => "op-timeout", preflightCleanup: noOpPreflight });
 
     const result = await runner.run({ kind: "query", request: { sql: "SELECT * FROM T", mode: "read" } }, config);
 

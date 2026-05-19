@@ -18,6 +18,10 @@ const config: DysflowConfig = {
 	processTimeoutMs: 1_500,
 };
 
+const noOpPreflight: AccessOperationPreflightCleanup = {
+	cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
+};
+
 describe("AccessPowerShellRunner", () => {
 	it("passes PowerShell command input as separated safe arguments", async () => {
 		const calls: Array<{
@@ -39,6 +43,7 @@ describe("AccessPowerShellRunner", () => {
 
 		const runner = new AccessPowerShellRunner({
 			executor,
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run access.ps1",
 		});
 
@@ -98,6 +103,7 @@ describe("AccessPowerShellRunner", () => {
 		});
 		const runner = new AccessPowerShellRunner({
 			executor,
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 
@@ -261,6 +267,7 @@ describe("AccessPowerShellRunner", () => {
 				listRecent: async () => [],
 			},
 			operationIdFactory: () => "op",
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 
@@ -292,6 +299,7 @@ describe("AccessPowerShellRunner", () => {
 		});
 		const runner = new AccessPowerShellRunner({
 			executor,
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 
@@ -340,6 +348,7 @@ describe("AccessPowerShellRunner", () => {
 		});
 		const runner = new AccessPowerShellRunner({
 			executor,
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 
@@ -387,6 +396,7 @@ describe("AccessPowerShellRunner", () => {
 		});
 		const runner = new AccessPowerShellRunner({
 			executor,
+			preflightCleanup: noOpPreflight,
 			scriptPath: "C:/tools/run.ps1",
 		});
 

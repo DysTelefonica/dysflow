@@ -4,6 +4,16 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-19
+
+### Added
+
+- MCP write-capable tools can now be enabled per project via `.dysflow/project.json` using `"allowWrites": true`, while keeping writes disabled by default globally. Closes #244.
+
+### Fixed
+
+- Added pre-flight Access cleanup before modern and legacy Access operations. Dysflow now cleans stale registry-tracked operations and safely terminates orphaned `MSACCESS.EXE` processes only when their command line matches the current `.accdb` exactly. Closes #245.
+
 ## [0.5.4] - 2026-05-19
 
 ### Fixed

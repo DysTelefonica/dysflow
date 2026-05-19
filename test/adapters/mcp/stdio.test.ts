@@ -34,7 +34,9 @@ class FakeVbaService {
 }
 
 class FakeQueryService {
-	async execute(): Promise<OperationResult<AccessQueryResult>> {
+	public requests: unknown[] = [];
+	async execute(request?: unknown): Promise<OperationResult<AccessQueryResult>> {
+		this.requests.push(request);
 		return successResult({ rows: [] });
 	}
 }
@@ -243,6 +245,7 @@ describe("JsonLineMcpStdioRuntime", () => {
 		const startup = join(root, "startup");
 		const project = join(root, "project");
 		const registryPath = join(root, "projects.json");
+		mkdirSync(startup, { recursive: true });
 		mkdirSync(join(project, ".dysflow"), { recursive: true });
 		mkdirSync(join(project, "src", "modules"), { recursive: true });
 		writeFileSync(join(project, "front.accdb"), "", "utf8");
@@ -279,6 +282,7 @@ describe("JsonLineMcpStdioRuntime", () => {
 		const startup = join(root, "startup");
 		const project = join(root, "project");
 		const registryPath = join(root, "projects.json");
+		mkdirSync(startup, { recursive: true });
 		mkdirSync(join(project, ".dysflow"), { recursive: true });
 		writeFileSync(join(project, "front.accdb"), "", "utf8");
 		writeFileSync(
@@ -292,9 +296,18 @@ describe("JsonLineMcpStdioRuntime", () => {
 			"utf8",
 		);
 
+		const query = new FakeQueryService();
 		const services = createUnavailableServices(
 			{ code: "CONFIG_MISSING_ACCESS_PATH", message: "startup cwd has no project", retryable: false },
-			{ cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
+			{
+				cwd: startup,
+				env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath },
+				serviceFactory: () => ({
+					vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+					queryService: query,
+					diagnosticsService: new FakeDiagnosticsService(),
+				}),
+			},
 		);
 		const result = await services.queryService.execute({
 			projectId: "lanzadera",
@@ -302,12 +315,11 @@ describe("JsonLineMcpStdioRuntime", () => {
 			mode: "read",
 		} as unknown as Parameters<typeof services.queryService.execute>[0]);
 
-		if (!result.ok) {
-			expect(result.error.code).not.toBe("CONFIG_MISSING_ACCESS_PATH");
-		} else {
-			expect(result.ok).toBe(true);
-		}
-	});
+		expect(result.ok).toBe(true);
+		expect(query.requests).toEqual([
+			expect.objectContaining({ projectId: "lanzadera", sql: "SELECT 1", mode: "read" }),
+		]);
+	}, 15_000);
 
 	it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {
 		const services = createUnavailableServices(

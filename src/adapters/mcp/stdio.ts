@@ -245,12 +245,12 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
 
 export function createUnavailableServices(
   error: DysflowError,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: { cwd?: string; env?: Record<string, string | undefined>; serviceFactory?: (config: DysflowConfig) => DysflowMcpServices } = {},
 ): DysflowMcpServices {
   const unavailable = async () => failureResult(error);
   const resolveService = async (input: unknown): Promise<DysflowMcpServices | undefined> => {
     const configResult = await resolveConfigForInput(input, options);
-    return configResult.ok ? createConfiguredServices(configResult.data) : undefined;
+    return configResult.ok ? (options.serviceFactory ?? createConfiguredServices)(configResult.data) : undefined;
   };
   return {
     vbaService: {
