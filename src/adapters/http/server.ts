@@ -8,7 +8,7 @@ import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../cor
 import { AccessDiagnosticsService, type AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService, type AccessQueryResult } from "../../core/services/query-service.js";
 import { AccessVbaService, type AccessVbaResult } from "../../core/services/vba-service.js";
-import { resolveProjectOperationRegistryPath } from "../mcp/stdio.js";
+import { resolveProjectOperationRegistryPath } from "../../core/operations/access-operation-registry.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17_321;

@@ -40,3 +40,26 @@ describe("core dependency direction", () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("http adapter dependency direction", () => {
+  const httpAdapterRoot = join(process.cwd(), "src", "adapters", "http");
+  // Matches both absolute paths (adapters/mcp) and relative paths (../mcp/) from within http adapter
+  const httpForbiddenPatterns = [
+    /(?:from|import(?:\s+type)?|import\s*\()\s*["'][^"']*adapters\/mcp[^"']*["']/,
+    /(?:from|import(?:\s+type)?|import\s*\()\s*["'][^"']*\.\.\/mcp\/[^"']*["']/,
+  ];
+
+  it("src/adapters/http does not import from src/adapters/mcp", () => {
+    const httpFiles = collectTypeScriptFiles(httpAdapterRoot);
+    expect(httpFiles.length).toBeGreaterThan(0);
+
+    const violations = httpFiles.flatMap((file) => {
+      const source = readFileSync(file, "utf8");
+      return httpForbiddenPatterns.some((pattern) => pattern.test(source))
+        ? [`${file}: imports from adapters/mcp`]
+        : [];
+    });
+
+    expect(violations).toEqual([]);
+  });
+});
