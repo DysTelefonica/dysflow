@@ -4,6 +4,7 @@ import type { DysflowConfig } from "../config/dysflow-config.js";
 import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 import { sanitizeSecrets } from "../utils/index.js";
+import { validateAccessIdentifier, validateAccessRowKeys } from "../security/access-sql.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
@@ -66,6 +67,11 @@ export class AccessPowerShellRunner implements AccessRunner {
   async run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig): Promise<OperationResult<TData>> {
     if (config === undefined) {
       return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
+    }
+
+    const validation = validateOperationIdentifiers(operation);
+    if (!validation.ok) {
+      return failureResult(validation.error);
     }
 
     const operationId = this.operationIdFactory();
@@ -148,6 +154,24 @@ export class AccessPowerShellRunner implements AccessRunner {
       updatedAt: this.clock(),
     })) ?? record;
   }
+}
+
+function validateOperationIdentifiers(operation: AccessRunnerOperation): OperationResult<void> {
+  if (operation.kind !== "query") return successResult(undefined);
+  const request = operation.request;
+  if (request.tableName !== undefined) {
+    const table = validateAccessIdentifier(request.tableName, "tableName");
+    if (!table.ok) return failureResult(table.error);
+  }
+  if (request.columnName !== undefined) {
+    const column = validateAccessIdentifier(request.columnName, "columnName");
+    if (!column.ok) return failureResult(column.error);
+  }
+  if (request.rows !== undefined) {
+    const rowKeys = validateAccessRowKeys(request.rows, "rows");
+    if (!rowKeys.ok) return failureResult(rowKeys.error);
+  }
+  return successResult(undefined);
 }
 
 function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOperation, config: DysflowConfig, operationId: string): string[] {

@@ -186,6 +186,29 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests).toEqual([]);
   });
 
+  it("rejects legacy query identifier injection before calling core services", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools.find((tool) => tool.name === "get_schema")?.handler({ tableName: "Users]; DROP TABLE Users;--" }),
+    ).resolves.toEqual({
+      content: [
+        {
+          type: "text",
+          text: "ACCESS_SQL_INVALID_IDENTIFIER: tableName contains unsupported characters. Allowed: letters, numbers, spaces, and underscore; must start with a letter or underscore and max length is 64.",
+        },
+      ],
+      isError: true,
+    });
+
+    expect(query.requests).toEqual([]);
+  });
+
   it("allows MCP write queries only when writes are explicitly enabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
