@@ -309,11 +309,7 @@ function Disable-StartupFeatures {
         [string]$Password
     )
 
-    $dbEngine = New-DaoDbEngine
-    if (-not $dbEngine) {
-        throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm porque no se pudo crear DAO.DBEngine. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution."
-    }
-
+    $dbEngine = $null
     $db = $null
     $restoreInfo = [ordered]@{
         RenamedAutoExec     = $false
@@ -322,6 +318,11 @@ function Disable-StartupFeatures {
     }
 
     try {
+        $dbEngine = New-DaoDbEngine
+        if (-not $dbEngine) {
+            throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm porque no se pudo crear DAO.DBEngine. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution."
+        }
+
         $connect = if ($Password) { ";PWD=$Password" } else { "" }
         $db = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
 
@@ -361,9 +362,10 @@ function Disable-StartupFeatures {
         $detail = if ($_.Exception -and $_.Exception.Message) { $_.Exception.Message } else { [string]$_ }
         throw ("CRITICAL: No se pudo deshabilitar AutoExec/StartupForm mediante DAO. Detalle: {0}. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution." -f $detail)
     } finally {
-        if ($db) { $db.Close(); [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) | Out-Null }
-        # FIX: liberar $dbEngine que antes quedaba vivo
-        if ($dbEngine) { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) | Out-Null }
+        if ($db) { try { $db.Close() } catch {} }
+        foreach ($obj in @($db, $dbEngine)) {
+            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+        }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
     }
@@ -379,10 +381,13 @@ function Restore-StartupFeatures {
 
     if (-not $RestoreInfo) { return }
 
-    $dbEngine = New-DaoDbEngine
+    $dbEngine = $null
     $db = $null
 
     try {
+        $dbEngine = New-DaoDbEngine
+        if (-not $dbEngine) { return }
+
         $connect = if ($Password) { ";PWD=$Password" } else { "" }
         $db = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
 
@@ -411,8 +416,12 @@ function Restore-StartupFeatures {
         }
     } catch {
     } finally {
-        if ($db) { $db.Close(); [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) | Out-Null }
-        if ($dbEngine) { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) | Out-Null }
+        if ($db) { try { $db.Close() } catch {} }
+        foreach ($obj in @($db, $dbEngine)) {
+            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+        }
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
     }
 }
 
