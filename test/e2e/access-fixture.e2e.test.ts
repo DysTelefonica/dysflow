@@ -16,6 +16,12 @@ const fixtureBackend = resolve("E2E_testing/NoConformidades_Datos.accdb");
 const canRunAccessE2e = existsSync(fixtureFront) && existsSync(fixtureBackend) && hasAccessCom();
 const startedServers: Server[] = [];
 
+if (!canRunAccessE2e) {
+  console.warn(
+    "[dysflow] Skipping Access fixture E2E: Access COM or E2E_testing/*.accdb fixtures are unavailable.",
+  );
+}
+
 function hasAccessCom(): boolean {
   try {
     const output = execFileSync(

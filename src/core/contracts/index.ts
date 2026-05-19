@@ -14,6 +14,12 @@ export type DysflowError = {
   retryable: boolean;
 };
 
+/**
+ * Protocol-neutral result envelope returned by core operations.
+ *
+ * Adapters should translate this shape to their transport protocol without
+ * throwing for expected operation failures.
+ */
 export type OperationResult<T> =
   | { ok: true; data: T; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata }
   | { ok: false; error: DysflowError; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata };
@@ -71,6 +77,9 @@ export function createDiagnostic(level: DiagnosticLevel, source: string, message
   return { level, source, message };
 }
 
+/**
+ * Creates a normalized Dysflow error for failed operation results.
+ */
 export function createDysflowError(
   code: string,
   message: string,
@@ -79,6 +88,10 @@ export function createDysflowError(
   return { code, message, retryable: options.retryable ?? false };
 }
 
+/**
+ * Creates a successful operation result with optional diagnostics, timing, and
+ * Access operation metadata.
+ */
 export function successResult<T>(
   data: T,
   options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
@@ -92,6 +105,10 @@ export function successResult<T>(
   };
 }
 
+/**
+ * Creates a failed operation result without throwing, preserving diagnostics,
+ * timing, and optional Access operation metadata for adapter translation.
+ */
 export function failureResult<T = never>(
   error: DysflowError,
   options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
