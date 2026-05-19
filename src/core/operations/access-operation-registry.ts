@@ -114,14 +114,14 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   async get(operationId: string): Promise<AccessOperationRecord | undefined> {
-    const record = (await this.readRecordsUnlocked()).get(operationId);
+    const record = (await this.readRecords()).get(operationId);
     return record ? { ...record, metadata: { ...record.metadata } } : undefined;
   }
 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
     const limit = options.limit ?? 50;
-    return [...(await this.readRecordsUnlocked()).values()]
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    return [...(await this.readRecords()).values()]
+      .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
       .map((record) => ({ ...record, metadata: { ...record.metadata } }));
   }
@@ -233,11 +233,6 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     return `${process.pid}:${randomUUID()}`;
   }
 
-  /** Read the registry file directly without acquiring any lock. Safe for readers because writes are atomic (temp-file rename). */
-  private readRecordsUnlocked(): Promise<Map<string, AccessOperationRecord>> {
-    return this.readRecords();
-  }
-
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {
     const raw = await readFile(this.filePath, "utf8").catch(() => undefined);
     if (raw === undefined || raw.trim().length === 0) return new Map();
@@ -253,7 +248,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private async writeRecords(records: Map<string, AccessOperationRecord>): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     const payload = {
-      records: [...records.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      records: [...records.values()].sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0)),
     };
     const tempPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
@@ -266,11 +261,12 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private evictOldestRecords(records: Map<string, AccessOperationRecord>): void {
-    while (records.size > this.maxRecords) {
-      const oldest = [...records.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))[0];
-      if (oldest === undefined) return;
-      records.delete(oldest.operationId);
-    }
+    const overCount = records.size - this.maxRecords;
+    if (overCount <= 0) return;
+    const toEvict = [...records.values()]
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0))
+      .slice(0, overCount);
+    for (const r of toEvict) records.delete(r.operationId);
   }
 }
 
@@ -305,17 +301,18 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
     const limit = options.limit ?? 50;
     return [...this.records.values()]
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
       .map((record) => ({ ...record, metadata: { ...record.metadata } }));
   }
 
   private evictOldestRecords(): void {
-    while (this.records.size > this.maxRecords) {
-      const oldest = [...this.records.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))[0];
-      if (oldest === undefined) return;
-      this.records.delete(oldest.operationId);
-    }
+    const overCount = this.records.size - this.maxRecords;
+    if (overCount <= 0) return;
+    const toEvict = [...this.records.values()]
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0))
+      .slice(0, overCount);
+    for (const r of toEvict) this.records.delete(r.operationId);
   }
 }
 

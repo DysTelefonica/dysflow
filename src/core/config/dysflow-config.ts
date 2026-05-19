@@ -522,7 +522,15 @@ async function pathExists(candidate: string): Promise<boolean> {
 
 function resolveRegisteredPath(value: string, registryDir: string): string | undefined {
 	const resolved = resolvePathMaybeRelative(value, registryDir);
-	if (isAbsolute(value)) return resolved;
+	if (isAbsolute(value)) {
+		if (!isPathInside(resolved, registryDir)) {
+			// ADR-7: warn-only (back-compat). Future versions may hard-block this.
+			console.warn(
+				`[dysflow] registry entry uses absolute path outside registry directory — consider using a relative path: ${resolved}`,
+			);
+		}
+		return resolved;
+	}
 	return isPathInside(resolved, registryDir) ? resolved : undefined;
 }
 
