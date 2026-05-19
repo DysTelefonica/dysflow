@@ -24,6 +24,8 @@ import {
 	removeDysflowMcpConfig,
 	applyIntegrationSelection,
 	writeRuntimeLaunchers,
+	MAX_PACKAGE_ROOT_DEPTH,
+	MAX_SUBPROCESS_BUFFER_BYTES,
 } from "../../src/cli/commands/install";
 import { compareVersions } from "../../src/core/utils/version";
 
@@ -130,6 +132,11 @@ describe("install arg parsing", () => {
 		expect(compareVersions("0.1.0", "0.0.9")).toBe(1);
 		expect(compareVersions("0.0.9", "0.1.0")).toBe(-1);
 		expect(compareVersions("1.2.3", "1.2.3")).toBe(0);
+	});
+
+	it("names package-root traversal and subprocess buffer limits", () => {
+		expect(MAX_PACKAGE_ROOT_DEPTH).toBe(12);
+		expect(MAX_SUBPROCESS_BUFFER_BYTES).toBe(10 * 1024 * 1024);
 	});
 });
 

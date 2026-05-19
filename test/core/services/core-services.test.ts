@@ -6,7 +6,12 @@ import { AccessQueryService } from "../../../src/core/services/query-service.js"
 import { AccessVbaService } from "../../../src/core/services/vba-service.js";
 import type { AccessRunner, AccessRunnerOperation } from "../../../src/core/runner/access-runner.js";
 
-const config: DysflowConfig = { accessDbPath: "C:/data/app.accdb", timeoutMs: 2_000 };
+const config: DysflowConfig = {
+  configSource: "explicit-request",
+  accessDbPath: "C:/data/app.accdb",
+  timeoutMs: 2_000,
+  processTimeoutMs: 2_000,
+};
 
 class FakeRunner implements AccessRunner {
   public operations: AccessRunnerOperation[] = [];

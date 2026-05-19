@@ -1,7 +1,7 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, parse, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
-import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync } from "../utils/index.js";
+import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../runner/powershell-executor.js";
 
@@ -623,10 +623,6 @@ function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
       tags,
     };
   });
-}
-
-function truthy(value: unknown): boolean {
-  return value === true || value === "true" || value === 1 || value === "1";
 }
 
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {

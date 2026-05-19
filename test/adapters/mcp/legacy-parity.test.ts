@@ -85,7 +85,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
       vbaService: vba,
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(),
-      cleanupService: { cleanup: async () => successResult({ killed: false, diagnostics: [] }) },
+      cleanupService: { cleanup: async () => successResult({ operationId: "op-test", accessPid: 1234, status: "cleaned" as const }) },
     });
     const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
@@ -199,7 +199,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
       queryService: {
         execute: async (request: unknown) => {
           queryCalls.push(request);
-          return successResult({ ok: true });
+          return successResult({ rows: [{ ok: true }] });
         },
       },
       diagnosticsService: new FakeDiagnosticsService(),
@@ -210,15 +210,15 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
       isError: false,
-      content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(tools.find((tool) => tool.name === "link_tables")?.handler({ backendPath: "C:/backend.accdb" })).resolves.toEqual({
       isError: false,
-      content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(tools.find((tool) => tool.name === "compact_repair")?.handler({ databasePath: "C:/db.accdb", dryRun: true })).resolves.toEqual({
       isError: false,
-      content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
 
     expect(queryCalls).toEqual([
@@ -296,7 +296,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
     const generated = await service.execute("generate_form", { spec, destinationRoot: tempRoot });
     expect(generated.ok).toBe(true);
-    const generatedPath = (generated.ok ? generated.data : undefined)?.outputPath as string | undefined;
+    const generatedPath = (generated.ok ? (generated.data as { outputPath?: string }) : undefined)?.outputPath;
     expect(generatedPath).toBeTruthy();
     if (generatedPath) {
       await expect(readFile(generatedPath, "utf8")).resolves.toContain("Form_Smoke");

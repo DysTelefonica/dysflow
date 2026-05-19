@@ -11,11 +11,10 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "coverage": "vitest run --coverage",
     "prepare": "pnpm build",
-    "prepack": "pnpm build",
-    "postinstall": "pnpm build"
+    "prepack": "pnpm build"
   },
   "engines": {
     "node": ">=20.0.0"

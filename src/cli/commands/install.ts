@@ -26,6 +26,8 @@ export const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
 const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
 const GITHUB_LATEST_RELEASE_API =
 	"https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
+export const MAX_PACKAGE_ROOT_DEPTH = 12;
+export const MAX_SUBPROCESS_BUFFER_BYTES = 10 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 
 export type ReleaseInfo = {
@@ -216,7 +218,7 @@ export function resolvePackageRoot(
 	const commandPath = fileURLToPath(options.moduleUrl ?? import.meta.url);
 	let currentDir = path.dirname(commandPath);
 
-	for (let depth = 0; depth < 12; depth += 1) {
+	for (let depth = 0; depth < MAX_PACKAGE_ROOT_DEPTH; depth += 1) {
 		const packageJson = path.join(currentDir, "package.json");
 		const tsConfig = path.join(currentDir, "tsconfig.json");
 		const distDir = path.join(currentDir, "dist");
@@ -712,7 +714,7 @@ async function runCommand(
 		await execFileAsync(command, [...args], {
 			cwd,
 			windowsHide: true,
-			maxBuffer: 10 * 1024 * 1024,
+			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
 		});
 	} catch (error) {
 		throw createCommandError(`${command} ${args.join(" ")}`, error);
@@ -728,7 +730,7 @@ async function runCommandOutput(
 		const { stdout } = await execFileAsync(command, [...args], {
 			cwd,
 			windowsHide: true,
-			maxBuffer: 10 * 1024 * 1024,
+			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
 		});
 		return String(stdout).trim();
 	} catch (error) {
