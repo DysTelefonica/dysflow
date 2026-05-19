@@ -4,6 +4,24 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-19
+
+### Fixed
+
+- Hardened config and VBA sync error handling: malformed project JSON is returned as `CONFIG_PROJECT_FILE_INVALID`, `parseArgsJson` no longer leaks uncaught exceptions, and catalog write failures propagate as `VBA_CATALOG_WRITE_FAILED`. Closes #192, #193, #194.
+- Removed cross-adapter HTTP→MCP coupling, made MCP write gating explicit at tool construction, and removed the dead legacy schema fallback behind a parity-tested schema map. Closes #196, #197, #200.
+- Improved registry and redaction safety: single-pass record eviction, direct ISO timestamp comparisons, removal of `readRecordsUnlocked`, short Windows path redaction, and warnings for absolute registry paths outside the registry directory. Closes #198, #199, #202, #204, #205.
+- Moved CI linting before test/build, removed the redundant `postinstall` build, and added TypeScript checking for test files. Closes #201, #206.
+
+### Changed
+
+- Deduplicated sync/async project config construction through shared pure helpers while preserving the public API. Closes #195.
+- Exported the shared `truthy()` utility and named package-root traversal / subprocess buffer constants. Closes #203.
+
+### Documentation
+
+- Updated the Git install example to the current release tag, documented public operation-result contracts, and added an explicit Access E2E skip message. Closes #207, #208, #209.
+
 ## [0.5.1] - 2026-05-18
 
 ### Fixed
