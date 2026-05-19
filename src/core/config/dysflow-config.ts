@@ -16,6 +16,7 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
+const LEGACY_PROJECT_CONFIG_PATH = "dysflow.project.json";
 const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
 export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-registry" | "runtime-default";
@@ -121,17 +122,27 @@ export function loadDysflowConfig(
 		);
 	}
 
-	const repoConfigPath = findRepoProjectConfigPath(cwd);
-	if (repoConfigPath !== undefined) {
+	const repoConfig = findRepoProjectConfigPath(cwd);
+	if (repoConfig.found === "ambiguous") {
+		const [pathA, pathB] = repoConfig.paths;
+		return failureResult(
+			createDysflowError(
+				"CONFIG_AMBIGUOUS_PROJECT_FILE",
+				`Both ${pathA} and ${pathB} exist. Remove one before continuing.`,
+				{ retryable: false },
+			),
+		);
+	}
+	if (repoConfig.found === "standard" || repoConfig.found === "legacy") {
 		return loadProjectConfigFromPath(
-			repoConfigPath,
+			repoConfig.path,
 			input,
 			env,
 			cwd,
 			"repo-config",
 		);
 	}
-
+	// repoConfig.found === "none"
 	return failureResult(
 		createDysflowError(
 			"CONFIG_MISSING_ACCESS_PATH",
@@ -178,17 +189,27 @@ export async function loadDysflowConfigAsync(
 		);
 	}
 
-	const repoConfigPath = await findRepoProjectConfigPathAsync(cwd);
-	if (repoConfigPath !== undefined) {
+	const repoConfig = await findRepoProjectConfigPathAsync(cwd);
+	if (repoConfig.found === "ambiguous") {
+		const [pathA, pathB] = repoConfig.paths;
+		return failureResult(
+			createDysflowError(
+				"CONFIG_AMBIGUOUS_PROJECT_FILE",
+				`Both ${pathA} and ${pathB} exist. Remove one before continuing.`,
+				{ retryable: false },
+			),
+		);
+	}
+	if (repoConfig.found === "standard" || repoConfig.found === "legacy") {
 		return loadProjectConfigFromPathAsync(
-			repoConfigPath,
+			repoConfig.path,
 			input,
 			env,
 			cwd,
 			"repo-config",
 		);
 	}
-
+	// repoConfig.found === "none"
 	return failureResult(
 		createDysflowError(
 			"CONFIG_MISSING_ACCESS_PATH",
@@ -511,9 +532,22 @@ async function resolveRegisteredProjectConfigPathAsync(
 	return resolveRegistryEntry(entry, dirname(registryPath));
 }
 
-async function findRepoProjectConfigPathAsync(cwd: string): Promise<string | undefined> {
-	const candidate = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-	return (await pathExists(candidate)) ? candidate : undefined;
+async function findRepoProjectConfigPathAsync(cwd: string): Promise<{ found: "none" } | { found: "legacy" | "standard", path: string } | { found: "ambiguous", paths: [string, string] }> {
+	const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
+	const legacy = resolve(cwd, LEGACY_PROJECT_CONFIG_PATH);
+	const standardExists = await pathExists(standard);
+	const legacyExists = await pathExists(legacy);
+
+	if (standardExists && legacyExists) {
+		return { found: "ambiguous", paths: [standard, legacy] };
+	}
+	if (standardExists) {
+		return { found: "standard", path: standard };
+	}
+	if (legacyExists) {
+		return { found: "legacy", path: legacy };
+	}
+	return { found: "none" };
 }
 
 async function pathExists(candidate: string): Promise<boolean> {
@@ -555,9 +589,22 @@ export function resolveProjectRegistryPath(
 	return join(home, "dysflow", "projects.json");
 }
 
-function findRepoProjectConfigPath(cwd: string): string | undefined {
-	const candidate = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-	return existsSync(candidate) ? candidate : undefined;
+function findRepoProjectConfigPath(cwd: string): { found: "none" } | { found: "legacy" | "standard", path: string } | { found: "ambiguous", paths: [string, string] } {
+	const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
+	const legacy = resolve(cwd, LEGACY_PROJECT_CONFIG_PATH);
+	const standardExists = existsSync(standard);
+	const legacyExists = existsSync(legacy);
+
+	if (standardExists && legacyExists) {
+		return { found: "ambiguous", paths: [standard, legacy] };
+	}
+	if (standardExists) {
+		return { found: "standard", path: standard };
+	}
+	if (legacyExists) {
+		return { found: "legacy", path: legacy };
+	}
+	return { found: "none" };
 }
 
 function resolveTimeout(explicitTimeoutMs: number | undefined): number {

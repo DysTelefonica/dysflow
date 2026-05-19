@@ -28,6 +28,40 @@ function writeRepoProjectConfig(root: string, config: Record<string, unknown>): 
 }
 
 describe("dysflow configuration", () => {
+	// #61 — both .dysflow/project.json and dysflow.project.json in same dir
+	it("returns CONFIG_AMBIGUOUS_PROJECT_FILE when both config filenames exist", () => {
+		const { root, cleanup } = createTempWorkspace();
+		try {
+			// Write .dysflow/project.json
+			mkdirSync(join(root, ".dysflow"), { recursive: true });
+			writeFileSync(join(root, ".dysflow", "project.json"), '{"accessPath":"a.accdb"}', "utf8");
+			// Write dysflow.project.json
+			writeFileSync(join(root, "dysflow.project.json"), '{"accessPath":"b.accdb"}', "utf8");
+
+			const result = loadDysflowConfig({ cwd: root, env: {} });
+
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("expected failure");
+			expect(result.error.code).toBe("CONFIG_AMBIGUOUS_PROJECT_FILE");
+			expect(result.error.retryable).toBe(false);
+			expect(result.error.message).toContain(".dysflow");
+			expect(result.error.message).toContain("dysflow.project.json");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("still succeeds when only one config filename exists", () => {
+		const { root, cleanup } = createTempWorkspace();
+		try {
+			writeRepoProjectConfig(root, { accessPath: "app.accdb" });
+			const result = loadDysflowConfig({ cwd: root, env: {} });
+			expect(result.ok).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
+
 	it("resolves Access path, timeout, and redacts password from explicit input", () => {
 		const result = loadDysflowConfig({
 			accessDbPath: "C:/data/app.accdb",
