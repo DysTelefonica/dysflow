@@ -959,6 +959,28 @@ errores:
 
 End Property
 
+' Issue #19: Indica si el detalle CE (descripción + fecha prevista) está completo
+Public Property Get ControlEficaciaDetalleCompleto() As EnumSino
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Me.RequiereControlEficacia <> "Sí" Then
+        ControlEficaciaDetalleCompleto = EnumSino.No
+        Exit Property
+    End If
+    If Me.ControlEficacia <> "" And IsDate(Me.FechaPrevistaControlEficacia) Then
+        ControlEficaciaDetalleCompleto = EnumSino.Sí
+    Else
+        ControlEficaciaDetalleCompleto = EnumSino.No
+    End If
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método NCProyecto.ControlEficaciaDetalleCompleto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
 Public Property Get ConControlDeEficaciaSinRellenar() As EnumSino
 
     On Error GoTo errores
