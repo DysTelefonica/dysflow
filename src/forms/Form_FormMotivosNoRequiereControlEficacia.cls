@@ -5,19 +5,14 @@ Private m_Error As String
 
 Private Function GetNCAObjeto() As Object
     On Error Resume Next
-    Dim frmParent As Form
     Set GetNCAObjeto = Nothing
-    
-    ' With acDialog, Screen.PreviousForm gives the form that opened this popup
-    Set frmParent = Screen.PreviousForm
-    If frmParent Is Nothing Then Exit Function
-    
-    ' Try to get the NC object from the parent form
-    On Error Resume Next
-    Set GetNCAObjeto = frmParent!m_ObjNCProyectoActiva
+
+    ' HOTFIX-20260519: Screen.PreviousForm no existe en Access.
+    ' El popup trabaja sobre los objetos activos globales del flujo NC.
+    Set GetNCAObjeto = m_ObjNCProyectoActiva
     If Not GetNCAObjeto Is Nothing Then Exit Function
-    
-    Set GetNCAObjeto = frmParent!m_ObjNCAuditoriaActiva
+
+    Set GetNCAObjeto = m_ObjNCAuditoriaActiva
 End Function
 
 Private Sub Form_Load()
