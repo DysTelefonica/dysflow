@@ -41,6 +41,7 @@ Begin Form
     End
     Caption ="Usuario conectado: Administrador (64 bits) 2024-046"
     OnOpen ="[Event Procedure]"
+    OnTimer ="[Event Procedure]"
     DatasheetFontName ="Arial"
     PrtMip = Begin
         0x6801000068010000680100006801000000000000201c0000e010000001000000 ,
@@ -3559,6 +3560,7 @@ Begin Form
                     FontWeight =700
                     BackColor =8210719
                     ForeColor =16777215
+                    Visible =0
                     Name ="lblEstado"
                     Caption ="Obteniendo variables de Entorno...URLVideoAyudaNCProyectoParaTecnico"
                     FontName ="Calibri"
