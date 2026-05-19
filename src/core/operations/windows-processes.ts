@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { OsProcessInfo, ProcessInspector, ProcessKiller } from "./access-operation-cleanup.js";
+import type { OsProcessInfo, ProcessInspector, ProcessKiller, ProcessScanner } from "./access-operation-cleanup.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -56,5 +56,30 @@ export class WindowsProcessKiller implements ProcessKiller {
       throw new Error("Process id must be a positive safe integer.");
     }
     await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Stop-Process -Id ${pid} -Force`], { windowsHide: true });
+  }
+}
+
+export class WindowsMsAccessProcessScanner implements ProcessScanner {
+  async listProcesses(): Promise<OsProcessInfo[]> {
+    if (process.platform !== "win32") return [];
+
+    const script = `Get-CimInstance Win32_Process -Filter "Name='MSACCESS.EXE'" | Select-Object ProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress`;
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true });
+    if (stdout.trim().length === 0) return [];
+    let parsed: Array<{ ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string }>;
+    try {
+      parsed = JSON.parse(stdout) as Array<{ ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string }>;
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(parsed)) {
+      parsed = [parsed];
+    }
+    return parsed.map((p) => ({
+      pid: p.ProcessId,
+      name: p.Name,
+      startTime: parseCimDateTimeToIso(p.CreationDate),
+      commandLine: p.CommandLine,
+    }));
   }
 }

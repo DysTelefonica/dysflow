@@ -12,6 +12,7 @@ import {
 	parseArgsJson,
 	type VbaManagerExecutor,
 } from "../../../src/core/services/vba-sync-legacy-service";
+import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -147,6 +148,84 @@ describe("VbaSyncLegacyService", () => {
 			signal: expect.any(AbortSignal),
 		},
 		]);
+	});
+
+	it("runs preflight cleanup with the resolved target before invoking the legacy manager", async () => {
+		const calls: string[] = [];
+		const preflight: AccessOperationPreflightCleanup = {
+			cleanup: vi.fn(async (request) => {
+				calls.push("preflight");
+				expect(request).toEqual({
+					accessPath: "C:/db/front.accdb",
+					projectRoot: "C:/repo",
+				});
+				return { cleaned: ["stale-op"], killed: [1234], orphanedKilled: [], errors: [] };
+			}),
+		};
+		const executor: VbaManagerExecutor = async () => {
+			calls.push("executor");
+			return {
+				exitCode: 0,
+				stdout: '{"ok":true}',
+				stderr: "",
+				durationMs: 7,
+				timedOut: false,
+			};
+		};
+		const service = new VbaSyncLegacyService({
+			executor,
+			preflightCleanup: preflight,
+			accessPath: "C:/db/front.accdb",
+			destinationRoot: "C:/repo",
+		});
+
+		const result = await service.execute("list_objects", {
+			accessPath: "C:/db/front.accdb",
+			projectRoot: "C:/repo",
+			destinationRoot: "C:/repo/src",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(calls).toEqual(["preflight", "executor"]);
+		expect(preflight.cleanup).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps legacy operation running when preflight cleanup throws and surfaces a warning", async () => {
+		const preflight: AccessOperationPreflightCleanup = {
+			cleanup: vi.fn(async () => {
+				throw new Error("registry unavailable");
+			}),
+		};
+		const service = new VbaSyncLegacyService({
+			preflightCleanup: preflight,
+			accessPath: "C:/db/front.accdb",
+			destinationRoot: "C:/repo",
+			executor: async () => ({
+				exitCode: 0,
+				stdout: '{"ok":true}',
+				stderr: "",
+				durationMs: 9,
+				timedOut: false,
+			}),
+		});
+
+		const result = await service.execute("list_objects", {
+			accessPath: "C:/db/front.accdb",
+			projectRoot: "C:/repo",
+			destinationRoot: "C:/repo/src",
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			data: { ok: true },
+			diagnostics: [
+				{
+					level: "warning",
+					source: "access.preflight",
+					message: "preflight: Pre-flight cleanup failed: registry unavailable",
+				},
+			],
+		});
 	});
 
 	it("dry-run import_all resolves explicit registered project instead of cwd and does not open Access", async () => {

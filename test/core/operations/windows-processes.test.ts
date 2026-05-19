@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WindowsProcessKiller, parseCimDateTimeToIso } from "../../../src/core/operations/windows-processes";
+import { WindowsMsAccessProcessScanner, WindowsProcessKiller, parseCimDateTimeToIso } from "../../../src/core/operations/windows-processes";
 
 describe("parseCimDateTimeToIso", () => {
   it("converts a DMTF CIM datetime string to ISO 8601 UTC", () => {
@@ -38,4 +38,14 @@ describe("WindowsProcessKiller", () => {
       await expect(killer.kill(pid)).rejects.toThrow("Process id must be a positive safe integer.");
     },
   );
+});
+
+describe("WindowsMsAccessProcessScanner", () => {
+  it("degrades to an empty process list outside Windows", async () => {
+    const scanner = new WindowsMsAccessProcessScanner();
+
+    if (process.platform === "win32") return;
+
+    await expect(scanner.listProcesses()).resolves.toEqual([]);
+  });
 });

@@ -2,6 +2,8 @@ import { createDiagnostic, createDysflowError, failureResult, successResult, typ
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
+import { AccessOperationPreflightCleanupService, diagnosticsFromPreflightCleanup, type AccessOperationPreflightCleanup } from "../operations/access-operation-preflight.js";
+import { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } from "../operations/windows-processes.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 import { sanitizeSecrets } from "../utils/index.js";
 
@@ -38,6 +40,7 @@ export type AccessPowerShellRunnerOptions = {
   executor?: PowerShellExecutor;
   scriptPath?: string;
   operationRegistry?: AccessOperationRegistry;
+  preflightCleanup?: AccessOperationPreflightCleanup;
   operationIdFactory?: () => string;
   clock?: () => string;
 };
@@ -52,6 +55,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   private readonly executor: PowerShellExecutor;
   private readonly scriptPath: string;
   private readonly operationRegistry: AccessOperationRegistry;
+  private readonly preflightCleanup: AccessOperationPreflightCleanup;
   private readonly operationIdFactory: () => string;
   private readonly clock: () => string;
 
@@ -59,6 +63,13 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.executor = options.executor ?? spawnPowerShell;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
     this.operationRegistry = options.operationRegistry ?? defaultRegistry;
+    this.preflightCleanup = options.preflightCleanup ?? new AccessOperationPreflightCleanupService({
+      registry: this.operationRegistry,
+      processInspector: new WindowsMsAccessProcessInspector(),
+      processKiller: new WindowsProcessKiller(),
+      processScanner: new WindowsMsAccessProcessScanner(),
+      clock: options.clock,
+    });
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
   }
@@ -68,6 +79,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
     }
 
+    const preflightResult = await this.runPreflightCleanup(config);
     const operationId = this.operationIdFactory();
     let record = await this.operationRegistry.create({
       operationId,
@@ -82,7 +94,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       updatedAt: this.clock(),
     });
 
-    const captureDiagnostics: Diagnostic[] = [];
+    const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
     const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
       timeoutMs: config.timeoutMs,
       operationId,
@@ -129,6 +141,22 @@ export class AccessPowerShellRunner implements AccessRunner {
         createDysflowError("RUNNER_INVALID_JSON", "PowerShell runner produced invalid JSON output."),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
       );
+    }
+  }
+
+  private async runPreflightCleanup(config: DysflowConfig) {
+    try {
+      return await this.preflightCleanup.cleanup({
+        accessPath: config.accessDbPath,
+        projectRoot: config.projectRoot ?? process.cwd(),
+      });
+    } catch (error) {
+      return {
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [{ operationId: "preflight", message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}` }],
+      };
     }
   }
 
