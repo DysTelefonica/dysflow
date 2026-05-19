@@ -1328,7 +1328,7 @@ describe("VbaSyncLegacyService", () => {
 	});
 
 	// #192 RED: parseArgsJson returns discriminated union instead of throwing
-	describe("parseArgsJson discriminated union (#192)", () => {
+		describe("parseArgsJson discriminated union (#192)", () => {
 		it("returns { ok: false, error } for invalid JSON instead of throwing", () => {
 			const result = parseArgsJson("{ not valid json }");
 			expect(result).toMatchObject({ ok: false });
@@ -1348,6 +1348,18 @@ describe("VbaSyncLegacyService", () => {
 		it("wraps a non-array JSON value in an array", () => {
 			const result = parseArgsJson('"single"');
 			expect(result).toMatchObject({ ok: true, value: ["single"] });
+		});
+
+		it("rejects payloads that exceed the JSON size limit", () => {
+			const oversized = `"${"a".repeat(200_000)}"`;
+			const result = parseArgsJson(oversized);
+			expect(result).toMatchObject({ ok: false, error: expect.stringContaining("too large") });
+		});
+
+		it("rejects deeply nested JSON payloads", () => {
+			const deepArray = `${"[".repeat(80)}0${"]".repeat(80)}`;
+			const result = parseArgsJson(deepArray);
+			expect(result).toMatchObject({ ok: false, error: expect.stringContaining("too deeply nested") });
 		});
 	});
 
