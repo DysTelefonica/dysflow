@@ -133,11 +133,10 @@ describe("MCP tool registration over core services", () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      writesEnabled: true,
       vbaService: vba,
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    });
+    }, true);
 
     await expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.handler({ moduleName: "Automation" })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
@@ -190,11 +189,10 @@ describe("MCP tool registration over core services", () => {
   it("allows MCP write queries only when writes are explicitly enabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      writesEnabled: true,
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    });
+    }, true);
 
     await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
@@ -339,11 +337,10 @@ describe("MCP tool registration over core services", () => {
   it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      writesEnabled: false,
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    });
+    }, false);
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:true — must NOT be blocked by write guard
@@ -359,11 +356,10 @@ describe("MCP tool registration over core services", () => {
   it("blocks relink_tables with dryRun:false when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      writesEnabled: false,
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    });
+    }, false);
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:false — must be blocked by write guard when writes are disabled
@@ -376,16 +372,47 @@ describe("MCP tool registration over core services", () => {
   it("allows relink_tables with dryRun:false when writes are enabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      writesEnabled: true,
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    });
+    }, true);
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     const writeResult = await relinkTool?.handler({ dryRun: false });
     expect(writeResult?.isError).toBe(false);
     expect(writeResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
     expect(query.requests.length).toBeGreaterThan(0);
+  });
+
+  describe("writesEnabled explicit parameter (#197)", () => {
+    function makeServices() {
+      return {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      };
+    }
+
+    it("write tool is gated when writesEnabled=false is passed as explicit second parameter", async () => {
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const services = { ...makeServices(), queryService: query };
+      // New signature: createDysflowMcpTools(services, writesEnabled)
+      // writesEnabled=false must block seed_fixture (a write tool)
+      const tools = createDysflowMcpTools(services, false);
+      const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
+      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }] });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+      expect(query.requests).toEqual([]);
+    });
+
+    it("write tool succeeds when writesEnabled=true is passed as explicit second parameter", async () => {
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const services = { ...makeServices(), queryService: query };
+      const tools = createDysflowMcpTools(services, true);
+      const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
+      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }], apply: true });
+      expect(result?.isError).toBe(false);
+    });
   });
 });

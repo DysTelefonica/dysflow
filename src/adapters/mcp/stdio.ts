@@ -1,9 +1,8 @@
-import { join } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
-import { FileAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { FileAccessOperationRegistry, resolveProjectOperationRegistryPath as resolveRegistryPath } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
@@ -210,9 +209,9 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
   const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
   const configResult = config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   const services = configResult.ok ? createConfiguredServices(configResult.data) : createUnavailableServices(configResult.error);
-  services.writesEnabled = options?.writesEnabled ?? false;
+  const writesEnabled = options?.writesEnabled ?? false;
 
-  for (const tool of createDysflowMcpTools(services)) {
+  for (const tool of createDysflowMcpTools(services, writesEnabled)) {
     activeRuntime.registerTool(tool);
   }
 
@@ -280,12 +279,11 @@ function createUnavailableLegacyToolService(
   };
 }
 
-export function resolveProjectOperationRegistryPath(config: Pick<DysflowConfig, "projectRoot">): string {
-  return join(config.projectRoot ?? process.cwd(), ".dysflow", "runtime", "operations.json");
-}
+// re-exported from core — do not add new imports from adapters here
+export { resolveProjectOperationRegistryPath } from "../../core/operations/access-operation-registry.js";
 
 function createProjectOperationRegistry(config: Pick<DysflowConfig, "projectRoot">): FileAccessOperationRegistry {
-  return new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath(config) });
+  return new FileAccessOperationRegistry({ filePath: resolveRegistryPath(config) });
 }
 
 function isMcpStdioRuntime(value: unknown): value is McpStdioRuntime {

@@ -104,7 +104,6 @@ const CLEANUP_SCHEMA: JsonObjectSchema = {
 };
 
 export type DysflowMcpServices = {
-  writesEnabled?: boolean;
   vbaService: {
     execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>>;
   };
@@ -197,87 +196,6 @@ function matchesJsonSchemaType(value: unknown, type: JsonSchemaPrimitiveType): b
 function articleFor(type: JsonSchemaPrimitiveType): "a" | "an" {
   return type === "object" || type === "array" ? "an" : "a";
 }
-
-function legacySchemaForTool(name: LegacyDysflowMcpToolName | "run_vba" | "query_sql" | "cleanup_access_operation"): JsonObjectSchema {
-  const properties: Record<string, JsonSchemaProperty> = {
-    ...CONTEXT_PROPERTIES,
-    accessPath: { type: "string", description: "Optional override for Access frontend database path. Normal calls use .dysflow/project.json." },
-    allowTable: { type: "string", description: "Single allowed table." },
-    allowTables: { type: "array", items: { type: "string" }, description: "Allowed tables." },
-    apply: { type: "boolean", description: "Apply a write instead of dry run." },
-    argsJson: { type: "string", description: "JSON encoded argument array." },
-    backendPath: { type: "string", description: "Optional override for Access backend database path. Normal calls use .dysflow/project.json." },
-    comparePath: { type: "string", description: "Backend comparison path." },
-    column: { type: "string", description: "Column name alias." },
-    backup: { type: "boolean", description: "Create a backup before destructive changes." },
-    backupFirst: { type: "boolean", description: "Create a backup before compact/repair." },
-    catalogPath: { type: "string", description: "Form control catalog path." },
-    columnName: { type: "string", description: "Column name." },
-    compile: { type: "boolean", description: "Compile before running." },
-    databasePath: { type: "string", description: "Database path." },
-    definition: { type: "string", description: "Table definition or fields." },
-    destinationRoot: { type: "string", description: "Optional override for source/export root. Normal calls use .dysflow/project.json destinationRoot, typically src." },
-    diff: { type: "boolean", description: "Include a diff when supported." },
-    erdPath: { type: "string", description: "ERD output path." },
-    denyTable: { type: "string", description: "Single denied table." },
-    denyTables: { type: "array", items: { type: "string" }, description: "Denied tables." },
-    directory: { type: "string", description: "Directory path alias." },
-    dryRun: { type: "boolean", description: "Run without applying writes." },
-    exportPath: { type: "string", description: "Export path." },
-    fields: { type: "string", description: "Table definition alias." },
-    force: { type: "boolean", description: "Force operation when supported." },
-    filter: { type: "string", description: "Test or object filter." },
-    includeQueries: { type: "boolean", description: "Include saved queries." },
-    importMode: { type: "string", description: "VBA import mode." },
-    limit: { type: "number", description: "Maximum number of items or diff lines." },
-    importPath: { type: "string", description: "Import path." },
-    moduleName: { type: "string", description: "VBA module name." },
-    moduleNames: { type: "array", items: { type: "string" }, description: "VBA module names." },
-    name: { type: "string", description: "Object or generated form name." },
-    operationId: { type: "string", description: "Dysflow operation id." },
-    path: { type: "string", description: "Path alias." },
-    proceduresJson: { type: "string", description: "JSON encoded VBA test procedures." },
-    projectRoot: { type: "string", description: "Optional override for project root. Normal calls use the active repo/worktree and .dysflow/project.json." },
-    procedureName: { type: "string", description: "Public VBA procedure name." },
-    query: { type: "string", description: "SQL query alias." },
-    queryDefinitions: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions." },
-    replace: { type: "boolean", description: "Replace existing resources." },
-    queries: { type: "array", items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } }, description: "Query definitions alias." },
-    rootPath: { type: "string", description: "Optional override for root directory. Normal calls use .dysflow/project.json destinationRoot." },
-    strict: { type: "boolean", description: "Use strict comparison or validation." },
-    strictContext: { type: "boolean", description: "Abort before opening Access if resolved target does not match expected paths." },
-    strictWrite: { type: "boolean", description: "Use strict write guards." },
-    expectedAccessPath: { type: "string", description: "Expected resolved Access database path for strictContext." },
-    expectedProjectRoot: { type: "string", description: "Expected resolved project root for strictContext." },
-    expectedDestinationRoot: { type: "string", description: "Expected resolved destination root for strictContext." },
-    rows: { type: "array", items: { type: "object", additionalProperties: true }, description: "Fixture rows." },
-    scriptPath: { type: "string", description: "SQL script path." },
-    sourcePath: { type: "string", description: "Source path alias." },
-    spec: { type: "object", description: "Form/report specification object." },
-    specPath: { type: "string", description: "Form/report specification path." },
-    sql: { type: "string", description: "SQL text." },
-    table: { type: "string", description: "Table name alias." },
-    tableName: { type: "string", description: "Table name." },
-    testsPath: { type: "string", description: "VBA test plan path." },
-    top: { type: "number", description: "Maximum returned rows." },
-    type: { type: "string", description: "Control type alias." },
-    controlName: { type: "string", description: "Control name." },
-    controlType: { type: "string", description: "Control type." },
-    kind: { type: "string", description: "Form/report kind." },
-    location: { type: "string", description: "Encoding fix location." },
-  };
-
-  if (name === "run_vba") {
-    return { type: "object", required: ["procedureName"], additionalProperties: false, properties: { procedureName: properties.procedureName, argsJson: { type: "string", description: "JSON encoded argument array." } } };
-  }
-  if (name === "cleanup_access_operation") {
-    return { type: "object", required: ["operationId"], additionalProperties: false, properties: { operationId: properties.operationId, accessPath: properties.accessPath, force: properties.force } };
-  }
-  return { type: "object", additionalProperties: false, properties };
-}
-
-const CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA = legacySchemaForTool("cleanup_access_operation");
-const RUN_VBA_LEGACY_SCHEMA = legacySchemaForTool("run_vba");
 
 // ---------------------------------------------------------------------------
 // Per-tool schemas (#177)
@@ -375,7 +293,7 @@ const STRICT_CTX = { strictContext: SCHEMA_PROPS.strictContext, expectedAccessPa
  * Exported for contract testing.
  */
 export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
-  // ---- alias tools (already have special cases in legacySchemaForTool) ----
+  // ---- alias tools (explicit per-tool schemas) ----
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
   cleanup_access_operation: { type: "object", required: ["operationId"], additionalProperties: false, properties: { operationId: SCHEMA_PROPS.operationId, accessPath: SCHEMA_PROPS.accessPath, force: SCHEMA_PROPS.force } },
   run_vba: { type: "object", required: ["procedureName"], additionalProperties: false, properties: { procedureName: SCHEMA_PROPS.procedureName, argsJson: SCHEMA_PROPS.argsJson } },
@@ -439,8 +357,7 @@ async function handleValidatedLegacyWrite<TData>(input: unknown, schema: JsonObj
   return translateCoreResultToMcpContent(await execute());
 }
 
-export function createDysflowMcpTools(services: DysflowMcpServices): DysflowMcpTool[] {
-  const writesEnabled = services.writesEnabled ?? false;
+export function createDysflowMcpTools(services: DysflowMcpServices, writesEnabled = false): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow.vba.execute",
@@ -522,9 +439,9 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "cleanup_access_operation",
     description: "Legacy-compatible alias for safe Access operation cleanup.",
-    inputSchema: CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA,
+    inputSchema: LEGACY_TOOL_SCHEMAS["cleanup_access_operation"]!,
     handler: async (input) => {
-      const validation = validateInput(input, CLEANUP_ACCESS_OPERATION_LEGACY_SCHEMA);
+      const validation = validateInput(input, LEGACY_TOOL_SCHEMAS["cleanup_access_operation"]!);
       if (validation !== undefined) return invalidInput(validation);
       if (services.cleanupService === undefined) {
         return { content: [{ type: "text", text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured." }], isError: true };
@@ -536,9 +453,9 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
   add({
     name: "run_vba",
     description: "Legacy-compatible alias for executing a public VBA procedure.",
-    inputSchema: RUN_VBA_LEGACY_SCHEMA,
+    inputSchema: LEGACY_TOOL_SCHEMAS["run_vba"]!,
     handler: async (input) => {
-      const validation = validateInput(input, RUN_VBA_LEGACY_SCHEMA);
+      const validation = validateInput(input, LEGACY_TOOL_SCHEMAS["run_vba"]!);
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
       const parsedArgs = parseLegacyArgsJson(request.argsJson);
@@ -550,7 +467,7 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       }));
     },
   });
-  const querySqlSchema = legacySchemaForTool("query_sql");
+  const querySqlSchema = LEGACY_TOOL_SCHEMAS["query_sql"]!;
   add({
     name: "query_sql",
     description: "Legacy-compatible alias for read-only Access SQL queries.",
@@ -562,47 +479,41 @@ function appendLegacyCompatibilityTools(currentTools: DysflowMcpTool[], services
       return translateCoreResultToMcpContent(await services.queryService.execute({ sql: request.sql ?? request.query ?? "", mode: "read" }));
     },
   });
-  const execSqlSchema = legacySchemaForTool("exec_sql");
   add({
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
-    inputSchema: execSqlSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, execSqlSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["exec_sql"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["exec_sql"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input))),
   });
-  const runScriptSchema = legacySchemaForTool("run_script");
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
-    inputSchema: runScriptSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, runScriptSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["run_script"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["run_script"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input))),
   });
-  const createTableSchema = legacySchemaForTool("create_table");
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
-    inputSchema: createTableSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, createTableSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["create_table"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["create_table"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input))),
   });
-  const dropTableSchema = legacySchemaForTool("drop_table");
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
-    inputSchema: dropTableSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, dropTableSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["drop_table"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["drop_table"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input))),
   });
-  const seedFixtureSchema = legacySchemaForTool("seed_fixture");
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
-    inputSchema: seedFixtureSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, seedFixtureSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["seed_fixture"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["seed_fixture"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input))),
   });
-  const teardownFixtureSchema = legacySchemaForTool("teardown_fixture");
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
-    inputSchema: teardownFixtureSchema,
-    handler: async (input) => handleValidatedLegacyWrite(input, teardownFixtureSchema, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
+    inputSchema: LEGACY_TOOL_SCHEMAS["teardown_fixture"]!,
+    handler: async (input) => handleValidatedLegacyWrite(input, LEGACY_TOOL_SCHEMAS["teardown_fixture"]!, writesEnabled, () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input))),
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
@@ -627,7 +538,8 @@ const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
 
 function createLegacyDispatchTool(name: LegacyDysflowMcpToolName, services: DysflowMcpServices, writesEnabled: boolean): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
-  const schema = LEGACY_TOOL_SCHEMAS[name] ?? legacySchemaForTool(name);
+  // LEGACY_TOOL_SCHEMAS is the sole source of truth for all legacy tool schemas (#200).
+  const schema = LEGACY_TOOL_SCHEMAS[name]!;
   return {
     name,
     description: definition.description,

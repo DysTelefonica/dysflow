@@ -352,3 +352,11 @@ export function toOperationMetadata(record: AccessOperationRecord): AccessOperat
     status: record.status,
   };
 }
+
+/**
+ * Resolves the file path for the per-project Access operation registry JSON.
+ * Moved from src/adapters/mcp/stdio.ts to break the HTTP→MCP adapter coupling (#196).
+ */
+export function resolveProjectOperationRegistryPath(config: { projectRoot?: string }): string {
+  return join(config.projectRoot ?? process.cwd(), ".dysflow", "runtime", "operations.json");
+}

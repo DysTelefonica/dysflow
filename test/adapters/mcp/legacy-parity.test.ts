@@ -118,7 +118,6 @@ describe("legacy Dysflow MCP parity inventory", () => {
     const legacyCalls: unknown[] = [];
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools({
-      writesEnabled: true,
       vbaService: new FakeVbaService(),
       queryService: {
         execute: async (request: unknown) => {
@@ -133,7 +132,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
           return successResult({ ok: true, toolName });
         },
       },
-    });
+    }, true);
 
     await expect(tools.find((tool) => tool.name === "export_modules")?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" })).resolves.toEqual({
       isError: false,
@@ -196,7 +195,6 @@ describe("legacy Dysflow MCP parity inventory", () => {
   it("dispatches maintenance query tools to the configured query service", async () => {
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools({
-      writesEnabled: true,
       vbaService: new FakeVbaService(),
       queryService: {
         execute: async (request: unknown) => {
@@ -208,7 +206,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
       legacyToolService: {
         execute: async () => successResult({ ok: true }),
       },
-    });
+    }, true);
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
       isError: false,
