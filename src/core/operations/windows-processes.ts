@@ -61,6 +61,8 @@ export class WindowsProcessKiller implements ProcessKiller {
 
 export class WindowsMsAccessProcessScanner implements ProcessScanner {
   async listProcesses(): Promise<OsProcessInfo[]> {
+    if (process.platform !== "win32") return [];
+
     const script = `Get-CimInstance Win32_Process -Filter "Name='MSACCESS.EXE'" | Select-Object ProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress`;
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true });
     if (stdout.trim().length === 0) return [];
