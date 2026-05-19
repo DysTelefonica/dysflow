@@ -23,6 +23,7 @@ export type DysflowConfigSource = "explicit-request" | "repo-config" | "global-r
 export type DysflowProjectConfig = {
 	id?: string;
 	name?: string;
+	allowWrites?: boolean;
 	accessPath?: string;
 	backendPath?: string;
 	destinationRoot?: string;
@@ -43,6 +44,7 @@ export type DysflowProjectRegistry = {
 
 export type DysflowConfig = {
 	configSource: DysflowConfigSource;
+	allowWrites: boolean;
 	accessDbPath: string;
 	backendPath?: string;
 	destinationRoot?: string;
@@ -200,6 +202,7 @@ export function redactDysflowConfig(
 ): RedactedDysflowConfig {
 	const base = {
 		configSource: config.configSource,
+		allowWrites: config.allowWrites,
 		accessDbPath: config.accessDbPath,
 		backendPath: config.backendPath,
 		destinationRoot: config.destinationRoot,
@@ -232,6 +235,7 @@ function buildExplicitConfig(
 	const timeoutMs = resolveTimeout(input.timeoutMs);
 	return successResult({
 		configSource: "explicit-request",
+		allowWrites: false,
 		accessDbPath,
 		backendPath: stringValue(input.backendPath),
 		destinationRoot: stringValue(input.destinationRoot) ?? cwd,
@@ -315,6 +319,7 @@ function buildProjectConfig(
 
 	return successResult({
 		configSource,
+		allowWrites: raw.allowWrites === true,
 		accessDbPath,
 		backendPath,
 		destinationRoot,

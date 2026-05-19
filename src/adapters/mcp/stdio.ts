@@ -211,7 +211,10 @@ export async function startMcpStdioAdapter(configOrRuntime?: DysflowConfig | Mcp
   const services = configResult.ok ? createConfiguredServices(configResult.data) : createUnavailableServices(configResult.error);
   const writesEnabled = options?.writesEnabled ?? false;
 
-  for (const tool of createDysflowMcpTools(services, writesEnabled)) {
+  for (const tool of createDysflowMcpTools(services, writesEnabled, async (input) => {
+    const configResult = await resolveConfigForInput(input);
+    return configResult.ok ? configResult.data.allowWrites : false;
+  })) {
     activeRuntime.registerTool(tool);
   }
 
@@ -245,18 +248,59 @@ export function createUnavailableServices(
   options: { cwd?: string; env?: Record<string, string | undefined> } = {},
 ): DysflowMcpServices {
   const unavailable = async () => failureResult(error);
+  const resolveService = async (input: unknown): Promise<DysflowMcpServices | undefined> => {
+    const configResult = await resolveConfigForInput(input, options);
+    return configResult.ok ? createConfiguredServices(configResult.data) : undefined;
+  };
   return {
-    vbaService: { execute: unavailable },
-    queryService: { execute: unavailable },
+    vbaService: {
+      execute: async (request) => {
+        const dynamicServices = await resolveService(request);
+        if (dynamicServices === undefined) return unavailable();
+        return dynamicServices.vbaService.execute(request);
+      },
+    },
+    queryService: {
+      execute: async (request) => {
+        const dynamicServices = await resolveService(request);
+        if (dynamicServices === undefined) return unavailable();
+        return dynamicServices.queryService.execute(request);
+      },
+    },
     diagnosticsService: {
-      run: async () => failureResult({
-        code: error.code,
-        message: error.message,
-        retryable: error.retryable,
-      }),
+      run: async (request) => {
+        const dynamicServices = await resolveService(request);
+        if (dynamicServices !== undefined) return dynamicServices.diagnosticsService.run(request);
+        return failureResult({
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+        });
+      },
     },
     legacyToolService: createUnavailableLegacyToolService(error, options),
   };
+}
+
+async function resolveConfigForInput(
+  input: unknown,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+) {
+  const params = isRecord(input) ? input : {};
+  return await loadDysflowConfigAsync({
+    cwd: options.cwd,
+    env: options.env,
+    projectId: stringOrUndefined(params.projectId),
+    contextId: stringOrUndefined(params.contextId),
+    accessDbPath: stringOrUndefined(params.accessPath),
+    backendPath: stringOrUndefined(params.backendPath),
+    destinationRoot: stringOrUndefined(params.destinationRoot),
+    projectRoot: stringOrUndefined(params.projectRoot),
+  });
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function createUnavailableLegacyToolService(

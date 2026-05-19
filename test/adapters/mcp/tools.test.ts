@@ -202,6 +202,47 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests).toEqual([{ sql: "UPDATE People SET name='Ada'", mode: "write" }]);
   });
 
+  it("allows write tool when project-scoped allowWrites resolver grants access", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    }, false, async (input) => (input as { projectId?: string }).projectId === "lanzadera");
+
+    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({
+      projectId: "lanzadera",
+      tableName: "People",
+      rows: [{ id: 1 }],
+      apply: true,
+    })).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
+      isError: false,
+    });
+
+    expect(query.requests).toEqual([expect.objectContaining({ action: "seed_fixture", mode: "write", dryRun: false })]);
+  });
+
+  it("keeps blocking write tool when allowWrites resolver denies the project", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    }, false, async () => false);
+
+    const result = await tools.find((tool) => tool.name === "seed_fixture")?.handler({
+      projectId: "readonly-project",
+      tableName: "People",
+      rows: [{ id: 1 }],
+      apply: true,
+    });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(query.requests).toEqual([]);
+  });
+
   it("handles legacy run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const tools = createDysflowMcpTools({
@@ -400,7 +441,7 @@ describe("MCP tool registration over core services", () => {
       // writesEnabled=false must block seed_fixture (a write tool)
       const tools = createDysflowMcpTools(services, false);
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
-      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }] });
+      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }], apply: true });
       expect(result?.isError).toBe(true);
       expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
       expect(query.requests).toEqual([]);

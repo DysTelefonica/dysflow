@@ -8,6 +8,7 @@ import type { AccessRunner, AccessRunnerOperation } from "../../../src/core/runn
 
 const config = {
   configSource: "explicit-request",
+  allowWrites: false,
   accessDbPath: "C:/data/app.accdb",
   timeoutMs: 2_000,
   processTimeoutMs: 2_000,

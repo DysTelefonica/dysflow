@@ -5,6 +5,7 @@ import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
+  allowWrites: false,
   accessDbPath: "C:/data/app.accdb",
   timeoutMs: 100,
   processTimeoutMs: 100,
