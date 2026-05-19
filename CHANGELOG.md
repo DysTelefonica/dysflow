@@ -4,6 +4,15 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-19
+
+### Fixed
+
+- `test_vba` now honors explicit `proceduresJson` payloads instead of always resolving from a manifest.
+- Relative `testsPath` values now resolve from the project root, so `tests/tests.vba.json` works when `destinationRoot` is `src`.
+- Pipe-separated `filter` values such as `Test_A|Test_B` now select tests by OR across name, procedure, and tags.
+- Empty `proceduresJson` or filters that select no tests now fail early with `VBA_NO_TESTS_SELECTED` and do not call PowerShell with an empty `-Procedures` array. Closes #211.
+
 ## [0.5.2] - 2026-05-19
 
 ### Fixed
