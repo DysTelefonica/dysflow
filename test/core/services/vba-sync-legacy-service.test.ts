@@ -791,6 +791,44 @@ describe("VbaSyncLegacyService", () => {
 		]);
 	});
 
+	it("uses explicit test_vba proceduresJson without resolving a manifest (#211)", async () => {
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				return {
+					exitCode: 0,
+					stdout: '[{"ok":true,"procedure":"Test_X"}]',
+					stderr: "",
+					durationMs: 5,
+					timedOut: false,
+				};
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+		});
+
+		await expect(
+			service.execute("test_vba", {
+				proceduresJson: JSON.stringify([{ procedure: "Test_X", args: [] }]),
+				testsPath: "missing-manifest.json",
+			}),
+		).resolves.toMatchObject({
+			ok: true,
+			data: [{ ok: true, procedure: "Test_X" }],
+		});
+
+		expect(calls).toEqual([
+			expect.objectContaining({
+				action: "Run-Tests",
+				extra: {
+					proceduresJson: JSON.stringify([{ procedure: "Test_X", args: [] }]),
+				},
+			}),
+		]);
+	});
+
 	it("loads test_vba manifests from testsPath and filters by name, procedure, or tags", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-tests-"));
 		await writeFile(
@@ -853,6 +891,170 @@ describe("VbaSyncLegacyService", () => {
 				},
 			}),
 		]);
+	});
+
+	it("resolves relative test_vba testsPath from project root, not destinationRoot (#211)", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-project-root-tests-"));
+		await mkdir(join(root, "tests"), { recursive: true });
+		await mkdir(join(root, "src"), { recursive: true });
+		await writeFile(
+			join(root, "tests", "tests.vba.json"),
+			JSON.stringify([{ procedure: "Test_ProjectRoot", args: [] }]),
+			"utf8",
+		);
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				return {
+					exitCode: 0,
+					stdout: '[{"ok":true,"procedure":"Test_ProjectRoot"}]',
+					stderr: "",
+					durationMs: 7,
+					timedOut: false,
+				};
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			destinationRoot: join(root, "src"),
+			env: {},
+			cwd: root,
+		});
+
+		await expect(
+			service.execute("test_vba", {
+				testsPath: "tests/tests.vba.json",
+				destinationRoot: join(root, "src"),
+			}),
+		).resolves.toMatchObject({
+			ok: true,
+			data: [{ ok: true, procedure: "Test_ProjectRoot" }],
+		});
+
+		expect(calls).toEqual([
+			expect.objectContaining({
+				destinationRoot: join(root, "src"),
+				extra: {
+					proceduresJson: JSON.stringify([{ procedure: "Test_ProjectRoot", args: [] }]),
+				},
+			}),
+		]);
+	});
+
+	it("supports pipe-separated OR filters for test_vba manifests (#211)", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-filter-or-"));
+		await writeFile(
+			join(root, "tests.vba.json"),
+			JSON.stringify([
+				{ name: "import", procedure: "Test_A", args: ["a"] },
+				{ name: "export", procedure: "Test_B", args: ["b"] },
+				{ name: "skip", procedure: "Test_C", args: ["c"] },
+			]),
+			"utf8",
+		);
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				return {
+					exitCode: 0,
+					stdout: '[{"ok":true}]',
+					stderr: "",
+					durationMs: 7,
+					timedOut: false,
+				};
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+			cwd: root,
+		});
+
+		await expect(
+			service.execute("test_vba", {
+				testsPath: "tests.vba.json",
+				filter: "Test_A|Test_B",
+			}),
+		).resolves.toMatchObject({ ok: true });
+
+		expect(calls).toEqual([
+			expect.objectContaining({
+				extra: {
+					proceduresJson: JSON.stringify([
+						{ procedure: "Test_A", args: ["a"] },
+						{ procedure: "Test_B", args: ["b"] },
+					]),
+				},
+			}),
+		]);
+	});
+
+	it("returns VBA_NO_TESTS_SELECTED without calling PowerShell when test_vba filter matches nothing (#211)", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-empty-filter-"));
+		await writeFile(
+			join(root, "tests.vba.json"),
+			JSON.stringify([{ procedure: "Test_A", args: [] }]),
+			"utf8",
+		);
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				return {
+					exitCode: 0,
+					stdout: "[]",
+					stderr: "",
+					durationMs: 1,
+					timedOut: false,
+				};
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+			cwd: root,
+		});
+
+		const result = await service.execute("test_vba", {
+			testsPath: "tests.vba.json",
+			filter: "Missing_Test",
+		});
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: { code: "VBA_NO_TESTS_SELECTED" },
+		});
+		if (!result.ok) {
+			expect(result.error.message).toContain("tests.vba.json");
+			expect(result.error.message).toContain("Missing_Test");
+		}
+		expect(calls).toEqual([]);
+	});
+
+	it("returns VBA_NO_TESTS_SELECTED without calling PowerShell when proceduresJson is empty (#211)", async () => {
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				return {
+					exitCode: 0,
+					stdout: "[]",
+					stderr: "",
+					durationMs: 1,
+					timedOut: false,
+				};
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+		});
+
+		await expect(
+			service.execute("test_vba", { proceduresJson: "[]" }),
+		).resolves.toMatchObject({
+			ok: false,
+			error: { code: "VBA_NO_TESTS_SELECTED" },
+		});
+		expect(calls).toEqual([]);
 	});
 
 	it("runs compile before test_vba plan execution when compile is requested", async () => {
