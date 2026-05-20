@@ -50,8 +50,20 @@ async function createPackageRoot(
 ): Promise<string> {
 	const packageRoot = join(root, `package-${version}`);
 	const distCli = join(packageRoot, "dist", "cli");
+	const scriptsDir = join(packageRoot, "scripts");
 	await mkdir(distCli, { recursive: true });
+	await mkdir(scriptsDir, { recursive: true });
 	await writeFile(join(distCli, "index.js"), marker, "utf8");
+	await writeFile(
+		join(scriptsDir, "dysflow-vba-manager.ps1"),
+		`${marker}_VBA_MANAGER`,
+		"utf8",
+	);
+	await writeFile(
+		join(scriptsDir, "dysflow-access-runner.ps1"),
+		`${marker}_ACCESS_RUNNER`,
+		"utf8",
+	);
 	await writeFile(
 		join(packageRoot, "package.json"),
 		JSON.stringify({ name: "dysflow", version, type: "module" }, null, 2),
@@ -465,6 +477,26 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(await readFile(join(runtimeDir, "CHANGELOG.md"), "utf8")).toContain(
 			"# Changelog",
 		);
+		const sourceVbaManager = await readFile(
+			join(process.cwd(), "scripts", "dysflow-vba-manager.ps1"),
+			"utf8",
+		);
+		const sourceAccessRunner = await readFile(
+			join(process.cwd(), "scripts", "dysflow-access-runner.ps1"),
+			"utf8",
+		);
+		expect(
+			await readFile(
+				join(runtimeDir, "app", "scripts", "dysflow-vba-manager.ps1"),
+				"utf8",
+			),
+		).toBe(sourceVbaManager);
+		expect(
+			await readFile(
+				join(runtimeDir, "app", "scripts", "dysflow-access-runner.ps1"),
+				"utf8",
+			),
+		).toBe(sourceAccessRunner);
 
 		const codexContent = await readFile(codexConfig, "utf8");
 		const expectedCmd = join(runtimeDir, "bin", "dysflow.cmd").replaceAll(
@@ -502,6 +534,7 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(ps1Launcher).toContain(
 			`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`,
 		);
+		expect(ps1Launcher).toContain("$env:ProgramFiles\\nodejs;$env:PATH");
 		expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
 
 		await rm(root, { recursive: true, force: true });
@@ -565,6 +598,18 @@ describe("handleUpdateCommand end-to-end", () => {
 		expect(
 			await readFile(join(appDir, "dist", "cli", "index.js"), "utf8"),
 		).toBe("RELEASE_RUNTIME");
+		expect(
+			await readFile(
+				join(appDir, "scripts", "dysflow-vba-manager.ps1"),
+				"utf8",
+			),
+		).toBe("RELEASE_RUNTIME_VBA_MANAGER");
+		expect(
+			await readFile(
+				join(appDir, "scripts", "dysflow-access-runner.ps1"),
+				"utf8",
+			),
+		).toBe("RELEASE_RUNTIME_ACCESS_RUNNER");
 
 		await rm(root, { recursive: true, force: true });
 	});

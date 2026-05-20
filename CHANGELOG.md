@@ -4,6 +4,13 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-05-20
+
+### Fixed
+
+- `dysflow install` and `dysflow update` now copy the PowerShell runtime scripts required by MCP/Access/VBA tools into `app/scripts`, preventing missing `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` failures. Closes #251.
+- Generated Windows launchers now escape the `ProgramFiles\nodejs` PATH segment correctly instead of writing a newline into the launcher.
+
 ## [0.6.3] - 2026-05-20
 
 ### Fixed
