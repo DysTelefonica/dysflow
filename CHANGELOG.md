@@ -4,6 +4,14 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-20
+
+### Fixed
+
+- Stabilized Windows runtime launchers so MCP processes can recover `ACCESS_VBA_PASSWORD` from the current user's environment and prepend Node's install directory before launching Dysflow.
+- Persisted the selected runtime directory in a machine marker so `dysflow update` keeps using the installed runtime instead of falling back to temporary or profile-derived paths.
+- Ensured runtime `scripts/` are copied into the installed app, including when the destination directory does not exist yet.
+
 ## [0.5.3] - 2026-05-19
 
 ### Fixed

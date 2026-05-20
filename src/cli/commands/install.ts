@@ -7,7 +7,7 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
@@ -28,6 +28,9 @@ const GITHUB_LATEST_RELEASE_API =
 	"https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
 export const MAX_PACKAGE_ROOT_DEPTH = 12;
 export const MAX_SUBPROCESS_BUFFER_BYTES = 10 * 1024 * 1024;
+const RUNTIME_MARKER_FILE = ".dysflow-marker";
+const RUNTIME_MARKER_VERSION = "1";
+const RUNTIME_MARKER_PATH_ENV = "DYSFLOW_RUNTIME_MARKER_PATH";
 const execFileAsync = promisify(execFile);
 
 export type ReleaseInfo = {
@@ -201,11 +204,45 @@ function resolveRuntimeDir(
 		return path.resolve(env.DYSFLOW_HOME);
 	}
 
+	try {
+		const markedRuntimeDir = parseRuntimeMarker(
+			readFileSync(getSystemMarkerPath(env), "utf8"),
+		);
+		if (markedRuntimeDir !== undefined) {
+			return path.resolve(markedRuntimeDir);
+		}
+	} catch {
+		// Marker not found or unreadable — fall through to default.
+	}
+
 	const localAppData =
 		env.LOCALAPPDATA ??
 		path.join(env.USERPROFILE ?? env.HOME ?? "", "AppData", "Local");
 
 	return path.join(localAppData, "dysflow");
+}
+
+function getSystemMarkerPath(env: NodeJS.ProcessEnv): string {
+	const explicitMarkerPath = env[RUNTIME_MARKER_PATH_ENV];
+	if (explicitMarkerPath !== undefined && explicitMarkerPath.trim().length > 0) {
+		return path.resolve(explicitMarkerPath);
+	}
+
+	const programData =
+		env.ProgramData ?? path.join(env.SystemDrive ?? "C:", "ProgramData");
+	return path.join(programData, "dysflow", RUNTIME_MARKER_FILE);
+}
+
+function parseRuntimeMarker(content: string): string | undefined {
+	const lines = content
+		.replace(/\r\n/g, "\n")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	if (lines.length === 0) return undefined;
+	if (lines[0] === RUNTIME_MARKER_VERSION) return lines[1];
+	return lines[0];
 }
 
 function getHome(env: NodeJS.ProcessEnv): string {
@@ -492,7 +529,7 @@ export async function applyIntegrationSelection(
 	const selected = new Set(selectedAgents);
 
 	try {
-		await installRuntime(runtimePaths, packageRoot);
+		await installRuntime(runtimePaths, packageRoot, env);
 		for (const agent of ALL_AGENTS) {
 			if (selected.has(agent)) {
 				await configureAgent(agent, agentConfigPaths, commandPath);
@@ -554,6 +591,7 @@ async function removeAgentConfig(
 async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
 	await mkdir(runtimePaths.appDir, { recursive: true });
 	await mkdir(runtimePaths.binDir, { recursive: true });
+	await mkdir(runtimePaths.scriptsDest, { recursive: true });
 
 	if (!(await fileExists(runtimePaths.distSource))) {
 		throw new Error(
@@ -620,10 +658,24 @@ async function copyDocs(
 async function installRuntime(
 	runtimePaths: RuntimePaths,
 	packageRoot: string,
+	env: NodeJS.ProcessEnv,
 ): Promise<void> {
 	await copyRuntime(runtimePaths);
 	await copyDocs(runtimePaths, packageRoot);
 	await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
+	await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);
+}
+
+async function writeRuntimeMarker(
+	markerPath: string,
+	runtimeDir: string,
+): Promise<void> {
+	await mkdir(path.dirname(markerPath), { recursive: true });
+	await writeFile(
+		markerPath,
+		`${RUNTIME_MARKER_VERSION}\n${runtimeDir}\n`,
+		"utf8",
+	);
 }
 
 function createInstallReport(
@@ -868,6 +920,10 @@ export async function writeRuntimeLaunchers(
 		"@echo off",
 		"setlocal",
 		`set "DYSFLOW_HOME=${cmdRuntimeDir}"`,
+		"if not defined ACCESS_VBA_PASSWORD (",
+		'  for /f "tokens=2,*" %%A in (\'reg query HKCU\\Environment /v ACCESS_VBA_PASSWORD 2^>nul\') do set "ACCESS_VBA_PASSWORD=%%B"',
+		")",
+		`set "PATH=%ProgramFiles%\\nodejs;%PATH%"`,
 		'node "%DYSFLOW_HOME%\\app\\dist\\cli\\index.js" %*',
 		"exit /b %ERRORLEVEL%",
 		"",
@@ -876,6 +932,11 @@ export async function writeRuntimeLaunchers(
 	const ps1Content = [
 		'$ErrorActionPreference = "Stop"',
 		`$env:DYSFLOW_HOME = "${psRuntimeDir}"`,
+		'$AccessPassword = [Environment]::GetEnvironmentVariable("ACCESS_VBA_PASSWORD", "User")',
+		'if ([string]::IsNullOrWhiteSpace($env:ACCESS_VBA_PASSWORD) -and -not [string]::IsNullOrWhiteSpace($AccessPassword)) {',
+		'  $env:ACCESS_VBA_PASSWORD = $AccessPassword',
+		'}',
+		`$env:PATH = "$env:ProgramFiles\\nodejs;$env:PATH"`,
 		`& node (Join-Path $env:DYSFLOW_HOME "app\\dist\\cli\\index.js") @args`,
 		"exit $LASTEXITCODE",
 		"",
@@ -924,7 +985,7 @@ export async function handleInstallCommand(
 			agents = await selectAgentsInteractive(ALL_AGENTS);
 		}
 
-		await installRuntime(runtimePaths, packageRoot);
+		await installRuntime(runtimePaths, packageRoot, env);
 
 		for (const agent of agents) {
 			if (agent === "codex") {
@@ -1027,7 +1088,7 @@ export async function handleUpdateCommand(
 			runtimeDir,
 			preparedPackage.packageRoot,
 		);
-		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot);
+		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
 		return {
 			exitCode: 0,
 			stdout:

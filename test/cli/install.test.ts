@@ -50,8 +50,11 @@ async function createPackageRoot(
 ): Promise<string> {
 	const packageRoot = join(root, `package-${version}`);
 	const distCli = join(packageRoot, "dist", "cli");
+	const scriptsDir = join(packageRoot, "scripts");
 	await mkdir(distCli, { recursive: true });
+	await mkdir(scriptsDir, { recursive: true });
 	await writeFile(join(distCli, "index.js"), marker, "utf8");
+	await writeFile(join(scriptsDir, "access-runner.ps1"), "SCRIPT_RUNTIME", "utf8");
 	await writeFile(
 		join(packageRoot, "package.json"),
 		JSON.stringify({ name: "dysflow", version, type: "module" }, null, 2),
@@ -275,6 +278,7 @@ describe("Dysflow MCP config state", () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-apply-selection-"));
 		const home = join(root, "home");
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const packageRoot = join(root, "package");
 		const distCli = join(packageRoot, "dist", "cli");
 		const codexConfig = join(home, ".codex", "config.toml");
@@ -317,7 +321,7 @@ describe("Dysflow MCP config state", () => {
 			);
 
 			const result = await applyIntegrationSelection(["opencode"], {
-				env: { USERPROFILE: home },
+				env: { USERPROFILE: home, DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 				runtimeDir,
 				packageRoot,
 			});
@@ -376,6 +380,7 @@ describe("handleInstallCommand end-to-end", () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-self-install-"));
 		const home = join(root, "home");
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const appDist = join(appDir, "dist");
 		const appCli = join(appDist, "cli");
@@ -394,7 +399,10 @@ describe("handleInstallCommand end-to-end", () => {
 
 			const result = await handleInstallCommand(
 				["--runtime-dir", runtimeDir, "--agents", "opencode", "--no-tui"],
-				{ env: { USERPROFILE: home }, packageRoot: appDir },
+				{
+					env: { USERPROFILE: home, DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
+					packageRoot: appDir,
+				},
 			);
 
 			expect(result.stderr).toBe("");
@@ -425,6 +433,7 @@ describe("handleInstallCommand end-to-end", () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-install-"));
 		const home = join(root, "home");
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const codexConfig = join(home, ".codex", "config.toml");
 		const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
 		const claudeSettings = join(home, ".claude", "settings.json");
@@ -441,6 +450,7 @@ describe("handleInstallCommand end-to-end", () => {
 			{
 				env: {
 					USERPROFILE: home,
+					DYSFLOW_RUNTIME_MARKER_PATH: markerPath,
 				},
 			},
 		);
@@ -465,6 +475,13 @@ describe("handleInstallCommand end-to-end", () => {
 		expect(await readFile(join(runtimeDir, "CHANGELOG.md"), "utf8")).toContain(
 			"# Changelog",
 		);
+		expect(await readFile(markerPath, "utf8")).toBe(`1\n${runtimeDir}\n`);
+		expect(
+			await readFile(
+				join(runtimeDir, "app", "scripts", "dysflow-access-runner.ps1"),
+				"utf8",
+			),
+		).toContain("[Parameter(Mandatory = $true)] [string] $AccessDbPath");
 
 		const codexContent = await readFile(codexConfig, "utf8");
 		const expectedCmd = join(runtimeDir, "bin", "dysflow.cmd").replaceAll(
@@ -496,9 +513,14 @@ describe("handleInstallCommand end-to-end", () => {
 
 		const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
 		expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+		expect(cmdLauncher).toContain("reg query HKCU\\Environment /v ACCESS_VBA_PASSWORD");
+		expect(cmdLauncher).toContain("%ProgramFiles%\\nodejs;%PATH%");
 		const ps1Launcher = await readFile(join(runtimeDir, "bin", "dysflow.ps1"), "utf8");
 		expect(ps1Launcher).toContain(
 			`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`,
+		);
+		expect(ps1Launcher).toContain(
+			'[Environment]::GetEnvironmentVariable("ACCESS_VBA_PASSWORD", "User")',
 		);
 		expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
 
@@ -527,6 +549,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("updates runtime from a newer GitHub release package provider", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-release-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const installedPackageJson = join(appDir, "package.json");
 		const releasePackageRoot = await createPackageRoot(
@@ -542,6 +565,7 @@ describe("handleUpdateCommand end-to-end", () => {
 		);
 
 		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 			releaseUpdateProvider: {
 				resolveLatestRelease: async () => ({ version: "9.9.9" }),
 				preparePackage: async () => ({
@@ -570,6 +594,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("skips GitHub release reinstall when installed runtime matches latest", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-current-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const appCli = join(appDir, "dist", "cli");
 		const installedPackageJson = join(appDir, "package.json");
@@ -587,6 +612,7 @@ describe("handleUpdateCommand end-to-end", () => {
 		await writeFile(join(appCli, "index.js"), "OLD_RUNTIME", "utf8");
 
 		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 			releaseUpdateProvider: {
 				resolveLatestRelease: async () => ({ version: "9.9.9" }),
 				preparePackage: async () => ({
@@ -605,6 +631,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("forces GitHub release reinstall when latest version is already installed", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-force-release-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const appCli = join(appDir, "dist", "cli");
 		const installedPackageJson = join(appDir, "package.json");
@@ -624,6 +651,7 @@ describe("handleUpdateCommand end-to-end", () => {
 		const result = await handleUpdateCommand(
 			["--runtime-dir", runtimeDir, "--force"],
 			{
+				env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 				releaseUpdateProvider: {
 					resolveLatestRelease: async () => ({ version: "9.9.9" }),
 					preparePackage: async () => ({
@@ -645,8 +673,10 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("returns an actionable error when GitHub release update resolution fails", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-fail-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 
 		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 			releaseUpdateProvider: {
 				resolveLatestRelease: async () => {
 					throw new Error("GitHub release lookup failed");
@@ -667,6 +697,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("updates runtime when local version is newer", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const installedPackageJson = join(appDir, "package.json");
 		const oldPackageJson = {
@@ -683,6 +714,7 @@ describe("handleUpdateCommand end-to-end", () => {
 
 		const localVersion = await getLocalDysflowVersion();
 		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 			releaseUpdateProvider: {
 				resolveLatestRelease: async () => ({ version: localVersion }),
 				preparePackage: async () => ({ packageRoot: process.cwd() }),
@@ -702,6 +734,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("skips reinstall when runtime is up to date", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const appCli = join(appDir, "dist", "cli");
 		const installedPackageJson = join(appDir, "package.json");
@@ -720,6 +753,7 @@ describe("handleUpdateCommand end-to-end", () => {
 		await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
 
 		const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+			env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 			releaseUpdateProvider: {
 				resolveLatestRelease: async () => ({ version: localVersion }),
 				preparePackage: async () => ({ packageRoot: process.cwd() }),
@@ -736,6 +770,7 @@ describe("handleUpdateCommand end-to-end", () => {
 	it("forces reinstall when --force is used", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-update-"));
 		const runtimeDir = join(root, "runtime");
+		const markerPath = join(root, "marker", ".dysflow-marker");
 		const appDir = join(runtimeDir, "app");
 		const appCli = join(appDir, "dist", "cli");
 		const installedPackageJson = join(appDir, "package.json");
@@ -757,6 +792,7 @@ describe("handleUpdateCommand end-to-end", () => {
 		const result = await handleUpdateCommand(
 			["--runtime-dir", runtimeDir, "--force"],
 			{
+				env: { DYSFLOW_RUNTIME_MARKER_PATH: markerPath },
 				releaseUpdateProvider: {
 					resolveLatestRelease: async () => ({ version: localVersion }),
 					preparePackage: async () => ({ packageRoot: process.cwd() }),
