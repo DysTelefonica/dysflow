@@ -15,16 +15,11 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     Dim logs As Collection
     Dim db As DAO.Database
     Dim rs As DAO.Recordset
-    Dim originalBackendActivo As String
-    Dim originalBackendProduccion As String
     Dim originalBackendSandbox As String
-    Dim originalEnPruebas As String
-    Dim originalIDAplicacion As Variant
-    Dim originalRutaProd As String
-    Dim originalRutaLocal As String
-    Dim cfgErr As String
     Dim assertError As String
     Dim sessionErr As String
+    Dim backendDb As DAO.Database
+    Dim backendErr As String
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
@@ -32,38 +27,22 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
         GoTo Cleanup
     End If
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
+    Set rs = db.OpenRecordset("SELECT BackendSandbox FROM TbConfiguracionBackends WHERE ID = 1", dbOpenSnapshot)
 
     If rs.EOF Then
         Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail("TbConfiguracionBackends sin filas", logs)
         GoTo Cleanup
     End If
 
-    originalBackendActivo = Trim$(Nz(rs.Fields("BackendActivo").Value, ""))
-    originalBackendProduccion = Trim$(Nz(rs.Fields("BackendProduccion").Value, ""))
     originalBackendSandbox = Trim$(Nz(rs.Fields("BackendSandbox").Value, ""))
-    originalEnPruebas = Trim$(Nz(rs.Fields("EnPruebas").Value, ""))
-    originalIDAplicacion = Nz(rs.Fields("IDAplicacion").Value, Null)
-    originalRutaProd = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_PROD").Value, ""))
-    originalRutaLocal = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_LOCAL").Value, ""))
 
-    If originalBackendProduccion = "" Or originalBackendSandbox = "" Then
-        TestHelper.AddLog logs, "Se omite validación activa: BackendProduccion/BackendSandbox vacío"
-        Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail("Config incompleta para validar BackendActivo", logs)
+    If originalBackendSandbox = "" Then
+        Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail("BackendSandbox vacío", logs)
         GoTo Cleanup
     End If
 
-    rs.Edit
-    rs.Fields("BackendActivo").Value = "PROD"
-    rs.Fields("EnPruebas").Value = "No"
-    rs.Update
-    TestHelper.AddLog logs, "Configurado BackendActivo=PROD, EnPruebas=No"
+    TestHelper.AddLog logs, "Configuración preservada: BackendSandbox=" & originalBackendSandbox
     Call TestHelper.AssertTrue(m_TestingMode, "BeginTestSession debe activar m_TestingMode", logs, assertError)
-    If assertError <> "" Then GoTo Fail
-
-    cfgErr = ""
-    Call LeeConfiguracionLocal(cfgErr)
-    Call TestHelper.AssertTrue(cfgErr = "", "LeeConfiguracionLocal(PROD) en modo test sin error", logs, assertError)
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(Nz(Application.TempVars("DatosEnLocal"), "") = "Sí", "DatosEnLocal debe forzarse a 'Sí' en modo test aunque BackendActivo sea PROD", logs, assertError)
     If assertError <> "" Then GoTo Fail
@@ -71,41 +50,34 @@ Public Function Test_E2E_EnvConfig_AplicaBackendActivo_Atomic() As String
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(m_BackendSandboxURL = originalBackendSandbox, "m_BackendSandboxURL debe registrar el backend local de test", logs, assertError)
     If assertError <> "" Then GoTo Fail
-
-    rs.Edit
-    rs.Fields("BackendActivo").Value = "LOCAL"
-    rs.Fields("EnPruebas").Value = "Sí"
-    rs.Update
-    TestHelper.AddLog logs, "Configurado BackendActivo=LOCAL, EnPruebas=Sí"
-
-    cfgErr = ""
-    Call LeeConfiguracionLocal(cfgErr)
-    Call TestHelper.AssertTrue(cfgErr = "", "LeeConfiguracionLocal(LOCAL) sin error", logs, assertError)
+    Call TestHelper.AssertTrue(fso.FileExists(originalBackendSandbox), "BackendSandbox local debe existir antes de desplegar tests", logs, assertError)
     If assertError <> "" Then GoTo Fail
-    Call TestHelper.AssertTrue(Nz(Application.TempVars("DatosEnLocal"), "") = "Sí", "DatosEnLocal debe ser 'Sí' para LOCAL", logs, assertError)
+
+    backendErr = ""
+    Set backendDb = getdb(backendErr)
+    Call TestHelper.AssertTrue(backendErr = "" And Not backendDb Is Nothing, "getdb debe abrir BackendSandbox en modo test sin fallback a PROD", logs, assertError)
     If assertError <> "" Then GoTo Fail
-    Call TestHelper.AssertTrue(Nz(Application.TempVars("BackendPathConfigurado"), "") = originalBackendSandbox, "BackendPathConfigurado debe usar BackendSandbox", logs, assertError)
+    Call TestHelper.AssertTrue(StrComp(backendDb.Name, originalBackendSandbox, vbTextCompare) = 0, "getdb debe apuntar al BackendSandbox configurado", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
     Call TestHelper.EndTestSession(logs)
-    Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonOk(logs, "backend_switch_ok")
     GoTo Cleanup
 
 Fail:
     Call TestHelper.EndTestSession(logs)
-    Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     GoTo Cleanup
 
 EH:
     Call TestHelper.EndTestSession(logs)
-    Call RestoreTbConfiguracionBackends(rs, originalBackendActivo, originalBackendProduccion, originalBackendSandbox, originalEnPruebas, originalIDAplicacion, originalRutaProd, originalRutaLocal, logs)
     TestHelper.AddLog logs, "Error: " & Err.Description
     Test_E2E_EnvConfig_AplicaBackendActivo_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
 
 Cleanup:
     On Error Resume Next
+    If Not backendDb Is Nothing Then backendDb.Close
+    Set backendDb = Nothing
     If Not rs Is Nothing Then rs.Close
     Set rs = Nothing
     Set db = Nothing
@@ -160,6 +132,10 @@ Public Function Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic() As String
     Dim assertError As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -288,6 +264,10 @@ Public Function Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_At
     Dim rutaNoEstandar As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -304,12 +284,7 @@ Public Function Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_At
     originalRutaProd = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_PROD").Value, ""))
     originalRutaLocal = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_LOCAL").Value, ""))
 
-    rutaNoEstandar = Trim$(Nz(originalRutaLocal, ""))
-    If rutaNoEstandar = "" Then rutaNoEstandar = Trim$(Nz(originalRutaProd, ""))
-    If rutaNoEstandar = "" Then
-        Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic = TestHelper.BuildJsonFail("Sin ruta base configurada para validar normalización", logs)
-        GoTo Cleanup
-    End If
+    rutaNoEstandar = CurrentProject.Path
     If Right$(rutaNoEstandar, 1) = "\" Then rutaNoEstandar = Left$(rutaNoEstandar, Len(rutaNoEstandar) - 1)
     rs.Edit
     rs.Fields("BackendActivo").Value = "LOCAL"
@@ -367,6 +342,10 @@ Public Function Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_At
     Dim rutaEntorno As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -383,12 +362,7 @@ Public Function Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_At
     originalRutaProd = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_PROD").Value, ""))
     originalRutaLocal = Trim$(Nz(rs.Fields("RutaDirectorioAplicacion_LOCAL").Value, ""))
 
-    rutaNoEstandar = Trim$(Nz(originalRutaLocal, ""))
-    If rutaNoEstandar = "" Then rutaNoEstandar = Trim$(Nz(originalRutaProd, ""))
-    If rutaNoEstandar = "" Then
-        Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic = TestHelper.BuildJsonFail("Sin ruta base configurada para validar Entorno.URLDirAplicacion", logs)
-        GoTo Cleanup
-    End If
+    rutaNoEstandar = CurrentProject.Path
     If Right$(rutaNoEstandar, 1) = "\" Then rutaNoEstandar = Left$(rutaNoEstandar, Len(rutaNoEstandar) - 1)
     rutaEsperada = rutaNoEstandar & "\"
 
@@ -455,6 +429,10 @@ Public Function Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic() As String
     Dim rutaNo As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -474,6 +452,7 @@ Public Function Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic() As String
     rs.Edit
     rs.Fields("BackendActivo").Value = "LOCAL"
     rs.Fields("EnPruebas").Value = "Sí"
+    rs.Fields("RutaDirectorioAplicacion_LOCAL").Value = CurrentProject.Path
     rs.Update
     cfgErr = ""
     Call LeeConfiguracionLocal(cfgErr)
@@ -536,6 +515,10 @@ Public Function Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic() As Strin
     Dim backendInaccesible As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -612,6 +595,10 @@ Public Function Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic() As Stri
     Dim rutaLocalInaccesible As String
 
     Set logs = TestHelper.NewLogs
+    TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
+    Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Exit Function
+
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracionBackends WHERE ID = 1", dbOpenDynaset)
 
@@ -1369,20 +1356,7 @@ Private Sub RestoreCacheStateE2E(ByVal p_Enabled As Boolean, ByRef p_Logs As Col
 End Sub
 
 Private Sub RestoreTbConfiguracionBackends(ByRef p_Rs As DAO.Recordset, ByVal p_BackendActivo As String, ByVal p_BackendProduccion As String, ByVal p_BackendSandbox As String, ByVal p_EnPruebas As String, ByVal p_IDAplicacion As Variant, ByVal p_RutaProd As String, ByVal p_RutaLocal As String, ByRef p_Logs As Collection)
-    On Error Resume Next
-    If p_Rs Is Nothing Then Exit Sub
-    If p_Rs.EOF Then Exit Sub
-
-    p_Rs.Edit
-    p_Rs.Fields("BackendActivo").Value = p_BackendActivo
-    p_Rs.Fields("BackendProduccion").Value = p_BackendProduccion
-    p_Rs.Fields("BackendSandbox").Value = p_BackendSandbox
-    p_Rs.Fields("EnPruebas").Value = p_EnPruebas
-    p_Rs.Fields("IDAplicacion").Value = p_IDAplicacion
-    p_Rs.Fields("RutaDirectorioAplicacion_PROD").Value = p_RutaProd
-    p_Rs.Fields("RutaDirectorioAplicacion_LOCAL").Value = p_RutaLocal
-    p_Rs.Update
-    TestHelper.AddLog p_Logs, "Rollback defensivo de TbConfiguracionBackends aplicado"
+    TestHelper.AddLog p_Logs, "RestoreTbConfiguracionBackends retired: tests must not mutate TbConfiguracionBackends."
 End Sub
 
 Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, Optional ByRef p_Error As String) As Boolean

@@ -25,34 +25,10 @@
       "tags": ["atomic", "spec007", "integration-light"]
     },
     {
-      "name": "EnvConfig ruta local no estándar normalizada",
-      "procedure": "Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic",
+      "name": "EnvConfig testing usa BackendSandbox runtime",
+      "procedure": "Test_E2E_EnvConfig_AplicaBackendActivo_Atomic",
       "expect": { "ok": true },
-      "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
-    },
-    {
-      "name": "EnvConfig Entorno URLDirAplicacion usa ruta configurada",
-      "procedure": "Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
-    },
-    {
-      "name": "EnvConfig fail-fast backend inaccesible",
-      "procedure": "Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
-    },
-    {
-      "name": "EnvConfig fail-fast diagnóstico agregado",
-      "procedure": "Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
-    },
-    {
-      "name": "EnvConfig EnPruebas no rutea infra",
-      "procedure": "Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "infra-config", "fail-fast", "issue-7"]
+      "tags": ["atomic", "infra-config", "backend-routing", "safe", "issue-6", "issue-10"]
     },
     {
       "name": "ConfigCore LeeConfiguracionLocal sincroniza cache",

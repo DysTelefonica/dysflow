@@ -814,6 +814,27 @@ Public Function ValidarInfraCritica(Optional ByRef p_Error As String) As Boolean
         Me.Error = ""
     End If
 
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacionAuditorias
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacionAuditorias", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioPlantillas
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioPlantillas", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacionAyuda
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacionAyuda", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
     If m_Diag <> "" Then
         p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & m_Diag
         ValidarInfraCritica = False

@@ -136,6 +136,7 @@ Public AplicarCache As Boolean
 Public m_ColFiltradoTareasNCProyectos As Scripting.Dictionary
 Public m_TestingMode As Boolean
 Public m_BackendSandboxURL As String
+Public m_BackendSandboxPassword As String
 
 
     
@@ -147,6 +148,33 @@ Public Function getdb( _
     
     Dim m_URL As String
     On Error GoTo errores
+
+    If m_TestingMode Then
+        m_URL = Trim$(Nz(m_BackendSandboxURL, ""))
+        If m_URL = "" Then
+            p_Error = "getdb: m_TestingMode=True pero m_BackendSandboxURL está vacío. No se abre BackendActivo/producción."
+            Err.Raise 1000
+        End If
+
+        If Not fso.FileExists(m_URL) Then
+            p_Error = "getdb: m_TestingMode=True pero BackendSandbox no existe: " & m_URL
+            Err.Raise 1000
+        End If
+
+        On Error Resume Next
+        Set wks = DBEngine.Workspaces(0)
+        Set db = wks.OpenDatabase(m_URL, False, False, ";PWD=" & m_BackendSandboxPassword)
+        If Err.Number <> 0 Then
+            p_Error = "getdb: m_TestingMode=True pero BackendSandbox no se pudo abrir: " & Err.Number & " - " & Err.Description
+            Err.Clear
+            On Error GoTo errores
+            Err.Raise 1000
+        End If
+        On Error GoTo errores
+
+        Set getdb = db
+        Exit Function
+    End If
     
     If Not p_SkipConfigLoad Then
         Call LeeConfiguracionLocal(p_Error)
@@ -155,14 +183,8 @@ Public Function getdb( _
 
     m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
     If m_URL = "" Then
-        If Application.TempVars("DatosEnLocal") = "Sí" Then
-            m_URL = m_URLRutaAplicacionesLocal & "000datoslocal\NoConformidades_Datos.accdb"
-        ElseIf Application.TempVars("DatosEnLocal") = "No" Then
-            m_URL = m_URLRutaAplicacionRemota & "NoConformidades_Datos.accdb"
-        Else
-            p_Error = "No se conoce el origen de los datos"
-            Err.Raise 1000
-        End If
+        p_Error = "BackendPathConfigurado no está resuelto. Revise BackendActivo/BackendProduccion/BackendSandbox en TbConfiguracionBackends"
+        Err.Raise 1000
     End If
     
     Set wks = DBEngine.Workspaces(0)
@@ -223,14 +245,6 @@ Public Function LeeConfiguracionLocal( _
     Else
         p_Error = "BackendActivo inválido en TbConfiguracionBackends. Use PROD/LOCAL/SANDBOX"
         Err.Raise 1000
-    End If
-
-    ' HOTFIX-20260519: los tests siempre deben usar BackendSandbox aunque BackendActivo sea PROD.
-    If m_TestingMode Then
-        m_BackendSandboxURL = m_BackendSandbox
-        m_BackendActivo = "SANDBOX"
-        m_EnPruebas = "Sí"
-        Application.TempVars("DatosEnLocal") = "Sí"
     End If
 
     m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
