@@ -145,12 +145,16 @@ export async function loadDysflowConfigAsync(
 	const env = input.env ?? process.env;
 	const cwd = resolve(input.cwd ?? process.cwd());
 
+	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 	const explicitAccessDbPath = stringValue(input.accessDbPath);
+
+	// Prioritize repo config when called from the same directory as the project.
+	// This preserves project.json timeoutMs and other settings when accessPath is
+	// supplied without going through the global registry path (#timeout-fix).
 	if (explicitAccessDbPath !== undefined) {
 		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
 	}
 
-	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 	if (requestedProjectId !== undefined) {
 		const registeredConfigPath = await resolveRegisteredProjectConfigPathAsync(
 			requestedProjectId,

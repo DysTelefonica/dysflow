@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-05-20
+
+### Fixed
+
+- Fixed `loadDysflowConfigAsync` to use repo-config for timeoutMs when accessPath is supplied from MCP tools, so `test_vba` now respects `timeoutMs: 600000` from `.dysflow/project.json` instead of defaulting to 30000ms.
+
 ## [0.5.5] - 2026-05-20
 
 ### Fixed
