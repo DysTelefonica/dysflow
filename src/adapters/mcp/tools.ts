@@ -743,11 +743,8 @@ export function translateCoreResultToMcpContent<TData>(result: OperationResult<T
 }
 
 function sanitizeErrorMessage(message: string): string {
-  return message
-    .replace(/[A-Za-z]:\\[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
-    .replace(/\/[^:]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]")
-    .replace(/[A-Za-z]:\\(?:[^\\\s:]+(?:\\[^\\\s:]+)*)?/g, "[PATH]")
-    .replace(/(?:\/[^/\s:]+)+/g, "[PATH]");
+  const pathPattern = /(?:[A-Za-z]:\\[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b|(?<!\S)\/[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b|\\\\[^\\\s"'<>|:*?]+\\[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?|[A-Za-z]:\\(?:[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?)?|(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+)/gi;
+  return message.replace(pathPattern, "[PATH]");
 }
 
 const LEGACY_QUERY_SLICE_TOOL_NAMES = [

@@ -98,18 +98,7 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set(["backendPath", "erdPath", "importMode", "location", "proceduresJson"]);
-
-const HIGHER_LEVEL_TOOLS: Record<string, string> = {
-  verify_code: "verify_code requires source document/code-behind comparison before it can run through this service.",
-  verify_binary: "verify_binary requires a higher-level source/binary comparison implementation before it can run through this service.",
-  reconcile_binary: "reconcile_binary requires source/binary reconciliation before it can run through this service.",
-  init_project: "init_project requires project bootstrap orchestration before it can run through this service.",
-  normalize_documents: "normalize_documents requires source document normalization before it can run through this service.",
-  validate_form_spec: "validate_form_spec requires form generation parity support before it can run through this service.",
-  generate_form: "generate_form requires form generation parity support before it can run through this service.",
-  catalog_add_control: "catalog_add_control requires form generation parity support before it can run through this service.",
-  harvest_form_catalog: "harvest_form_catalog requires form generation parity support before it can run through this service.",
-};
+const LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE = "This legacy tool is tracked for parity but is not implemented by this service yet.";
 
 export class VbaSyncLegacyService {
   private readonly executor: VbaManagerExecutor;
@@ -145,7 +134,7 @@ export class VbaSyncLegacyService {
     }
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
-      return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", HIGHER_LEVEL_TOOLS[toolName] ?? `${toolName} is tracked for legacy parity but not implemented by this service yet.`));
+      return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE));
     }
 
     // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
@@ -262,6 +251,7 @@ export class VbaSyncLegacyService {
           destinationRoot: stringValue(params.destinationRoot) ?? repoConfig.data.destinationRoot ?? repoConfig.data.projectRoot ?? this.cwd,
         });
       }
+      return repoConfig;
     }
 
     const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
