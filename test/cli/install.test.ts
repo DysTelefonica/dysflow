@@ -496,6 +496,8 @@ describe("handleInstallCommand end-to-end", () => {
 
 		const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
 		expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+		// Verify Node pnpm path is prepended so pnpm install works during update
+		expect(cmdLauncher).toContain("%ProgramFiles%\\nodejs;%PATH%");
 		const ps1Launcher = await readFile(join(runtimeDir, "bin", "dysflow.ps1"), "utf8");
 		expect(ps1Launcher).toContain(
 			`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`,

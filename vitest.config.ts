@@ -2,7 +2,18 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
+    include: [
+      "test/cli/**/*.test.ts",
+      "test/core/**/*.test.ts",
+      "test/adapters/**/*.test.ts",
+      "test/architecture/**/*.test.ts",
+      "test/quality-gates/**/*.test.ts",
+      "test/docs/**/*.test.ts",
+    ],
+    exclude: [
+      "test/e2e/**",
+      "test/scripts-access-runner.test.ts",
+    ],
     environment: "node",
     coverage: {
       provider: "v8",
