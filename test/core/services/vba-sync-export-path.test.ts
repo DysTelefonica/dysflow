@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VbaSyncLegacyService, type VbaManagerExecutionRequest } from "../../../src/core/services/vba-sync-legacy-service.js";
 
@@ -13,10 +15,11 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
     const service = new VbaSyncLegacyService({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
+      accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: "src",
     });
 
-    const exportPath = "C:\\Users\\adm1\\AppData\\Local\\Temp\\nc_export_check";
+    const exportPath = join(tmpdir(), "nc_export_check");
     await service.execute("export_modules", { exportPath, moduleNames: ["TestModule"] });
 
     expect(capturedRequests).toHaveLength(1);
@@ -35,6 +38,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
     const service = new VbaSyncLegacyService({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
+      accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: configDestinationRoot,
     });
 
@@ -54,10 +58,11 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
     const service = new VbaSyncLegacyService({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
+      accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: "src",
     });
 
-    const tempExportPath = "C:\\Users\\adm1\\AppData\\Local\\Temp\\opencode\\nc_export_check";
+    const tempExportPath = join(tmpdir(), "opencode", "nc_export_check");
     await service.execute("export_modules", { exportPath: tempExportPath });
 
     expect(capturedRequests).toHaveLength(1);

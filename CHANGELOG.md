@@ -10,6 +10,13 @@ All notable changes to Dysflow will be documented in this file.
 
 - `dysflow install` and `dysflow update` now copy the PowerShell runtime scripts required by MCP/Access/VBA tools into `app/scripts`, preventing missing `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` failures. Closes #251.
 - Generated Windows launchers now escape the `ProgramFiles\nodejs` PATH segment correctly instead of writing a newline into the launcher.
+- Legacy VBA sync now fails fast with `CONFIG_MISSING_ACCESS_PATH` when no explicit Access path or repo config can be resolved. Closes #230.
+- MCP error path redaction now uses a single-pass sanitizer covered through public MCP error translation behavior. Closes #229.
+
+### Changed
+
+- Removed the dead legacy higher-level tool message map and use one consistent `LEGACY_TOOL_NOT_IMPLEMENTED` response. Closes #226.
+- Refocused architecture boundary tests on behavior and meaningful core dependency invariants instead of brittle file/path checks. Closes #234.
 
 ## [0.6.3] - 2026-05-20
 

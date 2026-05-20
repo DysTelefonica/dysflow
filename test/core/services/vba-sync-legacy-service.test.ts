@@ -438,19 +438,18 @@ describe("VbaSyncLegacyService", () => {
 		});
 	});
 
-	it("strictContext fails when an expected path has no resolved actual value", async () => {
+	it("fails fast when no accessPath or project config can be resolved", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-strict-missing-"));
 		const service = new VbaSyncLegacyService({ cwd: root, env: {} });
 
 		const result = await service.execute("import_all", {
 			dryRun: true,
-			strictContext: true,
-			expectedAccessPath: join(root, "front.accdb"),
 		});
 
 		expect(result.ok).toBe(false);
-		if (result.ok) throw new Error("expected strict failure");
-		expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+		if (result.ok) throw new Error("expected missing accessPath failure");
+		expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+		expect(result.error.message).toContain("Access database path is required");
 	});
 
 	it("destinationRoot override wins even when projectId is registered", async () => {
@@ -1184,8 +1183,7 @@ describe("VbaSyncLegacyService", () => {
 		expect(await service.execute("verify_binary", { diff: true })).toEqual(
 			failureResult({
 				code: "LEGACY_TOOL_NOT_IMPLEMENTED",
-				message:
-					"verify_binary requires a higher-level source/binary comparison implementation before it can run through this service.",
+				message: "This legacy tool is tracked for parity but is not implemented by this service yet.",
 				retryable: false,
 			}),
 		);
