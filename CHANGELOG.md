@@ -4,7 +4,7 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
-## [0.5.4] - 2026-05-20
+## [0.5.5] - 2026-05-20
 
 ### Fixed
 
