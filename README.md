@@ -160,9 +160,17 @@ pnpm build
 pnpm install -g .
 ```
 
-### Runtime profile install
+### Runtime install
 
 Recommended production/runtime install remains profile-local on Windows (`%LOCALAPPDATA%\\dysflow`) for MCP tooling.
+
+If you use different Windows profiles and want updates to keep targeting a fixed runtime location, install with an explicit runtime directory. For true cross-user use on the same machine, choose a shared path that all intended users can read/write, such as `C:\Dysflow` or an ACL-managed `C:\ProgramData\dysflow\runtime`:
+
+```powershell
+dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
+```
+
+`dysflow install` persists the resolved runtime directory in a machine-level marker so future `dysflow update` calls can reuse the same installed runtime instead of falling back to the current user's `%LOCALAPPDATA%` path.
 
 ### Layout (profile install)
 
@@ -250,10 +258,17 @@ Call-level path/root fields are still supported as explicit one-off overrides, a
 
 | Variable                                         | Purpose                                                          |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
-| `DYSFLOW_HOME`                                   | Runtime root (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
+| `DYSFLOW_HOME`                                   | Runtime root override (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
 | `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD` | Access DB password fallback                                      |
 | `DYSFLOW_BACKEND_PASSWORD`                       | Backend DB password fallback                                     |
 | `ACCESS_VBA_PASSWORD`                            | Legacy fallback password env                                     |
+
+Runtime directory resolution order:
+
+1. `--runtime-dir <dir>`
+2. `DYSFLOW_HOME`
+3. persisted machine-level runtime marker
+4. `%LOCALAPPDATA%\\dysflow`
 
 ### Project config examples
 
@@ -414,6 +429,20 @@ dysflow update --force
 The updater builds the release source in a temporary workspace, so local `git`,
 `pnpm`, and network access to GitHub must be available.
 
+`dysflow update` uses the same runtime directory resolution as install:
+
+1. `--runtime-dir <dir>`
+2. `DYSFLOW_HOME`
+3. persisted machine-level runtime marker
+4. `%LOCALAPPDATA%\\dysflow`
+
+Use `--runtime-dir` once during install when you want future updates to reuse that exact runtime location:
+
+```powershell
+dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
+dysflow update
+```
+
 ---
 
 ## OpenCode MCP config
@@ -434,6 +463,8 @@ Point OpenCode to the installed runtime binary, e.g.:
   }
 }
 ```
+
+If you installed with `--runtime-dir`, point OpenCode to that runtime's `bin\\dysflow.cmd` instead.
 
 Validate:
 

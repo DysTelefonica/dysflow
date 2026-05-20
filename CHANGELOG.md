@@ -4,6 +4,16 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-05-20
+
+### Fixed
+
+- `dysflow update` now reuses the runtime directory persisted by `dysflow install --runtime-dir`, so updates keep targeting the installed MCP runtime instead of silently falling back to the current Windows user's `%LOCALAPPDATA%\\dysflow`. Closes #250.
+
+### Documentation
+
+- Documented runtime directory precedence for install/update and clarified how OpenCode should point to custom runtime installs.
+
 ## [0.6.2] - 2026-05-19
 
 ### Changed

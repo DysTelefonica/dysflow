@@ -7,7 +7,7 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
@@ -59,6 +59,7 @@ type UpdateOptions = {
 
 const RUNTIME_MARKER_FILE = ".dysflow-marker";
 const RUNTIME_MARKER_VERSION = "1";
+const RUNTIME_MARKER_PATH_ENV = "DYSFLOW_RUNTIME_MARKER_PATH";
 
 type RuntimePaths = {
 	runtimeDir: string;
@@ -71,7 +72,6 @@ type RuntimePaths = {
 	scriptsDest: string;
 	packageJsonSource: string;
 	packageJsonDest: string;
-	markerPath: string;
 };
 
 type AgentConfigPaths = {
@@ -193,12 +193,30 @@ export function parseUpdateArgs(
 	return { ok: true, options };
 }
 
-// Fixed per-machine marker path — the marker file itself lives at a known location
-// so that dysflow update can discover the runtime dir without DYSFLOW_HOME being set.
-// We use the Systemdrive root (usually C:) which is the same for all users on the machine.
+// Fixed machine-level marker path — the marker file itself lives at a known
+// location so `dysflow update` can discover the previous explicit runtime dir
+// without relying on a user-profile-derived %LOCALAPPDATA% fallback.
 function getSystemMarkerPath(env: NodeJS.ProcessEnv): string {
-	const systemDrive = env.SystemDrive ?? "C:";
-	return path.join(systemDrive, "\\dysflow", RUNTIME_MARKER_FILE);
+	const explicitMarkerPath = env[RUNTIME_MARKER_PATH_ENV];
+	if (explicitMarkerPath !== undefined && explicitMarkerPath.trim().length > 0) {
+		return path.resolve(explicitMarkerPath);
+	}
+
+	const programData =
+		env.ProgramData ?? path.join(env.SystemDrive ?? "C:", "ProgramData");
+	return path.join(programData, "dysflow", RUNTIME_MARKER_FILE);
+}
+
+function parseRuntimeMarker(content: string): string | undefined {
+	const lines = content
+		.replace(/\r\n/g, "\n")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	if (lines.length === 0) return undefined;
+	if (lines[0] === RUNTIME_MARKER_VERSION) return lines[1];
+	return lines[0];
 }
 
 function resolveRuntimeDir(
@@ -218,9 +236,9 @@ function resolveRuntimeDir(
 	// as the same machine has had a prior install with explicit --runtime-dir.
 	const markerPath = getSystemMarkerPath(env);
 	try {
-		const markerContent = require("node:fs").readFileSync(markerPath, "utf8").trim();
-		if (markerContent.length > 0) {
-			return path.resolve(markerContent);
+		const markedRuntimeDir = parseRuntimeMarker(readFileSync(markerPath, "utf8"));
+		if (markedRuntimeDir !== undefined) {
+			return path.resolve(markedRuntimeDir);
 		}
 	} catch {
 		// Marker not found or unreadable — fall through to default
@@ -288,7 +306,6 @@ function resolveRuntimePaths(
 		scriptsDest: path.join(appDir, "scripts"),
 		packageJsonSource: path.join(packageRoot, "package.json"),
 		packageJsonDest: path.join(appDir, "package.json"),
-		markerPath: path.join(runtimeDir, RUNTIME_MARKER_FILE),
 	};
 }
 
@@ -518,7 +535,7 @@ export async function applyIntegrationSelection(
 	const selected = new Set(selectedAgents);
 
 	try {
-		await installRuntime(runtimePaths, packageRoot);
+		await installRuntime(runtimePaths, packageRoot, env);
 		for (const agent of ALL_AGENTS) {
 			if (selected.has(agent)) {
 				await configureAgent(agent, agentConfigPaths, commandPath);
@@ -646,11 +663,12 @@ async function copyDocs(
 async function installRuntime(
 	runtimePaths: RuntimePaths,
 	packageRoot: string,
+	env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
 	await copyRuntime(runtimePaths);
 	await copyDocs(runtimePaths, packageRoot);
 	await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
-	await writeRuntimeMarker(runtimePaths.markerPath, runtimePaths.runtimeDir);
+	await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);
 }
 
 async function writeRuntimeMarker(
@@ -962,7 +980,7 @@ export async function handleInstallCommand(
 			agents = await selectAgentsInteractive(ALL_AGENTS);
 		}
 
-		await installRuntime(runtimePaths, packageRoot);
+		await installRuntime(runtimePaths, packageRoot, env);
 
 		for (const agent of agents) {
 			if (agent === "codex") {
@@ -1050,6 +1068,9 @@ export async function handleUpdateCommand(
 		compareVersions(latestRelease.version, installedVersion) > 0;
 
 	if (!isUpdateNeeded) {
+		// Even when up to date, persist the marker so that future update calls
+		// (without --runtime-dir) can still discover this runtime directory.
+		await writeRuntimeMarker(getSystemMarkerPath(env), runtimeDir);
 		return {
 			exitCode: 0,
 			stdout: createNoUpdateReport(runtimeDir, latestRelease.version),
@@ -1065,7 +1086,7 @@ export async function handleUpdateCommand(
 			runtimeDir,
 			preparedPackage.packageRoot,
 		);
-		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot);
+		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
 		return {
 			exitCode: 0,
 			stdout:
