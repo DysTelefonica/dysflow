@@ -57,6 +57,9 @@ type UpdateOptions = {
 	force: boolean;
 };
 
+const RUNTIME_MARKER_FILE = ".dysflow-marker";
+const RUNTIME_MARKER_VERSION = "1";
+
 type RuntimePaths = {
 	runtimeDir: string;
 	appDir: string;
@@ -68,6 +71,7 @@ type RuntimePaths = {
 	scriptsDest: string;
 	packageJsonSource: string;
 	packageJsonDest: string;
+	markerPath: string;
 };
 
 type AgentConfigPaths = {
@@ -189,6 +193,14 @@ export function parseUpdateArgs(
 	return { ok: true, options };
 }
 
+// Fixed per-machine marker path — the marker file itself lives at a known location
+// so that dysflow update can discover the runtime dir without DYSFLOW_HOME being set.
+// We use the Systemdrive root (usually C:) which is the same for all users on the machine.
+function getSystemMarkerPath(env: NodeJS.ProcessEnv): string {
+	const systemDrive = env.SystemDrive ?? "C:";
+	return path.join(systemDrive, "\\dysflow", RUNTIME_MARKER_FILE);
+}
+
 function resolveRuntimeDir(
 	runtimeOverride: string | undefined,
 	env: NodeJS.ProcessEnv,
@@ -199,6 +211,19 @@ function resolveRuntimeDir(
 
 	if (env.DYSFLOW_HOME !== undefined && env.DYSFLOW_HOME.trim().length > 0) {
 		return path.resolve(env.DYSFLOW_HOME);
+	}
+
+	// Try to read the marker file written by a previous --runtime-dir install.
+	// This lets dysflow update work without DYSFLOW_HOME being set, as long
+	// as the same machine has had a prior install with explicit --runtime-dir.
+	const markerPath = getSystemMarkerPath(env);
+	try {
+		const markerContent = require("node:fs").readFileSync(markerPath, "utf8").trim();
+		if (markerContent.length > 0) {
+			return path.resolve(markerContent);
+		}
+	} catch {
+		// Marker not found or unreadable — fall through to default
 	}
 
 	const localAppData =
@@ -263,6 +288,7 @@ function resolveRuntimePaths(
 		scriptsDest: path.join(appDir, "scripts"),
 		packageJsonSource: path.join(packageRoot, "package.json"),
 		packageJsonDest: path.join(appDir, "package.json"),
+		markerPath: path.join(runtimeDir, RUNTIME_MARKER_FILE),
 	};
 }
 
@@ -624,6 +650,18 @@ async function installRuntime(
 	await copyRuntime(runtimePaths);
 	await copyDocs(runtimePaths, packageRoot);
 	await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
+	await writeRuntimeMarker(runtimePaths.markerPath, runtimePaths.runtimeDir);
+}
+
+async function writeRuntimeMarker(
+	markerPath: string,
+	runtimeDir: string,
+): Promise<void> {
+	const markerDir = path.dirname(markerPath);
+	await mkdir(markerDir, { recursive: true });
+	// Write marker with version + runtime dir, so future versions can evolve the format
+	const markerContent = `${RUNTIME_MARKER_VERSION}\n${runtimeDir}\n`;
+	await writeFile(markerPath, markerContent, "utf8");
 }
 
 function createInstallReport(
