@@ -613,6 +613,8 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
 		},
 	);
 
+	// Scripts are required by MCP/Access/VBA tools at runtime.
+	await mkdir(runtimePaths.scriptsDest, { recursive: true });
 	if (await fileExists(runtimePaths.scriptsSource)) {
 		await copyIfDifferent(
 			runtimePaths.scriptsSource,
@@ -926,7 +928,7 @@ export async function writeRuntimeLaunchers(
 		`set "DYSFLOW_HOME=${cmdRuntimeDir}"`,
 		// Prepend Node pnpm/npm path so child processes (pnpm install during update)
 		// can find the package manager even when launched without a full PATH.
-		`set "PATH=%ProgramFiles%\nodejs;%PATH%"`,
+		`set "PATH=%ProgramFiles%\\nodejs;%PATH%"`,
 		`node "%DYSFLOW_HOME%\\app\\dist\\cli\\index.js" %*`,
 		"exit /b %ERRORLEVEL%",
 		"",
@@ -935,7 +937,7 @@ export async function writeRuntimeLaunchers(
 	const ps1Content = [
 		'$ErrorActionPreference = "Stop"',
 		`$env:DYSFLOW_HOME = "${psRuntimeDir}"`,
-		`$env:PATH = "$env:ProgramFiles\nodejs;$env:PATH"`,
+		`$env:PATH = "$env:ProgramFiles\\nodejs;$env:PATH"`,
 		`& node (Join-Path $env:DYSFLOW_HOME "app\\dist\\cli\\index.js") @args`,
 		"exit $LASTEXITCODE",
 		"",
