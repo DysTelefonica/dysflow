@@ -312,7 +312,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   import_modules: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile } },
   import_all: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile } },
   list_objects: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, filter: SCHEMA_PROPS.filter } },
-  exists: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, name: SCHEMA_PROPS.name } },
+  exists: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, name: SCHEMA_PROPS.name, moduleName: SCHEMA_PROPS.moduleName } },
   test_vba: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, proceduresJson: SCHEMA_PROPS.proceduresJson, filter: SCHEMA_PROPS.filter, testsPath: SCHEMA_PROPS.testsPath } },
   compile_vba: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE } },
   verify_code: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff } },
@@ -550,9 +550,6 @@ function appendLegacyCompatibilityTools(
  * Exported for contract testing.
  */
 export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
-  "verify_code",
-  "verify_binary",
-  "reconcile_binary",
   "init_project",
   "normalize_documents",
 ]);
@@ -580,6 +577,18 @@ function createLegacyDispatchTool(
       }
       if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
+      }
+      if (isVbaSyncSliceTool(name)) {
+        if (HIDDEN_STUB_TOOL_NAMES.has(name)) {
+          return {
+            isError: false,
+            content: [{ type: "text", text: JSON.stringify({ ok: false, supported: false, operation: name, message: `${name} is not supported by Dysflow's legacy compatibility layer yet.` }) }],
+          };
+        }
+        return {
+          isError: true,
+          content: [{ type: "text", text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the legacy VBA sync service to be configured.` }],
+        };
       }
       if (isQueryMaintenanceSliceTool(name)) {
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyMaintenanceRequest(name, input)));

@@ -1,5 +1,6 @@
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { extname, isAbsolute, parse, resolve } from "node:path";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { extname, isAbsolute, parse, relative, resolve } from "node:path";
 import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
 import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
@@ -64,6 +65,43 @@ export type BuildImportPlanResultOptions = {
   errors: readonly string[];
 };
 
+type VbaSourceComparisonFile = {
+  moduleName: string;
+  fileType: string;
+  path: string;
+  relativePath: string;
+};
+
+type VbaSourceComparisonEntry = {
+  moduleName: string;
+  fileType: string;
+  sourcePath?: string;
+  binaryPath?: string;
+};
+
+type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
+  sourceSnippet: string;
+  binarySnippet: string;
+};
+
+type VbaVerifyResult = {
+  operation: "verify_code" | "verify_binary";
+  ok: boolean;
+  dryRun: true;
+  willModifyAccess: false;
+  sourceRoot: string;
+  matched: readonly VbaSourceComparisonEntry[];
+  different: readonly VbaSourceComparisonEntry[];
+  missingInSource: readonly VbaSourceComparisonEntry[];
+  missingInBinary: readonly VbaSourceComparisonEntry[];
+  diffs?: readonly VbaSourceDiffEntry[];
+};
+
+type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
+  operation: "reconcile_binary";
+  recommendation: string;
+};
+
 export type VbaSyncLegacyServiceOptions = {
   executor?: VbaManagerExecutor;
   preflightCleanup?: AccessOperationPreflightCleanup;
@@ -89,7 +127,10 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   import_modules: mapping("Import", false, (input) => stringArray(input.moduleNames), (input) => ({ importMode: stringValue(input.importMode) })),
   import_all: mapping("Import"),
   list_objects: mapping("List-Objects", true),
-  exists: mapping("Exists", true, (input) => { const moduleName = stringValue(input.moduleName); return moduleName ? [moduleName] : []; }),
+  exists: mapping("Exists", true, (input) => {
+    const moduleName = stringValue(input.moduleName) || stringValue(input.name);
+    return moduleName ? [moduleName] : [];
+  }),
   test_vba: mapping("Run-Tests", true, () => [], (input) => ({ proceduresJson: directTestProceduresJson(input) })),
   compile_vba: mapping("Compile", true),
   fix_encoding: mapping("Fix-Encoding", false, (input) => stringArray(input.moduleNames), (input) => ({ location: stringValue(input.location) })),
@@ -129,6 +170,16 @@ export class VbaSyncLegacyService {
     if (toolName === "generate_form") return this.generateForm(params);
     if (toolName === "catalog_add_control") return this.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.harvestFormCatalog(params);
+    if (toolName === "verify_code" || toolName === "verify_binary") return this.verifySourceAgainstBinary(toolName, params);
+    if (toolName === "reconcile_binary") return this.planReconcileBinary(params);
+    if (toolName === "init_project" || toolName === "normalize_documents") {
+      return successResult({
+        ok: false,
+        supported: false,
+        operation: toolName,
+        message: `${toolName} is not supported by Dysflow's legacy compatibility layer yet.`,
+      });
+    }
     if (toolName === "test_vba") {
       return this.executeTestVba(params);
     }
@@ -310,6 +361,73 @@ export class VbaSyncLegacyService {
       warnings,
       errors,
     }));
+  }
+
+  private async verifySourceAgainstBinary(toolName: "verify_code" | "verify_binary", params: Record<string, unknown>): Promise<OperationResult<VbaVerifyResult>> {
+    const comparison = await this.compareSourceAgainstBinary(params);
+    if (!comparison.ok) return comparison;
+    return successResult({ operation: toolName, ...comparison.data });
+  }
+
+  private async planReconcileBinary(params: Record<string, unknown>): Promise<OperationResult<VbaReconcilePlanResult>> {
+    const comparison = await this.compareSourceAgainstBinary(params);
+    if (!comparison.ok) return comparison;
+    return successResult({
+      operation: "reconcile_binary",
+      ...comparison.data,
+      recommendation: comparison.data.ok
+        ? "Source and Access binary exports already match; no reconciliation is needed."
+        : "Dry-run only: review differences, then run an explicit import/export workflow if you want to reconcile.",
+    });
+  }
+
+  private async compareSourceAgainstBinary(params: Record<string, unknown>): Promise<OperationResult<Omit<VbaVerifyResult, "operation">>> {
+    const target = await this.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    const sourceRoot = target.data.destinationRoot;
+    const tempExportRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-verify-"));
+    const password = this.accessPassword;
+    const effectiveTimeoutMs = typeof params.timeoutMs === "number" && params.timeoutMs > 0
+      ? params.timeoutMs
+      : target.data.processTimeoutMs;
+    try {
+      const request: VbaManagerExecutionRequest = {
+        scriptPath: this.scriptPath,
+        action: "Export",
+        accessPath: target.data.accessPath,
+        destinationRoot: tempExportRoot,
+        moduleNames: stringArray(params.moduleNames),
+        password,
+        json: false,
+        extra: {},
+        timeoutMs: effectiveTimeoutMs,
+        env: password === undefined ? undefined : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
+      };
+
+      const preflightDiagnostics = diagnosticsFromPreflightCleanup(await this.runPreflightCleanup(target.data));
+      const result = await this.executeWithTimeout(request);
+      const secrets = [password].filter((secret): secret is string => Boolean(secret));
+      if (result.timedOut) {
+        return failureResult(
+          createDysflowError("VBA_MANAGER_TIMEOUT", `verify export timed out after ${result.durationMs}ms`, { retryable: true }),
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        );
+      }
+      if (result.exitCode !== 0) {
+        return failureResult(
+          createDysflowError("VBA_MANAGER_FAILED", `verify export failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        );
+      }
+
+      const comparison = await compareVbaSourceTrees(sourceRoot, tempExportRoot, stringArray(params.moduleNames), truthy(params.diff));
+      return successResult(comparison, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
+    } finally {
+      await rm(tempExportRoot, { recursive: true, force: true });
+    }
   }
 
   private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
@@ -589,6 +707,137 @@ async function discoverImportModules(destinationRoot: string): Promise<string[]>
     }
   }
   return Array.from(new Set(modules)).sort();
+}
+
+async function compareVbaSourceTrees(sourceRoot: string, binaryExportRoot: string, moduleNames: readonly string[], includeDiffs: boolean): Promise<Omit<VbaVerifyResult, "operation">> {
+  const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
+  const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter);
+  const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter);
+  const sourceByKey = new Map(sourceFiles.map((file) => [comparisonKey(file), file]));
+  const binaryByKey = new Map(binaryFiles.map((file) => [comparisonKey(file), file]));
+  const matched: VbaSourceComparisonEntry[] = [];
+  const different: VbaSourceComparisonEntry[] = [];
+  const missingInSource: VbaSourceComparisonEntry[] = [];
+  const missingInBinary: VbaSourceComparisonEntry[] = [];
+  const diffs: VbaSourceDiffEntry[] = [];
+
+  for (const [key, binaryFile] of binaryByKey) {
+    const sourceFile = sourceByKey.get(key);
+    if (sourceFile === undefined) {
+      missingInSource.push(toComparisonEntry(undefined, binaryFile));
+      continue;
+    }
+
+    const [sourceText, binaryText] = await Promise.all([
+      readFile(sourceFile.path, "utf8"),
+      readFile(binaryFile.path, "utf8"),
+    ]);
+    const entry = toComparisonEntry(sourceFile, binaryFile);
+    if (sourceText === binaryText) {
+      matched.push(entry);
+    } else {
+      different.push(entry);
+      if (includeDiffs) {
+        diffs.push({
+          ...entry,
+          sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
+          binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
+        });
+      }
+    }
+  }
+
+  for (const [key, sourceFile] of sourceByKey) {
+    if (!binaryByKey.has(key)) missingInBinary.push(toComparisonEntry(sourceFile, undefined));
+  }
+
+  return {
+    ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
+    dryRun: true,
+    willModifyAccess: false,
+    sourceRoot,
+    matched: sortComparisonEntries(matched),
+    different: sortComparisonEntries(different),
+    missingInSource: sortComparisonEntries(missingInSource),
+    missingInBinary: sortComparisonEntries(missingInBinary),
+    ...(includeDiffs ? { diffs: sortDiffEntries(diffs) } : {}),
+  };
+}
+
+async function collectVbaSourceFiles(root: string, moduleFilter: ReadonlySet<string>): Promise<VbaSourceComparisonFile[]> {
+  const files: VbaSourceComparisonFile[] = [];
+  async function visit(directory: string): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const fileType = vbaSourceFileType(entry.name);
+      if (fileType === undefined) continue;
+      const moduleName = moduleNameFromVbaFile(entry.name);
+      if (moduleFilter.size > 0 && !moduleFilter.has(moduleName.toLowerCase())) continue;
+      files.push({
+        moduleName,
+        fileType,
+        path,
+        relativePath: relative(root, path).replace(/\\/g, "/"),
+      });
+    }
+  }
+
+  await visit(root);
+  return files;
+}
+
+function vbaSourceFileType(fileName: string): string | undefined {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".form.txt")) return "form.txt";
+  if (lower.endsWith(".report.txt")) return "report.txt";
+  const extension = extname(lower);
+  if (extension === ".bas" || extension === ".cls" || extension === ".frm") return extension.slice(1);
+  return undefined;
+}
+
+function moduleNameFromVbaFile(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".form.txt")) return fileName.slice(0, -".form.txt".length);
+  if (lower.endsWith(".report.txt")) return fileName.slice(0, -".report.txt".length);
+  return parse(fileName).name;
+}
+
+function comparisonKey(file: VbaSourceComparisonFile): string {
+  return `${file.moduleName.toLowerCase()}\0${file.fileType}`;
+}
+
+function toComparisonEntry(sourceFile: VbaSourceComparisonFile | undefined, binaryFile: VbaSourceComparisonFile | undefined): VbaSourceComparisonEntry {
+  const file = sourceFile ?? binaryFile;
+  return {
+    moduleName: file?.moduleName ?? "",
+    fileType: file?.fileType ?? "",
+    sourcePath: sourceFile?.relativePath,
+    binaryPath: binaryFile?.relativePath,
+  };
+}
+
+function sortComparisonEntries(entries: VbaSourceComparisonEntry[]): VbaSourceComparisonEntry[] {
+  return entries.sort((left, right) => `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`));
+}
+
+function sortDiffEntries(entries: VbaSourceDiffEntry[]): VbaSourceDiffEntry[] {
+  return entries.sort((left, right) => `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`));
+}
+
+function firstDifferentLineSnippet(leftText: string, rightText: string, label: string): string {
+  const leftLines = leftText.split(/\r?\n/);
+  const rightLines = rightText.split(/\r?\n/);
+  const max = Math.max(leftLines.length, rightLines.length);
+  for (let index = 0; index < max; index += 1) {
+    if (leftLines[index] !== rightLines[index]) return `${label}:${index + 1}: ${leftLines[index] ?? ""}`;
+  }
+  return `${label}: files differ`;
 }
 
 function buildTargetDiagnostics(

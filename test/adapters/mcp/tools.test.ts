@@ -290,7 +290,8 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("stub tool visibility (#175)", () => {
-    const STUB_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary", "init_project", "normalize_documents"] as const;
+    const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary"] as const;
+    const STUB_TOOL_NAMES = ["init_project", "normalize_documents"] as const;
 
     function makeServices() {
       return {
@@ -302,6 +303,11 @@ describe("MCP tool registration over core services", () => {
 
     it("marks stub (not-implemented) tools as hidden so they are excluded from tools/list projection", () => {
       const tools = createDysflowMcpTools(makeServices());
+      for (const implemented of IMPLEMENTED_VERIFY_TOOL_NAMES) {
+        const tool = tools.find((t) => t.name === implemented);
+        expect(tool, `${implemented} must be present in tool registry`).toBeDefined();
+        expect(tool?.hidden, `${implemented} must be visible now that it is implemented`).toBeUndefined();
+      }
       for (const stub of STUB_TOOL_NAMES) {
         const tool = tools.find((t) => t.name === stub);
         expect(tool, `${stub} must be present in tool registry`).toBeDefined();
@@ -309,14 +315,45 @@ describe("MCP tool registration over core services", () => {
       }
     });
 
-    it("stub tools retain callable handlers that return LEGACY_TOOL_NOT_IMPLEMENTED", async () => {
+    it("stub tools retain callable handlers with explicit unsupported payloads", async () => {
       const tools = createDysflowMcpTools(makeServices());
       for (const stub of STUB_TOOL_NAMES) {
         const tool = tools.find((t) => t.name === stub);
         if (tool === undefined) continue;
         const result = await tool.handler({});
-        expect(result.isError, `${stub} handler should return isError: true`).toBe(true);
-        expect(result.content[0]?.text, `${stub} handler should return LEGACY_TOOL_NOT_IMPLEMENTED`).toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
+        expect(result.isError, `${stub} handler should be a safe unsupported payload, not a legacy not-implemented error`).toBe(false);
+        expect(JSON.parse(result.content[0]?.text ?? "{}"), `${stub} handler should return an explicit unsupported payload`).toMatchObject({
+          ok: false,
+          supported: false,
+          operation: stub,
+        });
+      }
+    });
+
+    it("visible VBA sync tools report service unavailability instead of legacy not-implemented when no legacy service is configured", async () => {
+      const tools = createDysflowMcpTools(makeServices());
+      for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
+        const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
+        expect(result?.isError, `${toolName} should fail safely without the legacy service`).toBe(true);
+        expect(result?.content[0]?.text).toContain("MCP_SERVICE_UNAVAILABLE");
+        expect(result?.content[0]?.text).not.toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
+      }
+    });
+
+    it("verify/reconcile tools dispatch to the legacy service instead of the not-implemented fallback", async () => {
+      const tools = createDysflowMcpTools({
+        ...makeServices(),
+        legacyToolService: {
+          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+        },
+      });
+
+      for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
+        const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
+        expect(result).toEqual({
+          content: [{ type: "text", text: JSON.stringify({ toolName, input: { diff: true }, ok: true }) }],
+          isError: false,
+        });
       }
     });
   });
@@ -349,6 +386,13 @@ describe("MCP tool registration over core services", () => {
       const schema = LEGACY_TOOL_SCHEMAS["seed_fixture"];
       expect(schema).toBeDefined();
       expect(schema?.properties).not.toHaveProperty("query");
+    });
+
+    it("exists schema accepts both public name and legacy moduleName aliases", () => {
+      const schema = LEGACY_TOOL_SCHEMAS["exists"];
+      expect(schema).toBeDefined();
+      expect(schema?.properties).toHaveProperty("name");
+      expect(schema?.properties).toHaveProperty("moduleName");
     });
 
     it("passing a property not in a tool-specific schema returns MCP_INPUT_INVALID", async () => {

@@ -100,7 +100,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
     expect(query.requests).toEqual([{ sql: "SELECT 1", mode: "read" }]);
   });
 
-  it("returns explicit not-implemented errors for legacy tools whose slice is not ported yet", async () => {
+  it("returns explicit service-unavailable errors for VBA sync tools when the product service is not configured", async () => {
     const tools = createDysflowMcpTools({
       vbaService: new FakeVbaService(),
       queryService: new FakeQueryService(),
@@ -110,7 +110,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
     await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({
       isError: true,
-      content: [{ type: "text", text: "LEGACY_TOOL_NOT_IMPLEMENTED: export_modules is tracked for legacy parity but not ported in this slice." }],
+      content: [{ type: "text", text: "MCP_SERVICE_UNAVAILABLE: export_modules requires the legacy VBA sync service to be configured." }],
     });
   });
 

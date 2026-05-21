@@ -208,6 +208,84 @@ describe("dysflow configuration", () => {
 		}
 	});
 
+	it("resolves matching projectId from the repo-local config so project allowWrites can apply", () => {
+		const workspace = createTempWorkspace();
+		try {
+			writeRepoProjectConfig(workspace.root, {
+				id: "any-access-project",
+				accessPath: "front.accdb",
+				backendPath: "backend.accdb",
+				allowWrites: true,
+			});
+			writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
+			writeFileSync(join(workspace.root, "backend.accdb"), "", "utf8");
+
+			const result = loadDysflowConfig({
+				cwd: workspace.root,
+				projectId: "any-access-project",
+				env: {},
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error("expected project config to load");
+			expect(result.data.projectId).toBe("any-access-project");
+			expect(result.data.allowWrites).toBe(true);
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("rejects projectId when it does not match the repo-local config id", () => {
+		const workspace = createTempWorkspace();
+		try {
+			writeRepoProjectConfig(workspace.root, {
+				id: "configured-project",
+				accessPath: "front.accdb",
+				allowWrites: true,
+			});
+
+			const result = loadDysflowConfig({
+				cwd: workspace.root,
+				projectId: "other-project",
+				env: {},
+			});
+
+			expect(result.ok).toBe(false);
+			if (result.ok) throw new Error("expected config mismatch");
+			expect(result.error.code).toBe("CONFIG_PROJECT_ID_MISMATCH");
+			expect(result.error.message).toContain("other-project");
+			expect(result.error.message).toContain("configured-project");
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	it("async config resolves matching projectId from the repo-local config", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "dysflow-config-async-project-id-"));
+		try {
+			await mkdir(join(workspace, ".dysflow"), { recursive: true });
+			await writeFile(
+				join(workspace, ".dysflow", "project.json"),
+				JSON.stringify({ id: "async-project", accessPath: "front.accdb", allowWrites: true }),
+				"utf8",
+			);
+			await writeFile(join(workspace, "front.accdb"), "", "utf8");
+
+			const result = await loadDysflowConfigAsync({
+				cwd: workspace,
+				projectId: "async-project",
+				env: {},
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error("expected async project config to load");
+			expect(result.data.projectId).toBe("async-project");
+			expect(result.data.allowWrites).toBe(true);
+		} finally {
+			rmSync(workspace, { recursive: true, force: true });
+		}
+	});
+
 	it("uses explicit projectId as canonical trace identity ahead of contextId", () => {
 		const result = loadDysflowConfig({
 			accessDbPath: "C:/data/app.accdb",

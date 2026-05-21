@@ -140,7 +140,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.5.4"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.6.5"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -194,6 +194,106 @@ C:\Users\<user>\AppData\Local\dysflow\bin
 ---
 
 ## Configuration
+
+### AI agent quick start: provision one repo before calling tools
+
+If you are an AI agent, do this **once per Access project/worktree** before using Dysflow tools. Do not guess paths on every call.
+
+#### Quick path
+
+1. Open the Access project repository/worktree.
+2. Choose a stable `projectId`. **Recommended:** use the same name your memory system/Engram uses for this project.
+3. Write repo-local config with `dysflow setup --write-project`.
+4. Put passwords in project-level environment variables, not in prompts or command arguments.
+5. Validate with `dysflow doctor`.
+6. Before the next Dysflow command after a timeout/crash, list and clean only operations owned by this project.
+
+```powershell
+cd C:\Projects\my-access-project
+
+# Use the same project id as Engram/memory when available.
+dysflow setup --write-project --project-id my-access-project `
+  --access-path .\Frontend.accdb `
+  --backend-path .\Backend.accdb
+
+# Set secrets at project/session level. Do not hardcode them in .dysflow/project.json.
+$env:DYSFLOW_ACCESS_PASSWORD = "<access-password>"
+$env:DYSFLOW_BACKEND_PASSWORD = "<backend-password>"
+
+dysflow doctor
+```
+
+After that, normal MCP calls should be short and traceable:
+
+```json
+{ "projectId": "my-access-project" }
+```
+
+Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` on every tool call when they already live in `.dysflow/project.json`. Repeated path overrides are for deliberate one-off exceptions only.
+
+#### What the AI should create
+
+`.dysflow/project.json` belongs in the Access project repo/worktree, not inside the Dysflow runtime install directory:
+
+```json
+{
+  "id": "my-access-project",
+  "accessPath": "Frontend.accdb",
+  "backendPath": "Backend.accdb",
+  "destinationRoot": "src",
+  "passwordEnv": "DYSFLOW_ACCESS_PASSWORD",
+  "backendPasswordEnv": "DYSFLOW_BACKEND_PASSWORD"
+}
+```
+
+Use repo-relative paths whenever possible so the same config works for `adm`, `adm.DEFENSA`, and teammates with different Windows profile names.
+
+#### Cleanup before retrying
+
+Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json`. If a command times out, fails, or leaves Access open, the AI may clean **only its own tracked operation** before launching the next command.
+
+1. List operations:
+
+   ```text
+   dysflow.access.operations.list { "projectId": "my-access-project" }
+   ```
+
+   Legacy-compatible alias:
+
+   ```text
+   list_access_operations { "projectId": "my-access-project" }
+   ```
+
+2. Cleanup a specific operation id returned by the list call:
+
+   ```text
+   dysflow.access.cleanup {
+     "projectId": "my-access-project",
+     "operationId": "<operation-id>"
+   }
+   ```
+
+   Legacy-compatible alias:
+
+   ```text
+   cleanup_access_operation {
+     "projectId": "my-access-project",
+     "operationId": "<operation-id>"
+   }
+   ```
+
+Never run broad process cleanup such as `Stop-Process -Name MSACCESS -Force`. Dysflow validates `operationId`, database path, PID, start time, process name, and status before terminating anything.
+
+#### AI checklist
+
+- [ ] I am in the Access project repo/worktree, not the Dysflow repo unless I am developing Dysflow itself.
+- [ ] `.dysflow/project.json` exists and uses repo-relative paths.
+- [ ] `projectId` matches the Engram/memory project name when available.
+- [ ] Secrets are in environment variables or a local ignored secret store, never in git.
+- [ ] I pass `projectId` on MCP calls for traceability.
+- [ ] After timeout/crash, I list operations and cleanup only the exact tracked `operationId` before retrying.
+
+---
 
 Dysflow resolves functional project configuration from the current repository:
 
