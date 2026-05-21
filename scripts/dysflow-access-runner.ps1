@@ -77,6 +77,18 @@ function Write-AccessProcessMarker {
   }
 }
 
+function Write-DysflowProgress {
+  param(
+    [Parameter(Mandatory = $true)] [int] $Percent,
+    [Parameter(Mandatory = $false)] [string] $Message,
+    [Parameter(Mandatory = $false)] [int] $Total
+  )
+  $obj = [ordered]@{ percent = $Percent }
+  if ($Total -gt 0) { $obj['total'] = $Total }
+  if (-not [string]::IsNullOrWhiteSpace($Message)) { $obj['message'] = $Message }
+  [Console]::Error.WriteLine('DYSFLOW_PROGRESS ' + ($obj | ConvertTo-Json -Compress -Depth 2))
+}
+
 function ConvertFrom-JsonCompat {
   param([string] $Json)
   if ([string]::IsNullOrWhiteSpace($Json)) { return @{} }
@@ -666,6 +678,7 @@ try {
   }
 
   Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+  Write-DysflowProgress -Percent 10 -Message "Opening database"
 
   if ($Operation -eq 'diagnostics') {
     $checks = @(
@@ -680,7 +693,9 @@ try {
     $argsList = @()
     if ($payload.arguments) { $argsList = @($payload.arguments) }
     $runArgs = @($payload.procedureName) + $argsList
+    Write-DysflowProgress -Percent 40 -Message "Executing operation"
     $returnValue = $access.Run.Invoke($runArgs)
+    Write-DysflowProgress -Percent 90 -Message "Finalizing"
     [ordered]@{ returnValue = $returnValue } | ConvertTo-Json -Compress -Depth 10
     exit 0
   }
@@ -688,11 +703,13 @@ try {
   if ($Operation -eq 'query') {
     $db = $access.CurrentDb()
     $action = [string]$payload.action
+    Write-DysflowProgress -Percent 40 -Message "Executing operation"
     if ([string]::IsNullOrWhiteSpace($action) -or $action -eq 'query_sql') {
       if ($payload.mode -eq 'read') {
         $rs = $db.OpenRecordset([string]$payload.sql)
         try {
           $rows = @(Convert-RecordsetRows $rs)
+          Write-DysflowProgress -Percent 90 -Message "Finalizing"
           [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
         } finally {
           if ($null -ne $rs) { $rs.Close() }
@@ -701,23 +718,30 @@ try {
       }
 
       $db.Execute([string]$payload.sql, 128)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       [ordered]@{ affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
       exit 0
     }
 
     if ($action -eq 'list_tables') {
-      [ordered]@{ tables = @(Get-TableNames -Database $db) } | ConvertTo-Json -Compress -Depth 10
+      $tables = @(Get-TableNames -Database $db)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
       exit 0
     }
 
     if ($action -eq 'list_linked_tables') {
-      [ordered]@{ tables = @(Get-TableNames -Database $db -LinkedOnly) } | ConvertTo-Json -Compress -Depth 10
+      $tables = @(Get-TableNames -Database $db -LinkedOnly)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
       exit 0
     }
 
     if ($action -eq 'get_schema') {
       if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for get_schema." }
-      [ordered]@{ schema = @(Get-TableSchema -Database $db -TableName ([string]$payload.tableName)) } | ConvertTo-Json -Compress -Depth 20
+      $schema = @(Get-TableSchema -Database $db -TableName ([string]$payload.tableName))
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
@@ -726,6 +750,7 @@ try {
       $rs = $db.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$payload.tableName)]")
       try {
         $rows = @(Convert-RecordsetRows $rs)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }
@@ -739,6 +764,7 @@ try {
       $rs = $db.OpenRecordset("SELECT DISTINCT [$([string]$payload.columnName)] AS Value FROM [$([string]$payload.tableName)]")
       try {
         $rows = @(Convert-RecordsetRows $rs)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }
@@ -748,69 +774,84 @@ try {
 
     if ($action -eq 'compare_backends') {
       $result = Compare-BackendTables -CurrentDb $db -BackendPath ([string]$payload.backendPath)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'list_access_files') {
-      [ordered]@{ files = @(Get-AccessFiles -RootPath ([string]$payload.rootPath)) } | ConvertTo-Json -Compress -Depth 10
+      $files = @(Get-AccessFiles -RootPath ([string]$payload.rootPath))
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ files = $files } | ConvertTo-Json -Compress -Depth 10
       exit 0
     }
 
     if ($action -eq 'get_relationships') {
-      [ordered]@{ relationships = @(Get-Relationships -Database $db) } | ConvertTo-Json -Compress -Depth 20
+      $relationships = @(Get-Relationships -Database $db)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'list_links') {
-      [ordered]@{ links = @(Get-LinkInfo -Database $db) } | ConvertTo-Json -Compress -Depth 20
+      $links = @(Get-LinkInfo -Database $db)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      [ordered]@{ links = $links } | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'link_tables') {
       $result = Update-LinkTables -Database $db -Payload $payload
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'relink_tables') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'localize_backend_links') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'unlink_table') {
       $result = Remove-LinkTable -Database $db -Payload $payload
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'export_queries') {
       $result = Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'import_queries') {
       $result = Import-QueryDefinitions -Database $db -Payload $payload
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -eq 'compact_repair') {
       $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
 
     if ($action -in @('exec_sql', 'run_script', 'create_table', 'drop_table', 'seed_fixture', 'teardown_fixture')) {
       $result = Invoke-WriteAction -Database $db -Action $action -Payload $payload
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
       exit 0
     }
