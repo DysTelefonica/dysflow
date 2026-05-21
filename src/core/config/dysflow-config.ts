@@ -89,17 +89,6 @@ export function loadDysflowConfig(
 	}
 
 	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
-	if (requestedProjectId !== undefined) {
-		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_NOT_REGISTERED",
-				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
-				{ retryable: false },
-			),
-		);
-	}
-
 	const repoConfig = findRepoProjectConfigPath(cwd);
 	if (repoConfig.found === "ambiguous") {
 		const [pathA, pathB] = repoConfig.paths;
@@ -118,6 +107,17 @@ export function loadDysflowConfig(
 			env,
 			cwd,
 			"repo-config",
+			requestedProjectId,
+		);
+	}
+	if (requestedProjectId !== undefined) {
+		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_NOT_REGISTERED",
+				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
+				{ retryable: false },
+			),
 		);
 	}
 	// repoConfig.found === "none"
@@ -142,17 +142,6 @@ export async function loadDysflowConfigAsync(
 	}
 
 	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
-	if (requestedProjectId !== undefined) {
-		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_NOT_REGISTERED",
-				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
-				{ retryable: false },
-			),
-		);
-	}
-
 	const repoConfig = await findRepoProjectConfigPathAsync(cwd);
 	if (repoConfig.found === "ambiguous") {
 		const [pathA, pathB] = repoConfig.paths;
@@ -171,6 +160,17 @@ export async function loadDysflowConfigAsync(
 			env,
 			cwd,
 			"repo-config",
+			requestedProjectId,
+		);
+	}
+	if (requestedProjectId !== undefined) {
+		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_NOT_REGISTERED",
+				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
+				{ retryable: false },
+			),
 		);
 	}
 	// repoConfig.found === "none"
@@ -349,6 +349,17 @@ function loadProjectConfigFromPath(
 			),
 		);
 	}
+	const requestedProjectId = stringValue(projectId);
+	const configuredProjectId = stringValue(raw.id);
+	if (requestedProjectId !== undefined && configuredProjectId !== undefined && requestedProjectId !== configuredProjectId) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_ID_MISMATCH",
+				`Requested projectId '${requestedProjectId}' does not match repo config id '${configuredProjectId}' in ${resolvedPath}.`,
+				{ retryable: false },
+			),
+		);
+	}
 
 	return buildProjectConfig(raw, {
 		resolvedPath,
@@ -386,6 +397,17 @@ async function loadProjectConfigFromPathAsync(
 			createDysflowError(
 				"CONFIG_PROJECT_FILE_INVALID",
 				`Project config file is not valid JSON: ${resolvedPath}. ${err instanceof Error ? err.message : String(err)}`,
+			),
+		);
+	}
+	const requestedProjectId = stringValue(projectId);
+	const configuredProjectId = stringValue(raw.id);
+	if (requestedProjectId !== undefined && configuredProjectId !== undefined && requestedProjectId !== configuredProjectId) {
+		return failureResult(
+			createDysflowError(
+				"CONFIG_PROJECT_ID_MISMATCH",
+				`Requested projectId '${requestedProjectId}' does not match repo config id '${configuredProjectId}' in ${resolvedPath}.`,
+				{ retryable: false },
 			),
 		);
 	}

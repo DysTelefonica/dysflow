@@ -1,0 +1,243 @@
+Version =21
+VersionRequired =20
+PublishOption =1
+Checksum =2038712755
+Begin Form
+    PopUp = NotDefault
+    RecordSelectors = NotDefault
+    MaxButton = NotDefault
+    MinButton = NotDefault
+    ControlBox = NotDefault
+    AutoCenter = NotDefault
+    NavigationButtons = NotDefault
+    CloseButton = NotDefault
+    DividingLines = NotDefault
+    AllowDesignChanges = NotDefault
+    DefaultView =0
+    ScrollBars =0
+    BorderStyle =3
+    PictureAlignment =2
+    DatasheetGridlinesBehavior =3
+    GridY =10
+    Width =4800
+    DatasheetFontHeight =11
+    ItemSuffix =6
+    Left =22695
+    Top =7860
+    Right =27495
+    Bottom =9960
+    TimerInterval =100
+    DatasheetGridlinesColor =14806254
+    RecSrcDt = Begin
+        0x881c5c679a6ee640
+    End
+    GUID = Begin
+        0x465afc03be643a4db648ef9d8cf66a5e
+    End
+    NameMap = Begin
+        0x0acc0e5500000000000000000000000000000000000000000c00000005000000 ,
+        0x0000000000000000000000000000
+    End
+    Caption ="Espere..."
+    OnOpen ="[Event Procedure]"
+    DatasheetFontName ="Calibri"
+    OnTimer ="[Event Procedure]"
+    FilterOnLoad =0
+    ShowPageMargins =0
+    DisplayOnSharePointSite =1
+    DatasheetAlternateBackColor =15921906
+    DatasheetGridlinesColor12 =0
+    FitToScreen =1
+    DatasheetBackThemeColorIndex =1
+    BorderThemeColorIndex =3
+    ThemeFontIndex =1
+    ForeThemeColorIndex =0
+    AlternateBackThemeColorIndex =1
+    AlternateBackShade =95.0
+    NoSaveCTIWhenDisabled =1
+    NoSaveCTIWhenDisabled =1
+    Begin
+        Begin Label
+            BackStyle =0
+            FontSize =11
+            BorderColor =8355711
+            ForeColor =6710886
+            FontName ="Calibri"
+            GridlineColor =10921638
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =0
+            BorderTint =50.0
+            ForeThemeColorIndex =0
+            ForeTint =60.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Section
+            Height =1600
+            BackColor =16774386
+            Name ="Detalle"
+            AlternateBackColor =15921906
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            Begin
+                Begin Label
+                    OverlapFlags =85
+                    TextFontCharSet =177
+                    TextAlign =2
+                    TextFontFamily =0
+                    Left =300
+                    Top =80
+                    Width =4200
+                    Height =340
+                    FontSize =16
+                    FontWeight =700
+                    ForeColor =3414531
+                    Name ="lblTitulo"
+                    Caption ="Procesando..."
+                    LayoutCachedLeft =300
+                    LayoutCachedTop =80
+                    LayoutCachedWidth =4200
+                    LayoutCachedHeight =340
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                End
+                Begin Label
+                    OverlapFlags =85
+                    TextAlign =2
+                    Left =200
+                    Top =460
+                    Width =4400
+                    Height =300
+                    ForeColor =9730158
+                    Name ="lblEstado"
+                    Caption ="Espere por favor..."
+                    LayoutCachedLeft =200
+                    LayoutCachedTop =460
+                    LayoutCachedWidth =4400
+                    LayoutCachedHeight =300
+                    ForeThemeColorIndex =-1
+                    ForeTint =100.0
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    OverlapFlags =93
+                    Left =200
+                    Top =900
+                    Width =4400
+                    Height =340
+                    BackColor =15527148
+                    Name ="lblProgresoFondo"
+                    LayoutCachedLeft =200
+                    LayoutCachedTop =900
+                    LayoutCachedWidth =4400
+                    LayoutCachedHeight =340
+                    BackThemeColorIndex =-1
+                End
+                Begin Label
+                    BackStyle =1
+                    OverlapFlags =87
+                    Left =200
+                    Top =900
+                    Width =0
+                    Height =340
+                    BackColor =16737792
+                    Name ="lblProgresoBarra"
+                    LayoutCachedLeft =200
+                    LayoutCachedTop =900
+                    LayoutCachedWidth =200
+                    LayoutCachedHeight =340
+                    BackThemeColorIndex =-1
+                End
+            End
+        End
+    End
+End
+CodeBehindForm
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+' MÓDULO: Form_frmBusy.cls
+' Popup modal - Barra de progreso animada
+Option Compare Database
+Option Explicit
+
+Public ProgresoActual As Long
+Public ProgresoTotal As Long
+
+Private Sub Form_Open(Cancel As Integer)
+    On Error GoTo errores
+    Debug.Print "=== Form_frmBusy OPEN ==="
+
+    If InStr(1, Nz(Command(), ""), "/dev", vbTextCompare) = 0 Then
+        Call GestionarRibbon(False)
+    End If
+
+    Me.TimerInterval = 500
+    Me.lblProgresoBarra.Width = 0
+    ProgresoActual = 0
+    ProgresoTotal = 100
+    g_BusyFlag = "running"
+
+    Debug.Print "=== Form_frmBusy OPEN fin ==="
+    Exit Sub
+errores:
+    Debug.Print "Form_frmBusy OPEN ERROR " & Err.Number & " - " & Err.Description
+    MsgBox Err.Description, vbCritical, "Error"
+End Sub
+
+Private Sub Form_Timer()
+    On Error Resume Next
+    Debug.Print "TIMER fired, g_BusyFlag=[" & g_BusyFlag & "]"
+    If g_BusyFlag = "done" Then
+        Debug.Print "TIMER: g_BusyFlag=done, cerrando..."
+        g_BusyFlag = ""
+        DoCmd.Close acForm, Me.Name
+    End If
+End Sub
+
+Public Sub MostrarEstado(ByVal p_Mensaje As String, Optional ByRef p_Error As String)
+    On Error GoTo errores
+    Me.lblEstado.Caption = p_Mensaje
+    DoEvents
+    Exit Sub
+errores:
+    p_Error = "MostrarEstado: " & Err.Description
+End Sub
+
+Public Sub ActualizarProgreso(ByVal p_Actual As Long, ByVal p_Total As Long, Optional ByRef p_Error As String)
+    On Error GoTo errores
+    Dim m_Porcentaje As Single
+    ProgresoActual = p_Actual
+    ProgresoTotal = p_Total
+    If p_Total > 0 Then
+        m_Porcentaje = p_Actual / p_Total
+        Me.lblProgresoBarra.Width = CLng(m_Porcentaje * Me.lblProgresoFondo.Width)
+    End If
+    DoEvents
+    Exit Sub
+errores:
+    p_Error = "ActualizarProgreso: " & Err.Description
+End Sub
+
+Public Sub IniciarPopup(ByVal p_Titulo As String, ByVal p_Mensaje As String, Optional ByRef p_Error As String)
+    On Error GoTo errores
+    Me.Caption = p_Titulo
+    Me.lblTitulo.Caption = p_Titulo
+    Me.lblEstado.Caption = p_Mensaje
+    Me.lblProgresoBarra.Width = 0
+    ProgresoActual = 0
+    Exit Sub
+errores:
+    p_Error = "IniciarPopup: " & Err.Description
+End Sub
+
+Public Sub CerrarPopup(Optional ByRef p_Error As String)
+    On Error GoTo errores
+    DoCmd.Close acForm, Me.Name
+    Exit Sub
+errores:
+    p_Error = "CerrarPopup: " & Err.Description
+End Sub

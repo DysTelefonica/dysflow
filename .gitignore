@@ -16,6 +16,11 @@ E2E_testing/**/*.mdb
 E2E_testing/**/*.accde
 E2E_testing/**/*.mde
 E2E_testing/**/*.laccdb
+E2E_testing/.dysflow/runtime/
+E2E_testing/.dysflow/e2e-runtime/
+E2E_testing/.dysflow/e2e-temp/
+E2E_testing/.dysflow/e2e-fast-temp/
+E2E_testing/forms/*.form.json
 # Local Pi runtime state
 .atl/
 .pi/

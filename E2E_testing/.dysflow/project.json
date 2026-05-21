@@ -1,0 +1,10 @@
+{
+  "id": "lanzadera",
+  "accessPath": "Expedientes.accdb",
+  "backendPath": "Expedientes_datos.accdb",
+  "destinationRoot": "src",
+  "allowWrites": true,
+  "timeoutMs": 90000,
+  "passwordEnv": "DYSFLOW_ACCESS_PASSWORD",
+  "backendPasswordEnv": "DYSFLOW_BACKEND_PASSWORD"
+}

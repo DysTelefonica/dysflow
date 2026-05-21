@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { failureResult } from "../../../src/core/contracts/index";
 import {
 	buildImportPlanResult,
 	VbaSyncLegacyService,
@@ -228,7 +227,7 @@ describe("VbaSyncLegacyService", () => {
 		});
 	});
 
-	it("dry-run import_all with registered projectId returns CONFIG_PROJECT_NOT_REGISTERED (global registry deprecated)", async () => {
+	it("dry-run import_all with mismatched projectId returns CONFIG_PROJECT_ID_MISMATCH", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-"));
 		const staging = join(root, "staging");
 		const develop = join(root, "develop");
@@ -294,12 +293,13 @@ describe("VbaSyncLegacyService", () => {
 
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected failure");
-		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
-		expect(result.error.message).toContain("deprecated");
+		expect(result.error.code).toBe("CONFIG_PROJECT_ID_MISMATCH");
+		expect(result.error.message).toContain("develop");
+		expect(result.error.message).toContain("staging");
 		expect(calls).toEqual([]);
 	});
 
-	it("dry-run import_all fails unknown explicit project without cwd fallback", async () => {
+	it("dry-run import_all fails unknown explicit project when repo config id differs", async () => {
 		const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-missing-"));
 		const staging = join(root, "staging");
 		await mkdir(join(staging, ".dysflow"), { recursive: true });
@@ -327,8 +327,9 @@ describe("VbaSyncLegacyService", () => {
 
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected failure");
-		expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
-		expect(result.error.message).toContain("deprecated");
+		expect(result.error.code).toBe("CONFIG_PROJECT_ID_MISMATCH");
+		expect(result.error.message).toContain("missing-project");
+		expect(result.error.message).toContain("staging");
 	});
 
 	it("dry-run explicit overrides win over requested project id", async () => {
@@ -758,14 +759,20 @@ describe("VbaSyncLegacyService", () => {
 		});
 
 		await service.execute("exists", { moduleName: "Form_Main" });
+		await service.execute("exists", { name: "Form_Secondary" });
 		await service.execute("list_objects", {});
 
 		expect(calls).toEqual([
-			expect.objectContaining({
-				action: "Exists",
-				moduleNames: ["Form_Main"],
-				json: true,
-			}),
+				expect.objectContaining({
+					action: "Exists",
+					moduleNames: ["Form_Main"],
+					json: true,
+				}),
+				expect.objectContaining({
+					action: "Exists",
+					moduleNames: ["Form_Secondary"],
+					json: true,
+				}),
 			expect.objectContaining({
 				action: "List-Objects",
 				moduleNames: [],
@@ -1166,27 +1173,116 @@ describe("VbaSyncLegacyService", () => {
 		]);
 	});
 
-	it("returns a safe failure when a direct runner mapping is not available yet", async () => {
+	it("verify_code exports to a temporary directory and compares without overwriting source", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-verify-code-"));
+		const sourceRoot = join(root, "src");
+		await mkdir(join(sourceRoot, "modules"), { recursive: true });
+		await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
+		await writeFile(join(sourceRoot, "modules", "Module2.bas"), "disk", "utf8");
+		const calls: unknown[] = [];
 		const service = new VbaSyncLegacyService({
-			executor: async () => ({
-				exitCode: 0,
-				stdout: "{}",
-				stderr: "",
-				durationMs: 1,
-				timedOut: false,
-			}),
+			executor: async (request) => {
+				calls.push(request);
+				expect(request.destinationRoot).not.toBe(sourceRoot);
+				await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+				await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "same", "utf8");
+				await writeFile(join(request.destinationRoot, "modules", "Module2.bas"), "binary", "utf8");
+				await writeFile(join(request.destinationRoot, "modules", "OnlyBinary.bas"), "binary only", "utf8");
+				return { exitCode: 0, stdout: "", stderr: "", durationMs: 6, timedOut: false };
+			},
 			scriptPath: "scripts/dysflow-vba-manager.ps1",
 			accessPath: "C:/db/front.accdb",
+			destinationRoot: sourceRoot,
 			env: {},
 		});
 
-		expect(await service.execute("verify_binary", { diff: true })).toEqual(
-			failureResult({
-				code: "LEGACY_TOOL_NOT_IMPLEMENTED",
-				message: "This legacy tool is tracked for parity but is not implemented by this service yet.",
-				retryable: false,
-			}),
-		);
+		const result = await service.execute("verify_code", { diff: true });
+
+		expect(result).toMatchObject({
+			ok: true,
+			data: {
+				operation: "verify_code",
+				ok: false,
+				dryRun: true,
+				willModifyAccess: false,
+				matched: [{ moduleName: "Module1", fileType: "bas" }],
+				different: [{ moduleName: "Module2", fileType: "bas" }],
+				missingInSource: [{ moduleName: "OnlyBinary", fileType: "bas" }],
+				missingInBinary: [],
+				diffs: [{ moduleName: "Module2", sourceSnippet: "source:1: disk", binarySnippet: "binary:1: binary" }],
+			},
+		});
+		expect(await readFile(join(sourceRoot, "modules", "Module2.bas"), "utf8")).toBe("disk");
+		expect(calls).toEqual([expect.objectContaining({ action: "Export", destinationRoot: expect.any(String) })]);
+	});
+
+	it("verify_binary supports selective module comparison", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-verify-binary-"));
+		const sourceRoot = join(root, "src");
+		await mkdir(join(sourceRoot, "modules"), { recursive: true });
+		await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
+		await writeFile(join(sourceRoot, "modules", "Other.bas"), "disk only", "utf8");
+		const calls: unknown[] = [];
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				calls.push(request);
+				await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+				await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "same", "utf8");
+				await writeFile(join(request.destinationRoot, "modules", "Other.bas"), "binary only", "utf8");
+				return { exitCode: 0, stdout: "", stderr: "", durationMs: 4, timedOut: false };
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			destinationRoot: sourceRoot,
+			env: {},
+		});
+
+		const result = await service.execute("verify_binary", { moduleNames: ["Module1"] });
+
+		expect(result).toMatchObject({
+			ok: true,
+			data: {
+				operation: "verify_binary",
+				ok: true,
+				matched: [{ moduleName: "Module1", fileType: "bas" }],
+				different: [],
+				missingInSource: [],
+				missingInBinary: [],
+			},
+		});
+		expect(calls).toEqual([expect.objectContaining({ moduleNames: ["Module1"] })]);
+	});
+
+	it("reconcile_binary returns a safe dry-run plan instead of mutating Access", async () => {
+		const root = await mkdtemp(join(tmpdir(), "dysflow-vba-reconcile-"));
+		const sourceRoot = join(root, "src");
+		await mkdir(join(sourceRoot, "modules"), { recursive: true });
+		await writeFile(join(sourceRoot, "modules", "Module1.bas"), "disk", "utf8");
+		const service = new VbaSyncLegacyService({
+			executor: async (request) => {
+				await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+				await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "binary", "utf8");
+				return { exitCode: 0, stdout: "", stderr: "", durationMs: 3, timedOut: false };
+			},
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			destinationRoot: sourceRoot,
+			env: {},
+		});
+
+		const result = await service.execute("reconcile_binary", { diff: true });
+
+		expect(result).toMatchObject({
+			ok: true,
+			data: {
+				operation: "reconcile_binary",
+				ok: false,
+				dryRun: true,
+				willModifyAccess: false,
+				different: [{ moduleName: "Module1" }],
+				recommendation: expect.stringContaining("Dry-run only"),
+			},
+		});
 	});
 
 	it("redacts passwords from runner failures", async () => {
