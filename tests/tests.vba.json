@@ -185,6 +185,48 @@
       "procedure": "Test_Issue19_Paridad_UI_Dominio",
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "red", "ui-domain-parity"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: usuario anterior reescrito",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_UsuarioAnteriorSeReescribe_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: con y sin barra final",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_ConYSinBarraFinal_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica rutas actuales",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaRutasActuales_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica ruta no local",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaRutaNoLocal_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica UNC",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaUNC_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: entrada vacía",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_EntradaVacia_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "LeeConfiguracionLocal ancla rutas locales al USERPROFILE",
+      "procedure": "Test_BackendConfigPaths_LeeConfiguracionLocal_AnchoraRutasLocalesEnUserProfile_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
     }
   ]
 }

@@ -250,6 +250,10 @@ Public Function LeeConfiguracionLocal( _
     m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
     m_RutaAplicacionActiva = SelectAppPathFromActiveProfile(m_BackendActivo, m_RutaProd, m_RutaLocal, m_NombreCampoRutaActiva)
 
+    m_RutaProd = SanitizarRutaUsuarioWindowsLocal(m_RutaProd)
+    m_RutaLocal = SanitizarRutaUsuarioWindowsLocal(m_RutaLocal)
+    m_RutaAplicacionActiva = SanitizarRutaUsuarioWindowsLocal(m_RutaAplicacionActiva)
+
     m_RutaProd = NormalizeFolderPath(m_RutaProd)
     m_RutaLocal = NormalizeFolderPath(m_RutaLocal)
     m_RutaAplicacionActiva = NormalizeFolderPath(m_RutaAplicacionActiva)
@@ -372,6 +376,57 @@ Private Function NormalizeFolderPath(ByVal p_Path As String) As String
     m_Path = Replace$(m_Path, "/", "\")
     If Right$(m_Path, 1) <> "\" Then m_Path = m_Path & "\"
     NormalizeFolderPath = m_Path
+End Function
+
+Public Function SanitizarRutaUsuarioWindowsLocal(ByVal p_Ruta As String, Optional ByVal p_PerfilUsuarioActual As String = "") As String
+    Dim m_Ruta As String
+    Dim m_UserProfile As String
+    Dim m_PosicionInicioSuffix As Long
+
+    m_Ruta = Trim$(Nz(p_Ruta, ""))
+    If m_Ruta = "" Then Exit Function
+
+    m_Ruta = Replace$(m_Ruta, "/", "\")
+
+    If Left$(m_Ruta, 2) = "\\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    If LCase$(Left$(m_Ruta, 9)) <> "c:\users\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    m_PosicionInicioSuffix = InStr(10, m_Ruta, "\")
+    If m_PosicionInicioSuffix = 0 Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    If Trim$(p_PerfilUsuarioActual) = "" Then
+        m_UserProfile = Trim$(Replace$(Environ$("USERPROFILE"), "/", "\"))
+    Else
+        m_UserProfile = Trim$(Replace$(p_PerfilUsuarioActual, "/", "\"))
+    End If
+
+    If m_UserProfile = "" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    If Right$(m_UserProfile, 1) = "\" Then
+        If Len(m_UserProfile) > 1 Then
+            m_UserProfile = Left$(m_UserProfile, Len(m_UserProfile) - 1)
+        End If
+    End If
+
+    If LCase$(Left$(m_UserProfile, 9)) <> "c:\users\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    SanitizarRutaUsuarioWindowsLocal = m_UserProfile & Mid$(m_Ruta, m_PosicionInicioSuffix)
 End Function
 
 Private Function GetParentFolderPath(ByVal p_AppPath As String) As String

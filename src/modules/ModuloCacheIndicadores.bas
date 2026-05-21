@@ -20,18 +20,18 @@ Option Explicit
 
 ' — Enumeracion de buckets —
 Public Enum EnumBucketCache
-    Bucket_TAR_PROY_PTE_REPLAN = 1
-    Bucket_NC_PROY_REGISTRADAS
-    Bucket_NC_PROY_SIN_TAREAS
-    Bucket_NC_PROY_PTE_CE
-    Bucket_NC_PROY_CE_CADUCADA
-    Bucket_NC_PROY_CE_NO_CONFORME
-    Bucket_TAR_AUD_PTE_REPLAN
-    Bucket_NC_AUD_REGISTRADAS
-    Bucket_NC_AUD_SIN_TAREAS
-    Bucket_NC_AUD_PTE_CE
-    Bucket_NC_AUD_CE_CADUCADA
-    Bucket_NC_AUD_CE_NO_CONFORME
+    EnumBucket_TAR_PROY_PTE_REPLAN = 1
+    EnumBucket_NC_PROY_REGISTRADAS
+    EnumBucket_NC_PROY_SIN_TAREAS
+    EnumBucket_NC_PROY_PTE_CE
+    EnumBucket_NC_PROY_CE_CADUCADA
+    EnumBucket_NC_PROY_CE_NO_CONFORME
+    EnumBucket_TAR_AUD_PTE_REPLAN
+    EnumBucket_NC_AUD_REGISTRADAS
+    EnumBucket_NC_AUD_SIN_TAREAS
+    EnumBucket_NC_AUD_PTE_CE
+    EnumBucket_NC_AUD_CE_CADUCADA
+    EnumBucket_NC_AUD_CE_NO_CONFORME
 End Enum
 
 ' — Buckets para PROYECTO —
