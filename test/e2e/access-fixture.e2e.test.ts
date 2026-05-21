@@ -61,6 +61,72 @@ afterEach(async () => {
 });
 
 describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
+  it("compares against backend database using backend password environment", async () => {
+    const workspace = createAccessFixtureWorkspace();
+    try {
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: { DYSFLOW_BACKEND_PASSWORD: "backend-secret" },
+      });
+      expect(config.ok).toBe(true);
+      if (!config.ok) throw new Error(config.error.message);
+
+      const runner = new AccessPowerShellRunner({ scriptPath: resolve("scripts/dysflow-access-runner.ps1") });
+      const queryService = new AccessQueryService({ runner, config: config.data });
+
+      const result = await queryService.execute({
+        sql: "SELECT 1",
+        mode: "read",
+        action: "compare_backends",
+        backendPath: join(workspace.root, "NoConformidades_Datos.accdb"),
+      });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        comparison: {
+          backendPath: join(workspace.root, "NoConformidades_Datos.accdb"),
+        },
+      },
+    });
+    } finally {
+      workspace.cleanup();
+    }
+  }, 60_000);
+
+  it("relinks backend-maintained tables using backend password environment", async () => {
+    const workspace = createAccessFixtureWorkspace();
+    try {
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: {
+          DYSFLOW_BACKEND_PASSWORD: "backend-secret",
+        },
+      });
+      expect(config.ok).toBe(true);
+      if (!config.ok) throw new Error(config.error.message);
+
+      const runner = new AccessPowerShellRunner({ scriptPath: resolve("scripts/dysflow-access-runner.ps1") });
+      const queryService = new AccessQueryService({ runner, config: config.data });
+
+      const result = await queryService.execute({
+        sql: "",
+        mode: "write",
+        action: "relink_tables",
+        backendPath: join(workspace.root, "NoConformidades_Datos.accdb"),
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        data: {
+          backendPath: join(workspace.root, "NoConformidades_Datos.accdb"),
+        },
+      });
+    } finally {
+      workspace.cleanup();
+    }
+  }, 60_000);
+
   it("serves diagnostics and read SQL through the real Access runner", async () => {
     const workspace = createAccessFixtureWorkspace();
     try {

@@ -17,6 +17,19 @@ if ([string]::IsNullOrEmpty($AccessPassword)) {
   $AccessPassword = $env:ACCESS_VBA_PASSWORD
 }
 
+$BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD
+
+function Open-DatabaseWithBackendPassword {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] [string] $DatabasePath
+  )
+  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+    return $DbEngine.OpenDatabase($DatabasePath)
+  }
+  return $DbEngine.OpenDatabase($DatabasePath, $false, $false, ";PWD=$BackendPassword")
+}
+
 function ConvertTo-IsoStartTime {
   param($CreationDate)
   if ($null -eq $CreationDate) { return $null }
@@ -291,7 +304,7 @@ function Update-LinkTables {
   }
 
   $dbEngine = New-Object -ComObject DAO.DBEngine.120
-  $backendDb = $dbEngine.OpenDatabase($backendPath)
+  $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath
   try {
     $targetNames = @(Resolve-LinkTargetNames -Database $Database -Payload $Payload)
     if ($targetNames.Count -eq 0) {
@@ -307,14 +320,22 @@ function Update-LinkTables {
           throw "Linked table not found: $tableName"
         }
         $linked = $Database.CreateTableDef([string]$tableName)
-        $linked.Connect = ";DATABASE=$backendPath"
+        if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+          $linked.Connect = ";DATABASE=$backendPath"
+        } else {
+          $linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"
+        }
         $linked.SourceTableName = [string]$tableName
         $Database.TableDefs.Append($linked)
       } else {
         if ([string]::IsNullOrWhiteSpace([string]$linked.Connect) -and $RefreshOnly) {
           throw "Table $tableName is not linked."
         }
-        $linked.Connect = ";DATABASE=$backendPath"
+        if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+          $linked.Connect = ";DATABASE=$backendPath"
+        } else {
+          $linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"
+        }
         if ([string]::IsNullOrWhiteSpace([string]$linked.SourceTableName)) {
           $linked.SourceTableName = [string]$tableName
         }
@@ -440,7 +461,7 @@ function Compare-BackendTables {
   }
 
   $dbEngine = New-Object -ComObject DAO.DBEngine.120
-  $backendDb = $dbEngine.OpenDatabase($BackendPath)
+  $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $BackendPath
   try {
     $currentTables = @(Get-TableNames -Database $CurrentDb)
     $backendTables = @(Get-TableNames -Database $backendDb)

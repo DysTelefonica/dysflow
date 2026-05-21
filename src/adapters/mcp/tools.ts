@@ -322,8 +322,6 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   delete_module: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, moduleName: SCHEMA_PROPS.moduleName, timeoutMs: SCHEMA_PROPS.timeoutMs } },
   generate_erd: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, erdPath: SCHEMA_PROPS.erdPath, timeoutMs: SCHEMA_PROPS.timeoutMs } },
   fix_encoding: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, location: SCHEMA_PROPS.location, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  init_project: { type: "object", additionalProperties: false, properties: { ...CTX, projectRoot: SCHEMA_PROPS.projectRoot, accessPath: SCHEMA_PROPS.accessPath, destinationRoot: SCHEMA_PROPS.destinationRoot } },
-  normalize_documents: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE } },
   validate_form_spec: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec } },
   generate_form: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec, kind: SCHEMA_PROPS.kind, name: SCHEMA_PROPS.name, replace: SCHEMA_PROPS.replace, dryRun: SCHEMA_PROPS.dryRun } },
   catalog_add_control: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, catalogPath: SCHEMA_PROPS.catalogPath, controlName: SCHEMA_PROPS.controlName, controlType: SCHEMA_PROPS.controlType, type: SCHEMA_PROPS.type } },
@@ -341,7 +339,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   export_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, exportPath: SCHEMA_PROPS.exportPath, path: SCHEMA_PROPS.path } },
   link_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
   relink_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
-  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, dryRun: SCHEMA_PROPS.dryRun } },
+  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
   unlink_table: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun } },
   import_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, queryDefinitions: SCHEMA_PROPS.queryDefinitions, queries: SCHEMA_PROPS.queries, dryRun: SCHEMA_PROPS.dryRun } },
   compact_repair: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath, backupFirst: SCHEMA_PROPS.backupFirst, dryRun: SCHEMA_PROPS.dryRun } },
@@ -550,10 +548,7 @@ function appendLegacyCompatibilityTools(
  * but remain registered so direct calls return a clear error rather than a routing failure.
  * Exported for contract testing.
  */
-export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
-  "init_project",
-  "normalize_documents",
-]);
+export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([]);
 
 function createLegacyDispatchTool(
   name: LegacyDysflowMcpToolName,
@@ -580,12 +575,6 @@ function createLegacyDispatchTool(
         return translateCoreResultToMcpContent(await services.legacyToolService.execute(name, input));
       }
       if (isVbaSyncSliceTool(name)) {
-        if (HIDDEN_STUB_TOOL_NAMES.has(name)) {
-          return {
-            isError: false,
-            content: [{ type: "text", text: JSON.stringify({ ok: false, supported: false, operation: name, message: `${name} is not supported by Dysflow's legacy compatibility layer yet.` }) }],
-          };
-        }
         return {
           isError: true,
           content: [{ type: "text", text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the legacy VBA sync service to be configured.` }],
