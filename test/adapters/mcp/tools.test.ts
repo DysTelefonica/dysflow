@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS } from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
@@ -538,6 +538,77 @@ describe("MCP tool registration over core services", () => {
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
       const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }], apply: true });
       expect(result?.isError).toBe(false);
+    });
+  });
+
+  describe("McpToolContext wiring — modern tools forward sendProgress to services", () => {
+    class ProgressCapturingVbaService {
+      public capturedOnProgress: unknown[] = [];
+      async execute(request: unknown, onProgress?: unknown): Promise<OperationResult<AccessVbaResult>> {
+        this.capturedOnProgress.push(onProgress);
+        return successResult({ returnValue: "ok" });
+      }
+    }
+
+    class ProgressCapturingQueryService {
+      public capturedOnProgress: unknown[] = [];
+      async execute(request: unknown, onProgress?: unknown): Promise<OperationResult<AccessQueryResult>> {
+        this.capturedOnProgress.push(onProgress);
+        return successResult({ rows: [] });
+      }
+    }
+
+    it("dysflow.vba.execute forwards context.sendProgress to vbaService.execute as onProgress", async () => {
+      const vba = new ProgressCapturingVbaService();
+      const tools = createDysflowMcpTools({
+        vbaService: vba as unknown as DysflowMcpServices["vbaService"],
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      const sendProgress = () => {};
+      const context = { progressToken: "tok-1", sendProgress };
+
+      const tool = tools.find((t) => t.name === "dysflow.vba.execute");
+      await tool?.handler({ procedureName: "DoWork" }, context);
+
+      expect(vba.capturedOnProgress).toHaveLength(1);
+      expect(vba.capturedOnProgress[0]).toBe(sendProgress);
+    });
+
+    it("dysflow.query.execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
+      const query = new ProgressCapturingQueryService();
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query as unknown as DysflowMcpServices["queryService"],
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      }, true);
+
+      const sendProgress = () => {};
+      const context = { progressToken: "tok-2", sendProgress };
+
+      const tool = tools.find((t) => t.name === "dysflow.query.execute");
+      await tool?.handler({ sql: "SELECT 1", mode: "read" }, context);
+
+      expect(query.capturedOnProgress).toHaveLength(1);
+      expect(query.capturedOnProgress[0]).toBe(sendProgress);
+    });
+
+    it("legacy handler called with a context does not throw", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = createDysflowMcpTools({
+        vbaService: vba,
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      const context = { progressToken: "tok-legacy", sendProgress: () => {} };
+      const legacyTool = tools.find((t) => t.name === "run_vba");
+
+      // Legacy handlers don't use context — calling with it must not throw
+      await expect(
+        legacyTool?.handler({ procedureName: "LegacyProc" }, context),
+      ).resolves.toMatchObject({ isError: false });
     });
   });
 });

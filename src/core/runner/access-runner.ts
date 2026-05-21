@@ -11,6 +11,7 @@ export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
+const PROGRESS_MARKER = "DYSFLOW_PROGRESS ";
 
 export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
 export type AccessRunnerOperation =
@@ -33,9 +34,12 @@ export type PowerShellExecutorOptions = {
   accessPath: string;
   env?: Record<string, string | undefined>;
   onAccessProcessCaptured(process: AccessProcessOwnership): Promise<void>;
+  onProgress?: AccessRunnerProgressCallback;
 };
 export type PowerShellExecutor = (command: string, args: readonly string[], options: PowerShellExecutorOptions) => Promise<PowerShellExecutionResult>;
-export type AccessRunner = { run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig): Promise<OperationResult<TData>> };
+export type AccessRunnerProgressCallback = (percent: number, total?: number, message?: string) => void;
+export type AccessRunnerRunOptions = { onProgress?: AccessRunnerProgressCallback };
+export type AccessRunner = { run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig, options?: AccessRunnerRunOptions): Promise<OperationResult<TData>> };
 export type AccessPowerShellRunnerOptions = {
   executor?: PowerShellExecutor;
   scriptPath?: string;
@@ -74,7 +78,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.clock = options.clock ?? (() => new Date().toISOString());
   }
 
-  async run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig): Promise<OperationResult<TData>> {
+  async run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig, options: AccessRunnerRunOptions = {}): Promise<OperationResult<TData>> {
     if (config === undefined) {
       return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
     }
@@ -111,6 +115,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       operationId,
       accessPath: config.accessDbPath,
       env: buildPowerShellEnvironment(config),
+      onProgress: options.onProgress,
       onAccessProcessCaptured: async (process) => {
         try {
           record = (await this.operationRegistry.update(operationId, {
@@ -248,6 +253,15 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
             captureTasks.push(options.onAccessProcessCaptured(parsed));
           } catch {
             nonMarkerLines.push(line);
+          }
+          continue;
+        }
+        if (line.startsWith(PROGRESS_MARKER)) {
+          try {
+            const data = JSON.parse(line.slice(PROGRESS_MARKER.length)) as { percent: number; total?: number; message?: string };
+            options.onProgress?.(data.percent, data.total, data.message);
+          } catch {
+            // swallow malformed progress lines — progress is best-effort telemetry
           }
           continue;
         }

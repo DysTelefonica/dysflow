@@ -1,5 +1,6 @@
 import type { Readable, Writable } from "node:stream";
 import { loadDysflowConfigAsync, type DysflowConfig } from "../../core/config/dysflow-config.js";
+import type { McpToolContext } from "./types.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
 import { FileAccessOperationRegistry, resolveProjectOperationRegistryPath as resolveRegistryPath } from "../../core/operations/access-operation-registry.js";
@@ -177,12 +178,38 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
     if (tool === undefined) {
       throw new JsonRpcMethodNotFound(`tool ${name}`);
     }
+
+    const meta = isRecord(call._meta) ? call._meta : undefined;
+    const progressToken = meta !== undefined && (typeof meta.progressToken === "string" || typeof meta.progressToken === "number")
+      ? meta.progressToken
+      : undefined;
+
+    const sendProgress: McpToolContext["sendProgress"] | undefined = progressToken !== undefined
+      ? (progress, total, message) => {
+          this.writeNotification("notifications/progress", {
+            progressToken,
+            progress,
+            ...(total !== undefined ? { total } : {}),
+            ...(message !== undefined ? { message } : {}),
+          });
+        }
+      : undefined;
+
+    const context: McpToolContext = {
+      progressToken,
+      sendProgress: sendProgress as McpToolContext["sendProgress"],
+    };
+
     try {
-      return await tool.handler(call.arguments);
+      return await tool.handler(call.arguments, context);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Tool call failed.";
       return { content: [{ type: "text", text: `MCP_TOOL_ERROR: ${message}` }], isError: true };
     }
+  }
+
+  private writeNotification(method: string, params: unknown): void {
+    this.output.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
   }
 
   private writeResponse(id: string | number | null, error?: { code: number; message: string }, result?: unknown): void {
@@ -254,17 +281,17 @@ export function createUnavailableServices(
   };
   return {
     vbaService: {
-      execute: async (request) => {
+      execute: async (request, onProgress) => {
         const dynamicServices = await resolveService(request);
         if (dynamicServices === undefined) return unavailable();
-        return dynamicServices.vbaService.execute(request);
+        return dynamicServices.vbaService.execute(request, onProgress);
       },
     },
     queryService: {
-      execute: async (request) => {
+      execute: async (request, onProgress) => {
         const dynamicServices = await resolveService(request);
         if (dynamicServices === undefined) return unavailable();
-        return dynamicServices.queryService.execute(request);
+        return dynamicServices.queryService.execute(request, onProgress);
       },
     },
     diagnosticsService: {

@@ -1,6 +1,6 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { AccessVbaRequest, OperationResult } from "../contracts/index.js";
-import type { AccessRunner } from "../runner/access-runner.js";
+import type { AccessRunner, AccessRunnerProgressCallback } from "../runner/access-runner.js";
 
 export type AccessVbaResult = {
   returnValue?: unknown;
@@ -20,7 +20,7 @@ export class AccessVbaService {
     this.config = options.config;
   }
 
-  execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>> {
-    return this.runner.run<AccessVbaResult>({ kind: "vba", request }, this.config);
+  execute(request: AccessVbaRequest, onProgress?: AccessRunnerProgressCallback): Promise<OperationResult<AccessVbaResult>> {
+    return this.runner.run<AccessVbaResult>({ kind: "vba", request }, this.config, { onProgress });
   }
 }

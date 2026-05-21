@@ -1,6 +1,6 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { AccessQueryRequest, OperationResult } from "../contracts/index.js";
-import type { AccessRunner } from "../runner/access-runner.js";
+import type { AccessRunner, AccessRunnerProgressCallback } from "../runner/access-runner.js";
 
 export type AccessQueryResult = {
   rows?: readonly Record<string, unknown>[];
@@ -29,7 +29,7 @@ export class AccessQueryService {
     this.config = options.config;
   }
 
-  execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>> {
-    return this.runner.run<AccessQueryResult>({ kind: "query", request }, this.config);
+  execute(request: AccessQueryRequest, onProgress?: AccessRunnerProgressCallback): Promise<OperationResult<AccessQueryResult>> {
+    return this.runner.run<AccessQueryResult>({ kind: "query", request }, this.config, { onProgress });
   }
 }
