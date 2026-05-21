@@ -184,8 +184,15 @@ function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOpe
 }
 
 function buildPowerShellEnvironment(config: DysflowConfig): Record<string, string | undefined> | undefined {
-  if (config.accessPassword === undefined) return undefined;
-  return { DYSFLOW_ACCESS_PASSWORD: config.accessPassword, ACCESS_VBA_PASSWORD: config.accessPassword };
+  const env: Record<string, string> = {};
+  if (config.accessPassword !== undefined) {
+    env.DYSFLOW_ACCESS_PASSWORD = config.accessPassword;
+    env.ACCESS_VBA_PASSWORD = config.accessPassword;
+  }
+  if (config.backendPassword !== undefined) {
+    env.DYSFLOW_BACKEND_PASSWORD = config.backendPassword;
+  }
+  return Object.keys(env).length > 0 ? env : undefined;
 }
 
 function collectDiagnostics(execution: PowerShellExecutionResult, secrets: readonly string[]): Diagnostic[] {

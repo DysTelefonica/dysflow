@@ -25,6 +25,12 @@ describe("dysflow-access-runner.ps1", () => {
   it("reads Access passwords from environment variables and constrains query export paths", () => {
     expect(script).toContain("$AccessPassword = $env:DYSFLOW_ACCESS_PASSWORD");
     expect(script).toContain("$AccessPassword = $env:ACCESS_VBA_PASSWORD");
+    expect(script).toContain("$BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD");
+    expect(script).not.toContain("$BackendPassword = $env:ACCESS_VBA_PASSWORD");
+    expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath");
+    expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $BackendPath");
+    expect(script).toContain("if ([string]::IsNullOrWhiteSpace($BackendPassword)) {");
+    expect(script).toContain('$linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"');
     expect(script).toContain('Resolve-SandboxedPath -RawPath $exportPath -RootPath $basePath -Label "exportPath"');
     expect(script).toContain('Resolve-SandboxedPath -RawPath ([string]$Payload.importPath) -RootPath $basePath -Label "importPath"');
     expect(script).toContain("importPath extension must be .json.");

@@ -90,9 +90,102 @@ describe("AccessPowerShellRunner", () => {
 				env: {
 					DYSFLOW_ACCESS_PASSWORD: "super-secret",
 					ACCESS_VBA_PASSWORD: "super-secret",
+					DYSFLOW_BACKEND_PASSWORD: "backend-secret",
 				},
 			},
 		]);
+	});
+
+	it("forwards backend password through runner environment when access password is absent", async () => {
+		const calls: Array<{
+			command: string;
+			args: readonly string[];
+			timeoutMs: number;
+			env?: Record<string, string | undefined>;
+		}> = [];
+		const executor: PowerShellExecutor = async (command, args, options) => {
+			calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
+			return {
+				exitCode: 0,
+				stdout: '{"returnValue":true}',
+				stderr: "",
+				durationMs: 9,
+				timedOut: false,
+			};
+		};
+
+		const runner = new AccessPowerShellRunner({
+			executor,
+			preflightCleanup: noOpPreflight,
+			scriptPath: "C:/tools/run.access-no-passwd.ps1",
+		});
+
+		await runner.run(
+			{
+				kind: "diagnostics",
+				request: { includeEnvironment: true },
+			},
+			{
+				...config,
+				accessPassword: undefined,
+			},
+		);
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0].env).toEqual({
+			DYSFLOW_BACKEND_PASSWORD: "backend-secret",
+		});
+	});
+
+	it("forwards secrets for compare_backends with backend-only credentials", async () => {
+		const calls: Array<{
+			command: string;
+			args: readonly string[];
+			timeoutMs: number;
+			env?: Record<string, string | undefined>;
+		}> = [];
+		const executor: PowerShellExecutor = async (command, args, options) => {
+			calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
+			return {
+				exitCode: 0,
+				stdout: '{"comparison":{"missingInBackend":[],"extraInBackend":[]}}',
+				stderr: "",
+				durationMs: 8,
+				timedOut: false,
+			};
+		};
+
+		const runner = new AccessPowerShellRunner({
+			executor,
+			preflightCleanup: noOpPreflight,
+			scriptPath: "C:/tools/run.compare.ps1",
+		});
+
+		await runner.run(
+			{
+				kind: "query",
+			request: {
+				sql: "SELECT 1",
+				mode: "read",
+				action: "compare_backends",
+				backendPath: "C:/data/backend.accdb",
+			},
+			},
+			{
+				...config,
+				accessPassword: undefined,
+			},
+		);
+
+		const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
+		const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+		const payload = payloadArg ? JSON.parse(payloadArg) as Record<string, unknown> : undefined;
+
+		expect(calls[0].env).toEqual({ DYSFLOW_BACKEND_PASSWORD: "backend-secret" });
+		expect(payload).toMatchObject({
+			action: "compare_backends",
+			backendPath: "C:/data/backend.accdb",
+		});
 	});
 
 	it("redacts backend passwords from diagnostics and runner failures", async () => {
