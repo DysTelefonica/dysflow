@@ -395,6 +395,41 @@ describe("MCP tool registration over core services", () => {
       expect(schema?.properties).toHaveProperty("moduleName");
     });
 
+    it("legacy VBA runner schemas expose per-call timeoutMs overrides", async () => {
+      const timeoutTools = [
+        "export_modules",
+        "export_all",
+        "import_modules",
+        "import_all",
+        "list_objects",
+        "exists",
+        "test_vba",
+        "compile_vba",
+        "verify_code",
+        "verify_binary",
+        "reconcile_binary",
+        "delete_module",
+        "generate_erd",
+        "fix_encoding",
+      ];
+      for (const toolName of timeoutTools) {
+        expect(LEGACY_TOOL_SCHEMAS[toolName]?.properties, `${toolName} should accept timeoutMs`).toHaveProperty("timeoutMs");
+      }
+
+      const tools = createDysflowMcpTools({
+        ...makeServices(),
+        legacyToolService: {
+          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+        },
+      });
+      const compile = tools.find((t) => t.name === "compile_vba");
+      const result = await compile?.handler({ timeoutMs: 120_000 });
+      expect(result).toEqual({
+        content: [{ type: "text", text: JSON.stringify({ toolName: "compile_vba", input: { timeoutMs: 120_000 }, ok: true }) }],
+        isError: false,
+      });
+    });
+
     it("passing a property not in a tool-specific schema returns MCP_INPUT_INVALID", async () => {
       const tools = createDysflowMcpTools(makeServices());
       // list_tables should not accept rows — passing rows should produce a validation error
