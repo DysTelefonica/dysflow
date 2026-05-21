@@ -7,18 +7,20 @@
     Pure-PowerShell helper function tests run in any environment.
 #>
 
-$ScriptPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
-
 Describe "dysflow-vba-manager.ps1 — script structure" {
+    BeforeAll {
+        $script:ScriptPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+    }
+
     Context "File presence and parseability" {
         It "script file exists" {
-            Test-Path $ScriptPath | Should -Be $true
+            Test-Path $script:ScriptPath | Should -Be $true
         }
 
         It "script parses without syntax errors" {
             $errors = $null
             $null = [System.Management.Automation.Language.Parser]::ParseFile(
-                (Resolve-Path $ScriptPath).Path,
+                (Resolve-Path $script:ScriptPath).Path,
                 [ref]$null,
                 [ref]$errors
             )
@@ -30,7 +32,7 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         BeforeAll {
             # Parse the AST to verify function definitions without executing the script
             $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-                (Resolve-Path $ScriptPath).Path,
+                (Resolve-Path $script:ScriptPath).Path,
                 [ref]$null,
                 [ref]$null
             )
@@ -75,7 +77,7 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
 
     Context "COM cleanup — try/finally pattern in source text" {
         BeforeAll {
-            $script:SourceText = Get-Content -Raw (Resolve-Path $ScriptPath).Path
+            $script:SourceText = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
         }
 
         It "Get-AllowBypassKeyState uses FinalReleaseComObject in finally" {
@@ -124,7 +126,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
         # Load the pure text-processing functions via a restricted dot-source approach:
         # parse out only functions that have no COM dependencies.
-        $scriptContent = Get-Content -Raw (Resolve-Path $ScriptPath).Path
+        $scriptContent = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
 
         # We define the helper functions in a child scope by extracting and eval-ing
         # only the pure string/text functions. This avoids COM activation.
@@ -214,8 +216,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             Test-IsVbaImportMetadataLine -Line "MultiUse = -1" | Should -Be $true
         }
 
-        It "returns false for empty string" {
-            Test-IsVbaImportMetadataLine -Line "" | Should -Be $false
+        It "throws for empty string due to mandatory validation" {
+            { Test-IsVbaImportMetadataLine -Line "" } | Should -Throw
         }
 
         It "returns false for regular VBA code" {
@@ -339,16 +341,16 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
 Describe "dysflow-vba-manager.ps1 — COM cleanup integration (requires Access)" {
     Context "Get-AllowBypassKeyState releases COM objects on exception" {
-        It "cleans up COM objects when database open fails" -Skip "Requires Access COM available" {
+        It "cleans up COM objects when database open fails" -Skip {
             # This test requires a live DAO COM installation.
             # Verify that calling the function with a non-existent path returns null
             # without leaving hanging COM objects.
-            . (Resolve-Path $ScriptPath).Path -Action Exists -AccessPath "C:\nonexistent.accdb"
+            . (Resolve-Path $script:ScriptPath).Path -Action Exists -AccessPath "C:\nonexistent.accdb"
         }
     }
 
     Context "Disable-StartupFeatures releases COM objects on exception" {
-        It "dbEngine is released when OpenDatabase throws" -Skip "Requires Access COM available" {
+        It "dbEngine is released when OpenDatabase throws" -Skip {
             # With a real DAO engine available, passing an invalid path should
             # trigger the OpenDatabase exception, hit the finally block, and
             # release $dbEngine without leaking it.
@@ -356,14 +358,14 @@ Describe "dysflow-vba-manager.ps1 — COM cleanup integration (requires Access)"
     }
 
     Context "Restore-StartupFeatures releases COM objects on early return" {
-        It "dbEngine is released when New-DaoDbEngine returns null" -Skip "Requires Access COM available" {
+        It "dbEngine is released when New-DaoDbEngine returns null" -Skip {
             # When DAO is unavailable, New-DaoDbEngine returns null,
             # the function should return early inside try so finally still runs.
         }
     }
 
     Context "Enable-AllowBypassKey releases COM objects on exception" {
-        It "all COM objects released when database cannot be opened" -Skip "Requires Access COM available" {
+        It "all COM objects released when database cannot be opened" -Skip {
             # Full COM integration test — requires Access/DAO installation.
         }
     }

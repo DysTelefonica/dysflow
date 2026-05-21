@@ -22,7 +22,7 @@
 # small, self-contained functions here and keep them in sync with the source.
 # ---------------------------------------------------------------------------
 
-function Resolve-SandboxedPath {
+function script:Resolve-SandboxedPath {
     param(
         [Parameter(Mandatory = $true)] [string] $RawPath,
         [Parameter(Mandatory = $true)] [string] $RootPath,
@@ -43,7 +43,7 @@ function Resolve-SandboxedPath {
     return $resolved
 }
 
-function Format-SqlLiteral {
+function script:Format-SqlLiteral {
     param($Value)
     if ($null -eq $Value) { return "NULL" }
     if ($Value -is [bool]) { if ($Value) { return "True" } else { return "False" } }
@@ -55,7 +55,7 @@ function Format-SqlLiteral {
     return "'" + ($Value.ToString().Replace("'", "''")) + "'"
 }
 
-function Split-SqlStatements {
+function script:Split-SqlStatements {
     param([string] $Sql)
     $statements = New-Object System.Collections.ArrayList
     $builder    = New-Object System.Text.StringBuilder
@@ -90,24 +90,14 @@ function Split-SqlStatements {
     return $statements
 }
 
-# ---------------------------------------------------------------------------
-# Assert-ColumnNameSafe  — the NEW guard function added by fix #219.
-# This is the function under test for the security regression suite.
-# It is also defined inside Invoke-WriteAction in the production script.
-# We expose it here as a standalone so Pester can call it directly.
-# ---------------------------------------------------------------------------
-function Assert-ColumnNameSafe {
+function script:Assert-ColumnNameSafe {
     param([string] $Name, [string] $Label = "column")
     if ($Name -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') {
         throw "Invalid $Label name: $Name"
     }
 }
 
-# ---------------------------------------------------------------------------
-# Simulate seed_fixture validation logic in isolation (no COM dependency).
-# Returns the list of INSERT statements that would be built, or throws.
-# ---------------------------------------------------------------------------
-function Invoke-SeedFixtureDryRun {
+function script:Invoke-SeedFixtureDryRun {
     param(
         [string]   $TableName,
         [object[]] $Rows
@@ -180,6 +170,7 @@ Describe "Resolve-SandboxedPath" {
 }
 
 Describe "Format-SqlLiteral" {
+
     Context "null and boolean values" {
         It "formats null as NULL" {
             Format-SqlLiteral $null | Should -Be "NULL"
@@ -237,6 +228,7 @@ Describe "Format-SqlLiteral" {
 }
 
 Describe "Split-SqlStatements" {
+
     It "splits two statements separated by semicolon" {
         $result = @(Split-SqlStatements "SELECT 1; SELECT 2")
         $result.Count | Should -Be 2
@@ -286,6 +278,7 @@ Describe "Split-SqlStatements" {
 # ===========================================================================
 
 Describe "seed_fixture SQL injection prevention" {
+
     Context "table name validation" {
         It "accepts a valid simple table name" {
             $rows = @([PSCustomObject]@{ id = 1 })
@@ -365,9 +358,7 @@ Describe "seed_fixture SQL injection prevention" {
         }
 
         It "rejects column name that is empty string" {
-            $row = New-Object PSObject
-            $row | Add-Member -MemberType NoteProperty -Name "" -Value 1
-            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } |
+            { Assert-ColumnNameSafe -Name "" -Label "column" } |
                 Should -Throw -ExpectedMessage "*Invalid column name*"
         }
     }

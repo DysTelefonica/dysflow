@@ -4,6 +4,18 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-05-21
+
+### Added
+
+- Added support for backend database password propagation (`DYSFLOW_BACKEND_PASSWORD` / `;PWD=...`) across PowerShell runner operations (backend comparison and table link maintenance). Closes #263.
+- Defined explicit backend resolution contract and schema for `localize_backend_links` tool, allowing `backendPath` fallback to config. Closes #265.
+- Added a deterministic release matrix coverage gate test verification for all MCP tools. Closes #266.
+
+### Removed
+
+- Removed legacy MCP stub tools `init_project` and `normalize_documents` from the compatibility surface. Closes #259, #260, #255.
+
 ## [0.6.5] - 2026-05-20
 
 ### Fixed
