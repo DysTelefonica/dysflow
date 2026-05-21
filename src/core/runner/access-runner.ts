@@ -79,23 +79,34 @@ export class AccessPowerShellRunner implements AccessRunner {
       return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
     }
 
+    let finalOperation = operation;
+    if (operation.kind === "query" && !operation.request.backendPath && config.backendPath) {
+      finalOperation = {
+        ...operation,
+        request: {
+          ...operation.request,
+          backendPath: config.backendPath,
+        },
+      };
+    }
+
     const preflightResult = await this.runPreflightCleanup(config);
     const operationId = this.operationIdFactory();
     let record = await this.operationRegistry.create({
       operationId,
-      action: operation.kind,
+      action: finalOperation.kind,
       accessPath: config.accessDbPath,
       projectRootAbs: config.projectRoot ?? process.cwd(),
       destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
       accessPid: null,
       processStartTime: null,
       status: "starting",
-      metadata: operation.request as Record<string, unknown>,
+      metadata: finalOperation.request as Record<string, unknown>,
       updatedAt: this.clock(),
     });
 
     const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
-    const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, operation, config, operationId), {
+    const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId), {
       timeoutMs: config.timeoutMs,
       operationId,
       accessPath: config.accessDbPath,

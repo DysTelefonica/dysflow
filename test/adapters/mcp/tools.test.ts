@@ -504,6 +504,32 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests.length).toBeGreaterThan(0);
   });
 
+  it("allows localize_backend_links with optional backendPath and dryRun", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    }, true);
+
+    const localizeTool = tools.find((t) => t.name === "localize_backend_links");
+    expect(localizeTool?.inputSchema?.properties).toHaveProperty("backendPath");
+
+    const result = await localizeTool?.handler({
+      backendPath: "C:/custom/backend.accdb",
+      dryRun: false,
+    });
+
+    expect(result?.isError).toBe(false);
+    expect(query.requests).toEqual([
+      expect.objectContaining({
+        action: "localize_backend_links",
+        backendPath: "C:/custom/backend.accdb",
+        dryRun: false,
+      }),
+    ]);
+  });
+
   describe("writesEnabled explicit parameter (#197)", () => {
     function makeServices() {
       return {

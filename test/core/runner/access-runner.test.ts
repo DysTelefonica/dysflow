@@ -188,6 +188,50 @@ describe("AccessPowerShellRunner", () => {
 		});
 	});
 
+	it("does fallback to config.backendPath when query request.backendPath is missing", async () => {
+		const calls: { cmd: string; args: string[]; env?: Record<string, string | undefined> }[] = [];
+		const executor: PowerShellExecutor = async (cmd, args, options) => {
+			calls.push({ cmd, args, env: options.env });
+			return {
+				exitCode: 0,
+				stdout: '{"rows":[]}',
+				stderr: "",
+				durationMs: 8,
+				timedOut: false,
+			};
+		};
+
+		const runner = new AccessPowerShellRunner({
+			executor,
+			preflightCleanup: noOpPreflight,
+			scriptPath: "C:/tools/run.ps1",
+		});
+
+		await runner.run(
+			{
+				kind: "query",
+				request: {
+					sql: "SELECT 1",
+					mode: "read",
+					action: "localize_backend_links",
+				},
+			},
+			{
+				...config,
+				backendPath: "C:/data/config-backend.accdb",
+			},
+		);
+
+		const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
+		const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+		const payload = payloadArg ? JSON.parse(payloadArg) as Record<string, unknown> : undefined;
+
+		expect(payload).toMatchObject({
+			action: "localize_backend_links",
+			backendPath: "C:/data/config-backend.accdb",
+		});
+	});
+
 	it("redacts backend passwords from diagnostics and runner failures", async () => {
 		const executor: PowerShellExecutor = async () => ({
 			exitCode: 7,

@@ -341,7 +341,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   export_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, exportPath: SCHEMA_PROPS.exportPath, path: SCHEMA_PROPS.path } },
   link_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
   relink_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
-  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, dryRun: SCHEMA_PROPS.dryRun } },
+  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
   unlink_table: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun } },
   import_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, queryDefinitions: SCHEMA_PROPS.queryDefinitions, queries: SCHEMA_PROPS.queries, dryRun: SCHEMA_PROPS.dryRun } },
   compact_repair: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath, backupFirst: SCHEMA_PROPS.backupFirst, dryRun: SCHEMA_PROPS.dryRun } },
