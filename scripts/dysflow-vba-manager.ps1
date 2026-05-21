@@ -2852,6 +2852,22 @@ try {
         $targets = @()
         if ($normalizedModules.Count -gt 0) {
             $targets = $normalizedModules
+            # Validate every requested module exists in VBProject before exporting any
+            foreach ($requestedName in $targets) {
+                $found = $false
+                try {
+                    $null = $vbProject.VBComponents.Item($requestedName)
+                    $found = $true
+                } catch {
+                    $baseName = $requestedName -replace '^(Form|Report)_', ''
+                    foreach ($candidate in @("Form_$baseName", "Report_$baseName")) {
+                        try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch {}
+                    }
+                }
+                if (-not $found) {
+                    throw ("VBA_MODULE_NOT_FOUND: El modulo '{0}' no existe en el proyecto VBA." -f $requestedName)
+                }
+            }
         } else {
             for ($i = 1; $i -le $components.Count; $i++) {
                 $c = $components.Item($i)
