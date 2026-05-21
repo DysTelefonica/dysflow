@@ -448,12 +448,12 @@ export class VbaSyncLegacyService {
     if (directProceduresJson !== undefined) {
       const directPlan = validateTestProceduresJson(directProceduresJson);
       if (!directPlan.ok) return directPlan;
-      return this.executeMappedTool("test_vba", { ...params, proceduresJson: directPlan.data }, DIRECT_MAPPINGS.test_vba);
+      return inspectTestResult(await this.executeMappedTool("test_vba", { ...params, proceduresJson: directPlan.data }, DIRECT_MAPPINGS.test_vba));
     }
 
     const planResult = await this.resolveTestProceduresJson(params);
     if (!planResult.ok) return planResult;
-    return this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba);
+    return inspectTestResult(await this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba));
   }
 
   private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<OperationResult<string>> {
@@ -530,13 +530,18 @@ export class VbaSyncLegacyService {
 
     const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const catalogPath = stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
+    const controlName = stringValue(params.controlName) ?? stringValue(params.name);
+    if (controlName === undefined) {
+      return failureResult(createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlName."));
+    }
+    const controlType = stringValue(params.controlType) ?? stringValue(params.type);
+    if (controlType === undefined) {
+      return failureResult(createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlType."));
+    }
     const catalog = await readJsonFileAsync<Record<string, unknown>>(catalogPath).catch(() => ({} as Record<string, unknown>));
     const forms = isRecord(catalog.forms) ? catalog.forms as Record<string, unknown> : {};
     const controls = Array.isArray(forms[spec.data.name]) ? forms[spec.data.name] as unknown[] : [];
-    controls.push({
-      name: stringValue(params.controlName) ?? stringValue(params.name) ?? "UnnamedControl",
-      type: stringValue(params.controlType) ?? stringValue(params.type) ?? "Unknown",
-    });
+    controls.push({ name: controlName, type: controlType });
     forms[spec.data.name] = controls;
     const updated = { ...catalog, forms };
     try {
@@ -925,6 +930,21 @@ function matchesTestFilter(test: VbaTestPlanEntry, filterParts: readonly string[
     || test.procedure.toLowerCase().includes(filterText)
     || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
   );
+}
+
+function inspectTestResult(result: OperationResult<unknown>): OperationResult<unknown> {
+  if (!result.ok) return result;
+  const tests = Array.isArray(result.data) ? result.data : undefined;
+  if (tests !== undefined) {
+    const failedCount = tests.filter((test) => isRecord(test) && test.ok === false).length;
+    if (failedCount > 0) {
+      return failureResult(
+        createDysflowError("VBA_TESTS_FAILED", `${failedCount} VBA test(s) failed.`),
+        { diagnostics: result.diagnostics, durationMs: result.durationMs },
+      );
+    }
+  }
+  return result;
 }
 
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {

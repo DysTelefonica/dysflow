@@ -1472,6 +1472,45 @@ describe("VbaSyncLegacyService", () => {
 		});
 	});
 
+	it("returns VBA_TESTS_FAILED when any test result has ok: false (#273)", async () => {
+		const service = new VbaSyncLegacyService({
+			executor: async () => ({
+				exitCode: 0,
+				stdout: '[{"ok":true,"procedure":"Test_A"},{"ok":false,"procedure":"Test_B","error":"Assert failed"}]',
+				stderr: "",
+				durationMs: 3,
+				timedOut: false,
+			}),
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+		});
+
+		const result = await service.execute("test_vba", { procedureName: "Test_B" });
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: { code: "VBA_TESTS_FAILED" },
+		});
+	});
+
+	it("returns FORM_SPEC_INVALID when catalog_add_control is called without controlName (#275)", async () => {
+		const service = new VbaSyncLegacyService({
+			scriptPath: "scripts/dysflow-vba-manager.ps1",
+			accessPath: "C:/db/front.accdb",
+			env: {},
+		});
+
+		const result = await service.execute("catalog_add_control", {
+			spec: { name: "TestForm", kind: "Form", controls: [] },
+		});
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: { code: "FORM_SPEC_INVALID" },
+		});
+	});
+
 	// #194 RED: catalogAddControl propagates mkdir errors (no more .catch(() => {}))
 	describe("catalogAddControl mkdir error propagation (#194)", () => {
 		it("propagates mkdir failure as VBA_CATALOG_WRITE_FAILED when catalog parent dir cannot be created", async () => {
