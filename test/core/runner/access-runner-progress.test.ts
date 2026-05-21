@@ -68,7 +68,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
     });
 
     const result = await runner.run(
-      { kind: "vba", request: { procedureName: "DoWork", arguments: [] } },
+      { kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } },
       config,
       { onProgress },
     );
@@ -110,7 +110,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
 
     // No onProgress in run options — should complete normally without throwing
     await expect(
-      runner.run({ kind: "vba", request: { procedureName: "DoWork", arguments: [] } }, config),
+      runner.run({ kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } }, config),
     ).resolves.toMatchObject({ ok: true });
   });
 
@@ -138,7 +138,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
     });
 
     const result = await runner.run(
-      { kind: "vba", request: { procedureName: "DoWork", arguments: [] } },
+      { kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } },
       config,
       { onProgress },
     );

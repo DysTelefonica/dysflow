@@ -30,7 +30,7 @@ describe("AccessVbaService — onProgress forwarding", () => {
     const service = new AccessVbaService({ runner, config });
     const onProgress = vi.fn();
 
-    await service.execute({ procedureName: "DoWork", arguments: [] }, onProgress);
+    await service.execute({ moduleName: "TestModule", procedureName: "DoWork", arguments: [] }, onProgress);
 
     expect(runner.capturedOptions).toHaveLength(1);
     expect(runner.capturedOptions[0]!.onProgress).toBe(onProgress);
@@ -40,7 +40,7 @@ describe("AccessVbaService — onProgress forwarding", () => {
     const runner = new CapturingRunner();
     const service = new AccessVbaService({ runner, config });
 
-    await service.execute({ procedureName: "DoWork", arguments: [] });
+    await service.execute({ moduleName: "TestModule", procedureName: "DoWork", arguments: [] });
 
     expect(runner.capturedOptions).toHaveLength(1);
     expect(runner.capturedOptions[0]!.onProgress).toBeUndefined();

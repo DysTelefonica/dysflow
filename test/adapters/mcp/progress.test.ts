@@ -30,7 +30,7 @@ describe("JsonLineMcpStdioRuntime — progress notifications", () => {
       description: "Tool that emits progress",
       handler: async (_args, context) => {
         capturedContext = context;
-        context?.sendProgress(40, 100, "Executing");
+        context?.sendProgress?.(40, 100, "Executing");
         return { content: [{ type: "text", text: "done" }], isError: false };
       },
     });
@@ -125,7 +125,7 @@ describe("JsonLineMcpStdioRuntime — progress notifications", () => {
       name: "dysflow.progress.minimal",
       description: "Tool that emits progress with only percent",
       handler: async (_args, context) => {
-        context?.sendProgress(50);
+        context?.sendProgress?.(50);
         return { content: [{ type: "text", text: "done" }], isError: false };
       },
     });
