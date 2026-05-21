@@ -189,7 +189,7 @@ describe("AccessPowerShellRunner", () => {
 	});
 
 	it("does fallback to config.backendPath when query request.backendPath is missing", async () => {
-		const calls: { cmd: string; args: string[]; env?: Record<string, string | undefined> }[] = [];
+		const calls: { cmd: string; args: readonly string[]; env?: Record<string, string | undefined> }[] = [];
 		const executor: PowerShellExecutor = async (cmd, args, options) => {
 			calls.push({ cmd, args, env: options.env });
 			return {
