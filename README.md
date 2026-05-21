@@ -426,31 +426,142 @@ dysflow mcp --enable-writes
 
 Project-scoped override: when a call resolves a registered/repo `.dysflow/project.json` with `"allowWrites": true`, write tools are enabled for that project even if MCP was started without `--enable-writes`. `dryRun` operations remain allowed in all modes.
 
-### Core MCP tools
+### Common Input Parameters
 
-| Tool                             | Purpose                                            |
-| -------------------------------- | -------------------------------------------------- |
-| `dysflow.vba.execute`            | Execute a public VBA procedure                     |
-| `dysflow.query.execute`          | Execute Access SQL in `read` or `write` mode       |
-| `dysflow.doctor`                 | Run diagnostics                                    |
-| `dysflow.access.operations.list` | List recent tracked operations                     |
-| `dysflow.access.cleanup`         | Validate and cleanup a single owned Access process |
+Many MCP tools share common context and override parameters:
+* **Context / Identity**:
+  - `projectId` (string, optional): Canonical project identity for traceability. Best matched to the Engram project name when available.
+  - `contextId` (string, optional): Optional run/context id for distinct executions.
+* **Access Database Path Overrides**:
+  - `accessPath` / `databasePath` / `sourcePath` (string, optional): Paths to the frontend Access database. Overrides `.dysflow/project.json` settings.
+  - `backendPath` / `comparePath` (string, optional): Paths to the backend database.
+* **Workspace Overrides**:
+  - `destinationRoot` (string, optional): Directory for VBA module source exports (usually `src`).
+  - `projectRoot` (string, optional): Root directory of the repository/worktree.
+* **Operation Safeguards**:
+  - `timeoutMs` (number, optional): Operation timeout override in milliseconds.
+  - `dryRun` (boolean, optional): Evaluate operations (like writes or imports) without applying changes.
+  - `apply` (boolean, optional): Explicitly apply write actions (mutually exclusive with `dryRun` mode).
 
-### Compatibility tools (legacy)
+---
 
-Dysflow also exposes a compatibility surface with legacy Dysflow MCP tool names and behaviors:
+### Core MCP Tools
 
-- `list_access_operations` / `cleanup_access_operation`
-- `run_vba`
-- `query_sql`
-- `exec_sql`, `run_script`, `create_table`, `drop_table`, `seed_fixture`, `teardown_fixture`
-- `list_tables`, `get_schema`, `count_rows`, `distinct_values`, `compare_backends`, `get_relationships`, `list_access_files`
-- `list_links`, `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`
-- `export_queries`, `import_queries`, `compact_repair`
-- `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`
-- `list_linked_tables`
+#### `dysflow.vba.execute`
+Execute a public VBA procedure via COM automation.
+* **Parameters**:
+  - `procedureName` (string, **required**): Public VBA procedure name to execute.
+  - `moduleName` (string, optional): Target module containing the procedure.
+  - `arguments` (array, optional): Positional arguments passed to the procedure.
+  - `projectId`, `contextId` (optional)
 
-Compatibility entries are documented and tracked in `src/adapters/mcp/legacy-parity-registry.ts`.
+#### `dysflow.query.execute`
+Run arbitrary SQL statements. Writes are guarded by the write-safety model.
+* **Parameters**:
+  - `sql` (string, **required**): SQL query to run.
+  - `mode` (string, **required**): Execution mode (`read` or `write`).
+  - `projectId`, `contextId` (optional)
+
+#### `dysflow.doctor`
+Run diagnostics on the MCP connection, Access installation, and configuration.
+* **Parameters**:
+  - `includeEnvironment` (boolean, optional): True to query environment settings and logs.
+  - `projectId`, `contextId` (optional)
+
+#### `dysflow.access.operations.list`
+Retrieve active and completed Access operation handles managed by Dysflow.
+* **Parameters**: None.
+
+#### `dysflow.access.cleanup`
+Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
+* **Parameters**:
+  - `operationId` (string, **required**): Handle ID of the operation to clean.
+  - `accessPath` (string, **required**): Database file path associated with the target operation.
+  - `force` (boolean, optional): Terminate immediately.
+
+---
+
+### Legacy Parity & Compatibility Tools
+
+These legacy aliases preserve backward compatibility with older client implementations:
+
+#### 1. VBA Lifecycle & Testing
+* **`export_modules`**: Export VBA source code modules to disk.
+  - Parameters: `moduleNames` (array, optional), `filter` (string, optional), `destinationRoot` (string, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional), `expectedAccessPath`/`expectedProjectRoot`/`expectedDestinationRoot` (string, optional)
+* **`export_all`**: Export all VBA modules from the database.
+  - Parameters: `filter` (string, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`import_modules`**: Import VBA source modules from disk.
+  - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`import_all`**: Bulk import all local modules into the Access project.
+  - Parameters: `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`compile_vba`**: Trigger VBA compilation inside the Access database.
+  - Parameters: `timeoutMs` (number, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
+* **`test_vba`**: Execute VBA unit tests.
+  - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
+* **`verify_code` / `verify_binary`**: Perform structural checks comparing disk modules and database binaries.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`reconcile_binary`**: Produce a reconciliation plan comparing binary state against disk source.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`delete_module`**: Delete a module from the VBA project.
+  - Parameters: `moduleName` (string, optional), `timeoutMs` (number, optional)
+* **`list_objects`**: List all forms, reports, modules, and macros.
+  - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
+* **`exists`**: Verify if an object or module exists.
+  - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
+
+#### 2. SQL Maintenance
+* **`query_sql`**: Read-only SQL query execution.
+  - Parameters: `sql` (string, optional), `query` (string, optional), `projectId`, `contextId`
+* **`exec_sql`**: Modify-capable SQL execution.
+  - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (array, optional), `accessPath`/`backendPath` (optional)
+* **`run_script`**: Execute SQL statements from a disk script file.
+  - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (optional)
+* **`create_table`**: Programmatically create a table in the database.
+  - Parameters: `tableName` (string, optional), `definition` (string, optional), `dryRun`, `apply`
+* **`drop_table`**: Drop a table.
+  - Parameters: `tableName` (string, optional), `dryRun`, `apply`
+* **`seed_fixture` / `teardown_fixture`**: Populates or clears mock rows in a table.
+  - Parameters: `tableName` (string, optional), `rows` (array of objects, optional), `dryRun`, `apply`
+
+#### 3. Database Schema & Links
+* **`list_tables`**: List all tables in the active databases.
+  - Parameters: `accessPath`, `backendPath`, `databasePath`, `sourcePath` (optional)
+* **`list_linked_tables`**: List only linked tables.
+  - Parameters: `accessPath`, `backendPath` (optional)
+* **`get_schema`**: Retrieve column types, sizes, and properties for a table.
+  - Parameters: `tableName` (string, optional), `accessPath` (optional)
+* **`count_rows`**: Get row count for a table or SQL query.
+  - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional)
+* **`distinct_values`**: List distinct values of a column.
+  - Parameters: `tableName` (string, optional), `columnName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional)
+* **`compare_backends`**: Compare structural differences between two backends.
+  - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional)
+* **`get_relationships`**: List foreign keys and relation constraints.
+  - Parameters: `accessPath` (optional)
+* **`list_access_files`**: Search for `.accdb` files recursively in a directory.
+  - Parameters: `rootPath` (string, optional), `directory` (string, optional)
+* **`list_links`**: Get target connections of all linked tables.
+  - Parameters: `accessPath` (optional)
+* **`link_tables` / `relink_tables`**: Link or rebind tables to a backend file.
+  - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
+* **`localize_backend_links`**: Convert absolute linked paths to local relative links.
+  - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
+* **`unlink_table`**: Delete a linked table definition.
+  - Parameters: `tableName` (string, optional), `accessPath` (optional), `dryRun`
+* **`export_queries` / `import_queries`**: Export or bulk import Access QueryDefs.
+  - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
+* **`compact_repair`**: Execute compact and repair operations.
+  - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
+
+#### 4. GUI & Forms
+* **`validate_form_spec`**: Parse and lint a JSON specification for form generation.
+  - Parameters: `specPath` (string, optional), `spec` (object, optional)
+* **`generate_form`**: Compile a form spec into a live Access form.
+  - Parameters: `specPath` (string, optional), `spec` (object, optional), `kind` (string, optional), `name` (string, optional), `replace` (boolean, optional), `dryRun`
+* **`catalog_add_control`**: Insert controls into a UI catalog definition.
+  - Parameters: `catalogPath` (string, optional), `controlName` (string, optional), `controlType` (string, optional)
+* **`harvest_form_catalog`**: Index controls from existing forms into a catalog.
+  - Parameters: `catalogPath` (string, optional), `filter` (string, optional)
 
 ### MCP protocol and maintenance
 

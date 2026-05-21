@@ -3,6 +3,7 @@ import type { AccessCleanupResult } from "../../core/operations/access-operation
 import type { AccessOperationRecord, AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import { successResult } from "../../core/contracts/index.js";
+import type { McpToolContext } from "./types.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
@@ -50,7 +51,7 @@ export type DysflowMcpTool = {
    * Used for stub tools that always return LEGACY_TOOL_NOT_IMPLEMENTED.
    */
   hidden?: boolean;
-  handler(input: unknown): Promise<McpToolResult>;
+  handler(input: unknown, context?: McpToolContext): Promise<McpToolResult>;
 };
 
 const NO_INPUT_SCHEMA: JsonObjectSchema = { type: "object", additionalProperties: false, properties: {} };
@@ -105,10 +106,10 @@ const CLEANUP_SCHEMA: JsonObjectSchema = {
 
 export type DysflowMcpServices = {
   vbaService: {
-    execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>>;
+    execute(request: AccessVbaRequest, onProgress?: (percent: number, total?: number, message?: string) => void): Promise<OperationResult<AccessVbaResult>>;
   };
   queryService: {
-    execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>>;
+    execute(request: AccessQueryRequest, onProgress?: (percent: number, total?: number, message?: string) => void): Promise<OperationResult<AccessQueryResult>>;
   };
   diagnosticsService: {
     run(request?: AccessDiagnosticsRequest): Promise<OperationResult<AccessDiagnosticsResult>>;
@@ -375,23 +376,23 @@ export function createDysflowMcpTools(
       name: "dysflow.vba.execute",
       description: "Execute a VBA procedure through Dysflow core services.",
       inputSchema: VBA_EXECUTE_SCHEMA,
-      handler: async (input) => {
+      handler: async (input, context) => {
         const validation = validateInput(input, VBA_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
-        return translateCoreResultToMcpContent(await services.vbaService.execute(input as AccessVbaRequest));
+        return translateCoreResultToMcpContent(await services.vbaService.execute(input as AccessVbaRequest, context?.sendProgress));
       },
     },
     {
       name: "dysflow.query.execute",
       description: "Execute an Access SQL query through Dysflow core services.",
       inputSchema: QUERY_EXECUTE_SCHEMA,
-      handler: async (input) => {
+      handler: async (input, context) => {
         const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
         if ((input as AccessQueryRequest).mode === "write") {
           if (!(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) return writesDisabled();
         }
-        return translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest));
+        return translateCoreResultToMcpContent(await services.queryService.execute(input as AccessQueryRequest, context?.sendProgress));
       },
     },
     {
