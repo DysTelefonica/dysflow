@@ -16,8 +16,6 @@ export const LEGACY_VBA_SYNC_TOOL_NAMES = [
   "delete_module",
   "generate_erd",
   "fix_encoding",
-  "init_project",
-  "normalize_documents",
   "validate_form_spec",
   "generate_form",
   "catalog_add_control",

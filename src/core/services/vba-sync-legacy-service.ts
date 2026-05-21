@@ -172,14 +172,6 @@ export class VbaSyncLegacyService {
     if (toolName === "harvest_form_catalog") return this.harvestFormCatalog(params);
     if (toolName === "verify_code" || toolName === "verify_binary") return this.verifySourceAgainstBinary(toolName, params);
     if (toolName === "reconcile_binary") return this.planReconcileBinary(params);
-    if (toolName === "init_project" || toolName === "normalize_documents") {
-      return successResult({
-        ok: false,
-        supported: false,
-        operation: toolName,
-        message: `${toolName} is not supported by Dysflow's legacy compatibility layer yet.`,
-      });
-    }
     if (toolName === "test_vba") {
       return this.executeTestVba(params);
     }

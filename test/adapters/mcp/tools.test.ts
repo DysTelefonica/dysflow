@@ -291,7 +291,6 @@ describe("MCP tool registration over core services", () => {
 
   describe("stub tool visibility (#175)", () => {
     const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary"] as const;
-    const STUB_TOOL_NAMES = ["init_project", "normalize_documents"] as const;
 
     function makeServices() {
       return {
@@ -307,26 +306,6 @@ describe("MCP tool registration over core services", () => {
         const tool = tools.find((t) => t.name === implemented);
         expect(tool, `${implemented} must be present in tool registry`).toBeDefined();
         expect(tool?.hidden, `${implemented} must be visible now that it is implemented`).toBeUndefined();
-      }
-      for (const stub of STUB_TOOL_NAMES) {
-        const tool = tools.find((t) => t.name === stub);
-        expect(tool, `${stub} must be present in tool registry`).toBeDefined();
-        expect(tool?.hidden, `${stub} must be marked hidden: true`).toBe(true);
-      }
-    });
-
-    it("stub tools retain callable handlers with explicit unsupported payloads", async () => {
-      const tools = createDysflowMcpTools(makeServices());
-      for (const stub of STUB_TOOL_NAMES) {
-        const tool = tools.find((t) => t.name === stub);
-        if (tool === undefined) continue;
-        const result = await tool.handler({});
-        expect(result.isError, `${stub} handler should be a safe unsupported payload, not a legacy not-implemented error`).toBe(false);
-        expect(JSON.parse(result.content[0]?.text ?? "{}"), `${stub} handler should return an explicit unsupported payload`).toMatchObject({
-          ok: false,
-          supported: false,
-          operation: stub,
-        });
       }
     });
 

@@ -31,13 +31,13 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
     // Report
     console.log("=== MCP RELEASE MATRIX TOOL COUNT REPORT ===");
-    console.log(`Legacy tools count: ${legacyCount} (expected: 46)`);
-    console.log(`Hidden stubs count: ${stubCount} (expected: 2)`);
+    console.log(`Legacy tools count: ${legacyCount} (expected: 44)`);
+    console.log(`Hidden stubs count: ${stubCount} (expected: 0)`);
     console.log(`Modern tools count: ${modernCount} (expected: 5)`);
     console.log(`Visible tools count: ${visibleCount} (expected: 49)`);
 
-    expect(legacyCount).toBe(46);
-    expect(stubCount).toBe(2);
+    expect(legacyCount).toBe(44);
+    expect(stubCount).toBe(0);
     expect(modernCount).toBe(5);
     expect(visibleCount).toBe(49);
   });

@@ -162,10 +162,6 @@ for (const implemented of ["verify_code", "verify_binary", "reconcile_binary"]) 
   await testCase("verify", implemented, { moduleNames: ["Test_JsonConverter"], diff: true }, "success");
 }
 
-for (const hidden of ["init_project", "normalize_documents"]) {
-  await testCase("hidden unsupported", hidden, {}, "success");
-}
-
 await testCase("operations", "cleanup invalid", { operationId: "E2E_NO_SUCH_OPERATION", accessPath: join(cwd, "Expedientes.accdb") }, "error", { actualTool: "dysflow.access.cleanup" });
 
 const cleanupList = await callMcp("dysflow.access.operations.list", {});
