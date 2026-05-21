@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-05-21
+
+### Added
+
+- MCP progress notifications: `dysflow.vba.execute` and `dysflow.query.execute` now emit real-time `notifications/progress` frames to progress-aware clients when `_meta.progressToken` is present. Three milestones (10%/40%/90%) are emitted by the PowerShell runner via stderr side-channel. Closes #272.
+
 ## [0.6.6] - 2026-05-21
 
 ### Added
