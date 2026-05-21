@@ -4,6 +4,14 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-05-21
+
+### Fixed
+
+- `test_vba` now returns `VBA_TESTS_FAILED` when any individual VBA test result has `ok: false`, instead of propagating a success result with failing tests in the payload. Closes #273.
+- `export_modules` pre-validates that every requested module name exists in VBProject before starting the export loop; returns `VBA_MODULE_NOT_FOUND` if any is missing. Closes #274.
+- `catalog_add_control` now requires `controlName` and `controlType` params; returns `FORM_SPEC_INVALID` instead of silently defaulting to `UnnamedControl`/`Unknown`. Closes #275.
+
 ## [0.6.7] - 2026-05-21
 
 ### Added
