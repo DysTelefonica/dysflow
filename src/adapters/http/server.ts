@@ -35,6 +35,7 @@ export type StartDysflowHttpServerOptions = {
   maxBodyBytes?: number;
   services?: DysflowHttpServices;
   env?: Record<string, string | undefined>;
+  cwd?: string;
 };
 
 export type StartedDysflowHttpServer = {
@@ -54,7 +55,7 @@ export async function startDysflowHttpServer(
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
-  const services = options.services ?? await createCoreServices(options.env);
+  const services = options.services ?? await createCoreServices(options.env, options.cwd);
   const server = createServer((request, response) => {
     void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
   });
@@ -72,8 +73,11 @@ export async function startDysflowHttpServer(
   return { server, host, port: resolvedPort, url: `http://${host}:${resolvedPort}`, writesEnabled };
 }
 
-async function createCoreServices(env?: Record<string, string | undefined>): Promise<DysflowHttpServices> {
-  const configResult = await loadDysflowConfigAsync({ env });
+async function createCoreServices(
+  env?: Record<string, string | undefined>,
+  cwd?: string,
+): Promise<DysflowHttpServices> {
+  const configResult = await loadDysflowConfigAsync({ env, cwd });
   if (!configResult.ok) {
     process.stderr.write(`[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`);
     return createUnavailableHttpServices();

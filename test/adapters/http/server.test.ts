@@ -100,10 +100,12 @@ describe("Dysflow HTTP adapter", () => {
   });
 
   it("starts in degraded mode when project config is unavailable", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dysflow-degraded-"));
     const server = await startDysflowHttpServer({
       host: "127.0.0.1",
       port: 0,
       env: {},
+      cwd: tempDir,
     });
     startedServers.push(server.server);
 
