@@ -688,7 +688,8 @@ function Get-AccessFilesRecursive {
   if ($Recursive) {
     return @(Get-ChildItem -Path $RootPath -Include $filter -Recurse -File -ErrorAction SilentlyContinue)
   }
-  return @(Get-ChildItem -Path $RootPath -Include $filter -File -ErrorAction SilentlyContinue)
+  $searchPath = Join-Path $RootPath "*"
+  return @(Get-ChildItem -Path $searchPath -Include $filter -File -ErrorAction SilentlyContinue)
 }
 
 function Build-AccessFileIndex {

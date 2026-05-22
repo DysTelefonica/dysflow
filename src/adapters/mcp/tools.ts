@@ -726,7 +726,7 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     strictLocal: params.strictLocal === true ? true : undefined,
     removeUnresolved: params.removeUnresolved === true ? true : undefined,
     noBackup: params.backup === false ? true : undefined,
-    recursive: params.recursive === true ? true : undefined,
+    recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
     timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
     backendPassword: stringValue(params.backendPassword) ?? stringValue(params.password) ?? (params.passwordEnv ? process.env[stringValue(params.passwordEnv) ?? ""] : undefined),
   };
