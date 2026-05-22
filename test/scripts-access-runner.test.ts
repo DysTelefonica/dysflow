@@ -39,4 +39,10 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain('Resolve-SandboxedPath -RawPath $targetPath -RootPath $folder -Label "targetPath"');
     expect(script).toContain("Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath");
   });
+
+  it("does not contain invalid PowerShell variable references followed by colons inside double-quoted strings", () => {
+    expect(script).not.toContain("Delete $linkName:");
+    expect(script).toContain("Delete ${linkName}:");
+  });
 });
+

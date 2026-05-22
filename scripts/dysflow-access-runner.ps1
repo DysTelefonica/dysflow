@@ -985,7 +985,7 @@ function Invoke-RelinkDirectory {
                       if ([string]$le.linkName -eq $linkName) { $le.classification = "removed"; break }
                     }
                   } catch {
-                    [void]$fileResult.errors.Add("Delete $linkName: $($_.Exception.Message)")
+                    [void]$fileResult.errors.Add("Delete ${linkName}: $($_.Exception.Message)")
                     [void]$allErrors.Add("$($file.FullName)!$($linkName): $($_.Exception.Message)")
                   }
                 }
