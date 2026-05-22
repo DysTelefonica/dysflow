@@ -118,6 +118,7 @@ export type AccessQueryRequest = {
   denyPrefixes?: readonly string[];
   strictLocal?: boolean;
   removeUnresolved?: boolean;
+  noBackup?: boolean;
   recursive?: boolean;
   timeoutMs?: number;
 };

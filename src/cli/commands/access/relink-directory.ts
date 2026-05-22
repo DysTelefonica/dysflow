@@ -266,6 +266,7 @@ export async function handleRelinkDirectoryCommand(
     sql: "",
     rootPath: options.rootPath,
     dryRun: !options.apply,
+    noBackup: !options.backup || undefined,
     maps: options.maps.length > 0 ? options.maps : undefined,
     denyPrefixes: options.denyPrefixes.length > 0 ? options.denyPrefixes : undefined,
     strictLocal: options.strictLocal || undefined,
