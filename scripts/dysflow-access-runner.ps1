@@ -19,16 +19,27 @@ if ([string]::IsNullOrEmpty($AccessPassword)) {
 
 $BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD
 
+function Open-DatabaseWithPassword {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [bool] $Exclusive = $false,
+    [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false,
+    [Parameter(Mandatory = $false)] [string] $Password = ""
+  )
+  if ([string]::IsNullOrWhiteSpace($Password)) {
+    return $DbEngine.OpenDatabase($DatabasePath, $Exclusive, $ReadOnly)
+  }
+  return $DbEngine.OpenDatabase($DatabasePath, $Exclusive, $ReadOnly, ";PWD=$Password")
+}
+
 function Open-DatabaseWithBackendPassword {
   param(
     [Parameter(Mandatory = $true)] $DbEngine,
     [Parameter(Mandatory = $true)] [string] $DatabasePath,
     [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false
   )
-  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-    return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly)
-  }
-  return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")
+  return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $ReadOnly -Password $BackendPassword
 }
 
 function ConvertTo-IsoStartTime {
@@ -805,7 +816,15 @@ function Resolve-LinkChain {
 
   $nextDb = $null
   try {
-    $nextDb = Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true
+    try {
+      $nextDb = Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $BackendPassword
+    } catch {
+      if (-not [string]::IsNullOrWhiteSpace($AccessPassword)) {
+        $nextDb = Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $AccessPassword
+      } else {
+        throw $_
+      }
+    }
     try {
       return Resolve-LinkChain `
         -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable `
@@ -885,7 +904,7 @@ function Invoke-RelinkDirectory {
         $remapPlan          = [System.Collections.ArrayList]::new()
         $unresolvedLinkNames = [System.Collections.ArrayList]::new()
 
-        $db = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true
+        $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $AccessPassword
         try {
           foreach ($td in $db.TableDefs) {
             $tdName = [string]$td.Name
@@ -944,7 +963,7 @@ function Invoke-RelinkDirectory {
           }
 
           if ($applyOk) {
-            $dbWrite = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false
+            $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $AccessPassword
             try {
               foreach ($plan in $remapPlan) {
                 $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -964,10 +983,9 @@ function Invoke-RelinkDirectory {
 
                 try {
                   $tdW = $dbWrite.TableDefs.Item($plan.tdName)
-                  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-                    $tdW.Connect = ";DATABASE=$targetPath"
-                  } else {
-                    $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
+                  $tdW.Connect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) { ";DATABASE=$targetPath" } else { ";DATABASE=$targetPath;PWD=$BackendPassword" }
+                  if ($chain.resolvedTable -and $tdW.SourceTableName -ne $chain.resolvedTable) {
+                    $tdW.SourceTableName = $chain.resolvedTable
                   }
                   $tdW.RefreshLink()
                   $plan.linkEntry.classification = "applied"

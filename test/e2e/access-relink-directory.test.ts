@@ -223,10 +223,22 @@ describe("relink-directory E2E", { timeout: 90_000 }, () => {
       const frontend = join(local, "frontend.accdb");
 
       createNativeDb(extC);
-      createLinkedDb(extB, extC);
+      createNativeDb(extB);
+      createLinkedDb(frontend, extB);
+      ps(`
+        $e=New-Object -ComObject DAO.DBEngine.120
+        try {
+          $db=$e.OpenDatabase('${extB}',$false,$false)
+          $db.TableDefs.Delete('Products')
+          $lk=$db.CreateTableDef('Products')
+          $lk.Connect=';DATABASE=${extC}'
+          $lk.SourceTableName='Products'
+          $db.TableDefs.Append($lk)
+          $db.Close()
+        } finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($e)|Out-Null }
+      `);
       ps(`Copy-Item -LiteralPath '${extC}' -Destination '${localC}'`);
       ps(`Copy-Item -LiteralPath '${extB}' -Destination '${localB}'`);
-      createLinkedDb(frontend, extB);
 
       const report = await runRelink(local, ["--apply"]);
 

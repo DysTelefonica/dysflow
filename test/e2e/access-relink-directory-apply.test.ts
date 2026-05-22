@@ -232,10 +232,22 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
       const frontend = join(tmpRoot, "frontend.accdb");
 
       runPs(psCreateNativeDb(extC));
-      runPs(psCreateLinkedDb(extB, extC));
+      runPs(psCreateNativeDb(extB));
+      runPs(psCreateLinkedDb(frontend, extB));
+      runPs(`
+        $e=New-Object -ComObject DAO.DBEngine.120
+        try {
+          $db=$e.OpenDatabase('${extB}',$false,$false)
+          $db.TableDefs.Delete('Products')
+          $lk=$db.CreateTableDef('Products')
+          $lk.Connect=';DATABASE=${extC}'
+          $lk.SourceTableName='Products'
+          $db.TableDefs.Append($lk)
+          $db.Close()
+        } finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($e)|Out-Null }
+      `);
       runPs(`Copy-Item -LiteralPath '${extC}' -Destination '${localC}'`);
       runPs(`Copy-Item -LiteralPath '${extB}' -Destination '${localB}'`);
-      runPs(psCreateLinkedDb(frontend, extB));
 
       const service = makeService(tmpRoot);
       const jsonResult = await handleRelinkDirectoryCommand(
