@@ -1,3 +1,14 @@
+import { rm } from "node:fs/promises";
+import path from "node:path";
+import {
+	ALL_AGENTS,
+	resolveRuntimeDir,
+	getSystemMarkerPath,
+	getHome,
+	resolveAgentConfigPaths,
+	removeAgentConfig,
+	fileExists,
+} from "./install.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 const UNINSTALL_USAGE = "Usage: dysflow uninstall [--runtime-dir <dir>]";
@@ -44,6 +55,15 @@ export async function handleUninstallCommand(
 			return { exitCode: 0, stdout: parsed.message, stderr: "" };
 		}
 		return { exitCode: 1, stdout: "", stderr: parsed.message };
+	}
+
+	const env = context?.env ?? process.env;
+	const home = getHome(env);
+
+	// Revert agent configurations
+	const agentConfigPaths = resolveAgentConfigPaths(home);
+	for (const agent of ALL_AGENTS) {
+		await removeAgentConfig(agent, agentConfigPaths);
 	}
 
 	return { exitCode: 0, stdout: "", stderr: "" };
