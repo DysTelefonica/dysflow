@@ -768,16 +768,18 @@ async function runCommand(
 	args: readonly string[],
 	cwd: string,
 ): Promise<void> {
-	const finalCommand =
-		process.platform === "win32" && (command === "pnpm" || command === "npm")
-			? `${command}.cmd`
-			: command;
+	const isCmd =
+		process.platform === "win32" && (command === "pnpm" || command === "npm");
+	const execCmd = isCmd ? (process.env.ComSpec || "cmd.exe") : command;
+	const execArgs = isCmd
+		? ["/d", "/s", "/c", `${command}.cmd`, ...args]
+		: [...args];
 	try {
-		await execFileAsync(finalCommand, [...args], {
+		await execFileAsync(execCmd, execArgs, {
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
-			shell: process.platform === "win32" && finalCommand.endsWith(".cmd"),
+			shell: false,
 		});
 	} catch (error) {
 		throw createCommandError(`${command} ${args.join(" ")}`, error);
@@ -789,16 +791,18 @@ async function runCommandOutput(
 	args: readonly string[],
 	cwd: string,
 ): Promise<string> {
-	const finalCommand =
-		process.platform === "win32" && (command === "pnpm" || command === "npm")
-			? `${command}.cmd`
-			: command;
+	const isCmd =
+		process.platform === "win32" && (command === "pnpm" || command === "npm");
+	const execCmd = isCmd ? (process.env.ComSpec || "cmd.exe") : command;
+	const execArgs = isCmd
+		? ["/d", "/s", "/c", `${command}.cmd`, ...args]
+		: [...args];
 	try {
-		const { stdout } = await execFileAsync(finalCommand, [...args], {
+		const { stdout } = await execFileAsync(execCmd, execArgs, {
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
-			shell: process.platform === "win32" && finalCommand.endsWith(".cmd"),
+			shell: false,
 		});
 		return String(stdout).trim();
 	} catch (error) {
