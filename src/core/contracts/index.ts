@@ -30,6 +30,48 @@ export type AccessVbaRequest = {
   arguments?: readonly unknown[];
 };
 
+export type LinkClassification = "alreadyLocal" | "plannedRelink" | "ambiguous" | "unresolved";
+
+export type RelinkDirectoryLinkResult = {
+  database: string;
+  linkName: string;
+  originalBackendPath: string;
+  classification: LinkClassification;
+  resolvedLocalPath?: string;
+  cycleDetected?: boolean;
+  chainHops?: number;
+  ambiguous?: boolean;
+};
+
+export type RelinkDirectoryFileResult = {
+  filePath: string;
+  linkedTablesFound: number;
+  alreadyLocal: number;
+  plannedRelinks: number;
+  appliedRelinks: number;
+  links: RelinkDirectoryLinkResult[];
+  backupPath?: string;
+  errors: string[];
+};
+
+export type RelinkDirectoryReport = {
+  mode: "dry-run" | "apply" | "verify";
+  root: string;
+  filesScanned: number;
+  linkedTablesFound: number;
+  alreadyLocal: number;
+  plannedRelinks: number;
+  appliedRelinks: number;
+  unresolved: RelinkDirectoryLinkResult[];
+  removed: RelinkDirectoryLinkResult[];
+  externalLinkCount: number;
+  datosteLinkCount: number;
+  brokenLinkCount: number;
+  backupPaths: string[];
+  errors: string[];
+  fileResults: RelinkDirectoryFileResult[];
+};
+
 export type AccessQueryRequest = {
   sql: string;
   mode: "read" | "write";
@@ -56,7 +98,8 @@ export type AccessQueryRequest = {
     | "create_table"
     | "drop_table"
     | "seed_fixture"
-    | "teardown_fixture";
+    | "teardown_fixture"
+    | "relink_directory";
   tableName?: string;
   columnName?: string;
   backendPath?: string;
@@ -71,6 +114,12 @@ export type AccessQueryRequest = {
   dryRun?: boolean;
   allowTables?: readonly string[];
   denyTables?: readonly string[];
+  maps?: readonly { from: string; to: string }[];
+  denyPrefixes?: readonly string[];
+  strictLocal?: boolean;
+  removeUnresolved?: boolean;
+  recursive?: boolean;
+  timeoutMs?: number;
 };
 
 export function createDiagnostic(level: DiagnosticLevel, source: string, message: string): Diagnostic {

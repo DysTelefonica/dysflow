@@ -31,6 +31,7 @@ describe("dysflow CLI help", () => {
 				"  uninstall Run Dysflow uninstaller (revert integrations + clean runtime)",
 				"  tui     Open the Dysflow terminal UI",
 				"  serve   Start local HTTP API",
+				"  access  Batch Access database operations (e.g. relink-directory)",
 			].join("\n"),
 			stderr: "",
 		});

@@ -7,7 +7,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { runCli } from "../../src/cli/index";
 import { handleDoctorCommand } from "../../src/cli/commands/doctor";
 import { handleServeCommand } from "../../src/cli/commands/serve";
@@ -442,5 +442,25 @@ describe("dysflow command modules", () => {
 				"Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]",
 			stderr: "",
 		});
+	});
+
+	it("routes dysflow access relink-directory to the access handler", async () => {
+		const result = await runCli([
+			"access",
+			"relink-directory",
+			"--root",
+			"C:\\data",
+			"--dry-run",
+		]);
+		// Without a real query service the handler returns exitCode 1 with an
+		// "not available" message — that proves routing reached the handler.
+		expect(result.exitCode).toBe(1);
+		expect(result.stderr).toMatch(/not available|service/i);
+	});
+
+	it("returns unknown subcommand error for unknown access subcommand", async () => {
+		const result = await runCli(["access", "unknown-cmd"]);
+		expect(result.exitCode).toBe(1);
+		expect(result.stderr).toMatch(/unknown access subcommand/i);
 	});
 });

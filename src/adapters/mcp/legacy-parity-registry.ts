@@ -27,6 +27,7 @@ const maintenanceQueryModes: Partial<Record<LegacyDysflowMcpToolName, LegacyQuer
   unlink_table: "write",
   import_queries: "write",
   compact_repair: "write",
+  relink_directory: "write",
 };
 
 const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
@@ -77,6 +78,7 @@ const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
   "export_queries",
   "import_queries",
   "compact_repair",
+  "relink_directory",
 ]);
 
 function buildDescription(name: LegacyDysflowMcpToolName, slice: LegacyParitySlice, status: LegacyParityStatus): string {
