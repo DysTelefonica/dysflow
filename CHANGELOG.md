@@ -11,6 +11,9 @@ All notable changes to Dysflow will be documented in this file.
 - Recreated table links dynamically during apply mode when `SourceTableName` changes to resolve DAO collection constraints.
 - Aligned MCP legacy `relink_directory` tool schema and mapper with modern CLI options (such as apply, maps, password, and timeout).
 - Preserved existing `PWD` connection password in table links when no new backend password is provided.
+- Propagated `recursive: false` correctly in the MCP legacy mapper instead of dropping the parameter.
+- Fixed non-recursive directory scanning in the PowerShell runner script by using wildcard paths to avoid matching zero files.
+- Updated installation instructions in `README.md` to reference the correct v0.7.5 release tag.
 
 ## [0.7.4] - 2026-05-22
 
