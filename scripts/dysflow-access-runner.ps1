@@ -22,12 +22,13 @@ $BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD
 function Open-DatabaseWithBackendPassword {
   param(
     [Parameter(Mandatory = $true)] $DbEngine,
-    [Parameter(Mandatory = $true)] [string] $DatabasePath
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false
   )
   if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-    return $DbEngine.OpenDatabase($DatabasePath)
+    return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly)
   }
-  return $DbEngine.OpenDatabase($DatabasePath, $false, $false, ";PWD=$BackendPassword")
+  return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")
 }
 
 function ConvertTo-IsoStartTime {
@@ -183,7 +184,7 @@ function Get-LinkInfo {
     $connect = [string]$table.Connect
     if ([string]::IsNullOrWhiteSpace($connect)) { continue }
     $backendPath = $null
-    if ($connect -match '(?i)(?:^|;)DATABASE=(.+)$') {
+    if ($connect -match '(?i)(?:^|;)DATABASE=([^;]+)') {
       $backendPath = $Matches[1].Trim()
     }
     [void]$links.Add([ordered]@{
@@ -785,7 +786,7 @@ function Resolve-LinkChain {
     return [ordered]@{ resolvedPath = $dbPath; resolvedTable = $TableName; isLocal = $true; cycleDetected = $false; hops = $Depth }
   }
 
-  $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')
+  $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=([^;]+)')
   if (-not $dbMatch.Success) {
     return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
   }
@@ -804,7 +805,7 @@ function Resolve-LinkChain {
 
   $nextDb = $null
   try {
-    $nextDb = $DbEngine.OpenDatabase($localPath, $false, $true)
+    $nextDb = Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true
     try {
       return Resolve-LinkChain `
         -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable `
@@ -884,7 +885,7 @@ function Invoke-RelinkDirectory {
         $remapPlan          = [System.Collections.ArrayList]::new()
         $unresolvedLinkNames = [System.Collections.ArrayList]::new()
 
-        $db = $dbEngine.OpenDatabase($file.FullName, $false, $true)
+        $db = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true
         try {
           foreach ($td in $db.TableDefs) {
             $tdName = [string]$td.Name
@@ -892,7 +893,7 @@ function Invoke-RelinkDirectory {
             $connectStr = [string]$td.Connect
             if ([string]::IsNullOrWhiteSpace($connectStr)) { continue }
 
-            $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')
+            $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=([^;]+)')
             if (-not $dbMatch.Success) { continue }
 
             $backendPath = $dbMatch.Groups[1].Value.Trim()
@@ -943,7 +944,7 @@ function Invoke-RelinkDirectory {
           }
 
           if ($applyOk) {
-            $dbWrite = $dbEngine.OpenDatabase($file.FullName, $false, $false)
+            $dbWrite = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false
             try {
               foreach ($plan in $remapPlan) {
                 $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -963,8 +964,11 @@ function Invoke-RelinkDirectory {
 
                 try {
                   $tdW = $dbWrite.TableDefs.Item($plan.tdName)
-                  $tdW.Connect = ";DATABASE=$targetPath"
-                  if ($chain.resolvedTable) { $tdW.SourceTableName = $chain.resolvedTable }
+                  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+                    $tdW.Connect = ";DATABASE=$targetPath"
+                  } else {
+                    $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
+                  }
                   $tdW.RefreshLink()
                   $plan.linkEntry.classification = "applied"
                   $plan.linkEntry.resolvedLocalPath = $targetPath
