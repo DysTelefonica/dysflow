@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Provide Access/VBA/query services behind a safe PowerShell runner boundary.
+Provide Access/VBA/query services behind a safe PowerShell runner boundary and propagate real-time progress.
 
 ## Requirements
 
 ### Requirement: Runner Boundary
 
-The system MUST execute Access-related work only through a bounded runner interface with timeouts and sanitized outputs.
+The system MUST execute Access-related work only through a bounded runner interface with timeouts and sanitized outputs. Services MUST also propagate any optional `onProgress` callback from their caller to the runner without modification.
 
 #### Scenario: Service calls runner
 - GIVEN a valid Access operation request
@@ -21,9 +21,6 @@ The system MUST execute Access-related work only through a bounded runner interf
 - WHEN the service handles completion
 - THEN it MUST return a timeout error
 
-### Requirement: Legacy Service Characterization
-The system MUST characterize `VbaSyncLegacyService` behavior before introducing seams or decomposition.
-
 #### Scenario: Seam refactor preserves behavior
 - GIVEN characterization coverage exists for a legacy sync path
 - WHEN a seam refactor is applied
@@ -33,3 +30,31 @@ The system MUST characterize `VbaSyncLegacyService` behavior before introducing 
 - GIVEN a legacy sync path lacks characterization coverage
 - WHEN decomposition is proposed
 - THEN implementation MUST add coverage before changing the path
+
+### Requirement: Legacy Service Characterization
+
+The system MUST characterize `VbaSyncLegacyService` behavior before introducing seams or decomposition.
+
+### Requirement: Progress Callback Forwarding
+
+`VbaService` and `QueryService` MUST accept an optional `onProgress` callback from their caller context and MUST forward it unchanged to the underlying runner call. Neither service MAY alter, wrap, or suppress the callback before forwarding.
+
+When the caller does not supply `onProgress`, the service MUST call the runner without an `onProgress` option, preserving the original call contract.
+
+#### Scenario: vba-service forwards onProgress to runner
+- GIVEN a `vba-service` execute call with `onProgress` provided in the service options
+- WHEN the service invokes the runner
+- THEN the runner MUST receive the same `onProgress` reference
+- AND progress callbacks fired by the runner MUST reach the original caller
+
+#### Scenario: query-service forwards onProgress to runner
+- GIVEN a `query-service` execute call with `onProgress` provided in the service options
+- WHEN the service invokes the runner
+- THEN the runner MUST receive the same `onProgress` reference
+- AND progress callbacks fired by the runner MUST reach the original caller
+
+#### Scenario: Service called without onProgress
+- GIVEN a service execute call with no `onProgress` in options
+- WHEN the service invokes the runner
+- THEN the runner MUST be called without an `onProgress` option
+- AND the service result MUST be identical to its pre-change behavior
