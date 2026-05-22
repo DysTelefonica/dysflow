@@ -359,6 +359,9 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
       strictLocal: { type: "boolean", description: "Fail verify if externalLinkCount > 0." } as JsonSchemaProperty,
       removeUnresolved: { type: "boolean", description: "Delete TableDef if no local target found." } as JsonSchemaProperty,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      passwordEnv: { type: "string", description: "Environment variable name containing the backend database password." } as JsonSchemaProperty,
+      backendPassword: { type: "string", description: "Raw backend database password." } as JsonSchemaProperty,
+      password: { type: "string", description: "Alias for backendPassword." } as JsonSchemaProperty,
     },
   },
 };
@@ -715,7 +718,17 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
     importPath: stringValue(params.importPath) ?? stringValue(params.path),
     queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-    dryRun: params.dryRun === false ? false : true,
+    dryRun: params.apply === true || params.dryRun === false ? false : true,
+    maps: Array.isArray(params.maps)
+      ? params.maps.filter((m): m is { from: string; to: string } => isRecord(m) && typeof m.from === "string" && typeof m.to === "string")
+      : undefined,
+    denyPrefixes: stringArrayValue(params.denyPrefixes),
+    strictLocal: params.strictLocal === true ? true : undefined,
+    removeUnresolved: params.removeUnresolved === true ? true : undefined,
+    noBackup: params.backup === false ? true : undefined,
+    recursive: params.recursive === true ? true : undefined,
+    timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
+    backendPassword: stringValue(params.backendPassword) ?? stringValue(params.password) ?? (params.passwordEnv ? process.env[stringValue(params.passwordEnv) ?? ""] : undefined),
   };
 }
 

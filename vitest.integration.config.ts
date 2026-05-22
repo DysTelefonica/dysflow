@@ -1,5 +1,7 @@
 import { defineConfig } from "vitest/config";
 
+delete process.env.DYSFLOW_HOME;
+
 export default defineConfig({
   test: {
     include: [

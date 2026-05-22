@@ -3,6 +3,8 @@
  * Requires DAO.DBEngine.120 (Windows + Access runtime installed).
  * Excluded from the standard vitest run — run manually or in a Windows E2E pipeline.
  */
+delete process.env.DYSFLOW_HOME;
+
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

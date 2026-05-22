@@ -907,7 +907,16 @@ function Invoke-RelinkDirectory {
         $remapPlan          = [System.Collections.ArrayList]::new()
         $unresolvedLinkNames = [System.Collections.ArrayList]::new()
 
-        $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $AccessPassword
+        $db = $null
+        try {
+          $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $AccessPassword
+        } catch {
+          if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
+            $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $BackendPassword
+          } else {
+            throw $_
+          }
+        }
         try {
           foreach ($td in $db.TableDefs) {
             $tdName = [string]$td.Name
@@ -966,7 +975,16 @@ function Invoke-RelinkDirectory {
           }
 
           if ($applyOk) {
-            $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $AccessPassword
+            $dbWrite = $null
+            try {
+              $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $AccessPassword
+            } catch {
+              if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
+                $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $BackendPassword
+              } else {
+                throw $_
+              }
+            }
             try {
               foreach ($plan in $remapPlan) {
                 $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -986,20 +1004,38 @@ function Invoke-RelinkDirectory {
 
                 try {
                   $tdW = $dbWrite.TableDefs.Item($plan.tdName)
-                  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-                    $tdW.Connect = ";DATABASE=$targetPath"
+                  $currentConnect = [string]$tdW.Connect
+                  $currentSource = [string]$tdW.SourceTableName
+                  
+                  $newConnect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+                    ";DATABASE=$targetPath"
                   } else {
-                    $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
+                    ";DATABASE=$targetPath;PWD=$BackendPassword"
                   }
-                  if ($chain.resolvedTable -and $tdW.SourceTableName -ne $chain.resolvedTable) {
-                    $resolvedTable = $chain.resolvedTable
-                    $tdW.SourceTableName = $resolvedTable
+
+                  if ($chain.resolvedTable -and $currentSource -ne [string]$chain.resolvedTable) {
+                    $linkName = $tdW.Name
+                    $attributes = $tdW.Attributes
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
+                    $dbWrite.TableDefs.Delete($linkName)
+                    $newTd = $dbWrite.CreateTableDef($linkName, $attributes, $chain.resolvedTable, $newConnect)
+                    $dbWrite.TableDefs.Append($newTd)
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch {}
+                  } else {
+                    if ($currentConnect -ne $newConnect) {
+                      if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+                        $tdW.Connect = ";DATABASE=$targetPath"
+                      } else {
+                        $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
+                      }
+                      $tdW.RefreshLink()
+                    }
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
                   }
-                  $tdW.RefreshLink()
+
                   $plan.linkEntry.classification = "applied"
                   $plan.linkEntry.resolvedLocalPath = $targetPath
                   $fileResult.appliedRelinks++; $totalApplied++
-                  try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
                 } catch {
                   [void]$fileResult.errors.Add("RefreshLink $($plan.tdName): $($_.Exception.Message)")
                   [void]$allErrors.Add("$($file.FullName)!$($plan.tdName): $($_.Exception.Message)")

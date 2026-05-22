@@ -1,3 +1,5 @@
+delete process.env.DYSFLOW_HOME;
+
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";

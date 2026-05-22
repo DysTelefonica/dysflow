@@ -1,3 +1,5 @@
+delete process.env.DYSFLOW_HOME;
+
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
