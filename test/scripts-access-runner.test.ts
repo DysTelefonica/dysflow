@@ -36,7 +36,7 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain("Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $BackendPassword");
     expect(script).toContain("if ([string]::IsNullOrWhiteSpace($BackendPassword)) {");
     expect(script).toContain('$linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"');
-    expect(script).toContain('$tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"');
+    expect(script).toContain('$tdW.Connect = $newConnect');
     expect(script).not.toContain('$tdW.SourceTableName = $chain.resolvedTable');
     expect(script).toContain("[regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=([^;]+)')");
     expect(script).not.toContain("[regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')");

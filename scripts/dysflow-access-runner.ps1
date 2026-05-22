@@ -1008,7 +1008,12 @@ function Invoke-RelinkDirectory {
                   $currentSource = [string]$tdW.SourceTableName
                   
                   $newConnect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-                    ";DATABASE=$targetPath"
+                    $pwdMatch = [regex]::Match($currentConnect, '(?i)(?:^|;)PWD=([^;]+)')
+                    if ($pwdMatch.Success) {
+                      ";DATABASE=$targetPath;PWD=$($pwdMatch.Groups[1].Value)"
+                    } else {
+                      ";DATABASE=$targetPath"
+                    }
                   } else {
                     ";DATABASE=$targetPath;PWD=$BackendPassword"
                   }
@@ -1023,11 +1028,7 @@ function Invoke-RelinkDirectory {
                     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch {}
                   } else {
                     if ($currentConnect -ne $newConnect) {
-                      if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-                        $tdW.Connect = ";DATABASE=$targetPath"
-                      } else {
-                        $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
-                      }
+                      $tdW.Connect = $newConnect
                       $tdW.RefreshLink()
                     }
                     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
