@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-22
+
+### Added
+
+- `dysflow access relink-directory` command to bulk-remap linked-table backends in every Access file under a root directory. Supports dry-run (default), `--apply` mode with per-file `.bak-*` backups, `--map old=new` alias overrides, DFS chain resolution (max depth 5) with cycle detection, `--remove-unresolved` to delete unresolvable TableDef links, `--strict-local` and `--deny-prefix` exit-code guards, and `--no-backup` flag. Closes #282.
+
 ## [0.6.9] - 2026-05-22
 
 ### Added
