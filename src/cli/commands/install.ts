@@ -704,7 +704,7 @@ function createNoUpdateReport(
 	runtimeDir: string,
 	localVersion: string,
 ): string {
-	return `Dysflow runtime is up to date in ${runtimeDir} (v${localVersion}).`;
+	return `Dysflow runtime is up to date and already at the latest version: v${localVersion} (at ${runtimeDir}).`;
 }
 
 async function readPackageJsonVersion(
@@ -1093,10 +1093,12 @@ export async function handleUpdateCommand(
 			preparedPackage.packageRoot,
 		);
 		await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
+		const previousVersionStr = installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
+		const latestVersionStr = `v${latestRelease.version}`;
 		return {
 			exitCode: 0,
 			stdout:
-				`Dysflow runtime update: ${previousVersion} -> ${latestRelease.version}\n` +
+				`Dysflow runtime update: upgrading from ${previousVersionStr} to ${latestVersionStr} (${previousVersion} -> ${latestRelease.version})\n` +
 				(preparedPackage.commitSha === undefined
 					? ""
 					: `Installed release commit: ${preparedPackage.commitSha}\n`) +
