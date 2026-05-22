@@ -86,5 +86,23 @@ export async function handleUninstallCommand(
 		// Silent catch if not empty or not found
 	}
 
-	return { exitCode: 0, stdout: "", stderr: "" };
+	// Remove DYSFLOW_HOME and DYSFLOW_RUNTIME_MARKER_PATH from context.env if present
+	if (context?.env) {
+		delete context.env.DYSFLOW_HOME;
+		delete context.env.DYSFLOW_RUNTIME_MARKER_PATH;
+	}
+
+	const stdoutParts: string[] = [];
+
+	// Check process.env and format warnings
+	if (process.env.DYSFLOW_HOME !== undefined) {
+		stdoutParts.push("Warning: DYSFLOW_HOME is still set in your process environment. You may need to remove it manually.");
+	}
+	if (process.env.DYSFLOW_RUNTIME_MARKER_PATH !== undefined) {
+		stdoutParts.push("Warning: DYSFLOW_RUNTIME_MARKER_PATH is still set in your process environment. You may need to remove it manually.");
+	}
+
+	stdoutParts.push("Dysflow uninstalled successfully.");
+
+	return { exitCode: 0, stdout: stdoutParts.join("\n"), stderr: "" };
 }
