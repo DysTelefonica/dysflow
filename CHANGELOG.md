@@ -2,6 +2,14 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.7.5] - 2026-05-22
+
+### Fixed
+
+- Resolved Node `DEP0190` security/deprecation warning on Windows during installation runner tasks.
+- Enhanced password propagation in `relink-directory` to correctly authenticate frontend databases with the frontend password while fallback-authenticating links.
+- Restored runner script function patterns to satisfy static integration tests.
+
 ## [0.7.4] - 2026-05-22
 
 ### Fixed
