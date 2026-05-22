@@ -1,4 +1,4 @@
-﻿[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory = $true, Position = 0)]
@@ -1087,13 +1087,12 @@ public class RotManager {
             Write-Status -Message ("Detectado lock activo: {0}" -f $lockPath) -Color Yellow
 
             # Buscar MSACCESS.EXE por CommandLine (contiene la ruta del .accdb que abrio)
-            $dbFileName = [System.IO.Path]::GetFileName($resolved)
             $cimProcs = @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)
             $killed = $false
 
             foreach ($cim in $cimProcs) {
-                if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($dbFileName)) {
-                    Write-Status -Message ("Cerrando MSACCESS PID {0} (CommandLine contiene: {1})" -f $cim.ProcessId, $dbFileName) -Color Yellow
+                if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
+                    Write-Status -Message ("Cerrando MSACCESS PID {0} (CommandLine contiene: {1})" -f $cim.ProcessId, $resolved) -Color Yellow
                     try {
                         Stop-Process -Id $cim.ProcessId -Force -ErrorAction Stop
                         $killed = $true
@@ -1104,7 +1103,7 @@ public class RotManager {
             }
 
             if (-not $killed -and $cimProcs.Count -gt 0) {
-                Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $dbFileName, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
+                Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
             }
 
             if ($killed) {

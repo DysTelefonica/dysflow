@@ -10,7 +10,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/ -CI\"",
+    "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/\"",
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "coverage": "vitest run --coverage",

@@ -273,6 +273,7 @@ export async function handleRelinkDirectoryCommand(
     removeUnresolved: options.removeUnresolved || undefined,
     recursive: options.recursive,
     timeoutMs: options.timeoutMs,
+    backendPassword: _password,
   });
 
   if (!result.ok) {

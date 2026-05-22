@@ -30,14 +30,14 @@ export type AccessVbaRequest = {
   arguments?: readonly unknown[];
 };
 
-export type LinkClassification = "alreadyLocal" | "plannedRelink" | "ambiguous" | "unresolved";
+export type LinkClassification = "alreadyLocal" | "plannedRelink" | "ambiguous" | "unresolved" | "cycle" | "applied" | "removed";
 
 export type RelinkDirectoryLinkResult = {
   database: string;
   linkName: string;
   originalBackendPath: string;
   classification: LinkClassification;
-  resolvedLocalPath?: string;
+  resolvedLocalPath?: string | null;
   cycleDetected?: boolean;
   chainHops?: number;
   ambiguous?: boolean;
@@ -121,6 +121,7 @@ export type AccessQueryRequest = {
   noBackup?: boolean;
   recursive?: boolean;
   timeoutMs?: number;
+  backendPassword?: string;
 };
 
 export function createDiagnostic(level: DiagnosticLevel, source: string, message: string): Diagnostic {

@@ -140,7 +140,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.6.5"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.7.3"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -268,7 +268,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 
    ```text
    dysflow.access.cleanup {
-     "projectId": "my-access-project",
+     "accessPath": "C:\\data\\mydb.accdb",
      "operationId": "<operation-id>"
    }
    ```
@@ -277,7 +277,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 
    ```text
    cleanup_access_operation {
-     "projectId": "my-access-project",
+     "accessPath": "C:\\data\\mydb.accdb",
      "operationId": "<operation-id>"
    }
    ```

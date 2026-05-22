@@ -6,7 +6,7 @@ import {
 } from "../../../src/cli/commands/access/relink-directory.js";
 import { handleAccessCommand } from "../../../src/cli/commands/access.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
-import type { OperationResult } from "../../../src/core/contracts/index.js";
+import type { OperationResult, AccessQueryRequest } from "../../../src/core/contracts/index.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 import type { RelinkDirectoryReport } from "../../../src/core/contracts/index.js";
 
@@ -35,28 +35,15 @@ function makeReport(overrides: Partial<RelinkDirectoryReport> = {}): RelinkDirec
   };
 }
 
-type FakeRequest = {
-  action?: string;
-  rootPath?: string;
-  dryRun?: boolean;
-  backup?: boolean;
-  recursive?: boolean;
-  maps?: unknown[];
-  denyPrefixes?: string[];
-  strictLocal?: boolean;
-  removeUnresolved?: boolean;
-  timeoutMs?: number;
-};
-
 class FakeQueryService {
-  public requests: FakeRequest[] = [];
+  public requests: AccessQueryRequest[] = [];
   private report: RelinkDirectoryReport;
 
   constructor(report?: RelinkDirectoryReport) {
     this.report = report ?? makeReport();
   }
 
-  async execute(request: FakeRequest): Promise<OperationResult<AccessQueryResult>> {
+  async execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>> {
     this.requests.push(request);
     return successResult({ relinkDirectory: this.report });
   }
