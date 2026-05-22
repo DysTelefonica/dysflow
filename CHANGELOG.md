@@ -2,13 +2,18 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.7.4] - 2026-05-22
+
+### Fixed
+
+- Fixed `relink-directory` PowerShell execution so protected databases are opened with `DYSFLOW_BACKEND_PASSWORD`, relinked `Connect` strings preserve `;PWD=...`, and existing linked TableDefs are refreshed without mutating immutable `SourceTableName`.
+
 ## [0.7.3] - 2026-05-22
 
 ### Fixed
 
 - Resolved quality audit blockers: aligned `LinkClassification` contract and fixed E2E and unit test types to ensure `pnpm lint` passes cleanly.
 - Added dynamic backend database password propagation to `relink-directory` command via `--password-env`.
-- Fixed `relink-directory` PowerShell execution so protected databases are opened with `DYSFLOW_BACKEND_PASSWORD`, relinked `Connect` strings preserve `;PWD=...`, and existing linked TableDefs are refreshed without mutating immutable `SourceTableName`.
 - Secured process cleanup fallback inside VBA manager by matching full database paths instead of base filenames to prevent terminating unintended Access processes.
 - Aligned documentation to reflect that the HTTP adapter is active and corrected MCP cleanup tool usage examples in `README.md`.
 
