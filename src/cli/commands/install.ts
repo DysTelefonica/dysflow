@@ -74,7 +74,7 @@ type RuntimePaths = {
 	packageJsonDest: string;
 };
 
-type AgentConfigPaths = {
+export type AgentConfigPaths = {
 	codex: string;
 	opencode: string;
 	claudeDesktop: string;
@@ -196,7 +196,7 @@ export function parseUpdateArgs(
 // Fixed machine-level marker path — the marker file itself lives at a known
 // location so `dysflow update` can discover the previous explicit runtime dir
 // without relying on a user-profile-derived %LOCALAPPDATA% fallback.
-function getSystemMarkerPath(env: NodeJS.ProcessEnv): string {
+export function getSystemMarkerPath(env: NodeJS.ProcessEnv): string {
 	const explicitMarkerPath = env[RUNTIME_MARKER_PATH_ENV];
 	if (explicitMarkerPath !== undefined && explicitMarkerPath.trim().length > 0) {
 		return path.resolve(explicitMarkerPath);
@@ -219,7 +219,7 @@ function parseRuntimeMarker(content: string): string | undefined {
 	return lines[0];
 }
 
-function resolveRuntimeDir(
+export function resolveRuntimeDir(
 	runtimeOverride: string | undefined,
 	env: NodeJS.ProcessEnv,
 ): string {
@@ -251,7 +251,7 @@ function resolveRuntimeDir(
 	return path.join(localAppData, "dysflow");
 }
 
-function getHome(env: NodeJS.ProcessEnv): string {
+export function getHome(env: NodeJS.ProcessEnv): string {
 	return env.USERPROFILE ?? env.HOME ?? env.USER ?? "";
 }
 
@@ -309,7 +309,7 @@ function resolveRuntimePaths(
 	};
 }
 
-function resolveAgentConfigPaths(home: string): AgentConfigPaths {
+export function resolveAgentConfigPaths(home: string): AgentConfigPaths {
 	return {
 		codex: path.join(home, ".codex", "config.toml"),
 		opencode: path.join(home, ".config", "opencode", "opencode.json"),
@@ -329,7 +329,7 @@ function commandPathForConfig(runtimeDir: string): string {
 	return path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
+export async function fileExists(filePath: string): Promise<boolean> {
 	try {
 		await access(filePath, constants.F_OK);
 		return true;
@@ -574,7 +574,7 @@ async function configureAgent(
 	return configurePi(agentConfigPaths.pi, commandPath);
 }
 
-async function removeAgentConfig(
+export async function removeAgentConfig(
 	agent: AgentName,
 	agentConfigPaths: AgentConfigPaths,
 ): Promise<void> {
