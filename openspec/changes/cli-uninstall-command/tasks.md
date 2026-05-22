@@ -79,13 +79,13 @@ The entire feature is estimated at ~370 lines (approx. 130 lines of source code 
 * **Target Branch**: `feat/uninstall-cli-routing` (or `main` depending on features configuration)
 * **Focus**: File system deletions, configuration scrubbing, and environment cleanup.
 
-#### [ ] Work Unit 2.1: Write Integration Test Suite for Side-Effects (TDD Red)
+#### [x] Work Unit 2.1: Write Integration Test Suite for Side-Effects (TDD Red)
 * **Commit**: `test(cli): add integration tests for uninstall side-effects`
 * **Files**:
   - [uninstall.test.ts](file:///C:/Proyectos/dysflow/test/cli/uninstall.test.ts)
 * **Tasks**:
-  - [ ] Set up a mock environment helper using `mkdtemp` to isolate filesystem changes.
-  - [ ] Write tests to verify:
+  - [x] Set up a mock environment helper using `mkdtemp` to isolate filesystem changes.
+  - [x] Write tests to verify:
     - Surgical removal of Dysflow server config from mock agent files (Codex, OpenCode, Claude, Pi) while keeping other server configs intact.
     - Safe handling when agent configuration files/folders do not exist (idempotency).
     - Recursive deletion of the target runtime directory.
@@ -95,33 +95,33 @@ The entire feature is estimated at ~370 lines (approx. 130 lines of source code 
     - Stdout warnings when `DYSFLOW_HOME` or `DYSFLOW_RUNTIME_MARKER_PATH` remain in `process.env`.
 * **Verification**: Run `pnpm test` and assert all new integration tests fail (Red).
 
-#### [ ] Work Unit 2.2: Implement surgical removal of agent integrations
+#### [x] Work Unit 2.2: Implement surgical removal of agent integrations
 * **Commit**: `feat(cli): implement uninstall MCP configuration removal`
 * **Files**:
   - [uninstall.ts](file:///C:/Proyectos/dysflow/src/cli/commands/uninstall.ts)
 * **Tasks**:
-  - [ ] Resolve the configuration paths.
-  - [ ] Revert agent configurations by calling `removeAgentConfig` for all agents.
+  - [x] Resolve the configuration paths.
+  - [x] Revert agent configurations by calling `removeAgentConfig` for all agents.
 * **Verification**: Run `pnpm test` and confirm integration tests for agent configuration removal now pass.
 
-#### [ ] Work Unit 2.3: Implement directory and marker file deletions
+#### [x] Work Unit 2.3: Implement directory and marker file deletions
 * **Commit**: `feat(cli): implement runtime directory and marker file deletion`
 * **Files**:
   - [uninstall.ts](file:///C:/Proyectos/dysflow/src/cli/commands/uninstall.ts)
 * **Tasks**:
-  - [ ] Delete resolved runtime directory recursively if it exists.
-  - [ ] Delete system marker file `.dysflow-marker` if it exists.
-  - [ ] Attempt to delete the parent directory of the marker file if empty, failing silently.
+  - [x] Delete resolved runtime directory recursively if it exists.
+  - [x] Delete system marker file `.dysflow-marker` if it exists.
+  - [x] Attempt to delete the parent directory of the marker file if empty, failing silently.
 * **Verification**: Run `pnpm test` and confirm file deletion integration tests pass.
 
-#### [ ] Work Unit 2.4: Implement environment cleanup & warnings
+#### [x] Work Unit 2.4: Implement environment cleanup & warnings
 * **Commit**: `feat(cli): clean up environment and emit shell warnings`
 * **Files**:
   - [uninstall.ts](file:///C:/Proyectos/dysflow/src/cli/commands/uninstall.ts)
 * **Tasks**:
-  - [ ] Remove `DYSFLOW_HOME` and `DYSFLOW_RUNTIME_MARKER_PATH` from `context.env` if present.
-  - [ ] Check `process.env` and format standard environment warnings.
-  - [ ] Format success console report to stdout.
+  - [x] Remove `DYSFLOW_HOME` and `DYSFLOW_RUNTIME_MARKER_PATH` from `context.env` if present.
+  - [x] Check `process.env` and format standard environment warnings.
+  - [x] Format success console report to stdout.
 * **Verification**: Run `pnpm test` and confirm ALL tests in `uninstall.test.ts` pass (Green).
 
 ---
