@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-22
+
+### Fixed
+
+- Fixed PowerShell parsing error (`InvalidVariableReferenceWithDrive`) in the Access runner script (`dysflow-access-runner.ps1`) when deleting unresolved links. Closes #287.
+
 ## [0.7.0] - 2026-05-22
 
 ### Added
