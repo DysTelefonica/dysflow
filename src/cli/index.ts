@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleMcpCommand } from "./commands/mcp.js";
@@ -11,6 +12,7 @@ import {
 } from "./commands/install.js";
 import { handleTuiCommand } from "./commands/tui.js";
 import { handleVersionCommand } from "./commands/version.js";
+import { handleUninstallCommand } from "./commands/uninstall.js";
 import {
 	HELP_TEXT,
 	type CliCommandContext,
@@ -27,6 +29,7 @@ const COMMANDS = new Map<string, CommandHandler>([
 	["tui", handleTuiCommand],
 	["install", handleInstallCommand],
 	["update", handleUpdateCommand],
+	["uninstall", handleUninstallCommand],
 	["serve", handleServeCommand],
 ]);
 export async function runCli(
@@ -73,9 +76,17 @@ async function main(): Promise<void> {
 	process.exitCode = result.exitCode;
 }
 
-const entrypoint = process.argv[1]
-	? pathToFileURL(process.argv[1]).href
-	: undefined;
+function getEntrypointUrl(): string | undefined {
+	if (!process.argv[1]) return undefined;
+	try {
+		return pathToFileURL(realpathSync(process.argv[1])).href;
+	} catch {
+		return pathToFileURL(process.argv[1]).href;
+	}
+}
+
+const entrypoint = getEntrypointUrl();
 if (entrypoint === import.meta.url) {
 	void main();
 }
+
