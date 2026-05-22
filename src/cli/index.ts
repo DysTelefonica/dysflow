@@ -11,6 +11,7 @@ import {
 } from "./commands/install.js";
 import { handleTuiCommand } from "./commands/tui.js";
 import { handleVersionCommand } from "./commands/version.js";
+import { handleUninstallCommand } from "./commands/uninstall.js";
 import {
 	HELP_TEXT,
 	type CliCommandContext,
@@ -27,6 +28,7 @@ const COMMANDS = new Map<string, CommandHandler>([
 	["tui", handleTuiCommand],
 	["install", handleInstallCommand],
 	["update", handleUpdateCommand],
+	["uninstall", handleUninstallCommand],
 	["serve", handleServeCommand],
 ]);
 export async function runCli(
