@@ -41,11 +41,11 @@ class FakeDiagnosticsService {
 }
 
 describe("legacy Dysflow MCP parity inventory", () => {
-  it("declares the complete 44-tool legacy inventory", () => {
+  it("declares the complete 45-tool legacy inventory", () => {
     expect(LEGACY_VBA_SYNC_TOOL_NAMES).toHaveLength(21);
-    expect(LEGACY_QUERY_TOOL_NAMES).toHaveLength(23);
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toHaveLength(44);
-    expect(new Set(LEGACY_DYSFLOW_MCP_TOOL_NAMES).size).toBe(44);
+    expect(LEGACY_QUERY_TOOL_NAMES).toHaveLength(24);
+    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toHaveLength(45);
+    expect(new Set(LEGACY_DYSFLOW_MCP_TOOL_NAMES).size).toBe(45);
     expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -54,8 +54,8 @@ describe("legacy Dysflow MCP parity inventory", () => {
   });
 
   it("exports a typed parity registry that classifies every legacy tool", () => {
-    expect(LEGACY_PARITY_REGISTRY).toHaveLength(44);
-    expect(new Set(LEGACY_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(44);
+    expect(LEGACY_PARITY_REGISTRY).toHaveLength(45);
+    expect(new Set(LEGACY_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(45);
 
     const implemented = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

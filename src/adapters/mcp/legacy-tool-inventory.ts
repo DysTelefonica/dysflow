@@ -46,6 +46,7 @@ export const LEGACY_QUERY_TOOL_NAMES = [
   "import_queries",
   "get_relationships",
   "compact_repair",
+  "relink_directory",
 ] as const;
 
 export const LEGACY_DYSFLOW_MCP_TOOL_NAMES = [

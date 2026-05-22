@@ -344,6 +344,23 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   unlink_table: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun } },
   import_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, queryDefinitions: SCHEMA_PROPS.queryDefinitions, queries: SCHEMA_PROPS.queries, dryRun: SCHEMA_PROPS.dryRun } },
   compact_repair: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath, backupFirst: SCHEMA_PROPS.backupFirst, dryRun: SCHEMA_PROPS.dryRun } },
+  relink_directory: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX,
+      rootPath: SCHEMA_PROPS.rootPath,
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      backup: SCHEMA_PROPS.backup,
+      recursive: { type: "boolean", description: "Recursively scan subdirectories under root." } as JsonSchemaProperty,
+      maps: { type: "array", items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } }, description: "Alias map entries (OldName.accdb=NewName.accdb)." } as JsonSchemaProperty,
+      denyPrefixes: { type: "array", items: { type: "string" }, description: "UNC prefixes to flag during verify." } as JsonSchemaProperty,
+      strictLocal: { type: "boolean", description: "Fail verify if externalLinkCount > 0." } as JsonSchemaProperty,
+      removeUnresolved: { type: "boolean", description: "Delete TableDef if no local target found." } as JsonSchemaProperty,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
 };
 
 async function handleValidatedLegacyQuery<TData>(input: unknown, schema: JsonObjectSchema, execute: () => Promise<OperationResult<TData>>): Promise<McpToolResult> {

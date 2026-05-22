@@ -1,5 +1,5 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import type { AccessQueryRequest, OperationResult } from "../contracts/index.js";
+import type { AccessQueryRequest, OperationResult, RelinkDirectoryReport } from "../contracts/index.js";
 import type { AccessRunner, AccessRunnerProgressCallback } from "../runner/access-runner.js";
 
 export type AccessQueryResult = {
@@ -13,6 +13,7 @@ export type AccessQueryResult = {
   relationships?: readonly Record<string, unknown>[];
   comparison?: Record<string, unknown>;
   plan?: Record<string, unknown>;
+  relinkDirectory?: RelinkDirectoryReport;
 };
 
 export type AccessQueryServiceOptions = {
