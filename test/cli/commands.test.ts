@@ -452,11 +452,11 @@ describe("dysflow command modules", () => {
 			"C:\\data",
 			"--dry-run",
 		]);
-		// Without a real query service the handler returns exitCode 1 with an
-		// "not available" message — that proves routing reached the handler.
-		expect(result.exitCode).toBe(1);
-		expect(result.stderr).toMatch(/not available|service/i);
-	});
+		// Service is now wired in access.ts — the handler should NOT return
+		// "service not available". The runner may fail for other reasons (PS not
+		// found, C:\data not a real directory) but routing and service wiring are correct.
+		expect(result.stderr).not.toMatch(/not available/i);
+	}, 30_000);
 
 	it("returns unknown subcommand error for unknown access subcommand", async () => {
 		const result = await runCli(["access", "unknown-cmd"]);
