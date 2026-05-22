@@ -819,6 +819,23 @@ function Resolve-LinkChain {
   }
 }
 
+function Test-LinkExternal {
+  param(
+    [string]$BackendPath,
+    [string]$RootPath,
+    [string[]]$DenyPrefixes = @()
+  )
+  $external = -not $BackendPath.StartsWith($RootPath, [System.StringComparison]::OrdinalIgnoreCase)
+  $broken   = $external -and -not (Test-Path -LiteralPath $BackendPath -PathType Leaf)
+  $denied   = $false
+  foreach ($prefix in $DenyPrefixes) {
+    if ($BackendPath.StartsWith([string]$prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+      $denied = $true; break
+    }
+  }
+  return [ordered]@{ external = $external; denied = $denied; broken = $broken }
+}
+
 function Invoke-RelinkDirectory {
   param($Payload)
 
@@ -993,18 +1010,20 @@ function Invoke-RelinkDirectory {
   Write-DysflowProgress -Percent 90 -Message "Finalizing"
 
   $allLinks = @($fileResults | ForEach-Object { @($_.links) } | Where-Object { $_ -ne $null })
-  $externalLinkCount = @($allLinks | Where-Object { $_.classification -notin @("alreadyLocal","applied","removed") }).Count
 
-  $denyPrefixes = @()
-  if ($null -ne $Payload.denyPrefixes) { $denyPrefixes = @($Payload.denyPrefixes) }
-  $datosteLinkCount = 0
-  if ($denyPrefixes.Count -gt 0) {
-    foreach ($link in $allLinks) {
-      foreach ($prefix in $denyPrefixes) {
-        if ($link.originalBackendPath.StartsWith([string]$prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-          $datosteLinkCount++; break
-        }
-      }
+  $denyPrefixList = [string[]]@()
+  if ($null -ne $Payload.denyPrefixes) { $denyPrefixList = @($Payload.denyPrefixes | ForEach-Object { [string]$_ }) }
+
+  $externalLinkCount = 0
+  $datosteLinkCount  = 0
+  $brokenLinkCount   = 0
+  foreach ($link in $allLinks) {
+    $cls = [string]$link.classification
+    if ($cls -notin @("alreadyLocal", "applied", "removed")) {
+      $check = Test-LinkExternal -BackendPath ([string]$link.originalBackendPath) -RootPath $rootPath -DenyPrefixes $denyPrefixList
+      if ($check.external) { $externalLinkCount++ }
+      if ($check.denied)   { $datosteLinkCount++ }
+      if ($check.broken)   { $brokenLinkCount++ }
     }
   }
 
@@ -1021,7 +1040,7 @@ function Invoke-RelinkDirectory {
       removed           = @($allLinks | Where-Object { $_.classification -eq "removed" })
       externalLinkCount = $externalLinkCount
       datosteLinkCount  = $datosteLinkCount
-      brokenLinkCount   = 0
+      brokenLinkCount   = $brokenLinkCount
       backupPaths       = @($allBackupPaths)
       errors            = @($allErrors)
       fileResults       = @($fileResults)
