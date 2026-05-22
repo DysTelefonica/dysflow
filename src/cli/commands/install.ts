@@ -768,8 +768,12 @@ async function runCommand(
 	args: readonly string[],
 	cwd: string,
 ): Promise<void> {
+	const finalCommand =
+		process.platform === "win32" && (command === "pnpm" || command === "npm")
+			? `${command}.cmd`
+			: command;
 	try {
-		await execFileAsync(command, [...args], {
+		await execFileAsync(finalCommand, [...args], {
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
@@ -784,8 +788,12 @@ async function runCommandOutput(
 	args: readonly string[],
 	cwd: string,
 ): Promise<string> {
+	const finalCommand =
+		process.platform === "win32" && (command === "pnpm" || command === "npm")
+			? `${command}.cmd`
+			: command;
 	try {
-		const { stdout } = await execFileAsync(command, [...args], {
+		const { stdout } = await execFileAsync(finalCommand, [...args], {
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
