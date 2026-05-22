@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import {
 	ALL_AGENTS,
@@ -64,6 +64,26 @@ export async function handleUninstallCommand(
 	const agentConfigPaths = resolveAgentConfigPaths(home);
 	for (const agent of ALL_AGENTS) {
 		await removeAgentConfig(agent, agentConfigPaths);
+	}
+
+	// Delete resolved runtime directory recursively if it exists
+	const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
+	if (await fileExists(runtimeDir)) {
+		await rm(runtimeDir, { recursive: true, force: true });
+	}
+
+	// Delete system marker file .dysflow-marker if it exists
+	const markerPath = getSystemMarkerPath(env);
+	const markerDir = path.dirname(markerPath);
+	if (await fileExists(markerPath)) {
+		await rm(markerPath, { force: true });
+	}
+
+	// Attempt to delete the parent directory of the marker file if empty
+	try {
+		await rmdir(markerDir);
+	} catch {
+		// Silent catch if not empty or not found
 	}
 
 	return { exitCode: 0, stdout: "", stderr: "" };
