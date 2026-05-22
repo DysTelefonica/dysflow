@@ -5,14 +5,14 @@ Dysflow is built inside-out: adapters depend inward on `src/core/**`, and the co
 ## Dependency direction
 
 ```text
-CLI / MCP stdio / future HTTP
+CLI / MCP stdio / HTTP
   -> src/adapters/*
   -> src/core/services/*
   -> src/core/runner/access-runner.ts
   -> PowerShell / Access process
 ```
 
-`src/core/**` MUST NOT import MCP or HTTP adapters. Core returns protocol-neutral `OperationResult` values with typed errors, diagnostics, data, and duration. Adapters translate that result at the boundary: MCP returns text content blocks, the future HTTP adapter will return JSON/status codes, and the CLI prints human-readable summaries.
+`src/core/**` MUST NOT import MCP or HTTP adapters. Core returns protocol-neutral `OperationResult` values with typed errors, diagnostics, data, and duration. Adapters translate that result at the boundary: MCP returns text content blocks, the HTTP adapter returns JSON/status codes, and the CLI prints human-readable summaries.
 
 ## MCP stdio adapter
 
@@ -29,7 +29,7 @@ MCP startup must not write product logs to stdout. Stdout belongs to the stdio p
 - `dysflow mcp` starts the MCP stdio adapter and returns empty CLI stdout. SQL write tools are disabled by default and require `dysflow mcp --enable-writes`.
 - `dysflow setup` resolves core configuration and prints only redacted values.
 - `dysflow doctor` calls core diagnostics and formats check results.
-- `dysflow serve` stays planned until the HTTP adapter phase.
+- `dysflow serve` starts the HTTP adapter and listens on the configured port.
 
 ## Legacy VBA sync timeout
 

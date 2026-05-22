@@ -25,3 +25,10 @@ E2E_testing/forms/*.form.json
 .atl/
 .pi/
 .pi-lens/
+
+# Local developer state & reports
+.antigravitycli/
+.dysflow/project.json
+E2E_testing/.mcp.json
+testResults.xml
+forms/

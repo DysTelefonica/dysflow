@@ -114,7 +114,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       timeoutMs: config.timeoutMs,
       operationId,
       accessPath: config.accessDbPath,
-      env: buildPowerShellEnvironment(config),
+      env: buildPowerShellEnvironment(config, finalOperation),
       onProgress: options.onProgress,
       onAccessProcessCaptured: async (process) => {
         try {
@@ -130,7 +130,11 @@ export class AccessPowerShellRunner implements AccessRunner {
         }
       },
     });
-    const secrets = [config.accessPassword, config.backendPassword].filter((secret): secret is string => Boolean(secret));
+    let dynamicBackendPassword = config.backendPassword;
+    if (finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined) {
+      dynamicBackendPassword = finalOperation.request.backendPassword;
+    }
+    const secrets = [config.accessPassword, dynamicBackendPassword].filter((secret): secret is string => Boolean(secret));
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
@@ -199,14 +203,20 @@ function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOpe
   return args;
 }
 
-function buildPowerShellEnvironment(config: DysflowConfig): Record<string, string | undefined> | undefined {
+function buildPowerShellEnvironment(config: DysflowConfig, operation?: AccessRunnerOperation): Record<string, string | undefined> | undefined {
   const env: Record<string, string> = {};
   if (config.accessPassword !== undefined) {
     env.DYSFLOW_ACCESS_PASSWORD = config.accessPassword;
     env.ACCESS_VBA_PASSWORD = config.accessPassword;
   }
-  if (config.backendPassword !== undefined) {
-    env.DYSFLOW_BACKEND_PASSWORD = config.backendPassword;
+  
+  let backendPassword = config.backendPassword;
+  if (operation?.kind === "query" && operation.request.backendPassword !== undefined) {
+    backendPassword = operation.request.backendPassword;
+  }
+
+  if (backendPassword !== undefined) {
+    env.DYSFLOW_BACKEND_PASSWORD = backendPassword;
   }
   return Object.keys(env).length > 0 ? env : undefined;
 }
