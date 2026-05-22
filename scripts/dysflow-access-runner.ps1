@@ -738,42 +738,117 @@ function Get-LinkClassification {
   return @{ classification = "plannedRelink"; resolvedLocalPath = $resolved.path }
 }
 
+function Backup-AccessFile {
+  param([string]$Path)
+  $ts = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
+  $dest = "${Path}.bak-${ts}"
+  if (Test-Path -LiteralPath $dest) {
+    $rand = [System.IO.Path]::GetRandomFileName().Replace('.', '')
+    $dest = "${Path}.bak-${ts}-${rand}"
+  }
+  Copy-Item -LiteralPath $Path -Destination $dest -ErrorAction Stop
+  return $dest
+}
+
+function Resolve-LinkChain {
+  param(
+    $DbEngine,
+    $StartDb,
+    [string]$TableName,
+    [string]$RootPath,
+    [hashtable]$AliasMap,
+    [hashtable]$FileIndex,
+    [ref]$Visited,
+    [int]$Depth = 0,
+    [int]$MaxDepth = 5
+  )
+  $dbPath = [string]$StartDb.Name
+  $key = "$($dbPath.ToLower())|$($TableName.ToLower())"
+  if ($Visited.Value.ContainsKey($key)) {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $true; hops = $Depth }
+  }
+  if ($Depth -ge $MaxDepth) {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $MaxDepth }
+  }
+  $Visited.Value[$key] = $true
+
+  $td = $null
+  foreach ($t in $StartDb.TableDefs) {
+    if ([string]$t.Name -eq $TableName) { $td = $t; break }
+  }
+  if ($null -eq $td) {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
+  }
+
+  $connectStr = [string]$td.Connect
+  if ([string]::IsNullOrWhiteSpace($connectStr)) {
+    return [ordered]@{ resolvedPath = $dbPath; resolvedTable = $TableName; isLocal = $true; cycleDetected = $false; hops = $Depth }
+  }
+
+  $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')
+  if (-not $dbMatch.Success) {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
+  }
+
+  $nextBackend = $dbMatch.Groups[1].Value.Trim()
+  $sourceTable = [string]$td.SourceTableName
+
+  $classResult = Get-LinkClassification -BackendPath $nextBackend -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex
+  $localPath = $null
+  if ($classResult.classification -eq 'alreadyLocal' -or $classResult.classification -eq 'plannedRelink') {
+    $localPath = $classResult.resolvedLocalPath
+  }
+  if ($null -eq $localPath) {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
+  }
+
+  $nextDb = $null
+  try {
+    $nextDb = $DbEngine.OpenDatabase($localPath, $false, $true)
+    try {
+      return Resolve-LinkChain `
+        -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable `
+        -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex `
+        -Visited $Visited -Depth ($Depth + 1) -MaxDepth $MaxDepth
+    } finally {
+      try { $nextDb.Close() } catch {}
+      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch {}
+    }
+  } catch {
+    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
+  }
+}
+
 function Invoke-RelinkDirectory {
   param($Payload)
 
-  $rootPath = [string]$Payload.rootPath
-  $dryRun = $true
-  if ($null -ne $Payload.dryRun) { $dryRun = [bool]$Payload.dryRun }
-  $recursive = $true
-  if ($null -ne $Payload.recursive) { $recursive = [bool]$Payload.recursive }
+  $rootPath      = [string]$Payload.rootPath
+  $dryRun        = $true;  if ($null -ne $Payload.dryRun)          { $dryRun        = [bool]$Payload.dryRun }
+  $recursive     = $true;  if ($null -ne $Payload.recursive)       { $recursive     = [bool]$Payload.recursive }
+  $noBackup      = $false; if ($null -ne $Payload.noBackup)        { $noBackup      = [bool]$Payload.noBackup }
+  $removeUnresolved = $false; if ($null -ne $Payload.removeUnresolved) { $removeUnresolved = [bool]$Payload.removeUnresolved }
 
-  # Build alias map from "old.accdb=new.accdb" entries in maps array
   $aliasMap = @{}
   if ($null -ne $Payload.maps) {
     foreach ($entry in @($Payload.maps)) {
-      $fromVal = [string]$entry.from
-      $toVal = [string]$entry.to
+      $fromVal = [string]$entry.from; $toVal = [string]$entry.to
       if (-not [string]::IsNullOrWhiteSpace($fromVal) -and -not [string]::IsNullOrWhiteSpace($toVal)) {
         $aliasMap[$fromVal.ToLower()] = $toVal
       }
     }
   }
 
-  # Enumerate files
-  $files = @(Get-AccessFilesRecursive -RootPath $rootPath -Recursive $recursive)
-  $fileIndex = Build-AccessFileIndex -Files $files
+  $files      = @(Get-AccessFilesRecursive -RootPath $rootPath -Recursive $recursive)
+  $fileIndex  = Build-AccessFileIndex -Files $files
 
-  $fileResults = [System.Collections.ArrayList]::new()
-  $allUnresolved = [System.Collections.ArrayList]::new()
-  $allErrors = [System.Collections.ArrayList]::new()
-  $totalLinked = 0
-  $totalAlreadyLocal = 0
-  $totalPlanned = 0
+  $fileResults   = [System.Collections.ArrayList]::new()
+  $allErrors     = [System.Collections.ArrayList]::new()
+  $allBackupPaths = [System.Collections.ArrayList]::new()
+  $totalLinked = 0; $totalAlreadyLocal = 0; $totalPlanned = 0; $totalApplied = 0; $totalRemoved = 0
 
   Write-DysflowProgress -Percent 20 -Message "Scanning files" -Total $files.Count
 
   $dbEngine = New-Object -ComObject DAO.DBEngine.120
-
   try {
     $fileIdx = 0
     foreach ($file in $files) {
@@ -781,17 +856,17 @@ function Invoke-RelinkDirectory {
       Write-DysflowProgress -Percent ([int](20 + 60 * $fileIdx / [Math]::Max(1, $files.Count))) -Message "Processing $($file.Name)" -Total $files.Count
 
       $fileResult = [ordered]@{
-        filePath           = $file.FullName
-        linkedTablesFound  = 0
-        alreadyLocal       = 0
-        plannedRelinks     = 0
-        appliedRelinks     = 0
-        links              = [System.Collections.ArrayList]::new()
-        errors             = [System.Collections.ArrayList]::new()
+        filePath          = $file.FullName
+        linkedTablesFound = 0; alreadyLocal = 0; plannedRelinks = 0; appliedRelinks = 0
+        links  = [System.Collections.ArrayList]::new()
+        errors = [System.Collections.ArrayList]::new()
       }
 
       try {
-        # Open read-only
+        # Phase 1: classify all links (read-only)
+        $remapPlan          = [System.Collections.ArrayList]::new()
+        $unresolvedLinkNames = [System.Collections.ArrayList]::new()
+
         $db = $dbEngine.OpenDatabase($file.FullName, $false, $true)
         try {
           foreach ($td in $db.TableDefs) {
@@ -800,16 +875,12 @@ function Invoke-RelinkDirectory {
             $connectStr = [string]$td.Connect
             if ([string]::IsNullOrWhiteSpace($connectStr)) { continue }
 
-            # Extract DATABASE= path
             $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')
             if (-not $dbMatch.Success) { continue }
 
             $backendPath = $dbMatch.Groups[1].Value.Trim()
             $classResult = Get-LinkClassification `
-              -BackendPath $backendPath `
-              -RootPath $rootPath `
-              -AliasMap $aliasMap `
-              -FileIndex $fileIndex
+              -BackendPath $backendPath -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex
 
             $linkEntry = [ordered]@{
               database            = $file.FullName
@@ -817,23 +888,96 @@ function Invoke-RelinkDirectory {
               originalBackendPath = $backendPath
               classification      = $classResult.classification
               resolvedLocalPath   = $classResult.resolvedLocalPath
+              chainHops           = 0
+              cycleDetected       = $false
             }
 
-            $fileResult.linkedTablesFound++
-            $totalLinked++
+            $fileResult.linkedTablesFound++; $totalLinked++
 
             switch ($classResult.classification) {
               "alreadyLocal"  { $fileResult.alreadyLocal++; $totalAlreadyLocal++ }
-              "plannedRelink" { $fileResult.plannedRelinks++; $totalPlanned++ }
-              "unresolved"    { [void]$allUnresolved.Add($linkEntry) }
-              "ambiguous"     { [void]$allUnresolved.Add($linkEntry) }
+              "plannedRelink" {
+                $fileResult.plannedRelinks++; $totalPlanned++
+                [void]$remapPlan.Add([ordered]@{ tdName = $tdName; resolvedLocalPath = $classResult.resolvedLocalPath; linkEntry = $linkEntry })
+              }
+              "unresolved" { [void]$unresolvedLinkNames.Add($tdName) }
+              "ambiguous"  { $linkEntry.classification = "unresolved"; [void]$unresolvedLinkNames.Add($tdName) }
             }
-
             [void]$fileResult.links.Add($linkEntry)
           }
         } finally {
           try { $db.Close() } catch {}
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch {}
+        }
+
+        # Phase 2: apply (when not dry-run and there is work)
+        $hasWork = $remapPlan.Count -gt 0 -or ($removeUnresolved -and $unresolvedLinkNames.Count -gt 0)
+        if (-not $dryRun -and $hasWork) {
+          $applyOk = $true
+          if (-not $noBackup) {
+            try {
+              $bak = Backup-AccessFile -Path $file.FullName
+              [void]$allBackupPaths.Add($bak)
+            } catch {
+              [void]$fileResult.errors.Add("Backup failed: $($_.Exception.Message)")
+              [void]$allErrors.Add("$($file.FullName): Backup failed: $($_.Exception.Message)")
+              $applyOk = $false
+            }
+          }
+
+          if ($applyOk) {
+            $dbWrite = $dbEngine.OpenDatabase($file.FullName, $false, $false)
+            try {
+              foreach ($plan in $remapPlan) {
+                $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
+                $chain = Resolve-LinkChain `
+                  -DbEngine $dbEngine -StartDb $dbWrite -TableName $plan.tdName `
+                  -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex `
+                  -Visited ([ref]$visited) -Depth 0 -MaxDepth 5
+
+                if ($chain.cycleDetected) {
+                  $plan.linkEntry.classification = "cycle"
+                  $plan.linkEntry.cycleDetected  = $true
+                  continue
+                }
+
+                $targetPath = if ($null -ne $chain.resolvedPath) { $chain.resolvedPath } else { $plan.resolvedLocalPath }
+                $plan.linkEntry.chainHops = $chain.hops
+
+                try {
+                  $tdW = $dbWrite.TableDefs.Item($plan.tdName)
+                  $tdW.Connect = ";DATABASE=$targetPath"
+                  if ($chain.resolvedTable) { $tdW.SourceTableName = $chain.resolvedTable }
+                  $tdW.RefreshLink()
+                  $plan.linkEntry.classification = "applied"
+                  $plan.linkEntry.resolvedLocalPath = $targetPath
+                  $fileResult.appliedRelinks++; $totalApplied++
+                  try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
+                } catch {
+                  [void]$fileResult.errors.Add("RefreshLink $($plan.tdName): $($_.Exception.Message)")
+                  [void]$allErrors.Add("$($file.FullName)!$($plan.tdName): $($_.Exception.Message)")
+                }
+              }
+
+              if ($removeUnresolved) {
+                foreach ($linkName in $unresolvedLinkNames) {
+                  try {
+                    $dbWrite.TableDefs.Delete($linkName)
+                    $totalRemoved++
+                    foreach ($le in $fileResult.links) {
+                      if ([string]$le.linkName -eq $linkName) { $le.classification = "removed"; break }
+                    }
+                  } catch {
+                    [void]$fileResult.errors.Add("Delete $linkName: $($_.Exception.Message)")
+                    [void]$allErrors.Add("$($file.FullName)!$($linkName): $($_.Exception.Message)")
+                  }
+                }
+              }
+            } finally {
+              try { $dbWrite.Close() } catch {}
+              try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbWrite) } catch {}
+            }
+          }
         }
       } catch {
         [void]$fileResult.errors.Add($_.Exception.Message)
@@ -848,18 +992,17 @@ function Invoke-RelinkDirectory {
 
   Write-DysflowProgress -Percent 90 -Message "Finalizing"
 
-  $allLinks = $fileResults | ForEach-Object { $_.links } | Where-Object { $_ -ne $null }
-  $externalLinkCount = @($allLinks | Where-Object { $_.classification -ne "alreadyLocal" }).Count
+  $allLinks = @($fileResults | ForEach-Object { @($_.links) } | Where-Object { $_ -ne $null })
+  $externalLinkCount = @($allLinks | Where-Object { $_.classification -notin @("alreadyLocal","applied","removed") }).Count
 
   $denyPrefixes = @()
   if ($null -ne $Payload.denyPrefixes) { $denyPrefixes = @($Payload.denyPrefixes) }
   $datosteLinkCount = 0
   if ($denyPrefixes.Count -gt 0) {
-    foreach ($link in @($allLinks)) {
+    foreach ($link in $allLinks) {
       foreach ($prefix in $denyPrefixes) {
         if ($link.originalBackendPath.StartsWith([string]$prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-          $datosteLinkCount++
-          break
+          $datosteLinkCount++; break
         }
       }
     }
@@ -873,13 +1016,13 @@ function Invoke-RelinkDirectory {
       linkedTablesFound = $totalLinked
       alreadyLocal      = $totalAlreadyLocal
       plannedRelinks    = $totalPlanned
-      appliedRelinks    = 0
-      unresolved        = @($allUnresolved)
-      removed           = @()
+      appliedRelinks    = $totalApplied
+      unresolved        = @($allLinks | Where-Object { $_.classification -eq "unresolved" })
+      removed           = @($allLinks | Where-Object { $_.classification -eq "removed" })
       externalLinkCount = $externalLinkCount
       datosteLinkCount  = $datosteLinkCount
       brokenLinkCount   = 0
-      backupPaths       = @()
+      backupPaths       = @($allBackupPaths)
       errors            = @($allErrors)
       fileResults       = @($fileResults)
     }
