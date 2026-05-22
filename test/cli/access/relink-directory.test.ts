@@ -4,6 +4,7 @@ import {
   handleRelinkDirectoryCommand,
   type RelinkDirectoryOptions,
 } from "../../../src/cli/commands/access/relink-directory.js";
+import { handleAccessCommand } from "../../../src/cli/commands/access.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { OperationResult } from "../../../src/core/contracts/index.js";
 import { successResult } from "../../../src/core/contracts/index.js";
@@ -329,4 +330,27 @@ describe("handleRelinkDirectoryCommand", () => {
     // The password itself should not appear in stdout
     expect(result.stdout).not.toContain("secret123");
   });
+});
+
+// ---------------------------------------------------------------------------
+// handleAccessCommand — service wiring tests
+// These tests verify that access.ts wires the AccessQueryService correctly
+// so that handleRelinkDirectoryCommand does NOT fall through to the
+// "service is not available" error path in production.
+// ---------------------------------------------------------------------------
+
+describe("handleAccessCommand service wiring", () => {
+  it("routes relink-directory and does not return 'service not available' error when rootPath is provided", async () => {
+    // When access.ts is properly wired, the service will be injected.
+    // Without wiring, the handler returns exitCode 1 with "service is not available".
+    // The runner may fail for other reasons (PS not found, path not exist) but must
+    // NOT return the "not available" sentinel — that would mean service is not wired.
+    const result = await handleAccessCommand(
+      ["relink-directory", "--root", "C:\\data", "--dry-run"],
+      {},
+    );
+    // With proper service wiring, this should NOT contain the "not available" sentinel.
+    // If service wiring is missing, this fails RED as expected in TDD.
+    expect(result.stderr).not.toContain("not available");
+  }, 30_000);
 });

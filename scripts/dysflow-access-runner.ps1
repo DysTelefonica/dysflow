@@ -660,6 +660,249 @@ function Invoke-WriteAction {
   }
 }
 
+# ---------------------------------------------------------------------------
+# relink_directory helpers — file enumeration, classification, dry-run JSON
+# ---------------------------------------------------------------------------
+
+function Get-AccessFilesRecursive {
+  param(
+    [string]$RootPath,
+    [bool]$Recursive = $true
+  )
+  $filter = @("*.accdb", "*.mdb")
+  if ($Recursive) {
+    return @(Get-ChildItem -Path $RootPath -Include $filter -Recurse -File -ErrorAction SilentlyContinue)
+  }
+  return @(Get-ChildItem -Path $RootPath -Include $filter -File -ErrorAction SilentlyContinue)
+}
+
+function Build-AccessFileIndex {
+  param([System.IO.FileInfo[]]$Files)
+  $index = @{}
+  foreach ($f in $Files) {
+    $key = $f.Name.ToLower()
+    if (-not $index.ContainsKey($key)) {
+      $index[$key] = [System.Collections.Generic.List[string]]::new()
+    }
+    $index[$key].Add($f.FullName)
+  }
+  return $index
+}
+
+function Resolve-LocalPath {
+  param(
+    [string]$BackendPath,
+    [hashtable]$AliasMap,
+    [hashtable]$FileIndex
+  )
+  $basename = [System.IO.Path]::GetFileName($BackendPath).ToLower()
+  $matchExt = [System.IO.Path]::GetExtension($basename).ToLower()
+
+  # Apply alias map first
+  if ($AliasMap.ContainsKey($basename)) {
+    $basename = $AliasMap[$basename].ToLower()
+    $matchExt = [System.IO.Path]::GetExtension($basename).ToLower()
+  }
+
+  if (-not $FileIndex.ContainsKey($basename)) { return $null }
+
+  $matches = @($FileIndex[$basename])
+  # Extension-exact match (no .mdb <-> .accdb cross-match per ADR-5)
+  $exactMatches = @($matches | Where-Object { [System.IO.Path]::GetExtension($_).ToLower() -eq $matchExt })
+
+  if ($exactMatches.Count -eq 0) { return $null }
+  if ($exactMatches.Count -gt 1) { return @{ path = $null; ambiguous = $true } }
+  return @{ path = $exactMatches[0]; ambiguous = $false }
+}
+
+function Get-LinkClassification {
+  param(
+    [string]$BackendPath,
+    [string]$RootPath,
+    [hashtable]$AliasMap,
+    [hashtable]$FileIndex
+  )
+
+  # Already local if path starts under RootPath
+  if ($BackendPath.StartsWith($RootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return @{ classification = "alreadyLocal"; resolvedLocalPath = $BackendPath }
+  }
+
+  $resolved = Resolve-LocalPath -BackendPath $BackendPath -AliasMap $AliasMap -FileIndex $FileIndex
+  if ($null -eq $resolved) {
+    return @{ classification = "unresolved"; resolvedLocalPath = $null }
+  }
+  if ($resolved.ambiguous) {
+    return @{ classification = "ambiguous"; resolvedLocalPath = $null }
+  }
+  return @{ classification = "plannedRelink"; resolvedLocalPath = $resolved.path }
+}
+
+function Invoke-RelinkDirectory {
+  param($Payload)
+
+  $rootPath = [string]$Payload.rootPath
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) { $dryRun = [bool]$Payload.dryRun }
+  $recursive = $true
+  if ($null -ne $Payload.recursive) { $recursive = [bool]$Payload.recursive }
+
+  # Build alias map from "old.accdb=new.accdb" entries in maps array
+  $aliasMap = @{}
+  if ($null -ne $Payload.maps) {
+    foreach ($entry in @($Payload.maps)) {
+      $fromVal = [string]$entry.from
+      $toVal = [string]$entry.to
+      if (-not [string]::IsNullOrWhiteSpace($fromVal) -and -not [string]::IsNullOrWhiteSpace($toVal)) {
+        $aliasMap[$fromVal.ToLower()] = $toVal
+      }
+    }
+  }
+
+  # Enumerate files
+  $files = @(Get-AccessFilesRecursive -RootPath $rootPath -Recursive $recursive)
+  $fileIndex = Build-AccessFileIndex -Files $files
+
+  $fileResults = [System.Collections.ArrayList]::new()
+  $allUnresolved = [System.Collections.ArrayList]::new()
+  $allErrors = [System.Collections.ArrayList]::new()
+  $totalLinked = 0
+  $totalAlreadyLocal = 0
+  $totalPlanned = 0
+
+  Write-DysflowProgress -Percent 20 -Message "Scanning files" -Total $files.Count
+
+  $dbEngine = New-Object -ComObject DAO.DBEngine.120
+
+  try {
+    $fileIdx = 0
+    foreach ($file in $files) {
+      $fileIdx++
+      Write-DysflowProgress -Percent ([int](20 + 60 * $fileIdx / [Math]::Max(1, $files.Count))) -Message "Processing $($file.Name)" -Total $files.Count
+
+      $fileResult = [ordered]@{
+        filePath           = $file.FullName
+        linkedTablesFound  = 0
+        alreadyLocal       = 0
+        plannedRelinks     = 0
+        appliedRelinks     = 0
+        links              = [System.Collections.ArrayList]::new()
+        errors             = [System.Collections.ArrayList]::new()
+      }
+
+      try {
+        # Open read-only
+        $db = $dbEngine.OpenDatabase($file.FullName, $false, $true)
+        try {
+          foreach ($td in $db.TableDefs) {
+            $tdName = [string]$td.Name
+            if ($tdName.StartsWith("MSys")) { continue }
+            $connectStr = [string]$td.Connect
+            if ([string]::IsNullOrWhiteSpace($connectStr)) { continue }
+
+            # Extract DATABASE= path
+            $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=(.+)$')
+            if (-not $dbMatch.Success) { continue }
+
+            $backendPath = $dbMatch.Groups[1].Value.Trim()
+            $classResult = Get-LinkClassification `
+              -BackendPath $backendPath `
+              -RootPath $rootPath `
+              -AliasMap $aliasMap `
+              -FileIndex $fileIndex
+
+            $linkEntry = [ordered]@{
+              database            = $file.FullName
+              linkName            = $tdName
+              originalBackendPath = $backendPath
+              classification      = $classResult.classification
+              resolvedLocalPath   = $classResult.resolvedLocalPath
+            }
+
+            $fileResult.linkedTablesFound++
+            $totalLinked++
+
+            switch ($classResult.classification) {
+              "alreadyLocal"  { $fileResult.alreadyLocal++; $totalAlreadyLocal++ }
+              "plannedRelink" { $fileResult.plannedRelinks++; $totalPlanned++ }
+              "unresolved"    { [void]$allUnresolved.Add($linkEntry) }
+              "ambiguous"     { [void]$allUnresolved.Add($linkEntry) }
+            }
+
+            [void]$fileResult.links.Add($linkEntry)
+          }
+        } finally {
+          try { $db.Close() } catch {}
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch {}
+        }
+      } catch {
+        [void]$fileResult.errors.Add($_.Exception.Message)
+        [void]$allErrors.Add("$($file.FullName): $($_.Exception.Message)")
+      }
+
+      [void]$fileResults.Add($fileResult)
+    }
+  } finally {
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch {}
+  }
+
+  Write-DysflowProgress -Percent 90 -Message "Finalizing"
+
+  $allLinks = $fileResults | ForEach-Object { $_.links } | Where-Object { $_ -ne $null }
+  $externalLinkCount = @($allLinks | Where-Object { $_.classification -ne "alreadyLocal" }).Count
+
+  $denyPrefixes = @()
+  if ($null -ne $Payload.denyPrefixes) { $denyPrefixes = @($Payload.denyPrefixes) }
+  $datosteLinkCount = 0
+  if ($denyPrefixes.Count -gt 0) {
+    foreach ($link in @($allLinks)) {
+      foreach ($prefix in $denyPrefixes) {
+        if ($link.originalBackendPath.StartsWith([string]$prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+          $datosteLinkCount++
+          break
+        }
+      }
+    }
+  }
+
+  return [ordered]@{
+    relinkDirectory = [ordered]@{
+      mode              = if ($dryRun) { "dry-run" } else { "apply" }
+      root              = $rootPath
+      filesScanned      = $files.Count
+      linkedTablesFound = $totalLinked
+      alreadyLocal      = $totalAlreadyLocal
+      plannedRelinks    = $totalPlanned
+      appliedRelinks    = 0
+      unresolved        = @($allUnresolved)
+      removed           = @()
+      externalLinkCount = $externalLinkCount
+      datosteLinkCount  = $datosteLinkCount
+      brokenLinkCount   = 0
+      backupPaths       = @()
+      errors            = @($allErrors)
+      fileResults       = @($fileResults)
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Early dispatch for relink_directory — bypasses Access COM open (ADR-2)
+# ---------------------------------------------------------------------------
+if ($Operation -eq 'query') {
+  $earlyPayload = ConvertFrom-JsonCompat $PayloadJson
+  if ([string]$earlyPayload.action -eq 'relink_directory') {
+    try {
+      $result = Invoke-RelinkDirectory -Payload $earlyPayload
+      $result | ConvertTo-Json -Depth 20 -Compress
+      exit 0
+    } catch {
+      [Console]::Error.WriteLine($_.Exception.Message)
+      exit 1
+    }
+  }
+}
+
 $access = $null
 try {
   if (-not (Test-Path -LiteralPath $AccessDbPath)) {
