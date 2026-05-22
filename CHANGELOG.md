@@ -4,6 +4,17 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-05-22
+
+### Added
+
+- `dysflow uninstall` command to recursively delete runtime directories, clean machine-level markers, and surgically remove MCP configurations from Codex, OpenCode, Claude Desktop, Claude Settings, and Pi. Closes #278.
+
+### Fixed
+
+- Resolved path resolution bugs where global dysflow installed via pnpm symlinks exited silently without console output.
+- Resolved spawn ENOENT errors when running update/install scripts on Windows (added pnpm.cmd/npm.cmd support).
+
 ## [0.6.8] - 2026-05-21
 
 ### Fixed
