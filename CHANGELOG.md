@@ -2,7 +2,14 @@
 
 All notable changes to Dysflow will be documented in this file.
 
-## [Unreleased]
+## [0.7.3] - 2026-05-22
+
+### Fixed
+
+- Resolved quality audit blockers: aligned `LinkClassification` contract and fixed E2E and unit test types to ensure `pnpm lint` passes cleanly.
+- Added dynamic backend database password propagation to `relink-directory` command via `--password-env`.
+- Secured process cleanup fallback inside VBA manager by matching full database paths instead of base filenames to prevent terminating unintended Access processes.
+- Aligned documentation to reflect that the HTTP adapter is active and corrected MCP cleanup tool usage examples in `README.md`.
 
 ## [0.7.2] - 2026-05-22
 
