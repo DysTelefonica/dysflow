@@ -4,6 +4,12 @@ All notable changes to Dysflow will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-22
+
+### Fixed
+
+- Fixed `spawn EINVAL` error on Windows during `dysflow update` when executing pnpm/npm update scripts. Closes #289.
+
 ## [0.7.1] - 2026-05-22
 
 ### Fixed
