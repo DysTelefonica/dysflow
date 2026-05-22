@@ -777,6 +777,7 @@ async function runCommand(
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
+			shell: process.platform === "win32" && finalCommand.endsWith(".cmd"),
 		});
 	} catch (error) {
 		throw createCommandError(`${command} ${args.join(" ")}`, error);
@@ -797,6 +798,7 @@ async function runCommandOutput(
 			cwd,
 			windowsHide: true,
 			maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
+			shell: process.platform === "win32" && finalCommand.endsWith(".cmd"),
 		});
 		return String(stdout).trim();
 	} catch (error) {
