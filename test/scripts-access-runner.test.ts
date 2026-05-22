@@ -31,9 +31,9 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain('return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")');
     expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath");
     expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $BackendPath");
-    expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true");
-    expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false");
-    expect(script).toContain("Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true");
+    expect(script).toContain("Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $AccessPassword");
+    expect(script).toContain("Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $AccessPassword");
+    expect(script).toContain("Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $BackendPassword");
     expect(script).toContain("if ([string]::IsNullOrWhiteSpace($BackendPassword)) {");
     expect(script).toContain('$linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"');
     expect(script).toContain('$tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"');

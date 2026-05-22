@@ -39,7 +39,10 @@ function Open-DatabaseWithBackendPassword {
     [Parameter(Mandatory = $true)] [string] $DatabasePath,
     [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false
   )
-  return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $ReadOnly -Password $BackendPassword
+  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+    return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly)
+  }
+  return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")
 }
 
 function ConvertTo-IsoStartTime {
@@ -983,9 +986,14 @@ function Invoke-RelinkDirectory {
 
                 try {
                   $tdW = $dbWrite.TableDefs.Item($plan.tdName)
-                  $tdW.Connect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) { ";DATABASE=$targetPath" } else { ";DATABASE=$targetPath;PWD=$BackendPassword" }
+                  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+                    $tdW.Connect = ";DATABASE=$targetPath"
+                  } else {
+                    $tdW.Connect = ";DATABASE=$targetPath;PWD=$BackendPassword"
+                  }
                   if ($chain.resolvedTable -and $tdW.SourceTableName -ne $chain.resolvedTable) {
-                    $tdW.SourceTableName = $chain.resolvedTable
+                    $resolvedTable = $chain.resolvedTable
+                    $tdW.SourceTableName = $resolvedTable
                   }
                   $tdW.RefreshLink()
                   $plan.linkEntry.classification = "applied"
