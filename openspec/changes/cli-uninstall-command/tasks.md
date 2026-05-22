@@ -34,12 +34,12 @@ The entire feature is estimated at ~370 lines (approx. 130 lines of source code 
 * **Target Branch**: `main`
 * **Focus**: Enable `dysflow uninstall`, parse arguments, and display help instructions.
 
-#### [ ] Work Unit 1.1: Export installer helpers and types
+#### [x] Work Unit 1.1: Export installer helpers and types
 * **Commit**: `refactor(cli): export installer helpers and types`
 * **Files**: [install.ts](file:///C:/Proyectos/dysflow/src/cli/commands/install.ts)
 * **Tasks**:
-  - [ ] Add `export` keyword to `type AgentConfigPaths`.
-  - [ ] Add `export` keyword to functions:
+  - [x] Add `export` keyword to `type AgentConfigPaths`.
+  - [x] Add `export` keyword to functions:
     - `resolveRuntimeDir`
     - `getSystemMarkerPath`
     - `getHome`
@@ -48,28 +48,28 @@ The entire feature is estimated at ~370 lines (approx. 130 lines of source code 
     - `fileExists`
 * **Verification**: Ensure project compiles successfully with `pnpm build` (or similar build command).
 
-#### [ ] Work Unit 1.2: Define routing and CLI help text
+#### [x] Work Unit 1.2: Define routing and CLI help text
 * **Commit**: `feat(cli): route uninstall command and add help text`
 * **Files**:
   - [types.ts](file:///C:/Proyectos/dysflow/src/cli/commands/types.ts)
   - [index.ts](file:///C:/Proyectos/dysflow/src/cli/index.ts)
 * **Tasks**:
-  - [ ] Add uninstall help entry to `HELP_TEXT` in `types.ts`.
-  - [ ] Import `handleUninstallCommand` and register `["uninstall", handleUninstallCommand]` in `COMMANDS` registry in `index.ts`.
+  - [x] Add uninstall help entry to `HELP_TEXT` in `types.ts`.
+  - [x] Import `handleUninstallCommand` and register `["uninstall", handleUninstallCommand]` in `COMMANDS` registry in `index.ts`.
 * **Verification**: Verify command registry compile safety.
 
-#### [ ] Work Unit 1.3: TDD Uninstall command scaffolding & argument parsing
+#### [x] Work Unit 1.3: TDD Uninstall command scaffolding & argument parsing
 * **Commit**: `feat(cli): parse uninstall arguments`
 * **Files**:
   - [uninstall.ts](file:///C:/Proyectos/dysflow/src/cli/commands/uninstall.ts) (New File)
   - [uninstall.test.ts](file:///C:/Proyectos/dysflow/test/cli/uninstall.test.ts) (New File)
 * **Tasks**:
-  - [ ] **TDD (Red)**: Write unit tests in `uninstall.test.ts` for argument parsing:
+  - [x] **TDD (Red)**: Write unit tests in `uninstall.test.ts` for argument parsing:
     - Should print usage text and exit with `0` when `--help` or `-h` is passed.
     - Should reject unknown arguments with exit code `1`.
     - Should reject missing or invalid value for `--runtime-dir` with exit code `1`.
     - Should correctly parse valid `--runtime-dir` options.
-  - [ ] **TDD (Green)**: Implement `parseUninstallArgs` and `handleUninstallCommand` scaffolding in `uninstall.ts` to satisfy the parsing tests.
+  - [x] **TDD (Green)**: Implement `parseUninstallArgs` and `handleUninstallCommand` scaffolding in `uninstall.ts` to satisfy the parsing tests.
 * **Verification**: Run `pnpm test` (vitest) to confirm parsing tests pass.
 
 ---
