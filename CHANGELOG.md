@@ -7,8 +7,10 @@ All notable changes to Dysflow will be documented in this file.
 ### Fixed
 
 - Resolved Node `DEP0190` security/deprecation warning on Windows during installation runner tasks.
-- Enhanced password propagation in `relink-directory` to correctly authenticate frontend databases with the frontend password while fallback-authenticating links.
-- Restored runner script function patterns to satisfy static integration tests.
+- Enhanced password propagation in `relink-directory` to correctly authenticate frontend databases with the frontend password while fallback-authenticating links, and fall back to the backend password during root directory scanning.
+- Recreated table links dynamically during apply mode when `SourceTableName` changes to resolve DAO collection constraints.
+- Aligned MCP legacy `relink_directory` tool schema and mapper with modern CLI options (such as apply, maps, password, and timeout).
+- Preserved existing `PWD` connection password in table links when no new backend password is provided.
 
 ## [0.7.4] - 2026-05-22
 
