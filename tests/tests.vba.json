@@ -115,6 +115,24 @@
       "tags": ["atomic", "indicator-characterization", "issue-16"]
     },
     {
+      "name": "Indicadores telemetria registra etapas proyecto",
+      "procedure": "Test_IndicadoresTelemetry_RegistraEtapas_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-telemetry", "issue-11", "issue-18"]
+    },
+    {
+      "name": "Indicadores telemetria deshabilitada sin resumen",
+      "procedure": "Test_IndicadoresTelemetry_DeshabilitadaNoEmiteResumen_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-telemetry", "issue-11"]
+    },
+    {
+      "name": "Indicadores telemetria evidencia cache startup",
+      "procedure": "Test_IndicadoresTelemetry_CacheEvidence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-telemetry", "issue-18"]
+    },
+    {
       "name": "Cache proyecto delegacion y reset",
       "procedure": "Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic",
       "expect": { "ok": true },
