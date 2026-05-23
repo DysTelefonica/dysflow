@@ -56,17 +56,13 @@ export type DysflowMcpTool = {
 
 const NO_INPUT_SCHEMA: JsonObjectSchema = { type: "object", additionalProperties: false, properties: {} };
 
-const CONTEXT_PROPERTIES: Record<string, JsonSchemaProperty> = {
-  projectId: { type: "string", description: "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
-  contextId: { type: "string", description: "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known." },
-};
-
 const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: ["procedureName"],
   additionalProperties: false,
   properties: {
-    ...CONTEXT_PROPERTIES,
+    projectId: { type: "string", description: "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+    contextId: { type: "string", description: "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known." },
     moduleName: { type: "string", description: "Optional VBA module name." },
     procedureName: { type: "string", description: "Public VBA procedure to execute." },
     arguments: { type: "array", items: {}, description: "Procedure arguments." },
@@ -78,7 +74,8 @@ const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   required: ["sql", "mode"],
   additionalProperties: false,
   properties: {
-    ...CONTEXT_PROPERTIES,
+    projectId: { type: "string", description: "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+    contextId: { type: "string", description: "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known." },
     sql: { type: "string", description: "Access SQL to execute." },
     mode: { type: "string", enum: ["read", "write"], description: "Execution mode: read or write." },
   },
@@ -88,7 +85,8 @@ const DOCTOR_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    ...CONTEXT_PROPERTIES,
+    projectId: { type: "string", description: "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides." },
+    contextId: { type: "string", description: "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known." },
     includeEnvironment: { type: "boolean", description: "Include environment diagnostics when supported." },
   },
 };
@@ -284,8 +282,8 @@ const SCHEMA_PROPS = {
   exists_name: { type: "string", description: "Object name to check for existence." } as JsonSchemaProperty,
 };
 
-/** Shared context props used by most tools. */
-const CTX = { projectId: SCHEMA_PROPS.projectId, contextId: SCHEMA_PROPS.contextId };
+/** Shared context props used by most tools (single source of truth). */
+const CTX_PROPS = { projectId: SCHEMA_PROPS.projectId, contextId: SCHEMA_PROPS.contextId };
 /** Access path overrides used by most legacy tools. */
 const ACCESS_OVERRIDE = { accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, destinationRoot: SCHEMA_PROPS.destinationRoot, projectRoot: SCHEMA_PROPS.projectRoot };
 /** Strict context guard props. */
@@ -301,54 +299,54 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
   cleanup_access_operation: { type: "object", required: ["operationId"], additionalProperties: false, properties: { operationId: SCHEMA_PROPS.operationId, accessPath: SCHEMA_PROPS.accessPath, force: SCHEMA_PROPS.force } },
   run_vba: { type: "object", required: ["procedureName"], additionalProperties: false, properties: { procedureName: SCHEMA_PROPS.procedureName, argsJson: SCHEMA_PROPS.argsJson } },
-  query_sql: { type: "object", additionalProperties: false, properties: { ...CTX, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
-  exec_sql: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
-  run_script: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, scriptPath: SCHEMA_PROPS.scriptPath, path: SCHEMA_PROPS.path, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
-  create_table: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, definition: SCHEMA_PROPS.definition, fields: SCHEMA_PROPS.fields, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply } },
-  drop_table: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply } },
-  seed_fixture: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, rows: SCHEMA_PROPS.rows, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
-  teardown_fixture: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
+  query_sql: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
+  exec_sql: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
+  run_script: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, scriptPath: SCHEMA_PROPS.scriptPath, path: SCHEMA_PROPS.path, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
+  create_table: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, definition: SCHEMA_PROPS.definition, fields: SCHEMA_PROPS.fields, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply } },
+  drop_table: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply } },
+  seed_fixture: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, rows: SCHEMA_PROPS.rows, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
+  teardown_fixture: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun, apply: SCHEMA_PROPS.apply, allowTables: SCHEMA_PROPS.allowTables, allowTable: SCHEMA_PROPS.allowTable, denyTables: SCHEMA_PROPS.denyTables, denyTable: SCHEMA_PROPS.denyTable } },
   // ---- VBA sync tools ----
-  export_modules: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, filter: SCHEMA_PROPS.filter, destinationRoot: SCHEMA_PROPS.destinationRoot, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  export_all: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, filter: SCHEMA_PROPS.filter, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  import_modules: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  import_all: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  list_objects: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, filter: SCHEMA_PROPS.filter, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  exists: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, name: SCHEMA_PROPS.name, moduleName: SCHEMA_PROPS.moduleName, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  test_vba: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, proceduresJson: SCHEMA_PROPS.proceduresJson, filter: SCHEMA_PROPS.filter, testsPath: SCHEMA_PROPS.testsPath, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  compile_vba: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  verify_code: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  verify_binary: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  reconcile_binary: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  delete_module: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, moduleName: SCHEMA_PROPS.moduleName, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  generate_erd: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, erdPath: SCHEMA_PROPS.erdPath, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  fix_encoding: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, location: SCHEMA_PROPS.location, timeoutMs: SCHEMA_PROPS.timeoutMs } },
-  validate_form_spec: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec } },
-  generate_form: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec, kind: SCHEMA_PROPS.kind, name: SCHEMA_PROPS.name, replace: SCHEMA_PROPS.replace, dryRun: SCHEMA_PROPS.dryRun } },
-  catalog_add_control: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, catalogPath: SCHEMA_PROPS.catalogPath, controlName: SCHEMA_PROPS.controlName, controlType: SCHEMA_PROPS.controlType, type: SCHEMA_PROPS.type } },
-  harvest_form_catalog: { type: "object", additionalProperties: false, properties: { ...CTX, ...ACCESS_OVERRIDE, catalogPath: SCHEMA_PROPS.catalogPath, filter: SCHEMA_PROPS.filter } },
+  export_modules: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, filter: SCHEMA_PROPS.filter, destinationRoot: SCHEMA_PROPS.destinationRoot, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  export_all: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, filter: SCHEMA_PROPS.filter, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  import_modules: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  import_all: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, importMode: SCHEMA_PROPS.importMode, dryRun: SCHEMA_PROPS.dryRun, compile: SCHEMA_PROPS.compile, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  list_objects: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, filter: SCHEMA_PROPS.filter, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  exists: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, name: SCHEMA_PROPS.name, moduleName: SCHEMA_PROPS.moduleName, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  test_vba: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, proceduresJson: SCHEMA_PROPS.proceduresJson, filter: SCHEMA_PROPS.filter, testsPath: SCHEMA_PROPS.testsPath, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  compile_vba: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  verify_code: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  verify_binary: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  reconcile_binary: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, ...STRICT_CTX, moduleNames: SCHEMA_PROPS.moduleNames, diff: SCHEMA_PROPS.diff, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  delete_module: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, moduleName: SCHEMA_PROPS.moduleName, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  generate_erd: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, erdPath: SCHEMA_PROPS.erdPath, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  fix_encoding: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, location: SCHEMA_PROPS.location, timeoutMs: SCHEMA_PROPS.timeoutMs } },
+  validate_form_spec: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec } },
+  generate_form: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, specPath: SCHEMA_PROPS.specPath, spec: SCHEMA_PROPS.spec, kind: SCHEMA_PROPS.kind, name: SCHEMA_PROPS.name, replace: SCHEMA_PROPS.replace, dryRun: SCHEMA_PROPS.dryRun } },
+  catalog_add_control: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, catalogPath: SCHEMA_PROPS.catalogPath, controlName: SCHEMA_PROPS.controlName, controlType: SCHEMA_PROPS.controlType, type: SCHEMA_PROPS.type } },
+  harvest_form_catalog: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, catalogPath: SCHEMA_PROPS.catalogPath, filter: SCHEMA_PROPS.filter } },
   // ---- query slice tools ----
-  list_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath } },
-  list_linked_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath } },
-  get_schema: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table } },
-  count_rows: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
-  distinct_values: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, columnName: SCHEMA_PROPS.columnName, column: SCHEMA_PROPS.column, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
-  compare_backends: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, comparePath: SCHEMA_PROPS.comparePath } },
-  list_access_files: { type: "object", additionalProperties: false, properties: { ...CTX, rootPath: SCHEMA_PROPS.rootPath, directory: SCHEMA_PROPS.directory } },
-  get_relationships: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath } },
-  list_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath } },
-  export_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, exportPath: SCHEMA_PROPS.exportPath, path: SCHEMA_PROPS.path } },
-  link_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
-  relink_tables: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
-  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
-  unlink_table: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun } },
-  import_queries: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, queryDefinitions: SCHEMA_PROPS.queryDefinitions, queries: SCHEMA_PROPS.queries, dryRun: SCHEMA_PROPS.dryRun } },
-  compact_repair: { type: "object", additionalProperties: false, properties: { ...CTX, accessPath: SCHEMA_PROPS.accessPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath, backupFirst: SCHEMA_PROPS.backupFirst, dryRun: SCHEMA_PROPS.dryRun } },
+  list_tables: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath } },
+  list_linked_tables: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath } },
+  get_schema: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table } },
+  count_rows: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
+  distinct_values: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, columnName: SCHEMA_PROPS.columnName, column: SCHEMA_PROPS.column, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query } },
+  compare_backends: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, comparePath: SCHEMA_PROPS.comparePath } },
+  list_access_files: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, rootPath: SCHEMA_PROPS.rootPath, directory: SCHEMA_PROPS.directory } },
+  get_relationships: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath } },
+  list_links: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath } },
+  export_queries: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, exportPath: SCHEMA_PROPS.exportPath, path: SCHEMA_PROPS.path } },
+  link_tables: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
+  relink_tables: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
+  localize_backend_links: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, backendPath: SCHEMA_PROPS.backendPath, dryRun: SCHEMA_PROPS.dryRun } },
+  unlink_table: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, tableName: SCHEMA_PROPS.tableName, table: SCHEMA_PROPS.table, dryRun: SCHEMA_PROPS.dryRun } },
+  import_queries: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, queryDefinitions: SCHEMA_PROPS.queryDefinitions, queries: SCHEMA_PROPS.queries, dryRun: SCHEMA_PROPS.dryRun } },
+  compact_repair: { type: "object", additionalProperties: false, properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath, databasePath: SCHEMA_PROPS.databasePath, sourcePath: SCHEMA_PROPS.sourcePath, backupFirst: SCHEMA_PROPS.backupFirst, dryRun: SCHEMA_PROPS.dryRun } },
   relink_directory: {
     type: "object",
     additionalProperties: false,
     properties: {
-      ...CTX,
+      ...CTX_PROPS,
       rootPath: SCHEMA_PROPS.rootPath,
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
@@ -381,7 +379,7 @@ async function handleValidatedLegacyWrite<TData>(
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) return invalidInput(validation);
-  const isDryRun = isLegacyWriteDryRun(input);
+  const isDryRun = resolveIsDryRun(input);
   if (!isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) return writesDisabled();
   return translateCoreResultToMcpContent(await execute());
 }
@@ -390,6 +388,7 @@ export function createDysflowMcpTools(
   services: DysflowMcpServices,
   writesEnabled = false,
   writeAccessResolver?: McpWriteAccessResolver,
+  env: Record<string, string | undefined> = process.env,
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -449,7 +448,7 @@ export function createDysflowMcpTools(
     },
   ];
 
-  return appendLegacyCompatibilityTools(currentTools, services, writesEnabled, writeAccessResolver);
+  return appendLegacyCompatibilityTools(currentTools, services, writesEnabled, writeAccessResolver, env);
 }
 
 function appendLegacyCompatibilityTools(
@@ -457,6 +456,7 @@ function appendLegacyCompatibilityTools(
   services: DysflowMcpServices,
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
+  env: Record<string, string | undefined>,
 ): DysflowMcpTool[] {
   const tools = [...currentTools];
   const names = new Set(tools.map((tool) => tool.name));
@@ -557,7 +557,7 @@ function appendLegacyCompatibilityTools(
   });
 
   for (const legacyName of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
-    add(createLegacyDispatchTool(legacyName, services, writesEnabled, writeAccessResolver));
+    add(createLegacyDispatchTool(legacyName, services, writesEnabled, writeAccessResolver, env));
   }
 
   return tools;
@@ -576,6 +576,7 @@ function createLegacyDispatchTool(
   services: DysflowMcpServices,
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
+  env: Record<string, string | undefined>,
 ): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
   // LEGACY_TOOL_SCHEMAS is the sole source of truth for all legacy tool schemas (#200).
@@ -588,7 +589,7 @@ function createLegacyDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
-      const isDryRun = isRecord(input) && input.dryRun === true;
+      const isDryRun = resolveIsDryRun(input);
       if (!isDryRun && (isWriteFixtureSliceTool(name) || getLegacyParityToolDefinition(name).queryMode === "write") && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
         return writesDisabled();
       }
@@ -602,7 +603,7 @@ function createLegacyDispatchTool(
         };
       }
       if (isQueryMaintenanceSliceTool(name)) {
-        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyMaintenanceRequest(name, input)));
+        return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyMaintenanceRequest(name, input, env)));
       }
       if (isQuerySliceTool(name)) {
         return translateCoreResultToMcpContent(await services.queryService.execute(toLegacyQueryRequest(name, input)));
@@ -628,9 +629,10 @@ async function isWriteAllowed(
   return await writeAccessResolver(input);
 }
 
-function isLegacyWriteDryRun(input: unknown): boolean {
+function resolveIsDryRun(input: unknown): boolean {
   if (!isRecord(input)) return true;
-  if (input.apply === true || input.dryRun === false) return false;
+  if (input["apply"] === true) return false;
+  if (input["dryRun"] === false) return false;
   return true;
 }
 
@@ -697,13 +699,13 @@ function toLegacyWriteFixtureRequest(name: LegacyDysflowMcpToolName, input: unkn
     scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
     definition: stringValue(params.definition) ?? stringValue(params.fields),
     rows: rowsValue(params.rows),
-    dryRun: params.apply === true || params.dryRun === false ? false : true,
+    dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
   };
 }
 
-function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unknown): AccessQueryRequest {
+function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unknown, env: Record<string, string | undefined>): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
   const queryMode = getLegacyParityToolDefinition(name).queryMode ?? "write";
   return {
@@ -718,7 +720,7 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
     importPath: stringValue(params.importPath) ?? stringValue(params.path),
     queryDefinitions: queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-    dryRun: params.apply === true || params.dryRun === false ? false : true,
+    dryRun: resolveIsDryRun(input),
     maps: Array.isArray(params.maps)
       ? params.maps.filter((m): m is { from: string; to: string } => isRecord(m) && typeof m.from === "string" && typeof m.to === "string")
       : undefined,
@@ -728,7 +730,7 @@ function toLegacyMaintenanceRequest(name: LegacyDysflowMcpToolName, input: unkno
     noBackup: params.backup === false ? true : undefined,
     recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
     timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
-    backendPassword: stringValue(params.backendPassword) ?? stringValue(params.password) ?? (params.passwordEnv ? process.env[stringValue(params.passwordEnv) ?? ""] : undefined),
+    backendPassword: stringValue(params.backendPassword) ?? stringValue(params.password) ?? (params.passwordEnv ? env[stringValue(params.passwordEnv) ?? ""] : undefined),
   };
 }
 
@@ -773,8 +775,19 @@ export function translateCoreResultToMcpContent<TData>(result: OperationResult<T
 }
 
 function sanitizeErrorMessage(message: string): string {
-  const pathPattern = /(?:[A-Za-z]:\\[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b|(?<!\S)\/[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b|\\\\[^\\\s"'<>|:*?]+\\[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?|[A-Za-z]:\\(?:[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?)?|(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+)/gi;
-  return message.replace(pathPattern, "[PATH]");
+  // Each alternative is applied sequentially to avoid nested unbounded quantifiers
+  // in a single combined pattern (defense against catastrophic backtracking).
+  // UNC paths: \\server\share[\subdir...][\ ]
+  let result = message.replace(/\\\\[^\\\s"'<>|:*?]+\\[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?/g, "[PATH]");
+  // Windows paths with database extension: C:\...\file.accdb
+  result = result.replace(/[A-Za-z]:\\[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]");
+  // POSIX paths with database extension: /path/to/file.accdb
+  result = result.replace(/(?<!\S)\/[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]");
+  // Windows drive root paths: C:\dir\...
+  result = result.replace(/[A-Za-z]:\\(?:[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?)?/g, "[PATH]");
+  // POSIX directory paths: /dir/subdir/...
+  result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
+  return result;
 }
 
 const LEGACY_QUERY_SLICE_TOOL_NAMES = [

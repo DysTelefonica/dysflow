@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
@@ -629,6 +630,28 @@ describe("MCP tool registration over core services", () => {
       await expect(
         legacyTool?.handler({ procedureName: "LegacyProc" }, context),
       ).resolves.toMatchObject({ isError: false });
+    });
+  });
+
+  describe("context props unification — single source of truth (#200)", () => {
+    it("does NOT declare CONTEXT_PROPERTIES or the standalone CTX alias in tools.ts (they were duplicates)", () => {
+      const source = readFileSync("src/adapters/mcp/tools.ts", "utf8");
+      expect(source).not.toContain("const CONTEXT_PROPERTIES");
+      expect(source).not.toContain("const CTX =");
+    });
+
+    it("schemas that previously used CONTEXT_PROPERTIES still include projectId and contextId", () => {
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+      const toolsWithCtx = ["query_sql", "exec_sql", "export_modules", "link_tables", "list_tables"];
+      for (const name of toolsWithCtx) {
+        const tool = tools.find((t) => t.name === name);
+        expect(tool?.inputSchema?.properties, `${name} must have projectId`).toHaveProperty("projectId");
+        expect(tool?.inputSchema?.properties, `${name} must have contextId`).toHaveProperty("contextId");
+      }
     });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LEGACY_DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/legacy-tool-inventory";
+import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, type LegacyDysflowMcpToolName } from "../../../src/adapters/mcp/legacy-tool-inventory";
 import { HIDDEN_STUB_TOOL_NAMES, createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { LEGACY_PARITY_REGISTRY } from "../../../src/adapters/mcp/legacy-parity-registry";
 import { successResult } from "../../../src/core/contracts/index";
@@ -26,15 +26,8 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
   it("documents and validates exact tool counts", () => {
     const legacyCount = LEGACY_DYSFLOW_MCP_TOOL_NAMES.length;
     const stubCount = HIDDEN_STUB_TOOL_NAMES.size;
-    const modernCount = tools.filter(t => !LEGACY_DYSFLOW_MCP_TOOL_NAMES.includes(t.name as any)).length;
+    const modernCount = tools.filter(t => !LEGACY_DYSFLOW_MCP_TOOL_NAMES.includes(t.name as LegacyDysflowMcpToolName)).length;
     const visibleCount = tools.filter(t => !t.hidden).length;
-
-    // Report
-    console.log("=== MCP RELEASE MATRIX TOOL COUNT REPORT ===");
-    console.log(`Legacy tools count: ${legacyCount} (expected: 45)`);
-    console.log(`Hidden stubs count: ${stubCount} (expected: 2)`);
-    console.log(`Modern tools count: ${modernCount} (expected: 5)`);
-    console.log(`Visible tools count: ${visibleCount} (expected: 48)`);
 
     expect(legacyCount).toBe(45);
     expect(stubCount).toBe(2);

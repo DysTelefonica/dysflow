@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
 	InMemoryAccessOperationRegistry,
@@ -39,10 +40,8 @@ describe("AccessOperationPreflightCleanupService", () => {
 
 		expect(result).toEqual({ cleaned: ["op-stale"], killed: [], orphanedKilled: [], errors: [] });
 		expect(killed).toEqual([]);
-		await expect(registry.get("op-stale")).resolves.toMatchObject({
-			status: "cleaned",
-			updatedAt: "2026-05-15T10:02:00.000Z",
-		});
+		// cleaned records are purged from InMemory registry (parity with FileRegistry)
+		await expect(registry.get("op-stale")).resolves.toBeUndefined();
 	});
 
 	it("marks matching stale operations without a pid as cleaned without inspecting or killing", async () => {
@@ -61,7 +60,8 @@ describe("AccessOperationPreflightCleanupService", () => {
 			orphanedKilled: [],
 			errors: [],
 		});
-		await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "cleaned" });
+		// cleaned records are purged from InMemory registry (parity with FileRegistry)
+		await expect(registry.get("op-stale")).resolves.toBeUndefined();
 	});
 
 	it("kills the registered live pid before marking the operation cleaned", async () => {
@@ -88,7 +88,8 @@ describe("AccessOperationPreflightCleanupService", () => {
 
 		expect(result).toEqual({ cleaned: ["op-stale"], killed: [1234], orphanedKilled: [], errors: [] });
 		expect(killed).toEqual([1234]);
-		await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "cleaned" });
+		// cleaned records are purged from InMemory registry (parity with FileRegistry)
+		await expect(registry.get("op-stale")).resolves.toBeUndefined();
 	});
 
 	it("ignores records with a different accessPath", async () => {
@@ -441,6 +442,39 @@ describe("AccessOperationPreflightCleanupService", () => {
 
 			expect(result.orphanedKilled).toEqual([9999]);
 			expect(killed).toEqual([9999]);
+		});
+	});
+
+	describe("scanAndCleanOrphans — explicit scanner parameter (no non-null assertion)", () => {
+		it("does NOT use non-null assertion on processScanner in scanAndCleanOrphans", () => {
+			const source = readFileSync(
+				"src/core/operations/access-operation-preflight.ts",
+				"utf8",
+			);
+			// The method should not have processScanner! (non-null assertion)
+			expect(source).not.toContain("this.options.processScanner!");
+		});
+
+		it("scanAndCleanOrphans accepts an explicit ProcessScanner parameter and still kills orphans", async () => {
+			const registry = new InMemoryAccessOperationRegistry();
+			const killed: number[] = [];
+			const scanner = {
+				listProcesses: async (): Promise<OsProcessInfo[]> => [
+					{ pid: 5555, name: "MSACCESS.EXE", startTime: "2026-05-15T12:00:00.000Z", commandLine: 'MSACCESS.EXE "C:/data/app.accdb"' },
+				],
+			};
+			const service = new AccessOperationPreflightCleanupService({
+				registry,
+				processInspector: { getProcess: async () => undefined },
+				processKiller: { kill: async (pid) => { killed.push(pid); } },
+				processScanner: scanner,
+				clock: () => "2026-05-15T10:02:00.000Z",
+			});
+
+			const result = await service.cleanup({ accessPath: "C:/data/app.accdb", projectRoot: "C:/repo/app" });
+
+			expect(result.orphanedKilled).toEqual([5555]);
+			expect(killed).toEqual([5555]);
 		});
 	});
 });

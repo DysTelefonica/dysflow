@@ -280,8 +280,10 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
     const stored = { ...record, metadata: { ...record.metadata } };
-    this.records.set(stored.operationId, stored);
-    this.evictOldestRecords();
+    if (!PURGED_PERSISTENT_STATUSES.has(stored.status)) {
+      this.records.set(stored.operationId, stored);
+      this.evictOldestRecords();
+    }
     return { ...stored, metadata: { ...stored.metadata } };
   }
 
@@ -289,7 +291,11 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
     const current = this.records.get(operationId);
     if (current === undefined) return undefined;
     const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };
-    this.records.set(operationId, next);
+    if (PURGED_PERSISTENT_STATUSES.has(next.status)) {
+      this.records.delete(operationId);
+    } else {
+      this.records.set(operationId, next);
+    }
     return { ...next, metadata: { ...next.metadata } };
   }
 

@@ -36,7 +36,8 @@ describe("AccessPowerShellRunner operation ownership", () => {
     const result = await runner.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
 
     expect(result).toMatchObject({ ok: true, operation: { operationId: "op-success", accessPath: "C:/data/app.accdb", accessPid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", status: "completed" } });
-    await expect(registry.get("op-success")).resolves.toMatchObject({ accessPid: 4567, processStartTime: "2026-05-15T10:00:00.000Z", status: "completed" });
+    // completed records are purged from InMemory registry (parity with FileRegistry)
+    await expect(registry.get("op-success")).resolves.toBeUndefined();
   });
 
   it("keeps accessPid/processStartTime in the registry when the call times out", async () => {
