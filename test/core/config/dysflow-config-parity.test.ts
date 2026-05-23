@@ -1,11 +1,15 @@
 /**
- * Characterization tests (PR3 — #195)
+ * Characterization tests (PR2 — #295, originally PR3 — #195)
  *
  * These tests assert that the sync variant (loadDysflowConfig) and the async
  * variant (loadDysflowConfigAsync) return deepEqual results for identical
  * inputs.  They MUST remain GREEN before, during, and after the refactor that
  * extracts shared pure helpers.  If any test turns RED during the refactor,
  * STOP and revert to the last GREEN state.
+ *
+ * Section "loadProjectConfigCore unit tests" exercises the extracted shared
+ * core directly, ensuring both load variants delegate to a single
+ * implementation rather than duplicating the validation + build logic.
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -15,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
   loadDysflowConfig,
   loadDysflowConfigAsync,
+  loadProjectConfigCore,
 } from "../../../src/core/config/dysflow-config";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +242,117 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       if (syncResult.ok) throw new Error("expected failure");
       expect(syncResult.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
       expect(syncResult.error.message).toContain("deprecated");
+    } finally {
+      ws.cleanup();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadProjectConfigCore unit tests (PR2 — #295)
+// These tests verify the extracted shared core directly.  Both
+// loadProjectConfigFromPath (sync) and loadProjectConfigFromPathAsync call
+// this function after resolving the file path and reading raw JSON — so the
+// validation + build logic lives in exactly one place.
+// ---------------------------------------------------------------------------
+
+describe("loadProjectConfigCore — shared validation and build (#295)", () => {
+  function createTempWorkspace(): { root: string; cleanup(): void } {
+    const root = mkdtempSync(join(tmpdir(), "dysflow-core-"));
+    return {
+      root,
+      cleanup: () => rmSync(root, { recursive: true, force: true }),
+    };
+  }
+
+  it("returns a valid DysflowConfig for a well-formed raw project config", () => {
+    const ws = createTempWorkspace();
+    try {
+      writeFileSync(join(ws.root, "app.accdb"), "", "utf8");
+      const resolvedPath = join(ws.root, ".dysflow", "project.json");
+      mkdirSync(join(ws.root, ".dysflow"), { recursive: true });
+
+      const raw = {
+        id: "core-test",
+        accessPath: "app.accdb",
+        allowWrites: true,
+        timeoutMs: 10_000,
+      };
+
+      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", undefined);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.data.configSource).toBe("repo-config");
+      expect(result.data.projectId).toBe("core-test");
+      expect(result.data.allowWrites).toBe(true);
+      expect(result.data.timeoutMs).toBe(10_000);
+      expect(result.data.accessDbPath).toBe(resolve(ws.root, "app.accdb"));
+    } finally {
+      ws.cleanup();
+    }
+  });
+
+  it("returns CONFIG_PROJECT_ID_MISMATCH when requested projectId differs from config id", () => {
+    const ws = createTempWorkspace();
+    try {
+      writeFileSync(join(ws.root, "app.accdb"), "", "utf8");
+      const resolvedPath = join(ws.root, ".dysflow", "project.json");
+      mkdirSync(join(ws.root, ".dysflow"), { recursive: true });
+
+      const raw = { id: "configured-id", accessPath: "app.accdb" };
+
+      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", "requested-id");
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure");
+      expect(result.error.code).toBe("CONFIG_PROJECT_ID_MISMATCH");
+      expect(result.error.message).toContain("requested-id");
+      expect(result.error.message).toContain("configured-id");
+    } finally {
+      ws.cleanup();
+    }
+  });
+
+  it("returns CONFIG_MISSING_ACCESS_PATH when raw config has no accessPath", () => {
+    const ws = createTempWorkspace();
+    try {
+      const resolvedPath = join(ws.root, ".dysflow", "project.json");
+      mkdirSync(join(ws.root, ".dysflow"), { recursive: true });
+
+      const raw = { id: "no-path-project" };
+
+      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", undefined);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure");
+      expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+    } finally {
+      ws.cleanup();
+    }
+  });
+
+  it("resolves passwords from env via injected env parameter", () => {
+    const ws = createTempWorkspace();
+    try {
+      writeFileSync(join(ws.root, "app.accdb"), "", "utf8");
+      const resolvedPath = join(ws.root, ".dysflow", "project.json");
+      mkdirSync(join(ws.root, ".dysflow"), { recursive: true });
+
+      const raw = {
+        id: "pwd-project",
+        accessPath: "app.accdb",
+        accessPasswordEnv: "MY_PWD",
+        backendPasswordEnv: "MY_BACKEND_PWD",
+      };
+      const env = { MY_PWD: "access-secret", MY_BACKEND_PWD: "backend-secret" };
+
+      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env }, env, "repo-config", undefined);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.data.accessPassword).toBe("access-secret");
+      expect(result.data.backendPassword).toBe("backend-secret");
     } finally {
       ws.cleanup();
     }

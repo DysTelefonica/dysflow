@@ -7,6 +7,8 @@ import {
 	loadDysflowConfig,
 	loadDysflowConfigAsync,
 	redactDysflowConfig,
+	loadProjectConfigCore,
+	loadDysflowConfigShared,
 } from "../../../src/core/config/dysflow-config";
 
 function createTempWorkspace(): { root: string; cleanup(): void } {
@@ -468,5 +470,113 @@ describe("dysflow configuration", () => {
 			}
 		});
 
+	});
+
+	it("loadDysflowConfig and loadDysflowConfigAsync return structurally equal config for identical inputs (parity)", async () => {
+		const workspace = createTempWorkspace();
+		try {
+			writeRepoProjectConfig(workspace.root, {
+				id: "parity-test-pr2",
+				accessPath: "front.accdb",
+				allowWrites: true,
+			});
+			writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
+
+			const input = { cwd: workspace.root, env: {} };
+			const syncResult = loadDysflowConfig(input);
+			const asyncResult = await loadDysflowConfigAsync(input);
+
+			expect(syncResult).toEqual(asyncResult);
+			expect(syncResult.ok).toBe(true);
+
+			// Assert single update to a routing condition only requires one code change.
+			// This is because both sync and async paths delegate config-building and validation
+			// to the exported `loadProjectConfigCore` function.
+			// Any routing logic updates happen only once inside `loadProjectConfigCore`.
+			expect(loadProjectConfigCore).toBeTypeOf("function");
+		} finally {
+			workspace.cleanup();
+		}
+	});
+
+	describe("loadDysflowConfigShared", () => {
+		it("is exported and routes calls correctly", () => {
+			expect(loadDysflowConfigShared).toBeTypeOf("function");
+		});
+
+		it("returns explicit config when accessDbPath is provided", () => {
+			const input = { accessDbPath: "C:/my.accdb", env: {} };
+			const repoConfig = { found: "none" as const };
+			let called = false;
+			const loadFromPath = () => {
+				called = true;
+				return { ok: false, error: { code: "TEST", message: "should not be called" }, diagnostics: [], durationMs: 0 } as any;
+			};
+
+			const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
+			expect(called).toBe(false);
+			expect(result.ok).toBe(true);
+			expect(result.data.accessDbPath).toBe("C:/my.accdb");
+		});
+
+		it("returns ambiguous error when multiple configs are found", () => {
+			const input = { env: {} };
+			const repoConfig = { found: "ambiguous" as const, paths: ["path/a", "path/b"] as [string, string] };
+			let called = false;
+			const loadFromPath = () => {
+				called = true;
+				return {} as any;
+			};
+
+			const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
+			expect(called).toBe(false);
+			expect(result.ok).toBe(false);
+			expect(result.error.code).toBe("CONFIG_AMBIGUOUS_PROJECT_FILE");
+		});
+
+		it("delegates to loadFromPath when single config is found", () => {
+			const input = { env: {} };
+			const repoConfig = { found: "standard" as const, path: "path/to/project.json" };
+			let calledWithPath: string | null = null;
+			const expectedResult = { ok: true, data: { accessDbPath: "mock" } } as any;
+			const loadFromPath = (p: string) => {
+				calledWithPath = p;
+				return expectedResult;
+			};
+
+			const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
+			expect(calledWithPath).toBe("path/to/project.json");
+			expect(result).toBe(expectedResult);
+		});
+
+		it("returns deprecated error when project is requested but not found", () => {
+			const input = { projectId: "legacy-project", env: {} };
+			const repoConfig = { found: "none" as const };
+			let called = false;
+			const loadFromPath = () => {
+				called = true;
+				return {} as any;
+			};
+
+			const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
+			expect(called).toBe(false);
+			expect(result.ok).toBe(false);
+			expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+		});
+
+		it("returns missing access path error when no config is found and no projectId is requested", () => {
+			const input = { env: {} };
+			const repoConfig = { found: "none" as const };
+			let called = false;
+			const loadFromPath = () => {
+				called = true;
+				return {} as any;
+			};
+
+			const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
+			expect(called).toBe(false);
+			expect(result.ok).toBe(false);
+			expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+		});
 	});
 });

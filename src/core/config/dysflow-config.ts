@@ -77,19 +77,25 @@ export type DysflowConfigInput = {
 	env?: Record<string, string | undefined>;
 };
 
-export function loadDysflowConfig(
-	input: DysflowConfigInput = {},
-): OperationResult<DysflowConfig> {
+export function loadDysflowConfigShared<
+	T extends OperationResult<DysflowConfig> | Promise<OperationResult<DysflowConfig>>,
+>(
+	input: DysflowConfigInput,
+	repoConfig:
+		| { found: "none" }
+		| { found: "legacy" | "standard"; path: string }
+		| { found: "ambiguous"; paths: [string, string] },
+	loadFromPath: (path: string) => T,
+): T {
 	const env = input.env ?? process.env;
 	const cwd = resolve(input.cwd ?? process.cwd());
 
 	const explicitAccessDbPath = stringValue(input.accessDbPath);
 	if (explicitAccessDbPath !== undefined) {
-		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
+		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath) as T;
 	}
 
 	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
-	const repoConfig = findRepoProjectConfigPath(cwd);
 	if (repoConfig.found === "ambiguous") {
 		const [pathA, pathB] = repoConfig.paths;
 		return failureResult(
@@ -98,17 +104,10 @@ export function loadDysflowConfig(
 				`Both ${pathA} and ${pathB} exist. Remove one before continuing.`,
 				{ retryable: false },
 			),
-		);
+		) as T;
 	}
 	if (repoConfig.found === "standard" || repoConfig.found === "legacy") {
-		return loadProjectConfigFromPath(
-			repoConfig.path,
-			input,
-			env,
-			cwd,
-			"repo-config",
-			requestedProjectId,
-		);
+		return loadFromPath(repoConfig.path);
 	}
 	if (requestedProjectId !== undefined) {
 		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
@@ -118,13 +117,34 @@ export function loadDysflowConfig(
 				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
 				{ retryable: false },
 			),
-		);
+		) as T;
 	}
 	// repoConfig.found === "none"
 	return failureResult(
 		createDysflowError(
 			"CONFIG_MISSING_ACCESS_PATH",
 			"Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+		),
+	) as T;
+}
+
+export function loadDysflowConfig(
+	input: DysflowConfigInput = {},
+): OperationResult<DysflowConfig> {
+	const cwd = resolve(input.cwd ?? process.cwd());
+	const repoConfig = findRepoProjectConfigPath(cwd);
+
+	const env = input.env ?? process.env;
+	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+
+	return loadDysflowConfigShared(input, repoConfig, (path) =>
+		loadProjectConfigFromPath(
+			path,
+			input,
+			env,
+			cwd,
+			"repo-config",
+			requestedProjectId,
 		),
 	);
 }
@@ -133,51 +153,20 @@ export function loadDysflowConfig(
 export async function loadDysflowConfigAsync(
 	input: DysflowConfigInput = {},
 ): Promise<OperationResult<DysflowConfig>> {
-	const env = input.env ?? process.env;
 	const cwd = resolve(input.cwd ?? process.cwd());
-
-	const explicitAccessDbPath = stringValue(input.accessDbPath);
-	if (explicitAccessDbPath !== undefined) {
-		return buildExplicitConfig(input, env, cwd, explicitAccessDbPath);
-	}
-
-	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 	const repoConfig = await findRepoProjectConfigPathAsync(cwd);
-	if (repoConfig.found === "ambiguous") {
-		const [pathA, pathB] = repoConfig.paths;
-		return failureResult(
-			createDysflowError(
-				"CONFIG_AMBIGUOUS_PROJECT_FILE",
-				`Both ${pathA} and ${pathB} exist. Remove one before continuing.`,
-				{ retryable: false },
-			),
-		);
-	}
-	if (repoConfig.found === "standard" || repoConfig.found === "legacy") {
-		return loadProjectConfigFromPathAsync(
-			repoConfig.path,
+
+	const env = input.env ?? process.env;
+	const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+
+	return loadDysflowConfigShared(input, repoConfig, (path) =>
+		loadProjectConfigFromPathAsync(
+			path,
 			input,
 			env,
 			cwd,
 			"repo-config",
 			requestedProjectId,
-		);
-	}
-	if (requestedProjectId !== undefined) {
-		// Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_NOT_REGISTERED",
-				`Project '${requestedProjectId}' is not registered. The global projects.json registry is deprecated. Add a .dysflow/project.json to the repository instead.`,
-				{ retryable: false },
-			),
-		);
-	}
-	// repoConfig.found === "none"
-	return failureResult(
-		createDysflowError(
-			"CONFIG_MISSING_ACCESS_PATH",
-			"Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
 		),
 	);
 }
@@ -349,25 +338,15 @@ function loadProjectConfigFromPath(
 			),
 		);
 	}
-	const requestedProjectId = stringValue(projectId);
-	const configuredProjectId = stringValue(raw.id);
-	if (requestedProjectId !== undefined && configuredProjectId !== undefined && requestedProjectId !== configuredProjectId) {
-		return failureResult(
-			createDysflowError(
-				"CONFIG_PROJECT_ID_MISMATCH",
-				`Requested projectId '${requestedProjectId}' does not match repo config id '${configuredProjectId}' in ${resolvedPath}.`,
-				{ retryable: false },
-			),
-		);
-	}
 
-	return buildProjectConfig(raw, {
+	return loadProjectConfigCore(
 		resolvedPath,
-		configSource,
-		projectIdOverride: projectId,
+		raw,
 		input,
 		env,
-	});
+		configSource,
+		projectId,
+	);
 }
 
 
@@ -400,6 +379,25 @@ async function loadProjectConfigFromPathAsync(
 			),
 		);
 	}
+
+	return loadProjectConfigCore(
+		resolvedPath,
+		raw,
+		input,
+		env,
+		configSource,
+		projectId,
+	);
+}
+
+export function loadProjectConfigCore(
+	resolvedPath: string,
+	raw: DysflowProjectConfig,
+	input: DysflowConfigInput,
+	env: Record<string, string | undefined>,
+	configSource: DysflowConfigSource,
+	projectId: string | undefined,
+): OperationResult<DysflowConfig> {
 	const requestedProjectId = stringValue(projectId);
 	const configuredProjectId = stringValue(raw.id);
 	if (requestedProjectId !== undefined && configuredProjectId !== undefined && requestedProjectId !== configuredProjectId) {
