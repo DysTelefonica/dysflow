@@ -11,12 +11,6 @@
       "procedure": "Test_E2E_Cache_Invalidate_NoStaleListado_Atomic",
       "expect": { "ok": true },
       "tags": ["e2e", "atomic", "cache", "staging", "write-controlled"]
-    },
-    {
-      "name": "Spec007 PA09 invalidate",
-      "procedure": "Test_Spec007_PA09_InvalidateNC_Atomic",
-      "expect": { "ok": true },
-      "tags": ["e2e", "atomic", "cache", "spec007", "write-controlled"]
     }
   ]
 }

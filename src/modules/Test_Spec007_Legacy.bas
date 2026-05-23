@@ -1,33 +1,6 @@
-Attribute VB_Name = "Spec007_Tests"
+Attribute VB_Name = "Test_Spec007_Legacy"
 Option Compare Database
 Option Explicit
-
-Public Function Test_Spec007_PA09_InvalidateNC_Atomic() As String
-    On Error GoTo EH
-
-    Dim logs As Collection
-    Dim assertError As String
-    Dim result As Boolean
-    Dim p_Error As String
-
-    Set logs = TestHelper.NewLogs
-    TestHelper.AddLog logs, "PA09 smoke/integration: usa ID real=1 y no va en manifest principal"
-
-    result = NCProyectoWrapper.InvalidateNC(1, p_Error)
-    If p_Error <> "" Then TestHelper.AddLog logs, "Detalle InvalidateNC error=" & p_Error
-
-    Call TestHelper.AssertTrue(result = True, "PA-09 debe invalidar sin crash (solo smoke)", logs, assertError)
-
-    If assertError <> "" Then
-        Test_Spec007_PA09_InvalidateNC_Atomic = TestHelper.BuildJsonFail(assertError, logs)
-    Else
-        Test_Spec007_PA09_InvalidateNC_Atomic = TestHelper.BuildJsonOk(logs, "pa09_ok")
-    End If
-    Exit Function
-EH:
-    TestHelper.AddLog logs, "Error: " & Err.Description
-    Test_Spec007_PA09_InvalidateNC_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
-End Function
 
 Public Function Test_Spec007_PA10_GetNCProyectoVMSeguro_Atomic() As String
     On Error GoTo EH

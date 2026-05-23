@@ -133,7 +133,7 @@ Public Function Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic() As String
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_EnPruebasInvalido_Bloquea_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
@@ -265,7 +265,7 @@ Public Function Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_At
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_RutaAplicacionLocal_NoEstandar_Normalizada_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
@@ -343,7 +343,7 @@ Public Function Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_At
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_EntornoURLDirAplicacion_UsaRutaConfigurada_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
@@ -430,7 +430,7 @@ Public Function Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic() As String
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_EnPruebas_NoRuteaInfra_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
@@ -516,7 +516,7 @@ Public Function Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic() As Strin
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_FailFast_BackendInaccesible_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
@@ -596,7 +596,7 @@ Public Function Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic() As Stri
 
     Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Retired: esta prueba requería mutar TbConfiguracionBackends y fue retirada del manifest."
-    Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic = TestHelper.BuildJsonOk(logs, "retired_non_mutating")
+    Test_E2E_EnvConfig_FailFast_DiagnosticoAgregado_Atomic = TestHelper.BuildJsonFail("RETIRED TEST: no ejecutar como test activo", logs)
     Exit Function
 
     Set db = CurrentDb
