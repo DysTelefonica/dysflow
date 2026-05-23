@@ -98,7 +98,7 @@ Every `dysflow` invocation that starts Access records an operation with:
 
 ### 2) Cleanup is explicit and validated
 
-`dysflow.access.cleanup`/`cleanup_access_operation` only succeeds when all safety checks pass.
+`dysflow_access_cleanup`/`cleanup_access_operation` only succeeds when all safety checks pass.
 
 Refusal examples include:
 
@@ -255,7 +255,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 1. List operations:
 
    ```text
-   dysflow.access.operations.list { "projectId": "my-access-project" }
+   dysflow_access_operations_list { "projectId": "my-access-project" }
    ```
 
    Legacy-compatible alias:
@@ -267,7 +267,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 2. Cleanup a specific operation id returned by the list call:
 
    ```text
-   dysflow.access.cleanup {
+   dysflow_access_cleanup {
      "accessPath": "C:\\data\\mydb.accdb",
      "operationId": "<operation-id>"
    }
@@ -331,7 +331,7 @@ This writes `.dysflow/project.json` with repo-relative paths and default `destin
 Normal calls should stay short and use the active repo/worktree config. `projectId` is the canonical trace identity and should match the Engram project name when Engram is available. `contextId` is only for a distinct run/context id; do not duplicate `projectId` and `contextId` with the same value.
 
 ```text
-dysflow.doctor { "projectId": "00-no-conformidades-staging-clean" }
+dysflow_doctor { "projectId": "00-no-conformidades-staging-clean" }
 ```
 
 To align an existing repo config with the Engram project name, run:
@@ -406,7 +406,7 @@ Dysflow keeps Access PID ownership state separate from stable project configurat
    └─ operations.json            # volatile Access operation registry, git-ignored
 ```
 
-`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `dysflow.access.cleanup` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
+`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `dysflow_access_cleanup` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
 
 ---
 
@@ -447,7 +447,7 @@ Many MCP tools share common context and override parameters:
 
 ### Core MCP Tools
 
-#### `dysflow.vba.execute`
+#### `dysflow_vba_execute`
 Execute a public VBA procedure via COM automation.
 * **Parameters**:
   - `procedureName` (string, **required**): Public VBA procedure name to execute.
@@ -455,24 +455,24 @@ Execute a public VBA procedure via COM automation.
   - `arguments` (array, optional): Positional arguments passed to the procedure.
   - `projectId`, `contextId` (optional)
 
-#### `dysflow.query.execute`
+#### `dysflow_query_execute`
 Run arbitrary SQL statements. Writes are guarded by the write-safety model.
 * **Parameters**:
   - `sql` (string, **required**): SQL query to run.
   - `mode` (string, **required**): Execution mode (`read` or `write`).
   - `projectId`, `contextId` (optional)
 
-#### `dysflow.doctor`
+#### `dysflow_doctor`
 Run diagnostics on the MCP connection, Access installation, and configuration.
 * **Parameters**:
   - `includeEnvironment` (boolean, optional): True to query environment settings and logs.
   - `projectId`, `contextId` (optional)
 
-#### `dysflow.access.operations.list`
+#### `dysflow_access_operations_list`
 Retrieve active and completed Access operation handles managed by Dysflow.
 * **Parameters**: None.
 
-#### `dysflow.access.cleanup`
+#### `dysflow_access_cleanup`
 Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
   - `operationId` (string, **required**): Handle ID of the operation to clean.
@@ -618,8 +618,8 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 3. Validate config: `dysflow setup` or `dysflow doctor`
 4. Start MCP: `dysflow mcp`
 5. Run MCP client session (OpenCode, etc.)
-6. On automation error/timeouts, inspect `dysflow.access.operations.list`
-7. Clean up owned operation explicitly via `dysflow.access.cleanup`
+6. On automation error/timeouts, inspect `dysflow_access_operations_list`
+7. Clean up owned operation explicitly via `dysflow_access_cleanup`
 
 ### Updating Dysflow
 

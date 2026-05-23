@@ -71,7 +71,7 @@ All notable changes to Dysflow will be documented in this file.
 
 ### Added
 
-- MCP progress notifications: `dysflow.vba.execute` and `dysflow.query.execute` now emit real-time `notifications/progress` frames to progress-aware clients when `_meta.progressToken` is present. Three milestones (10%/40%/90%) are emitted by the PowerShell runner via stderr side-channel. Closes #272.
+- MCP progress notifications: `dysflow_vba_execute` and `dysflow_query_execute` now emit real-time `notifications/progress` frames to progress-aware clients when `_meta.progressToken` is present. Three milestones (10%/40%/90%) are emitted by the PowerShell runner via stderr side-channel. Closes #272.
 
 ## [0.6.6] - 2026-05-21
 
@@ -341,11 +341,11 @@ Initial production release focused on making Access automation safe, observable 
 
 - New MCP stdio runtime entrypoint (`dysflow mcp`) with protocol-aware initialize responses.
 - Core command surface:
-  - `dysflow.vba.execute`
-  - `dysflow.query.execute`
-  - `dysflow.doctor`
-  - `dysflow.access.operations.list`
-  - `dysflow.access.cleanup`
+  - `dysflow_vba_execute`
+  - `dysflow_query_execute`
+  - `dysflow_doctor`
+  - `dysflow_access_operations_list`
+  - `dysflow_access_cleanup`
 - Legacy compatibility MCP tools for query/VBA/form/schema slices.
 - MCP protocol maintenance instrumentation:
   - named protocol constant `MCP_PROTOCOL_VERSION`
