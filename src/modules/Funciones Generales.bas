@@ -100,6 +100,9 @@ Public Function PintarIndicadores( _
     Dim m_Usuario As usuario
     Dim m_IncluirProyecto As Boolean
     Dim m_IncluirAuditoria As Boolean
+    Dim m_Telemetria As Scripting.Dictionary
+    Dim m_TelemetriaResumen As String
+    Dim m_TelemetriaError As String
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -114,6 +117,9 @@ Public Function PintarIndicadores( _
 
     m_IncluirProyecto = (UCase$(Trim$(p_Modo)) <> "AUDITORIA")
     m_IncluirAuditoria = (UCase$(Trim$(p_Modo)) <> "PROYECTO")
+    Set m_Telemetria = Indicadores_TelemetriaIniciar(p_Modo, m_IncluirProyecto, m_TelemetriaError)
+    Call Indicadores_TelemetriaEtapa(m_Telemetria, "inicio", m_TelemetriaError)
+    Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "reset", p_Reiniciando <> EnumSino.Sí, m_TelemetriaError)
     
     ' Contrato baseline de indicadores (caracterización previa a optimización):
     ' - Null collection => cuenta como 0.
@@ -123,6 +129,7 @@ Public Function PintarIndicadores( _
     ' - m_ColSegsTareasProyectoIrregulares se consulta por compatibilidad pero NO suma.
 
     If m_IncluirProyecto Then
+        Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
         Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
         Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
         Set m_ColSegsNCProyectoRegistradas = m_ObjEntorno.ColSegsNCProyectoRegistradas
@@ -130,18 +137,22 @@ Public Function PintarIndicadores( _
         Set m_ColSegsNCProyectoPteCE = m_ObjEntorno.ColSegsNCProyectoPteCE
         Set m_ColSegsNCProyectoCECaducada = m_ObjEntorno.ColSegsNCProyectoCECaducada
         Set m_ColSegsNCProyectoCENoConforme = m_ObjEntorno.ColSegsNCProyectoCENoConforme
+        Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-finish", m_TelemetriaError)
     End If
 
     If m_IncluirAuditoria Then
+        Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-start", m_TelemetriaError)
         Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
         Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
         Set m_ColSegsNCAuditoriaAccionesSinTareas = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
         Set m_ColSegsNCAuditoriaPteCE = m_ObjEntorno.ColSegsNCAuditoriaPteCE
         Set m_ColSegsNCAuditoriaCECaducada = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
         Set m_ColSegsNCAuditoriaCENoConforme = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
+        Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-finish", m_TelemetriaError)
     End If
 
     Set m_Usuario = m_ObjUsuarioConectado
+    Call Indicadores_TelemetriaEtapa(m_Telemetria, "calcular-start", m_TelemetriaError)
     Set m_Resultados = Indicadores_CalcularDesdeColecciones( _
                         m_Usuario, _
                         m_ColSegsTareasProyectoPteReplanificar, _
@@ -162,10 +173,12 @@ Public Function PintarIndicadores( _
     If p_Error <> "" Then
         Err.Raise 1000
     End If
+    Call Indicadores_TelemetriaEtapa(m_Telemetria, "calcular-finish", m_TelemetriaError)
                                
     
     
     If m_IncluirProyecto And FormularioAbierto("Form0BDOpcionesParteProyectos") Then
+        Call Indicadores_TelemetriaEtapa(m_Telemetria, "aplicar-proyecto", m_TelemetriaError)
         Forms("Form0BDOpcionesParteProyectos").Controls("lblSeguimientos").Caption = _
             Indicadores_FormatearCaption(CLng(m_Resultados("ProyectoUsuario")), CLng(m_Resultados("ProyectoTotal")))
     End If
@@ -187,6 +200,8 @@ Public Function PintarIndicadores( _
             Form_FormNCAuditoriaSeguimientoTareas.Filtrar
         End If
     End If
+    m_TelemetriaResumen = Indicadores_TelemetriaResumen(m_Telemetria, m_TelemetriaError)
+    If m_TelemetriaResumen <> "" Then Debug.Print "Indicadores telemetry: " & m_TelemetriaResumen
     AvanceCerrar
     Exit Function
 errores:
@@ -229,6 +244,109 @@ Public Function Indicadores_MensajeAvance( _
         Case Else
             Indicadores_MensajeAvance = "Calculando indicadores..."
     End Select
+End Function
+
+Public Function Indicadores_TelemetriaIniciar( _
+                                    ByVal p_Modo As String, _
+                                    Optional ByVal p_Habilitada As Boolean = True, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Telemetria As Scripting.Dictionary
+    Dim m_Cache As Scripting.Dictionary
+    Dim m_Modo As String
+
+    On Error GoTo errores
+
+    m_Modo = UCase$(Trim$(p_Modo))
+    If m_Modo = "" Then m_Modo = "AMBOS"
+
+    Set m_Telemetria = New Scripting.Dictionary
+    m_Telemetria.CompareMode = TextCompare
+    m_Telemetria("Habilitada") = p_Habilitada
+    m_Telemetria("Modo") = m_Modo
+    m_Telemetria("Inicio") = Timer
+    Set m_Telemetria("Etapas") = New Collection
+
+    Set m_Cache = New Scripting.Dictionary
+    m_Cache.CompareMode = TextCompare
+    Set m_Telemetria("Cache") = m_Cache
+
+    Set Indicadores_TelemetriaIniciar = m_Telemetria
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_TelemetriaIniciar ha devuelto el error: " & vbNewLine & Err.Description
+End Function
+
+Public Function Indicadores_TelemetriaEtapa( _
+                                    ByVal p_Telemetria As Scripting.Dictionary, _
+                                    ByVal p_Etapa As String, _
+                                    Optional ByRef p_Error As String _
+                                    ) As String
+    On Error GoTo errores
+
+    If p_Telemetria Is Nothing Then Exit Function
+    If Not CBool(p_Telemetria("Habilitada")) Then Exit Function
+
+    p_Telemetria("Etapas").Add Trim$(p_Etapa)
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_TelemetriaEtapa ha devuelto el error: " & vbNewLine & Err.Description
+End Function
+
+Public Function Indicadores_TelemetriaCacheEstado( _
+                                    ByVal p_Telemetria As Scripting.Dictionary, _
+                                    ByVal p_Etapa As String, _
+                                    ByVal p_CacheHit As Boolean, _
+                                    Optional ByRef p_Error As String _
+                                    ) As String
+    Dim m_Cache As Scripting.Dictionary
+
+    On Error GoTo errores
+
+    If p_Telemetria Is Nothing Then Exit Function
+    If Not CBool(p_Telemetria("Habilitada")) Then Exit Function
+
+    Set m_Cache = p_Telemetria("Cache")
+    If p_CacheHit Then
+        m_Cache(Trim$(p_Etapa)) = "HIT"
+    Else
+        m_Cache(Trim$(p_Etapa)) = "MISS"
+    End If
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_TelemetriaCacheEstado ha devuelto el error: " & vbNewLine & Err.Description
+End Function
+
+Public Function Indicadores_TelemetriaResumen( _
+                                    ByVal p_Telemetria As Scripting.Dictionary, _
+                                    Optional ByRef p_Error As String _
+                                    ) As String
+    Dim m_Resumen As String
+    Dim m_Etapa As Variant
+    Dim m_Key As Variant
+    Dim m_Cache As Scripting.Dictionary
+
+    On Error GoTo errores
+
+    If p_Telemetria Is Nothing Then Exit Function
+    If Not CBool(p_Telemetria("Habilitada")) Then Exit Function
+
+    m_Resumen = "modo=" & CStr(p_Telemetria("Modo")) & "; totalMs=" & _
+                CStr(CLng((Timer - CSng(p_Telemetria("Inicio"))) * 1000))
+
+    For Each m_Etapa In p_Telemetria("Etapas")
+        m_Resumen = m_Resumen & "; " & CStr(m_Etapa)
+    Next m_Etapa
+
+    Set m_Cache = p_Telemetria("Cache")
+    For Each m_Key In m_Cache.Keys
+        m_Resumen = m_Resumen & "; " & CStr(m_Key) & "=" & CStr(m_Cache(m_Key))
+    Next m_Key
+
+    Indicadores_TelemetriaResumen = m_Resumen
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_TelemetriaResumen ha devuelto el error: " & vbNewLine & Err.Description
 End Function
 
 Public Function Indicadores_BuildDatos( _
