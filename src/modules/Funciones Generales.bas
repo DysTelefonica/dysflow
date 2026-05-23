@@ -528,6 +528,41 @@ Public Function Indicadores_FormatearCaption(ByVal p_Usuario As Long, ByVal p_To
     Indicadores_FormatearCaption = "Seguimiento " & CStr(p_Usuario) & " / " & CStr(p_Total)
 End Function
 
+Public Function Indicadores_CalcularProyectoDesdeConteos( _
+                                    ByVal p_Conteos As Scripting.Dictionary, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Resultados As Scripting.Dictionary
+    On Error GoTo errores
+
+    p_Error = ""
+
+    Set m_Resultados = New Scripting.Dictionary
+    m_Resultados.CompareMode = TextCompare
+
+    m_Resultados("ProyectoTotal") = Indicadores_ConteoLong(p_Conteos, "ProyectoTareasPteReplanificarTotal") + _
+                                     Indicadores_ConteoLong(p_Conteos, "ProyectoNCAccionesSinTareasTotal") + _
+                                     Indicadores_ConteoLong(p_Conteos, "ProyectoNCRegistradasTotal") + _
+                                     Indicadores_ConteoLong(p_Conteos, "ProyectoNCPteCETotal") + _
+                                     Indicadores_ConteoLong(p_Conteos, "ProyectoNCCECaducadaTotal") + _
+                                     Indicadores_ConteoLong(p_Conteos, "ProyectoNCCENoConformeTotal")
+
+    m_Resultados("ProyectoUsuario") = Indicadores_ConteoLong(p_Conteos, "ProyectoTareasPteReplanificarUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoTareasIrregularesUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoNCRegistradasUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoNCAccionesSinTareasUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoNCPteCEUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoNCCECaducadaUsuario") + _
+                                       Indicadores_ConteoLong(p_Conteos, "ProyectoNCCENoConformeUsuario")
+
+    Set Indicadores_CalcularProyectoDesdeConteos = m_Resultados
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Indicadores_CalcularProyectoDesdeConteos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
 Private Function Indicadores_GetDictionary(ByVal p_Datos As Scripting.Dictionary, ByVal p_Key As String) As Scripting.Dictionary
     If p_Datos Is Nothing Then Exit Function
     If Not p_Datos.Exists(p_Key) Then Exit Function
@@ -542,6 +577,12 @@ Private Function Indicadores_CountDictionary(ByVal p_Datos As Scripting.Dictiona
     If Not m_Col Is Nothing Then
         Indicadores_CountDictionary = m_Col.count
     End If
+End Function
+
+Private Function Indicadores_ConteoLong(ByVal p_Conteos As Scripting.Dictionary, ByVal p_Key As String) As Long
+    If p_Conteos Is Nothing Then Exit Function
+    If Not p_Conteos.Exists(p_Key) Then Exit Function
+    If IsNumeric(p_Conteos(p_Key)) Then Indicadores_ConteoLong = CLng(p_Conteos(p_Key))
 End Function
 
 Private Function Indicadores_CountUsuario( _

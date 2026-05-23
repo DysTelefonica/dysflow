@@ -91,6 +91,18 @@
       "tags": ["atomic", "indicator-characterization", "issue-16"]
     },
     {
+      "name": "Indicadores fast counts proyecto paridad mixed dataset",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-fast-counts", "issue-13"]
+    },
+    {
+      "name": "Indicadores fast counts proyecto no toca auditoria",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-fast-counts", "issue-13"]
+    },
+    {
       "name": "Indicadores caption formato",
       "procedure": "Test_Indicadores_FormatearCaption_Totales_Atomic",
       "expect": { "ok": true },
