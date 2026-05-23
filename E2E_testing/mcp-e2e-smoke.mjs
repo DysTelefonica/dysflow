@@ -96,8 +96,8 @@ const list = await callMcp("tools/list", {});
 results.push({ area: "protocol", tool: "tools/list", pass: list.ok, expected: "success", durationMs: 0, summary: list.ok ? `advertised=${list.result.tools.length}` : (list.error ?? list.stderr) });
 const advertised = list.result?.tools?.map((tool) => tool.name).sort() ?? [];
 
-await testCase("diagnostics", "dysflow.doctor", { includeEnvironment: false });
-await testCase("operations", "dysflow.access.operations.list", {});
+await testCase("diagnostics", "dysflow_doctor", { includeEnvironment: false });
+await testCase("operations", "dysflow_access_operations_list", {});
 await testCase("operations", "list_access_operations", {});
 
 const tablesResponse = await testCase("schema/read", "list_tables", {});
@@ -108,7 +108,7 @@ if (table) {
   await testCase("schema/read", "get_schema", { tableName: table });
   await testCase("schema/read", "count_rows", { tableName: table });
   await testCase("schema/read", "query_sql", { sql: `SELECT TOP 1 * FROM [${table}]` });
-  await testCase("schema/read", "dysflow.query.execute", { sql: `SELECT TOP 1 * FROM [${table}]`, mode: "read" });
+  await testCase("schema/read", "dysflow_query_execute", { sql: `SELECT TOP 1 * FROM [${table}]`, mode: "read" });
 } else {
   results.push({ area: "schema/read", tool: "table-dependent-read", pass: false, expected: "success", durationMs: 0, summary: "No table found from list_tables" });
 }
@@ -129,7 +129,7 @@ await testCase("write guard", "drop_table dryRun", { tableName: writeTable, dryR
 await testCase("write guard", "seed_fixture dryRun", { tableName: writeTable, rows: [{ ID: 1 }], dryRun: true, allowTable: writeTable }, "success", { actualTool: "seed_fixture" });
 await testCase("write guard", "teardown_fixture dryRun", { tableName: writeTable, dryRun: true, allowTable: writeTable }, "success", { actualTool: "teardown_fixture" });
 await testCase("write guard", "run_script dryRun", { scriptPath, dryRun: true }, "success", { actualTool: "run_script" });
-await testCase("write guard", "dysflow.query.execute write", { sql: `CREATE TABLE [${writeTable}] (ID LONG)`, mode: "write" }, "success", { actualTool: "dysflow.query.execute" });
+await testCase("write guard", "dysflow_query_execute write", { sql: `CREATE TABLE [${writeTable}] (ID LONG)`, mode: "write" }, "success", { actualTool: "dysflow_query_execute" });
 await testCase("write guard", "drop_table cleanup", { tableName: writeTable, dryRun: false, apply: true }, "success", { actualTool: "drop_table" });
 
 await testCase("links", "link_tables dryRun", { backendPath: join(cwd, "Expedientes_datos.accdb"), dryRun: true }, "success", { actualTool: "link_tables" });
@@ -162,13 +162,13 @@ for (const implemented of ["verify_code", "verify_binary", "reconcile_binary"]) 
   await testCase("verify", implemented, { moduleNames: ["Test_JsonConverter"], diff: true }, "success");
 }
 
-await testCase("operations", "cleanup invalid", { operationId: "E2E_NO_SUCH_OPERATION", accessPath: join(cwd, "Expedientes.accdb") }, "error", { actualTool: "dysflow.access.cleanup" });
+await testCase("operations", "cleanup invalid", { operationId: "E2E_NO_SUCH_OPERATION", accessPath: join(cwd, "Expedientes.accdb") }, "error", { actualTool: "dysflow_access_cleanup" });
 
-const cleanupList = await callMcp("dysflow.access.operations.list", {});
+const cleanupList = await callMcp("dysflow_access_operations_list", {});
 const cleanupData = parseTextJson(cleanupList);
 const ops = Array.isArray(cleanupData) ? cleanupData : [];
 for (const op of ops.filter((item) => item?.status !== "cleaned" && item?.operationId && item?.accessPath).slice(0, 10)) {
-  await testCase("operations", `cleanup ${op.operationId}`, { operationId: op.operationId, accessPath: op.accessPath }, "error", { actualTool: "dysflow.access.cleanup" });
+  await testCase("operations", `cleanup ${op.operationId}`, { operationId: op.operationId, accessPath: op.accessPath }, "error", { actualTool: "dysflow_access_cleanup" });
 }
 
 const rows = results.map((r) => `| ${r.pass ? "PASS" : "FAIL"} | ${r.area} | ${r.tool} | ${r.expected} | ${r.durationMs} | ${String(r.summary).replace(/\r?\n/g, " ").replace(/\|/g, "\\|")} |`).join("\n");

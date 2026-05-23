@@ -67,8 +67,8 @@ describe("MCP tool registration over core services", () => {
     const tools = createDysflowMcpTools({ vbaService: vba, queryService: query, diagnosticsService: diagnostics });
     const toolNames = tools.map((tool) => tool.name);
 
-    expect(toolNames).toEqual(expect.arrayContaining(["dysflow.vba.execute", "dysflow.query.execute", "dysflow.doctor", "dysflow.access.operations.list", "dysflow.access.cleanup"]));
-    expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.inputSchema).toMatchObject({
+    expect(toolNames).toEqual(expect.arrayContaining(["dysflow_vba_execute", "dysflow_query_execute", "dysflow_doctor", "dysflow_access_operations_list", "dysflow_access_cleanup"]));
+    expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema).toMatchObject({
       type: "object",
       required: ["procedureName"],
       additionalProperties: false,
@@ -96,13 +96,33 @@ describe("MCP tool registration over core services", () => {
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
   });
 
+  it("registers modern MCP tool names with underscores instead of dots", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const toolNames = tools.map((tool) => tool.name);
+    const expectedModernToolNames = [
+      "dysflow_vba_execute",
+      "dysflow_query_execute",
+      "dysflow_doctor",
+      "dysflow_access_operations_list",
+      "dysflow_access_cleanup",
+    ];
+
+    expect(toolNames).toEqual(expect.arrayContaining(expectedModernToolNames));
+    expect(toolNames.filter((name) => name.startsWith("dysflow") && name.includes("."))).toEqual([]);
+  });
+
   it("describes projectId as canonical trace identity and contextId as optional run context", () => {
     const tools = createDysflowMcpTools({
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
       queryService: new FakeQueryService(successResult({ rows: [] })),
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
-    const schema = tools.find((tool) => tool.name === "dysflow.vba.execute")?.inputSchema;
+    const schema = tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema;
 
     expect(schema?.properties.projectId.description).toContain("canonical project identity");
     expect(schema?.properties.projectId.description).toContain("Engram");
@@ -120,9 +140,9 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: diagnostics,
     });
 
-    await expect(tools.find((tool) => tool.name === "dysflow.doctor")?.handler({ contextId: "00-no-conformidades-staging-clean" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" })).resolves.toMatchObject({ isError: false });
+    await expect(tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ contextId: "00-no-conformidades-staging-clean" })).resolves.toMatchObject({ isError: false });
+    await expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" })).resolves.toMatchObject({ isError: false });
+    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" })).resolves.toMatchObject({ isError: false });
 
     expect(diagnostics.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean" }]);
     expect(vba.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" }]);
@@ -138,7 +158,7 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     }, true);
 
-    await expect(tools.find((tool) => tool.name === "dysflow.vba.execute")?.handler({ moduleName: "Automation" })).resolves.toEqual({
+    await expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.handler({ moduleName: "Automation" })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
     });
@@ -165,11 +185,11 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
 
-    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "SELECT 1", mode: "delete" })).resolves.toEqual({
+    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "SELECT 1", mode: "delete" })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
+    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." }],
       isError: true,
     });
@@ -194,7 +214,7 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     }, true);
 
-    await expect(tools.find((tool) => tool.name === "dysflow.query.execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
+    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
     });
@@ -348,8 +368,8 @@ describe("MCP tool registration over core services", () => {
 
     it("every registered legacy tool has an entry in LEGACY_TOOL_SCHEMAS", () => {
       const tools = createDysflowMcpTools(makeServices());
-      // Legacy tools are those without a 'dysflow.' prefix (they use legacySchemaForTool)
-      const legacyTools = tools.filter((t) => !t.name.startsWith("dysflow."));
+      // Legacy tools are those outside the modern 'dysflow_' namespace (they use legacySchemaForTool)
+      const legacyTools = tools.filter((t) => !t.name.startsWith("dysflow_"));
       for (const tool of legacyTools) {
         expect(LEGACY_TOOL_SCHEMAS, `${tool.name} must have an entry in LEGACY_TOOL_SCHEMAS`).toHaveProperty(tool.name);
       }
@@ -558,7 +578,7 @@ describe("MCP tool registration over core services", () => {
       }
     }
 
-    it("dysflow.vba.execute forwards context.sendProgress to vbaService.execute as onProgress", async () => {
+    it("dysflow_vba_execute forwards context.sendProgress to vbaService.execute as onProgress", async () => {
       const vba = new ProgressCapturingVbaService();
       const tools = createDysflowMcpTools({
         vbaService: vba as unknown as DysflowMcpServices["vbaService"],
@@ -569,14 +589,14 @@ describe("MCP tool registration over core services", () => {
       const sendProgress = () => {};
       const context = { progressToken: "tok-1", sendProgress };
 
-      const tool = tools.find((t) => t.name === "dysflow.vba.execute");
+      const tool = tools.find((t) => t.name === "dysflow_vba_execute");
       await tool?.handler({ procedureName: "DoWork" }, context);
 
       expect(vba.capturedOnProgress).toHaveLength(1);
       expect(vba.capturedOnProgress[0]).toBe(sendProgress);
     });
 
-    it("dysflow.query.execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
+    it("dysflow_query_execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
       const query = new ProgressCapturingQueryService();
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -587,7 +607,7 @@ describe("MCP tool registration over core services", () => {
       const sendProgress = () => {};
       const context = { progressToken: "tok-2", sendProgress };
 
-      const tool = tools.find((t) => t.name === "dysflow.query.execute");
+      const tool = tools.find((t) => t.name === "dysflow_query_execute");
       await tool?.handler({ sql: "SELECT 1", mode: "read" }, context);
 
       expect(query.capturedOnProgress).toHaveLength(1);

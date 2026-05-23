@@ -393,7 +393,7 @@ export function createDysflowMcpTools(
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
-      name: "dysflow.vba.execute",
+      name: "dysflow_vba_execute",
       description: "Execute a VBA procedure through Dysflow core services.",
       inputSchema: VBA_EXECUTE_SCHEMA,
       handler: async (input, context) => {
@@ -403,7 +403,7 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow.query.execute",
+      name: "dysflow_query_execute",
       description: "Execute an Access SQL query through Dysflow core services.",
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) => {
@@ -416,7 +416,7 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow.doctor",
+      name: "dysflow_doctor",
       description: "Run Dysflow diagnostics through core services.",
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {
@@ -426,7 +426,7 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow.access.operations.list",
+      name: "dysflow_access_operations_list",
       description: "List recent Access operations tracked by Dysflow.",
       inputSchema: NO_INPUT_SCHEMA,
       handler: async () => {
@@ -435,7 +435,7 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow.access.cleanup",
+      name: "dysflow_access_cleanup",
       description: "Safely cleanup a registered Access operation by operationId and accessPath.",
       inputSchema: CLEANUP_SCHEMA,
       handler: async (input) => {

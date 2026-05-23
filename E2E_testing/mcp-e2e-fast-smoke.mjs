@@ -71,8 +71,8 @@ const list = await callTool("tools/list", {});
 const advertised = list.response?.result?.tools?.map((tool) => tool.name).sort() ?? [];
 rows.push({ area: "protocol", tool: "tools/list", pass: advertised.length === 49, expected: "49 visible tools", ms: 0, summary: `advertised=${advertised.length}` });
 
-await record("diagnostics", "dysflow.doctor", { includeEnvironment: false });
-await record("operations", "dysflow.access.operations.list", {});
+await record("diagnostics", "dysflow_doctor", { includeEnvironment: false });
+await record("operations", "dysflow_access_operations_list", {});
 await record("schema", "list_tables", {});
 await record("schema", "list_access_files", { directory: cwd });
 await record("schema", "export_queries", { exportPath: join(tempRoot, "queries.json") });

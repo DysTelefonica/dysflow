@@ -18,9 +18,9 @@ CLI / MCP stdio / HTTP
 
 The MCP adapter registers tools over core services:
 
-- `dysflow.vba.execute` -> `AccessVbaService`
-- `dysflow.query.execute` -> `AccessQueryService`
-- `dysflow.doctor` -> `AccessDiagnosticsService`
+- `dysflow_vba_execute` -> `AccessVbaService`
+- `dysflow_query_execute` -> `AccessQueryService`
+- `dysflow_doctor` -> `AccessDiagnosticsService`
 
 MCP startup must not write product logs to stdout. Stdout belongs to the stdio protocol; safe messages belong in returned tool content or stderr on startup failure.
 
