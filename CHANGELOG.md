@@ -2,6 +2,13 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.7.6] - 2026-05-23
+
+### Fixed
+
+- Renamed modern MCP tools to underscore-separated names (`dysflow_vba_execute`, `dysflow_query_execute`, `dysflow_doctor`, `dysflow_access_operations_list`, `dysflow_access_cleanup`) so PI/Codex clients that enforce `^[a-zA-Z0-9_-]+$` can load Dysflow tools. Closes #296.
+- Updated installation instructions in `README.md` to reference the correct v0.7.6 release tag.
+
 ## [0.7.5] - 2026-05-22
 
 ### Fixed
