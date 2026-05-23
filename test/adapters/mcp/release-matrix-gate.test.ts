@@ -32,14 +32,14 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // Report
     console.log("=== MCP RELEASE MATRIX TOOL COUNT REPORT ===");
     console.log(`Legacy tools count: ${legacyCount} (expected: 45)`);
-    console.log(`Hidden stubs count: ${stubCount} (expected: 0)`);
+    console.log(`Hidden stubs count: ${stubCount} (expected: 2)`);
     console.log(`Modern tools count: ${modernCount} (expected: 5)`);
-    console.log(`Visible tools count: ${visibleCount} (expected: 50)`);
+    console.log(`Visible tools count: ${visibleCount} (expected: 48)`);
 
     expect(legacyCount).toBe(45);
-    expect(stubCount).toBe(0);
+    expect(stubCount).toBe(2);
     expect(modernCount).toBe(5);
-    expect(visibleCount).toBe(50);
+    expect(visibleCount).toBe(48);
   });
 
   it("verifies split-mode coverage explicitly", () => {

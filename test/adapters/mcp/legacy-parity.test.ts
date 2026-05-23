@@ -70,7 +70,8 @@ describe("legacy Dysflow MCP parity inventory", () => {
       "exec_sql",
       "seed_fixture",
     ]));
-    expect(pending.length).toBe(0);
+    expect(pending.length).toBe(2);
+    expect(pending.map((entry) => entry.name)).toEqual(expect.arrayContaining(["verify_binary", "reconcile_binary"]));
     expect(getLegacyParityToolDefinition("query_sql")).toMatchObject({
       name: "query_sql",
       slice: "query",

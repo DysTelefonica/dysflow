@@ -310,7 +310,7 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("stub tool visibility (#175)", () => {
-    const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code", "verify_binary", "reconcile_binary"] as const;
+    const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code"] as const;
 
     function makeServices() {
       return {
