@@ -301,6 +301,81 @@ errores:
     Test_Indicadores_CalcularDesdeColecciones_ProyectoSolo_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
 End Function
 
+Public Function Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim datos As Scripting.Dictionary
+    Dim conteos As Scripting.Dictionary
+    Dim legacy As Scripting.Dictionary
+    Dim fast As Scripting.Dictionary
+    Dim usr As usuario
+    Dim pError As String
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    Set datos = BuildDatosMixed("QA User", logs)
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+
+    Set legacy = Indicadores_Calcular(datos, usr, pError, "PROYECTO")
+    Call TestHelper.AssertTrue(pError = "", "Legacy Proyecto no debe fallar", logs, assertError)
+
+    Set conteos = BuildConteosProyectoDesdeDatos(datos, usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Fixture de conteos Proyecto no debe fallar", logs, assertError)
+
+    Set fast = Indicadores_CalcularProyectoDesdeConteos(conteos, pError)
+    Call TestHelper.AssertTrue(pError = "", "Fast counts Proyecto no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(fast("ProyectoTotal")) = CLng(legacy("ProyectoTotal")), "ProyectoTotal fast debe igualar legacy", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(fast("ProyectoUsuario")) = CLng(legacy("ProyectoUsuario")), "ProyectoUsuario fast debe igualar legacy", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic = TestHelper.BuildJsonOk(logs, "fast_counts_parity_ok")
+    End If
+    Exit Function
+errores:
+    Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Public Function Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim datos As Scripting.Dictionary
+    Dim conteos As Scripting.Dictionary
+    Dim legacy As Scripting.Dictionary
+    Dim fast As Scripting.Dictionary
+    Dim usr As usuario
+    Dim pError As String
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    Set datos = BuildDatosMixed("QA User", logs)
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+
+    Set legacy = Indicadores_Calcular(datos, usr, pError, "AMBOS")
+    Call TestHelper.AssertTrue(pError = "", "Legacy AMBOS no debe fallar", logs, assertError)
+    Set conteos = BuildConteosProyectoDesdeDatos(datos, usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Fixture de conteos Proyecto no debe fallar", logs, assertError)
+    Set fast = Indicadores_CalcularProyectoDesdeConteos(conteos, pError)
+    Call TestHelper.AssertTrue(pError = "", "Fast counts Proyecto no debe fallar", logs, assertError)
+
+    Call TestHelper.AssertTrue(Not fast.Exists("AuditoriaTotal"), "Fast counts Proyecto no debe devolver AuditoriaTotal", logs, assertError)
+    Call TestHelper.AssertTrue(Not fast.Exists("AuditoriaUsuario"), "Fast counts Proyecto no debe devolver AuditoriaUsuario", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(legacy("AuditoriaTotal")) = 6, "Legacy AuditoriaTotal debe seguir intacto", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(legacy("AuditoriaUsuario")) = 5, "Legacy AuditoriaUsuario debe seguir intacto", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic = TestHelper.BuildJsonOk(logs, "fast_counts_no_auditoria_ok")
+    End If
+    Exit Function
+errores:
+    Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
 Private Function BuildDatosVacios() As Scripting.Dictionary
     Dim datos As Scripting.Dictionary
     Set datos = New Scripting.Dictionary
@@ -393,6 +468,43 @@ Private Sub AddSegNCAuditoria(ByVal pCol As Scripting.Dictionary, ByVal pID As S
     pCol.Add pID & "|" & CStr(pCol.count + 1), item
 End Sub
 
+Private Function BuildConteosProyectoDesdeDatos( _
+                                    ByVal pDatos As Scripting.Dictionary, _
+                                    ByVal pUsuario As usuario, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim conteos As Scripting.Dictionary
+    Set conteos = New Scripting.Dictionary
+    conteos.CompareMode = TextCompare
+
+    conteos("ProyectoTareasPteReplanificarTotal") = pDatos("ProyectoTareasPteReplanificar").Count
+    conteos("ProyectoTareasPteReplanificarUsuario") = CountUsuarioTest(pDatos("ProyectoTareasPteReplanificar"), pUsuario, p_Error)
+    conteos("ProyectoTareasIrregularesUsuario") = CountUsuarioTest(pDatos("ProyectoTareasIrregulares"), pUsuario, p_Error)
+    conteos("ProyectoNCRegistradasTotal") = pDatos("ProyectoNCRegistradas").Count
+    conteos("ProyectoNCRegistradasUsuario") = CountUsuarioTest(pDatos("ProyectoNCRegistradas"), pUsuario, p_Error)
+    conteos("ProyectoNCAccionesSinTareasTotal") = pDatos("ProyectoNCAccionesSinTareas").Count
+    conteos("ProyectoNCAccionesSinTareasUsuario") = CountUsuarioTest(pDatos("ProyectoNCAccionesSinTareas"), pUsuario, p_Error)
+    conteos("ProyectoNCPteCETotal") = pDatos("ProyectoNCPteCE").Count
+    conteos("ProyectoNCPteCEUsuario") = CountUsuarioTest(pDatos("ProyectoNCPteCE"), pUsuario, p_Error)
+    conteos("ProyectoNCCECaducadaTotal") = pDatos("ProyectoNCCECaducada").Count
+    conteos("ProyectoNCCECaducadaUsuario") = CountUsuarioTest(pDatos("ProyectoNCCECaducada"), pUsuario, p_Error)
+    conteos("ProyectoNCCENoConformeTotal") = pDatos("ProyectoNCCENoConforme").Count
+    conteos("ProyectoNCCENoConformeUsuario") = CountUsuarioTest(pDatos("ProyectoNCCENoConforme"), pUsuario, p_Error)
+
+    Set BuildConteosProyectoDesdeDatos = conteos
+End Function
+
+Private Function CountUsuarioTest( _
+                                    ByVal pCol As Scripting.Dictionary, _
+                                    ByVal pUsuario As usuario, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Long
+    Dim colUsuario As Scripting.Dictionary
+    Set colUsuario = getColSeguimientoPorUsuario(pCol, pUsuario, p_Error)
+    If p_Error <> "" Then Exit Function
+    If Not colUsuario Is Nothing Then CountUsuarioTest = colUsuario.Count
+End Function
+
 ' ============================================================
 ' TESTS DE SINCRONIZACION DE CACHE — ModuloCacheIndicadores
 ' Verifica que el cache global de indicadores funciona correctamente
@@ -428,7 +540,7 @@ Public Function Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic() As String
     Call TestHelper.AssertTrue(col1 Is dict1, "Cache directo y via Entorno deben devolver la misma referencia", logs, assertError)
     
     ' 3.Resetear cache
-    Call Cache_InvalidarProyecto(pError:=pError)
+    Call Cache_InvalidarProyecto(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
     AddLog logs, "Cache invalidado"
     
@@ -472,7 +584,7 @@ Public Function Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic() As 
                  " aud=" & Cache_Auditoria_EstaCargado()
     
     ' Invalidar TODO
-    Call Cache_InvalidarTodo(pError:=pError)
+    Call Cache_InvalidarTodo(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarTodo no debe fallar", logs, assertError)
     
     ' Ambos deben estar limpiados
@@ -510,7 +622,7 @@ Public Function Test_Cache_InvalidacionSelectiva_Atomic() As String
     If pError <> "" Then GoTo errores
     
     ' Invalidar solo proyecto
-    Call Cache_InvalidarProyecto(pError:=pError)
+    Call Cache_InvalidarProyecto(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
     
     Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), _
@@ -523,7 +635,7 @@ Public Function Test_Cache_InvalidacionSelectiva_Atomic() As String
     Call TestHelper.AssertTrue(pError = "", "Recarga proyecto no debe fallar", logs, assertError)
     
     ' Invalidar solo auditoria
-    Call Cache_InvalidarAuditoria(pError:=pError)
+    Call Cache_InvalidarAuditoria(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarAuditoria no debe fallar", logs, assertError)
     
     Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), _
@@ -559,7 +671,7 @@ Public Function Test_Cache_ConsistenciaConEntorno_Atomic() As String
     usr.Nombre = "QA User"
     
     ' Limpiar cache primero para test limpio
-    Call Cache_InvalidarProyecto(pError:=pError)
+    Call Cache_InvalidarProyecto(p_Error:=pError)
     
     ' Cargar via Entorno (delega a cache internamente)
     Set colEntorno = m_ObjEntorno.ColSegsNCProyectoRegistradas
