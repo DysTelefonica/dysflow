@@ -52,8 +52,6 @@ const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
   "test_vba",
   "compile_vba",
   "verify_code",
-  "verify_binary",
-  "reconcile_binary",
   "delete_module",
   "generate_erd",
   "fix_encoding",

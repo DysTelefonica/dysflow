@@ -569,7 +569,7 @@ function appendLegacyCompatibilityTools(
  * but remain registered so direct calls return a clear error rather than a routing failure.
  * Exported for contract testing.
  */
-export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([]);
+export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>(["verify_binary", "reconcile_binary"]);
 
 function createLegacyDispatchTool(
   name: LegacyDysflowMcpToolName,
