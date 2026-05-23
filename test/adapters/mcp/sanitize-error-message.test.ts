@@ -29,4 +29,20 @@ describe("sanitizeErrorMessage", () => {
   it("keeps non-path error text and URLs readable", () => {
     expect(sanitize("error 42 expected 'foo' see https://example.test/docs")).toBe("TEST_ERROR: error 42 expected 'foo' see https://example.test/docs");
   });
+
+  it("completes within 50ms on adversarial UNC-like string with many backslashes (no catastrophic backtracking)", () => {
+    // This string has many backslashes that can trigger exponential backtracking
+    // in patterns with nested unbounded quantifiers (e.g. (?:\..+)*)
+    const adversarial = `\\\\${"a\\".repeat(30)}`;
+    const start = Date.now();
+    sanitize(adversarial);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it("sanitizes UNC source code description in error messages", () => {
+    const result = sanitize("failed to open \\\\server\\share\\front.mdb: access denied");
+    expect(result).toContain("[PATH]");
+    expect(result).not.toContain("\\\\server");
+  });
 });

@@ -57,7 +57,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     }
 
     if (this.options.processScanner) {
-      await this.scanAndCleanOrphans(request, result, handledPids);
+      await this.scanAndCleanOrphans(this.options.processScanner, request, result, handledPids);
     }
 
     return result;
@@ -111,13 +111,14 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
   }
 
   private async scanAndCleanOrphans(
+    scanner: ProcessScanner,
     request: AccessOperationPreflightCleanupRequest,
     result: AccessOperationPreflightCleanupResult,
     handledPids: Set<number>,
   ): Promise<void> {
     let processes: OsProcessInfo[];
     try {
-      processes = await this.options.processScanner!.listProcesses();
+      processes = await scanner.listProcesses();
     } catch (error) {
       result.errors.push({ operationId: "orphan_scanner", message: `Failed to enumerate processes: ${formatError(error)}` });
       return;

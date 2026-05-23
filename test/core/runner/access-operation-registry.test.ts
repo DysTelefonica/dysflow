@@ -46,7 +46,7 @@ describe("Access operation registry and cleanup safety", () => {
 		await registry.create({
 			...base,
 			operationId: "old",
-			status: "completed",
+			status: "running",
 			accessPid: 1,
 			processStartTime: "2026-05-15T10:00:00.000Z",
 			updatedAt: "2026-05-15T10:00:00.000Z",
@@ -54,7 +54,7 @@ describe("Access operation registry and cleanup safety", () => {
 		await registry.create({
 			...base,
 			operationId: "middle",
-			status: "completed",
+			status: "running",
 			accessPid: 2,
 			processStartTime: "2026-05-15T11:00:00.000Z",
 			updatedAt: "2026-05-15T11:00:00.000Z",
@@ -62,7 +62,7 @@ describe("Access operation registry and cleanup safety", () => {
 		await registry.create({
 			...base,
 			operationId: "new",
-			status: "completed",
+			status: "running",
 			accessPid: 3,
 			processStartTime: "2026-05-15T12:00:00.000Z",
 			updatedAt: "2026-05-15T12:00:00.000Z",
@@ -496,9 +496,8 @@ describe("Access operation registry and cleanup safety", () => {
 
 		expect(result.ok).toBe(true);
 		expect(killed).toEqual([1234]);
-		await expect(registry.get("op-1")).resolves.toMatchObject({
-			status: "cleaned",
-		});
+		// cleaned records are purged from InMemory registry (parity with FileRegistry)
+		await expect(registry.get("op-1")).resolves.toBeUndefined();
 	});
 
 	it("accepts cleanup when accessPath differs only by case", async () => {
