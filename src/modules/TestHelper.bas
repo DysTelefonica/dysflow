@@ -82,7 +82,7 @@ Private Function ResolveBackendSandbox(ByRef p_BackendPath As String, ByRef p_Ba
     p_Error = ""
 
     Set dbConfig = CurrentDb
-    Set rsConfig = dbConfig.OpenRecordset("SELECT TOP 1 BackendSandbox, PasswordBackend FROM TbConfiguracionBackends ORDER BY ID", dbOpenSnapshot)
+    Set rsConfig = dbConfig.OpenRecordset("SELECT BackendSandbox, PasswordBackend FROM TbConfiguracionBackends WHERE ID = 1", dbOpenSnapshot)
 
     If rsConfig.EOF Then
         p_Error = "TESTS BLOCKED: TbConfiguracionBackends no tiene configuración"

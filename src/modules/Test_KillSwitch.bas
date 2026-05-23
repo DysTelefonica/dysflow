@@ -34,13 +34,20 @@ Public Function Test_KillSwitch_SetEnabled_True_Atomic() As String
 
     Dim logs As Collection
     Dim estadoOriginal As Boolean
+    Dim sessionStarted As Boolean
     Dim setResult As Boolean
     Dim estadoActual As Boolean
     Dim assertError As String
     Dim restoreErr As String
     Dim opError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
     estadoOriginal = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(estadoOriginal)
 
@@ -57,25 +64,28 @@ Public Function Test_KillSwitch_SetEnabled_True_Atomic() As String
 
     Call RestoreState(estadoOriginal, logs, restoreErr)
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.TestFail(restoreErr, logs)
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail(restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.TestPass(logs, estadoActual)
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonOk(logs, estadoActual)
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreState(estadoOriginal, logs, restoreErr)
     If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
-    Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.TestFail(assertError, logs)
+    Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
     Exit Function
 EH:
-    Call RestoreState(estadoOriginal, logs, restoreErr)
+    If sessionStarted Then Call RestoreState(estadoOriginal, logs, restoreErr)
     TestHelper.AddLog logs, "Error: " & Err.Description
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.TestFail(Err.Description & " | Restore: " & restoreErr, logs)
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.TestFail(Err.Description, logs)
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_KillSwitch_SetEnabled_False_Atomic() As String
@@ -83,13 +93,20 @@ Public Function Test_KillSwitch_SetEnabled_False_Atomic() As String
 
     Dim logs As Collection
     Dim estadoOriginal As Boolean
+    Dim sessionStarted As Boolean
     Dim setResult As Boolean
     Dim estadoActual As Boolean
     Dim assertError As String
     Dim restoreErr As String
     Dim opError As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
     estadoOriginal = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(estadoOriginal)
 
@@ -106,25 +123,28 @@ Public Function Test_KillSwitch_SetEnabled_False_Atomic() As String
 
     Call RestoreState(estadoOriginal, logs, restoreErr)
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.TestFail(restoreErr, logs)
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail(restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.TestPass(logs, estadoActual)
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonOk(logs, estadoActual)
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreState(estadoOriginal, logs, restoreErr)
     If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
-    Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.TestFail(assertError, logs)
+    Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
     Exit Function
 EH:
-    Call RestoreState(estadoOriginal, logs, restoreErr)
+    If sessionStarted Then Call RestoreState(estadoOriginal, logs, restoreErr)
     TestHelper.AddLog logs, "Error: " & Err.Description
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.TestFail(Err.Description & " | Restore: " & restoreErr, logs)
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.TestFail(Err.Description, logs)
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_KillSwitch_RestoreDefault_Atomic() As String
@@ -134,8 +154,15 @@ Public Function Test_KillSwitch_RestoreDefault_Atomic() As String
     Dim setResult As Boolean
     Dim assertError As String
     Dim opError As String
+    Dim sessionStarted As Boolean
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
     opError = ""
     setResult = CacheConfig_SetEnabled(True, opError)
     Call TestHelper.AssertTrue(setResult, "Restore default debe devolver True", logs, assertError)
@@ -143,14 +170,16 @@ Public Function Test_KillSwitch_RestoreDefault_Atomic() As String
         Call TestHelper.AssertTrue(opError = "", "Restore default no debe devolver error", logs, assertError)
     End If
     If assertError <> "" Then
-        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.TestFail(assertError, logs)
+        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     Else
-        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.TestPass(logs, IsCacheEnabled())
+        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.BuildJsonOk(logs, IsCacheEnabled())
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 EH:
     TestHelper.AddLog logs, "Error: " & Err.Description
-    Test_KillSwitch_RestoreDefault_Atomic = TestHelper.TestFail(Err.Description, logs)
+    Test_KillSwitch_RestoreDefault_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
@@ -161,8 +190,15 @@ Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
     Dim ok2 As Boolean
     Dim errMsg As String
     Dim assertError As String
+    Dim sessionStarted As Boolean
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
     errMsg = ""
     ok1 = EnsureCacheSchemaReadiness(errMsg)
     Call TestHelper.AssertTrue(ok1, "EnsureCacheSchemaReadiness primera ejecución OK", logs, assertError)
@@ -187,16 +223,19 @@ Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
     Call TestHelper.AssertTrue(TableHasField("TbCacheListadoNC", "CacheValida"), "TbCacheListadoNC.CacheValida existe", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
-    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestPass(logs, "schema_seed_ready")
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.BuildJsonOk(logs, "schema_seed_ready")
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
-    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestFail(assertError, logs)
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
     Exit Function
 
 EH:
     TestHelper.AddLog logs, "Error: " & Err.Description
-    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.TestFail(Err.Description, logs)
+    Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Private Function CountRowsBackend(ByVal p_Table As String, Optional ByVal p_Where As String = "") As Long
@@ -224,11 +263,18 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
 
     Dim logs As Collection
     Dim originalState As Boolean
+    Dim sessionStarted As Boolean
     Dim assertError As String
     Dim opError As String
     Dim restoreErr As String
+    Dim sessionErr As String
 
     Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
     originalState = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(originalState)
 
@@ -258,26 +304,29 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
 
     Call RestoreState(originalState, logs, restoreErr)
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(restoreErr, logs)
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail(restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestPass(logs, "off_on_off_ok")
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonOk(logs, "off_on_off_ok")
     End If
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 
 Fail:
     Call RestoreState(originalState, logs, restoreErr)
     If restoreErr <> "" Then assertError = assertError & " | Restore: " & restoreErr
-    Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(assertError, logs)
+    Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
     Exit Function
 
 EH:
-    Call RestoreState(originalState, logs, restoreErr)
+    If sessionStarted Then Call RestoreState(originalState, logs, restoreErr)
     TestHelper.AddLog logs, "Error: " & Err.Description
     If restoreErr <> "" Then
-        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(Err.Description & " | Restore: " & restoreErr, logs)
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & restoreErr, logs)
     Else
-        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.TestFail(Err.Description, logs)
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Private Function TableHasField(ByVal p_Table As String, ByVal p_Field As String) As Boolean
@@ -298,6 +347,19 @@ Private Function TableHasField(ByVal p_Table As String, ByVal p_Field As String)
     Exit Function
 EH:
     TableHasField = False
+End Function
+
+Private Function BeginKillSwitchWriteSession(ByRef p_Logs As Collection, ByRef p_Error As String) As Boolean
+    BeginKillSwitchWriteSession = False
+    p_Error = ""
+
+    If Not TestHelper.BeginTestSession(p_Logs, p_Error) Then Exit Function
+    If Not TestHelper.AssertSandboxBackend(p_Logs, p_Error) Then
+        Call TestHelper.EndTestSession(p_Logs)
+        Exit Function
+    End If
+
+    BeginKillSwitchWriteSession = True
 End Function
 
 Private Sub RestoreState(ByVal p_Enabled As Boolean, ByRef p_Logs As Collection, Optional ByRef p_Error As String)
