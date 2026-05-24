@@ -97,21 +97,21 @@ Chain strategy: stacked-to-main
 
 ### Phase 3.1: VBA Form Service [RED → GREEN]
 
-- [ ] 3.1.1 **[RED]** Create `test/core/services/vba-form-service.test.ts` — unit tests calling `VbaFormService.validateFormSpec`, `generateForm`, `catalogAddControl`, `harvestFormCatalog`, `resolveFormSpec` directly (with mocked executor/collaborators). Assert symbols are importable from `vba-form-service.ts`. _Spec: "Form operations importable from vba-form-service" scenario._
-- [ ] 3.1.2 **[GREEN]** Create `src/core/services/vba-form-service.ts` with `class VbaFormService` — constructor accepts `{ executor, env, resolveExecutionTarget, validateStrictContext }` collaborators. Move `validateFormSpec`, `generateForm`, `catalogAddControl`, `harvestFormCatalog`, `resolveFormSpec` from `VbaSyncLegacyService` into the class as methods. Export the class.
-- [ ] 3.1.3 **[VERIFY]** Run `pnpm test` — all tests green.
+- [x] 3.1.1 **[RED]** Create `test/core/services/vba-form-service.test.ts` — unit tests calling `VbaFormService.validateFormSpec`, `generateForm`, `catalogAddControl`, `harvestFormCatalog`, `resolveFormSpec` directly (with mocked executor/collaborators). Assert symbols are importable from `vba-form-service.ts`. _Spec: "Form operations importable from vba-form-service" scenario._
+- [x] 3.1.2 **[GREEN]** Create `src/core/services/vba-form-service.ts` with `class VbaFormService` — constructor accepts `{ executor, env, resolveExecutionTarget, validateStrictContext }` collaborators. Move `validateFormSpec`, `generateForm`, `catalogAddControl`, `harvestFormCatalog`, `resolveFormSpec` from `VbaSyncLegacyService` into the class as methods. Export the class.
+- [x] 3.1.3 **[VERIFY]** Run `pnpm test` — all tests green.
 
 ### Phase 3.2: VBA Source Comparison Module [RED → GREEN]
 
-- [ ] 3.2.1 **[RED]** Create `test/core/services/vba-source-comparison.test.ts` — unit tests calling `compareSourceAgainstBinary`, `compareVbaSourceTrees`, `collectVbaSourceFiles` with mocked context. Assert symbols are importable from `vba-source-comparison.ts`. _Spec: "Comparison operations importable from vba-source-comparison" scenario._
-- [ ] 3.2.2 **[GREEN]** Create `src/core/services/vba-source-comparison.ts` — move `compareSourceAgainstBinary`, `compareVbaSourceTrees`, `collectVbaSourceFiles` from `VbaSyncLegacyService` as free exported functions. Export `planReconcileBinary` if it resides there.
-- [ ] 3.2.3 **[VERIFY]** Run `pnpm test` — all tests green.
+- [x] 3.2.1 **[RED]** Create `test/core/services/vba-source-comparison.test.ts` — unit tests calling `compareSourceAgainstBinary`, `compareVbaSourceTrees`, `collectVbaSourceFiles` with mocked context. Assert symbols are importable from `vba-source-comparison.ts`. _Spec: "Comparison operations importable from vba-source-comparison" scenario._
+- [x] 3.2.2 **[GREEN]** Create `src/core/services/vba-source-comparison.ts` — move `compareSourceAgainstBinary`, `compareVbaSourceTrees`, `collectVbaSourceFiles` from `VbaSyncLegacyService` as free exported functions. Export `planReconcileBinary` if it resides there.
+- [x] 3.2.3 **[VERIFY]** Run `pnpm test` — all tests green.
 
 ### Phase 3.3: VbaSyncLegacyService Coordinator Wiring [RED → GREEN]
 
-- [ ] 3.3.1 **[RED]** Add integration test (or assert on existing) that `VbaSyncLegacyService.execute` routing for form/catalog and comparison branches passes calls through to the new sub-modules (spy/mock injection). Assert public API signature unchanged. _Spec: "Public API unchanged" and "Delegation to sub-modules" scenarios._
-- [ ] 3.3.2 **[GREEN]** In `src/core/services/vba-sync-legacy-service.ts`: instantiate `VbaFormService` and import comparison functions. Wire `execute()` form/spec/catalog/erd branches to `VbaFormService` methods; wire verify/reconcile branches to `compareSourceAgainstBinary`. Add re-exports of moved symbols for one-release back-compat. Delete now-empty inline implementations.
-- [ ] 3.3.3 **[VERIFY]** Run `pnpm test` — all tests green. Confirm existing VBA integration tests remain green untouched. Commit PR3.
+- [x] 3.3.1 **[RED]** Add integration test (or assert on existing) that `VbaSyncLegacyService.execute` routing for form/catalog and comparison branches passes calls through to the new sub-modules (spy/mock injection). Assert public API signature unchanged. _Spec: "Public API unchanged" and "Delegation to sub-modules" scenarios._
+- [x] 3.3.2 **[GREEN]** In `src/core/services/vba-sync-legacy-service.ts`: instantiate `VbaFormService` and import comparison functions. Wire `execute()` form/spec/catalog/erd branches to `VbaFormService` methods; wire verify/reconcile branches to `compareSourceAgainstBinary`. Add re-exports of moved symbols for one-release back-compat. Delete now-empty inline implementations.
+- [x] 3.3.3 **[VERIFY]** Run `pnpm test` — all tests green. Confirm existing VBA integration tests remain green untouched. Commit PR3.
 
 ---
 

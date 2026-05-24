@@ -1,10 +1,10 @@
 ## Verification Report
 
 **Change**: address-v075-tech-debt
-**Version**: PR2 Config Sync/Async Dedup
+**Version**: PR3 VBA Service Split
 **Mode**: Strict TDD
-**Date**: 2026-05-23
-**Verdict**: PASS
+**Date**: 2026-05-24
+**Verdict**: PASS WITH WARNINGS
 
 ### Completeness
 | Metric | Value |
@@ -12,28 +12,28 @@
 | Tasks total | 3 |
 | Tasks complete | 3 |
 | Tasks incomplete | 0 |
-| PR Slice | PR2 — Config Sync/Async Dedup |
+| PR Slice | PR3 — VBA Service Split |
 
 ### Build & Tests Execution
-**Tests**: ✅ `npx vitest run test/core/config/dysflow-config-parity.test.ts` passed (10/10 tests). `npx vitest run test/core/config/dysflow-config.test.ts` passed (25/25 tests). Full test suite passed (442/442 tests).
-
-**Build**: ✅ `pnpm build` passed.
-
-**Lint/Type Check**: ✅ `pnpm lint` passed (tsc noEmit check on code and tests).
-
-**Coverage**: ✅ `pnpm coverage` passed. `dysflow-config.ts` has 95.85% statement coverage, 85.71% branch coverage.
+- **Tests**: ✅ All tests pass at runtime.
+  - `npx vitest run test/core/services/vba-sync-legacy-service.test.ts` passed (50/50 tests).
+  - `npx vitest run test/core/services/vba-form-service.test.ts` passed (6/6 tests).
+  - `npx vitest run test/core/services/vba-source-comparison.test.ts` passed (3/3 tests).
+  - Total: 59/59 tests passed.
+- **Build**: ✅ `pnpm build` passed (source code compiles without any type errors).
+- **Lint/Type Check**: ❌ `pnpm lint` failed with 3 errors due to mock values in test files missing properties from the strict `OperationResult` type (see WARNING section).
 
 ---
 
 ### TDD Compliance
 | Check | Result | Details |
 |-------|--------|---------|
-| TDD Evidence reported | ✅ | `apply-progress.md` contains the required TDD Cycle Evidence table. |
-| All tasks have tests | ✅ | Tasks 2.1.1 and 2.1.2 reference test files. |
-| RED confirmed (tests exist) | ✅ | `dysflow-config.test.ts` and `dysflow-config-parity.test.ts` exist. |
-| GREEN confirmed (tests pass) | ✅ | All tests in both files pass at runtime. |
-| Triangulation adequate | ✅ | Extensively tested with multiple config variations (env, standard, legacy, overrides, etc.). |
-| Safety Net for modified files | ✅ | Existing tests ran as safety nets (35 config tests, 442 total suite). |
+| TDD Evidence reported | ✅ | Found in `apply-progress.md` TDD Cycle Evidence table. |
+| All tasks have tests | ✅ | 3/3 tasks map to specific test files. |
+| RED confirmed (tests exist) | ✅ | Checked test files exist: `vba-form-service.test.ts`, `vba-source-comparison.test.ts`, `vba-sync-legacy-service.test.ts`. |
+| GREEN confirmed (tests pass) | ✅ | All tests in all three files pass at runtime. |
+| Triangulation adequate | ✅ | 6 cases for form-service, 3 cases for source-comparison, 2 cases for delegation. |
+| Safety Net for modified files | ✅ | Existing 48 tests in `vba-sync-legacy-service.test.ts` passed, serving as a safety net during refactoring. |
 
 **TDD Compliance**: 6/6 checks passed.
 
@@ -42,69 +42,67 @@
 ### Test Layer Distribution
 | Layer | Tests | Files | Tools |
 |-------|-------|-------|-------|
-| Unit | 35 | 2 | Vitest |
-| Integration | 0 | 0 | Not used |
+| Unit | 9 | 2 | Vitest |
+| Integration | 50 | 1 | Vitest |
 | E2E | 0 | 0 | Not used |
-| **Total** | **35** | **2** | |
+| **Total** | **59** | **3** | |
 
 ---
 
 ### Changed File Coverage
 | File | Line % | Branch % | Uncovered Lines | Rating |
 |------|--------|----------|-----------------|--------|
-| `src/core/config/dysflow-config.ts` | 95.85% | 85.71% | L467-468, L494-495 | ✅ Excellent |
-| `test/core/config/dysflow-config.test.ts` | 100% | 100% | — | ✅ Excellent |
-| `test/core/config/dysflow-config-parity.test.ts` | 100% | 100% | — | ✅ Excellent |
+| `src/core/services/vba-form-service.ts` | 94.82% | 50.76% | L48, L157, L171-172 | ⚠️ Acceptable |
+| `src/core/services/vba-source-comparison.ts` | 94.29% | 67.69% | L219-220, L258-259 | ⚠️ Acceptable |
+| `src/core/services/vba-sync-legacy-service.ts` | 94.76% | 78.97% | L646-647, L656-659 | ⚠️ Acceptable |
 
-**Average changed file coverage**: 98.62%
+**Average changed file coverage**: 94.62%
 
 ---
 
 ### Assertion Quality
-| Check | Result | Details |
-|-------|--------|---------|
-| Tautologies (`expect(true).toBe(true)`, etc.) | ✅ None | Checked both test files; no tautological assertions found. |
-| Ghost loops (looping over empty queries) | ✅ None | No queries or dynamic array filters looped over. |
-| Empty collection checks without non-empty | ✅ None | Only checking `diagnostics: []` which is a fixed schema type, no actual collections asserting empty. |
-| Type-only assertions alone | ⚠️ Minor Warning | Two tests verify function runtime type (`toBeTypeOf("function")` on `loadProjectConfigCore` and `loadDysflowConfigShared`), but they are accompanied by value assertions. |
-| Smoke-test-only (render + toBeInTheDocument) | ✅ None | No UI smoke tests. |
-| CSS class or implementation details | ✅ None | Testing is strictly functional on API inputs/outputs. |
-| Mock-heavy tests (mocks > 2x assertions) | ✅ None | Mocks are 0 (tests use real temp directory filesystem). |
+| File | Line | Assertion | Issue | Severity |
+|------|------|-----------|-------|----------|
+| `test/core/services/vba-sync-legacy-service.test.ts` | 1553-1555 | `expect(...).toBeDefined()` | Type-only presence assertions alone | WARNING |
 
-**Assertion quality**: PASS WITH WARNINGS (minor runtime type check warning).
+**Assertion quality**: 0 CRITICAL, 1 WARNING (presence check for compatibility re-exports).
+All other assertions check real behavior.
 
 ---
 
 ### Quality Metrics
-| Metric | Status | Details |
-|--------|--------|---------|
-| Linter | ✅ Pass | `pnpm lint` returned no errors. |
-| Type Checker | ✅ Pass | `tsc` compilation checks passed. |
+**Linter**: ❌ 3 errors (Type errors in mock returns within test files when type-checking tests)
+**Type Checker**: ✅ No errors (Source code compiles successfully via `pnpm build`)
 
 ---
 
 ### Spec Compliance Matrix
 | Requirement | Scenario | Test / Evidence | Result |
 |-------------|----------|-----------------|--------|
-| Single-Implementation Config Loading | Sync result matches async result | `test/core/config/dysflow-config-parity.test.ts` | ✅ COMPLIANT |
-| Single-Implementation Config Loading | No routing duplication | `src/core/config/dysflow-config.ts` | ✅ COMPLIANT |
+| VBA Form Service Module | Form operations importable | `test/core/services/vba-form-service.test.ts` | ✅ COMPLIANT |
+| VBA Form Service Module | Not duplicated in legacy service | `src/core/services/vba-sync-legacy-service.ts` delegates to form service | ✅ COMPLIANT |
+| VBA Source Comparison Module | Comparison operations importable | `test/core/services/vba-source-comparison.test.ts` | ✅ COMPLIANT |
+| VBA Sync Legacy Service Public API Preserved | Public API unchanged | `test/core/services/vba-sync-legacy-service.test.ts` verifies re-exports & backward compatibility | ✅ COMPLIANT |
+| VBA Sync Legacy Service Public API Preserved | Delegation to sub-modules | `test/core/services/vba-sync-legacy-service.test.ts` (delegation spy) | ✅ COMPLIANT |
 
-**Compliance summary**: 2/2 scenarios compliant.
+**Compliance summary**: 5/5 scenarios compliant.
 
 ---
 
 ### Correctness (Static Evidence)
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Sync/async config loader results parity | ✅ Implemented | Both variants return identical output for same input. |
-| Single-implementation configuration loading | ✅ Implemented | Duplication fully resolved by extracting routing logic into `loadDysflowConfigShared` and building/validation logic into `loadProjectConfigCore`. |
+| Form-related operations relocated | ✅ Implemented | Operations relocated to `vba-form-service.ts` in class `VbaFormService`. |
+| Source comparison operations relocated | ✅ Implemented | Relocated as free functions in `vba-source-comparison.ts`. |
+| Coordinator instantiates and delegates | ✅ Implemented | `VbaSyncLegacyService` instantiates `VbaFormService` and delegates form and verification tasks. |
+| Backwards compatibility re-exports exist | ✅ Implemented | All relocated symbols re-exported from `vba-sync-legacy-service.ts`. |
 
 ---
 
 ### Coherence (Design)
 | Decision | Followed? | Notes |
 |----------|-----------|-------|
-| Decision 8: Config sync/async dedup | ✅ Yes | Wrappers are now thin wrappers that delegate config-building to `loadProjectConfigCore` and routing to `loadDysflowConfigShared`. |
+| Decision 9: VBA service split | ✅ Yes | Coordinator instantiates `VbaFormService` and imports comparison free functions. Public API is stable and backwards-compatible re-exports are provided. |
 
 ---
 
@@ -114,12 +112,13 @@
 - None.
 
 #### WARNING
-- **Type-Only Assertion**: Test files contain checks for function runtime type using `toBeTypeOf("function")` (on `loadProjectConfigCore` and `loadDysflowConfigShared`). While minor, these are accompanied by robust value and structure-matching checks, posing no risk to verification quality.
+- **TypeScript compilation errors in test files**: When running `pnpm lint` (which runs `tsc` over test files), there are 3 type errors in `vba-source-comparison.test.ts` and `vba-sync-legacy-service.test.ts` because test mocks return objects lacking `diagnostics` and `durationMs` from `OperationResult`. While these do not prevent the Vitest runtime execution (which executes and passes successfully), they break strict TypeScript checks for tests.
+- **Type-only assertion**: `vba-sync-legacy-service.test.ts` contains `toBeDefined()` presence assertions to check that `VbaFormService`, `compareSourceAgainstBinary`, and `planReconcileBinary` are re-exported. This is acceptable here because its explicit goal is to verify the existence of exports for backwards compatibility.
 
 #### SUGGESTION
-- None.
+- **Mock Return Completeness**: We suggest updating the test files to return full `OperationResult` shapes in mocks (e.g. adding `diagnostics: [], durationMs: 0` to mocked resolved values) to resolve the typescript check errors.
 
 ---
 
 ### Verdict
-PASS
+PASS WITH WARNINGS

@@ -1546,4 +1546,30 @@ describe("VbaSyncLegacyService", () => {
 			});
 		});
 	});
+
+	describe("delegation to form service and comparison modules", () => {
+		it("re-exports VbaFormService, comparison helpers, and related types for backward compatibility", async () => {
+			const serviceModule = await import("../../../src/core/services/vba-sync-legacy-service");
+			expect(serviceModule.VbaFormService).toBeDefined();
+			expect(serviceModule.compareSourceAgainstBinary).toBeDefined();
+			expect(serviceModule.planReconcileBinary).toBeDefined();
+		});
+
+		it("delegates form-related operations to VbaFormService methods", async () => {
+			const service = new VbaSyncLegacyService({
+				accessPath: "C:/db/front.accdb",
+				env: {},
+			});
+
+			// @ts-expect-error formService is private
+			const formServiceSpy = vi.spyOn(service.formService, "validateFormSpec");
+			formServiceSpy.mockResolvedValue({ ok: true, data: { spyCalled: true }, diagnostics: [], durationMs: 0 });
+
+			const result = await service.execute("validate_form_spec", { spec: { name: "SpyForm" } });
+			expect(formServiceSpy).toHaveBeenCalledTimes(1);
+			expect(result).toMatchObject({ ok: true, data: { spyCalled: true } });
+			formServiceSpy.mockRestore();
+		});
+	});
 });
+

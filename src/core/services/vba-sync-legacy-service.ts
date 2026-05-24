@@ -7,6 +7,53 @@ import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-co
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../runner/powershell-executor.js";
 import { AccessOperationPreflightCleanupService, diagnosticsFromPreflightCleanup, type AccessOperationPreflightCleanup, type AccessOperationPreflightCleanupResult } from "../operations/access-operation-preflight.js";
 import { FileAccessOperationRegistry, resolveProjectOperationRegistryPath } from "../operations/access-operation-registry.js";
+import { VbaFormService } from "./vba-form-service.js";
+import { compareSourceAgainstBinary, planReconcileBinary } from "./vba-source-comparison.js";
+
+export * from "./vba-form-service.js";
+export {
+	compareSourceAgainstBinary,
+	planReconcileBinary,
+	compareVbaSourceTrees,
+	collectVbaSourceFiles,
+} from "./vba-source-comparison.js";
+
+export type VbaSourceComparisonFile = {
+  moduleName: string;
+  fileType: string;
+  path: string;
+  relativePath: string;
+};
+
+export type VbaSourceComparisonEntry = {
+  moduleName: string;
+  fileType: string;
+  sourcePath?: string;
+  binaryPath?: string;
+};
+
+export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
+  sourceSnippet: string;
+  binarySnippet: string;
+};
+
+export type VbaVerifyResult = {
+  operation: "verify_code" | "verify_binary";
+  ok: boolean;
+  dryRun: true;
+  willModifyAccess: false;
+  sourceRoot: string;
+  matched: readonly VbaSourceComparisonEntry[];
+  different: readonly VbaSourceComparisonEntry[];
+  missingInSource: readonly VbaSourceComparisonEntry[];
+  missingInBinary: readonly VbaSourceComparisonEntry[];
+  diffs?: readonly VbaSourceDiffEntry[];
+};
+
+export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
+  operation: "reconcile_binary";
+  recommendation: string;
+};
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
@@ -65,43 +112,6 @@ export type BuildImportPlanResultOptions = {
   errors: readonly string[];
 };
 
-type VbaSourceComparisonFile = {
-  moduleName: string;
-  fileType: string;
-  path: string;
-  relativePath: string;
-};
-
-type VbaSourceComparisonEntry = {
-  moduleName: string;
-  fileType: string;
-  sourcePath?: string;
-  binaryPath?: string;
-};
-
-type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
-  sourceSnippet: string;
-  binarySnippet: string;
-};
-
-type VbaVerifyResult = {
-  operation: "verify_code" | "verify_binary";
-  ok: boolean;
-  dryRun: true;
-  willModifyAccess: false;
-  sourceRoot: string;
-  matched: readonly VbaSourceComparisonEntry[];
-  different: readonly VbaSourceComparisonEntry[];
-  missingInSource: readonly VbaSourceComparisonEntry[];
-  missingInBinary: readonly VbaSourceComparisonEntry[];
-  diffs?: readonly VbaSourceDiffEntry[];
-};
-
-type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
-  operation: "reconcile_binary";
-  recommendation: string;
-};
-
 export type VbaSyncLegacyServiceOptions = {
   executor?: VbaManagerExecutor;
   preflightCleanup?: AccessOperationPreflightCleanup;
@@ -151,6 +161,7 @@ export class VbaSyncLegacyService {
   private readonly destinationRoot?: string;
   private readonly accessPassword?: string;
   private readonly processTimeoutMs: number;
+  private readonly formService: VbaFormService;
 
   constructor(options: VbaSyncLegacyServiceOptions = {}) {
     this.env = options.env ?? process.env;
@@ -162,16 +173,24 @@ export class VbaSyncLegacyService {
     this.destinationRoot = stringValue(options.destinationRoot);
     this.accessPassword = stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
+    this.formService = new VbaFormService({
+      executor: this.executor,
+      env: this.env,
+      resolveExecutionTarget: this.resolveExecutionTarget.bind(this),
+      validateStrictContext: this.validateStrictContext.bind(this),
+      cwd: this.cwd,
+    });
   }
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     const params = isRecord(input) ? input : {};
-    if (toolName === "validate_form_spec") return this.validateFormSpec(params);
-    if (toolName === "generate_form") return this.generateForm(params);
-    if (toolName === "catalog_add_control") return this.catalogAddControl(params);
-    if (toolName === "harvest_form_catalog") return this.harvestFormCatalog(params);
-    if (toolName === "verify_code" || toolName === "verify_binary") return this.verifySourceAgainstBinary(toolName, params);
-    if (toolName === "reconcile_binary") return this.planReconcileBinary(params);
+    if (toolName === "validate_form_spec") return this.formService.validateFormSpec(params);
+    if (toolName === "generate_form") return this.formService.generateForm(params);
+    if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
+    if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
+    if (toolName === "verify_code" || toolName === "verify_binary") return compareSourceAgainstBinary(toolName, params, this.getComparisonContext());
+    if (toolName === "reconcile_binary") return planReconcileBinary(params, this.getComparisonContext());
+
     if (toolName === "test_vba") {
       return this.executeTestVba(params);
     }
@@ -355,71 +374,15 @@ export class VbaSyncLegacyService {
     }));
   }
 
-  private async verifySourceAgainstBinary(toolName: "verify_code" | "verify_binary", params: Record<string, unknown>): Promise<OperationResult<VbaVerifyResult>> {
-    const comparison = await this.compareSourceAgainstBinary(params);
-    if (!comparison.ok) return comparison;
-    return successResult({ operation: toolName, ...comparison.data });
-  }
-
-  private async planReconcileBinary(params: Record<string, unknown>): Promise<OperationResult<VbaReconcilePlanResult>> {
-    const comparison = await this.compareSourceAgainstBinary(params);
-    if (!comparison.ok) return comparison;
-    return successResult({
-      operation: "reconcile_binary",
-      ...comparison.data,
-      recommendation: comparison.data.ok
-        ? "Source and Access binary exports already match; no reconciliation is needed."
-        : "Dry-run only: review differences, then run an explicit import/export workflow if you want to reconcile.",
-    });
-  }
-
-  private async compareSourceAgainstBinary(params: Record<string, unknown>): Promise<OperationResult<Omit<VbaVerifyResult, "operation">>> {
-    const target = await this.resolveExecutionTarget(params);
-    if (!target.ok) return target;
-    const strict = this.validateStrictContext(params, target.data);
-    if (!strict.ok) return strict;
-
-    const sourceRoot = target.data.destinationRoot;
-    const tempExportRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-verify-"));
-    const password = this.accessPassword;
-    const effectiveTimeoutMs = typeof params.timeoutMs === "number" && params.timeoutMs > 0
-      ? params.timeoutMs
-      : target.data.processTimeoutMs;
-    try {
-      const request: VbaManagerExecutionRequest = {
-        scriptPath: this.scriptPath,
-        action: "Export",
-        accessPath: target.data.accessPath,
-        destinationRoot: tempExportRoot,
-        moduleNames: stringArray(params.moduleNames),
-        password,
-        json: false,
-        extra: {},
-        timeoutMs: effectiveTimeoutMs,
-        env: password === undefined ? undefined : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
-      };
-
-      const preflightDiagnostics = diagnosticsFromPreflightCleanup(await this.runPreflightCleanup(target.data));
-      const result = await this.executeWithTimeout(request);
-      const secrets = [password].filter((secret): secret is string => Boolean(secret));
-      if (result.timedOut) {
-        return failureResult(
-          createDysflowError("VBA_MANAGER_TIMEOUT", `verify export timed out after ${result.durationMs}ms`, { retryable: true }),
-          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
-        );
-      }
-      if (result.exitCode !== 0) {
-        return failureResult(
-          createDysflowError("VBA_MANAGER_FAILED", `verify export failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
-          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
-        );
-      }
-
-      const comparison = await compareVbaSourceTrees(sourceRoot, tempExportRoot, stringArray(params.moduleNames), truthy(params.diff));
-      return successResult(comparison, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
-    } finally {
-      await rm(tempExportRoot, { recursive: true, force: true });
-    }
+  private getComparisonContext() {
+    return {
+      scriptPath: this.scriptPath,
+      accessPassword: this.accessPassword,
+      resolveExecutionTarget: this.resolveExecutionTarget.bind(this),
+      validateStrictContext: this.validateStrictContext.bind(this),
+      runPreflightCleanup: this.runPreflightCleanup.bind(this),
+      executeWithTimeout: this.executeWithTimeout.bind(this),
+    };
   }
 
   private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
@@ -484,151 +447,7 @@ export class VbaSyncLegacyService {
     }
   }
 
-  private async validateFormSpec(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    const spec = await this.resolveFormSpec(params);
-    if (!spec.ok) return spec;
-    return successResult({
-      valid: true,
-      name: spec.data.name,
-      kind: spec.data.kind,
-      controlCount: spec.data.controls.length,
-      controls: spec.data.controls,
-      specPath: spec.data.specPath,
-    });
-  }
 
-  private async generateForm(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    const spec = await this.resolveFormSpec(params);
-    if (!spec.ok) return spec;
-
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const formsDir = resolve(destinationRoot, "forms");
-    await mkdir(formsDir, { recursive: true });
-
-    const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
-    const outputPath = resolve(formsDir, fileName);
-    const payload = JSON.stringify({
-      name: spec.data.name,
-      kind: spec.data.kind,
-      controls: spec.data.controls,
-      generatedAt: new Date().toISOString(),
-    }, null, 2);
-    await writeFile(outputPath, payload, "utf8");
-
-    return successResult({
-      generated: true,
-      outputPath,
-      name: spec.data.name,
-      kind: spec.data.kind,
-      controlCount: spec.data.controls.length,
-    });
-  }
-
-  private async catalogAddControl(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    const spec = await this.resolveFormSpec(params);
-    if (!spec.ok) return spec;
-
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const catalogPath = stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
-    const controlName = stringValue(params.controlName) ?? stringValue(params.name);
-    if (controlName === undefined) {
-      return failureResult(createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlName."));
-    }
-    const controlType = stringValue(params.controlType) ?? stringValue(params.type);
-    if (controlType === undefined) {
-      return failureResult(createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlType."));
-    }
-    const catalog = await readJsonFileAsync<Record<string, unknown>>(catalogPath).catch(() => ({} as Record<string, unknown>));
-    const forms = isRecord(catalog.forms) ? catalog.forms as Record<string, unknown> : {};
-    const controls = Array.isArray(forms[spec.data.name]) ? forms[spec.data.name] as unknown[] : [];
-    controls.push({ name: controlName, type: controlType });
-    forms[spec.data.name] = controls;
-    const updated = { ...catalog, forms };
-    try {
-      await mkdir(resolve(catalogPath, ".."), { recursive: true });
-      await writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");
-    } catch (err) {
-      return failureResult(createDysflowError("VBA_CATALOG_WRITE_FAILED", err instanceof Error ? err.message : String(err)));
-    }
-
-    return successResult({
-      catalogPath,
-      formName: spec.data.name,
-      controlCount: controls.length,
-    });
-  }
-
-  private async harvestFormCatalog(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    const destinationRoot = stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const formsDir = resolve(destinationRoot, "forms");
-    const reportsDir = resolve(destinationRoot, "reports");
-    const catalog: Array<Record<string, unknown>> = [];
-    for (const folder of [formsDir, reportsDir]) {
-      const kind = folder === reportsDir ? "Report" : "Form";
-      const entries = await this.safeReadDir(folder);
-      for (const entry of entries) {
-        if (!entry.toLowerCase().endsWith(".json")) continue;
-        if (!entry.toLowerCase().endsWith(".form.json") && !entry.toLowerCase().endsWith(".report.json")) continue;
-        const spec = await readJsonFileAsync<Record<string, unknown>>(resolve(folder, entry)).catch(() => undefined);
-        if (spec === undefined) continue;
-        const controls = Array.isArray(spec.controls) ? spec.controls : [];
-        catalog.push({
-          name: stringValue(spec.name) ?? entry.replace(/\.(form|report)\.json$/i, ""),
-          kind: stringValue(spec.kind) ?? kind,
-          controls: controls.length,
-          specPath: resolve(folder, entry),
-        });
-      }
-    }
-
-    return successResult({
-      destinationRoot,
-      forms: catalog.filter((item) => item.kind === "Form"),
-      reports: catalog.filter((item) => item.kind === "Report"),
-      total: catalog.length,
-    });
-  }
-
-  private async resolveFormSpec(params: Record<string, unknown>): Promise<OperationResult<{ name: string; kind: "Form" | "Report"; controls: readonly { name: string; type: string }[]; specPath?: string }>> {
-    const specFromInput = isRecord(params.spec) ? params.spec : undefined;
-    const specPath = stringValue(params.specPath);
-    const loaded = specFromInput ?? (specPath ? await readJsonFileAsync<Record<string, unknown>>(specPath) : undefined);
-    if (loaded === undefined) {
-      return failureResult(createDysflowError("FORM_SPEC_MISSING", "validate_form_spec requires spec or specPath."));
-    }
-    const name = stringValue(loaded.name) ?? stringValue(params.name);
-    if (name === undefined) {
-      return failureResult(createDysflowError("FORM_SPEC_INVALID", "Form spec requires a name."));
-    }
-    const kindText = stringValue(loaded.kind) ?? stringValue(params.kind) ?? (name.startsWith("Report_") ? "Report" : "Form");
-    if (kindText !== "Form" && kindText !== "Report") {
-      return failureResult(createDysflowError("FORM_SPEC_INVALID", `Unsupported form kind: ${kindText}`));
-    }
-    const controls = Array.isArray(loaded.controls)
-      ? loaded.controls
-          .filter(isRecord)
-          .map((control) => ({
-            name: stringValue(control.name) ?? "",
-            type: stringValue(control.type) ?? stringValue(control.controlType) ?? "Unknown",
-          }))
-          .filter((control) => control.name.length > 0)
-      : [];
-
-    return successResult({
-      name,
-      kind: kindText as "Form" | "Report",
-      controls,
-      specPath,
-    });
-  }
-
-  private async safeReadDir(path: string): Promise<string[]> {
-    try {
-      return await readdir(path);
-    } catch {
-      return [];
-    }
-  }
 }
 
 function validateVbaManagerExtra(extra: Record<string, string | boolean | number | undefined>): OperationResult<undefined> {
@@ -706,136 +525,7 @@ async function discoverImportModules(destinationRoot: string): Promise<string[]>
   return Array.from(new Set(modules)).sort();
 }
 
-async function compareVbaSourceTrees(sourceRoot: string, binaryExportRoot: string, moduleNames: readonly string[], includeDiffs: boolean): Promise<Omit<VbaVerifyResult, "operation">> {
-  const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
-  const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter);
-  const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter);
-  const sourceByKey = new Map(sourceFiles.map((file) => [comparisonKey(file), file]));
-  const binaryByKey = new Map(binaryFiles.map((file) => [comparisonKey(file), file]));
-  const matched: VbaSourceComparisonEntry[] = [];
-  const different: VbaSourceComparisonEntry[] = [];
-  const missingInSource: VbaSourceComparisonEntry[] = [];
-  const missingInBinary: VbaSourceComparisonEntry[] = [];
-  const diffs: VbaSourceDiffEntry[] = [];
 
-  for (const [key, binaryFile] of binaryByKey) {
-    const sourceFile = sourceByKey.get(key);
-    if (sourceFile === undefined) {
-      missingInSource.push(toComparisonEntry(undefined, binaryFile));
-      continue;
-    }
-
-    const [sourceText, binaryText] = await Promise.all([
-      readFile(sourceFile.path, "utf8"),
-      readFile(binaryFile.path, "utf8"),
-    ]);
-    const entry = toComparisonEntry(sourceFile, binaryFile);
-    if (sourceText === binaryText) {
-      matched.push(entry);
-    } else {
-      different.push(entry);
-      if (includeDiffs) {
-        diffs.push({
-          ...entry,
-          sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
-          binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
-        });
-      }
-    }
-  }
-
-  for (const [key, sourceFile] of sourceByKey) {
-    if (!binaryByKey.has(key)) missingInBinary.push(toComparisonEntry(sourceFile, undefined));
-  }
-
-  return {
-    ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
-    dryRun: true,
-    willModifyAccess: false,
-    sourceRoot,
-    matched: sortComparisonEntries(matched),
-    different: sortComparisonEntries(different),
-    missingInSource: sortComparisonEntries(missingInSource),
-    missingInBinary: sortComparisonEntries(missingInBinary),
-    ...(includeDiffs ? { diffs: sortDiffEntries(diffs) } : {}),
-  };
-}
-
-async function collectVbaSourceFiles(root: string, moduleFilter: ReadonlySet<string>): Promise<VbaSourceComparisonFile[]> {
-  const files: VbaSourceComparisonFile[] = [];
-  async function visit(directory: string): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) {
-        await visit(path);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const fileType = vbaSourceFileType(entry.name);
-      if (fileType === undefined) continue;
-      const moduleName = moduleNameFromVbaFile(entry.name);
-      if (moduleFilter.size > 0 && !moduleFilter.has(moduleName.toLowerCase())) continue;
-      files.push({
-        moduleName,
-        fileType,
-        path,
-        relativePath: relative(root, path).replace(/\\/g, "/"),
-      });
-    }
-  }
-
-  await visit(root);
-  return files;
-}
-
-function vbaSourceFileType(fileName: string): string | undefined {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".form.txt")) return "form.txt";
-  if (lower.endsWith(".report.txt")) return "report.txt";
-  const extension = extname(lower);
-  if (extension === ".bas" || extension === ".cls" || extension === ".frm") return extension.slice(1);
-  return undefined;
-}
-
-function moduleNameFromVbaFile(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".form.txt")) return fileName.slice(0, -".form.txt".length);
-  if (lower.endsWith(".report.txt")) return fileName.slice(0, -".report.txt".length);
-  return parse(fileName).name;
-}
-
-function comparisonKey(file: VbaSourceComparisonFile): string {
-  return `${file.moduleName.toLowerCase()}\0${file.fileType}`;
-}
-
-function toComparisonEntry(sourceFile: VbaSourceComparisonFile | undefined, binaryFile: VbaSourceComparisonFile | undefined): VbaSourceComparisonEntry {
-  const file = sourceFile ?? binaryFile;
-  return {
-    moduleName: file?.moduleName ?? "",
-    fileType: file?.fileType ?? "",
-    sourcePath: sourceFile?.relativePath,
-    binaryPath: binaryFile?.relativePath,
-  };
-}
-
-function sortComparisonEntries(entries: VbaSourceComparisonEntry[]): VbaSourceComparisonEntry[] {
-  return entries.sort((left, right) => `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`));
-}
-
-function sortDiffEntries(entries: VbaSourceDiffEntry[]): VbaSourceDiffEntry[] {
-  return entries.sort((left, right) => `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`));
-}
-
-function firstDifferentLineSnippet(leftText: string, rightText: string, label: string): string {
-  const leftLines = leftText.split(/\r?\n/);
-  const rightLines = rightText.split(/\r?\n/);
-  const max = Math.max(leftLines.length, rightLines.length);
-  for (let index = 0; index < max; index += 1) {
-    if (leftLines[index] !== rightLines[index]) return `${label}:${index + 1}: ${leftLines[index] ?? ""}`;
-  }
-  return `${label}: files differ`;
-}
 
 function buildTargetDiagnostics(
   operation: string,
