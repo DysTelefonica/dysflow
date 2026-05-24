@@ -109,7 +109,7 @@ Public Sub ComandoGrabar_Click()
     
     ' Validación: si RequiereControlEficacia="No" debe haber motivo
     If Nz(Me.RequiereControlEficacia, "") = "No" And Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos NR'."
+        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos No CE'."
         Err.Raise 1000
     End If
     
@@ -358,9 +358,9 @@ Public Function EstablecerDatos( _
             If .RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
 If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
                 Else
-                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
@@ -480,9 +480,9 @@ Private Sub RequiereControlEficacia_AfterUpdate()
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
             If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
             Else
-                Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
@@ -539,9 +539,9 @@ Private Sub ComandoVerNoRequiere_Click()
     
     ' Update button caption
     If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
     Else
-        Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
     End If
     
     Exit Sub
