@@ -2,6 +2,16 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.7.7] - 2026-05-24
+
+### Fixed
+
+- **Config Sync/Async Dedup**: Unified config parsing, routing, and error formatting under `loadDysflowConfigShared` and `loadProjectConfigCore` to prevent routing duplication.
+- **VBA Service Split**: Extracted `VbaFormService` (form & catalog operations) and `vba-source-comparison.ts` (pure binary/source tree comparison helpers) from `VbaSyncLegacyService` while keeping stable backwards-compatible exports.
+- **Install CLI Utils**: Decoupled `uninstall.ts` from `install.ts` by extracting filesystem and execution helpers to `install-utils.ts` and resolved Pester/PMR dependencies.
+- **Preflight & Operations**: Removed non-null assertions in preflight cleanup and aligned `InMemoryAccessOperationRegistry` status purging with `FileRegistry` behavior.
+- Updated installation instructions in `README.md` to reference the correct v0.7.7 release tag.
+
 ## [0.7.6] - 2026-05-23
 
 ### Fixed
