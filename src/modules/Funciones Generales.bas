@@ -103,6 +103,10 @@ Public Function PintarIndicadores( _
     Dim m_Telemetria As Scripting.Dictionary
     Dim m_TelemetriaResumen As String
     Dim m_TelemetriaError As String
+    Dim m_ModoNormalizado As String
+    Dim m_ConteosProyectoRapidos As Scripting.Dictionary
+    Dim m_ProyectoFastPath As Boolean
+    Dim m_ProyectoFastError As String
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -115,8 +119,12 @@ Public Function PintarIndicadores( _
         End If
     End If
 
-    m_IncluirProyecto = (UCase$(Trim$(p_Modo)) <> "AUDITORIA")
-    m_IncluirAuditoria = (UCase$(Trim$(p_Modo)) <> "PROYECTO")
+    m_ModoNormalizado = UCase$(Trim$(p_Modo))
+    If m_ModoNormalizado = "" Then m_ModoNormalizado = "AMBOS"
+
+    m_IncluirProyecto = (m_ModoNormalizado <> "AUDITORIA")
+    m_IncluirAuditoria = (m_ModoNormalizado <> "PROYECTO")
+    Set m_Usuario = m_ObjUsuarioConectado
     Set m_Telemetria = Indicadores_TelemetriaIniciar(p_Modo, m_IncluirProyecto, m_TelemetriaError)
     Call Indicadores_TelemetriaEtapa(m_Telemetria, "inicio", m_TelemetriaError)
     Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "reset", p_Reiniciando <> EnumSino.Sí, m_TelemetriaError)
@@ -129,15 +137,31 @@ Public Function PintarIndicadores( _
     ' - m_ColSegsTareasProyectoIrregulares se consulta por compatibilidad pero NO suma.
 
     If m_IncluirProyecto Then
-        Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
-        Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
-        Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
-        Set m_ColSegsNCProyectoRegistradas = m_ObjEntorno.ColSegsNCProyectoRegistradas
-        Set m_ColSegsNCProyectoAccionesSinTareas = m_ObjEntorno.ColSegsNCProyectoAccionesSinTareas
-        Set m_ColSegsNCProyectoPteCE = m_ObjEntorno.ColSegsNCProyectoPteCE
-        Set m_ColSegsNCProyectoCECaducada = m_ObjEntorno.ColSegsNCProyectoCECaducada
-        Set m_ColSegsNCProyectoCENoConforme = m_ObjEntorno.ColSegsNCProyectoCENoConforme
-        Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-finish", m_TelemetriaError)
+        If m_ModoNormalizado = "PROYECTO" Then
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-start", m_TelemetriaError)
+            Set m_ConteosProyectoRapidos = Indicadores_ObtenerConteosProyectoRapidos(m_Usuario, p_Error:=m_ProyectoFastError)
+            m_ProyectoFastPath = (m_ProyectoFastError = "" And Not m_ConteosProyectoRapidos Is Nothing)
+            If m_ProyectoFastPath Then
+                Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-finish", m_TelemetriaError)
+            ElseIf m_ProyectoFastError <> "" Then
+                Debug.Print "Indicadores Proyecto fast counts fallback: " & m_ProyectoFastError
+                m_ProyectoFastError = ""
+                Set m_ConteosProyectoRapidos = Nothing
+                Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-fallback", m_TelemetriaError)
+            End If
+        End If
+
+        If Not m_ProyectoFastPath Then
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
+            Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
+            Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
+            Set m_ColSegsNCProyectoRegistradas = m_ObjEntorno.ColSegsNCProyectoRegistradas
+            Set m_ColSegsNCProyectoAccionesSinTareas = m_ObjEntorno.ColSegsNCProyectoAccionesSinTareas
+            Set m_ColSegsNCProyectoPteCE = m_ObjEntorno.ColSegsNCProyectoPteCE
+            Set m_ColSegsNCProyectoCECaducada = m_ObjEntorno.ColSegsNCProyectoCECaducada
+            Set m_ColSegsNCProyectoCENoConforme = m_ObjEntorno.ColSegsNCProyectoCENoConforme
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-finish", m_TelemetriaError)
+        End If
     End If
 
     If m_IncluirAuditoria Then
@@ -151,7 +175,6 @@ Public Function PintarIndicadores( _
         Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-finish", m_TelemetriaError)
     End If
 
-    Set m_Usuario = m_ObjUsuarioConectado
     Call Indicadores_TelemetriaEtapa(m_Telemetria, "calcular-start", m_TelemetriaError)
     Set m_Resultados = Indicadores_CalcularDesdeColecciones( _
                         m_Usuario, _
@@ -169,7 +192,8 @@ Public Function PintarIndicadores( _
                         m_ColSegsNCAuditoriaCECaducada, _
                         m_ColSegsNCAuditoriaCENoConforme, _
                         p_Modo, _
-                        p_Error)
+                        p_Error, _
+                        m_ConteosProyectoRapidos)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -415,13 +439,21 @@ Public Function Indicadores_CalcularDesdeColecciones( _
                                     ByVal p_ColSegsNCAuditoriaRegistradas As Scripting.Dictionary, _
                                     ByVal p_ColSegsNCAuditoriaAccionesSinTareas As Scripting.Dictionary, _
                                     ByVal p_ColSegsNCAuditoriaPteCE As Scripting.Dictionary, _
-                                    ByVal p_ColSegsNCAuditoriaCECaducada As Scripting.Dictionary, _
-                                    ByVal p_ColSegsNCAuditoriaCENoConforme As Scripting.Dictionary, _
-                                    Optional ByVal p_Modo As String = "AMBOS", _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
+                                     ByVal p_ColSegsNCAuditoriaCECaducada As Scripting.Dictionary, _
+                                     ByVal p_ColSegsNCAuditoriaCENoConforme As Scripting.Dictionary, _
+                                     Optional ByVal p_Modo As String = "AMBOS", _
+                                     Optional ByRef p_Error As String, _
+                                     Optional ByVal p_ConteosProyectoRapidos As Scripting.Dictionary _
+                                     ) As Scripting.Dictionary
     Dim m_Datos As Scripting.Dictionary
     On Error GoTo errores
+
+    If UCase$(Trim$(p_Modo)) = "PROYECTO" Then
+        If Not p_ConteosProyectoRapidos Is Nothing Then
+            Set Indicadores_CalcularDesdeColecciones = Indicadores_CalcularProyectoDesdeConteos(p_ConteosProyectoRapidos, p_Error)
+            Exit Function
+        End If
+    End If
 
     Set m_Datos = Indicadores_BuildDatos( _
                     p_ColSegsTareasProyectoPteReplanificar, _
@@ -563,6 +595,94 @@ errores:
     End If
 End Function
 
+Public Function Indicadores_ObtenerConteosProyectoRapidos( _
+                                    ByVal p_Usuario As usuario, _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Db As DAO.Database
+    Dim m_Conteos As Scripting.Dictionary
+    Dim m_UsuarioSql As String
+    Dim m_BaseTareas As String
+    Dim m_BaseNCRegistradas As String
+    Dim m_BaseNCSinTareas As String
+    Dim m_BaseNCConAR As String
+    On Error GoTo errores
+
+    p_Error = ""
+    If p_Usuario Is Nothing Then
+        p_Error = "Indicadores_ObtenerConteosProyectoRapidos requiere usuario."
+        Err.Raise 1000
+    End If
+
+    If p_Db Is Nothing Then
+        Set m_Db = getdb(p_Error)
+        If p_Error <> "" Then Err.Raise 1000
+    Else
+        Set m_Db = p_Db
+    End If
+    If m_Db Is Nothing Then
+        p_Error = "Indicadores_ObtenerConteosProyectoRapidos no pudo resolver getdb()."
+        Err.Raise 1000
+    End If
+
+    m_UsuarioSql = Indicadores_SqlTexto(p_Usuario.Nombre)
+    Set m_Conteos = New Scripting.Dictionary
+    m_Conteos.CompareMode = TextCompare
+
+    m_BaseTareas = "FROM (TbNoConformidades INNER JOIN (TbNCAccionCorrectivas " & _
+                   "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva) " & _
+                   "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) "
+    m_BaseNCRegistradas = "FROM (TbNoConformidades INNER JOIN TbExpedientes " & _
+                         "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) " & _
+                         "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad "
+    m_BaseNCSinTareas = "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
+                       "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) " & _
+                       "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+                       "LEFT JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva "
+    m_BaseNCConAR = "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
+                    "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) " & _
+                    "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+                    "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva "
+
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoTareasPteReplanificarTotal", m_Db, "TbNCAccionesRealizadas.IDAccionRealizada", _
+        m_BaseTareas & "WHERE Not TbNCAccionesRealizadas.FechaInicio Is Null AND TbNCAccionesRealizadas.FechaFinPrevista<=Date() AND TbNCAccionesRealizadas.FechaFinReal Is Null", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoTareasPteReplanificarUsuario", m_Db, "TbNCAccionesRealizadas.IDAccionRealizada", _
+        m_BaseTareas & "WHERE Not TbNCAccionesRealizadas.FechaInicio Is Null AND TbNCAccionesRealizadas.FechaFinPrevista<=Date() AND TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoTareasIrregularesUsuario", m_Db, "TbNCAccionesRealizadas.IDAccionRealizada", _
+        m_BaseTareas & "WHERE TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCRegistradasTotal", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCRegistradas & "WHERE TbNCAccionCorrectivas.IDAccionCorrectiva Is Null AND TbNoConformidades.Borrado=False", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCRegistradasUsuario", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCRegistradas & "WHERE TbNCAccionCorrectivas.IDAccionCorrectiva Is Null AND TbNoConformidades.Borrado=False AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCAccionesSinTareasTotal", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCSinTareas & "WHERE TbNCAccionesRealizadas.IDAccionRealizada Is Null AND TbNoConformidades.FECHACIERRE Is Null", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCAccionesSinTareasUsuario", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCSinTareas & "WHERE TbNCAccionesRealizadas.IDAccionRealizada Is Null AND TbNoConformidades.FECHACIERRE Is Null AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCPteCETotal", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE Not TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.FechaControlEficacia Is Null AND Not TbNoConformidades.FechaPrevistaControlEficacia Is Null", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCPteCEUsuario", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE Not TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.FechaControlEficacia Is Null AND Not TbNoConformidades.FechaPrevistaControlEficacia Is Null AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCCECaducadaTotal", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE Not TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.FechaControlEficacia Is Null AND TbNoConformidades.FechaPrevistaControlEficacia<=Date()", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCCECaducadaUsuario", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE Not TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.FechaControlEficacia Is Null AND TbNoConformidades.FechaPrevistaControlEficacia<=Date() AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCCENoConformeTotal", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE TbNoConformidades.ConformeControlEficacia='No' AND Not TbNCAccionesRealizadas.FechaFinReal Is Null", p_Error)
+    Call Indicadores_AgregarConteo(m_Conteos, "ProyectoNCCENoConformeUsuario", m_Db, "TbNoConformidades.IDNoConformidad", _
+        m_BaseNCConAR & "WHERE TbNoConformidades.ConformeControlEficacia='No' AND Not TbNCAccionesRealizadas.FechaFinReal Is Null AND TbNoConformidades.RESPONSABLECALIDAD=" & m_UsuarioSql, p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+
+    Set Indicadores_ObtenerConteosProyectoRapidos = m_Conteos
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Indicadores_ObtenerConteosProyectoRapidos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
 Private Function Indicadores_GetDictionary(ByVal p_Datos As Scripting.Dictionary, ByVal p_Key As String) As Scripting.Dictionary
     If p_Datos Is Nothing Then Exit Function
     If Not p_Datos.Exists(p_Key) Then Exit Function
@@ -583,6 +703,49 @@ Private Function Indicadores_ConteoLong(ByVal p_Conteos As Scripting.Dictionary,
     If p_Conteos Is Nothing Then Exit Function
     If Not p_Conteos.Exists(p_Key) Then Exit Function
     If IsNumeric(p_Conteos(p_Key)) Then Indicadores_ConteoLong = CLng(p_Conteos(p_Key))
+End Function
+
+Private Sub Indicadores_AgregarConteo( _
+                                    ByVal p_Conteos As Scripting.Dictionary, _
+                                    ByVal p_Key As String, _
+                                    ByVal p_Db As DAO.Database, _
+                                    ByVal p_IdExpression As String, _
+                                    ByVal p_FromWhereSql As String, _
+                                    ByRef p_Error As String _
+                                    )
+    If p_Error <> "" Then Exit Sub
+    p_Conteos(p_Key) = Indicadores_CountDistinct(p_Db, p_IdExpression, p_FromWhereSql, p_Error)
+End Sub
+
+Private Function Indicadores_CountDistinct( _
+                                    ByVal p_Db As DAO.Database, _
+                                    ByVal p_IdExpression As String, _
+                                    ByVal p_FromWhereSql As String, _
+                                    ByRef p_Error As String _
+                                    ) As Long
+    Dim m_Rs As DAO.Recordset
+    Dim m_SQL As String
+    On Error GoTo errores
+
+    m_SQL = "SELECT COUNT(*) AS Total FROM (SELECT DISTINCT " & p_IdExpression & " AS IdConteo " & p_FromWhereSql & ") AS Q"
+    Set m_Rs = p_Db.OpenRecordset(m_SQL, dbOpenSnapshot)
+    If Not m_Rs.EOF Then
+        Indicadores_CountDistinct = CLng(Nz(m_Rs.Fields("Total").Value, 0))
+    End If
+
+salir:
+    If Not m_Rs Is Nothing Then
+        m_Rs.Close
+        Set m_Rs = Nothing
+    End If
+    Exit Function
+errores:
+    p_Error = "El método Indicadores_CountDistinct ha devuelto el error: " & vbNewLine & Err.Description
+    Resume salir
+End Function
+
+Private Function Indicadores_SqlTexto(ByVal p_Valor As String) As String
+    Indicadores_SqlTexto = "'" & Replace(Nz(p_Valor, ""), "'", "''") & "'"
 End Function
 
 Private Function Indicadores_CountUsuario( _

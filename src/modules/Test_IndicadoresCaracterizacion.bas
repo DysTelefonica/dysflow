@@ -376,6 +376,128 @@ errores:
     Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
 End Function
 
+Public Function Test_Indicadores_ProyectoFastCounts_RuntimeUsaConteos_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim conteos As Scripting.Dictionary
+    Dim resultados As Scripting.Dictionary
+    Dim usr As usuario
+    Dim pError As String
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    Set conteos = New Scripting.Dictionary
+    conteos.CompareMode = TextCompare
+    conteos("ProyectoTareasPteReplanificarTotal") = 2
+    conteos("ProyectoNCAccionesSinTareasTotal") = 3
+    conteos("ProyectoNCRegistradasTotal") = 5
+    conteos("ProyectoNCPteCETotal") = 7
+    conteos("ProyectoNCCECaducadaTotal") = 11
+    conteos("ProyectoNCCENoConformeTotal") = 13
+    conteos("ProyectoTareasPteReplanificarUsuario") = 1
+    conteos("ProyectoTareasIrregularesUsuario") = 2
+    conteos("ProyectoNCRegistradasUsuario") = 3
+    conteos("ProyectoNCAccionesSinTareasUsuario") = 4
+    conteos("ProyectoNCPteCEUsuario") = 5
+    conteos("ProyectoNCCECaducadaUsuario") = 6
+    conteos("ProyectoNCCENoConformeUsuario") = 7
+
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+
+    Set resultados = Indicadores_CalcularDesdeColecciones( _
+                    usr, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    "PROYECTO", _
+                    pError, _
+                    conteos)
+
+    Call TestHelper.AssertTrue(pError = "", "Runtime Proyecto con conteos rápidos no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("ProyectoTotal")) = 41, "ProyectoTotal debe salir de conteos rápidos", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("ProyectoUsuario")) = 28, "ProyectoUsuario debe salir de conteos rápidos", logs, assertError)
+    Call TestHelper.AssertTrue(Not resultados.Exists("AuditoriaTotal"), "Runtime fast PROYECTO no debe devolver AuditoriaTotal", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Indicadores_ProyectoFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Indicadores_ProyectoFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonOk(logs, "runtime_fast_counts_ok")
+    End If
+    Exit Function
+errores:
+    Test_Indicadores_ProyectoFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Public Function Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim conteos As Scripting.Dictionary
+    Dim resultados As Scripting.Dictionary
+    Dim usr As usuario
+    Dim audPte As Scripting.Dictionary
+    Dim audReg As Scripting.Dictionary
+    Dim pError As String
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    Set conteos = New Scripting.Dictionary
+    conteos.CompareMode = TextCompare
+    conteos("ProyectoTareasPteReplanificarTotal") = 99
+    conteos("ProyectoTareasPteReplanificarUsuario") = 99
+
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+    Set audPte = New Scripting.Dictionary
+    Set audReg = New Scripting.Dictionary
+    Call AddSegTareasAuditoria(audPte, "AAR-1", "QA User")
+    Call AddSegTareasAuditoria(audPte, "AAR-2", "Otro")
+    Call AddSegNCAuditoria(audReg, "NCA-1", "QA User")
+
+    Set resultados = Indicadores_CalcularDesdeColecciones( _
+                    usr, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    audPte, _
+                    audReg, _
+                    New Scripting.Dictionary, _
+                    New Scripting.Dictionary, _
+                    New Scripting.Dictionary, _
+                    New Scripting.Dictionary, _
+                    "AUDITORIA", _
+                    pError, _
+                    conteos)
+
+    Call TestHelper.AssertTrue(pError = "", "Runtime AUDITORIA no debe fallar con conteos Proyecto presentes", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("AuditoriaTotal")) = 3, "AuditoriaTotal debe conservar ruta legacy", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("AuditoriaUsuario")) = 2, "AuditoriaUsuario debe conservar ruta legacy", logs, assertError)
+    Call TestHelper.AssertTrue(Not resultados.Exists("ProyectoTotal"), "AUDITORIA no debe consumir conteos Proyecto", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic = TestHelper.BuildJsonOk(logs, "runtime_fast_counts_auditoria_ok")
+    End If
+    Exit Function
+errores:
+    Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
 Private Function BuildDatosVacios() As Scripting.Dictionary
     Dim datos As Scripting.Dictionary
     Set datos = New Scripting.Dictionary
