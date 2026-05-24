@@ -31,12 +31,12 @@
 > Scope: PowerShell Access runner and E2E tests.
 
 ### Phase 2: PowerShell Runner Modifications
-- [ ] 2.1 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): implement `Open-DatabaseWithPassword` helper.
-- [ ] 2.2 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update `Open-DatabaseWithBackendPassword` to use the helper.
-- [ ] 2.3 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update scanned and applied database opens in `Invoke-RelinkDirectory` to use `$AccessPassword`.
-- [ ] 2.4 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update link chain resolution database opens in `Resolve-LinkChain` to use `$BackendPassword` (falling back to `$AccessPassword`).
-- [ ] 2.5 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update connection string reconstruction to include `;PWD=$BackendPassword` if set.
-- [ ] 2.6 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): conditionally set `$tdW.SourceTableName` only when it differs from `$chain.resolvedTable`.
+- [x] 2.1 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): implement `Open-DatabaseWithPassword` helper.
+- [x] 2.2 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update `Open-DatabaseWithBackendPassword` to use the helper.
+- [x] 2.3 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update scanned and applied database opens in `Invoke-RelinkDirectory` to use `$AccessPassword`.
+- [x] 2.4 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update link chain resolution database opens in `Resolve-LinkChain` to use `$BackendPassword` (falling back to `$AccessPassword`).
+- [x] 2.5 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): update connection string reconstruction to include `;PWD=$BackendPassword` if set.
+- [x] 2.6 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): conditionally set `$tdW.SourceTableName` only when it differs from `$chain.resolvedTable`.
 
 ### Phase 3: E2E Test Suite Adjustments
 - [ ] 3.1 **MODIFY** [access-relink-directory.test.ts](file:///C:/Proyectos/dysflow/test/e2e/access-relink-directory.test.ts): fix setup for `chain A→B→C` test.
