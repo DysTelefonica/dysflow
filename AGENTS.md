@@ -124,6 +124,19 @@ Después de cualquier `dysflow.import_modules` o `dysflow.import_all`:
 
 ---
 
+## Tests Access/VBA — Fixture explícita obligatoria
+
+Regla dura para cualquier test que toque datos, tablas, configuración, caché persistente/local o backend:
+
+1. **ERD/schema primero:** antes de escribir o aceptar un seed, inspeccionar el schema real de cada tabla tocada: PK, FKs, campos `Required`/`NOT NULL`, tipos y valores válidos. Si falta ese conocimiento, parar e inspeccionar; no adivinar.
+2. **Poblar no es verificar:** el test debe insertar/controlar exactamente las filas que necesita antes del Act. No vale `SELECT TOP 1`, no vale “si existe una fila”, no vale depender de datos de usuario.
+3. **Sandbox/local obligatorio:** toda escritura de test debe ir contra backend local/sandbox mediante el patrón `ForceLocalBackend` / `m_TestingMode` cuando aplique.
+4. **Orden FK:** crear padres antes que hijos; borrar en orden inverso. Los teardowns solo pueden borrar IDs/marcadores determinísticos de test.
+5. **Asserts fuertes:** además de que no explote, verificar valores concretos, cardinalidad esperada y efectos secundarios.
+6. **Test inválido:** si pasa porque el dato “justo estaba”, el test está mal aunque esté verde. Reescribir antes de confiar en la implementación.
+
+---
+
 ## Skills
 
 - `access-vba-sync`, `access-query`, `access-form-creation`, `jira-confluence-sdd`, `access-vba-tdd`
