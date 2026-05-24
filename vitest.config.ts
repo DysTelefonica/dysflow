@@ -9,6 +9,7 @@ export default defineConfig({
       "test/architecture/**/*.test.ts",
       "test/quality-gates/**/*.test.ts",
       "test/docs/**/*.test.ts",
+      "test/integration/**/*.test.ts",
     ],
     exclude: [
       "test/e2e/**",

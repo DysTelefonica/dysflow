@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
       - name: Lint
         run: pnpm lint
 
@@ -69,5 +72,15 @@ jobs:
           Get-Command powershell.exe
           powershell.exe -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
 
+      - name: Run PowerShell Pester tests
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name Pester)) {
+            Install-Module Pester -Force -Scope CurrentUser
+          }
+          Import-Module Pester
+          $result = Invoke-Pester -Path scripts/tests -PassThru -Output Minimal
+          if ($result.FailedCount -gt 0) { exit 1 }
+
       - name: Run Access/PowerShell integration tests
-        run: pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/scripts-access-runner.test.ts
+        run: pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts test/scripts-access-runner.test.ts
