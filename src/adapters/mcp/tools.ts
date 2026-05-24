@@ -384,22 +384,6 @@ async function handleValidatedLegacyWrite<TData>(
   return translateCoreResultToMcpContent(await execute());
 }
 
-/**
- * Canonical modern Dysflow MCP tool names.
- * These names use underscore separators and are the authoritative source of truth
- * for the five modern tool identifiers advertised via tools/list.
- * Exported for contract testing and regression guards.
- */
-export const MODERN_TOOL_NAMES = [
-  "dysflow_vba_execute",
-  "dysflow_query_execute",
-  "dysflow_doctor",
-  "dysflow_access_operations_list",
-  "dysflow_access_cleanup",
-] as const;
-
-export type ModernDysflowMcpToolName = typeof MODERN_TOOL_NAMES[number];
-
 export function createDysflowMcpTools(
   services: DysflowMcpServices,
   writesEnabled = false,
