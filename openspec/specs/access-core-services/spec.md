@@ -58,3 +58,42 @@ When the caller does not supply `onProgress`, the service MUST call the runner w
 - WHEN the service invokes the runner
 - THEN the runner MUST be called without an `onProgress` option
 - AND the service result MUST be identical to its pre-change behavior
+
+### Requirement: VBA Form Service Module
+
+`src/core/services/vba-form-service.ts` MUST own the operations `validateFormSpec`, `generateForm`, `catalogAddControl`, `harvestFormCatalog`, and `resolveFormSpec`. These functions MUST be exported from this module.
+
+#### Scenario: Form operations importable from vba-form-service
+- GIVEN a consumer that needs `validateFormSpec` or `generateForm`
+- WHEN they import
+- THEN the symbol MUST be resolvable from `vba-form-service.ts`
+
+#### Scenario: Not duplicated in legacy service
+- GIVEN `vba-sync-legacy-service.ts`
+- WHEN it needs a form operation
+- THEN it MUST import from `vba-form-service.ts`, not reimplement it
+
+### Requirement: VBA Source Comparison Module
+
+`src/core/services/vba-source-comparison.ts` MUST own the operations `compareSourceAgainstBinary`, `compareVbaSourceTrees`, and `collectVbaSourceFiles`. These functions MUST be exported from this module.
+
+#### Scenario: Comparison operations importable from vba-source-comparison
+- GIVEN a consumer that needs `compareSourceAgainstBinary`
+- WHEN they import
+- THEN the symbol MUST be resolvable from `vba-source-comparison.ts`
+
+### Requirement: VBA Sync Legacy Service Public API Preserved
+
+`VbaSyncLegacyService` MUST retain its existing public API. Callers MUST require no import path or signature changes after the split.
+(Previously: the service contained all form and comparison logic inline; now it delegates.)
+
+#### Scenario: Public API unchanged
+- GIVEN existing call sites for `VbaSyncLegacyService`
+- WHEN PR3 lands
+- THEN all call sites MUST compile and pass tests without modification
+
+#### Scenario: Delegation to sub-modules
+- GIVEN the service receives a form-related operation
+- WHEN it executes
+- THEN it MUST delegate to `vba-form-service.ts` — not contain inline form logic
+

@@ -8,7 +8,7 @@ import {
 	resolveAgentConfigPaths,
 	removeAgentConfig,
 	fileExists,
-} from "./install.js";
+} from "./install-utils.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 const UNINSTALL_USAGE = "Usage: dysflow uninstall [--runtime-dir <dir>]";
