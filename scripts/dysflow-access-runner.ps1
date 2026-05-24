@@ -36,13 +36,9 @@ function Open-DatabaseWithPassword {
 function Open-DatabaseWithBackendPassword {
   param(
     [Parameter(Mandatory = $true)] $DbEngine,
-    [Parameter(Mandatory = $true)] [string] $DatabasePath,
-    [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false
+    [Parameter(Mandatory = $true)] [string] $DatabasePath
   )
-  if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-    return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly)
-  }
-  return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")
+  return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $false -Password $BackendPassword
 }
 
 function ConvertTo-IsoStartTime {

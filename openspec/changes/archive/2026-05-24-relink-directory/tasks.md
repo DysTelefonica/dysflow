@@ -100,24 +100,24 @@ Chain strategy: stacked-to-main
 
 ### Phase 1 (3a boundary): Backup + Chain Resolution
 
-- [ ] 6.1 Implement `Backup-AccessFile($path)` in `scripts/dysflow-access-runner.ps1`: `Copy-Item` to `$path + ".bak-" + (Get-Date -AsUTC -Format "yyyyMMddHHmmss")`; never overwrite; returns backup path string.
-- [ ] 6.2 Implement `Resolve-LinkChain($dbEngine, $startDb, $tableName, $rootPath, $aliasMap, $accessFileIndex, [ref]$visited, $depth, $maxDepth=5)`: DFS; visited set keyed by `lower(fullpath)|lower(table)`; stops when native table found or `$depth >= $maxDepth`; returns `{ resolvedPath, resolvedTable, isLocal, cycleDetected, hops }`.
-- [ ] 6.3 Handle cycle detection in `Resolve-LinkChain`: if visited key already present, return `cycleDetected: $true`; do not recurse.
-- [ ] 6.4 Handle max-depth exceeded: return `cycleDetected: $false, resolvedPath: $null` with `hops: $maxDepth` and error note.
+- [x] 6.1 Implement `Backup-AccessFile($path)` in `scripts/dysflow-access-runner.ps1`: `Copy-Item` to `$path + ".bak-" + (Get-Date -AsUTC -Format "yyyyMMddHHmmss")`; never overwrite; returns backup path string.
+- [x] 6.2 Implement `Resolve-LinkChain($dbEngine, $startDb, $tableName, $rootPath, $aliasMap, $accessFileIndex, [ref]$visited, $depth, $maxDepth=5)`: DFS; visited set keyed by `lower(fullpath)|lower(table)`; stops when native table found or `$depth >= $maxDepth`; returns `{ resolvedPath, resolvedTable, isLocal, cycleDetected, hops }`.
+- [x] 6.3 Handle cycle detection in `Resolve-LinkChain`: if visited key already present, return `cycleDetected: $true`; do not recurse.
+- [x] 6.4 Handle max-depth exceeded: return `cycleDetected: $false, resolvedPath: $null` with `hops: $maxDepth` and error note.
 
 ### Phase 2 (3b boundary): Apply Loop + Remove-Unresolved
 
-- [ ] 6.5 Wire backup into apply loop in `Invoke-RelinkDirectory`: call `Backup-AccessFile` once per file BEFORE any `RefreshLink` when `$dryRun -eq $false` and `$Payload.backup -ne $false`.
-- [ ] 6.6 Implement apply per-link: update `td.Connect` with `";DATABASE=" + $resolvedPath`; preserve `SourceTableName` and `ForeignName`; call `td.RefreshLink()`.
-- [ ] 6.7 Implement `--remove-unresolved` path: after apply loop, if `$Payload.removeUnresolved -eq $true`, call `$db.TableDefs.Delete($linkName)` for each unresolved link; record as `removed`.
-- [ ] 6.8 Implement locked-file error handling (FR-20): per-file `try/catch`; on open failure, add error string to `fileResult.errors`, continue to next file.
-- [ ] 6.9 Aggregate all `FileResult` entries into final `RelinkDirectoryReport`; include `backupPaths[]` from all files.
-- [ ] 6.10 Update `handleRelinkDirectoryCommand` in `src/cli/commands/access/relink-directory.ts` to pass `backup: !noBackup` in the request payload.
-- [ ] 6.11 **Test** — Add integration test `test/integration/access-relink-apply.test.ts` (guarded by `hasAccessCom()`): create temp `.accdb` fixture with external link in `beforeAll`; run `--apply`; assert `.bak-*` file exists; assert link now points to local path; run dry-run again to confirm `alreadyLocal` classification.
-- [ ] 6.12 **Test** — Add integration test for `--remove-unresolved`: fixture with unresolvable link; run `--apply --remove-unresolved`; assert TableDef no longer present.
-- [ ] 6.13 **Test** — Add integration test for chain resolution: fixture A→B→C (C has native table); run `--apply`; assert A's link points directly to C's table.
-- [ ] 6.14 **Test** — Add integration test for cycle detection: fixture A→B→A; run `--apply`; assert `cycleDetected: true` in result and neither file modified.
-- [ ] 6.15 Run `vitest run` — all GREEN. Commit PR 3 (or 3a then 3b if split).
+- [x] 6.5 Wire backup into apply loop in `Invoke-RelinkDirectory`: call `Backup-AccessFile` once per file BEFORE any `RefreshLink` when `$dryRun -eq $false` and `$Payload.backup -ne $false`.
+- [x] 6.6 Implement apply per-link: update `td.Connect` with `";DATABASE=" + $resolvedPath`; preserve `SourceTableName` and `ForeignName`; call `td.RefreshLink()`.
+- [x] 6.7 Implement `--remove-unresolved` path: after apply loop, if `$Payload.removeUnresolved -eq $true`, call `$db.TableDefs.Delete($linkName)` for each unresolved link; record as `removed`.
+- [x] 6.8 Implement locked-file error handling (FR-20): per-file `try/catch`; on open failure, add error string to `fileResult.errors`, continue to next file.
+- [x] 6.9 Aggregate all `FileResult` entries into final `RelinkDirectoryReport`; include `backupPaths[]` from all files.
+- [x] 6.10 Update `handleRelinkDirectoryCommand` in `src/cli/commands/access/relink-directory.ts` to pass `backup: !noBackup` in the request payload.
+- [x] 6.11 **Test** — Add integration test `test/integration/access-relink-apply.test.ts` (guarded by `hasAccessCom()`): create temp `.accdb` fixture with external link in `beforeAll`; run `--apply`; assert `.bak-*` file exists; assert link now points to local path; run dry-run again to confirm `alreadyLocal` classification.
+- [x] 6.12 **Test** — Add integration test for `--remove-unresolved`: fixture with unresolvable link; run `--apply --remove-unresolved`; assert TableDef no longer present.
+- [x] 6.13 **Test** — Add integration test for chain resolution: fixture A→B→C (C has native table); run `--apply`; assert A's link points directly to C's table.
+- [x] 6.14 **Test** — Add integration test for cycle detection: fixture A→B→A; run `--apply`; assert `cycleDetected: true` in result and neither file modified.
+- [x] 6.15 Run `vitest run` — all GREEN. Commit PR 3 (or 3a then 3b if split).
 
 > **Split boundary** (if PR 3 exceeds 380 lines during implementation):
 > - PR 3a: tasks 6.1–6.4 (Backup-AccessFile + Resolve-LinkChain) — commit, PR to main
@@ -132,27 +132,27 @@ Chain strategy: stacked-to-main
 
 ### Phase 1: Verify mode PS
 
-- [ ] 7.1 Implement `Test-LinkExternal($backendPath, $rootPath, $denyPrefixes)` in `scripts/dysflow-access-runner.ps1`: returns `{ external: bool, denied: bool, broken: bool }` — `external` if path not under `$rootPath`, `denied` if any deny-prefix matches (case-insensitive), `broken` if `Test-Path` fails.
-- [ ] 7.2 Implement verify scan in `Invoke-RelinkDirectory`: post-apply (or standalone if `$Payload.verifyOnly`), re-enumerate all links and call `Test-LinkExternal` per link; accumulate `externalLinkCount`, `datosteLinkCount`, `brokenLinkCount`.
-- [ ] 7.3 Implement `--deny-prefix` count aggregation: any link matching a deny-prefix increments `denyPrefixMatchCount`.
+- [x] 7.1 Implement `Test-LinkExternal($backendPath, $rootPath, $denyPrefixes)` in `scripts/dysflow-access-runner.ps1`: returns `{ external: bool, denied: bool, broken: bool }` — `external` if path not under `$rootPath`, `denied` if any deny-prefix matches (case-insensitive), `broken` if `Test-Path` fails.
+- [x] 7.2 Implement verify scan in `Invoke-RelinkDirectory`: post-apply (or standalone if `$Payload.verifyOnly`), re-enumerate all links and call `Test-LinkExternal` per link; accumulate `externalLinkCount`, `datosteLinkCount`, `brokenLinkCount`.
+- [x] 7.3 Implement `--deny-prefix` count aggregation: any link matching a deny-prefix increments `denyPrefixMatchCount`.
 
 ### Phase 2: TS exit code wiring for verify
 
-- [ ] 7.4 In `handleRelinkDirectoryCommand`: after receiving result, if `strictLocal && report.externalLinkCount > 0` → exit 1; if `report.denyPrefixMatchCount > 0` → exit 1. (These may already be stubbed from PR 1 — confirm and complete.)
-- [ ] 7.5 Update handler tests to cover verify-specific exit code paths if not already covered in PR 1.
+- [x] 7.4 In `handleRelinkDirectoryCommand`: after receiving result, if `strictLocal && report.externalLinkCount > 0` → exit 1; if `report.denyPrefixMatchCount > 0` → exit 1. (These may already be stubbed from PR 1 — confirm and complete.)
+- [x] 7.5 Update handler tests to cover verify-specific exit code paths if not already covered in PR 1.
 
 ### Phase 3: E2E test suite
 
-- [ ] 7.6 Create `test/e2e/access-relink-directory.test.ts` guarded by `hasAccessCom()`.
-- [ ] 7.7 E2E: `beforeAll` builds temp directory with `frontend.accdb` (links to external), `backendA.accdb` (links to `backendB.accdb`), `backendB.accdb` (native tables) via DAO.
-- [ ] 7.8 E2E test: dry-run — no `.bak` files, no link changes, result has correct `plannedRelinks` count.
-- [ ] 7.9 E2E test: apply — `.bak-*` file created for `frontend.accdb`; link now points to local path; exit code 0.
-- [ ] 7.10 E2E test: verify after apply — `externalLinkCount: 0`; exit code 0.
-- [ ] 7.11 E2E test: chain resolution — `frontend.accdb` → `backendA.accdb` → `backendB.accdb`; after apply, frontend links directly to `backendB.accdb` native table; `chainHops: 2` in result.
-- [ ] 7.12 E2E test: `--strict-local` fails when one link is deliberately unresolvable; exit code 1; `externalLinkCount: 1`.
-- [ ] 7.13 E2E test: `--deny-prefix "\\\\datoste\\"` — fixture with a remaining UNC link; verify returns `denyPrefixMatchCount: 1`; exit code 1.
-- [ ] 7.14 E2E test: cycle fixture A→B→A; result contains `cycleDetected: true`; no mutations; exit code 0 (errors[] is non-empty, exit non-zero per FR-20).
-- [ ] 7.15 Run `vitest run` — all GREEN. Commit PR 4.
+- [x] 7.6 Create `test/e2e/access-relink-directory.test.ts` guarded by `hasAccessCom()`.
+- [x] 7.7 E2E: `beforeAll` builds temp directory with `frontend.accdb` (links to external), `backendA.accdb` (links to `backendB.accdb`), `backendB.accdb` (native tables) via DAO.
+- [x] 7.8 E2E test: dry-run — no `.bak` files, no link changes, result has correct `plannedRelinks` count.
+- [x] 7.9 E2E test: apply — `.bak-*` file created for `frontend.accdb`; link now points to local path; exit code 0.
+- [x] 7.10 E2E test: verify after apply — `externalLinkCount: 0`; exit code 0.
+- [x] 7.11 E2E test: chain resolution — `frontend.accdb` → `backendA.accdb` → `backendB.accdb`; after apply, frontend links directly to `backendB.accdb` native table; `chainHops: 2` in result.
+- [x] 7.12 E2E test: `--strict-local` fails when one link is deliberately unresolvable; exit code 1; `externalLinkCount: 1`.
+- [x] 7.13 E2E test: `--deny-prefix "\\\\datoste\\"` — fixture with a remaining UNC link; verify returns `denyPrefixMatchCount: 1`; exit code 1.
+- [x] 7.14 E2E test: cycle fixture A→B→A; result contains `cycleDetected: true`; no mutations; exit code 0 (errors[] is non-empty, exit non-zero per FR-20).
+- [x] 7.15 Run `vitest run` — all GREEN. Commit PR 4.
 
 ---
 
