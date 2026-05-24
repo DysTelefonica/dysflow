@@ -633,187 +633,258 @@ End Function
 ' y no corrompe datos al invalidar/recargar.
 ' ============================================================
 
+Private Function CacheTest_NewDict() As Scripting.Dictionary
+    Set CacheTest_NewDict = New Scripting.Dictionary
+    CacheTest_NewDict.CompareMode = TextCompare
+End Function
+
+Private Sub CacheTest_ResetTeardown(ByRef p_Logs As Collection, ByRef p_AssertError As String)
+    Dim resetError As String
+
+    Call Cache_Test_ResetAll(p_Error:=resetError)
+    If resetError <> "" Then
+        AddLog p_Logs, "TEARDOWN ERROR: " & resetError
+        If p_AssertError = "" Then p_AssertError = resetError
+    Else
+        AddLog p_Logs, "Teardown: cache reset"
+    End If
+End Sub
+
 Public Function Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic() As String
-    ' Test: el cache delegate en Entorno devuelve el mismo resultado
-    ' que el constructor, y resetear fuerza recalculado.
+    ' Test puro/in-memory: seed deterministico, cache directo e invalidacion sin backend.
     Dim logs As Collection
     Dim assertError As String
-    Dim usr As usuario
-    Dim col1 As Scripting.Dictionary
-    Dim col2 As Scripting.Dictionary
-    Dim col3 As Scripting.Dictionary
     Dim pError As String
+    Dim errMsg As String
+    Dim seeded1 As Scripting.Dictionary
+    Dim seeded2 As Scripting.Dictionary
     Dim dict1 As Scripting.Dictionary
     Dim dict2 As Scripting.Dictionary
     On Error GoTo errores
-    
+
     Set logs = TestHelper.NewLogs
-    Set usr = New usuario
-    usr.Nombre = "QA User"
-    
-    ' 1.Primera carga via Entorno (delega a cache)
-    Set col1 = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
-    AddLog logs, "Primera carga via Entorno, count=" & col1.Count
-    
-    ' 2.Segunda carga via cache directo (debe ser la misma referencia)
+    Call Cache_Test_ResetAll(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange limpia cache antes del seed", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
+    Set seeded1 = CacheTest_NewDict()
+    Call AddSegTareasProyecto(seeded1, "AR-CACHE-P1", "QA User")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_TAR_PROY_PTE_REPLAN, seeded1, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed proyecto pte replan deterministico", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
     Set dict1 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
-    Call TestHelper.AssertTrue(pError = "", "Cache_Indicadores_Proyecto no debe fallar", logs, assertError)
-    Call TestHelper.AssertTrue(Not dict1 Is Nothing, "Cache no debe ser Nothing tras carga via Entorno", logs, assertError)
-    Call TestHelper.AssertTrue(col1 Is dict1, "Cache directo y via Entorno deben devolver la misma referencia", logs, assertError)
-    
-    ' 3.Resetear cache
+    Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket proyecto sin recalcular", logs, assertError)
+    Call TestHelper.AssertTrue(dict1 Is seeded1, "Cache debe devolver la misma referencia seeded", logs, assertError)
+    Call TestHelper.AssertTrue(dict1.Count = 1, "Cache seeded inicial debe tener 1 item", logs, assertError)
+
     Call Cache_InvalidarProyecto(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
-    AddLog logs, "Cache invalidado"
-    
-    ' 4.Reset=True obliga a recalcular (nueva referencia)
-    Set dict2 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=pError)
-    Call TestHelper.AssertTrue(pError = "", "Recalculo con reset no debe fallar", logs, assertError)
-    Call TestHelper.AssertTrue(Not dict2 Is Nothing, "Tras reset, cache debe tener datos", logs, assertError)
-    
-    ' 5.Loading indicator state
-    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), "Cache debe estar marcado como cargado", logs, assertError)
-    
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), "Proyecto debe quedar descargado tras invalidar", logs, assertError)
+
+    Set seeded2 = CacheTest_NewDict()
+    Call AddSegTareasProyecto(seeded2, "AR-CACHE-P2", "QA User")
+    Call AddSegTareasProyecto(seeded2, "AR-CACHE-P3", "QA User")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_TAR_PROY_PTE_REPLAN, seeded2, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange re-seed proyecto tras reset", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
+    Set dict2 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket re-seeded sin backend", logs, assertError)
+    Call TestHelper.AssertTrue(dict2 Is seeded2, "Cache debe devolver la nueva referencia seeded", logs, assertError)
+    Call TestHelper.AssertTrue(Not (dict2 Is dict1), "La referencia tras reset debe cambiar", logs, assertError)
+    Call TestHelper.AssertTrue(dict2.Count = 2, "Cache re-seeded debe tener 2 items", logs, assertError)
+    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), "Cache proyecto debe quedar cargado", logs, assertError)
+
+finalizar:
+    Call CacheTest_ResetTeardown(logs, assertError)
     If assertError <> "" Then
         Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     Else
-        Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonOk(logs, "cache_delegacion_reset_ok")
+        Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonOk(logs, "cache_pure_seed_reset_ok")
     End If
     Exit Function
 errores:
-    Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheTest_ResetTeardown(logs, assertError)
+    On Error GoTo 0
+    Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function
 
 Public Function Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic() As String
-    ' Test: InvalidarTodo limpia ambos caches independientemente.
-    ' Cada cache debe poder existir sin interferir con el otro.
+    ' Test puro/in-memory: InvalidarTodo limpia caches seeded de proyecto y auditoria.
     Dim logs As Collection
     Dim assertError As String
     Dim pError As String
+    Dim errMsg As String
+    Dim seedProy As Scripting.Dictionary
+    Dim seedAud As Scripting.Dictionary
     Dim dictProy As Scripting.Dictionary
     Dim dictAud As Scripting.Dictionary
     On Error GoTo errores
-    
+
     Set logs = TestHelper.NewLogs
-    
-    ' Cargar ambos caches
+    Call Cache_Test_ResetAll(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange limpia cache antes del seed doble", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
+    Set seedProy = CacheTest_NewDict()
+    Set seedAud = CacheTest_NewDict()
+    Call AddSegTareasProyecto(seedProy, "AR-CACHE-P1", "QA User")
+    Call AddSegTareasAuditoria(seedAud, "AAR-CACHE-A1", "QA User")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_TAR_PROY_PTE_REPLAN, seedProy, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed proyecto", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    Call Cache_Test_SeedAuditoriaBucket(BUCKET_TAR_AUD_PTE_REPLAN, seedAud, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed auditoria", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
     Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
-    If pError <> "" Then GoTo errores
+    Call TestHelper.AssertTrue(pError = "", "Act obtiene proyecto seeded", logs, assertError)
     Set dictAud = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
-    If pError <> "" Then GoTo errores
-    
-    AddLog logs, "Ambos caches cargados. EstaCargado proy=" & Cache_Proyecto_EstaCargado() & _
-                 " aud=" & Cache_Auditoria_EstaCargado()
-    
-    ' Invalidar TODO
+    Call TestHelper.AssertTrue(pError = "", "Act obtiene auditoria seeded", logs, assertError)
+    Call TestHelper.AssertTrue(dictProy Is seedProy, "Proyecto debe conservar referencia seeded", logs, assertError)
+    Call TestHelper.AssertTrue(dictAud Is seedAud, "Auditoria debe conservar referencia seeded", logs, assertError)
+
     Call Cache_InvalidarTodo(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarTodo no debe fallar", logs, assertError)
-    
-    ' Ambos deben estar limpiados
-    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), _
-        "Tras InvalidarTodo, proyecto no debe estar cargado", logs, assertError)
-    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), _
-        "Tras InvalidarTodo, auditoria no debe estar cargada", logs, assertError)
-    
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), "Tras InvalidarTodo, proyecto no debe estar cargado", logs, assertError)
+    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), "Tras InvalidarTodo, auditoria no debe estar cargada", logs, assertError)
+
+finalizar:
+    Call CacheTest_ResetTeardown(logs, assertError)
     If assertError <> "" Then
         Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     Else
-        Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonOk(logs, "invalidate_todo_separation_ok")
+        Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonOk(logs, "invalidate_todo_pure_ok")
     End If
     Exit Function
 errores:
-    Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheTest_ResetTeardown(logs, assertError)
+    On Error GoTo 0
+    Test_Cache_InvalidarTodo_SeparaProyectosYAuditorias_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function
 
 Public Function Test_Cache_InvalidacionSelectiva_Atomic() As String
-    ' Test: InvalidarProyecto solo limpia cache proyecto,
-    ' invalidar auditoria solo limpia cache auditoria.
+    ' Test puro/in-memory: cada invalidacion selectiva respeta el otro cache seeded.
     Dim logs As Collection
     Dim assertError As String
     Dim pError As String
+    Dim errMsg As String
+    Dim seedProy As Scripting.Dictionary
+    Dim seedProy2 As Scripting.Dictionary
+    Dim seedAud As Scripting.Dictionary
     Dim dictProy As Scripting.Dictionary
     Dim dictAud As Scripting.Dictionary
     On Error GoTo errores
-    
+
     Set logs = TestHelper.NewLogs
-    
-    ' Cargar ambos
-    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
-    If pError <> "" Then GoTo errores
-    Set dictAud = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
-    If pError <> "" Then GoTo errores
-    
-    ' Invalidar solo proyecto
+    Call Cache_Test_ResetAll(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange limpia cache antes de invalidacion selectiva", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
+    Set seedProy = CacheTest_NewDict()
+    Set seedAud = CacheTest_NewDict()
+    Call AddSegTareasProyecto(seedProy, "AR-CACHE-P1", "QA User")
+    Call AddSegTareasAuditoria(seedAud, "AAR-CACHE-A1", "QA User")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_TAR_PROY_PTE_REPLAN, seedProy, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed proyecto", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    Call Cache_Test_SeedAuditoriaBucket(BUCKET_TAR_AUD_PTE_REPLAN, seedAud, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed auditoria", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
     Call Cache_InvalidarProyecto(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
-    
-    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), _
-        "Proyecto debe estar descargado", logs, assertError)
-    Call TestHelper.AssertTrue(Cache_Auditoria_EstaCargado(), _
-        "Auditoria debe seguir cargada (inval. selectiva)", logs, assertError)
-    
-    ' Recargar proyecto
-    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=pError)
-    Call TestHelper.AssertTrue(pError = "", "Recarga proyecto no debe fallar", logs, assertError)
-    
-    ' Invalidar solo auditoria
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), "Proyecto debe estar descargado", logs, assertError)
+    Call TestHelper.AssertTrue(Cache_Auditoria_EstaCargado(), "Auditoria debe seguir cargada", logs, assertError)
+    Set dictAud = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Auditoria seeded sigue accesible", logs, assertError)
+    Call TestHelper.AssertTrue(dictAud Is seedAud, "Auditoria conserva su referencia tras invalidar proyecto", logs, assertError)
+
+    Set seedProy2 = CacheTest_NewDict()
+    Call AddSegTareasProyecto(seedProy2, "AR-CACHE-P2", "QA User")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_TAR_PROY_PTE_REPLAN, seedProy2, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange re-seed proyecto", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
     Call Cache_InvalidarAuditoria(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarAuditoria no debe fallar", logs, assertError)
-    
-    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), _
-        "Proyecto sigue cargado", logs, assertError)
-    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), _
-        "Auditoria debe estar descargada", logs, assertError)
-    
+    Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), "Proyecto debe seguir cargado", logs, assertError)
+    Call TestHelper.AssertTrue(Not Cache_Auditoria_EstaCargado(), "Auditoria debe estar descargada", logs, assertError)
+    Set dictProy = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Proyecto re-seeded sigue accesible", logs, assertError)
+    Call TestHelper.AssertTrue(dictProy Is seedProy2, "Proyecto conserva su nueva referencia tras invalidar auditoria", logs, assertError)
+
+finalizar:
+    Call CacheTest_ResetTeardown(logs, assertError)
     If assertError <> "" Then
         Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     Else
-        Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonOk(logs, "inval_selectiva_ok")
+        Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonOk(logs, "inval_selectiva_pure_ok")
     End If
     Exit Function
 errores:
-    Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheTest_ResetTeardown(logs, assertError)
+    On Error GoTo 0
+    Test_Cache_InvalidacionSelectiva_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function
 
 Public Function Test_Cache_ConsistenciaConEntorno_Atomic() As String
-    ' Test: los datos devueltos por cache y por Entorno son consistentes.
-    ' Tras cargar via Entorno, el cache debe tener los mismos datos.
+    ' Test puro/in-memory: consistencia de bucket seeded y cache API sin Entorno/backend.
     Dim logs As Collection
     Dim assertError As String
-    Dim usr As usuario
-    Dim colEntorno As Scripting.Dictionary
-    Dim colCache As Scripting.Dictionary
-    Dim resultadosEntorno As Scripting.Dictionary
-    Dim resultadosCache As Scripting.Dictionary
     Dim pError As String
+    Dim errMsg As String
+    Dim seedReg As Scripting.Dictionary
+    Dim colCache As Scripting.Dictionary
+    Dim colCache2 As Scripting.Dictionary
     On Error GoTo errores
-    
+
     Set logs = TestHelper.NewLogs
-    Set usr = New usuario
-    usr.Nombre = "QA User"
-    
-    ' Limpiar cache primero para test limpio
-    Call Cache_InvalidarProyecto(p_Error:=pError)
-    
-    ' Cargar via Entorno (delega a cache internamente)
-    Set colEntorno = m_ObjEntorno.ColSegsNCProyectoRegistradas
-    AddLog logs, "Entorno carga NCProyectoRegistradas, count=" & colEntorno.Count
-    
-    ' Obtener via cache directo
+    Call Cache_Test_ResetAll(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange limpia cache antes de consistencia", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
+    Set seedReg = CacheTest_NewDict()
+    Call AddSegNCProyecto(seedReg, "NCP-CACHE-1", "QA User")
+    Call AddSegNCProyecto(seedReg, "NCP-CACHE-2", "Otro")
+    Call Cache_Test_SeedProyectoBucket(BUCKET_NC_PROY_REGISTRADAS, seedReg, pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange seed NC proyecto registradas", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+
     Set colCache = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=pError)
-    Call TestHelper.AssertTrue(pError = "", "Cache no debe fallar", logs, assertError)
-    Call TestHelper.AssertTrue(Not colCache Is Nothing, "Cache no debe ser Nothing", logs, assertError)
-    
-    ' Deben ser la misma referencia
-    Call TestHelper.AssertTrue(colEntorno Is colCache, _
-        "Entorno y Cache deben devolver misma referencia para mismo bucket", logs, assertError)
-    
+    Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket NC registradas desde cache", logs, assertError)
+    Call TestHelper.AssertTrue(colCache Is seedReg, "Cache debe devolver exactamente el bucket seeded", logs, assertError)
+    Call TestHelper.AssertTrue(colCache.Count = 2, "Bucket seeded debe conservar sus 2 elementos", logs, assertError)
+
+    Call Cache_InvalidarAuditoria(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Invalidar auditoria no debe tocar proyecto", logs, assertError)
+    Set colCache2 = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Proyecto sigue accesible tras invalidar auditoria", logs, assertError)
+    Call TestHelper.AssertTrue(colCache2 Is seedReg, "Proyecto conserva referencia tras invalidar auditoria", logs, assertError)
+
+    Call Cache_InvalidarProyecto(p_Error:=pError)
+    Call TestHelper.AssertTrue(pError = "", "Invalidar proyecto no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not Cache_Proyecto_EstaCargado(), "Proyecto debe quedar descargado al final del Act", logs, assertError)
+
+finalizar:
+    Call CacheTest_ResetTeardown(logs, assertError)
     If assertError <> "" Then
         Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     Else
-        Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonOk(logs, "consistencia_entorno_cache_ok")
+        Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonOk(logs, "consistencia_cache_pure_ok")
     End If
     Exit Function
 errores:
-    Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheTest_ResetTeardown(logs, assertError)
+    On Error GoTo 0
+    Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function

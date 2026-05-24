@@ -306,14 +306,96 @@ errores:
 End Sub
 
 ' ============================================================
+' API PUBLICA — HELPERS TEST-ONLY
+' ============================================================
+
+' Helpers estrechos para tests unitarios/in-memory de cache.
+' No ejecutan constructores ni acceden a backend.
+Public Sub Cache_Test_ResetAll(Optional ByRef p_Error As String)
+    On Error GoTo errores
+    p_Error = ""
+    Set m_CacheProyecto = Nothing
+    Set m_CacheAuditoria = Nothing
+    Exit Sub
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "Cache_Test_ResetAll: " & Err.Description
+    End If
+End Sub
+
+Public Sub Cache_Test_SeedProyectoBucket( _
+                        ByVal p_Bucket As String, _
+                        ByVal p_Data As Scripting.Dictionary, _
+                        Optional ByRef p_Error As String _
+                    )
+    On Error GoTo errores
+    p_Error = ""
+
+    If p_Data Is Nothing Then
+        p_Error = "Cache_Test_SeedProyectoBucket: p_Data no puede ser Nothing"
+        Exit Sub
+    End If
+
+    If Cache_Proyecto_GetConstructorFunc(p_Bucket) = "" Then
+        p_Error = "Cache_Test_SeedProyectoBucket: bucket desconocido '" & p_Bucket & "'"
+        Exit Sub
+    End If
+
+    Cache_EnsureProyecto
+    If m_CacheProyecto.Exists(p_Bucket) Then m_CacheProyecto.Remove p_Bucket
+    m_CacheProyecto.Add p_Bucket, p_Data
+    Exit Sub
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "Cache_Test_SeedProyectoBucket: " & Err.Description
+    End If
+End Sub
+
+Public Sub Cache_Test_SeedAuditoriaBucket( _
+                        ByVal p_Bucket As String, _
+                        ByVal p_Data As Scripting.Dictionary, _
+                        Optional ByRef p_Error As String _
+                    )
+    On Error GoTo errores
+    p_Error = ""
+
+    If p_Data Is Nothing Then
+        p_Error = "Cache_Test_SeedAuditoriaBucket: p_Data no puede ser Nothing"
+        Exit Sub
+    End If
+
+    If Cache_Auditoria_GetConstructorFunc(p_Bucket) = "" Then
+        p_Error = "Cache_Test_SeedAuditoriaBucket: bucket desconocido '" & p_Bucket & "'"
+        Exit Sub
+    End If
+
+    Cache_EnsureAuditoria
+    If m_CacheAuditoria.Exists(p_Bucket) Then m_CacheAuditoria.Remove p_Bucket
+    m_CacheAuditoria.Add p_Bucket, p_Data
+    Exit Sub
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "Cache_Test_SeedAuditoriaBucket: " & Err.Description
+    End If
+End Sub
+
+' ============================================================
 ' API PUBLICA — CONSULTA DE ESTADO
 ' ============================================================
 
 ' Devuelve True si el cache de proyecto esta cargado
 Public Function Cache_Proyecto_EstaCargado() As Boolean
-    Cache_Proyecto_EstaCargado = (Not m_CacheProyecto Is Nothing) And (m_CacheProyecto.Count > 0)
+    If m_CacheProyecto Is Nothing Then
+        Cache_Proyecto_EstaCargado = False
+    Else
+        Cache_Proyecto_EstaCargado = (m_CacheProyecto.Count > 0)
+    End If
 End Function
 
 Public Function Cache_Auditoria_EstaCargado() As Boolean
-    Cache_Auditoria_EstaCargado = (Not m_CacheAuditoria Is Nothing) And (m_CacheAuditoria.Count > 0)
+    If m_CacheAuditoria Is Nothing Then
+        Cache_Auditoria_EstaCargado = False
+    Else
+        Cache_Auditoria_EstaCargado = (m_CacheAuditoria.Count > 0)
+    End If
 End Function
