@@ -132,27 +132,27 @@ Chain strategy: stacked-to-main
 
 ### Phase 1: Verify mode PS
 
-- [ ] 7.1 Implement `Test-LinkExternal($backendPath, $rootPath, $denyPrefixes)` in `scripts/dysflow-access-runner.ps1`: returns `{ external: bool, denied: bool, broken: bool }` — `external` if path not under `$rootPath`, `denied` if any deny-prefix matches (case-insensitive), `broken` if `Test-Path` fails.
-- [ ] 7.2 Implement verify scan in `Invoke-RelinkDirectory`: post-apply (or standalone if `$Payload.verifyOnly`), re-enumerate all links and call `Test-LinkExternal` per link; accumulate `externalLinkCount`, `datosteLinkCount`, `brokenLinkCount`.
-- [ ] 7.3 Implement `--deny-prefix` count aggregation: any link matching a deny-prefix increments `denyPrefixMatchCount`.
+- [x] 7.1 Implement `Test-LinkExternal($backendPath, $rootPath, $denyPrefixes)` in `scripts/dysflow-access-runner.ps1`: returns `{ external: bool, denied: bool, broken: bool }` — `external` if path not under `$rootPath`, `denied` if any deny-prefix matches (case-insensitive), `broken` if `Test-Path` fails.
+- [x] 7.2 Implement verify scan in `Invoke-RelinkDirectory`: post-apply (or standalone if `$Payload.verifyOnly`), re-enumerate all links and call `Test-LinkExternal` per link; accumulate `externalLinkCount`, `datosteLinkCount`, `brokenLinkCount`.
+- [x] 7.3 Implement `--deny-prefix` count aggregation: any link matching a deny-prefix increments `denyPrefixMatchCount`.
 
 ### Phase 2: TS exit code wiring for verify
 
-- [ ] 7.4 In `handleRelinkDirectoryCommand`: after receiving result, if `strictLocal && report.externalLinkCount > 0` → exit 1; if `report.denyPrefixMatchCount > 0` → exit 1. (These may already be stubbed from PR 1 — confirm and complete.)
-- [ ] 7.5 Update handler tests to cover verify-specific exit code paths if not already covered in PR 1.
+- [x] 7.4 In `handleRelinkDirectoryCommand`: after receiving result, if `strictLocal && report.externalLinkCount > 0` → exit 1; if `report.denyPrefixMatchCount > 0` → exit 1. (These may already be stubbed from PR 1 — confirm and complete.)
+- [x] 7.5 Update handler tests to cover verify-specific exit code paths if not already covered in PR 1.
 
 ### Phase 3: E2E test suite
 
-- [ ] 7.6 Create `test/e2e/access-relink-directory.test.ts` guarded by `hasAccessCom()`.
-- [ ] 7.7 E2E: `beforeAll` builds temp directory with `frontend.accdb` (links to external), `backendA.accdb` (links to `backendB.accdb`), `backendB.accdb` (native tables) via DAO.
-- [ ] 7.8 E2E test: dry-run — no `.bak` files, no link changes, result has correct `plannedRelinks` count.
-- [ ] 7.9 E2E test: apply — `.bak-*` file created for `frontend.accdb`; link now points to local path; exit code 0.
-- [ ] 7.10 E2E test: verify after apply — `externalLinkCount: 0`; exit code 0.
-- [ ] 7.11 E2E test: chain resolution — `frontend.accdb` → `backendA.accdb` → `backendB.accdb`; after apply, frontend links directly to `backendB.accdb` native table; `chainHops: 2` in result.
-- [ ] 7.12 E2E test: `--strict-local` fails when one link is deliberately unresolvable; exit code 1; `externalLinkCount: 1`.
-- [ ] 7.13 E2E test: `--deny-prefix "\\\\datoste\\"` — fixture with a remaining UNC link; verify returns `denyPrefixMatchCount: 1`; exit code 1.
-- [ ] 7.14 E2E test: cycle fixture A→B→A; result contains `cycleDetected: true`; no mutations; exit code 0 (errors[] is non-empty, exit non-zero per FR-20).
-- [ ] 7.15 Run `vitest run` — all GREEN. Commit PR 4.
+- [x] 7.6 Create `test/e2e/access-relink-directory.test.ts` guarded by `hasAccessCom()`.
+- [x] 7.7 E2E: `beforeAll` builds temp directory with `frontend.accdb` (links to external), `backendA.accdb` (links to `backendB.accdb`), `backendB.accdb` (native tables) via DAO.
+- [x] 7.8 E2E test: dry-run — no `.bak` files, no link changes, result has correct `plannedRelinks` count.
+- [x] 7.9 E2E test: apply — `.bak-*` file created for `frontend.accdb`; link now points to local path; exit code 0.
+- [x] 7.10 E2E test: verify after apply — `externalLinkCount: 0`; exit code 0.
+- [x] 7.11 E2E test: chain resolution — `frontend.accdb` → `backendA.accdb` → `backendB.accdb`; after apply, frontend links directly to `backendB.accdb` native table; `chainHops: 2` in result.
+- [x] 7.12 E2E test: `--strict-local` fails when one link is deliberately unresolvable; exit code 1; `externalLinkCount: 1`.
+- [x] 7.13 E2E test: `--deny-prefix "\\\\datoste\\"` — fixture with a remaining UNC link; verify returns `denyPrefixMatchCount: 1`; exit code 1.
+- [x] 7.14 E2E test: cycle fixture A→B→A; result contains `cycleDetected: true`; no mutations; exit code 0 (errors[] is non-empty, exit non-zero per FR-20).
+- [x] 7.15 Run `vitest run` — all GREEN. Commit PR 4.
 
 ---
 

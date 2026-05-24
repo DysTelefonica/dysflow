@@ -39,6 +39,6 @@
 - [x] 2.6 **MODIFY** [dysflow-access-runner.ps1](file:///C:/Proyectos/dysflow/scripts/dysflow-access-runner.ps1): conditionally set `$tdW.SourceTableName` only when it differs from `$chain.resolvedTable`.
 
 ### Phase 3: E2E Test Suite Adjustments
-- [ ] 3.1 **MODIFY** [access-relink-directory.test.ts](file:///C:/Proyectos/dysflow/test/e2e/access-relink-directory.test.ts): fix setup for `chain A→B→C` test.
-- [ ] 3.2 **MODIFY** [access-relink-directory-apply.test.ts](file:///C:/Proyectos/dysflow/test/e2e/access-relink-directory-apply.test.ts): fix setup for `chain A→B→C` test.
-- [ ] 3.3 Run `pnpm exec vitest run --config vitest.integration.config.ts` and verify all tests pass.
+- [x] 3.1 **MODIFY** [access-relink-directory.test.ts](file:///C:/Proyectos/dysflow/test/e2e/access-relink-directory.test.ts): fix setup for `chain A→B→C` test.
+- [x] 3.2 **MODIFY** [access-relink-directory-apply.test.ts](file:///C:/Proyectos/dysflow/test/e2e/access-relink-directory-apply.test.ts): fix setup for `chain A→B→C` test.
+- [x] 3.3 Run `pnpm exec vitest run --config vitest.integration.config.ts` and verify all tests pass.
