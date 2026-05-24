@@ -33,7 +33,7 @@ import {
 	removeDysflowMcpConfig,
 } from "./install-utils.js";
 
-export { fileExists, removeDysflowMcpConfig, MAX_SUBPROCESS_BUFFER_BYTES, ALL_AGENTS, resolveAgentConfigPaths };
+export { removeDysflowMcpConfig, MAX_SUBPROCESS_BUFFER_BYTES, ALL_AGENTS, resolveAgentConfigPaths };
 export type { AgentName, AgentConfigPaths };
 
 const INSTALL_USAGE =
