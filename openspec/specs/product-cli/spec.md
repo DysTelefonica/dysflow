@@ -68,3 +68,38 @@ The system MUST support applying a TUI integration selection to Dysflow-owned MC
 - GIVEN Claude may use `.claude/settings.json` or Claude Desktop config
 - WHEN Claude is unselected
 - THEN Dysflow MUST remove Dysflow-owned MCP entries from both supported Claude config paths
+
+### Requirement: Shared Install Utilities Module
+
+`src/cli/install-utils.ts` MUST export `fileExists`, `readJson`, `writeJson`, `ensureObject`, `runCommand`, and `runCommandOutput`. These are the canonical implementations for file system and command helpers in the CLI layer.
+
+#### Scenario: Helpers importable from install-utils
+- GIVEN any CLI module needing `fileExists` or `runCommand`
+- WHEN it imports
+- THEN the symbol MUST be resolvable from `install-utils.ts`
+
+### Requirement: Uninstall Does Not Import From install.ts
+
+`uninstall.ts` MUST import shared helpers from `install-utils.ts`. It MUST NOT import any symbol from `install.ts`.
+(Previously: `uninstall.ts` imported helpers directly from `install.ts`, creating a dependency on the install command module.)
+
+#### Scenario: No install.ts import in uninstall
+- GIVEN `uninstall.ts`
+- WHEN its import graph is resolved
+- THEN no transitive or direct import from `install.ts` SHALL exist
+
+#### Scenario: Uninstall functions correctly after decoupling
+- GIVEN `install.ts` is modified
+- WHEN `uninstall.ts` executes
+- THEN it MUST not be affected by changes to non-shared install logic
+
+### Requirement: install.ts Imports From install-utils.ts
+
+`install.ts` MUST import its file system and command helpers from `install-utils.ts` rather than defining them inline.
+(Previously: helpers were defined inline in `install.ts`.)
+
+#### Scenario: install.ts delegates helper calls
+- GIVEN `install.ts` needs to call `fileExists` or `runCommand`
+- WHEN the function executes
+- THEN it MUST invoke the implementation from `install-utils.ts`
+
