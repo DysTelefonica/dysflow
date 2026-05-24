@@ -28,6 +28,7 @@ errores:
         m_CargaInicialIndicadoresPendiente = False
         Me.TimerInterval = 0
     End If
+    Me.lblEstado.Visible = False
     DoCmd.Hourglass False
     m_IndicadoresReiniciando = EnumSino.No
     m_IndicadoresModo = ""
@@ -368,7 +369,9 @@ Private Sub Form_Timer()
      End If
 
      Me.lblSeguimientos.Caption = "Seguimiento: obteniendo tareas..."
-    Avance Indicadores_MensajeAvance(l_Modo, "INICIO")
+    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "INICIO")
+    Me.lblEstado.Visible = True
+    Avance Me.lblEstado.Caption
     Me.Repaint
     VBA.DoEvents
 
@@ -377,8 +380,12 @@ Private Sub Form_Timer()
         Err.Raise 1000
     End If
 
-    Avance Indicadores_MensajeAvance(l_Modo, "APLICAR")
+    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "APLICAR")
+    Avance Me.lblEstado.Caption
+    Me.Repaint
+    VBA.DoEvents
     AvanceCerrar
+    Me.lblEstado.Visible = False
 
      DoCmd.Hourglass False
      m_CargandoIndicadores = False
@@ -388,6 +395,7 @@ Private Sub Form_Timer()
 
 errores:
     AvanceCerrar
+    Me.lblEstado.Visible = False
     Me.TimerInterval = 0
     m_CargandoIndicadores = False
     m_IndicadoresReiniciando = EnumSino.No
