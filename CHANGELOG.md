@@ -2,6 +2,43 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.8.0] - 2026-05-24
+
+### Features
+
+- **`relink_directory` apply mode**: PS implementation complete — backup (.bak-*), chain resolution (depth-first, max 5 hops), apply loop with RefreshLink, `--remove-unresolved` support (#316, #318)
+- **`relink_directory` verify mode**: `Test-LinkExternal` for strict-local and deny-prefix validation, non-zero exit on violations (#318)
+- **Password propagation**: `Open-DatabaseWithPassword` helper in PS runner; `Invoke-RelinkDirectory` and `Resolve-LinkChain` now use `$AccessPassword`/`$BackendPassword` (#317)
+
+### Fixed
+
+- Fixed MCP modern tool naming: exported `MODERN_TOOL_NAMES` constant as single source of truth; regression test asserts no dots (#321)
+
+### CI / Quality
+
+- E2E relink-directory tests added to Windows CI job (#319)
+- Pester tests now run automatically in CI (#319)
+- `pnpm audit --audit-level=high` added to quality gate (#319)
+- `test/integration/` added to vitest quality suite (#319)
+
+### Dependencies
+
+- Migrated vitest v1 → v3 (no breaking changes) (#322)
+- Fixed `@vitest/coverage-v8` version pin — added `^` caret (#320)
+
+### Tests
+
+- 519 tests (+60 since v0.7.7)
+- New dedicated tests for `serve`, `setup`, and `version` (#323)
+- New integration tests for relink_directory apply mode (#316)
+
+### Housekeeping
+
+- Removed stale `fileExists` re-export from `install.ts` (#320)
+- `coverage/` directory now gitignored (#320)
+- Stale remote branches deleted (#320)
+- 3 SDD changes archived: `relink-directory`, `release-fixes`, `fix-mcp-tool-name-underscores`
+
 ## [0.7.7] - 2026-05-24
 
 ### Fixed
