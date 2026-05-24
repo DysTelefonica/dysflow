@@ -39,7 +39,7 @@ describe("repository quality gates", () => {
 		expect(workflow).toContain("runs-on: windows-latest");
 		expect(workflow).toContain("Get-Command powershell.exe");
 		expect(commands).toContain(
-			"pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/scripts-access-runner.test.ts",
+			"pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts test/scripts-access-runner.test.ts",
 		);
 		expect(await readText("vitest.integration.config.ts")).toContain(
 			"test/e2e/**/*.test.ts",
