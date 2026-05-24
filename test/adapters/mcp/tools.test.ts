@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS, MODERN_TOOL_NAMES, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
@@ -115,6 +115,24 @@ describe("MCP tool registration over core services", () => {
 
     expect(toolNames).toEqual(expect.arrayContaining(expectedModernToolNames));
     expect(toolNames.filter((name) => name.startsWith("dysflow") && name.includes("."))).toEqual([]);
+  });
+
+  it("regression: MODERN_TOOL_NAMES are exactly the 5 underscore-only names and none contains a dot", () => {
+    // This test is the authoritative contract for modern tool names.
+    // It guards against accidental regression to dotted names (e.g. dysflow.vba.execute).
+    const expectedNames = [
+      "dysflow_vba_execute",
+      "dysflow_query_execute",
+      "dysflow_doctor",
+      "dysflow_access_operations_list",
+      "dysflow_access_cleanup",
+    ];
+
+    expect(MODERN_TOOL_NAMES).toEqual(expectedNames);
+
+    for (const name of MODERN_TOOL_NAMES) {
+      expect(name, `Modern tool name "${name}" must not contain a dot`).not.toContain(".");
+    }
   });
 
   it("describes projectId as canonical trace identity and contextId as optional run context", () => {
