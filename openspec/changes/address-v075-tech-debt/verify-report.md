@@ -1,7 +1,7 @@
 ## Verification Report
 
 **Change**: address-v075-tech-debt
-**Version**: PR3 VBA Service Split
+**Version**: PR4 Install Utils Extraction
 **Mode**: Strict TDD
 **Date**: 2026-05-24
 **Verdict**: PASS WITH WARNINGS
@@ -9,19 +9,19 @@
 ### Completeness
 | Metric | Value |
 |--------|-------|
-| Tasks total | 3 |
-| Tasks complete | 3 |
+| Tasks total | 2 (PR4 specific) |
+| Tasks complete | 2 |
 | Tasks incomplete | 0 |
-| PR Slice | PR3 — VBA Service Split |
+| PR Slice | PR4 — Install Utils Extraction |
 
 ### Build & Tests Execution
 - **Tests**: ✅ All tests pass at runtime.
-  - `npx vitest run test/core/services/vba-sync-legacy-service.test.ts` passed (50/50 tests).
-  - `npx vitest run test/core/services/vba-form-service.test.ts` passed (6/6 tests).
-  - `npx vitest run test/core/services/vba-source-comparison.test.ts` passed (3/3 tests).
-  - Total: 59/59 tests passed.
-- **Build**: ✅ `pnpm build` passed (source code compiles without any type errors).
-- **Lint/Type Check**: ❌ `pnpm lint` failed with 3 errors due to mock values in test files missing properties from the strict `OperationResult` type (see WARNING section).
+  - `npx vitest run test/cli/install-utils.test.ts` passed (5/5 tests).
+  - `npx vitest run test/cli/install.test.ts` passed (32/32 tests).
+  - `npx vitest run test/cli/uninstall.test.ts` passed (14/14 tests).
+  - Total: 51/51 tests passed.
+- **Build**: ✅ `pnpm build` passed (source code compiles without type errors).
+- **Lint/Type Check**: ❌ `pnpm lint` failed with 1 compilation error in `test/cli/uninstall.test.ts` (see WARNING section).
 
 ---
 
@@ -29,11 +29,11 @@
 | Check | Result | Details |
 |-------|--------|---------|
 | TDD Evidence reported | ✅ | Found in `apply-progress.md` TDD Cycle Evidence table. |
-| All tasks have tests | ✅ | 3/3 tasks map to specific test files. |
-| RED confirmed (tests exist) | ✅ | Checked test files exist: `vba-form-service.test.ts`, `vba-source-comparison.test.ts`, `vba-sync-legacy-service.test.ts`. |
-| GREEN confirmed (tests pass) | ✅ | All tests in all three files pass at runtime. |
-| Triangulation adequate | ✅ | 6 cases for form-service, 3 cases for source-comparison, 2 cases for delegation. |
-| Safety Net for modified files | ✅ | Existing 48 tests in `vba-sync-legacy-service.test.ts` passed, serving as a safety net during refactoring. |
+| All tasks have tests | ✅ | PR4 tasks map to test files. |
+| RED confirmed (tests exist) | ✅ | Checked test files exist: `install-utils.test.ts`. |
+| GREEN confirmed (tests pass) | ✅ | All tests in `install-utils.test.ts` pass at runtime. |
+| Triangulation adequate | ✅ | 4 helper tests, 1 tracer. |
+| Safety Net for modified files | ✅ | Existing 46 tests in `install.test.ts` and `uninstall.test.ts` passed. |
 
 **TDD Compliance**: 6/6 checks passed.
 
@@ -42,67 +42,65 @@
 ### Test Layer Distribution
 | Layer | Tests | Files | Tools |
 |-------|-------|-------|-------|
-| Unit | 9 | 2 | Vitest |
-| Integration | 50 | 1 | Vitest |
+| Unit | 49 | 2 | Vitest |
+| Static Analysis | 2 | 1 | Vitest (dependency graph tracer) |
 | E2E | 0 | 0 | Not used |
-| **Total** | **59** | **3** | |
+| **Total** | **51** | **3** | |
 
 ---
 
 ### Changed File Coverage
 | File | Line % | Branch % | Uncovered Lines | Rating |
 |------|--------|----------|-----------------|--------|
-| `src/core/services/vba-form-service.ts` | 94.82% | 50.76% | L48, L157, L171-172 | ⚠️ Acceptable |
-| `src/core/services/vba-source-comparison.ts` | 94.29% | 67.69% | L219-220, L258-259 | ⚠️ Acceptable |
-| `src/core/services/vba-sync-legacy-service.ts` | 94.76% | 78.97% | L646-647, L656-659 | ⚠️ Acceptable |
+| `src/cli/commands/install-utils.ts` | 93.17% | 77.46% | L109-111, L134-135, L161 | ✅ Excellent |
+| `src/cli/commands/uninstall.ts` | 100.00% | 96.66% | L60 | ✅ Perfect |
+| `src/cli/commands/install.ts` | 79.05% | 77.03% | Various | ✅ Good (mostly unchanged logic) |
 
-**Average changed file coverage**: 94.62%
+**Average changed file coverage**: 90.74%
 
 ---
 
 ### Assertion Quality
 | File | Line | Assertion | Issue | Severity |
 |------|------|-----------|-------|----------|
-| `test/core/services/vba-sync-legacy-service.test.ts` | 1553-1555 | `expect(...).toBeDefined()` | Type-only presence assertions alone | WARNING |
+| `test/cli/install-utils.test.ts` | 89-128 | `expect(resolved).not.toBe(...)` inside `for` loop | Ghost loop risk if `imports` is empty (no guard asserting `imports.length > 0`) | WARNING |
 
-**Assertion quality**: 0 CRITICAL, 1 WARNING (presence check for compatibility re-exports).
-All other assertions check real behavior.
+**Assertion quality**: 0 CRITICAL, 1 WARNING.
 
 ---
 
 ### Quality Metrics
-**Linter**: ❌ 3 errors (Type errors in mock returns within test files when type-checking tests)
-**Type Checker**: ✅ No errors (Source code compiles successfully via `pnpm build`)
+- **Linter**: ❌ 1 error (TypeScript check error in test code)
+- **Type Checker**: ✅ No errors (Source code compiles successfully via `pnpm build`)
 
 ---
 
 ### Spec Compliance Matrix
 | Requirement | Scenario | Test / Evidence | Result |
 |-------------|----------|-----------------|--------|
-| VBA Form Service Module | Form operations importable | `test/core/services/vba-form-service.test.ts` | ✅ COMPLIANT |
-| VBA Form Service Module | Not duplicated in legacy service | `src/core/services/vba-sync-legacy-service.ts` delegates to form service | ✅ COMPLIANT |
-| VBA Source Comparison Module | Comparison operations importable | `test/core/services/vba-source-comparison.test.ts` | ✅ COMPLIANT |
-| VBA Sync Legacy Service Public API Preserved | Public API unchanged | `test/core/services/vba-sync-legacy-service.test.ts` verifies re-exports & backward compatibility | ✅ COMPLIANT |
-| VBA Sync Legacy Service Public API Preserved | Delegation to sub-modules | `test/core/services/vba-sync-legacy-service.test.ts` (delegation spy) | ✅ COMPLIANT |
+| Shared Install Utilities Module | Helpers importable | `test/cli/install-utils.test.ts` (unit tests for each helper) | ✅ COMPLIANT |
+| Uninstall Decoupling | No install.ts import in uninstall | `test/cli/install-utils.test.ts` (static-analysis check) | ✅ COMPLIANT |
+| Uninstall Decoupling | Uninstall functions correctly after decoupling | `test/cli/uninstall.test.ts` passes at runtime | ✅ COMPLIANT |
+| Install Migration | install.ts delegates helper calls | `src/cli/commands/install.ts` imports and delegates | ✅ COMPLIANT |
 
-**Compliance summary**: 5/5 scenarios compliant.
+**Compliance summary**: 4/4 scenarios compliant.
 
 ---
 
 ### Correctness (Static Evidence)
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Form-related operations relocated | ✅ Implemented | Operations relocated to `vba-form-service.ts` in class `VbaFormService`. |
-| Source comparison operations relocated | ✅ Implemented | Relocated as free functions in `vba-source-comparison.ts`. |
-| Coordinator instantiates and delegates | ✅ Implemented | `VbaSyncLegacyService` instantiates `VbaFormService` and delegates form and verification tasks. |
-| Backwards compatibility re-exports exist | ✅ Implemented | All relocated symbols re-exported from `vba-sync-legacy-service.ts`. |
+| FS/process helpers moved | ✅ Implemented | Relocated to `src/cli/commands/install-utils.ts`. |
+| `uninstall.ts` decoupled | ✅ Implemented | Imports only from `./install-utils.js` and `./types.js`. |
+| Backward-compatibility re-exports | ✅ Implemented | `fileExists`, `removeDysflowMcpConfig`, `MAX_SUBPROCESS_BUFFER_BYTES`, `ALL_AGENTS`, `resolveAgentConfigPaths` re-exported in `install.ts`. |
+| Static-analysis dependency graph | ✅ Implemented | Checked by static check in `install-utils.test.ts`. |
 
 ---
 
 ### Coherence (Design)
 | Decision | Followed? | Notes |
 |----------|-----------|-------|
-| Decision 9: VBA service split | ✅ Yes | Coordinator instantiates `VbaFormService` and imports comparison free functions. Public API is stable and backwards-compatible re-exports are provided. |
+| Decision 10: install/uninstall helper extraction | ✅ Yes | Relocated filesystem/process helpers to `install-utils.ts` and decoupled `uninstall.ts` and `install.ts` imports. |
 
 ---
 
@@ -112,11 +110,13 @@ All other assertions check real behavior.
 - None.
 
 #### WARNING
-- **TypeScript compilation errors in test files**: When running `pnpm lint` (which runs `tsc` over test files), there are 3 type errors in `vba-source-comparison.test.ts` and `vba-sync-legacy-service.test.ts` because test mocks return objects lacking `diagnostics` and `durationMs` from `OperationResult`. While these do not prevent the Vitest runtime execution (which executes and passes successfully), they break strict TypeScript checks for tests.
-- **Type-only assertion**: `vba-sync-legacy-service.test.ts` contains `toBeDefined()` presence assertions to check that `VbaFormService`, `compareSourceAgainstBinary`, and `planReconcileBinary` are re-exported. This is acceptable here because its explicit goal is to verify the existence of exports for backwards compatibility.
+- **TypeScript compilation error in test file**: `test/cli/uninstall.test.ts` imports `getSystemMarkerPath` from `../../src/cli/commands/install`. However, `install.ts` no longer exports `getSystemMarkerPath` since it was moved to `install-utils.ts` and is not part of the backward-compatibility re-exports list in `install.ts`. This causes `pnpm lint` to fail with:
+  `test/cli/uninstall.test.ts(9,2): error TS2459: Module '"../../src/cli/commands/install"' declares 'getSystemMarkerPath' locally, but it is not exported.`
+  *Correction needed*: The import in `test/cli/uninstall.test.ts` should be updated to pull `getSystemMarkerPath` from `./install-utils.js` (or `./install-utils` in TS) instead of `./install`.
+- **Potential Ghost Loop in Static Analysis Test**: `test/cli/install-utils.test.ts` parses imports in `uninstall.ts` and asserts on them in a loop without first asserting that `imports.length > 0`. If regex parsing fails to match any imports, the test will pass silently without executing any assertions.
 
 #### SUGGESTION
-- **Mock Return Completeness**: We suggest updating the test files to return full `OperationResult` shapes in mocks (e.g. adding `diagnostics: [], durationMs: 0` to mocked resolved values) to resolve the typescript check errors.
+- **Clean up uninstall test imports**: Update the import statement in `test/cli/uninstall.test.ts` to reference `install-utils` instead of `install` for `resolveAgentConfigPaths`, `getSystemMarkerPath`, and `fileExists`.
 
 ---
 

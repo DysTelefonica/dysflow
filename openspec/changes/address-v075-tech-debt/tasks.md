@@ -121,15 +121,15 @@ Chain strategy: stacked-to-main
 
 ### Phase 4.1: Shared Install Utilities Module [RED → GREEN]
 
-- [ ] 4.1.1 **[RED]** Create `test/cli/install-utils.test.ts` — per-helper unit tests against temp dir (`mkdtemp`): `fileExists` returns false for missing path; `readJson`/`writeJson` round-trip; `ensureObject` coerces non-objects; `runCommand`/`runCommandOutput` execute a real process. _Spec: "Helpers importable from install-utils" scenario._
-- [ ] 4.1.2 **[GREEN]** Create `src/cli/commands/install-utils.ts` — export `fileExists`, `readJson`, `writeJson`, `ensureObject`, `runCommand`, `runCommandOutput`. Move implementations from `install.ts` (do not duplicate — delete from source).
-- [ ] 4.1.3 **[VERIFY]** Run `pnpm test` — all tests green.
+- [x] 4.1.1 **[RED]** Create `test/cli/install-utils.test.ts` — per-helper unit tests against temp dir (`mkdtemp`): `fileExists` returns false for missing path; `readJson`/`writeJson` round-trip; `ensureObject` coerces non-objects; `runCommand`/`runCommandOutput` execute a real process. _Spec: "Helpers importable from install-utils" scenario._
+- [x] 4.1.2 **[GREEN]** Create `src/cli/commands/install-utils.ts` — export `fileExists`, `readJson`, `writeJson`, `ensureObject`, `runCommand`, `runCommandOutput`. Move implementations from `install.ts` (do not duplicate — delete from source).
+- [x] 4.1.3 **[VERIFY]** Run `pnpm test` — all tests green.
 
 ### Phase 4.2: install.ts and uninstall.ts Migration [RED → GREEN]
 
-- [ ] 4.2.1 **[RED]** Add static-analysis test in `test/cli/install-utils.test.ts` asserting that importing from `uninstall.ts` does NOT transitively reference `install.ts` (traverse import graph via a regex on the compiled output or `import.meta.resolve` approach). _Spec: "No install.ts import in uninstall" scenario._
-- [ ] 4.2.2 **[GREEN]** In `src/cli/commands/install.ts`: import `fileExists`, `readJson`, `writeJson`, `ensureObject`, `runCommand`, `runCommandOutput` from `./install-utils`. Keep temporary `fileExists` re-export for back-compat. In `src/cli/commands/uninstall.ts`: import shared helpers from `./install-utils` — remove any import from `install.ts`.
-- [ ] 4.2.3 **[VERIFY]** Run `pnpm test` — all tests green. Commit PR4.
+- [x] 4.2.1 **[RED]** Add static-analysis test in `test/cli/install-utils.test.ts` asserting that importing from `uninstall.ts` does NOT transitively reference `install.ts` (traverse import graph via a regex on the compiled output or `import.meta.resolve` approach). _Spec: "No install.ts import in uninstall" scenario._
+- [x] 4.2.2 **[GREEN]** In `src/cli/commands/install.ts`: import `fileExists`, `readJson`, `writeJson`, `ensureObject`, `runCommand`, `runCommandOutput` from `./install-utils`. Keep temporary `fileExists` re-export for back-compat. In `src/cli/commands/uninstall.ts`: import shared helpers from `./install-utils` — remove any import from `install.ts`.
+- [x] 4.2.3 **[VERIFY]** Run `pnpm test` — all tests green. Commit PR4.
 
 ---
 

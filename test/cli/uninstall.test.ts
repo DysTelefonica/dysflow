@@ -8,7 +8,7 @@ import {
 	resolveAgentConfigPaths,
 	getSystemMarkerPath,
 	fileExists,
-} from "../../src/cli/commands/install";
+} from "../../src/cli/commands/install-utils";
 
 describe("uninstall arg parsing", () => {
 	const UNINSTALL_USAGE = "Usage: dysflow uninstall [--runtime-dir <dir>]";

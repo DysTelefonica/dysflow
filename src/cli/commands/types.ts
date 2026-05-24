@@ -2,7 +2,7 @@ import type { OperationResult } from "../../core/contracts/index.js";
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { StartHttpAdapter } from "./serve.js";
-import type { AgentName } from "./install.js";
+import type { AgentName } from "./install-utils.js";
 
 export type CliResult = {
 	exitCode: number;
