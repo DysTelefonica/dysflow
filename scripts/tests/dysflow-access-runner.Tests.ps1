@@ -122,9 +122,94 @@ function script:Invoke-SeedFixtureDryRun {
     return $statements
 }
 
+# Open-DatabaseWithPassword: testable stub (avoids COM; validates routing logic)
+# The stub captures the call args so we can assert which overload was chosen.
+$script:LastOpenCall = $null
+
+function script:New-FakeDbEngine {
+    param([string] $Mode = "ok")
+    $engine = [PSCustomObject]@{ Mode = $Mode; Calls = [System.Collections.ArrayList]::new() }
+    $engine | Add-Member -MemberType ScriptMethod -Name "OpenDatabase" -Value {
+        param($Path, $Exclusive, $ReadOnly, $Connect = $null)
+        $entry = [ordered]@{ path = $Path; exclusive = $Exclusive; readOnly = $ReadOnly; connect = $Connect }
+        $this.Calls.Add($entry) | Out-Null
+        return [PSCustomObject]@{ Name = $Path; Closed = $false }
+    }
+    return $engine
+}
+
+function script:Open-DatabaseWithPassword {
+    param(
+        [Parameter(Mandatory = $true)] $DbEngine,
+        [Parameter(Mandatory = $true)] [string] $DatabasePath,
+        [Parameter(Mandatory = $false)] [bool] $Exclusive = $false,
+        [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false,
+        [Parameter(Mandatory = $false)] [string] $Password = ""
+    )
+    if ([string]::IsNullOrWhiteSpace($Password)) {
+        return $DbEngine.OpenDatabase($DatabasePath, $Exclusive, $ReadOnly)
+    }
+    return $DbEngine.OpenDatabase($DatabasePath, $Exclusive, $ReadOnly, ";PWD=$Password")
+}
+
 # ===========================================================================
 # TESTS
 # ===========================================================================
+
+Describe "Open-DatabaseWithPassword" {
+
+    Context "no password (blank / null / whitespace)" {
+        It "calls OpenDatabase without connect string when password is empty string" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -Password ""
+            $engine.Calls.Count | Should -Be 1
+            $engine.Calls[0].connect | Should -BeNullOrEmpty
+        }
+
+        It "calls OpenDatabase without connect string when password is whitespace" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -Password "   "
+            $engine.Calls.Count | Should -Be 1
+            $engine.Calls[0].connect | Should -BeNullOrEmpty
+        }
+
+        It "passes ReadOnly flag correctly when no password" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -ReadOnly $true -Password ""
+            $engine.Calls[0].readOnly | Should -Be $true
+        }
+    }
+
+    Context "with password" {
+        It "appends ;PWD=<password> to connect string" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -Password "secret"
+            $engine.Calls.Count | Should -Be 1
+            $engine.Calls[0].connect | Should -Be ";PWD=secret"
+        }
+
+        It "passes ReadOnly flag correctly when password is set" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -ReadOnly $true -Password "pw"
+            $engine.Calls[0].readOnly | Should -Be $true
+            $engine.Calls[0].connect | Should -Be ";PWD=pw"
+        }
+
+        It "passes Exclusive flag correctly when password is set" {
+            $engine = New-FakeDbEngine
+            Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -Exclusive $true -Password "pw"
+            $engine.Calls[0].exclusive | Should -Be $true
+            $engine.Calls[0].connect | Should -Be ";PWD=pw"
+        }
+
+        It "returns the database object from the engine" {
+            $engine = New-FakeDbEngine
+            $result = Open-DatabaseWithPassword -DbEngine $engine -DatabasePath "C:\db.accdb" -Password "pw"
+            $result | Should -Not -BeNullOrEmpty
+            $result.Name | Should -Be "C:\db.accdb"
+        }
+    }
+}
 
 Describe "Resolve-SandboxedPath" {
     BeforeAll {
