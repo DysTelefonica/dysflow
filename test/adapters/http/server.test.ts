@@ -506,8 +506,10 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(200);
     expect(cleanupCalls).toHaveLength(1);
-    expect(cleanupCalls[0]!.operationId).toBe("op-123");
-    expect(cleanupCalls[0]!.accessPath).toBe("C:/db/front.accdb");
+    expect(cleanupCalls[0]).toMatchObject({
+      operationId: "op-123",
+      accessPath: "C:/db/front.accdb",
+    });
   });
 
   it("POST /access/cleanup returns SERVICE_UNAVAILABLE 500 when cleanupService is absent", async () => {
