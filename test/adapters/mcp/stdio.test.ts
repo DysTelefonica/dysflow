@@ -546,9 +546,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     await started;
     output.end();
 
-    await expect(collectOutput(output)).resolves.toEqual([
-      expect.objectContaining({ id: 14 }),
-    ]);
+    await expect(collectOutput(output)).resolves.toEqual([expect.objectContaining({ id: 14 })]);
   });
 
   // ─────────────────────────────────────────────────────────────
@@ -585,8 +583,8 @@ describe("JsonLineMcpStdioRuntime", () => {
       name: "dysflow.progress_tool",
       description: "Tool that sends progress",
       handler: async (_args, ctx) => {
-        ctx.sendProgress?.(1, 3, "step one");
-        ctx.sendProgress?.(2, 3, "step two");
+        ctx?.sendProgress?.(1, 3, "step one");
+        ctx?.sendProgress?.(2, 3, "step two");
         return { content: [{ type: "text", text: "done" }], isError: false };
       },
     });
@@ -755,7 +753,7 @@ describe("JsonLineMcpStdioRuntime", () => {
 
     const adapterDone = startMcpStdioAdapter(
       { accessDbPath: "fake.accdb" } as never,
-      runtime,
+      runtime as any,
     );
     writeMessage(input, { jsonrpc: "2.0", id: 31, method: "initialize", params: {} });
     input.end();

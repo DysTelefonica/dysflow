@@ -83,6 +83,7 @@ describe("dysflow-access-runner.ps1", () => {
 
   it("does not contain invalid PowerShell variable references followed by colons inside double-quoted strings", () => {
     expect(script).not.toContain("Delete $linkName:");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting literal PowerShell variable reference syntax
     expect(script).toContain("Delete ${linkName}:");
   });
 });

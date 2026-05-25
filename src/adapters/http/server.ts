@@ -7,17 +7,13 @@ import {
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
-import {
-  type AccessCleanupResult,
-} from "../../core/operations/access-operation-cleanup.js";
-import {
-  type AccessOperationRecord,
-  type AccessOperationRegistry,
+import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
+import type {
+  AccessOperationRecord,
+  AccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import { getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
-import {
-  type AccessDiagnosticsResult,
-} from "../../core/services/diagnostics-service.js";
+import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { createHttpServices } from "./http-services-factory.js";
@@ -128,7 +124,9 @@ async function routeRequest(
     if (cleanupService === undefined) {
       sendOperationResult(
         response,
-        failureResult(createDysflowError("SERVICE_UNAVAILABLE", "Cleanup service is not configured.")),
+        failureResult(
+          createDysflowError("SERVICE_UNAVAILABLE", "Cleanup service is not configured."),
+        ),
       );
       return;
     }

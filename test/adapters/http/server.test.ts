@@ -482,7 +482,11 @@ describe("Dysflow HTTP adapter", () => {
     const fakeCleanupService = {
       cleanup: async (request: { operationId: string; accessPath: string; force?: boolean }) => {
         cleanupCalls.push(request);
-        return successResult({ cleaned: true, operationId: request.operationId });
+        return successResult({
+          status: "cleaned" as const,
+          accessPid: 9999,
+          operationId: request.operationId,
+        });
       },
     };
     const services = createFakeServices({ cleanupService: fakeCleanupService });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LegacyVbaSyncPort } from "../../../src/core/contracts/index";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
+import type { LegacyVbaSyncPort } from "../../../src/core/contracts/index";
 
 describe("LegacyVbaSyncPort contract", () => {
   it("a mock conforming to LegacyVbaSyncPort is assignable to DysflowMcpServices.legacyToolService", () => {
