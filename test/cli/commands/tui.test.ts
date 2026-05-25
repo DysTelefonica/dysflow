@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleTuiCommand } from "../../../src/cli/commands/tui";
-import { renderDashboard } from "../../../src/cli/tui/render";
 
 vi.mock("../../../src/cli/commands/install", () => ({
-  applyIntegrationSelection: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "MOCKED_APPLY", stderr: "" }),
-  handleInstallCommand: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "MOCKED_INSTALL", stderr: "" }),
+  applyIntegrationSelection: vi
+    .fn()
+    .mockResolvedValue({ exitCode: 0, stdout: "MOCKED_APPLY", stderr: "" }),
+  handleInstallCommand: vi
+    .fn()
+    .mockResolvedValue({ exitCode: 0, stdout: "MOCKED_INSTALL", stderr: "" }),
   ALL_AGENTS: ["codex", "opencode", "claude", "pi"],
 }));
 
