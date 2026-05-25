@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { failureResult } from "../../../src/core/contracts/index";
 import { translateCoreResultToMcpContent } from "../../../src/adapters/mcp/tools";
+import { failureResult } from "../../../src/core/contracts/index";
 
 function sanitize(message: string): string {
-  const result = translateCoreResultToMcpContent(failureResult({
-    code: "TEST_ERROR",
-    message,
-    retryable: false,
-  }));
+  const result = translateCoreResultToMcpContent(
+    failureResult({
+      code: "TEST_ERROR",
+      message,
+      retryable: false,
+    }),
+  );
   return result.content[0]?.text ?? "";
 }
 
@@ -27,7 +29,9 @@ describe("sanitizeErrorMessage", () => {
   });
 
   it("keeps non-path error text and URLs readable", () => {
-    expect(sanitize("error 42 expected 'foo' see https://example.test/docs")).toBe("TEST_ERROR: error 42 expected 'foo' see https://example.test/docs");
+    expect(sanitize("error 42 expected 'foo' see https://example.test/docs")).toBe(
+      "TEST_ERROR: error 42 expected 'foo' see https://example.test/docs",
+    );
   });
 
   it("completes within 50ms on adversarial UNC-like string with many backslashes (no catastrophic backtracking)", () => {

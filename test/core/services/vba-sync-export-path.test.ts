@@ -1,7 +1,10 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { VbaSyncLegacyService, type VbaManagerExecutionRequest } from "../../../src/core/services/vba-sync-legacy-service.js";
+import {
+  type VbaManagerExecutionRequest,
+  VbaSyncLegacyService,
+} from "../../../src/core/services/vba-sync-legacy-service.js";
 
 // Issue #185: export_modules must respect exportPath parameter
 describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", () => {

@@ -1,11 +1,31 @@
-import { createDiagnostic, createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
-import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import { createAccessOperationId, InMemoryAccessOperationRegistry, toOperationMetadata, type AccessOperationRegistry, type AccessOperationRecord } from "../operations/access-operation-registry.js";
-import { AccessOperationPreflightCleanupService, diagnosticsFromPreflightCleanup, type AccessOperationPreflightCleanup } from "../operations/access-operation-preflight.js";
-import { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } from "../operations/windows-processes.js";
-import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
+import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
+import {
+  createDiagnostic,
+  createDysflowError,
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../contracts/index.js";
+import {
+  type AccessOperationPreflightCleanup,
+  AccessOperationPreflightCleanupService,
+  diagnosticsFromPreflightCleanup,
+} from "../operations/access-operation-preflight.js";
+import {
+  type AccessOperationRecord,
+  type AccessOperationRegistry,
+  createAccessOperationId,
+  InMemoryAccessOperationRegistry,
+  toOperationMetadata,
+} from "../operations/access-operation-registry.js";
+import {
+  WindowsMsAccessProcessInspector,
+  WindowsMsAccessProcessScanner,
+  WindowsProcessKiller,
+} from "../operations/windows-processes.js";
 import { sanitizeSecrets } from "../utils/index.js";
+import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
@@ -19,7 +39,11 @@ export type AccessRunnerOperation =
   | { kind: "query"; request: AccessQueryRequest }
   | { kind: "diagnostics"; request: AccessDiagnosticsRequest };
 
-export type AccessProcessOwnership = { pid: number; processStartTime: string; commandLine?: string };
+export type AccessProcessOwnership = {
+  pid: number;
+  processStartTime: string;
+  commandLine?: string;
+};
 export type PowerShellExecutionResult = {
   exitCode: number | null;
   stdout: string;
@@ -36,10 +60,24 @@ export type PowerShellExecutorOptions = {
   onAccessProcessCaptured(process: AccessProcessOwnership): Promise<void>;
   onProgress?: AccessRunnerProgressCallback;
 };
-export type PowerShellExecutor = (command: string, args: readonly string[], options: PowerShellExecutorOptions) => Promise<PowerShellExecutionResult>;
-export type AccessRunnerProgressCallback = (percent: number, total?: number, message?: string) => void;
+export type PowerShellExecutor = (
+  command: string,
+  args: readonly string[],
+  options: PowerShellExecutorOptions,
+) => Promise<PowerShellExecutionResult>;
+export type AccessRunnerProgressCallback = (
+  percent: number,
+  total?: number,
+  message?: string,
+) => void;
 export type AccessRunnerRunOptions = { onProgress?: AccessRunnerProgressCallback };
-export type AccessRunner = { run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig, options?: AccessRunnerRunOptions): Promise<OperationResult<TData>> };
+export type AccessRunner = {
+  run<TData = unknown>(
+    operation: AccessRunnerOperation,
+    config?: DysflowConfig,
+    options?: AccessRunnerRunOptions,
+  ): Promise<OperationResult<TData>>;
+};
 export type AccessPowerShellRunnerOptions = {
   executor?: PowerShellExecutor;
   scriptPath?: string;
@@ -67,20 +105,31 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.executor = options.executor ?? spawnPowerShell;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
     this.operationRegistry = options.operationRegistry ?? defaultRegistry;
-    this.preflightCleanup = options.preflightCleanup ?? new AccessOperationPreflightCleanupService({
-      registry: this.operationRegistry,
-      processInspector: new WindowsMsAccessProcessInspector(),
-      processKiller: new WindowsProcessKiller(),
-      processScanner: new WindowsMsAccessProcessScanner(),
-      clock: options.clock,
-    });
+    this.preflightCleanup =
+      options.preflightCleanup ??
+      new AccessOperationPreflightCleanupService({
+        registry: this.operationRegistry,
+        processInspector: new WindowsMsAccessProcessInspector(),
+        processKiller: new WindowsProcessKiller(),
+        processScanner: new WindowsMsAccessProcessScanner(),
+        clock: options.clock,
+      });
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
   }
 
-  async run<TData = unknown>(operation: AccessRunnerOperation, config?: DysflowConfig, options: AccessRunnerRunOptions = {}): Promise<OperationResult<TData>> {
+  async run<TData = unknown>(
+    operation: AccessRunnerOperation,
+    config?: DysflowConfig,
+    options: AccessRunnerRunOptions = {},
+  ): Promise<OperationResult<TData>> {
     if (config === undefined) {
-      return failureResult(createDysflowError("CONFIG_MISSING_ACCESS_PATH", "Access runner requires resolved configuration."));
+      return failureResult(
+        createDysflowError(
+          "CONFIG_MISSING_ACCESS_PATH",
+          "Access runner requires resolved configuration.",
+        ),
+      );
     }
 
     let finalOperation = operation;
@@ -110,55 +159,85 @@ export class AccessPowerShellRunner implements AccessRunner {
     });
 
     const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
-    const execution = await this.executor(POWERSHELL_EXE, buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId), {
-      timeoutMs: config.timeoutMs,
-      operationId,
-      accessPath: config.accessDbPath,
-      env: buildPowerShellEnvironment(config, finalOperation),
-      onProgress: options.onProgress,
-      onAccessProcessCaptured: async (process) => {
-        try {
-          record = (await this.operationRegistry.update(operationId, {
-            accessPid: process.pid,
-            processStartTime: process.processStartTime,
-            commandLine: process.commandLine,
-            status: "running",
-            updatedAt: this.clock(),
-          })) ?? record;
-        } catch (error) {
-          captureDiagnostics.push(createDiagnostic("error", "access.pid", `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`));
-        }
+    const execution = await this.executor(
+      POWERSHELL_EXE,
+      buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
+      {
+        timeoutMs: config.timeoutMs,
+        operationId,
+        accessPath: config.accessDbPath,
+        env: buildPowerShellEnvironment(config, finalOperation),
+        onProgress: options.onProgress,
+        onAccessProcessCaptured: async (process) => {
+          try {
+            record =
+              (await this.operationRegistry.update(operationId, {
+                accessPid: process.pid,
+                processStartTime: process.processStartTime,
+                commandLine: process.commandLine,
+                status: "running",
+                updatedAt: this.clock(),
+              })) ?? record;
+          } catch (error) {
+            captureDiagnostics.push(
+              createDiagnostic(
+                "error",
+                "access.pid",
+                `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            );
+          }
+        },
       },
-    });
+    );
     let dynamicBackendPassword = config.backendPassword;
     if (finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined) {
       dynamicBackendPassword = finalOperation.request.backendPassword;
     }
-    const secrets = [config.accessPassword, dynamicBackendPassword].filter((secret): secret is string => Boolean(secret));
+    const secrets = [config.accessPassword, dynamicBackendPassword].filter(
+      (secret): secret is string => Boolean(secret),
+    );
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
 
     if (execution.timedOut) {
       return failureResult(
-        createDysflowError("RUNNER_TIMEOUT", `Access operation timed out after ${config.timeoutMs}ms.`, { retryable: true }),
+        createDysflowError(
+          "RUNNER_TIMEOUT",
+          `Access operation timed out after ${config.timeoutMs}ms.`,
+          { retryable: true },
+        ),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
       );
     }
 
     if (execution.exitCode !== 0) {
-      const safeOutput = sanitizeSecrets(execution.stderr || execution.stdout || "No runner output.", secrets);
+      const safeOutput = sanitizeSecrets(
+        execution.stderr || execution.stdout || "No runner output.",
+        secrets,
+      );
       return failureResult(
-        createDysflowError("RUNNER_FAILED", `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`),
+        createDysflowError(
+          "RUNNER_FAILED",
+          `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+        ),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
       );
     }
 
     try {
-      return successResult(parseRunnerData<TData>(execution.stdout, secrets), { diagnostics, durationMs: execution.durationMs, operation: operationMetadata });
+      return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
+        diagnostics,
+        durationMs: execution.durationMs,
+        operation: operationMetadata,
+      });
     } catch {
       return failureResult(
-        createDysflowError("RUNNER_INVALID_JSON", "PowerShell runner produced invalid JSON output."),
+        createDysflowError(
+          "RUNNER_INVALID_JSON",
+          "PowerShell runner produced invalid JSON output.",
+        ),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
       );
     }
@@ -175,41 +254,75 @@ export class AccessPowerShellRunner implements AccessRunner {
         cleaned: [],
         killed: [],
         orphanedKilled: [],
-        errors: [{ operationId: "preflight", message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}` }],
+        errors: [
+          {
+            operationId: "preflight",
+            message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
       };
     }
   }
 
-  private async updateOperationFromExecution(record: AccessOperationRecord, execution: PowerShellExecutionResult): Promise<AccessOperationRecord> {
-    const status = execution.accessProcess === undefined && record.accessPid === null
-      ? "pid_unknown"
-      : execution.timedOut
-        ? "timed_out"
-        : execution.exitCode === 0
-          ? "completed"
-          : "failed";
-    return (await this.operationRegistry.update(record.operationId, {
-      accessPid: execution.accessProcess?.pid ?? record.accessPid,
-      processStartTime: execution.accessProcess?.processStartTime ?? record.processStartTime,
-      commandLine: execution.accessProcess?.commandLine ?? record.commandLine,
-      status,
-      updatedAt: this.clock(),
-    })) ?? record;
+  private async updateOperationFromExecution(
+    record: AccessOperationRecord,
+    execution: PowerShellExecutionResult,
+  ): Promise<AccessOperationRecord> {
+    const status =
+      execution.accessProcess === undefined && record.accessPid === null
+        ? "pid_unknown"
+        : execution.timedOut
+          ? "timed_out"
+          : execution.exitCode === 0
+            ? "completed"
+            : "failed";
+    return (
+      (await this.operationRegistry.update(record.operationId, {
+        accessPid: execution.accessProcess?.pid ?? record.accessPid,
+        processStartTime: execution.accessProcess?.processStartTime ?? record.processStartTime,
+        commandLine: execution.accessProcess?.commandLine ?? record.commandLine,
+        status,
+        updatedAt: this.clock(),
+      })) ?? record
+    );
   }
 }
 
-function buildPowerShellArguments(scriptPath: string, operation: AccessRunnerOperation, config: DysflowConfig, operationId: string): string[] {
-  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-AccessDbPath", config.accessDbPath, "-Operation", operation.kind, "-PayloadJson", JSON.stringify(operation.request), "-OperationId", operationId];
+function buildPowerShellArguments(
+  scriptPath: string,
+  operation: AccessRunnerOperation,
+  config: DysflowConfig,
+  operationId: string,
+): string[] {
+  const args = [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    scriptPath,
+    "-AccessDbPath",
+    config.accessDbPath,
+    "-Operation",
+    operation.kind,
+    "-PayloadJson",
+    JSON.stringify(operation.request),
+    "-OperationId",
+    operationId,
+  ];
   return args;
 }
 
-function buildPowerShellEnvironment(config: DysflowConfig, operation?: AccessRunnerOperation): Record<string, string | undefined> | undefined {
+function buildPowerShellEnvironment(
+  config: DysflowConfig,
+  operation?: AccessRunnerOperation,
+): Record<string, string | undefined> | undefined {
   const env: Record<string, string> = {};
   if (config.accessPassword !== undefined) {
     env.DYSFLOW_ACCESS_PASSWORD = config.accessPassword;
     env.ACCESS_VBA_PASSWORD = config.accessPassword;
   }
-  
+
   let backendPassword = config.backendPassword;
   if (operation?.kind === "query" && operation.request.backendPassword !== undefined) {
     backendPassword = operation.request.backendPassword;
@@ -221,13 +334,25 @@ function buildPowerShellEnvironment(config: DysflowConfig, operation?: AccessRun
   return Object.keys(env).length > 0 ? env : undefined;
 }
 
-function collectDiagnostics(execution: PowerShellExecutionResult, secrets: readonly string[]): Diagnostic[] {
+function collectDiagnostics(
+  execution: PowerShellExecutionResult,
+  secrets: readonly string[],
+): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const safeStdout = sanitizeSecrets(execution.stdout, secrets);
   const safeStderr = sanitizeSecrets(execution.stderr, secrets);
-  if (safeStdout.length > 0 && (execution.exitCode !== 0 || execution.timedOut)) diagnostics.push(createDiagnostic("warning", "powershell.stdout", safeStdout));
-  if (safeStderr.length > 0) diagnostics.push(createDiagnostic("error", "powershell.stderr", safeStderr));
-  if (execution.accessProcess === undefined) diagnostics.push(createDiagnostic("warning", "access.pid", "Access PID could not be determined; automatic cleanup is not safe."));
+  if (safeStdout.length > 0 && (execution.exitCode !== 0 || execution.timedOut))
+    diagnostics.push(createDiagnostic("warning", "powershell.stdout", safeStdout));
+  if (safeStderr.length > 0)
+    diagnostics.push(createDiagnostic("error", "powershell.stderr", safeStderr));
+  if (execution.accessProcess === undefined)
+    diagnostics.push(
+      createDiagnostic(
+        "warning",
+        "access.pid",
+        "Access PID could not be determined; automatic cleanup is not safe.",
+      ),
+    );
   return diagnostics;
 }
 
@@ -237,7 +362,9 @@ function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TDa
   return JSON.parse(safeStdout) as TData;
 }
 
-export function resolveDefaultRunnerScriptPath(env: Record<string, string | undefined> = process.env): string {
+export function resolveDefaultRunnerScriptPath(
+  env: Record<string, string | undefined> = process.env,
+): string {
   const dysflowHome = env.DYSFLOW_HOME;
   if (dysflowHome !== undefined && dysflowHome.trim().length > 0) {
     return `${dysflowHome.replace(/\\$/, "")}/app/scripts/dysflow-access-runner.ps1`;
@@ -259,7 +386,9 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
       for (const line of text.split(/\r?\n/)) {
         if (line.startsWith(ACCESS_PROCESS_MARKER)) {
           try {
-            const parsed = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length)) as AccessProcessOwnership;
+            const parsed = JSON.parse(
+              line.slice(ACCESS_PROCESS_MARKER.length),
+            ) as AccessProcessOwnership;
             captureTasks.push(options.onAccessProcessCaptured(parsed));
           } catch {
             nonMarkerLines.push(line);
@@ -268,7 +397,11 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
         }
         if (line.startsWith(PROGRESS_MARKER)) {
           try {
-            const data = JSON.parse(line.slice(PROGRESS_MARKER.length)) as { percent: number; total?: number; message?: string };
+            const data = JSON.parse(line.slice(PROGRESS_MARKER.length)) as {
+              percent: number;
+              total?: number;
+              message?: string;
+            };
             options.onProgress?.(data.percent, data.total, data.message);
           } catch {
             // swallow malformed progress lines — progress is best-effort telemetry

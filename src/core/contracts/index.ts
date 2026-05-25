@@ -21,8 +21,20 @@ export type DysflowError = {
  * throwing for expected operation failures.
  */
 export type OperationResult<T> =
-  | { ok: true; data: T; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata }
-  | { ok: false; error: DysflowError; diagnostics: Diagnostic[]; durationMs: number; operation?: AccessOperationMetadata };
+  | {
+      ok: true;
+      data: T;
+      diagnostics: Diagnostic[];
+      durationMs: number;
+      operation?: AccessOperationMetadata;
+    }
+  | {
+      ok: false;
+      error: DysflowError;
+      diagnostics: Diagnostic[];
+      durationMs: number;
+      operation?: AccessOperationMetadata;
+    };
 
 export type AccessVbaRequest = {
   moduleName: string;
@@ -30,7 +42,14 @@ export type AccessVbaRequest = {
   arguments?: readonly unknown[];
 };
 
-export type LinkClassification = "alreadyLocal" | "plannedRelink" | "ambiguous" | "unresolved" | "cycle" | "applied" | "removed";
+export type LinkClassification =
+  | "alreadyLocal"
+  | "plannedRelink"
+  | "ambiguous"
+  | "unresolved"
+  | "cycle"
+  | "applied"
+  | "removed";
 
 export type RelinkDirectoryLinkResult = {
   database: string;
@@ -124,7 +143,11 @@ export type AccessQueryRequest = {
   backendPassword?: string;
 };
 
-export function createDiagnostic(level: DiagnosticLevel, source: string, message: string): Diagnostic {
+export function createDiagnostic(
+  level: DiagnosticLevel,
+  source: string,
+  message: string,
+): Diagnostic {
   return { level, source, message };
 }
 
@@ -145,7 +168,11 @@ export function createDysflowError(
  */
 export function successResult<T>(
   data: T,
-  options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
+  options: {
+    diagnostics?: Diagnostic[];
+    durationMs?: number;
+    operation?: AccessOperationMetadata;
+  } = {},
 ): OperationResult<T> {
   return {
     ok: true,
@@ -162,7 +189,11 @@ export function successResult<T>(
  */
 export function failureResult<T = never>(
   error: DysflowError,
-  options: { diagnostics?: Diagnostic[]; durationMs?: number; operation?: AccessOperationMetadata } = {},
+  options: {
+    diagnostics?: Diagnostic[];
+    durationMs?: number;
+    operation?: AccessOperationMetadata;
+  } = {},
 ): OperationResult<T> {
   return {
     ok: false,

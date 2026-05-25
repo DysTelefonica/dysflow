@@ -1,7 +1,12 @@
-import { startDysflowHttpServer, type StartDysflowHttpServerOptions, type StartedDysflowHttpServer } from "../../adapters/http/server.js";
+import {
+  type StartDysflowHttpServerOptions,
+  type StartedDysflowHttpServer,
+  startDysflowHttpServer,
+} from "../../adapters/http/server.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
-export const SERVE_USAGE = "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]";
+export const SERVE_USAGE =
+  "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]";
 
 type ServeOptions = {
   host: string;
@@ -9,7 +14,10 @@ type ServeOptions = {
   writesEnabled: boolean;
 };
 
-export async function handleServeCommand(args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
+export async function handleServeCommand(
+  args: readonly string[],
+  context: CliCommandContext = {},
+): Promise<CliResult> {
   if (args.includes("--help") || args.includes("-h")) {
     return { exitCode: 0, stdout: SERVE_USAGE, stderr: "" };
   }
@@ -33,7 +41,9 @@ export async function handleServeCommand(args: readonly string[], context: CliCo
   }
 }
 
-function parseServeOptions(args: readonly string[]): { ok: true; options: ServeOptions } | { ok: false; message: string } {
+function parseServeOptions(
+  args: readonly string[],
+): { ok: true; options: ServeOptions } | { ok: false; message: string } {
   const options: ServeOptions = { host: "127.0.0.1", port: 17_321, writesEnabled: false };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -70,4 +80,6 @@ function parseServeOptions(args: readonly string[]): { ok: true; options: ServeO
   return { ok: true, options };
 }
 
-export type StartHttpAdapter = (options: StartDysflowHttpServerOptions) => Promise<Omit<StartedDysflowHttpServer, "server">>;
+export type StartHttpAdapter = (
+  options: StartDysflowHttpServerOptions,
+) => Promise<Omit<StartedDysflowHttpServer, "server">>;

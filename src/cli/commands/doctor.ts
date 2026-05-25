@@ -1,12 +1,19 @@
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
-import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
-import { AccessDiagnosticsService, type AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { OperationResult } from "../../core/contracts/index.js";
+import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
+import {
+  type AccessDiagnosticsResult,
+  AccessDiagnosticsService,
+} from "../../core/services/diagnostics-service.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
-export async function handleDoctorCommand(_args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
+export async function handleDoctorCommand(
+  _args: readonly string[],
+  context: CliCommandContext = {},
+): Promise<CliResult> {
   try {
-    const diagnosticsService = context.diagnosticsService ?? await createDiagnosticsService(context);
+    const diagnosticsService =
+      context.diagnosticsService ?? (await createDiagnosticsService(context));
     const result = await diagnosticsService.run({ includeEnvironment: true });
 
     return formatDiagnosticsResult(result);
@@ -16,13 +23,18 @@ export async function handleDoctorCommand(_args: readonly string[], context: Cli
   }
 }
 
-async function createDiagnosticsService(context: CliCommandContext): Promise<AccessDiagnosticsService> {
+async function createDiagnosticsService(
+  context: CliCommandContext,
+): Promise<AccessDiagnosticsService> {
   const configResult = await loadDysflowConfigAsync({ env: context.env, cwd: context.cwd });
   if (!configResult.ok) {
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }
 
-  return new AccessDiagnosticsService({ runner: new AccessPowerShellRunner(), config: configResult.data });
+  return new AccessDiagnosticsService({
+    runner: new AccessPowerShellRunner(),
+    config: configResult.data,
+  });
 }
 
 function formatDiagnosticsResult(result: OperationResult<AccessDiagnosticsResult>): CliResult {
@@ -35,5 +47,3 @@ function formatDiagnosticsResult(result: OperationResult<AccessDiagnosticsResult
     .join("\n");
   return { exitCode: result.data.checks.every((check) => check.ok) ? 0 : 1, stdout, stderr: "" };
 }
-
-

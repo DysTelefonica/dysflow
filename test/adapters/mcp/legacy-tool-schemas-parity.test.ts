@@ -11,8 +11,8 @@ describe("LEGACY_TOOL_SCHEMAS parity (#200)", () => {
   });
 
   it("run_vba, query_sql, and cleanup_access_operation have entries in LEGACY_TOOL_SCHEMAS", () => {
-    expect(LEGACY_TOOL_SCHEMAS["run_vba"]).toBeDefined();
-    expect(LEGACY_TOOL_SCHEMAS["query_sql"]).toBeDefined();
-    expect(LEGACY_TOOL_SCHEMAS["cleanup_access_operation"]).toBeDefined();
+    expect(LEGACY_TOOL_SCHEMAS.run_vba).toBeDefined();
+    expect(LEGACY_TOOL_SCHEMAS.query_sql).toBeDefined();
+    expect(LEGACY_TOOL_SCHEMAS.cleanup_access_operation).toBeDefined();
   });
 });

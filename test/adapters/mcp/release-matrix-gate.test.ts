@@ -1,17 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { LEGACY_DYSFLOW_MCP_TOOL_NAMES, type LegacyDysflowMcpToolName } from "../../../src/adapters/mcp/legacy-tool-inventory";
-import { HIDDEN_STUB_TOOL_NAMES, createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { LEGACY_PARITY_REGISTRY } from "../../../src/adapters/mcp/legacy-parity-registry";
+import {
+  LEGACY_DYSFLOW_MCP_TOOL_NAMES,
+  type LegacyDysflowMcpToolName,
+} from "../../../src/adapters/mcp/legacy-tool-inventory";
+import { createDysflowMcpTools, HIDDEN_STUB_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 class FakeVbaService {
-  async execute() { return successResult({ returnValue: "ok" }); }
+  async execute() {
+    return successResult({ returnValue: "ok" });
+  }
 }
 class FakeQueryService {
-  async execute() { return successResult({ rows: [] }); }
+  async execute() {
+    return successResult({ rows: [] });
+  }
 }
 class FakeDiagnosticsService {
-  async run() { return successResult({ checks: [] }); }
+  async run() {
+    return successResult({ checks: [] });
+  }
 }
 
 describe("MCP Release Matrix Gate & Coverage Report", () => {
@@ -26,8 +35,10 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
   it("documents and validates exact tool counts", () => {
     const legacyCount = LEGACY_DYSFLOW_MCP_TOOL_NAMES.length;
     const stubCount = HIDDEN_STUB_TOOL_NAMES.size;
-    const modernCount = tools.filter(t => !LEGACY_DYSFLOW_MCP_TOOL_NAMES.includes(t.name as LegacyDysflowMcpToolName)).length;
-    const visibleCount = tools.filter(t => !t.hidden).length;
+    const modernCount = tools.filter(
+      (t) => !LEGACY_DYSFLOW_MCP_TOOL_NAMES.includes(t.name as LegacyDysflowMcpToolName),
+    ).length;
+    const visibleCount = tools.filter((t) => !t.hidden).length;
 
     expect(legacyCount).toBe(45);
     expect(stubCount).toBe(2);
@@ -37,17 +48,17 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
   it("verifies split-mode coverage explicitly", () => {
     // Read/Write split mode checks
-    const queryExecute = tools.find(t => t.name === "dysflow_query_execute");
+    const queryExecute = tools.find((t) => t.name === "dysflow_query_execute");
     expect(queryExecute).toBeDefined();
     expect(queryExecute?.inputSchema?.properties?.mode?.enum).toEqual(["read", "write"]);
 
     // Verify read-only legacy sql query
-    const querySql = tools.find(t => t.name === "query_sql");
+    const querySql = tools.find((t) => t.name === "query_sql");
     expect(querySql).toBeDefined();
     expect(querySql?.inputSchema?.properties?.sql).toBeDefined();
 
     // Verify write legacy sql exec
-    const execSql = tools.find(t => t.name === "exec_sql");
+    const execSql = tools.find((t) => t.name === "exec_sql");
     expect(execSql).toBeDefined();
     expect(execSql?.inputSchema?.properties?.dryRun).toBeDefined();
 
@@ -64,18 +75,21 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
       "create_table",
       "drop_table",
       "seed_fixture",
-      "teardown_fixture"
+      "teardown_fixture",
     ];
 
     for (const toolName of dryRunApplyTools) {
-      const tool = tools.find(t => t.name === toolName);
+      const tool = tools.find((t) => t.name === toolName);
       expect(tool, `Tool ${toolName} must be registered and implemented`).toBeDefined();
-      
+
       const properties = tool?.inputSchema?.properties ?? {};
       const hasDryRun = "dryRun" in properties;
       const hasApply = "apply" in properties;
-      
-      expect(hasDryRun || hasApply, `Tool ${toolName} must support split mode (dryRun or apply)`).toBe(true);
+
+      expect(
+        hasDryRun || hasApply,
+        `Tool ${toolName} must support split mode (dryRun or apply)`,
+      ).toBe(true);
     }
   });
 

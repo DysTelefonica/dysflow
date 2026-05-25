@@ -1,14 +1,37 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
-import { createDysflowError, failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest, type OperationResult } from "../../core/contracts/index.js";
-import { AccessPowerShellRunner, getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
-import { AccessOperationCleanupService, type AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
-import { FileAccessOperationRegistry, type AccessOperationRecord, type AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
-import { WindowsMsAccessProcessInspector, WindowsProcessKiller } from "../../core/operations/windows-processes.js";
-import { AccessDiagnosticsService, type AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
-import { AccessQueryService, type AccessQueryResult } from "../../core/services/query-service.js";
-import { AccessVbaService, type AccessVbaResult } from "../../core/services/vba-service.js";
-import { resolveProjectOperationRegistryPath } from "../../core/operations/access-operation-registry.js";
+import {
+  type AccessQueryRequest,
+  type AccessVbaRequest,
+  createDysflowError,
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../../core/contracts/index.js";
+import {
+  type AccessCleanupResult,
+  AccessOperationCleanupService,
+} from "../../core/operations/access-operation-cleanup.js";
+import {
+  type AccessOperationRecord,
+  type AccessOperationRegistry,
+  FileAccessOperationRegistry,
+  resolveProjectOperationRegistryPath,
+} from "../../core/operations/access-operation-registry.js";
+import {
+  WindowsMsAccessProcessInspector,
+  WindowsProcessKiller,
+} from "../../core/operations/windows-processes.js";
+import {
+  AccessPowerShellRunner,
+  getDefaultAccessOperationRegistry,
+} from "../../core/runner/access-runner.js";
+import {
+  type AccessDiagnosticsResult,
+  AccessDiagnosticsService,
+} from "../../core/services/diagnostics-service.js";
+import { type AccessQueryResult, AccessQueryService } from "../../core/services/query-service.js";
+import { type AccessVbaResult, AccessVbaService } from "../../core/services/vba-service.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17_321;
@@ -16,7 +39,9 @@ export const DEFAULT_HTTP_MAX_BODY_BYTES = 1024 * 1024;
 
 export type DysflowHttpServices = {
   diagnosticsService: {
-    run(request?: { includeEnvironment?: boolean }): Promise<OperationResult<AccessDiagnosticsResult>>;
+    run(request?: {
+      includeEnvironment?: boolean;
+    }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
   queryService: {
     execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>>;
@@ -25,7 +50,13 @@ export type DysflowHttpServices = {
     execute(request: AccessVbaRequest): Promise<OperationResult<AccessVbaResult>>;
   };
   operationRegistry?: AccessOperationRegistry;
-  cleanupService?: { cleanup(request: { operationId: string; accessPath: string; force?: boolean }): Promise<OperationResult<AccessCleanupResult>> };
+  cleanupService?: {
+    cleanup(request: {
+      operationId: string;
+      accessPath: string;
+      force?: boolean;
+    }): Promise<OperationResult<AccessCleanupResult>>;
+  };
 };
 
 export type StartDysflowHttpServerOptions = {
@@ -55,7 +86,7 @@ export async function startDysflowHttpServer(
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
-  const services = options.services ?? await createCoreServices(options.env, options.cwd);
+  const services = options.services ?? (await createCoreServices(options.env, options.cwd));
   const server = createServer((request, response) => {
     void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
   });
@@ -79,7 +110,9 @@ async function createCoreServices(
 ): Promise<DysflowHttpServices> {
   const configResult = await loadDysflowConfigAsync({ env, cwd });
   if (!configResult.ok) {
-    process.stderr.write(`[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`);
+    process.stderr.write(
+      `[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`,
+    );
     return createUnavailableHttpServices();
   }
 
@@ -102,7 +135,12 @@ async function createCoreServices(
 
 function createUnavailableHttpServices(): DysflowHttpServices {
   const unavailable = async () =>
-    failureResult(createDysflowError("SERVICE_UNAVAILABLE", "Service is unavailable. Check the server configuration."));
+    failureResult(
+      createDysflowError(
+        "SERVICE_UNAVAILABLE",
+        "Service is unavailable. Check the server configuration.",
+      ),
+    );
   return {
     diagnosticsService: { run: unavailable },
     queryService: { execute: unavailable },
@@ -129,7 +167,10 @@ async function routeRequest(
 
   if (method === "GET" && path === "/access/operations") {
     const registry = context.services.operationRegistry ?? getDefaultAccessOperationRegistry();
-    sendOperationResult(response, successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })));
+    sendOperationResult(
+      response,
+      successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })),
+    );
     return;
   }
 
@@ -139,13 +180,29 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    const cleanupService = context.services.cleanupService ?? new AccessOperationCleanupService({ registry: getDefaultAccessOperationRegistry(), processInspector: new WindowsMsAccessProcessInspector(), processKiller: new WindowsProcessKiller() });
-    sendOperationResult(response, await cleanupService.cleanup({ operationId: String(body.data.operationId ?? ""), accessPath: String(body.data.accessPath ?? ""), force: body.data.force === true }));
+    const cleanupService =
+      context.services.cleanupService ??
+      new AccessOperationCleanupService({
+        registry: getDefaultAccessOperationRegistry(),
+        processInspector: new WindowsMsAccessProcessInspector(),
+        processKiller: new WindowsProcessKiller(),
+      });
+    sendOperationResult(
+      response,
+      await cleanupService.cleanup({
+        operationId: String(body.data.operationId ?? ""),
+        accessPath: String(body.data.accessPath ?? ""),
+        force: body.data.force === true,
+      }),
+    );
     return;
   }
 
   if (method === "GET" && path === "/diagnostics") {
-    sendOperationResult(response, await context.services.diagnosticsService.run({ includeEnvironment: true }));
+    sendOperationResult(
+      response,
+      await context.services.diagnosticsService.run({ includeEnvironment: true }),
+    );
     return;
   }
 
@@ -160,13 +217,19 @@ async function routeRequest(
       sendOperationResult(
         response,
         failureResult(
-          createDysflowError("HTTP_READ_ONLY_SQL_REQUIRED", "The /query/read route only accepts read-only SELECT queries."),
+          createDysflowError(
+            "HTTP_READ_ONLY_SQL_REQUIRED",
+            "The /query/read route only accepts read-only SELECT queries.",
+          ),
         ),
         400,
       );
       return;
     }
-    sendOperationResult(response, await context.services.queryService.execute({ sql, mode: "read" }));
+    sendOperationResult(
+      response,
+      await context.services.queryService.execute({ sql, mode: "read" }),
+    );
     return;
   }
 
@@ -180,7 +243,13 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    sendOperationResult(response, await context.services.queryService.execute({ sql: String(body.data.sql ?? ""), mode: "write" }));
+    sendOperationResult(
+      response,
+      await context.services.queryService.execute({
+        sql: String(body.data.sql ?? ""),
+        mode: "write",
+      }),
+    );
     return;
   }
 
@@ -194,11 +263,18 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    sendOperationResult(response, await context.services.vbaService.execute(toVbaRequest(body.data)));
+    sendOperationResult(
+      response,
+      await context.services.vbaService.execute(toVbaRequest(body.data)),
+    );
     return;
   }
 
-  sendOperationResult(response, failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)), 404);
+  sendOperationResult(
+    response,
+    failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)),
+    404,
+  );
 }
 
 function isReadOnlySql(sql: string): boolean {
@@ -210,18 +286,25 @@ function isReadOnlySql(sql: string): boolean {
     .toLowerCase();
 
   // Step 2: strip string literals so that ; or keywords inside them are invisible
-  const tokenized = withoutComments
-    .replace(/'([^']|'')*'/g, "''")
-    .replace(/"([^"]|"")*"/g, '""');
+  const tokenized = withoutComments.replace(/'([^']|'')*'/g, "''").replace(/"([^"]|"")*"/g, '""');
 
   // Step 3: split on top-level semicolons and filter empty fragments
-  const statements = tokenized.split(";").map((s) => s.trim()).filter((s) => s.length > 0);
+  const statements = tokenized
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
   // Step 4: must be exactly one non-empty statement
   if (statements.length !== 1) return false;
 
   const firstToken = statements[0].match(/^[a-z]+/)?.[0];
-  return firstToken === "select" && !/\binto\b/.test(tokenized) && !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(tokenized);
+  return (
+    firstToken === "select" &&
+    !/\binto\b/.test(tokenized) &&
+    !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(
+      tokenized,
+    )
+  );
 }
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
@@ -235,7 +318,10 @@ function toVbaRequest(body: JsonBody): AccessVbaRequest {
   return request;
 }
 
-async function readJsonBody(request: IncomingMessage, maxBodyBytes: number): Promise<OperationResult<JsonBody>> {
+async function readJsonBody(
+  request: IncomingMessage,
+  maxBodyBytes: number,
+): Promise<OperationResult<JsonBody>> {
   const contentLength = Number(request.headers["content-length"] ?? 0);
   if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
     return bodyTooLarge(maxBodyBytes);
@@ -266,7 +352,12 @@ function normalizeMaxBodyBytes(value: number | undefined): number {
 }
 
 function bodyTooLarge(maxBodyBytes: number): OperationResult<JsonBody> {
-  return failureResult(createDysflowError("HTTP_BODY_TOO_LARGE", `Request body exceeds the ${maxBodyBytes} byte limit.`));
+  return failureResult(
+    createDysflowError(
+      "HTTP_BODY_TOO_LARGE",
+      `Request body exceeds the ${maxBodyBytes} byte limit.`,
+    ),
+  );
 }
 
 function isJsonBody(value: unknown): value is JsonBody {
@@ -290,7 +381,11 @@ function sendWritesDisabled(response: ServerResponse): void {
   );
 }
 
-function sendOperationResult<TData>(response: ServerResponse, result: OperationResult<TData>, failureStatus = 500): void {
+function sendOperationResult<TData>(
+  response: ServerResponse,
+  result: OperationResult<TData>,
+  failureStatus = 500,
+): void {
   sendJson(response, result.ok ? 200 : failureStatus, result);
 }
 

@@ -1,7 +1,16 @@
 import type { Diagnostic } from "../contracts/index.js";
 import { createDiagnostic } from "../contracts/index.js";
-import type { AccessOperationRecord, AccessOperationRegistry, AccessOperationStatus } from "./access-operation-registry.js";
-import type { OsProcessInfo, ProcessInspector, ProcessKiller, ProcessScanner } from "./access-operation-cleanup.js";
+import type {
+  OsProcessInfo,
+  ProcessInspector,
+  ProcessKiller,
+  ProcessScanner,
+} from "./access-operation-cleanup.js";
+import type {
+  AccessOperationRecord,
+  AccessOperationRegistry,
+  AccessOperationStatus,
+} from "./access-operation-registry.js";
 
 export type AccessOperationPreflightCleanupRequest = {
   accessPath: string;
@@ -21,10 +30,16 @@ export type AccessOperationPreflightCleanupResult = {
 };
 
 export type AccessOperationPreflightCleanup = {
-  cleanup(request: AccessOperationPreflightCleanupRequest): Promise<AccessOperationPreflightCleanupResult>;
+  cleanup(
+    request: AccessOperationPreflightCleanupRequest,
+  ): Promise<AccessOperationPreflightCleanupResult>;
 };
 
-const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>(["timed_out", "failed", "cleanup_pending"]);
+const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>([
+  "timed_out",
+  "failed",
+  "cleanup_pending",
+]);
 
 export class AccessOperationPreflightCleanupService implements AccessOperationPreflightCleanup {
   constructor(
@@ -37,13 +52,23 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     },
   ) {}
 
-  async cleanup(request: AccessOperationPreflightCleanupRequest): Promise<AccessOperationPreflightCleanupResult> {
-    const result: AccessOperationPreflightCleanupResult = { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+  async cleanup(
+    request: AccessOperationPreflightCleanupRequest,
+  ): Promise<AccessOperationPreflightCleanupResult> {
+    const result: AccessOperationPreflightCleanupResult = {
+      cleaned: [],
+      killed: [],
+      orphanedKilled: [],
+      errors: [],
+    };
     let records: AccessOperationRecord[];
     try {
       records = await this.options.registry.listRecent({ limit: 1000 });
     } catch (error) {
-      result.errors.push({ operationId: "registry", message: `Failed to list Access operations: ${formatError(error)}` });
+      result.errors.push({
+        operationId: "registry",
+        message: `Failed to list Access operations: ${formatError(error)}`,
+      });
       return result;
     }
 
@@ -63,12 +88,21 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     return result;
   }
 
-  private matchesScope(record: AccessOperationRecord, request: AccessOperationPreflightCleanupRequest): boolean {
-    return normalizePath(record.accessPath) === normalizePath(request.accessPath)
-      && normalizePath(record.projectRootAbs ?? "") === normalizePath(request.projectRoot);
+  private matchesScope(
+    record: AccessOperationRecord,
+    request: AccessOperationPreflightCleanupRequest,
+  ): boolean {
+    return (
+      normalizePath(record.accessPath) === normalizePath(request.accessPath) &&
+      normalizePath(record.projectRootAbs ?? "") === normalizePath(request.projectRoot)
+    );
   }
 
-  private async cleanupRecord(record: AccessOperationRecord, result: AccessOperationPreflightCleanupResult, handledPids: Set<number>): Promise<void> {
+  private async cleanupRecord(
+    record: AccessOperationRecord,
+    result: AccessOperationPreflightCleanupResult,
+    handledPids: Set<number>,
+  ): Promise<void> {
     if (record.accessPid === null || record.processStartTime === null) {
       await this.markCleaned(record, result);
       return;
@@ -78,7 +112,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     try {
       process = await this.options.processInspector.getProcess(record.accessPid);
     } catch (error) {
-      result.errors.push({ operationId: record.operationId, message: `Failed to inspect process ${record.accessPid}: ${formatError(error)}` });
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to inspect process ${record.accessPid}: ${formatError(error)}`,
+      });
       return;
     }
 
@@ -88,12 +125,18 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     }
 
     if (process.name.toUpperCase() !== "MSACCESS.EXE") {
-      result.errors.push({ operationId: record.operationId, message: `Refused to kill PID ${record.accessPid} because it is ${process.name}.` });
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Refused to kill PID ${record.accessPid} because it is ${process.name}.`,
+      });
       return;
     }
 
     if (process.startTime !== record.processStartTime) {
-      result.errors.push({ operationId: record.operationId, message: `Refused to kill PID ${record.accessPid} because processStartTime differs from the registry.` });
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Refused to kill PID ${record.accessPid} because processStartTime differs from the registry.`,
+      });
       return;
     }
 
@@ -103,7 +146,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       await this.options.processKiller.kill(record.accessPid);
       result.killed.push(record.accessPid);
     } catch (error) {
-      result.errors.push({ operationId: record.operationId, message: `Failed to kill process ${record.accessPid}: ${formatError(error)}` });
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to kill process ${record.accessPid}: ${formatError(error)}`,
+      });
       return;
     }
 
@@ -120,7 +166,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     try {
       processes = await scanner.listProcesses();
     } catch (error) {
-      result.errors.push({ operationId: "orphan_scanner", message: `Failed to enumerate processes: ${formatError(error)}` });
+      result.errors.push({
+        operationId: "orphan_scanner",
+        message: `Failed to enumerate processes: ${formatError(error)}`,
+      });
       return;
     }
 
@@ -137,12 +186,18 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         await this.options.processKiller.kill(process.pid);
         result.orphanedKilled.push(process.pid);
       } catch (error) {
-        result.errors.push({ operationId: "orphan", message: `Failed to kill orphan PID ${process.pid}: ${formatError(error)}` });
+        result.errors.push({
+          operationId: "orphan",
+          message: `Failed to kill orphan PID ${process.pid}: ${formatError(error)}`,
+        });
       }
     }
   }
 
-  private async markCleaned(record: AccessOperationRecord, result: AccessOperationPreflightCleanupResult): Promise<void> {
+  private async markCleaned(
+    record: AccessOperationRecord,
+    result: AccessOperationPreflightCleanupResult,
+  ): Promise<void> {
     try {
       await this.options.registry.update(record.operationId, {
         status: "cleaned",
@@ -150,13 +205,20 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       });
       result.cleaned.push(record.operationId);
     } catch (error) {
-      result.errors.push({ operationId: record.operationId, message: `Failed to mark operation cleaned: ${formatError(error)}` });
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to mark operation cleaned: ${formatError(error)}`,
+      });
     }
   }
 }
 
-export function diagnosticsFromPreflightCleanup(result: AccessOperationPreflightCleanupResult): Diagnostic[] {
-  return result.errors.map((error) => createDiagnostic("warning", "access.preflight", `${error.operationId}: ${error.message}`));
+export function diagnosticsFromPreflightCleanup(
+  result: AccessOperationPreflightCleanupResult,
+): Diagnostic[] {
+  return result.errors.map((error) =>
+    createDiagnostic("warning", "access.preflight", `${error.operationId}: ${error.message}`),
+  );
 }
 
 function normalizePath(value: string): string {
@@ -164,7 +226,10 @@ function normalizePath(value: string): string {
 }
 
 function normalizePathForMatching(value: string): string {
-  return value.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+  return value
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase();
 }
 
 function pathMatchesAccessPath(commandLine: string, normalizedAccessPath: string): boolean {

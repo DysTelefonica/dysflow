@@ -13,8 +13,8 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   loadDysflowConfig,
@@ -34,16 +34,9 @@ function createTempWorkspace(): { root: string; cleanup(): void } {
   };
 }
 
-function writeProjectConfig(
-  root: string,
-  config: Record<string, unknown>,
-): void {
+function writeProjectConfig(root: string, config: Record<string, unknown>): void {
   mkdirSync(join(root, ".dysflow"), { recursive: true });
-  writeFileSync(
-    join(root, ".dysflow", "project.json"),
-    JSON.stringify(config, null, 2),
-    "utf8",
-  );
+  writeFileSync(join(root, ".dysflow", "project.json"), JSON.stringify(config, null, 2), "utf8");
 }
 
 function writeRegistryWithProject(
@@ -180,9 +173,7 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       expect(syncResult.ok).toBe(true);
       if (!syncResult.ok) throw new Error("expected success");
       expect(syncResult.data.projectRoot).toBe(resolve(projectRoot));
-      expect(syncResult.data.accessDbPath).toBe(
-        resolve(projectRoot, "data.accdb"),
-      );
+      expect(syncResult.data.accessDbPath).toBe(resolve(projectRoot, "data.accdb"));
     } finally {
       ws.cleanup();
     }
@@ -279,7 +270,14 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
         timeoutMs: 10_000,
       };
 
-      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", undefined);
+      const result = loadProjectConfigCore(
+        resolvedPath,
+        raw,
+        { cwd: ws.root, env: {} },
+        {},
+        "repo-config",
+        undefined,
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");
@@ -302,7 +300,14 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
 
       const raw = { id: "configured-id", accessPath: "app.accdb" };
 
-      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", "requested-id");
+      const result = loadProjectConfigCore(
+        resolvedPath,
+        raw,
+        { cwd: ws.root, env: {} },
+        {},
+        "repo-config",
+        "requested-id",
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("expected failure");
@@ -322,7 +327,14 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
 
       const raw = { id: "no-path-project" };
 
-      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env: {} }, {}, "repo-config", undefined);
+      const result = loadProjectConfigCore(
+        resolvedPath,
+        raw,
+        { cwd: ws.root, env: {} },
+        {},
+        "repo-config",
+        undefined,
+      );
 
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("expected failure");
@@ -347,7 +359,14 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
       };
       const env = { MY_PWD: "access-secret", MY_BACKEND_PWD: "backend-secret" };
 
-      const result = loadProjectConfigCore(resolvedPath, raw, { cwd: ws.root, env }, env, "repo-config", undefined);
+      const result = loadProjectConfigCore(
+        resolvedPath,
+        raw,
+        { cwd: ws.root, env },
+        env,
+        "repo-config",
+        undefined,
+      );
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");

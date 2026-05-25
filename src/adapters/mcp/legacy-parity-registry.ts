@@ -1,6 +1,5 @@
 import {
   LEGACY_DYSFLOW_MCP_TOOL_NAMES,
-  LEGACY_QUERY_TOOL_NAMES,
   LEGACY_VBA_SYNC_TOOL_NAMES,
   type LegacyDysflowMcpToolName,
 } from "./legacy-tool-inventory.js";
@@ -79,9 +78,16 @@ const implementedToolNames = new Set<LegacyDysflowMcpToolName>([
   "relink_directory",
 ]);
 
-function buildDescription(name: LegacyDysflowMcpToolName, slice: LegacyParitySlice, status: LegacyParityStatus): string {
+function buildDescription(
+  name: LegacyDysflowMcpToolName,
+  slice: LegacyParitySlice,
+  status: LegacyParityStatus,
+): string {
   const humanSlice = slice === "vba-sync" ? "VBA sync" : "query/schema";
-  const suffix = status === "implemented" ? "implemented via Dysflow core services." : "tracked for parity and not ported in this slice.";
+  const suffix =
+    status === "implemented"
+      ? "implemented via Dysflow core services."
+      : "tracked for parity and not ported in this slice.";
   return `Legacy Dysflow MCP tool ${name}; ${humanSlice} ${suffix}`;
 }
 
@@ -89,19 +95,22 @@ function classifyToolName(name: LegacyDysflowMcpToolName): LegacyParitySlice {
   return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name) ? "vba-sync" : "query";
 }
 
-export const LEGACY_PARITY_REGISTRY: readonly LegacyParityToolDefinition[] = LEGACY_DYSFLOW_MCP_TOOL_NAMES.map((name) => {
-  const slice = classifyToolName(name);
-  const status = implementedToolNames.has(name) ? "implemented" : "pending";
-  return {
-    name,
-    slice,
-    status,
-    description: buildDescription(name, slice, status),
-    queryMode: maintenanceQueryModes[name],
-  };
-});
+export const LEGACY_PARITY_REGISTRY: readonly LegacyParityToolDefinition[] =
+  LEGACY_DYSFLOW_MCP_TOOL_NAMES.map((name) => {
+    const slice = classifyToolName(name);
+    const status = implementedToolNames.has(name) ? "implemented" : "pending";
+    return {
+      name,
+      slice,
+      status,
+      description: buildDescription(name, slice, status),
+      queryMode: maintenanceQueryModes[name],
+    };
+  });
 
-export function getLegacyParityToolDefinition(name: LegacyDysflowMcpToolName): LegacyParityToolDefinition {
+export function getLegacyParityToolDefinition(
+  name: LegacyDysflowMcpToolName,
+): LegacyParityToolDefinition {
   const entry = LEGACY_PARITY_REGISTRY.find((tool) => tool.name === name);
   if (entry === undefined) {
     throw new Error(`Unknown legacy parity tool: ${name}`);
@@ -109,6 +118,8 @@ export function getLegacyParityToolDefinition(name: LegacyDysflowMcpToolName): L
   return entry;
 }
 
-export function getLegacyParityToolNamesBySlice(slice: LegacyParitySlice): readonly LegacyDysflowMcpToolName[] {
+export function getLegacyParityToolNamesBySlice(
+  slice: LegacyParitySlice,
+): readonly LegacyDysflowMcpToolName[] {
   return LEGACY_PARITY_REGISTRY.filter((tool) => tool.slice === slice).map((tool) => tool.name);
 }

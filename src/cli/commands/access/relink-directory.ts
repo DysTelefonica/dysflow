@@ -1,6 +1,6 @@
-import type { CliCommandContext, CliResult } from "../types.js";
-import type { AccessQueryService } from "../../../core/services/query-service.js";
 import type { RelinkDirectoryReport } from "../../../core/contracts/index.js";
+import type { AccessQueryService } from "../../../core/services/query-service.js";
+import type { CliCommandContext, CliResult } from "../types.js";
 
 export type AliasMapEntry = { from: string; to: string };
 
@@ -18,9 +18,7 @@ export type RelinkDirectoryOptions = {
   timeoutMs?: number;
 };
 
-export type ParseResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 const USAGE =
   "Usage: dysflow access relink-directory --root <path> [--apply] [--dry-run] [--no-backup] [--recursive] [--map <old>=<new>] [--deny-prefix <prefix>] [--strict-local] [--remove-unresolved] [--password-env <VAR>] [--timeout-ms <ms>] [--json]";
@@ -138,7 +136,10 @@ export function parseRelinkDirectoryArgs(
       }
       const parsed = Number(next);
       if (!Number.isFinite(parsed) || parsed <= 0) {
-        return { ok: false, error: `Invalid --timeout-ms value: "${next}". Expected a positive integer.` };
+        return {
+          ok: false,
+          error: `Invalid --timeout-ms value: "${next}". Expected a positive integer.`,
+        };
       }
       timeoutMs = parsed;
       i++;
@@ -180,7 +181,7 @@ export function parseRelinkDirectoryArgs(
   };
 }
 
-function formatReport(report: RelinkDirectoryReport, options: RelinkDirectoryOptions): string {
+function formatReport(report: RelinkDirectoryReport, _options: RelinkDirectoryOptions): string {
   const lines: string[] = [
     `Relink Directory — ${report.mode} mode`,
     `Root: ${report.root}`,
@@ -213,10 +214,7 @@ function formatReport(report: RelinkDirectoryReport, options: RelinkDirectoryOpt
   return lines.join("\n");
 }
 
-function computeExitCode(
-  report: RelinkDirectoryReport,
-  options: RelinkDirectoryOptions,
-): number {
+function computeExitCode(report: RelinkDirectoryReport, options: RelinkDirectoryOptions): number {
   if (options.strictLocal && report.externalLinkCount > 0) {
     return 1;
   }

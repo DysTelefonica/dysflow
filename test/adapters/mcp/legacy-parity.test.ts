@@ -1,18 +1,18 @@
-import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { describe, expect, it } from "vitest";
+import {
+  getLegacyParityToolDefinition,
+  LEGACY_PARITY_REGISTRY,
+} from "../../../src/adapters/mcp/legacy-parity-registry";
 import {
   LEGACY_DYSFLOW_MCP_TOOL_NAMES,
   LEGACY_QUERY_TOOL_NAMES,
   LEGACY_VBA_SYNC_TOOL_NAMES,
 } from "../../../src/adapters/mcp/legacy-tool-inventory";
-import {
-  LEGACY_PARITY_REGISTRY,
-  getLegacyParityToolDefinition,
-} from "../../../src/adapters/mcp/legacy-parity-registry";
-import { successResult, type OperationResult } from "../../../src/core/contracts/index";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { type OperationResult, successResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
@@ -60,18 +60,22 @@ describe("legacy Dysflow MCP parity inventory", () => {
     const implemented = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
 
-    expect(implemented.map((entry) => entry.name)).toEqual(expect.arrayContaining([
-      "list_access_operations",
-      "cleanup_access_operation",
-      "run_vba",
-      "query_sql",
-      "list_tables",
-      "get_schema",
-      "exec_sql",
-      "seed_fixture",
-    ]));
+    expect(implemented.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining([
+        "list_access_operations",
+        "cleanup_access_operation",
+        "run_vba",
+        "query_sql",
+        "list_tables",
+        "get_schema",
+        "exec_sql",
+        "seed_fixture",
+      ]),
+    );
     expect(pending.length).toBe(2);
-    expect(pending.map((entry) => entry.name)).toEqual(expect.arrayContaining(["verify_binary", "reconcile_binary"]));
+    expect(pending.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(["verify_binary", "reconcile_binary"]),
+    );
     expect(getLegacyParityToolDefinition("query_sql")).toMatchObject({
       name: "query_sql",
       slice: "query",
@@ -86,11 +90,19 @@ describe("legacy Dysflow MCP parity inventory", () => {
       vbaService: vba,
       queryService: query,
       diagnosticsService: new FakeDiagnosticsService(),
-      cleanupService: { cleanup: async () => successResult({ operationId: "op-test", accessPid: 1234, status: "cleaned" as const }) },
+      cleanupService: {
+        cleanup: async () =>
+          successResult({ operationId: "op-test", accessPid: 1234, status: "cleaned" as const }),
+      },
     });
     const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-    for (const name of ["list_access_operations", "cleanup_access_operation", "run_vba", "query_sql"] as const) {
+    for (const name of [
+      "list_access_operations",
+      "cleanup_access_operation",
+      "run_vba",
+      "query_sql",
+    ] as const) {
       expect(byName.has(name), `${name} should be registered`).toBe(true);
     }
 
@@ -111,61 +123,102 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
     await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({
       isError: true,
-      content: [{ type: "text", text: "MCP_SERVICE_UNAVAILABLE: export_modules requires the legacy VBA sync service to be configured." }],
+      content: [
+        {
+          type: "text",
+          text: "MCP_SERVICE_UNAVAILABLE: export_modules requires the legacy VBA sync service to be configured.",
+        },
+      ],
     });
   });
 
   it("dispatches VBA sync legacy tools to the configured product service", async () => {
     const legacyCalls: unknown[] = [];
     const queryCalls: unknown[] = [];
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(),
-      queryService: {
-        execute: async (request: unknown) => {
-          queryCalls.push(request);
-          return successResult({ rows: [{ ok: true }] });
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(),
+        queryService: {
+          execute: async (request: unknown) => {
+            queryCalls.push(request);
+            return successResult({ rows: [{ ok: true }] });
+          },
+        },
+        diagnosticsService: new FakeDiagnosticsService(),
+        legacyToolService: {
+          execute: async (toolName, input) => {
+            legacyCalls.push({ toolName, input });
+            return successResult({ ok: true, toolName });
+          },
         },
       },
-      diagnosticsService: new FakeDiagnosticsService(),
-      legacyToolService: {
-        execute: async (toolName, input) => {
-          legacyCalls.push({ toolName, input });
-          return successResult({ ok: true, toolName });
-        },
-      },
-    }, true);
+      true,
+    );
 
-    await expect(tools.find((tool) => tool.name === "export_modules")?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "export_modules")
+        ?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "export_modules" }) }],
     });
-    await expect(tools.find((tool) => tool.name === "list_tables")?.handler({ backendPath: "C:/db.accdb" })).resolves.toEqual({
+    await expect(
+      tools.find((tool) => tool.name === "list_tables")?.handler({ backendPath: "C:/db.accdb" }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "exec_sql")?.handler({ sql: "UPDATE People SET Name='Ada'", apply: false })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "exec_sql")
+        ?.handler({ sql: "UPDATE People SET Name='Ada'", apply: false }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "run_script")?.handler({ path: "fixtures.sql", apply: true })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "run_script")
+        ?.handler({ path: "fixtures.sql", apply: true }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "teardown_fixture")?.handler({ tableName: "People", dryRun: false })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "teardown_fixture")
+        ?.handler({ tableName: "People", dryRun: false }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "verify_binary")?.handler({ moduleNames: ["Form_Main"], diff: true })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "verify_binary")
+        ?.handler({ moduleNames: ["Form_Main"], diff: true }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_binary" }) }],
     });
 
     expect(legacyCalls).toEqual([
-      { toolName: "export_modules", input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" } },
+      {
+        toolName: "export_modules",
+        input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" },
+      },
       { toolName: "verify_binary", input: { moduleNames: ["Form_Main"], diff: true } },
     ]);
     expect(queryCalls).toEqual([
-      { action: "list_tables", mode: "read", sql: "", tableName: undefined, columnName: undefined, backendPath: "C:/db.accdb", rootPath: undefined },
+      {
+        action: "list_tables",
+        mode: "read",
+        sql: "",
+        tableName: undefined,
+        columnName: undefined,
+        backendPath: "C:/db.accdb",
+        rootPath: undefined,
+      },
       {
         action: "exec_sql",
         mode: "write",
@@ -195,29 +248,40 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
   it("dispatches maintenance query tools to the configured query service", async () => {
     const queryCalls: unknown[] = [];
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(),
-      queryService: {
-        execute: async (request: unknown) => {
-          queryCalls.push(request);
-          return successResult({ rows: [{ ok: true }] });
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(),
+        queryService: {
+          execute: async (request: unknown) => {
+            queryCalls.push(request);
+            return successResult({ rows: [{ ok: true }] });
+          },
+        },
+        diagnosticsService: new FakeDiagnosticsService(),
+        legacyToolService: {
+          execute: async () => successResult({ ok: true }),
         },
       },
-      diagnosticsService: new FakeDiagnosticsService(),
-      legacyToolService: {
-        execute: async () => successResult({ ok: true }),
-      },
-    }, true);
+      true,
+    );
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "link_tables")?.handler({ backendPath: "C:/backend.accdb" })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "link_tables")
+        ?.handler({ backendPath: "C:/backend.accdb" }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
-    await expect(tools.find((tool) => tool.name === "compact_repair")?.handler({ databasePath: "C:/db.accdb", dryRun: true })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "compact_repair")
+        ?.handler({ databasePath: "C:/db.accdb", dryRun: true }),
+    ).resolves.toEqual({
       isError: false,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
@@ -280,9 +344,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
     const spec = {
       name: "Form_Smoke",
       kind: "Form",
-      controls: [
-        { name: "txtName", type: "TextBox" },
-      ],
+      controls: [{ name: "txtName", type: "TextBox" }],
     };
 
     await expect(service.execute("validate_form_spec", { spec })).resolves.toMatchObject({
@@ -297,18 +359,21 @@ describe("legacy Dysflow MCP parity inventory", () => {
 
     const generated = await service.execute("generate_form", { spec, destinationRoot: tempRoot });
     expect(generated.ok).toBe(true);
-    const generatedPath = (generated.ok ? (generated.data as { outputPath?: string }) : undefined)?.outputPath;
+    const generatedPath = (generated.ok ? (generated.data as { outputPath?: string }) : undefined)
+      ?.outputPath;
     expect(generatedPath).toBeTruthy();
     if (generatedPath) {
       await expect(readFile(generatedPath, "utf8")).resolves.toContain("Form_Smoke");
     }
 
-    await expect(service.execute("catalog_add_control", {
-      spec,
-      destinationRoot: tempRoot,
-      controlName: "txtName",
-      controlType: "TextBox",
-    })).resolves.toMatchObject({
+    await expect(
+      service.execute("catalog_add_control", {
+        spec,
+        destinationRoot: tempRoot,
+        controlName: "txtName",
+        controlType: "TextBox",
+      }),
+    ).resolves.toMatchObject({
       ok: true,
       data: {
         formName: "Form_Smoke",
@@ -316,12 +381,13 @@ describe("legacy Dysflow MCP parity inventory", () => {
       },
     });
 
-    await expect(service.execute("harvest_form_catalog", { destinationRoot: tempRoot })).resolves.toMatchObject({
+    await expect(
+      service.execute("harvest_form_catalog", { destinationRoot: tempRoot }),
+    ).resolves.toMatchObject({
       ok: true,
       data: {
         total: 1,
       },
     });
   });
-
 });

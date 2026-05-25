@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  InMemoryAccessOperationRegistry,
   type AccessOperationRecord,
   type AccessOperationStatus,
+  InMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
 
 function makeRecord(overrides: Partial<AccessOperationRecord> = {}): AccessOperationRecord {

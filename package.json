@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/\"",
     "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/",
+    "format": "biome format src/ test/ --write",
+    "format:check": "biome format src/ test/ --check",
     "coverage": "vitest run --coverage",
     "prepare": "pnpm build",
     "prepack": "pnpm build"
@@ -21,6 +23,7 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.15",
     "@types/node": "^20.12.12",
     "@vitest/coverage-v8": "^3.2.4",
     "typescript": "^5.4.5",

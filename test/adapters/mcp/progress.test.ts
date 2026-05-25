@@ -58,18 +58,18 @@ describe("JsonLineMcpStdioRuntime — progress notifications", () => {
     // First frame is the notification — no id field
     const notification = frames[0] as Record<string, unknown>;
     expect(notification).not.toHaveProperty("id");
-    expect(notification["jsonrpc"]).toBe("2.0");
-    expect(notification["method"]).toBe("notifications/progress");
-    const params = notification["params"] as Record<string, unknown>;
-    expect(params["progressToken"]).toBe("tok-abc");
-    expect(params["progress"]).toBe(40);
-    expect(params["total"]).toBe(100);
-    expect(params["message"]).toBe("Executing");
+    expect(notification.jsonrpc).toBe("2.0");
+    expect(notification.method).toBe("notifications/progress");
+    const params = notification.params as Record<string, unknown>;
+    expect(params.progressToken).toBe("tok-abc");
+    expect(params.progress).toBe(40);
+    expect(params.total).toBe(100);
+    expect(params.message).toBe("Executing");
 
     // Second frame is the result — has id
     const result = frames[1] as Record<string, unknown>;
-    expect(result["id"]).toBe(7);
-    expect(result["result"]).toBeDefined();
+    expect(result.id).toBe(7);
+    expect(result.result).toBeDefined();
 
     // context had sendProgress as a callable function
     expect(typeof capturedContext?.sendProgress).toBe("function");
@@ -112,8 +112,8 @@ describe("JsonLineMcpStdioRuntime — progress notifications", () => {
     // Only the result frame — no notification
     expect(frames).toHaveLength(1);
     const result = frames[0] as Record<string, unknown>;
-    expect(result["id"]).toBe(8);
-    expect(result["result"]).toBeDefined();
+    expect(result.id).toBe(8);
+    expect(result.result).toBeDefined();
   });
 
   it("omits total and message fields when not provided to sendProgress", async () => {
@@ -151,8 +151,8 @@ describe("JsonLineMcpStdioRuntime — progress notifications", () => {
     expect(frames).toHaveLength(2);
 
     const notification = frames[0] as Record<string, unknown>;
-    const params = notification["params"] as Record<string, unknown>;
-    expect(params["progress"]).toBe(50);
+    const params = notification.params as Record<string, unknown>;
+    expect(params.progress).toBe(50);
     expect(params).not.toHaveProperty("total");
     expect(params).not.toHaveProperty("message");
   });
