@@ -941,13 +941,13 @@ Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
     Dim db As DAO.Database
     Dim rs As DAO.Recordset
     Dim sqlInsert As String
-    Dim sqlDelete As String
     Dim motivoLeido As String
     Dim requiere As String
     Dim assertError As String
     Dim ncLoaded As NCProyecto
     Dim loadError As String
     Dim sessionErr As String
+    Dim fixtureRows As Long
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
@@ -958,13 +958,16 @@ Public Function Test_E2E_MotivoPersistencia_NCProyecto_Atomic() As String
 
     If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
 
-    sqlDelete = "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY
-    db.Execute sqlDelete, dbFailOnError
+    Call CleanupMotivoProyectoFixture(db, logs)
 
     sqlInsert = "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, PROYECTO, DESCRIPCION, CAUSA, FECHAAPERTURA, TIPO, RequiereControlEficacia, MotivoNoRequiereControlEficacia, Borrado) " & _
                 "VALUES (" & TEST_ID_NC_PROY & ", " & TestHelper.SqlText("E2E-PROY-900001") & ", " & TestHelper.SqlText("E2E-EXP") & ", " & TestHelper.SqlText("E2E-PROY") & ", " & TestHelper.SqlText("Fixture E2E NC Proyecto") & ", " & TestHelper.SqlText("Causa E2E") & ", Date(), " & TestHelper.SqlText("Proyecto") & ", 'No', " & TestHelper.SqlText(TEST_MOTIVO) & ", 0)"
     db.Execute sqlInsert, dbFailOnError
     TestHelper.AddLog logs, "Fixture NC Proyecto insertado"
+
+    fixtureRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY & " AND RequiereControlEficacia = 'No' AND MotivoNoRequiereControlEficacia = " & TestHelper.SqlText(TEST_MOTIVO))
+    Call TestHelper.AssertTrue(fixtureRows = 1, "Fixture NC Proyecto debe quedar con cardinalidad exacta y motivo controlado", logs, assertError)
+    If assertError <> "" Then GoTo Fail
 
     Set rs = db.OpenRecordset("SELECT RequiereControlEficacia, MotivoNoRequiereControlEficacia FROM TbNoConformidades WHERE IDNoConformidad=" & TEST_ID_NC_PROY, dbOpenSnapshot)
     If rs.EOF Then
@@ -1002,7 +1005,7 @@ EH:
 
 Cleanup:
     On Error Resume Next
-    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY, dbFailOnError
+    If Not db Is Nothing Then Call CleanupMotivoProyectoFixture(db, logs)
     If Not rs Is Nothing Then rs.Close
     Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
@@ -1023,6 +1026,8 @@ Public Function Test_E2E_MotivoPersistencia_NCAuditoria_Atomic() As String
     Dim ncLoaded As NCAuditoria
     Dim loadError As String
     Dim sessionErr As String
+    Dim parentRows As Long
+    Dim fixtureRows As Long
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
@@ -1033,15 +1038,22 @@ Public Function Test_E2E_MotivoPersistencia_NCAuditoria_Atomic() As String
 
     If Not EnsureMotivoNoRequiereControlEficaciaSchema(db, logs, assertError) Then GoTo Fail
 
-    db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD, dbFailOnError
-    db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
+    Call CleanupMotivoAuditoriaFixture(db, logs)
     db.Execute "INSERT INTO TbAuditorias (IDAuditoria, Tipo, FechaInicio, FechaFin) VALUES (" & TEST_ID_AUDITORIA & ", " & TestHelper.SqlText("E2E") & ", Date(), Date())", dbFailOnError
     TestHelper.AddLog logs, "Fixture padre TbAuditorias insertado"
+
+    parentRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA)
+    Call TestHelper.AssertTrue(parentRows = 1, "Fixture padre TbAuditorias debe quedar con cardinalidad exacta", logs, assertError)
+    If assertError <> "" Then GoTo Fail
 
     sqlInsert = "INSERT INTO TbNoConformidadesAuditoria (ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereAccionCorrectiva, Tipo, RequiereControlEficacia, MotivoNoRequiereControlEficacia, Borrado) " & _
                 "VALUES (" & TEST_ID_NC_AUD & ", " & TEST_ID_AUDITORIA & ", Date(), " & TestHelper.SqlText("E2E-AUD-900002") & ", " & TestHelper.SqlText("Fixture E2E NC Auditoria") & ", " & TestHelper.SqlText("Causa raíz E2E") & ", " & TestHelper.SqlText("adm") & ", 'No', " & TestHelper.SqlText("Auditoria") & ", 'No', " & TestHelper.SqlText(TEST_MOTIVO) & ", 0)"
     db.Execute sqlInsert, dbFailOnError
     TestHelper.AddLog logs, "Fixture NC Auditoría insertado"
+
+    fixtureRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD & " AND IDAuditoria = " & TEST_ID_AUDITORIA & " AND RequiereControlEficacia = 'No' AND MotivoNoRequiereControlEficacia = " & TestHelper.SqlText(TEST_MOTIVO))
+    Call TestHelper.AssertTrue(fixtureRows = 1, "Fixture NC Auditoría debe quedar con cardinalidad exacta y FK padre controlada", logs, assertError)
+    If assertError <> "" Then GoTo Fail
 
     Set rs = db.OpenRecordset("SELECT RequiereControlEficacia, MotivoNoRequiereControlEficacia FROM TbNoConformidadesAuditoria WHERE ID=" & TEST_ID_NC_AUD, dbOpenSnapshot)
     If rs.EOF Then
@@ -1079,8 +1091,7 @@ EH:
 
 Cleanup:
     On Error Resume Next
-    db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD, dbFailOnError
-    db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
+    If Not db Is Nothing Then Call CleanupMotivoAuditoriaFixture(db, logs)
     If Not rs Is Nothing Then rs.Close
     Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
@@ -1092,18 +1103,18 @@ Private Function EnsureMotivoNoRequiereControlEficaciaSchema(ByVal p_Db As DAO.D
     On Error GoTo EH
 
     EnsureMotivoNoRequiereControlEficaciaSchema = False
+    p_Error = ""
 
-    If Not TableHasField(p_Db, "TbNoConformidades", "MotivoNoRequiereControlEficacia") Then
-        p_Error = "Contrato de esquema incumplido: falta TbNoConformidades.MotivoNoRequiereControlEficacia"
-        TestHelper.AddLog p_Logs, p_Error
-        Exit Function
-    End If
+    If Not TestHelper.AssertSandboxBackend(p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbNoConformidades", MotivoNCProyectoSeedFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbAuditorias", MotivoAuditoriaParentSeedFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbNoConformidadesAuditoria", MotivoNCAuditoriaSeedFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureNoRequiredFieldsOutsideSeed(p_Db, "TbNoConformidades", MotivoNCProyectoSeedFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureNoRequiredFieldsOutsideSeed(p_Db, "TbAuditorias", MotivoAuditoriaParentSeedFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureNoRequiredFieldsOutsideSeed(p_Db, "TbNoConformidadesAuditoria", MotivoNCAuditoriaSeedFields(), p_Logs, p_Error) Then Exit Function
 
-    If Not TableHasField(p_Db, "TbNoConformidadesAuditoria", "MotivoNoRequiereControlEficacia") Then
-        p_Error = "Contrato de esquema incumplido: falta TbNoConformidadesAuditoria.MotivoNoRequiereControlEficacia"
-        TestHelper.AddLog p_Logs, p_Error
-        Exit Function
-    End If
+    TestHelper.AddLog p_Logs, "Schema facts inspected: motivo fixtures seed all Required=True fields for TbNoConformidades, TbAuditorias and TbNoConformidadesAuditoria"
+    TestHelper.AddLog p_Logs, "FK facts inspected via Dysflow: current sandbox exposes no application relationships; audit fixture still seeds TbAuditorias parent before TbNoConformidadesAuditoria child"
 
     EnsureMotivoNoRequiereControlEficaciaSchema = True
     Exit Function
@@ -1111,6 +1122,33 @@ Private Function EnsureMotivoNoRequiereControlEficaciaSchema(ByVal p_Db As DAO.D
 EH:
     p_Error = "EnsureMotivoNoRequiereControlEficaciaSchema: " & Err.Description
 End Function
+
+Private Function MotivoNCProyectoSeedFields() As Variant
+    MotivoNCProyectoSeedFields = Array("IDNoConformidad", "CodigoNoConformidad", "EXPEDIENTE", "PROYECTO", "DESCRIPCION", "CAUSA", "FECHAAPERTURA", "TIPO", "RequiereControlEficacia", "MotivoNoRequiereControlEficacia", "Borrado")
+End Function
+
+Private Function MotivoAuditoriaParentSeedFields() As Variant
+    MotivoAuditoriaParentSeedFields = Array("IDAuditoria", "Tipo", "FechaInicio", "FechaFin")
+End Function
+
+Private Function MotivoNCAuditoriaSeedFields() As Variant
+    MotivoNCAuditoriaSeedFields = Array("ID", "IDAuditoria", "FechaApertura", "Numero", "DESCRIPCION", "CAUSARAIZ", "RESPONSABLEIMPLANTACION", "RequiereAccionCorrectiva", "Tipo", "RequiereControlEficacia", "MotivoNoRequiereControlEficacia", "Borrado")
+End Function
+
+Private Sub CleanupMotivoProyectoFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    On Error Resume Next
+
+    If TableExistsInDb(p_Db, "TbNoConformidades") Then p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_PROY, dbFailOnError
+    TestHelper.AddLog p_Logs, "Cleanup fixture motivo proyecto ID=" & CStr(TEST_ID_NC_PROY) & " aplicado"
+End Sub
+
+Private Sub CleanupMotivoAuditoriaFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    On Error Resume Next
+
+    If TableExistsInDb(p_Db, "TbNoConformidadesAuditoria") Then p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID = " & TEST_ID_NC_AUD, dbFailOnError
+    If TableExistsInDb(p_Db, "TbAuditorias") Then p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria = " & TEST_ID_AUDITORIA, dbFailOnError
+    TestHelper.AddLog p_Logs, "Cleanup fixture motivo auditoría aplicado en orden hijo→padre"
+End Sub
 
 Private Function TableHasField(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_FieldName As String) As Boolean
     Dim fld As DAO.Field
