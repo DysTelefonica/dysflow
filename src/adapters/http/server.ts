@@ -1,5 +1,4 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -10,28 +9,18 @@ import {
 } from "../../core/contracts/index.js";
 import {
   type AccessCleanupResult,
-  AccessOperationCleanupService,
 } from "../../core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
   type AccessOperationRegistry,
-  FileAccessOperationRegistry,
-  resolveProjectOperationRegistryPath,
 } from "../../core/operations/access-operation-registry.js";
-import {
-  WindowsMsAccessProcessInspector,
-  WindowsProcessKiller,
-} from "../../core/operations/windows-processes.js";
-import {
-  AccessPowerShellRunner,
-  getDefaultAccessOperationRegistry,
-} from "../../core/runner/access-runner.js";
+import { getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import {
   type AccessDiagnosticsResult,
-  AccessDiagnosticsService,
 } from "../../core/services/diagnostics-service.js";
-import { type AccessQueryResult, AccessQueryService } from "../../core/services/query-service.js";
-import { type AccessVbaResult, AccessVbaService } from "../../core/services/vba-service.js";
+import type { AccessQueryResult } from "../../core/services/query-service.js";
+import type { AccessVbaResult } from "../../core/services/vba-service.js";
+import { createHttpServices } from "./http-services-factory.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17_321;
@@ -86,7 +75,7 @@ export async function startDysflowHttpServer(
   const port = options.port ?? DEFAULT_HTTP_PORT;
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
-  const services = options.services ?? (await createCoreServices(options.env, options.cwd));
+  const services = options.services ?? (await createHttpServices(options.env, options.cwd));
   const server = createServer((request, response) => {
     void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
   });
@@ -102,51 +91,6 @@ export async function startDysflowHttpServer(
   const address = server.address();
   const resolvedPort = typeof address === "object" && address !== null ? address.port : port;
   return { server, host, port: resolvedPort, url: `http://${host}:${resolvedPort}`, writesEnabled };
-}
-
-async function createCoreServices(
-  env?: Record<string, string | undefined>,
-  cwd?: string,
-): Promise<DysflowHttpServices> {
-  const configResult = await loadDysflowConfigAsync({ env, cwd });
-  if (!configResult.ok) {
-    process.stderr.write(
-      `[dysflow] HTTP server starting in degraded mode: ${configResult.error.code}: ${configResult.error.message}\n`,
-    );
-    return createUnavailableHttpServices();
-  }
-
-  const operationRegistry = new FileAccessOperationRegistry({
-    filePath: resolveProjectOperationRegistryPath(configResult.data),
-  });
-  const runner = new AccessPowerShellRunner({ operationRegistry });
-  return {
-    diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
-    queryService: new AccessQueryService({ runner, config: configResult.data }),
-    vbaService: new AccessVbaService({ runner, config: configResult.data }),
-    operationRegistry,
-    cleanupService: new AccessOperationCleanupService({
-      registry: operationRegistry,
-      processInspector: new WindowsMsAccessProcessInspector(),
-      processKiller: new WindowsProcessKiller(),
-    }),
-  };
-}
-
-function createUnavailableHttpServices(): DysflowHttpServices {
-  const unavailable = async () =>
-    failureResult(
-      createDysflowError(
-        "SERVICE_UNAVAILABLE",
-        "Service is unavailable. Check the server configuration.",
-      ),
-    );
-  return {
-    diagnosticsService: { run: unavailable },
-    queryService: { execute: unavailable },
-    vbaService: { execute: unavailable },
-    operationRegistry: getDefaultAccessOperationRegistry(),
-  };
 }
 
 async function routeRequest(
@@ -180,13 +124,14 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    const cleanupService =
-      context.services.cleanupService ??
-      new AccessOperationCleanupService({
-        registry: getDefaultAccessOperationRegistry(),
-        processInspector: new WindowsMsAccessProcessInspector(),
-        processKiller: new WindowsProcessKiller(),
-      });
+    const cleanupService = context.services.cleanupService;
+    if (cleanupService === undefined) {
+      sendOperationResult(
+        response,
+        failureResult(createDysflowError("SERVICE_UNAVAILABLE", "Cleanup service is not configured.")),
+      );
+      return;
+    }
     sendOperationResult(
       response,
       await cleanupService.cleanup({
