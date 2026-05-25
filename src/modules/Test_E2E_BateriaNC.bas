@@ -672,13 +672,26 @@ Public Function Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic() As 
     Dim actual As Boolean
     Dim assertError As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
         Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
         GoTo Cleanup
     End If
-    Set db = getdb()
+
+    fixtureErr = ""
+    If Not EnsureConfigCoreCacheFixture(logs, fixtureErr) Then
+        Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        GoTo Cleanup
+    End If
+
+    Set db = getdb(fixtureErr)
+    If db Is Nothing Then
+        If fixtureErr = "" Then fixtureErr = "No se pudo abrir backend sandbox vía getdb()"
+        Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        GoTo Cleanup
+    End If
     Set rs = db.OpenRecordset("SELECT * FROM TbConfiguracion WHERE ID = 1", dbOpenDynaset)
 
     If rs.EOF Then
