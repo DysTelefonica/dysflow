@@ -20,9 +20,10 @@ describe("MCP/core architecture boundary", () => {
 
     const violations = coreFiles.flatMap((file) => {
       const source = readFileSync(file, "utf8");
-      const importsAdapter = /^\s*import\s+.*(?:\.\.\/)+adapters\//m.test(source)
-        || /^\s*export\s+.*(?:\.\.\/)+adapters\//m.test(source)
-        || /from\s+["'](?:\.\.\/)+adapters\//.test(source);
+      const importsAdapter =
+        /^\s*import\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
+        /^\s*export\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
+        /from\s+["'](?:\.\.\/)+adapters\//.test(source);
 
       return importsAdapter ? [relative(process.cwd(), file)] : [];
     });
@@ -53,9 +54,19 @@ describe("MCP/core architecture boundary", () => {
       },
     });
 
-    await expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.handler({ procedureName: "Smoke" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "SELECT 1", mode: "read" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ includeEnvironment: true })).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_vba_execute")
+        ?.handler({ procedureName: "Smoke" }),
+    ).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "SELECT 1", mode: "read" }),
+    ).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ includeEnvironment: true }),
+    ).resolves.toMatchObject({ isError: false });
 
     expect(requests).toEqual([
       { service: "vba", request: { procedureName: "Smoke" } },
@@ -73,7 +84,11 @@ describe("MCP/core architecture boundary", () => {
       legacyToolService: {
         execute: async (toolName, input) => {
           legacyRequests.push({ toolName, input });
-          return failureResult({ code: "LEGACY_TOOL_NOT_IMPLEMENTED", message: "not implemented", retryable: false });
+          return failureResult({
+            code: "LEGACY_TOOL_NOT_IMPLEMENTED",
+            message: "not implemented",
+            retryable: false,
+          });
         },
       },
     });

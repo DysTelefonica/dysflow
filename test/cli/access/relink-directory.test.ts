@@ -1,14 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseRelinkDirectoryArgs,
   handleRelinkDirectoryCommand,
-  type RelinkDirectoryOptions,
+  parseRelinkDirectoryArgs,
 } from "../../../src/cli/commands/access/relink-directory.js";
 import { handleAccessCommand } from "../../../src/cli/commands/access.js";
-import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
-import type { OperationResult, AccessQueryRequest } from "../../../src/core/contracts/index.js";
+import type {
+  AccessQueryRequest,
+  OperationResult,
+  RelinkDirectoryReport,
+} from "../../../src/core/contracts/index.js";
 import { successResult } from "../../../src/core/contracts/index.js";
-import type { RelinkDirectoryReport } from "../../../src/core/contracts/index.js";
+import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 
 // ---------------------------------------------------------------------------
 // FakeQueryService for handler tests
@@ -99,9 +101,12 @@ describe("parseRelinkDirectoryArgs", () => {
 
   it("--map repeated → maps array populated", () => {
     const result = parseRelinkDirectoryArgs([
-      "--root", "C:\\data",
-      "--map", "OldName.accdb=NewName.accdb",
-      "--map", "Legacy.mdb=Current.accdb",
+      "--root",
+      "C:\\data",
+      "--map",
+      "OldName.accdb=NewName.accdb",
+      "--map",
+      "Legacy.mdb=Current.accdb",
     ]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -113,9 +118,12 @@ describe("parseRelinkDirectoryArgs", () => {
 
   it("--deny-prefix repeated → denyPrefixes array populated", () => {
     const result = parseRelinkDirectoryArgs([
-      "--root", "C:\\data",
-      "--deny-prefix", "\\\\datoste\\",
-      "--deny-prefix", "\\\\server2\\",
+      "--root",
+      "C:\\data",
+      "--deny-prefix",
+      "\\\\datoste\\",
+      "--deny-prefix",
+      "\\\\server2\\",
     ]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -123,7 +131,12 @@ describe("parseRelinkDirectoryArgs", () => {
   });
 
   it("--password-env ACCESS_VBA_PASSWORD → passwordEnv set", () => {
-    const result = parseRelinkDirectoryArgs(["--root", "C:\\data", "--password-env", "ACCESS_VBA_PASSWORD"]);
+    const result = parseRelinkDirectoryArgs([
+      "--root",
+      "C:\\data",
+      "--password-env",
+      "ACCESS_VBA_PASSWORD",
+    ]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.passwordEnv).toBe("ACCESS_VBA_PASSWORD");
@@ -214,11 +227,7 @@ describe("handleRelinkDirectoryCommand", () => {
 
   it("--apply → dryRun:false in payload", async () => {
     const service = new FakeQueryService();
-    await handleRelinkDirectoryCommand(
-      ["--root", "C:\\data", "--apply"],
-      {},
-      { service },
-    );
+    await handleRelinkDirectoryCommand(["--root", "C:\\data", "--apply"], {}, { service });
     expect(service.requests[0]).toMatchObject({
       action: "relink_directory",
       dryRun: false,

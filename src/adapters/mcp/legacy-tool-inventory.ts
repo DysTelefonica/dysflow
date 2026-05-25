@@ -54,4 +54,4 @@ export const LEGACY_DYSFLOW_MCP_TOOL_NAMES = [
   ...LEGACY_QUERY_TOOL_NAMES,
 ] as const;
 
-export type LegacyDysflowMcpToolName = typeof LEGACY_DYSFLOW_MCP_TOOL_NAMES[number];
+export type LegacyDysflowMcpToolName = (typeof LEGACY_DYSFLOW_MCP_TOOL_NAMES)[number];

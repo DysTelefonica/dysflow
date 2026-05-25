@@ -5,13 +5,12 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { successResult } from "../../src/core/contracts/index.js";
-import type { OperationResult } from "../../src/core/contracts/index.js";
-import type { AccessQueryResult } from "../../src/core/services/query-service.js";
-import type { RelinkDirectoryReport } from "../../src/core/contracts/index.js";
 import { handleRelinkDirectoryCommand } from "../../src/cli/commands/access/relink-directory.js";
 import { loadDysflowConfig } from "../../src/core/config/dysflow-config.js";
+import type { OperationResult, RelinkDirectoryReport } from "../../src/core/contracts/index.js";
+import { successResult } from "../../src/core/contracts/index.js";
 import { AccessPowerShellRunner } from "../../src/core/runner/access-runner.js";
+import type { AccessQueryResult } from "../../src/core/services/query-service.js";
 import { AccessQueryService } from "../../src/core/services/query-service.js";
 
 // ---------------------------------------------------------------------------
@@ -22,8 +21,12 @@ function hasDaoCom(): boolean {
   try {
     const out = execFileSync(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command",
-        "try { $e = New-Object -ComObject DAO.DBEngine.120; [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null; 'ok' } catch { 'missing' }"],
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "try { $e = New-Object -ComObject DAO.DBEngine.120; [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null; 'ok' } catch { 'missing' }",
+      ],
       { encoding: "utf8", windowsHide: true, timeout: 15_000 },
     );
     return out.trim().includes("ok");
@@ -42,11 +45,11 @@ if (!canRun) {
 // ---------------------------------------------------------------------------
 
 function runPs(script: string, timeoutMs = 45_000): string {
-  return execFileSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", script],
-    { encoding: "utf8", windowsHide: true, timeout: timeoutMs },
-  );
+  return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: timeoutMs,
+  });
 }
 
 /**
@@ -71,7 +74,12 @@ function psCreateNativeDb(path: string): string {
  * Create a frontend .accdb whose "Products" table links to $backendPath.
  * DAO validates the source table exists in the backend at creation time.
  */
-function psCreateLinkedDb(frontendPath: string, backendPath: string, sourceTable = "Products", linkName = "Products"): string {
+function psCreateLinkedDb(
+  frontendPath: string,
+  backendPath: string,
+  sourceTable = "Products",
+  linkName = "Products",
+): string {
   return `
     $e = New-Object -ComObject DAO.DBEngine.120
     try {
@@ -140,7 +148,10 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
 
   beforeEach(() => {
     tmpRoot = join(tmpdir(), `dysflow-rld-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    extRoot = join(tmpdir(), `dysflow-rld-ext-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    extRoot = join(
+      tmpdir(),
+      `dysflow-rld-ext-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    );
     mkdirSync(tmpRoot, { recursive: true });
     mkdirSync(extRoot, { recursive: true });
   });
@@ -154,9 +165,9 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
   it.skipIf(!canRun)(
     "apply: remaps external link, creates .bak-* backup; re-run is alreadyLocal",
     async () => {
-      const extBackend  = join(extRoot, "backend.accdb");
+      const extBackend = join(extRoot, "backend.accdb");
       const localBackend = join(tmpRoot, "backend.accdb");
-      const frontend     = join(tmpRoot, "frontend.accdb");
+      const frontend = join(tmpRoot, "frontend.accdb");
 
       runPs(psCreateNativeDb(extBackend));
       runPs(`Copy-Item -LiteralPath '${extBackend}' -Destination '${localBackend}'`);
@@ -172,7 +183,8 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
       expect(applyResult.exitCode).toBe(0);
 
       // Backup must exist next to frontend
-      const bakFiles = require("node:fs").readdirSync(tmpRoot)
+      const bakFiles = require("node:fs")
+        .readdirSync(tmpRoot)
         .filter((f: string) => f.startsWith("frontend.accdb.bak-"));
       expect(bakFiles.length).toBeGreaterThan(0);
 
@@ -188,8 +200,11 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
       );
       expect(dryResult.exitCode).toBe(0);
       const report = JSON.parse(
-        await handleRelinkDirectoryCommand(["--root", tmpRoot, "--dry-run", "--json"], {}, { service })
-          .then(r => r.stdout),
+        await handleRelinkDirectoryCommand(
+          ["--root", tmpRoot, "--dry-run", "--json"],
+          {},
+          { service },
+        ).then((r) => r.stdout),
       ) as RelinkDirectoryReport;
       expect(report.alreadyLocal).toBeGreaterThan(0);
       expect(report.plannedRelinks).toBe(0);
@@ -197,29 +212,26 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
   );
 
   // 6.12 — --remove-unresolved deletes the unresolvable linked table
-  it.skipIf(!canRun)(
-    "--remove-unresolved: unresolvable link deleted from TableDefs",
-    async () => {
-      const extBackend = join(extRoot, "backend.accdb");
-      const frontend   = join(tmpRoot, "frontend.accdb");
+  it.skipIf(!canRun)("--remove-unresolved: unresolvable link deleted from TableDefs", async () => {
+    const extBackend = join(extRoot, "backend.accdb");
+    const frontend = join(tmpRoot, "frontend.accdb");
 
-      runPs(psCreateNativeDb(extBackend));
-      runPs(psCreateLinkedDb(frontend, extBackend));
+    runPs(psCreateNativeDb(extBackend));
+    runPs(psCreateLinkedDb(frontend, extBackend));
 
-      // Do NOT copy backend.accdb to tmpRoot → link is unresolvable inside tmpRoot
-      expect(existsSync(join(tmpRoot, "backend.accdb"))).toBe(false);
+    // Do NOT copy backend.accdb to tmpRoot → link is unresolvable inside tmpRoot
+    expect(existsSync(join(tmpRoot, "backend.accdb"))).toBe(false);
 
-      const service = makeService(tmpRoot);
-      const result = await handleRelinkDirectoryCommand(
-        ["--root", tmpRoot, "--apply", "--remove-unresolved"],
-        {},
-        { service },
-      );
+    const service = makeService(tmpRoot);
+    const result = await handleRelinkDirectoryCommand(
+      ["--root", tmpRoot, "--apply", "--remove-unresolved"],
+      {},
+      { service },
+    );
 
-      expect(result.exitCode).toBe(0);
-      expect(psTableExists(frontend, "Products")).toBe(false);
-    },
-  );
+    expect(result.exitCode).toBe(0);
+    expect(psTableExists(frontend, "Products")).toBe(false);
+  });
 
   // 6.13 — chain A→B→C: after apply, A links directly to C (chainHops:2)
   it.skipIf(!canRun)(
@@ -227,8 +239,8 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
     async () => {
       // extC has native "Products"; extB links to extC.
       // Local root has copies of B and C plus a frontend linking to extB.
-      const extC  = join(extRoot, "C_backend.accdb");
-      const extB  = join(extRoot, "B_middle.accdb");
+      const extC = join(extRoot, "C_backend.accdb");
+      const extB = join(extRoot, "B_middle.accdb");
       const localC = join(tmpRoot, "C_backend.accdb");
       const localB = join(tmpRoot, "B_middle.accdb");
       const frontend = join(tmpRoot, "frontend.accdb");
@@ -268,7 +280,7 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
 
       // chainHops should be 2 (frontend→B→C)
       const frontendResult = report.fileResults.find(
-        fr => (fr as { filePath: string }).filePath.toLowerCase() === frontend.toLowerCase(),
+        (fr) => (fr as { filePath: string }).filePath.toLowerCase() === frontend.toLowerCase(),
       ) as { links: Array<{ chainHops: number }> } | undefined;
       const link = frontendResult?.links?.[0];
       expect(link?.chainHops).toBe(2);
@@ -276,48 +288,60 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
   );
 
   // 6.14 — cycle: FakeQueryService returns cycleDetected; TS handler propagates it
-  it(
-    "cycle detection: cycleDetected links pass through report unchanged",
-    async () => {
-      const cycleReport: RelinkDirectoryReport = {
-        mode: "apply", root: tmpRoot,
-        filesScanned: 1, linkedTablesFound: 1,
-        alreadyLocal: 0, plannedRelinks: 0, appliedRelinks: 0,
-        unresolved: [], removed: [],
-        externalLinkCount: 1, datosteLinkCount: 0, brokenLinkCount: 0,
-        backupPaths: [], errors: [],
-        fileResults: [{
+  it("cycle detection: cycleDetected links pass through report unchanged", async () => {
+    const cycleReport: RelinkDirectoryReport = {
+      mode: "apply",
+      root: tmpRoot,
+      filesScanned: 1,
+      linkedTablesFound: 1,
+      alreadyLocal: 0,
+      plannedRelinks: 0,
+      appliedRelinks: 0,
+      unresolved: [],
+      removed: [],
+      externalLinkCount: 1,
+      datosteLinkCount: 0,
+      brokenLinkCount: 0,
+      backupPaths: [],
+      errors: [],
+      fileResults: [
+        {
           filePath: join(tmpRoot, "frontend.accdb"),
-          linkedTablesFound: 1, alreadyLocal: 0, plannedRelinks: 0, appliedRelinks: 0,
-          links: [{
-            database: join(tmpRoot, "frontend.accdb"),
-            linkName: "Products",
-            originalBackendPath: "\\\\ext\\share\\backend.accdb",
-            classification: "cycle",
-            resolvedLocalPath: null,
-            chainHops: 2,
-            cycleDetected: true,
-          }],
+          linkedTablesFound: 1,
+          alreadyLocal: 0,
+          plannedRelinks: 0,
+          appliedRelinks: 0,
+          links: [
+            {
+              database: join(tmpRoot, "frontend.accdb"),
+              linkName: "Products",
+              originalBackendPath: "\\\\ext\\share\\backend.accdb",
+              classification: "cycle",
+              resolvedLocalPath: null,
+              chainHops: 2,
+              cycleDetected: true,
+            },
+          ],
           errors: [],
-        }],
-      };
-
-      const fakeService = {
-        async execute(_req: unknown): Promise<OperationResult<AccessQueryResult>> {
-          return successResult({ relinkDirectory: cycleReport });
         },
-      };
+      ],
+    };
 
-      const result = await handleRelinkDirectoryCommand(
-        ["--root", tmpRoot, "--apply", "--json"],
-        {},
-        { service: fakeService },
-      );
+    const fakeService = {
+      async execute(_req: unknown): Promise<OperationResult<AccessQueryResult>> {
+        return successResult({ relinkDirectory: cycleReport });
+      },
+    };
 
-      expect(result.exitCode).toBe(0);
-      const report = JSON.parse(result.stdout) as RelinkDirectoryReport;
-      const link = report.fileResults?.[0]?.links?.[0] as { cycleDetected?: boolean };
-      expect(link?.cycleDetected).toBe(true);
-    },
-  );
+    const result = await handleRelinkDirectoryCommand(
+      ["--root", tmpRoot, "--apply", "--json"],
+      {},
+      { service: fakeService },
+    );
+
+    expect(result.exitCode).toBe(0);
+    const report = JSON.parse(result.stdout) as RelinkDirectoryReport;
+    const link = report.fileResults?.[0]?.links?.[0] as { cycleDetected?: boolean };
+    expect(link?.cycleDetected).toBe(true);
+  });
 });

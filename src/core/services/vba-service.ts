@@ -20,7 +20,10 @@ export class AccessVbaService {
     this.config = options.config;
   }
 
-  execute(request: AccessVbaRequest, onProgress?: AccessRunnerProgressCallback): Promise<OperationResult<AccessVbaResult>> {
+  execute(
+    request: AccessVbaRequest,
+    onProgress?: AccessRunnerProgressCallback,
+  ): Promise<OperationResult<AccessVbaResult>> {
     return this.runner.run<AccessVbaResult>({ kind: "vba", request }, this.config, { onProgress });
   }
 }

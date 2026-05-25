@@ -1,15 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 class FakeQueryService {
-  async execute() { return successResult({ rows: [] }); }
+  async execute() {
+    return successResult({ rows: [] });
+  }
 }
 class FakeVbaService {
-  async execute() { return successResult({ returnValue: "ok" }); }
+  async execute() {
+    return successResult({ returnValue: "ok" });
+  }
 }
 class FakeDiagnosticsService {
-  async run() { return successResult({ checks: [] }); }
+  async run() {
+    return successResult({ checks: [] });
+  }
 }
 
 const services = {

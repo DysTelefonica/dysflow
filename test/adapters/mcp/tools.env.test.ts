@@ -14,9 +14,17 @@ function makeServices() {
   };
   return {
     services: {
-      vbaService: { async execute() { return successResult({ returnValue: "ok" }); } },
+      vbaService: {
+        async execute() {
+          return successResult({ returnValue: "ok" });
+        },
+      },
       queryService,
-      diagnosticsService: { async run() { return successResult({ checks: [] }); } },
+      diagnosticsService: {
+        async run() {
+          return successResult({ checks: [] });
+        },
+      },
     },
     captured,
   };
@@ -31,7 +39,7 @@ describe("Environment injection in MCP adapter (toLegacyMaintenanceRequest)", ()
     const relinkDir = tools.find((t) => t.name === "relink_directory");
     expect(relinkDir).toBeDefined();
 
-    await relinkDir!.handler({ passwordEnv: "MY_DB_PASS" });
+    await relinkDir?.handler({ passwordEnv: "MY_DB_PASS" });
 
     expect(captured[0]?.backendPassword).toBe("injected-password");
   });
@@ -40,20 +48,22 @@ describe("Environment injection in MCP adapter (toLegacyMaintenanceRequest)", ()
     const { services, captured } = makeServices();
 
     // Set a different value in process.env vs injected env
-    const original = process.env["DIVERGENT_TEST_VAR"];
-    process.env["DIVERGENT_TEST_VAR"] = "process-env-value";
+    const original = process.env.DIVERGENT_TEST_VAR;
+    process.env.DIVERGENT_TEST_VAR = "process-env-value";
 
-    const injectedEnv: Record<string, string | undefined> = { DIVERGENT_TEST_VAR: "injected-value" };
+    const injectedEnv: Record<string, string | undefined> = {
+      DIVERGENT_TEST_VAR: "injected-value",
+    };
     const tools = createDysflowMcpTools(services, true, undefined, injectedEnv);
     const relinkDir = tools.find((t) => t.name === "relink_directory");
 
-    await relinkDir!.handler({ passwordEnv: "DIVERGENT_TEST_VAR" });
+    await relinkDir?.handler({ passwordEnv: "DIVERGENT_TEST_VAR" });
 
     // Restore process.env
     if (original === undefined) {
-      delete process.env["DIVERGENT_TEST_VAR"];
+      delete process.env.DIVERGENT_TEST_VAR;
     } else {
-      process.env["DIVERGENT_TEST_VAR"] = original;
+      process.env.DIVERGENT_TEST_VAR = original;
     }
 
     expect(captured[0]?.backendPassword).toBe("injected-value");
@@ -62,18 +72,18 @@ describe("Environment injection in MCP adapter (toLegacyMaintenanceRequest)", ()
   it("when no env is injected, defaults to process.env (backwards compat)", async () => {
     const { services, captured } = makeServices();
 
-    const original = process.env["BC_TEST_VAR"];
-    process.env["BC_TEST_VAR"] = "process-env-bc-value";
+    const original = process.env.BC_TEST_VAR;
+    process.env.BC_TEST_VAR = "process-env-bc-value";
 
     const tools = createDysflowMcpTools(services, true); // no env parameter
     const relinkDir = tools.find((t) => t.name === "relink_directory");
 
-    await relinkDir!.handler({ passwordEnv: "BC_TEST_VAR" });
+    await relinkDir?.handler({ passwordEnv: "BC_TEST_VAR" });
 
     if (original === undefined) {
-      delete process.env["BC_TEST_VAR"];
+      delete process.env.BC_TEST_VAR;
     } else {
-      process.env["BC_TEST_VAR"] = original;
+      process.env.BC_TEST_VAR = original;
     }
 
     expect(captured[0]?.backendPassword).toBe("process-env-bc-value");

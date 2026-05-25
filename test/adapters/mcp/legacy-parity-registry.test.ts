@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LEGACY_DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/legacy-tool-inventory";
 import { LEGACY_PARITY_REGISTRY } from "../../../src/adapters/mcp/legacy-parity-registry";
+import { LEGACY_DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/legacy-tool-inventory";
 import { HIDDEN_STUB_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 
 /**

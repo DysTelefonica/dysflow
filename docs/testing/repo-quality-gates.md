@@ -6,8 +6,8 @@ Owner: repo-engineering-hardening
 
 - `pnpm test` runs the Vitest suite.
 - `pnpm build` runs the TypeScript build.
-- Lint currently uses TypeScript strict checking through `pnpm lint`
-  (`tsc --noEmit`).
+- Lint uses TypeScript strict checking and Biome (lint + format check) through `pnpm lint`
+  (`tsc --noEmit && biome check`). Use `pnpm format` to auto-format, `pnpm format:check` to verify.
 - `pnpm coverage` runs Vitest coverage for `src/**/*.ts`.
 
 ## Coverage thresholds
@@ -22,5 +22,4 @@ Current floors (set on PR2 of product-quality-fixes):
 | functions  | 88%   |
 | lines      | 86%   |
 
-Raise the thresholds after significant coverage improvements, and replace the
-TypeScript-only lint gate with a dedicated style linter when the team chooses one.
+Raise the thresholds after significant coverage improvements.

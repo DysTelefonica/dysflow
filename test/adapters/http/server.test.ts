@@ -1,11 +1,16 @@
 import { mkdtemp } from "node:fs/promises";
+import { request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { request as httpRequest, type Server } from "node:http";
 import { startDysflowHttpServer } from "../../../src/adapters/http/server";
+import {
+  type AccessQueryRequest,
+  type AccessVbaRequest,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
-import { failureResult, successResult, type AccessQueryRequest, type AccessVbaRequest } from "../../../src/core/contracts/index";
 
 const startedServers: Server[] = [];
 type HttpServerOptions = NonNullable<Parameters<typeof startDysflowHttpServer>[0]>;
@@ -34,7 +39,10 @@ function createFakeServices(overrides: Partial<HttpServices> = {}) {
     diagnosticsService: {
       run: async () => {
         calls.diagnostics += 1;
-        return successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }, { durationMs: 3 });
+        return successResult(
+          { checks: [{ name: "access-db-path", ok: true, message: "configured" }] },
+          { durationMs: 3 },
+        );
       },
     },
     queryService: {
@@ -53,26 +61,40 @@ function createFakeServices(overrides: Partial<HttpServices> = {}) {
   };
 }
 
-async function readJson<TBody = any>(url: string, init?: RequestInit): Promise<{ response: Response; body: TBody }> {
+async function readJson<TBody = any>(
+  url: string,
+  init?: RequestInit,
+): Promise<{ response: Response; body: TBody }> {
   const response = await fetch(url, init);
-  return { response, body: await response.json() as TBody };
+  return { response, body: (await response.json()) as TBody };
 }
 
-async function postChunkedJson(url: string, chunks: readonly string[], headers: Record<string, string> = {}) {
+async function postChunkedJson(
+  url: string,
+  chunks: readonly string[],
+  headers: Record<string, string> = {},
+) {
   const target = new URL(url);
   return new Promise<{ statusCode: number; body: unknown }>((resolve, reject) => {
-    const request = httpRequest({
-      hostname: target.hostname,
-      port: Number(target.port),
-      path: target.pathname,
-      method: "POST",
-      headers: { "content-type": "application/json", ...headers },
-    }, (response) => {
-      let raw = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => { raw += chunk; });
-      response.on("end", () => resolve({ statusCode: response.statusCode ?? 0, body: JSON.parse(raw) as unknown }));
-    });
+    const request = httpRequest(
+      {
+        hostname: target.hostname,
+        port: Number(target.port),
+        path: target.pathname,
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+      },
+      (response) => {
+        let raw = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          raw += chunk;
+        });
+        response.on("end", () =>
+          resolve({ statusCode: response.statusCode ?? 0, body: JSON.parse(raw) as unknown }),
+        );
+      },
+    );
     request.on("error", reject);
     for (const chunk of chunks) request.write(chunk);
     request.end();
@@ -80,9 +102,14 @@ async function postChunkedJson(url: string, chunks: readonly string[], headers: 
 }
 
 afterEach(async () => {
-  await Promise.all(startedServers.splice(0).map((server) => new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-  })));
+  await Promise.all(
+    startedServers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        }),
+    ),
+  );
 });
 
 describe("Dysflow HTTP adapter", () => {
@@ -132,12 +159,25 @@ describe("Dysflow HTTP adapter", () => {
     });
 
     expect(diagnostics.response.status).toBe(200);
-    expect(diagnostics.body).toEqual({ ok: true, data: { checks: [{ name: "access-db-path", ok: true, message: "configured" }] }, diagnostics: [], durationMs: 3 });
+    expect(diagnostics.body).toEqual({
+      ok: true,
+      data: { checks: [{ name: "access-db-path", ok: true, message: "configured" }] },
+      diagnostics: [],
+      durationMs: 3,
+    });
     expect(query.response.status).toBe(200);
-    expect(query.body).toEqual({ ok: true, data: { rows: [{ id: 1, name: "Ada" }] }, diagnostics: [], durationMs: 5 });
-    expect(services.calls).toEqual({ diagnostics: 1, queries: [{ sql: "SELECT id, name FROM People", mode: "read" }], vba: [] });
+    expect(query.body).toEqual({
+      ok: true,
+      data: { rows: [{ id: 1, name: "Ada" }] },
+      diagnostics: [],
+      durationMs: 5,
+    });
+    expect(services.calls).toEqual({
+      diagnostics: 1,
+      queries: [{ sql: "SELECT id, name FROM People", mode: "read" }],
+      vba: [],
+    });
   });
-
 
   it("rejects write SQL sent to the read route before it reaches core services", async () => {
     const services = createFakeServices();
@@ -162,7 +202,6 @@ describe("Dysflow HTTP adapter", () => {
     });
     expect(services.calls.queries).toEqual([]);
   });
-
 
   it("rejects Access SELECT INTO write SQL on the read route", async () => {
     const services = createFakeServices();
@@ -211,7 +250,16 @@ describe("Dysflow HTTP adapter", () => {
     });
 
     expect(response.response.status).toBe(413);
-    expect(response.body).toEqual({ ok: false, error: { code: "HTTP_BODY_TOO_LARGE", message: "Request body exceeds the 16 byte limit.", retryable: false }, diagnostics: [], durationMs: 0 });
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: "HTTP_BODY_TOO_LARGE",
+        message: "Request body exceeds the 16 byte limit.",
+        retryable: false,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
     expect(services.calls.queries).toEqual([]);
   });
 
@@ -219,17 +267,30 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services, maxBodyBytes: 16 });
 
-    const response = await postChunkedJson(`${server.url}/query/read`, ["{\"sql\":", "\"SELECT 1\"}"]);
+    const response = await postChunkedJson(`${server.url}/query/read`, ['{"sql":', '"SELECT 1"}']);
 
     expect(response.statusCode).toBe(413);
-    expect(response.body).toEqual({ ok: false, error: { code: "HTTP_BODY_TOO_LARGE", message: "Request body exceeds the 16 byte limit.", retryable: false }, diagnostics: [], durationMs: 0 });
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: "HTTP_BODY_TOO_LARGE",
+        message: "Request body exceeds the 16 byte limit.",
+        retryable: false,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
     expect(services.calls.queries).toEqual([]);
   });
 
   it("translates core failures and malformed JSON to safe JSON errors", async () => {
     const services = createFakeServices({
       queryService: {
-        execute: async () => failureResult({ code: "RUNNER_FAILED", message: "sanitized failure", retryable: false }, { durationMs: 4 }),
+        execute: async () =>
+          failureResult(
+            { code: "RUNNER_FAILED", message: "sanitized failure", retryable: false },
+            { durationMs: 4 },
+          ),
       },
     });
     const server = await startTestServer({ services });
@@ -246,9 +307,23 @@ describe("Dysflow HTTP adapter", () => {
     });
 
     expect(coreFailure.response.status).toBe(500);
-    expect(coreFailure.body).toEqual({ ok: false, error: { code: "RUNNER_FAILED", message: "sanitized failure", retryable: false }, diagnostics: [], durationMs: 4 });
+    expect(coreFailure.body).toEqual({
+      ok: false,
+      error: { code: "RUNNER_FAILED", message: "sanitized failure", retryable: false },
+      diagnostics: [],
+      durationMs: 4,
+    });
     expect(badJson.response.status).toBe(400);
-    expect(badJson.body).toEqual({ ok: false, error: { code: "HTTP_BAD_JSON", message: "Request body must be valid JSON.", retryable: false }, diagnostics: [], durationMs: 0 });
+    expect(badJson.body).toEqual({
+      ok: false,
+      error: {
+        code: "HTTP_BAD_JSON",
+        message: "Request body must be valid JSON.",
+        retryable: false,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
   });
 
   it("blocks query and VBA write routes by default without calling core services", async () => {
@@ -268,7 +343,17 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(writeQuery.response.status).toBe(403);
     expect(vba.response.status).toBe(403);
-    expect(writeQuery.body).toEqual({ ok: false, error: { code: "HTTP_WRITES_DISABLED", message: "Write routes are disabled. Start dysflow serve with --enable-writes to allow them.", retryable: false }, diagnostics: [], durationMs: 0 });
+    expect(writeQuery.body).toEqual({
+      ok: false,
+      error: {
+        code: "HTTP_WRITES_DISABLED",
+        message:
+          "Write routes are disabled. Start dysflow serve with --enable-writes to allow them.",
+        retryable: false,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
     expect(vba.body.error.code).toBe("HTTP_WRITES_DISABLED");
     expect(services.calls).toEqual({ diagnostics: 0, queries: [], vba: [] });
   });
@@ -285,13 +370,21 @@ describe("Dysflow HTTP adapter", () => {
     const vba = await readJson(`${server.url}/vba/execute`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }),
+      body: JSON.stringify({
+        moduleName: "Automation",
+        procedureName: "Refresh",
+        arguments: [2026],
+      }),
     });
 
     expect(writeQuery.response.status).toBe(200);
     expect(vba.response.status).toBe(200);
-    expect(services.calls.queries).toEqual([{ sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write" }]);
-    expect(services.calls.vba).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }]);
+    expect(services.calls.queries).toEqual([
+      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write" },
+    ]);
+    expect(services.calls.vba).toEqual([
+      { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] },
+    ]);
   });
 
   it("accepts SELECT with a semicolon inside a string literal", async () => {

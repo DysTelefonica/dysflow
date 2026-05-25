@@ -1,7 +1,17 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools, translateCoreResultToMcpContent, LEGACY_TOOL_SCHEMAS, MODERN_TOOL_NAMES, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
-import { failureResult, successResult, type OperationResult } from "../../../src/core/contracts/index";
+import {
+  createDysflowMcpTools,
+  type DysflowMcpServices,
+  LEGACY_TOOL_SCHEMAS,
+  MODERN_TOOL_NAMES,
+  translateCoreResultToMcpContent,
+} from "../../../src/adapters/mcp/tools";
+import {
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
@@ -60,15 +70,32 @@ describe("MCP tool registration over core services", () => {
 
   it("registers protocol-safe MCP tools that invoke the matching core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "refreshed" }, { durationMs: 7 }));
-    const query = new FakeQueryService(successResult({ rows: [{ id: 1, name: "Ada" }] }, { durationMs: 5 }));
+    const query = new FakeQueryService(
+      successResult({ rows: [{ id: 1, name: "Ada" }] }, { durationMs: 5 }),
+    );
     const diagnostics = new FakeDiagnosticsService(
-      successResult({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }, { durationMs: 3 }),
+      successResult(
+        { checks: [{ name: "access-db-path", ok: true, message: "configured" }] },
+        { durationMs: 3 },
+      ),
     );
 
-    const tools = createDysflowMcpTools({ vbaService: vba, queryService: query, diagnosticsService: diagnostics });
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: query,
+      diagnosticsService: diagnostics,
+    });
     const toolNames = tools.map((tool) => tool.name);
 
-    expect(toolNames).toEqual(expect.arrayContaining(["dysflow_vba_execute", "dysflow_query_execute", "dysflow_doctor", "dysflow_access_operations_list", "dysflow_access_cleanup"]));
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        "dysflow_vba_execute",
+        "dysflow_query_execute",
+        "dysflow_doctor",
+        "dysflow_access_operations_list",
+        "dysflow_access_cleanup",
+      ]),
+    );
     expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema).toMatchObject({
       type: "object",
       required: ["procedureName"],
@@ -79,20 +106,33 @@ describe("MCP tool registration over core services", () => {
         arguments: { type: "array" },
       },
     });
-    await expect(tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] })).resolves.toEqual({
+    await expect(
+      tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
     });
-    await expect(tools[1]?.handler({ sql: "SELECT id, name FROM People", mode: "read" })).resolves.toEqual({
+    await expect(
+      tools[1]?.handler({ sql: "SELECT id, name FROM People", mode: "read" }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [{ id: 1, name: "Ada" }] }) }],
       isError: false,
     });
     await expect(tools[2]?.handler({ includeEnvironment: true })).resolves.toEqual({
-      content: [{ type: "text", text: JSON.stringify({ checks: [{ name: "access-db-path", ok: true, message: "configured" }] }) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            checks: [{ name: "access-db-path", ok: true, message: "configured" }],
+          }),
+        },
+      ],
       isError: false,
     });
 
-    expect(vba.requests).toEqual([{ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }]);
+    expect(vba.requests).toEqual([
+      { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] },
+    ]);
     expect(query.requests).toEqual([{ sql: "SELECT id, name FROM People", mode: "read" }]);
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
   });
@@ -114,7 +154,9 @@ describe("MCP tool registration over core services", () => {
     ];
 
     expect(toolNames).toEqual(expect.arrayContaining(expectedModernToolNames));
-    expect(toolNames.filter((name) => name.startsWith("dysflow") && name.includes("."))).toEqual([]);
+    expect(toolNames.filter((name) => name.startsWith("dysflow") && name.includes("."))).toEqual(
+      [],
+    );
   });
 
   it("regression: MODERN_TOOL_NAMES are exactly the 5 underscore-only names and none contains a dot", () => {
@@ -159,40 +201,81 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: diagnostics,
     });
 
-    await expect(tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ contextId: "00-no-conformidades-staging-clean" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" })).resolves.toMatchObject({ isError: false });
-    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" })).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_doctor")
+        ?.handler({ contextId: "00-no-conformidades-staging-clean" }),
+    ).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_vba_execute")
+        ?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" }),
+    ).resolves.toMatchObject({ isError: false });
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({
+          contextId: "00-no-conformidades-staging-clean",
+          sql: "SELECT 1",
+          mode: "read",
+        }),
+    ).resolves.toMatchObject({ isError: false });
 
     expect(diagnostics.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean" }]);
-    expect(vba.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" }]);
-    expect(query.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" }]);
+    expect(vba.requests).toEqual([
+      { contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" },
+    ]);
+    expect(query.requests).toEqual([
+      { contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" },
+    ]);
   });
 
   it("rejects invalid MCP inputs before calling core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, true);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: vba,
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
 
-    await expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.handler({ moduleName: "Automation" })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_vba_execute")
+        ?.handler({ moduleName: "Automation" }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 })).resolves.toEqual({
+    await expect(
+      tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: sql must be a string." }],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], dryRun: true })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "seed_fixture")
+        ?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], dryRun: true }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
     });
-    expect(tools.find((tool) => tool.name === "catalog_add_control")?.inputSchema?.properties).toHaveProperty("catalogPath");
+    expect(
+      tools.find((tool) => tool.name === "catalog_add_control")?.inputSchema?.properties,
+    ).toHaveProperty("catalogPath");
 
     expect(vba.requests).toEqual([]);
-    expect(query.requests).toEqual([expect.objectContaining({ action: "seed_fixture", tableName: "People", allowTables: ["People"] })]);
+    expect(query.requests).toEqual([
+      expect.objectContaining({
+        action: "seed_fixture",
+        tableName: "People",
+        allowTables: ["People"],
+      }),
+    ]);
   });
 
   it("rejects invalid nested MCP inputs before calling core services", async () => {
@@ -204,20 +287,43 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
 
-    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "SELECT 1", mode: "delete" })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "SELECT 1", mode: "delete" }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
-      content: [{ type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." }],
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
+    ).resolves.toEqual({
+      content: [
+        {
+          type: "text",
+          text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter.",
+        },
+      ],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({ tableName: "People", allowTables: ["People", 7], rows: [{ id: 1 }] })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "seed_fixture")
+        ?.handler({ tableName: "People", allowTables: ["People", 7], rows: [{ id: 1 }] }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: allowTables[1] must be a string." }],
       isError: true,
     });
-    await expect(tools.find((tool) => tool.name === "import_queries")?.handler({ queryDefinitions: [{ name: "q_people", sql: 42 }] })).resolves.toEqual({
-      content: [{ type: "text", text: "MCP_INPUT_INVALID: queryDefinitions[0].sql must be a string." }],
+    await expect(
+      tools
+        .find((tool) => tool.name === "import_queries")
+        ?.handler({ queryDefinitions: [{ name: "q_people", sql: 42 }] }),
+    ).resolves.toEqual({
+      content: [
+        { type: "text", text: "MCP_INPUT_INVALID: queryDefinitions[0].sql must be a string." },
+      ],
       isError: true,
     });
 
@@ -227,13 +333,20 @@ describe("MCP tool registration over core services", () => {
 
   it("allows MCP write queries only when writes are explicitly enabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, true);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
 
-    await expect(tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
     });
@@ -243,39 +356,55 @@ describe("MCP tool registration over core services", () => {
 
   it("allows write tool when project-scoped allowWrites resolver grants access", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, false, async (input) => (input as { projectId?: string }).projectId === "lanzadera");
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      false,
+      async (input) => (input as { projectId?: string }).projectId === "lanzadera",
+    );
 
-    await expect(tools.find((tool) => tool.name === "seed_fixture")?.handler({
-      projectId: "lanzadera",
-      tableName: "People",
-      rows: [{ id: 1 }],
-      apply: true,
-    })).resolves.toEqual({
+    await expect(
+      tools
+        .find((tool) => tool.name === "seed_fixture")
+        ?.handler({
+          projectId: "lanzadera",
+          tableName: "People",
+          rows: [{ id: 1 }],
+          apply: true,
+        }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
     });
 
-    expect(query.requests).toEqual([expect.objectContaining({ action: "seed_fixture", mode: "write", dryRun: false })]);
+    expect(query.requests).toEqual([
+      expect.objectContaining({ action: "seed_fixture", mode: "write", dryRun: false }),
+    ]);
   });
 
   it("keeps blocking write tool when allowWrites resolver denies the project", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, false, async () => false);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      false,
+      async () => false,
+    );
 
-    const result = await tools.find((tool) => tool.name === "seed_fixture")?.handler({
-      projectId: "readonly-project",
-      tableName: "People",
-      rows: [{ id: 1 }],
-      apply: true,
-    });
+    const result = await tools
+      .find((tool) => tool.name === "seed_fixture")
+      ?.handler({
+        projectId: "readonly-project",
+        tableName: "People",
+        rows: [{ id: 1 }],
+        apply: true,
+      });
 
     expect(result?.isError).toBe(true);
     expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
@@ -299,7 +428,9 @@ describe("MCP tool registration over core services", () => {
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
     });
-    await expect(runVba?.handler({ procedureName: "Array", argsJson: "[1,\"two\"]" })).resolves.toEqual({
+    await expect(
+      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]' }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
     });
@@ -323,7 +454,10 @@ describe("MCP tool registration over core services", () => {
     });
 
     for (const tool of tools) {
-      expect(tool.inputSchema, `${tool.name} should declare inputSchema`).toMatchObject({ type: "object", properties: expect.any(Object) });
+      expect(tool.inputSchema, `${tool.name} should declare inputSchema`).toMatchObject({
+        type: "object",
+        properties: expect.any(Object),
+      });
       expect(tool.inputSchema).not.toEqual({ type: "object", additionalProperties: true });
     }
   });
@@ -344,7 +478,10 @@ describe("MCP tool registration over core services", () => {
       for (const implemented of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const tool = tools.find((t) => t.name === implemented);
         expect(tool, `${implemented} must be present in tool registry`).toBeDefined();
-        expect(tool?.hidden, `${implemented} must be visible now that it is implemented`).toBeUndefined();
+        expect(
+          tool?.hidden,
+          `${implemented} must be visible now that it is implemented`,
+        ).toBeUndefined();
       }
     });
 
@@ -352,7 +489,9 @@ describe("MCP tool registration over core services", () => {
       const tools = createDysflowMcpTools(makeServices());
       for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
-        expect(result?.isError, `${toolName} should fail safely without the legacy service`).toBe(true);
+        expect(result?.isError, `${toolName} should fail safely without the legacy service`).toBe(
+          true,
+        );
         expect(result?.content[0]?.text).toContain("MCP_SERVICE_UNAVAILABLE");
         expect(result?.content[0]?.text).not.toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
       }
@@ -369,7 +508,9 @@ describe("MCP tool registration over core services", () => {
       for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
         expect(result).toEqual({
-          content: [{ type: "text", text: JSON.stringify({ toolName, input: { diff: true }, ok: true }) }],
+          content: [
+            { type: "text", text: JSON.stringify({ toolName, input: { diff: true }, ok: true }) },
+          ],
           isError: false,
         });
       }
@@ -390,24 +531,27 @@ describe("MCP tool registration over core services", () => {
       // Legacy tools are those outside the modern 'dysflow_' namespace (they use legacySchemaForTool)
       const legacyTools = tools.filter((t) => !t.name.startsWith("dysflow_"));
       for (const tool of legacyTools) {
-        expect(LEGACY_TOOL_SCHEMAS, `${tool.name} must have an entry in LEGACY_TOOL_SCHEMAS`).toHaveProperty(tool.name);
+        expect(
+          LEGACY_TOOL_SCHEMAS,
+          `${tool.name} must have an entry in LEGACY_TOOL_SCHEMAS`,
+        ).toHaveProperty(tool.name);
       }
     });
 
     it("list_tables schema does not include rows property", () => {
-      const schema = LEGACY_TOOL_SCHEMAS["list_tables"];
+      const schema = LEGACY_TOOL_SCHEMAS.list_tables;
       expect(schema).toBeDefined();
       expect(schema?.properties).not.toHaveProperty("rows");
     });
 
     it("seed_fixture schema does not include query property", () => {
-      const schema = LEGACY_TOOL_SCHEMAS["seed_fixture"];
+      const schema = LEGACY_TOOL_SCHEMAS.seed_fixture;
       expect(schema).toBeDefined();
       expect(schema?.properties).not.toHaveProperty("query");
     });
 
     it("exists schema accepts both public name and legacy moduleName aliases", () => {
-      const schema = LEGACY_TOOL_SCHEMAS["exists"];
+      const schema = LEGACY_TOOL_SCHEMAS.exists;
       expect(schema).toBeDefined();
       expect(schema?.properties).toHaveProperty("name");
       expect(schema?.properties).toHaveProperty("moduleName");
@@ -431,7 +575,10 @@ describe("MCP tool registration over core services", () => {
         "fix_encoding",
       ];
       for (const toolName of timeoutTools) {
-        expect(LEGACY_TOOL_SCHEMAS[toolName]?.properties, `${toolName} should accept timeoutMs`).toHaveProperty("timeoutMs");
+        expect(
+          LEGACY_TOOL_SCHEMAS[toolName]?.properties,
+          `${toolName} should accept timeoutMs`,
+        ).toHaveProperty("timeoutMs");
       }
 
       const tools = createDysflowMcpTools({
@@ -443,7 +590,16 @@ describe("MCP tool registration over core services", () => {
       const compile = tools.find((t) => t.name === "compile_vba");
       const result = await compile?.handler({ timeoutMs: 120_000 });
       expect(result).toEqual({
-        content: [{ type: "text", text: JSON.stringify({ toolName: "compile_vba", input: { timeoutMs: 120_000 }, ok: true }) }],
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              toolName: "compile_vba",
+              input: { timeoutMs: 120_000 },
+              ok: true,
+            }),
+          },
+        ],
         isError: false,
       });
     });
@@ -453,6 +609,7 @@ describe("MCP tool registration over core services", () => {
       // list_tables should not accept rows — passing rows should produce a validation error
       const listTables = tools.find((t) => t.name === "list_tables");
       expect(listTables).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: listTables is asserted defined above
       const result = await listTables!.handler({ rows: [{ id: 1 }] });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
@@ -461,12 +618,27 @@ describe("MCP tool registration over core services", () => {
 
   it("translates core failures to safe MCP errors without leaking diagnostics, protocol details, or local paths", () => {
     const result = failureResult(
-      { code: "RUNNER_FAILED", message: "PowerShell runner failed for C:\\Users\\Jane Doe\\NoConformidades.accdb and /Users/Jane Doe/db.accdb: password=[REDACTED]", retryable: false },
-      { diagnostics: [{ level: "error", source: "powershell.stderr", message: "raw internal stack" }], durationMs: 11 },
+      {
+        code: "RUNNER_FAILED",
+        message:
+          "PowerShell runner failed for C:\\Users\\Jane Doe\\NoConformidades.accdb and /Users/Jane Doe/db.accdb: password=[REDACTED]",
+        retryable: false,
+      },
+      {
+        diagnostics: [
+          { level: "error", source: "powershell.stderr", message: "raw internal stack" },
+        ],
+        durationMs: 11,
+      },
     );
 
     expect(translateCoreResultToMcpContent(result)).toEqual({
-      content: [{ type: "text", text: "RUNNER_FAILED: PowerShell runner failed for [PATH] and [PATH]: password=[REDACTED]" }],
+      content: [
+        {
+          type: "text",
+          text: "RUNNER_FAILED: PowerShell runner failed for [PATH] and [PATH]: password=[REDACTED]",
+        },
+      ],
       isError: true,
     });
   });
@@ -474,11 +646,14 @@ describe("MCP tool registration over core services", () => {
   // Issue #184: dryRun:true must bypass the write guard for relink_tables
   it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, false);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      false,
+    );
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:true — must NOT be blocked by write guard
@@ -493,11 +668,14 @@ describe("MCP tool registration over core services", () => {
 
   it("blocks relink_tables with dryRun:false when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, false);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      false,
+    );
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:false — must be blocked by write guard when writes are disabled
@@ -509,11 +687,14 @@ describe("MCP tool registration over core services", () => {
 
   it("allows relink_tables with dryRun:false when writes are enabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, true);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     const writeResult = await relinkTool?.handler({ dryRun: false });
@@ -524,11 +705,14 @@ describe("MCP tool registration over core services", () => {
 
   it("allows localize_backend_links with optional backendPath and dryRun", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-    }, true);
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
 
     const localizeTool = tools.find((t) => t.name === "localize_backend_links");
     expect(localizeTool?.inputSchema?.properties).toHaveProperty("backendPath");
@@ -564,7 +748,11 @@ describe("MCP tool registration over core services", () => {
       // writesEnabled=false must block seed_fixture (a write tool)
       const tools = createDysflowMcpTools(services, false);
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
-      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }], apply: true });
+      const result = await seedFixture?.handler({
+        tableName: "People",
+        rows: [{ id: 1 }],
+        apply: true,
+      });
       expect(result?.isError).toBe(true);
       expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
       expect(query.requests).toEqual([]);
@@ -575,7 +763,11 @@ describe("MCP tool registration over core services", () => {
       const services = { ...makeServices(), queryService: query };
       const tools = createDysflowMcpTools(services, true);
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
-      const result = await seedFixture?.handler({ tableName: "People", rows: [{ id: 1 }], apply: true });
+      const result = await seedFixture?.handler({
+        tableName: "People",
+        rows: [{ id: 1 }],
+        apply: true,
+      });
       expect(result?.isError).toBe(false);
     });
   });
@@ -583,7 +775,10 @@ describe("MCP tool registration over core services", () => {
   describe("McpToolContext wiring — modern tools forward sendProgress to services", () => {
     class ProgressCapturingVbaService {
       public capturedOnProgress: unknown[] = [];
-      async execute(request: unknown, onProgress?: unknown): Promise<OperationResult<AccessVbaResult>> {
+      async execute(
+        _request: unknown,
+        onProgress?: unknown,
+      ): Promise<OperationResult<AccessVbaResult>> {
         this.capturedOnProgress.push(onProgress);
         return successResult({ returnValue: "ok" });
       }
@@ -591,7 +786,10 @@ describe("MCP tool registration over core services", () => {
 
     class ProgressCapturingQueryService {
       public capturedOnProgress: unknown[] = [];
-      async execute(request: unknown, onProgress?: unknown): Promise<OperationResult<AccessQueryResult>> {
+      async execute(
+        _request: unknown,
+        onProgress?: unknown,
+      ): Promise<OperationResult<AccessQueryResult>> {
         this.capturedOnProgress.push(onProgress);
         return successResult({ rows: [] });
       }
@@ -617,11 +815,14 @@ describe("MCP tool registration over core services", () => {
 
     it("dysflow_query_execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
       const query = new ProgressCapturingQueryService();
-      const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: query as unknown as DysflowMcpServices["queryService"],
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-      }, true);
+      const tools = createDysflowMcpTools(
+        {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query as unknown as DysflowMcpServices["queryService"],
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        true,
+      );
 
       const sendProgress = () => {};
       const context = { progressToken: "tok-2", sendProgress };
@@ -664,11 +865,21 @@ describe("MCP tool registration over core services", () => {
         queryService: new FakeQueryService(successResult({ rows: [] })),
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       });
-      const toolsWithCtx = ["query_sql", "exec_sql", "export_modules", "link_tables", "list_tables"];
+      const toolsWithCtx = [
+        "query_sql",
+        "exec_sql",
+        "export_modules",
+        "link_tables",
+        "list_tables",
+      ];
       for (const name of toolsWithCtx) {
         const tool = tools.find((t) => t.name === name);
-        expect(tool?.inputSchema?.properties, `${name} must have projectId`).toHaveProperty("projectId");
-        expect(tool?.inputSchema?.properties, `${name} must have contextId`).toHaveProperty("contextId");
+        expect(tool?.inputSchema?.properties, `${name} must have projectId`).toHaveProperty(
+          "projectId",
+        );
+        expect(tool?.inputSchema?.properties, `${name} must have contextId`).toHaveProperty(
+          "contextId",
+        );
       }
     });
   });

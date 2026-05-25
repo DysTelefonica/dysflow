@@ -1,15 +1,15 @@
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it, expect, afterAll } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
-  REDACTED_SECRET,
   isRecord,
+  REDACTED_SECRET,
+  readJsonFileAsync,
+  readJsonFileSync,
+  sanitizeSecrets,
   stringValue,
   truthy,
-  sanitizeSecrets,
-  readJsonFileSync,
-  readJsonFileAsync,
 } from "../../../src/core/utils/index.js";
 
 // Shared temp directory for file-read tests — cleaned up after all tests

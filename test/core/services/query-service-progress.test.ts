@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { AccessQueryService } from "../../../src/core/services/query-service.js";
-import { successResult, type OperationResult } from "../../../src/core/contracts/index.js";
-import type { AccessRunner, AccessRunnerOperation, AccessRunnerRunOptions } from "../../../src/core/runner/access-runner.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
-import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
+import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
+import type {
+  AccessRunner,
+  AccessRunnerOperation,
+  AccessRunnerRunOptions,
+} from "../../../src/core/runner/access-runner.js";
+import { AccessQueryService } from "../../../src/core/services/query-service.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
@@ -17,7 +20,11 @@ class CapturingRunner implements AccessRunner {
   public capturedOptions: AccessRunnerRunOptions[] = [];
   public capturedOperations: AccessRunnerOperation[] = [];
 
-  async run<TData>(operation: AccessRunnerOperation, _config?: DysflowConfig, options?: AccessRunnerRunOptions): Promise<OperationResult<TData>> {
+  async run<TData>(
+    operation: AccessRunnerOperation,
+    _config?: DysflowConfig,
+    options?: AccessRunnerRunOptions,
+  ): Promise<OperationResult<TData>> {
     this.capturedOperations.push(operation);
     this.capturedOptions.push(options ?? {});
     return successResult({} as TData);
@@ -33,7 +40,7 @@ describe("AccessQueryService — onProgress forwarding", () => {
     await service.execute({ sql: "SELECT 1", mode: "read" }, onProgress);
 
     expect(runner.capturedOptions).toHaveLength(1);
-    expect(runner.capturedOptions[0]!.onProgress).toBe(onProgress);
+    expect(runner.capturedOptions[0]?.onProgress).toBe(onProgress);
   });
 
   it("calls runner.run without onProgress when no callback is supplied", async () => {
@@ -43,6 +50,6 @@ describe("AccessQueryService — onProgress forwarding", () => {
     await service.execute({ sql: "SELECT 1", mode: "read" });
 
     expect(runner.capturedOptions).toHaveLength(1);
-    expect(runner.capturedOptions[0]!.onProgress).toBeUndefined();
+    expect(runner.capturedOptions[0]?.onProgress).toBeUndefined();
   });
 });

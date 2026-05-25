@@ -4,7 +4,10 @@ import type { CliCommandContext, CliResult } from "./types.js";
 
 export const MCP_USAGE = "Usage: dysflow mcp [--enable-writes]";
 
-export async function handleMcpCommand(args: readonly string[], context: CliCommandContext = {}): Promise<CliResult> {
+export async function handleMcpCommand(
+  args: readonly string[],
+  context: CliCommandContext = {},
+): Promise<CliResult> {
   const writesEnabled = args.includes("--enable-writes");
   const unknownArg = args.find((arg) => arg !== "--enable-writes");
   if (unknownArg !== undefined) {
@@ -12,7 +15,10 @@ export async function handleMcpCommand(args: readonly string[], context: CliComm
   }
   try {
     const configResult = await loadDysflowConfigAsync({ env: context.env, cwd: context.cwd });
-    await (context.startMcpAdapter ?? startMcpStdioAdapter)(configResult.ok ? configResult.data : undefined, { writesEnabled });
+    await (context.startMcpAdapter ?? startMcpStdioAdapter)(
+      configResult.ok ? configResult.data : undefined,
+      { writesEnabled },
+    );
     return { exitCode: 0, stdout: "", stderr: "" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start MCP stdio adapter.";

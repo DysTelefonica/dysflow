@@ -1,21 +1,39 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { extname, isAbsolute, parse, relative, resolve } from "node:path";
-import { createDysflowError, failureResult, successResult, type OperationResult } from "../contracts/index.js";
-import { stringValue, isRecord, sanitizeSecrets, readJsonFileAsync, truthy } from "../utils/index.js";
-import { loadDysflowConfigAsync, type DysflowConfig } from "../config/dysflow-config.js";
+import { readdir, stat } from "node:fs/promises";
+import { extname, isAbsolute, parse, resolve } from "node:path";
+import { type DysflowConfig, loadDysflowConfigAsync } from "../config/dysflow-config.js";
+import {
+  createDysflowError,
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../contracts/index.js";
+import {
+  type AccessOperationPreflightCleanup,
+  type AccessOperationPreflightCleanupResult,
+  AccessOperationPreflightCleanupService,
+  diagnosticsFromPreflightCleanup,
+} from "../operations/access-operation-preflight.js";
+import {
+  FileAccessOperationRegistry,
+  resolveProjectOperationRegistryPath,
+} from "../operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../runner/powershell-executor.js";
-import { AccessOperationPreflightCleanupService, diagnosticsFromPreflightCleanup, type AccessOperationPreflightCleanup, type AccessOperationPreflightCleanupResult } from "../operations/access-operation-preflight.js";
-import { FileAccessOperationRegistry, resolveProjectOperationRegistryPath } from "../operations/access-operation-registry.js";
+import {
+  isRecord,
+  readJsonFileAsync,
+  sanitizeSecrets,
+  stringValue,
+  truthy,
+} from "../utils/index.js";
 import { VbaFormService } from "./vba-form-service.js";
 import { compareSourceAgainstBinary, planReconcileBinary } from "./vba-source-comparison.js";
 
 export * from "./vba-form-service.js";
 export {
-	compareSourceAgainstBinary,
-	planReconcileBinary,
-	compareVbaSourceTrees,
-	collectVbaSourceFiles,
+  collectVbaSourceFiles,
+  compareSourceAgainstBinary,
+  compareVbaSourceTrees,
+  planReconcileBinary,
 } from "./vba-source-comparison.js";
 
 export type VbaSourceComparisonFile = {
@@ -77,7 +95,9 @@ export type VbaManagerExecutionResult = {
   timedOut: boolean;
 };
 
-export type VbaManagerExecutor = (request: VbaManagerExecutionRequest) => Promise<VbaManagerExecutionResult>;
+export type VbaManagerExecutor = (
+  request: VbaManagerExecutionRequest,
+) => Promise<VbaManagerExecutionResult>;
 
 export type ImportPlanResult = {
   operation: "import_all" | "import_modules";
@@ -98,7 +118,10 @@ export type ImportPlanResult = {
   errors: readonly string[];
 };
 
-export type ImportPlanTarget = Pick<DysflowConfig, "accessDbPath" | "backendPath" | "projectRoot" | "projectId" | "configSource"> & {
+export type ImportPlanTarget = Pick<
+  DysflowConfig,
+  "accessDbPath" | "backendPath" | "projectRoot" | "projectId" | "configSource"
+> & {
   accessPath?: string;
   destinationRoot: string;
 };
@@ -134,22 +157,52 @@ type DirectMapping = {
 const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
   export_all: mapping("Export"),
-  import_modules: mapping("Import", false, (input) => stringArray(input.moduleNames), (input) => ({ importMode: stringValue(input.importMode) })),
+  import_modules: mapping(
+    "Import",
+    false,
+    (input) => stringArray(input.moduleNames),
+    (input) => ({ importMode: stringValue(input.importMode) }),
+  ),
   import_all: mapping("Import"),
   list_objects: mapping("List-Objects", true),
   exists: mapping("Exists", true, (input) => {
     const moduleName = stringValue(input.moduleName) || stringValue(input.name);
     return moduleName ? [moduleName] : [];
   }),
-  test_vba: mapping("Run-Tests", true, () => [], (input) => ({ proceduresJson: directTestProceduresJson(input) })),
+  test_vba: mapping(
+    "Run-Tests",
+    true,
+    () => [],
+    (input) => ({ proceduresJson: directTestProceduresJson(input) }),
+  ),
   compile_vba: mapping("Compile", true),
-  fix_encoding: mapping("Fix-Encoding", false, (input) => stringArray(input.moduleNames), (input) => ({ location: stringValue(input.location) })),
+  fix_encoding: mapping(
+    "Fix-Encoding",
+    false,
+    (input) => stringArray(input.moduleNames),
+    (input) => ({ location: stringValue(input.location) }),
+  ),
   delete_module: mapping("Delete", true, (input) => stringArray(input.moduleNames)),
-  generate_erd: mapping("Generate-ERD", false, () => [], (input) => ({ backendPath: stringValue(input.backendPath), erdPath: stringValue(input.erdPath) })),
+  generate_erd: mapping(
+    "Generate-ERD",
+    false,
+    () => [],
+    (input) => ({
+      backendPath: stringValue(input.backendPath),
+      erdPath: stringValue(input.erdPath),
+    }),
+  ),
 };
 
-const VBA_MANAGER_EXTRA_KEYS = new Set(["backendPath", "erdPath", "importMode", "location", "proceduresJson"]);
-const LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE = "This legacy tool is tracked for parity but is not implemented by this service yet.";
+const VBA_MANAGER_EXTRA_KEYS = new Set([
+  "backendPath",
+  "erdPath",
+  "importMode",
+  "location",
+  "proceduresJson",
+]);
+const LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE =
+  "This legacy tool is tracked for parity but is not implemented by this service yet.";
 
 export class VbaSyncLegacyService {
   private readonly executor: VbaManagerExecutor;
@@ -171,7 +224,8 @@ export class VbaSyncLegacyService {
     this.cwd = options.cwd ?? process.cwd();
     this.accessPath = stringValue(options.accessPath);
     this.destinationRoot = stringValue(options.destinationRoot);
-    this.accessPassword = stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
+    this.accessPassword =
+      stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
     this.formService = new VbaFormService({
       executor: this.executor,
@@ -188,28 +242,37 @@ export class VbaSyncLegacyService {
     if (toolName === "generate_form") return this.formService.generateForm(params);
     if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
-    if (toolName === "verify_code" || toolName === "verify_binary") return compareSourceAgainstBinary(toolName, params, this.getComparisonContext());
-    if (toolName === "reconcile_binary") return planReconcileBinary(params, this.getComparisonContext());
+    if (toolName === "verify_code" || toolName === "verify_binary")
+      return compareSourceAgainstBinary(toolName, params, this.getComparisonContext());
+    if (toolName === "reconcile_binary")
+      return planReconcileBinary(params, this.getComparisonContext());
 
     if (toolName === "test_vba") {
       return this.executeTestVba(params);
     }
     const mapping = DIRECT_MAPPINGS[toolName];
     if (mapping === undefined) {
-      return failureResult(createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE));
+      return failureResult(
+        createDysflowError("LEGACY_TOOL_NOT_IMPLEMENTED", LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE),
+      );
     }
 
     // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
     // the caller-specified directory instead of the project's default src/ folder (issue #185).
     const exportPath = stringValue(params.exportPath);
-    const effectiveParams = (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
-      ? { ...params, destinationRoot: exportPath }
-      : params;
+    const effectiveParams =
+      (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
+        ? { ...params, destinationRoot: exportPath }
+        : params;
 
     return this.executeMappedTool(toolName, effectiveParams, mapping);
   }
 
-  private async executeMappedTool(toolName: string, params: Record<string, unknown>, mapping: DirectMapping): Promise<OperationResult<unknown>> {
+  private async executeMappedTool(
+    toolName: string,
+    params: Record<string, unknown>,
+    mapping: DirectMapping,
+  ): Promise<OperationResult<unknown>> {
     if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
     }
@@ -221,9 +284,10 @@ export class VbaSyncLegacyService {
     const accessPath = target.data.accessPath;
     const destinationRoot = target.data.destinationRoot;
     const password = this.accessPassword;
-    const effectiveTimeoutMs = typeof params.timeoutMs === "number" && params.timeoutMs > 0
-      ? params.timeoutMs
-      : target.data.processTimeoutMs;
+    const effectiveTimeoutMs =
+      typeof params.timeoutMs === "number" && params.timeoutMs > 0
+        ? params.timeoutMs
+        : target.data.processTimeoutMs;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
@@ -234,56 +298,100 @@ export class VbaSyncLegacyService {
       json: mapping.json ?? false,
       extra: mapping.extra(params),
       timeoutMs: effectiveTimeoutMs,
-      env: password === undefined ? undefined : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
+      env:
+        password === undefined
+          ? undefined
+          : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
     };
     const extraValidation = validateVbaManagerExtra(request.extra);
     if (!extraValidation.ok) return extraValidation;
 
-    const preflightDiagnostics = diagnosticsFromPreflightCleanup(await this.runPreflightCleanup(target.data));
+    const preflightDiagnostics = diagnosticsFromPreflightCleanup(
+      await this.runPreflightCleanup(target.data),
+    );
     const result = await this.executeWithTimeout(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
       return failureResult(
-        createDysflowError("VBA_MANAGER_TIMEOUT", `${toolName} timed out after ${result.durationMs}ms`, { retryable: true }),
+        createDysflowError(
+          "VBA_MANAGER_TIMEOUT",
+          `${toolName} timed out after ${result.durationMs}ms`,
+          { retryable: true },
+        ),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
     if (result.exitCode !== 0) {
       return failureResult(
-        createDysflowError("VBA_MANAGER_FAILED", `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`),
+        createDysflowError(
+          "VBA_MANAGER_FAILED",
+          `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`,
+        ),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
 
     const parsedOutput = parseOutput(result.stdout, secrets);
     if (toolName === "import_all" || toolName === "import_modules") {
-      return successResult({
-        result: parsedOutput,
-        ...buildTargetDiagnostics(toolName, params, target.data, true),
-      }, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
+      return successResult(
+        {
+          result: parsedOutput,
+          ...buildTargetDiagnostics(toolName, params, target.data, true),
+        },
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+      );
     }
 
-    return successResult(parsedOutput, { diagnostics: preflightDiagnostics, durationMs: result.durationMs });
+    return successResult(parsedOutput, {
+      diagnostics: preflightDiagnostics,
+      durationMs: result.durationMs,
+    });
   }
 
-  private async runPreflightCleanup(target: { accessPath?: string; projectRoot?: string }): Promise<AccessOperationPreflightCleanupResult> {
-    if (target.accessPath === undefined) return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+  private async runPreflightCleanup(target: {
+    accessPath?: string;
+    projectRoot?: string;
+  }): Promise<AccessOperationPreflightCleanupResult> {
+    if (target.accessPath === undefined)
+      return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
     const projectRoot = target.projectRoot ?? this.cwd;
     try {
-      const cleanup = this.preflightCleanup ?? await createDefaultPreflightCleanup(projectRoot);
+      const cleanup = this.preflightCleanup ?? (await createDefaultPreflightCleanup(projectRoot));
       return await cleanup.cleanup({ accessPath: target.accessPath, projectRoot });
     } catch (error) {
       return {
         cleaned: [],
         killed: [],
         orphanedKilled: [],
-        errors: [{ operationId: "preflight", message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}` }],
+        errors: [
+          {
+            operationId: "preflight",
+            message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
       };
     }
   }
 
-  private async resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<Pick<DysflowConfig, "accessDbPath" | "backendPath" | "destinationRoot" | "projectRoot" | "projectId" | "configSource" | "timeoutMs" | "processTimeoutMs"> & { accessPath?: string; destinationRoot: string }>> {
-    const hasExplicitConfigOverride = stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
+  private async resolveExecutionTarget(
+    params: Record<string, unknown>,
+  ): Promise<
+    OperationResult<
+      Pick<
+        DysflowConfig,
+        | "accessDbPath"
+        | "backendPath"
+        | "destinationRoot"
+        | "projectRoot"
+        | "projectId"
+        | "configSource"
+        | "timeoutMs"
+        | "processTimeoutMs"
+      > & { accessPath?: string; destinationRoot: string }
+    >
+  > {
+    const hasExplicitConfigOverride =
+      stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
     const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
     if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
       const config = await loadDysflowConfigAsync({
@@ -300,7 +408,11 @@ export class VbaSyncLegacyService {
       return successResult({
         ...config.data,
         accessPath: config.data.accessDbPath,
-        destinationRoot: stringValue(params.destinationRoot) ?? config.data.destinationRoot ?? config.data.projectRoot ?? this.cwd,
+        destinationRoot:
+          stringValue(params.destinationRoot) ??
+          config.data.destinationRoot ??
+          config.data.projectRoot ??
+          this.cwd,
       });
     }
 
@@ -310,13 +422,21 @@ export class VbaSyncLegacyService {
         return successResult({
           ...repoConfig.data,
           accessPath: repoConfig.data.accessDbPath,
-          destinationRoot: stringValue(params.destinationRoot) ?? repoConfig.data.destinationRoot ?? repoConfig.data.projectRoot ?? this.cwd,
+          destinationRoot:
+            stringValue(params.destinationRoot) ??
+            repoConfig.data.destinationRoot ??
+            repoConfig.data.projectRoot ??
+            this.cwd,
         });
       }
       return repoConfig;
     }
 
-    const destinationRoot = stringValue(params.destinationRoot) ?? stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd;
+    const destinationRoot =
+      stringValue(params.destinationRoot) ??
+      stringValue(params.projectRoot) ??
+      this.destinationRoot ??
+      this.cwd;
     return successResult({
       configSource: "runtime-default",
       accessDbPath: this.accessPath ?? "",
@@ -329,49 +449,77 @@ export class VbaSyncLegacyService {
     });
   }
 
-  private validateStrictContext(params: Record<string, unknown>, target: { accessPath?: string; destinationRoot: string; projectRoot?: string }): OperationResult<undefined> {
-    if (!truthy(params.strictContext) && !truthy(params.strictWrite)) return successResult(undefined);
+  private validateStrictContext(
+    params: Record<string, unknown>,
+    target: { accessPath?: string; destinationRoot: string; projectRoot?: string },
+  ): OperationResult<undefined> {
+    if (!truthy(params.strictContext) && !truthy(params.strictWrite))
+      return successResult(undefined);
     const checks: Array<[string, string | undefined, string | undefined]> = [
       ["expectedAccessPath", stringValue(params.expectedAccessPath), target.accessPath],
-      ["expectedDestinationRoot", stringValue(params.expectedDestinationRoot), target.destinationRoot],
+      [
+        "expectedDestinationRoot",
+        stringValue(params.expectedDestinationRoot),
+        target.destinationRoot,
+      ],
       ["expectedProjectRoot", stringValue(params.expectedProjectRoot), target.projectRoot],
     ];
     for (const [name, expected, actual] of checks) {
       if (expected !== undefined && actual === undefined) {
-        return failureResult(createDysflowError("STRICT_CONTEXT_MISMATCH", `${name} was provided but the resolved target has no matching value.`));
+        return failureResult(
+          createDysflowError(
+            "STRICT_CONTEXT_MISMATCH",
+            `${name} was provided but the resolved target has no matching value.`,
+          ),
+        );
       }
       if (expected !== undefined && actual !== undefined && resolve(expected) !== resolve(actual)) {
-        return failureResult(createDysflowError("STRICT_CONTEXT_MISMATCH", `${name} does not match resolved target. Expected ${expected}; resolved ${actual}.`));
+        return failureResult(
+          createDysflowError(
+            "STRICT_CONTEXT_MISMATCH",
+            `${name} does not match resolved target. Expected ${expected}; resolved ${actual}.`,
+          ),
+        );
       }
     }
     return successResult(undefined);
   }
 
-  private async planImport(toolName: "import_all" | "import_modules", params: Record<string, unknown>): Promise<OperationResult<ImportPlanResult>> {
+  private async planImport(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<ImportPlanResult>> {
     const target = await this.resolveExecutionTarget(params);
     if (!target.ok) return target;
     const strict = this.validateStrictContext(params, target.data);
     if (!strict.ok) return strict;
 
     const requestedModules = stringArray(params.moduleNames);
-    const modulesPlanned = toolName === "import_modules"
-      ? requestedModules
-      : await discoverImportModules(target.data.destinationRoot);
+    const modulesPlanned =
+      toolName === "import_modules"
+        ? requestedModules
+        : await discoverImportModules(target.data.destinationRoot);
     const warnings: string[] = [];
     const errors: string[] = [];
-    await stat(target.data.destinationRoot).catch(() => errors.push(`destinationRoot not found: ${target.data.destinationRoot}`));
+    await stat(target.data.destinationRoot).catch(() =>
+      errors.push(`destinationRoot not found: ${target.data.destinationRoot}`),
+    );
     if (target.data.accessPath !== undefined) {
-      await stat(target.data.accessPath).catch(() => errors.push(`accessPath not found: ${target.data.accessPath}`));
+      await stat(target.data.accessPath).catch(() =>
+        errors.push(`accessPath not found: ${target.data.accessPath}`),
+      );
     }
 
-    return successResult(buildImportPlanResult({
-      toolName,
-      params,
-      target: target.data,
-      modulesPlanned,
-      warnings,
-      errors,
-    }));
+    return successResult(
+      buildImportPlanResult({
+        toolName,
+        params,
+        target: target.data,
+        modulesPlanned,
+        warnings,
+        errors,
+      }),
+    );
   }
 
   private getComparisonContext() {
@@ -385,14 +533,22 @@ export class VbaSyncLegacyService {
     };
   }
 
-  private async executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult> {
+  private async executeWithTimeout(
+    request: VbaManagerExecutionRequest,
+  ): Promise<VbaManagerExecutionResult> {
     const controller = new AbortController();
     const requestWithSignal = { ...request, signal: controller.signal };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<VbaManagerExecutionResult>((resolve) => {
       timer = setTimeout(() => {
         controller.abort();
-        resolve({ exitCode: null, stdout: "", stderr: "", durationMs: request.timeoutMs, timedOut: true });
+        resolve({
+          exitCode: null,
+          stdout: "",
+          stderr: "",
+          durationMs: request.timeoutMs,
+          timedOut: true,
+        });
       }, request.timeoutMs);
     });
     const execution = this.executor(requestWithSignal).finally(() => {
@@ -403,7 +559,11 @@ export class VbaSyncLegacyService {
 
   private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
     if (truthy(params.compile)) {
-      const compileResult = await this.executeMappedTool("compile_vba", params, DIRECT_MAPPINGS.compile_vba);
+      const compileResult = await this.executeMappedTool(
+        "compile_vba",
+        params,
+        DIRECT_MAPPINGS.compile_vba,
+      );
       if (!compileResult.ok) return compileResult;
     }
 
@@ -411,20 +571,35 @@ export class VbaSyncLegacyService {
     if (directProceduresJson !== undefined) {
       const directPlan = validateTestProceduresJson(directProceduresJson);
       if (!directPlan.ok) return directPlan;
-      return inspectTestResult(await this.executeMappedTool("test_vba", { ...params, proceduresJson: directPlan.data }, DIRECT_MAPPINGS.test_vba));
+      return inspectTestResult(
+        await this.executeMappedTool(
+          "test_vba",
+          { ...params, proceduresJson: directPlan.data },
+          DIRECT_MAPPINGS.test_vba,
+        ),
+      );
     }
 
     const planResult = await this.resolveTestProceduresJson(params);
     if (!planResult.ok) return planResult;
-    return inspectTestResult(await this.executeMappedTool("test_vba", { ...params, proceduresJson: planResult.data }, DIRECT_MAPPINGS.test_vba));
+    return inspectTestResult(
+      await this.executeMappedTool(
+        "test_vba",
+        { ...params, proceduresJson: planResult.data },
+        DIRECT_MAPPINGS.test_vba,
+      ),
+    );
   }
 
-  private async resolveTestProceduresJson(params: Record<string, unknown>): Promise<OperationResult<string>> {
+  private async resolveTestProceduresJson(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<string>> {
     try {
       const procedureName = stringValue(params.procedureName);
       if (procedureName !== undefined) {
         const parsed = parseArgsJson(params.argsJson);
-        if (!parsed.ok) return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", parsed.error));
+        if (!parsed.ok)
+          return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", parsed.error));
         return successResult(JSON.stringify([{ procedure: procedureName, args: parsed.value }]));
       }
 
@@ -434,26 +609,43 @@ export class VbaSyncLegacyService {
       const parsed = await readJsonFileAsync<unknown>(resolvedPath);
       const tests = normalizeTestPlan(parsed);
       const filterParts = parseTestFilter(params.filter);
-      const selected = filterParts === undefined ? tests : tests.filter((test) => matchesTestFilter(test, filterParts));
+      const selected =
+        filterParts === undefined
+          ? tests
+          : tests.filter((test) => matchesTestFilter(test, filterParts));
       if (selected.length === 0) {
-        return failureResult(createDysflowError(
-          "VBA_NO_TESTS_SELECTED",
-          `No VBA tests selected from ${resolvedPath}${stringValue(params.filter) !== undefined ? ` with filter "${stringValue(params.filter)}"` : ""}.`,
-        ));
+        return failureResult(
+          createDysflowError(
+            "VBA_NO_TESTS_SELECTED",
+            `No VBA tests selected from ${resolvedPath}${stringValue(params.filter) !== undefined ? ` with filter "${stringValue(params.filter)}"` : ""}.`,
+          ),
+        );
       }
-      return successResult(JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))));
+      return successResult(
+        JSON.stringify(selected.map((test) => ({ procedure: test.procedure, args: test.args }))),
+      );
     } catch (err) {
-      return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
+      return failureResult(
+        createDysflowError(
+          "VBA_INVALID_TEST_PLAN",
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
     }
   }
-
-
 }
 
-function validateVbaManagerExtra(extra: Record<string, string | boolean | number | undefined>): OperationResult<undefined> {
+function validateVbaManagerExtra(
+  extra: Record<string, string | boolean | number | undefined>,
+): OperationResult<undefined> {
   for (const key of Object.keys(extra)) {
     if (!VBA_MANAGER_EXTRA_KEYS.has(key)) {
-      return failureResult(createDysflowError("VBA_MANAGER_EXTRA_NOT_ALLOWED", `Unsupported VBA manager option: ${key}.`));
+      return failureResult(
+        createDysflowError(
+          "VBA_MANAGER_EXTRA_NOT_ALLOWED",
+          `Unsupported VBA manager option: ${key}.`,
+        ),
+      );
     }
   }
   return successResult(undefined);
@@ -468,7 +660,8 @@ export function buildImportPlanResult(options: BuildImportPlanResultOptions): Im
     requestedProjectId: stringValue(params.projectId),
     requestedContextId: stringValue(params.contextId),
     resolvedProjectId: target.projectId,
-    configSource: target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
+    configSource:
+      target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
     projectRoot: target.projectRoot,
     accessPath: target.accessPath,
     backendPath: target.backendPath,
@@ -481,7 +674,9 @@ export function buildImportPlanResult(options: BuildImportPlanResultOptions): Im
   };
 }
 
-export function resolveDefaultVbaManagerScriptPath(env: Record<string, string | undefined> = process.env): string {
+export function resolveDefaultVbaManagerScriptPath(
+  env: Record<string, string | undefined> = process.env,
+): string {
   const home = env.DYSFLOW_HOME;
   if (home !== undefined && home.trim().length > 0) {
     return `${home.replace(/\\$/, "")}/app/scripts/dysflow-vba-manager.ps1`;
@@ -493,15 +688,22 @@ function mapping(
   action: string,
   json = false,
   moduleNames: (input: Record<string, unknown>) => readonly string[] = () => [],
-  extra: (input: Record<string, unknown>) => Record<string, string | boolean | number | undefined> = () => ({}),
+  extra: (
+    input: Record<string, unknown>,
+  ) => Record<string, string | boolean | number | undefined> = () => ({}),
 ): DirectMapping {
   return { action, json, moduleNames, extra };
 }
 
-async function createDefaultPreflightCleanup(projectRoot: string): Promise<AccessOperationPreflightCleanup> {
-  const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } = await import("../operations/windows-processes.js");
+async function createDefaultPreflightCleanup(
+  projectRoot: string,
+): Promise<AccessOperationPreflightCleanup> {
+  const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } =
+    await import("../operations/windows-processes.js");
   return new AccessOperationPreflightCleanupService({
-    registry: new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath({ projectRoot }) }),
+    registry: new FileAccessOperationRegistry({
+      filePath: resolveProjectOperationRegistryPath({ projectRoot }),
+    }),
     processInspector: new WindowsMsAccessProcessInspector(),
     processKiller: new WindowsProcessKiller(),
     processScanner: new WindowsMsAccessProcessScanner(),
@@ -514,7 +716,12 @@ function stringArray(value: unknown): string[] {
 
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {
   const modules: string[] = [];
-  for (const folder of [destinationRoot, resolve(destinationRoot, "modules"), resolve(destinationRoot, "classes"), resolve(destinationRoot, "forms")]) {
+  for (const folder of [
+    destinationRoot,
+    resolve(destinationRoot, "modules"),
+    resolve(destinationRoot, "classes"),
+    resolve(destinationRoot, "forms"),
+  ]) {
     const entries = await readdir(folder).catch(() => []);
     for (const entry of entries) {
       const extension = extname(entry).toLowerCase();
@@ -525,12 +732,13 @@ async function discoverImportModules(destinationRoot: string): Promise<string[]>
   return Array.from(new Set(modules)).sort();
 }
 
-
-
 function buildTargetDiagnostics(
   operation: string,
   params: Record<string, unknown>,
-  target: Pick<DysflowConfig, "backendPath" | "configSource" | "projectId" | "projectRoot"> & { accessPath?: string; destinationRoot: string },
+  target: Pick<DysflowConfig, "backendPath" | "configSource" | "projectId" | "projectRoot"> & {
+    accessPath?: string;
+    destinationRoot: string;
+  },
   willModifyAccess: boolean,
 ): Record<string, unknown> {
   return {
@@ -540,7 +748,8 @@ function buildTargetDiagnostics(
     requestedProjectId: stringValue(params.projectId),
     requestedContextId: stringValue(params.contextId),
     resolvedProjectId: target.projectId,
-    configSource: target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
+    configSource:
+      target.configSource === "explicit-request" ? "explicit-overrides" : target.configSource,
     projectRoot: target.projectRoot,
     accessPath: target.accessPath,
     backendPath: target.backendPath,
@@ -573,7 +782,11 @@ type VbaTestPlanEntry = {
 };
 
 function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
-  const tests = Array.isArray(value) ? value : isRecord(value) && Array.isArray(value.tests) ? value.tests : undefined;
+  const tests = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.tests)
+      ? value.tests
+      : undefined;
   if (tests === undefined) {
     throw new Error("tests.vba.json must contain an array or an object with a tests array.");
   }
@@ -596,11 +809,20 @@ function validateTestProceduresJson(proceduresJson: string): OperationResult<str
   try {
     const procedures = normalizeTestPlan(JSON.parse(proceduresJson));
     if (procedures.length === 0) {
-      return failureResult(createDysflowError("VBA_NO_TESTS_SELECTED", "proceduresJson must contain at least one VBA test procedure."));
+      return failureResult(
+        createDysflowError(
+          "VBA_NO_TESTS_SELECTED",
+          "proceduresJson must contain at least one VBA test procedure.",
+        ),
+      );
     }
-    return successResult(JSON.stringify(procedures.map((test) => ({ procedure: test.procedure, args: test.args }))));
+    return successResult(
+      JSON.stringify(procedures.map((test) => ({ procedure: test.procedure, args: test.args }))),
+    );
   } catch (err) {
-    return failureResult(createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)));
+    return failureResult(
+      createDysflowError("VBA_INVALID_TEST_PLAN", err instanceof Error ? err.message : String(err)),
+    );
   }
 }
 
@@ -615,10 +837,11 @@ function parseTestFilter(value: unknown): string[] | undefined {
 }
 
 function matchesTestFilter(test: VbaTestPlanEntry, filterParts: readonly string[]): boolean {
-  return filterParts.some((filterText) =>
-    test.name.toLowerCase().includes(filterText)
-    || test.procedure.toLowerCase().includes(filterText)
-    || test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
+  return filterParts.some(
+    (filterText) =>
+      test.name.toLowerCase().includes(filterText) ||
+      test.procedure.toLowerCase().includes(filterText) ||
+      test.tags.some((tag) => tag.toLowerCase().includes(filterText)),
   );
 }
 
@@ -648,9 +871,21 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
 }
 
 export const spawnVbaManager: VbaManagerExecutor = (request) => {
-  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", request.scriptPath, "-Action", request.action, "-DestinationRoot", request.destinationRoot];
+  const args = [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    request.scriptPath,
+    "-Action",
+    request.action,
+    "-DestinationRoot",
+    request.destinationRoot,
+  ];
   if (request.accessPath) args.push("-AccessPath", request.accessPath);
-  if (request.moduleNames.length > 0) args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
+  if (request.moduleNames.length > 0)
+    args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
   if (request.json) args.push("-Json");
   for (const [key, value] of Object.entries(request.extra)) {
     if (value === undefined) continue;

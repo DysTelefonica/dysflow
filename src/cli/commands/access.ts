@@ -1,8 +1,8 @@
-import { handleRelinkDirectoryCommand } from "./access/relink-directory.js";
-import type { CommandHandler } from "./types.js";
+import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
-import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
+import { handleRelinkDirectoryCommand } from "./access/relink-directory.js";
+import type { CommandHandler } from "./types.js";
 
 function extractRootPath(args: readonly string[]): string | undefined {
   for (let i = 0; i < args.length; i++) {
@@ -26,7 +26,10 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
     }
 
     const env = context?.env ?? process.env;
-    const configResult = loadDysflowConfig({ accessDbPath: rootPath, env: env as Record<string, string | undefined> });
+    const configResult = loadDysflowConfig({
+      accessDbPath: rootPath,
+      env: env as Record<string, string | undefined>,
+    });
     if (!configResult.ok) {
       return handleRelinkDirectoryCommand(rest, context);
     }

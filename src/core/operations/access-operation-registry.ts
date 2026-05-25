@@ -39,7 +39,10 @@ export type UpdateAccessOperationRecord = Partial<Omit<AccessOperationRecord, "o
 
 export type AccessOperationRegistry = {
   create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord>;
-  update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined>;
+  update(
+    operationId: string,
+    patch: UpdateAccessOperationRecord,
+  ): Promise<AccessOperationRecord | undefined>;
   get(operationId: string): Promise<AccessOperationRecord | undefined>;
   listRecent(options?: { limit?: number }): Promise<AccessOperationRecord[]>;
 };
@@ -96,7 +99,10 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     });
   }
 
-  async update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined> {
+  async update(
+    operationId: string,
+    patch: UpdateAccessOperationRecord,
+  ): Promise<AccessOperationRecord | undefined> {
     return this.withFileLock(async () => {
       const records = await this.readRecords();
       const current = records.get(operationId);
@@ -128,7 +134,9 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
 
   private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
     const previous = FileAccessOperationRegistry.fileLocks.get(this.filePath) ?? Promise.resolve();
-    const current = previous.catch(() => undefined).then(() => this.withRegistryMutationLock(operation));
+    const current = previous
+      .catch(() => undefined)
+      .then(() => this.withRegistryMutationLock(operation));
     const settled = current.catch(() => undefined);
     FileAccessOperationRegistry.fileLocks.set(this.filePath, settled);
     try {
@@ -177,7 +185,6 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
           throw new Error(`Timed out acquiring operation registry lock: ${this.lockPath}`);
         }
         await sleep(Math.min(LOCK_RETRY_INTERVAL_MS, Math.max(1, deadline - Date.now())));
-        continue;
       }
     }
   }
@@ -237,9 +244,16 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     const raw = await readFile(this.filePath, "utf8").catch(() => undefined);
     if (raw === undefined || raw.trim().length === 0) return new Map();
     try {
-      const parsed = JSON.parse(raw) as { records?: AccessOperationRecord[] } | AccessOperationRecord[];
-      const records = Array.isArray(parsed) ? parsed : parsed.records ?? [];
-      return new Map(records.map((record) => [record.operationId, { ...record, metadata: { ...record.metadata } }]));
+      const parsed = JSON.parse(raw) as
+        | { records?: AccessOperationRecord[] }
+        | AccessOperationRecord[];
+      const records = Array.isArray(parsed) ? parsed : (parsed.records ?? []);
+      return new Map(
+        records.map((record) => [
+          record.operationId,
+          { ...record, metadata: { ...record.metadata } },
+        ]),
+      );
     } catch {
       return new Map();
     }
@@ -248,7 +262,9 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private async writeRecords(records: Map<string, AccessOperationRecord>): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     const payload = {
-      records: [...records.values()].sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0)),
+      records: [...records.values()].sort((a, b) =>
+        b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0,
+      ),
     };
     const tempPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
@@ -287,7 +303,10 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
     return { ...stored, metadata: { ...stored.metadata } };
   }
 
-  async update(operationId: string, patch: UpdateAccessOperationRecord): Promise<AccessOperationRecord | undefined> {
+  async update(
+    operationId: string,
+    patch: UpdateAccessOperationRecord,
+  ): Promise<AccessOperationRecord | undefined> {
     const current = this.records.get(operationId);
     if (current === undefined) return undefined;
     const next = { ...current, ...patch, metadata: patch.metadata ?? current.metadata };

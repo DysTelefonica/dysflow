@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  AccessPowerShellRunner,
-  type PowerShellExecutor,
-  type PowerShellExecutionResult,
-  type AccessRunnerProgressCallback,
-} from "../../../src/core/runner/access-runner.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
+import {
+  AccessPowerShellRunner,
+  type PowerShellExecutionResult,
+  type PowerShellExecutor,
+} from "../../../src/core/runner/access-runner.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
@@ -57,7 +56,7 @@ function buildMixedStderrExecutor(capturedPids: number[]): PowerShellExecutor {
 
 describe("AccessPowerShellRunner — progress callback", () => {
   it("calls onProgress exactly twice with correct args for valid progress lines", async () => {
-    const onProgress = vi.fn<[number, number | undefined, string | undefined], void>();
+    const onProgress = vi.fn<(percent: number, total?: number, message?: string) => void>();
     const capturedPids: number[] = [];
 
     const executor = buildMixedStderrExecutor(capturedPids);
@@ -68,7 +67,10 @@ describe("AccessPowerShellRunner — progress callback", () => {
     });
 
     const result = await runner.run(
-      { kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } },
+      {
+        kind: "vba",
+        request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] },
+      },
       config,
       { onProgress },
     );
@@ -86,7 +88,11 @@ describe("AccessPowerShellRunner — progress callback", () => {
   });
 
   it("does not throw when onProgress is absent and progress lines appear in stderr", async () => {
-    const executor: PowerShellExecutor = async (_command, _args, options): Promise<PowerShellExecutionResult> => {
+    const executor: PowerShellExecutor = async (
+      _command,
+      _args,
+      options,
+    ): Promise<PowerShellExecutionResult> => {
       await options.onAccessProcessCaptured({
         pid: 1111,
         processStartTime: "2026-01-01T00:00:00.000Z",
@@ -110,13 +116,23 @@ describe("AccessPowerShellRunner — progress callback", () => {
 
     // No onProgress in run options — should complete normally without throwing
     await expect(
-      runner.run({ kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } }, config),
+      runner.run(
+        {
+          kind: "vba",
+          request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] },
+        },
+        config,
+      ),
     ).resolves.toMatchObject({ ok: true });
   });
 
   it("plain text stderr lines are preserved in diagnostics and do not trigger onProgress", async () => {
     const onProgress = vi.fn();
-    const executor: PowerShellExecutor = async (_command, _args, options): Promise<PowerShellExecutionResult> => {
+    const executor: PowerShellExecutor = async (
+      _command,
+      _args,
+      options,
+    ): Promise<PowerShellExecutionResult> => {
       await options.onAccessProcessCaptured({
         pid: 2222,
         processStartTime: "2026-01-01T00:00:00.000Z",
@@ -138,7 +154,10 @@ describe("AccessPowerShellRunner — progress callback", () => {
     });
 
     const result = await runner.run(
-      { kind: "vba", request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] } },
+      {
+        kind: "vba",
+        request: { moduleName: "TestModule", procedureName: "DoWork", arguments: [] },
+      },
       config,
       { onProgress },
     );
