@@ -7,7 +7,7 @@
     Tests cover:
       - Resolve-SandboxedPath : path-traversal prevention
       - Format-SqlLiteral     : SQL value quoting / escaping
-      - Split-SqlStatements   : semicolon-aware statement splitting
+      - Split-SqlStatements   : semicolon-aware statement splitting with -- comment stripping
       - seed_fixture column/table validation (SQL injection prevention, #219)
 
 .NOTES
@@ -74,6 +74,10 @@ function script:Split-SqlStatements {
         if ($char -eq "'") {
             $inSingleQuote = -not $inSingleQuote
             [void]$builder.Append($char)
+            continue
+        }
+        if ($char -eq '-' -and $nextChar -eq '-' -and -not $inSingleQuote) {
+            while ($i -lt $Sql.Length -and $Sql[$i] -ne "`n") { $i++ }
             continue
         }
         if ($char -eq ";" -and -not $inSingleQuote) {
@@ -353,6 +357,32 @@ Describe "Split-SqlStatements" {
         $result = @(Split-SqlStatements "  SELECT 1  ;  SELECT 2  ")
         $result[0] | Should -Be "SELECT 1"
         $result[1] | Should -Be "SELECT 2"
+    }
+
+    It "strips leading line comments before a DDL statement" {
+        $sql = "-- Issue #18 backend DDL`n-- second comment line`nCREATE TABLE Foo (Id INT)"
+        $result = @(Split-SqlStatements $sql)
+        $result.Count | Should -Be 1
+        $result[0] | Should -Be "CREATE TABLE Foo (Id INT)"
+    }
+
+    It "strips inline line comments between statements" {
+        $sql = "SELECT 1;`n-- a comment`nSELECT 2"
+        $result = @(Split-SqlStatements $sql)
+        $result.Count | Should -Be 2
+        $result[0] | Should -Be "SELECT 1"
+        $result[1] | Should -Be "SELECT 2"
+    }
+
+    It "does not strip -- inside a string literal" {
+        $result = @(Split-SqlStatements "SELECT '--not a comment' AS x")
+        $result.Count | Should -Be 1
+        $result[0] | Should -Be "SELECT '--not a comment' AS x"
+    }
+
+    It "returns empty list for comment-only input" {
+        $result = @(Split-SqlStatements "-- just a comment`n-- another one")
+        $result.Count | Should -Be 0
     }
 }
 

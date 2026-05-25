@@ -597,6 +597,11 @@ function Split-SqlStatements {
       continue
     }
 
+    if ($char -eq '-' -and $nextChar -eq '-' -and -not $inSingleQuote) {
+      while ($i -lt $Sql.Length -and $Sql[$i] -ne "`n") { $i++ }
+      continue
+    }
+
     if ($char -eq ";" -and -not $inSingleQuote) {
       $sql = $builder.ToString().Trim()
       if (-not [string]::IsNullOrWhiteSpace($sql)) { [void]$statements.Add($sql) }
