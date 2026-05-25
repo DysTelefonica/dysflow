@@ -806,12 +806,19 @@ Public Function Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache
     Dim cfgErr As String
     Dim assertError As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
         Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
         Exit Function
     End If
+    If Not EnsureConfigCoreCacheFixture(logs, fixtureErr) Then
+        Test_E2E_ConfigCore_LeeConfiguracionLocal_SincronizaAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
     If assertError <> "" Then GoTo Fail
     TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
@@ -867,12 +874,19 @@ Public Function Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic() As S
     Dim eveErr As String
     Dim assertError As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
         Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
         Exit Function
     End If
+    If Not EnsureConfigCoreCacheFixture(logs, fixtureErr) Then
+        Test_E2E_ConfigCore_EVE_NoSobreEscribeAplicarCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     Call TestHelper.AssertTrue(ReadCacheHabilitadaMandatory(originalState, opErr), "Precondición: TbConfiguracion.CacheHabilitada obligatorio y legible", logs, assertError)
     If assertError <> "" Then GoTo Fail
     TestHelper.AddLog logs, "Estado original cache=" & CStr(originalState)
@@ -1528,6 +1542,84 @@ End Sub
 Private Sub RestoreTbConfiguracionBackends(ByRef p_Rs As DAO.Recordset, ByVal p_BackendActivo As String, ByVal p_BackendProduccion As String, ByVal p_BackendSandbox As String, ByVal p_EnPruebas As String, ByVal p_IDAplicacion As Variant, ByVal p_RutaProd As String, ByVal p_RutaLocal As String, ByRef p_Logs As Collection)
     TestHelper.AddLog p_Logs, "RestoreTbConfiguracionBackends retired: tests must not mutate TbConfiguracionBackends."
 End Sub
+
+Private Function EnsureConfigCoreCacheFixture(ByRef p_Logs As Collection, Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim readinessErr As String
+    Dim totalRows As Long
+    Dim idOneRows As Long
+    Dim assertError As String
+
+    On Error GoTo EH
+    EnsureConfigCoreCacheFixture = False
+    p_Error = ""
+
+    If Not m_TestingMode Then
+        p_Error = "EnsureConfigCoreCacheFixture: BeginTestSession debe ejecutarse antes"
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    If Not TestHelper.AssertSandboxBackend(p_Logs, p_Error) Then Exit Function
+
+    readinessErr = ""
+    If Not EnsureCacheSchemaReadiness(readinessErr) Then
+        p_Error = "EnsureCacheSchemaReadiness: " & readinessErr
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    Set db = getdb(p_Error)
+    If db Is Nothing Then
+        If p_Error = "" Then p_Error = "EnsureConfigCoreCacheFixture: getdb devolvió Nothing en modo testing"
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    TestHelper.AddLog p_Logs, "Arrange fixture: TbConfiguracion config-core asegurada por EnsureCacheSchemaReadiness en sandbox local"
+    TestHelper.AddLog p_Logs, "Fixture DB: " & db.Name
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.ID: Long, Required=False; contrato singleton ID=1"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.CacheHabilitada: Boolean, Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.FechaCambioCache: Date, Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.UsuarioCambioCache: Text(255), Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.MotivoCambioCache: Memo/LongText, Required=False"
+    TestHelper.AddLog p_Logs, "FK facts inspected via Dysflow: no application relationships exposed for TbConfiguracion"
+
+    If Not EnsureTableFields(db, "TbConfiguracion", ConfigCoreRequiredFields(), p_Logs, p_Error) Then GoTo CleanupFailure
+    If Not EnsureNoRequiredFieldsOutsideSeed(db, "TbConfiguracion", ConfigCoreSeedFields(), p_Logs, p_Error) Then GoTo CleanupFailure
+
+    totalRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbConfiguracion")
+    Call TestHelper.AssertTrue(totalRows = 1, "TbConfiguracion debe tener exactamente una fila singleton", p_Logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    idOneRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbConfiguracion WHERE ID=1")
+    Call TestHelper.AssertTrue(idOneRows = 1, "TbConfiguracion debe tener exactamente una fila ID=1", p_Logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    TestHelper.AddLog p_Logs, "ID=1 es fixture controlada por EnsureTbConfiguracion en sandbox, no dato preexistente afortunado"
+    EnsureConfigCoreCacheFixture = True
+    Set db = Nothing
+    Exit Function
+
+Fail:
+    p_Error = assertError
+CleanupFailure:
+    Set db = Nothing
+    Exit Function
+
+EH:
+    p_Error = "EnsureConfigCoreCacheFixture: " & Err.Description
+    TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+    Set db = Nothing
+End Function
+
+Private Function ConfigCoreRequiredFields() As Variant
+    ConfigCoreRequiredFields = Array("ID", "CacheHabilitada", "FechaCambioCache", "UsuarioCambioCache", "MotivoCambioCache")
+End Function
+
+Private Function ConfigCoreSeedFields() As Variant
+    ConfigCoreSeedFields = Array("ID", "CacheHabilitada")
+End Function
 
 Private Function ReadCacheHabilitadaMandatory(ByRef p_Value As Boolean, Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
