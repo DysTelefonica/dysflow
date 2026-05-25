@@ -2,6 +2,14 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.3] - 2026-05-25
+
+### Fixed
+
+- **MCP E2E stability**: fixed `dysflow access` dry-run execution path in `Update-LinkTables` to avoid PowerShell non-operational failures during smoke tests and CI (`#346`).
+- **Legacy schema compatibility**: restored acceptance of legacy form-catalog payload aliases (`spec`/`specPath`) for `catalog_add_control`.
+- **Smoke harness correctness**: updated the MCP smoke harness expectations to the current tool count (`48`) and aligned form-catalog test input to include a valid empty spec payload.
+
 ## [0.9.1] - 2026-05-25
 
 ### Fixed
