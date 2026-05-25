@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.5] - 2026-05-25
+
+### Fixed
+
+- **`run_script` DDL compatibility**: strip `--` line comments from SQL scripts before executing DDL statements, allowing scripts authored with standard SQL comment syntax to run without parse errors. Closes #348.
+
 ## [0.9.4] - 2026-05-25
 
 ### Fixed
