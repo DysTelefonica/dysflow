@@ -476,4 +476,42 @@ describe("Dysflow HTTP adapter", () => {
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
     expect(services.calls.queries).toEqual([]);
   });
+
+  it("POST /access/cleanup with injected cleanupService calls cleanup with correct operationId and accessPath", async () => {
+    const cleanupCalls: Array<{ operationId: string; accessPath: string; force?: boolean }> = [];
+    const fakeCleanupService = {
+      cleanup: async (request: { operationId: string; accessPath: string; force?: boolean }) => {
+        cleanupCalls.push(request);
+        return successResult({ cleaned: true, operationId: request.operationId });
+      },
+    };
+    const services = createFakeServices({ cleanupService: fakeCleanupService });
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: "op-123", accessPath: "C:/db/front.accdb" }),
+    });
+
+    expect(response.response.status).toBe(200);
+    expect(cleanupCalls).toHaveLength(1);
+    expect(cleanupCalls[0]!.operationId).toBe("op-123");
+    expect(cleanupCalls[0]!.accessPath).toBe("C:/db/front.accdb");
+  });
+
+  it("POST /access/cleanup returns SERVICE_UNAVAILABLE 500 when cleanupService is absent", async () => {
+    const services = createFakeServices({ cleanupService: undefined });
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: "op-456", accessPath: "C:/db/back.accdb" }),
+    });
+
+    expect(response.response.status).toBe(500);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("SERVICE_UNAVAILABLE");
+  });
 });

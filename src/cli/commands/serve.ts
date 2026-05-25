@@ -14,6 +14,10 @@ type ServeOptions = {
   writesEnabled: boolean;
 };
 
+/**
+ * Composition root for the HTTP adapter.
+ * Concrete service construction is delegated to createHttpServices() via startDysflowHttpServer.
+ */
 export async function handleServeCommand(
   args: readonly string[],
   context: CliCommandContext = {},
