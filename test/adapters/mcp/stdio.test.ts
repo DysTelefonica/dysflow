@@ -430,7 +430,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     const msg = JSON.stringify({ jsonrpc: "2.0", id: 10, method: "initialize", params: {} });
     const mid = Math.floor(msg.length / 2);
     input.write(msg.slice(0, mid));
-    input.write(msg.slice(mid) + "\n");
+    input.write(`${msg.slice(mid)}\n`);
     input.end();
     await started;
     output.end();
@@ -751,10 +751,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     const output = new PassThrough();
     const runtime = new JsonLineMcpStdioRuntime({ input, output });
 
-    const adapterDone = startMcpStdioAdapter(
-      { accessDbPath: "fake.accdb" } as never,
-      runtime as any,
-    );
+    const adapterDone = startMcpStdioAdapter({ accessDbPath: "fake.accdb" } as never, runtime);
     writeMessage(input, { jsonrpc: "2.0", id: 31, method: "initialize", params: {} });
     input.end();
     await adapterDone;
