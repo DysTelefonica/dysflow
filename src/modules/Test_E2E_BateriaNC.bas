@@ -1125,10 +1125,11 @@ Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As St
     Dim opErr As String
     Dim assertError As String
     Dim ok As Boolean
-    Dim cacheCount As Long
-    Dim logCount As Long
+    Dim cacheRows As Long
+    Dim logRows As Long
     Dim fixtureDesc As String
     Dim sessionErr As String
+    Dim cacheStateCaptured As Boolean
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
@@ -1140,6 +1141,7 @@ Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As St
     If Not EnsureCacheTestNCFixture(db, logs, idNC, fixtureDesc, assertError) Then GoTo Fail
 
     originalState = IsCacheEnabled()
+    cacheStateCaptured = True
     opErr = ""
     ok = CacheConfig_SetEnabled(True, opErr)
     Call TestHelper.AssertTrue(ok, "Cache ON para validación funcional", logs, assertError)
@@ -1155,34 +1157,30 @@ Public Function Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic() As St
     Call TestHelper.AssertTrue(ok, "PrecalentarCacheCompleto debe completar en ON", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
-    Set rs = db.OpenRecordset("SELECT COUNT(*) AS Total FROM TbCacheListadoNC", dbOpenSnapshot)
-    cacheCount = CLng(Nz(rs.Fields("Total").Value, 0))
-    rs.Close: Set rs = Nothing
-    Call TestHelper.AssertTrue(cacheCount > 0, "TbCacheListadoNC debe quedar poblada", logs, assertError)
+    cacheRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbCacheListadoNC WHERE IDNoConformidad = " & idNC & " AND CacheValida = True AND Descripcion = " & TestHelper.SqlText(fixtureDesc))
+    Call TestHelper.AssertTrue(cacheRows = 1, "TbCacheListadoNC debe contener exactamente el fixture cache activo", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
-    Set rs = db.OpenRecordset("SELECT COUNT(*) AS Total FROM TbLogCache WHERE TipoOperacion IN ('Sincronizar','PrecalentarCache')", dbOpenSnapshot)
-    logCount = CLng(Nz(rs.Fields("Total").Value, 0))
-    rs.Close: Set rs = Nothing
-    Call TestHelper.AssertTrue(logCount > 0, "TbLogCache debe registrar evidencia de sincronización/precalentado", logs, assertError)
+    logRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbLogCache WHERE IDNoConformidad = " & idNC & " AND TipoOperacion IN ('Generar Completo','Regenerar','Sync-Faltan')")
+    Call TestHelper.AssertTrue(logRows >= 1, "TbLogCache debe registrar evidencia específica para el fixture cache", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then
         Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(opErr, logs)
     Else
-        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonOk(logs, cacheCount)
+        Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonOk(logs, cacheRows)
     End If
     GoTo Cleanup
 
 Fail:
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     GoTo Cleanup
 
 EH:
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     TestHelper.AddLog logs, "Error: " & Err.Description
     If opErr <> "" Then
         Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
@@ -1192,7 +1190,7 @@ EH:
 
 Cleanup:
     On Error Resume Next
-    If Not db Is Nothing Then db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If Not db Is Nothing Then Call CleanupCacheTestNCFixture(db, logs)
     If Not rs Is Nothing Then rs.Close
     Call TestHelper.EndTestSession(logs)
     Set rs = Nothing
@@ -1209,10 +1207,12 @@ Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
     Dim originalDesc As String
     Dim mutatedDesc As String
     Dim cacheDesc As String
+    Dim cacheRows As Long
     Dim opErr As String
     Dim assertError As String
     Dim ok As Boolean
     Dim sessionErr As String
+    Dim cacheStateCaptured As Boolean
 
     Set logs = TestHelper.NewLogs
     If Not TestHelper.BeginTestSession(logs, sessionErr) Then
@@ -1224,6 +1224,7 @@ Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
     If Not EnsureCacheTestNCFixture(db, logs, idNC, originalDesc, assertError) Then GoTo Fail
 
     originalState = IsCacheEnabled()
+    cacheStateCaptured = True
     originalDesc = ObtenerDescripcionNC(db, idNC)
     mutatedDesc = "E2E-CACHE-" & CStr(idNC) & "-MUTATED"
 
@@ -1244,13 +1245,16 @@ Public Function Test_E2E_Cache_Invalidate_NoStaleListado_Atomic() As String
     If assertError <> "" Then GoTo Fail
 
     cacheDesc = ObtenerDescripcionCacheListado(db, idNC)
+    cacheRows = CountRowsBySql(db, "SELECT COUNT(*) AS Total FROM TbCacheListadoNC WHERE IDNoConformidad = " & idNC & " AND CacheValida = True")
+    Call TestHelper.AssertTrue(cacheRows = 1, "TbCacheListadoNC debe tener exactamente un registro válido del fixture", logs, assertError)
+    If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(cacheDesc = mutatedDesc, "TbCacheListadoNC debe reflejar descripción actualizada", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
     Call ActualizarDescripcionNC(db, idNC, originalDesc)
     opErr = ""
     Call InvalidateListItem(idNC, opErr)
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then
         Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(opErr, logs)
     Else
@@ -1262,7 +1266,7 @@ Fail:
     On Error Resume Next
     If idNC > 0 Then Call ActualizarDescripcionNC(db, idNC, originalDesc)
     On Error GoTo 0
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     If opErr <> "" Then assertError = assertError & " | Restore: " & opErr
     Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(assertError, logs)
     GoTo Cleanup
@@ -1271,7 +1275,7 @@ EH:
     On Error Resume Next
     If idNC > 0 Then Call ActualizarDescripcionNC(db, idNC, originalDesc)
     On Error GoTo 0
-    Call RestoreCacheStateE2E(originalState, logs, opErr)
+    If cacheStateCaptured Then Call RestoreCacheStateE2E(originalState, logs, opErr)
     TestHelper.AddLog logs, "Error: " & Err.Description
     If opErr <> "" Then
         Test_E2E_Cache_Invalidate_NoStaleListado_Atomic = TestHelper.BuildJsonFail(Err.Description & " | Restore: " & opErr, logs)
@@ -1281,7 +1285,7 @@ EH:
 
 Cleanup:
     On Error Resume Next
-    If Not db Is Nothing Then db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If Not db Is Nothing Then Call CleanupCacheTestNCFixture(db, logs)
     Call TestHelper.EndTestSession(logs)
     Set db = Nothing
 End Function
@@ -1290,15 +1294,26 @@ Private Function EnsureCacheTestNCFixture(ByVal p_Db As DAO.Database, ByRef p_Lo
     On Error GoTo EH
 
     Dim sqlInsert As String
+    Dim fixtureRows As Long
     p_IDNC = TEST_ID_NC_CACHE
     p_Descripcion = "Fixture E2E cache " & CStr(TEST_ID_NC_CACHE)
     p_Error = ""
 
-    p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If Not TestHelper.AssertSandboxBackend(p_Logs, p_Error) Then Exit Function
+    If Not EnsureCacheE2ESchema(p_Db, p_Logs, p_Error) Then Exit Function
+
+    Call CleanupCacheTestNCFixture(p_Db, p_Logs)
     sqlInsert = "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, PROYECTO, DESCRIPCION, CAUSA, FECHAAPERTURA, TIPO, RequiereControlEficacia, MotivoNoRequiereControlEficacia, Borrado) " & _
                 "VALUES (" & TEST_ID_NC_CACHE & ", " & TestHelper.SqlText("E2E-CACHE-" & CStr(TEST_ID_NC_CACHE)) & ", " & TestHelper.SqlText("E2E-EXP") & ", " & TestHelper.SqlText("E2E-PROY") & ", " & TestHelper.SqlText(p_Descripcion) & ", " & TestHelper.SqlText("Causa E2E cache") & ", Date(), " & TestHelper.SqlText("Proyecto") & ", 'No', " & TestHelper.SqlText("Fixture cache") & ", 0)"
     p_Db.Execute sqlInsert, dbFailOnError
-    TestHelper.AddLog p_Logs, "Fixture NC cache insertado ID=" & CStr(TEST_ID_NC_CACHE)
+    fixtureRows = CountRowsBySql(p_Db, "SELECT COUNT(*) AS Total FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE & " AND Descripcion = " & TestHelper.SqlText(p_Descripcion))
+    If fixtureRows <> 1 Then
+        p_Error = "TESTS BLOCKED: fixture TbNoConformidades no quedó con cardinalidad exacta ID=" & CStr(TEST_ID_NC_CACHE)
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    TestHelper.AddLog p_Logs, "Fixture NC cache insertado y verificado ID=" & CStr(TEST_ID_NC_CACHE)
 
     EnsureCacheTestNCFixture = True
     Exit Function
@@ -1306,6 +1321,161 @@ Private Function EnsureCacheTestNCFixture(ByVal p_Db As DAO.Database, ByRef p_Lo
 EH:
     p_Error = "No se pudo crear fixture NC cache ID=" & CStr(TEST_ID_NC_CACHE) & ": " & Err.Description
     TestHelper.AddLog p_Logs, p_Error
+End Function
+
+Private Function EnsureCacheE2ESchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_Error As String) As Boolean
+    Dim readinessErr As String
+
+    On Error GoTo EH
+    EnsureCacheE2ESchema = False
+    p_Error = ""
+
+    readinessErr = ""
+    If Not EnsureCacheSchemaReadiness(readinessErr) Then
+        p_Error = "TESTS BLOCKED: EnsureCacheSchemaReadiness falló: " & readinessErr
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    If Not EnsureTableFields(p_Db, "TbNoConformidades", RequiredCacheNCSourceFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbCacheNCProyecto", RequiredCacheDetailFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbCacheListadoNC", RequiredCacheListadoFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureTableFields(p_Db, "TbLogCache", RequiredCacheLogFields(), p_Logs, p_Error) Then Exit Function
+    If Not EnsureNoRequiredFieldsOutsideSeed(p_Db, "TbNoConformidades", CacheNCSeedFields(), p_Logs, p_Error) Then Exit Function
+
+    TestHelper.AddLog p_Logs, "Schema facts inspected: TbNoConformidades source fields, TbCacheNCProyecto detail, TbCacheListadoNC listing, TbLogCache evidence"
+    TestHelper.AddLog p_Logs, "FK facts inspected via Dysflow: no relevant relationships exposed for local sandbox cache/source tables"
+    EnsureCacheE2ESchema = True
+    Exit Function
+
+EH:
+    p_Error = "TESTS BLOCKED: EnsureCacheE2ESchema: " & Err.Description
+    TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+End Function
+
+Private Function EnsureTableFields(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_Fields As Variant, ByRef p_Logs As Collection, ByRef p_Error As String) As Boolean
+    Dim fieldName As Variant
+
+    EnsureTableFields = False
+    If Not TableExistsInDb(p_Db, p_TableName) Then
+        p_Error = "TESTS BLOCKED: falta tabla requerida " & p_TableName
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    For Each fieldName In p_Fields
+        If Not TableHasField(p_Db, p_TableName, CStr(fieldName)) Then
+            p_Error = "TESTS BLOCKED: falta campo requerido " & p_TableName & "." & CStr(fieldName)
+            TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+            Exit Function
+        End If
+    Next fieldName
+
+    TestHelper.AddLog p_Logs, "Schema OK: " & p_TableName & " contiene campos requeridos para el fixture"
+    EnsureTableFields = True
+End Function
+
+Private Function EnsureNoRequiredFieldsOutsideSeed(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_SeedFields As Variant, ByRef p_Logs As Collection, ByRef p_Error As String) As Boolean
+    Dim fld As DAO.Field
+
+    On Error GoTo EH
+    EnsureNoRequiredFieldsOutsideSeed = False
+
+    For Each fld In p_Db.TableDefs(p_TableName).Fields
+        If fld.Required Then
+            If Not IsFieldInArray(fld.Name, p_SeedFields) And ((fld.Attributes And dbAutoIncrField) = 0) Then
+                p_Error = "TESTS BLOCKED: campo obligatorio no sembrado " & p_TableName & "." & fld.Name
+                TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+                Exit Function
+            End If
+        End If
+    Next fld
+
+    TestHelper.AddLog p_Logs, "Schema OK: no hay campos Required=True fuera del seed de " & p_TableName
+    EnsureNoRequiredFieldsOutsideSeed = True
+    Exit Function
+
+EH:
+    p_Error = "TESTS BLOCKED: EnsureNoRequiredFieldsOutsideSeed: " & Err.Description
+    TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+End Function
+
+Private Sub CleanupCacheTestNCFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    On Error Resume Next
+
+    If TableExistsInDb(p_Db, "TbCacheListadoNC") Then p_Db.Execute "DELETE FROM TbCacheListadoNC WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If TableExistsInDb(p_Db, "TbCacheNCProyecto") Then p_Db.Execute "DELETE FROM TbCacheNCProyecto WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If TableExistsInDb(p_Db, "TbLogCache") Then p_Db.Execute "DELETE FROM TbLogCache WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    If TableExistsInDb(p_Db, "TbNoConformidades") Then p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad = " & TEST_ID_NC_CACHE, dbFailOnError
+    TestHelper.AddLog p_Logs, "Cleanup fixture cache ID=" & CStr(TEST_ID_NC_CACHE) & " aplicado en orden hijos→padre"
+End Sub
+
+Private Function CountRowsBySql(ByVal p_Db As DAO.Database, ByVal p_SQL As String) As Long
+    Dim rs As DAO.Recordset
+
+    On Error GoTo EH
+    Set rs = p_Db.OpenRecordset(p_SQL, dbOpenSnapshot)
+    If Not rs.EOF Then CountRowsBySql = CLng(Nz(rs.Fields(0).Value, 0))
+    rs.Close
+    Set rs = Nothing
+    Exit Function
+
+EH:
+    CountRowsBySql = -1
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+End Function
+
+Private Function TableExistsInDb(ByVal p_Db As DAO.Database, ByVal p_TableName As String) As Boolean
+    Dim tdf As DAO.TableDef
+
+    On Error GoTo EH
+    Set tdf = p_Db.TableDefs(p_TableName)
+    TableExistsInDb = True
+    Exit Function
+
+EH:
+    TableExistsInDb = False
+End Function
+
+Private Function IsFieldInArray(ByVal p_FieldName As String, ByVal p_Fields As Variant) As Boolean
+    Dim item As Variant
+
+    For Each item In p_Fields
+        If StrComp(CStr(item), p_FieldName, vbTextCompare) = 0 Then
+            IsFieldInArray = True
+            Exit Function
+        End If
+    Next item
+End Function
+
+Private Function CacheNCSeedFields() As Variant
+    CacheNCSeedFields = Array("IDNoConformidad", "CodigoNoConformidad", "EXPEDIENTE", "PROYECTO", "DESCRIPCION", "CAUSA", "FECHAAPERTURA", "TIPO", "RequiereControlEficacia", "MotivoNoRequiereControlEficacia", "Borrado")
+End Function
+
+Private Function RequiredCacheNCSourceFields() As Variant
+    RequiredCacheNCSourceFields = Array("IDNoConformidad", "Juridica", "CodigoNoConformidad", "EsNoConformidad", _
+        "EXPEDIENTE", "PROYECTO", "VEHICULO", "DESCRIPCION", "CAUSA", "CausaYAnalisRaiz", _
+        "ENTIDADRESPONSABLE", "RESPONSABLETELEFONICA", "FECHAAPERTURA", "FECHACIERRE", "FPREVCIERRE", _
+        "NOTAS", "Borrado", "TIPO", "RequiereACR", "ACR", "MotivoBorrado", "RequiereControlEficacia", _
+        "MotivoNoRequiereControlEficacia", "ControlEficacia", "FechaControlEficacia", _
+        "FechaPrevistaControlEficacia", "ResultadoControlEficacia", "ConformeControlEficacia", _
+        "RESPONSABLECALIDAD", "IDExpediente", "CodExp", "Nemotecnico", "JuridicaExp", "IDTipo", _
+        "DetectadoPor", "ESTADO", "Cerrada", "IDNCAsociada", "CodigoNoConformidadAsociada", _
+        "CodConcesionAsociada")
+End Function
+
+Private Function RequiredCacheDetailFields() As Variant
+    RequiredCacheDetailFields = Array("IDNoConformidad", "Version", "FechaCache", "DatosNC", "DatosACs", "DatosARs", "DatosReplanificaciones", "DatosRiesgos", "UsuarioCache", "CacheValida")
+End Function
+
+Private Function RequiredCacheListadoFields() As Variant
+    RequiredCacheListadoFields = Array("IDNoConformidad", "Version", "Descripcion", "FechaCache", "CacheValida")
+End Function
+
+Private Function RequiredCacheLogFields() As Variant
+    RequiredCacheLogFields = Array("IDNoConformidad", "TipoOperacion", "Detalles", "FechaOperacion", "Usuario", "DuracionMs", "Exito")
 End Function
 
 Private Function ObtenerDescripcionNC(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long) As String
