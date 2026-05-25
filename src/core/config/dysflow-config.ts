@@ -108,7 +108,6 @@ export function loadDysflowConfigShared<
   }
   if (requestedProjectId !== undefined) {
     // Global registry is deprecated. projectId must resolve via per-repo .dysflow/project.json.
-    // TODO(v0.9.0): remove this error path after confirming no users on global projects.json
     return failureResult(
       createDysflowError(
         "CONFIG_PROJECT_NOT_REGISTERED",
