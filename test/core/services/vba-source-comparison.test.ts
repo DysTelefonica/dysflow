@@ -7,6 +7,7 @@ import {
   compareSourceAgainstBinary,
   compareVbaSourceTrees,
   planReconcileBinary,
+  type VbaExecutionRequest,
 } from "../../../src/core/services/vba-source-comparison";
 
 describe("vba-source-comparison", () => {
@@ -75,7 +76,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (request: any) => {
+      executeWithTimeout: async (request: { destinationRoot: string }) => {
         // Simulate PowerShell exporting the module to the temporary destinationRoot
         const destModules = join(request.destinationRoot, "modules");
         await mkdir(destModules, { recursive: true });
@@ -136,7 +137,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (request: any) => {
+      executeWithTimeout: async (request: VbaExecutionRequest) => {
         const destModules = join(request.destinationRoot, "modules");
         await mkdir(destModules, { recursive: true });
         await writeFile(join(destModules, "Mod.bas"), "content", "utf8");

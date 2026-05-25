@@ -43,7 +43,7 @@ describe("createHttpServices", () => {
   it("falls back gracefully when cwd has no .dysflow config (returns services, does not throw)", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "dysflow-factory-test-"));
 
-    let services;
+    let services: Awaited<ReturnType<typeof createHttpServices>> | undefined;
     let threw = false;
     try {
       services = await createHttpServices({}, tempDir);
@@ -54,9 +54,12 @@ describe("createHttpServices", () => {
     expect(threw).toBe(false);
     expect(services).toBeDefined();
     expect(services).not.toBeNull();
+    if (services === undefined) {
+      throw new Error("Expected degraded HTTP services to be created");
+    }
 
     // Degraded services should return SERVICE_UNAVAILABLE
-    const result = await services!.diagnosticsService.run();
+    const result = await services.diagnosticsService.run();
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error.code).toBe("SERVICE_UNAVAILABLE");
   });

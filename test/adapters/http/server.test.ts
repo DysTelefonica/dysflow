@@ -15,6 +15,12 @@ import { FileAccessOperationRegistry } from "../../../src/core/operations/access
 const startedServers: Server[] = [];
 type HttpServerOptions = NonNullable<Parameters<typeof startDysflowHttpServer>[0]>;
 type HttpServices = NonNullable<HttpServerOptions["services"]>;
+type HttpErrorBody = {
+  ok: false;
+  error: { code: string; message: string; retryable?: boolean };
+  diagnostics: unknown[];
+  durationMs: number;
+};
 
 async function startTestServer(options: HttpServerOptions = {}) {
   const server = await startDysflowHttpServer({
@@ -61,7 +67,7 @@ function createFakeServices(overrides: Partial<HttpServices> = {}) {
   };
 }
 
-async function readJson<TBody = any>(
+async function readJson<TBody = unknown>(
   url: string,
   init?: RequestInit,
 ): Promise<{ response: Response; body: TBody }> {
@@ -137,7 +143,7 @@ describe("Dysflow HTTP adapter", () => {
     startedServers.push(server.server);
 
     const health = await readJson(`${server.url}/health`);
-    const diagnostics = await readJson(`${server.url}/diagnostics`);
+    const diagnostics = await readJson<HttpErrorBody>(`${server.url}/diagnostics`);
 
     expect(health.response.status).toBe(200);
     expect(health.body).toEqual({ ok: true, service: "dysflow", writesEnabled: false });
@@ -183,7 +189,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1" }),
@@ -207,7 +213,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT * INTO ArchivedPeople FROM People" }),
@@ -228,7 +234,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql }),
@@ -243,7 +249,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services, maxBodyBytes: 16 });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT 1" }),
@@ -335,7 +341,7 @@ describe("Dysflow HTTP adapter", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1" }),
     });
-    const vba = await readJson(`${server.url}/vba/execute`, {
+    const vba = await readJson<HttpErrorBody>(`${server.url}/vba/execute`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ moduleName: "Automation", procedureName: "Refresh" }),
@@ -391,7 +397,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT * FROM T WHERE col = 'foo;bar'" }),
@@ -405,7 +411,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT * FROM T WHERE name = 'val;ue;with;many'" }),
@@ -419,7 +425,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "SELECT 1; INSERT INTO T VALUES(1)" }),
@@ -466,7 +472,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/query/read`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sql: "INSERT INTO T VALUES (1); DELETE FROM T" }),
@@ -492,7 +498,7 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices({ cleanupService: fakeCleanupService });
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/access/cleanup`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ operationId: "op-123", accessPath: "C:/db/front.accdb" }),
@@ -500,15 +506,17 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(200);
     expect(cleanupCalls).toHaveLength(1);
-    expect(cleanupCalls[0]!.operationId).toBe("op-123");
-    expect(cleanupCalls[0]!.accessPath).toBe("C:/db/front.accdb");
+    expect(cleanupCalls[0]).toMatchObject({
+      operationId: "op-123",
+      accessPath: "C:/db/front.accdb",
+    });
   });
 
   it("POST /access/cleanup returns SERVICE_UNAVAILABLE 500 when cleanupService is absent", async () => {
     const services = createFakeServices({ cleanupService: undefined });
     const server = await startTestServer({ services });
 
-    const response = await readJson(`${server.url}/access/cleanup`, {
+    const response = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ operationId: "op-456", accessPath: "C:/db/back.accdb" }),

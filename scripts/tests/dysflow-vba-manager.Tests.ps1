@@ -115,6 +115,16 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
             # The fixed pattern must Close before releasing
             $script:SourceText | Should -Match '\$db\.Close\(\)'
         }
+
+        It "RotManager embedded C# does not contain PowerShell catch bodies" {
+            $rotManagerBlock = [regex]::Match(
+                $script:SourceText,
+                'Add-Type -TypeDefinition @"(?<code>[\s\S]*?public class RotManager[\s\S]*?)"@'
+            ).Groups['code'].Value
+
+            $rotManagerBlock | Should -Not -Match 'Write-Debug'
+            $rotManagerBlock | Should -Match 'catch \{ \}'
+        }
     }
 }
 

@@ -263,6 +263,10 @@ class JsonRpcMethodNotFound extends Error {
 export async function startMcpStdioAdapter(runtime?: McpStdioRuntime): Promise<void>;
 export async function startMcpStdioAdapter(
   config?: DysflowConfig,
+  runtime?: McpStdioRuntime,
+): Promise<void>;
+export async function startMcpStdioAdapter(
+  config?: DysflowConfig,
   options?: { writesEnabled?: boolean },
   runtime?: McpStdioRuntime,
 ): Promise<void>;

@@ -456,7 +456,7 @@ function createInstallReport(runtimeDir: string, configuredAgents: readonly Agen
     "",
     "Note:",
     "- Runtime docs were copied to INSTALL_DIR: README.md and CHANGELOG.md.",
-    "- MCP server command used in integrations: " + path.join(runtimeDir, "bin", "dysflow.cmd"),
+    `- MCP server command used in integrations: ${path.join(runtimeDir, "bin", "dysflow.cmd")}`,
     "- Re-run `dysflow install` to refresh runtime + integrations.",
   ].join("\n");
 }

@@ -1032,7 +1032,7 @@ public class RotManager {
                     } catch {
                         // No tiene BD abierta o instancia corrupta — saltar
                     } finally {
-                        if (db != null) try { Marshal.ReleaseComObject(db); } catch { Write-Debug "Diagnostics: $_" }
+                        if (db != null) try { Marshal.ReleaseComObject(db); } catch { }
                     }
 
                     if (!string.IsNullOrEmpty(openDbName) &&
@@ -1041,13 +1041,13 @@ public class RotManager {
                             comObj.GetType().InvokeMember("CloseCurrentDatabase",
                                 BindingFlags.InvokeMethod, null, comObj, null);
                             result.ClosedCount++;
-                        } catch { Write-Debug "Diagnostics: $_" }
+                        } catch { }
                     }
                 } catch {
                     // Este moniker no sirve — continuar
                 } finally {
-                    if (comObj != null) try { Marshal.ReleaseComObject(comObj); } catch { Write-Debug "Diagnostics: $_" }
-                    try { Marshal.ReleaseComObject(monikers[0]); } catch { Write-Debug "Diagnostics: $_" }
+                    if (comObj != null) try { Marshal.ReleaseComObject(comObj); } catch { }
+                    try { Marshal.ReleaseComObject(monikers[0]); } catch { }
                     monikers[0] = null;
                 }
             }
@@ -1055,9 +1055,9 @@ public class RotManager {
             result.Success = false;
             result.Error = ex.Message;
         } finally {
-            if (enumMk != null) try { Marshal.ReleaseComObject(enumMk); } catch { Write-Debug "Diagnostics: $_" }
-            if (bindCtx != null) try { Marshal.ReleaseComObject(bindCtx); } catch { Write-Debug "Diagnostics: $_" }
-            if (rot != null) try { Marshal.ReleaseComObject(rot); } catch { Write-Debug "Diagnostics: $_" }
+            if (enumMk != null) try { Marshal.ReleaseComObject(enumMk); } catch { }
+            if (bindCtx != null) try { Marshal.ReleaseComObject(bindCtx); } catch { }
+            if (rot != null) try { Marshal.ReleaseComObject(rot); } catch { }
         }
         return result;
     }
