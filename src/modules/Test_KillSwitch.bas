@@ -16,17 +16,35 @@ Public Function Test_KillSwitch_IsCacheEnabled_Atomic() As String
     On Error GoTo EH
 
     Dim logs As Collection
-    Set logs = TestHelper.NewLogs
-
     Dim estado As Boolean
+    Dim sessionStarted As Boolean
+    Dim sessionErr As String
+    Dim fixtureErr As String
+
+    Set logs = TestHelper.NewLogs
+    If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
+        Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     estado = IsCacheEnabled()
     TestHelper.AddLog logs, "IsCacheEnabled ejecutado. Estado=" & CStr(estado)
 
-    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.TestPass(logs, estado)
+    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonOk(logs, estado)
+    Call TestHelper.EndTestSession(logs)
     Exit Function
 EH:
+    If logs Is Nothing Then Set logs = TestHelper.NewLogs
     TestHelper.AddLog logs, "Error: " & Err.Description
-    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.TestFail(Err.Description, logs)
+    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
 Public Function Test_KillSwitch_SetEnabled_True_Atomic() As String
@@ -41,6 +59,7 @@ Public Function Test_KillSwitch_SetEnabled_True_Atomic() As String
     Dim restoreErr As String
     Dim opError As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
@@ -48,6 +67,12 @@ Public Function Test_KillSwitch_SetEnabled_True_Atomic() As String
         Exit Function
     End If
     sessionStarted = True
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_SetEnabled_True_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     estadoOriginal = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(estadoOriginal)
 
@@ -100,6 +125,7 @@ Public Function Test_KillSwitch_SetEnabled_False_Atomic() As String
     Dim restoreErr As String
     Dim opError As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
@@ -107,6 +133,12 @@ Public Function Test_KillSwitch_SetEnabled_False_Atomic() As String
         Exit Function
     End If
     sessionStarted = True
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_SetEnabled_False_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     estadoOriginal = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(estadoOriginal)
 
@@ -156,6 +188,7 @@ Public Function Test_KillSwitch_RestoreDefault_Atomic() As String
     Dim opError As String
     Dim sessionStarted As Boolean
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
@@ -163,6 +196,12 @@ Public Function Test_KillSwitch_RestoreDefault_Atomic() As String
         Exit Function
     End If
     sessionStarted = True
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_RestoreDefault_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     opError = ""
     setResult = CacheConfig_SetEnabled(True, opError)
     Call TestHelper.AssertTrue(setResult, "Restore default debe devolver True", logs, assertError)
@@ -192,6 +231,7 @@ Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
     Dim assertError As String
     Dim sessionStarted As Boolean
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
@@ -199,6 +239,12 @@ Public Function Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic() As String
         Exit Function
     End If
     sessionStarted = True
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_EnsureSchemaSeed_Idempotent_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     errMsg = ""
     ok1 = EnsureCacheSchemaReadiness(errMsg)
     Call TestHelper.AssertTrue(ok1, "EnsureCacheSchemaReadiness primera ejecución OK", logs, assertError)
@@ -238,6 +284,72 @@ EH:
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
 End Function
 
+Private Function EnsureKillSwitchFixture(ByRef p_Logs As Collection, Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim readinessErr As String
+    Dim totalRows As Long
+    Dim idOneRows As Long
+    Dim assertError As String
+
+    On Error GoTo EH
+    EnsureKillSwitchFixture = False
+    p_Error = ""
+
+    If Not m_TestingMode Then
+        p_Error = "EnsureKillSwitchFixture: BeginKillSwitchWriteSession debe ejecutarse antes"
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    readinessErr = ""
+    If Not EnsureCacheSchemaReadiness(readinessErr) Then
+        p_Error = "EnsureCacheSchemaReadiness: " & readinessErr
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    Set db = getdb()
+    If db Is Nothing Then
+        p_Error = "EnsureKillSwitchFixture: getdb devolvió Nothing en modo testing"
+        TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+        Exit Function
+    End If
+
+    TestHelper.AddLog p_Logs, "Arrange fixture: EnsureCacheSchemaReadiness OK bajo sandbox local"
+    TestHelper.AddLog p_Logs, "Fixture DB: " & db.Name
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.ID: Long, Required=False; contrato singleton ID=1"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.CacheHabilitada: Boolean, Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.FechaCambioCache: Date, Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.UsuarioCambioCache: Text(255), Required=False"
+    TestHelper.AddLog p_Logs, "Schema fact TbConfiguracion.MotivoCambioCache: Memo/LongText, Required=False"
+    TestHelper.AddLog p_Logs, "ID=1 es fixture controlada por EnsureTbConfiguracion en sandbox, no dato preexistente afortunado"
+
+    totalRows = CountRowsBackend("TbConfiguracion")
+    Call TestHelper.AssertTrue(totalRows = 1, "TbConfiguracion debe tener exactamente una fila singleton", p_Logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    idOneRows = CountRowsBackend("TbConfiguracion", "ID=1")
+    Call TestHelper.AssertTrue(idOneRows = 1, "TbConfiguracion debe tener exactamente una fila ID=1", p_Logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    Call TestHelper.AssertTrue(TableHasField("TbConfiguracion", "CacheHabilitada"), "TbConfiguracion.CacheHabilitada existe", p_Logs, assertError)
+    If assertError <> "" Then GoTo Fail
+
+    EnsureKillSwitchFixture = True
+    Set db = Nothing
+    Exit Function
+
+Fail:
+    p_Error = assertError
+    Set db = Nothing
+    Exit Function
+
+EH:
+    p_Error = "EnsureKillSwitchFixture: " & Err.Description
+    TestHelper.AddLog p_Logs, "ASSERT FAIL: " & p_Error
+    Set db = Nothing
+End Function
+
 Private Function CountRowsBackend(ByVal p_Table As String, Optional ByVal p_Where As String = "") As Long
     Dim db As DAO.Database
     Dim rs As DAO.Recordset
@@ -268,6 +380,7 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
     Dim opError As String
     Dim restoreErr As String
     Dim sessionErr As String
+    Dim fixtureErr As String
 
     Set logs = TestHelper.NewLogs
     If Not BeginKillSwitchWriteSession(logs, sessionErr) Then
@@ -275,6 +388,12 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
         Exit Function
     End If
     sessionStarted = True
+    If Not EnsureKillSwitchFixture(logs, fixtureErr) Then
+        Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & fixtureErr, logs)
+        If sessionStarted Then Call TestHelper.EndTestSession(logs)
+        Exit Function
+    End If
+
     originalState = IsCacheEnabled()
     TestHelper.AddLog logs, "Estado original=" & CStr(originalState)
 
