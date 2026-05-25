@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
 import {
   buildImportPlanResult,
   parseArgsJson,
@@ -11,7 +10,8 @@ import {
   spawnVbaManager,
   type VbaManagerExecutor,
   VbaSyncLegacyService,
-} from "../../../src/core/services/vba-sync-legacy-service";
+} from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter";
+import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -1569,10 +1569,10 @@ describe("VbaSyncLegacyService", () => {
 
   describe("delegation to form service and comparison modules", () => {
     it("re-exports VbaFormService, comparison helpers, and related types for backward compatibility", async () => {
-      const serviceModule = await import("../../../src/core/services/vba-sync-legacy-service");
-      expect(serviceModule.VbaFormService).toBeDefined();
-      expect(serviceModule.compareSourceAgainstBinary).toBeDefined();
-      expect(serviceModule.planReconcileBinary).toBeDefined();
+      const adapterModule = await import("../../../src/adapters/vba-sync/vba-sync-legacy-adapter");
+      expect(adapterModule.VbaFormService).toBeDefined();
+      expect(adapterModule.compareSourceAgainstBinary).toBeDefined();
+      expect(adapterModule.planReconcileBinary).toBeDefined();
     });
 
     it("delegates form-related operations to VbaFormService methods", async () => {

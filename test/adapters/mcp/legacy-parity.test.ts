@@ -12,11 +12,11 @@ import {
   LEGACY_VBA_SYNC_TOOL_NAMES,
 } from "../../../src/adapters/mcp/legacy-tool-inventory";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { VbaSyncLegacyService } from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
-import { VbaSyncLegacyService } from "../../../src/core/services/vba-sync-legacy-service";
 
 class FakeVbaService {
   public requests: unknown[] = [];

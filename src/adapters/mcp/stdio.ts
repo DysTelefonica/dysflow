@@ -14,9 +14,9 @@ import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
-import { VbaSyncLegacyService } from "../../core/services/vba-sync-legacy-service.js";
 import { isRecord } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
+import { VbaSyncLegacyService } from "../vba-sync/vba-sync-legacy-adapter.js";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,

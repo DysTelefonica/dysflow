@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   type VbaManagerExecutionRequest,
   VbaSyncLegacyService,
-} from "../../../src/core/services/vba-sync-legacy-service.js";
+} from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter.js";
 
 // Issue #185: export_modules must respect exportPath parameter
 describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", () => {
