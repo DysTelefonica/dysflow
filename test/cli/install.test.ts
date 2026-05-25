@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyIntegrationSelection,
   createGitHubReleaseRequestHeaders,
+  formatAgentsLine,
   handleInstallCommand,
   handleUpdateCommand,
   hasDysflowMcpConfig,
@@ -917,5 +918,193 @@ describe("runtime marker — persistent runtime dir across Windows users", () =>
     expect(markerContent).toContain(runtimeDir);
 
     await rm(root, { recursive: true, force: true });
+  });
+});
+
+describe("parseAgentList edge cases", () => {
+  it("returns empty agents when raw is undefined", () => {
+    expect(parseAgentList(undefined)).toEqual({ ok: true, agents: [] });
+  });
+});
+
+describe("parseInstallArgs error branches", () => {
+  it("rejects --runtime-dir with missing value", () => {
+    expect(parseInstallArgs(["--runtime-dir"])).toEqual({
+      ok: false,
+      message: "Missing value for --runtime-dir.",
+    });
+  });
+
+  it("rejects --runtime-dir when next arg looks like a flag", () => {
+    expect(parseInstallArgs(["--runtime-dir", "--agents"])).toEqual({
+      ok: false,
+      message: "Missing value for --runtime-dir.",
+    });
+  });
+
+  it("rejects unknown install option", () => {
+    expect(parseInstallArgs(["--unknown-flag"])).toEqual({
+      ok: false,
+      message: "Unsupported install option: --unknown-flag",
+    });
+  });
+
+  it("rejects --agents with unknown agent name", () => {
+    expect(parseInstallArgs(["--agents", "unknown-agent"])).toEqual({
+      ok: false,
+      message: "Unknown agent(s): unknown-agent.",
+    });
+  });
+
+  it("returns usage message on --help", () => {
+    const result = parseInstallArgs(["--help"]);
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; message: string }).message).toContain("Usage: dysflow install");
+  });
+});
+
+describe("parseUpdateArgs error branches", () => {
+  it("rejects --runtime-dir with missing value", () => {
+    expect(parseUpdateArgs(["--runtime-dir"])).toEqual({
+      ok: false,
+      message: "Missing value for --runtime-dir.",
+    });
+  });
+
+  it("rejects --runtime-dir when next arg looks like a flag", () => {
+    expect(parseUpdateArgs(["--runtime-dir", "--force"])).toEqual({
+      ok: false,
+      message: "Missing value for --runtime-dir.",
+    });
+  });
+
+  it("rejects unknown update option", () => {
+    expect(parseUpdateArgs(["--unknown-flag"])).toEqual({
+      ok: false,
+      message: "Unsupported update option: --unknown-flag",
+    });
+  });
+
+  it("returns usage message on --help", () => {
+    const result = parseUpdateArgs(["--help"]);
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; message: string }).message).toContain("Usage: dysflow update");
+  });
+});
+
+describe("formatAgentsLine", () => {
+  it("returns (none) for empty agents array", () => {
+    expect(formatAgentsLine([])).toBe("(none)");
+  });
+
+  it("joins agent names with comma for non-empty arrays", () => {
+    expect(formatAgentsLine(["codex", "opencode"])).toBe("codex, opencode");
+  });
+});
+
+describe("handleInstallCommand error catch", () => {
+  it("returns exitCode 1 when installRuntime throws an Error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-error-"));
+    try {
+      // missing distSource so copyRuntime throws
+      const badPackageRoot = join(root, "bad-package");
+      await mkdir(badPackageRoot, { recursive: true });
+      await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+
+      const result = await handleInstallCommand(
+        ["--runtime-dir", join(root, "runtime"), "--agents", "codex", "--no-tui"],
+        { env: { USERPROFILE: root }, packageRoot: badPackageRoot },
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("Cannot install: runtime distribution not found");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("handleUpdateCommand error catch — preparePackage failure", () => {
+  it("returns exitCode 1 when preparePackage throws an Error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-prepare-error-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+
+    try {
+      await mkdir(appDir, { recursive: true });
+      await writeFile(
+        join(appDir, "package.json"),
+        JSON.stringify({ name: "dysflow", version: "0.0.1" }),
+      );
+
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => {
+            throw new Error("git clone failed");
+          },
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("Failed to update Dysflow runtime: git clone failed");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns generic message when preparePackage throws a non-Error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-nonerrorthrow-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+
+    try {
+      await mkdir(appDir, { recursive: true });
+      await writeFile(
+        join(appDir, "package.json"),
+        JSON.stringify({ name: "dysflow", version: "0.0.1" }),
+      );
+
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => {
+            throw "unexpected string error";
+          },
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toBe(
+        "Failed to update Dysflow runtime: Failed to update Dysflow runtime.",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("applyIntegrationSelection error catch", () => {
+  it("returns exitCode 1 when installRuntime throws inside applyIntegrationSelection", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-apply-error-"));
+    try {
+      const badPackageRoot = join(root, "no-dist");
+      await mkdir(badPackageRoot, { recursive: true });
+      await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+
+      const result = await applyIntegrationSelection(["codex"], {
+        env: { USERPROFILE: root },
+        runtimeDir: join(root, "runtime"),
+        packageRoot: badPackageRoot,
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("Cannot install: runtime distribution not found");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
