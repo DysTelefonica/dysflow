@@ -4,14 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
-  buildImportPlanResult,
-  parseArgsJson,
   resolveDefaultVbaManagerScriptPath,
   spawnVbaManager,
   type VbaManagerExecutor,
   VbaSyncLegacyService,
 } from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
+import { buildImportPlanResult, parseArgsJson } from "../../../src/core/services/vba-import-plan";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
