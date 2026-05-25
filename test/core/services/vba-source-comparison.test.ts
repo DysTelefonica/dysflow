@@ -75,7 +75,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (request: any) => {
+      executeWithTimeout: async (request: { destinationRoot: string }) => {
         // Simulate PowerShell exporting the module to the temporary destinationRoot
         const destModules = join(request.destinationRoot, "modules");
         await mkdir(destModules, { recursive: true });

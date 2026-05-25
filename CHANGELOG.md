@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.1] - 2026-05-25
+
+### Fixed
+
+- Fixed `Close-TargetAccessDbIfOpen` failing during VBA import/export preflight because PowerShell `Write-Debug` catch bodies were accidentally embedded inside the C# `RotManager` `Add-Type` block (#342).
+
 ## [0.9.0] - 2026-05-25
 
 ### Features

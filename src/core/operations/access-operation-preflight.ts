@@ -108,7 +108,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       return;
     }
 
-    let process;
+    let process: OsProcessInfo | undefined;
     try {
       process = await this.options.processInspector.getProcess(record.accessPid);
     } catch (error) {
@@ -237,12 +237,13 @@ function pathMatchesAccessPath(commandLine: string, normalizedAccessPath: string
 
   const tokenPattern = /"([^"]*)"|(\S+)/g;
   const tokens: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = tokenPattern.exec(commandLine)) !== null) {
+  let match = tokenPattern.exec(commandLine);
+  while (match !== null) {
     const token = match[1] ?? match[2] ?? "";
     if (token.length > 0) {
       tokens.push(token.replace(/\\/g, "/").toLowerCase());
     }
+    match = tokenPattern.exec(commandLine);
   }
 
   for (const token of tokens) {

@@ -37,7 +37,7 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).not.toContain("$BackendPassword = $env:ACCESS_VBA_PASSWORD");
     expect(script).toContain("[Parameter(Mandatory = $false)] [bool] $ReadOnly = $false");
     expect(script).toContain(
-      'return $DbEngine.OpenDatabase($DatabasePath, $false, $ReadOnly, ";PWD=$BackendPassword")',
+      'return $DbEngine.OpenDatabase($DatabasePath, $Exclusive, $ReadOnly, ";PWD=$Password")',
     );
     expect(script).toContain(
       "Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath",
