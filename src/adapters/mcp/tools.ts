@@ -1,6 +1,7 @@
 import type {
   AccessQueryRequest,
   AccessVbaRequest,
+  LegacyVbaSyncPort,
   OperationResult,
 } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
@@ -176,9 +177,8 @@ export type DysflowMcpServices = {
       force?: boolean;
     }): Promise<OperationResult<AccessCleanupResult>>;
   };
-  legacyToolService?: {
-    execute(toolName: LegacyDysflowMcpToolName, input: unknown): Promise<OperationResult<unknown>>;
-  };
+  /** Injected adapter for legacy VBA sync tool dispatch. See LegacyVbaSyncPort in core/contracts. */
+  legacyToolService?: LegacyVbaSyncPort;
 };
 
 export type McpWriteAccessResolver = (input: unknown) => Promise<boolean>;
