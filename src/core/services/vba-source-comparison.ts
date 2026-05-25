@@ -7,7 +7,10 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import { diagnosticsFromPreflightCleanup } from "../operations/access-operation-preflight.js";
+import {
+  type AccessOperationPreflightCleanupResult,
+  diagnosticsFromPreflightCleanup,
+} from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
 
 export type VbaSourceComparisonFile = {
@@ -47,13 +50,46 @@ export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
   recommendation: string;
 };
 
+export type VbaExecutionTarget = {
+  accessPath?: string;
+  destinationRoot: string;
+  projectRoot?: string;
+  processTimeoutMs: number;
+};
+
+export type VbaExecutionRequest = {
+  scriptPath: string;
+  action: string;
+  accessPath?: string;
+  destinationRoot: string;
+  moduleNames: readonly string[];
+  password?: string;
+  json: boolean;
+  extra: Record<string, string | boolean | number | undefined>;
+  timeoutMs: number;
+  env?: Record<string, string | undefined>;
+};
+
+export type VbaExecutionResult = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  timedOut: boolean;
+};
+
 export type VbaComparisonContext = {
   scriptPath: string;
   accessPassword?: string;
-  resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<any>>;
-  validateStrictContext(params: Record<string, unknown>, target: any): OperationResult<undefined>;
-  runPreflightCleanup(target: any): Promise<any>;
-  executeWithTimeout(request: any): Promise<any>;
+  resolveExecutionTarget(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<VbaExecutionTarget>>;
+  validateStrictContext(
+    params: Record<string, unknown>,
+    target: VbaExecutionTarget,
+  ): OperationResult<undefined>;
+  runPreflightCleanup(target: VbaExecutionTarget): Promise<AccessOperationPreflightCleanupResult>;
+  executeWithTimeout(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
 };
 
 export async function compareSourceAgainstBinary(
@@ -62,9 +98,9 @@ export async function compareSourceAgainstBinary(
   ctx: VbaComparisonContext,
 ): Promise<OperationResult<VbaVerifyResult>> {
   const target = await ctx.resolveExecutionTarget(params);
-  if (!target.ok) return target as any;
+  if (!target.ok) return target as unknown as OperationResult<VbaVerifyResult>;
   const strict = ctx.validateStrictContext(params, target.data);
-  if (!strict.ok) return strict as any;
+  if (!strict.ok) return strict as unknown as OperationResult<VbaVerifyResult>;
 
   const sourceRoot = target.data.destinationRoot;
   const tempExportRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-verify-"));
@@ -103,7 +139,7 @@ export async function compareSourceAgainstBinary(
           { retryable: true },
         ),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
-      ) as any;
+      );
     }
     if (result.exitCode !== 0) {
       return failureResult(
@@ -112,7 +148,7 @@ export async function compareSourceAgainstBinary(
           `verify export failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`,
         ),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
-      ) as any;
+      );
     }
 
     const comparison = await compareVbaSourceTrees(
@@ -135,7 +171,7 @@ export async function planReconcileBinary(
   ctx: VbaComparisonContext,
 ): Promise<OperationResult<VbaReconcilePlanResult>> {
   const comparison = await compareSourceAgainstBinary("verify_code", params, ctx);
-  if (!comparison.ok) return comparison as any;
+  if (!comparison.ok) return comparison as unknown as OperationResult<VbaReconcilePlanResult>;
   return successResult(
     {
       operation: "reconcile_binary",
