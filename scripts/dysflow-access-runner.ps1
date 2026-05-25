@@ -325,6 +325,10 @@ function Update-LinkTables {
   if (-not (Test-Path -LiteralPath $backendPath)) {
     throw "Backend database not found: $backendPath"
   }
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) {
+    $dryRun = [bool]$Payload.dryRun
+  }
 
   $dbEngine = New-Object -ComObject DAO.DBEngine.120
   $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath
@@ -338,6 +342,14 @@ function Update-LinkTables {
     foreach ($tableName in $targetNames) {
       $linked = $null
       try { $linked = $Database.TableDefs.Item([string]$tableName) } catch { Write-Debug "Diagnostics: $_" }
+      if ($dryRun) {
+        [void]$updated.Add([ordered]@{
+          name = [string]$tableName
+          backendPath = $backendPath
+          wouldCreateOrRefresh = ($null -eq $linked)
+        })
+        continue
+      }
       if ($null -eq $linked) {
         if ($RefreshOnly) {
           throw "Linked table not found: $tableName"
@@ -1270,6 +1282,13 @@ try {
     }
 
     if ($action -eq 'link_tables') {
+      $dryRun = $true; if ($null -ne $payload.dryRun) { $dryRun = [bool]$payload.dryRun }
+      if ($dryRun) {
+        $backendPath = [string]$payload.backendPath
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ dryRun = $true; backendPath = $backendPath; linkedTables = @() } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
       $result = Update-LinkTables -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20

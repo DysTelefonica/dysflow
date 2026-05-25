@@ -155,7 +155,7 @@ await testCase("vba-sync", "generate_erd", { backendPath: join(cwd, "Expedientes
 await testCase("forms", "validate_form_spec missing", {}, "error", { actualTool: "validate_form_spec" });
 await testCase("forms", "validate_form_spec inline", { spec: { name: "E2E_Form", controls: [] } }, "success", { actualTool: "validate_form_spec" });
 await testCase("forms", "generate_form dryRun", { name: "E2E_Form", spec: { name: "E2E_Form", controls: [] }, dryRun: true }, "success", { actualTool: "generate_form" });
-await testCase("forms", "catalog_add_control", { catalogPath: join(tempRoot, "catalog.json"), controlName: "txtE2E", controlType: "TextBox" });
+await testCase("forms", "catalog_add_control", { catalogPath: join(tempRoot, "catalog.json"), controlName: "txtE2E", controlType: "TextBox", spec: { name: "E2E_Form", controls: [] } });
 await testCase("forms", "harvest_form_catalog", { catalogPath: join(tempRoot, "catalog.json"), filter: "E2E" });
 
 for (const implemented of ["verify_code", "verify_binary", "reconcile_binary"]) {
