@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.2] - 2026-05-25 · Stable rollback release (behavioral baseline: 0.9.0)
+
+### Release policy
+
+- Re-publishing a stable runtime at an explicitly higher patch version to allow `dysflow update` to recover cleanly from a bad `v0.9.1` deployment while keeping the runtime behavior aligned with the known-good `0.9.0` state.
+
 ## [0.9.0] - 2026-05-25
 
 ### Features
