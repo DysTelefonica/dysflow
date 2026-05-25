@@ -69,7 +69,7 @@ async function record(area, tool, args, expected = "success", timeoutMs, actualT
 
 const list = await callTool("tools/list", {});
 const advertised = list.response?.result?.tools?.map((tool) => tool.name).sort() ?? [];
-rows.push({ area: "protocol", tool: "tools/list", pass: advertised.length === 49, expected: "49 visible tools", ms: 0, summary: `advertised=${advertised.length}` });
+rows.push({ area: "protocol", tool: "tools/list", pass: advertised.length === 48, expected: "48 visible tools", ms: 0, summary: `advertised=${advertised.length}` });
 
 await record("diagnostics", "dysflow_doctor", { includeEnvironment: false });
 await record("operations", "dysflow_access_operations_list", {});

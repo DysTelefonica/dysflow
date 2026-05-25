@@ -610,6 +610,8 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
       controlName: SCHEMA_PROPS.controlName,
       controlType: SCHEMA_PROPS.controlType,
       type: SCHEMA_PROPS.type,
+      spec: SCHEMA_PROPS.spec,
+      specPath: SCHEMA_PROPS.specPath,
     },
   },
   harvest_form_catalog: {
