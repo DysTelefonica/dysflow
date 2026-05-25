@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult } from "../../core/contracts/index.js";
@@ -290,14 +292,26 @@ export async function startMcpStdioAdapter(
     : createUnavailableServices(configResult.error);
   const writesEnabled = options?.writesEnabled ?? false;
 
+  const startupConfig = configResult.ok ? configResult.data : undefined;
   for (const tool of createDysflowMcpTools(services, writesEnabled, async (input) => {
-    const configResult = await resolveConfigForInput(input);
-    return configResult.ok ? configResult.data.allowWrites : false;
+    return await resolveMcpWriteAccessForInput(input, startupConfig);
   })) {
     activeRuntime.registerTool(tool);
   }
 
   await activeRuntime.start();
+}
+
+export async function resolveMcpWriteAccessForInput(
+  input: unknown,
+  startupConfig?: DysflowConfig,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+): Promise<boolean> {
+  if (startupConfig !== undefined && inputTargetsConfig(input, startupConfig)) {
+    return startupConfig.allowWrites;
+  }
+  const configResult = await resolveConfigForInput(input, options, { preferProjectConfig: true });
+  return configResult.ok ? configResult.data.allowWrites : false;
 }
 
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
@@ -315,8 +329,8 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
     }),
     legacyToolService: new VbaSyncLegacyService({
       processTimeoutMs: config.processTimeoutMs,
-      accessPath: config.accessDbPath,
-      destinationRoot: config.destinationRoot,
+      cwd: config.projectRoot ?? process.cwd(),
+      env: process.env,
       accessPassword: config.accessPassword,
     }),
   };
@@ -333,6 +347,7 @@ export function createUnavailableServices(
   const unavailable = async () => failureResult(error);
   const resolveService = async (input: unknown): Promise<DysflowMcpServices | undefined> => {
     const configResult = await resolveConfigForInput(input, options);
+    if (configResult.ok && !existsSync(configResult.data.accessDbPath)) return undefined;
     return configResult.ok
       ? (options.serviceFactory ?? createConfiguredServices)(configResult.data)
       : undefined;
@@ -370,18 +385,42 @@ export function createUnavailableServices(
 async function resolveConfigForInput(
   input: unknown,
   options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  resolutionOptions: { preferProjectConfig?: boolean } = {},
 ) {
   const params = isRecord(input) ? input : {};
+  const projectRoot = stringOrUndefined(params.projectRoot);
+  const preferProjectConfig = resolutionOptions.preferProjectConfig === true;
   return await loadDysflowConfigAsync({
-    cwd: options.cwd,
+    cwd: projectRoot ?? options.cwd,
     env: options.env,
     projectId: stringOrUndefined(params.projectId),
     contextId: stringOrUndefined(params.contextId),
-    accessDbPath: stringOrUndefined(params.accessPath),
-    backendPath: stringOrUndefined(params.backendPath),
+    accessDbPath: preferProjectConfig ? undefined : stringOrUndefined(params.accessPath),
+    backendPath: preferProjectConfig ? undefined : stringOrUndefined(params.backendPath),
     destinationRoot: stringOrUndefined(params.destinationRoot),
-    projectRoot: stringOrUndefined(params.projectRoot),
+    projectRoot,
   });
+}
+
+function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
+  const params = isRecord(input) ? input : {};
+  const requestedProjectId =
+    stringOrUndefined(params.projectId) ?? stringOrUndefined(params.contextId);
+  if (requestedProjectId !== undefined) return requestedProjectId === config.projectId;
+
+  const accessPath = stringOrUndefined(params.accessPath);
+  if (accessPath !== undefined && pathsMatch(accessPath, config.accessDbPath)) return true;
+
+  const projectRoot = stringOrUndefined(params.projectRoot);
+  if (projectRoot !== undefined && config.projectRoot !== undefined) {
+    return pathsMatch(projectRoot, config.projectRoot);
+  }
+
+  return Object.keys(params).length === 0;
+}
+
+function pathsMatch(left: string, right: string): boolean {
+  return resolve(left).toLowerCase() === resolve(right).toLowerCase();
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

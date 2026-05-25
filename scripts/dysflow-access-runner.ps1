@@ -36,9 +36,44 @@ function Open-DatabaseWithPassword {
 function Open-DatabaseWithBackendPassword {
   param(
     [Parameter(Mandatory = $true)] $DbEngine,
-    [Parameter(Mandatory = $true)] [string] $DatabasePath
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [bool] $ReadOnly = $false
   )
-  return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $false -Password $BackendPassword
+  return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $ReadOnly -Password $BackendPassword
+}
+
+function Resolve-WriteActionDatabase {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] $CurrentDb,
+    [Parameter(Mandatory = $true)] $Payload
+  )
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) { $dryRun = [bool]$Payload.dryRun }
+  $targetPath = [string]$Payload.databasePath
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.backendPath }
+  if ([string]::IsNullOrWhiteSpace($targetPath) -or $dryRun) {
+    return [ordered]@{ Database = $CurrentDb; Owned = $false; TargetPath = $targetPath }
+  }
+  $targetDb = Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $targetPath
+  return [ordered]@{ Database = $targetDb; Owned = $true; TargetPath = $targetPath }
+}
+
+function Resolve-ReadActionDatabase {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] $CurrentDb,
+    [Parameter(Mandatory = $true)] $Payload
+  )
+  $targetPath = [string]$Payload.databasePath
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.backendPath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) {
+    return [ordered]@{ Database = $CurrentDb; Owned = $false; TargetPath = $targetPath }
+  }
+  $targetDb = Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $targetPath -ReadOnly $true
+  return [ordered]@{ Database = $targetDb; Owned = $true; TargetPath = $targetPath }
 }
 
 function ConvertTo-IsoStartTime {
@@ -1143,22 +1178,35 @@ if ($Operation -eq 'query') {
 
 $access = $null
 try {
-  if (-not (Test-Path -LiteralPath $AccessDbPath)) {
+  $before = Get-MsAccessProcesses
+  $payload = ConvertFrom-JsonCompat $PayloadJson
+  $action = [string]$payload.action
+  $targetPath = [string]$payload.databasePath
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.backendPath }
+  $dryRun = $true
+  if ($null -ne $payload.dryRun) { $dryRun = [bool]$payload.dryRun }
+  $isDirectTargetQuery = $Operation -eq 'query' -and -not [string]::IsNullOrWhiteSpace($targetPath) -and -not $dryRun -and (
+    $action -in @('exec_sql', 'run_script', 'create_table', 'drop_table', 'seed_fixture', 'teardown_fixture') -or
+    ([string]::IsNullOrWhiteSpace($action) -and $payload.mode -eq 'write')
+  )
+
+  if (-not $isDirectTargetQuery -and -not (Test-Path -LiteralPath $AccessDbPath)) {
     throw "Access database not found: $AccessDbPath"
   }
 
-  $before = Get-MsAccessProcesses
-  $payload = ConvertFrom-JsonCompat $PayloadJson
   $access = New-Object -ComObject Access.Application
   $access.Visible = $false
 
-  if ([string]::IsNullOrEmpty($AccessPassword)) {
-    $access.OpenCurrentDatabase($AccessDbPath)
-  } else {
-    $access.OpenCurrentDatabase($AccessDbPath, $false, $AccessPassword)
+  if (-not $isDirectTargetQuery) {
+    if ([string]::IsNullOrEmpty($AccessPassword)) {
+      $access.OpenCurrentDatabase($AccessDbPath)
+    } else {
+      $access.OpenCurrentDatabase($AccessDbPath, $false, $AccessPassword)
+    }
+    Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
   }
 
-  Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
   Write-DysflowProgress -Percent 10 -Message "Opening database"
 
   if ($Operation -eq 'diagnostics') {
@@ -1182,8 +1230,22 @@ try {
   }
 
   if ($Operation -eq 'query') {
+    if ($isDirectTargetQuery) {
+      $directDb = Open-DatabaseWithBackendPassword -DbEngine $access.DBEngine -DatabasePath $targetPath
+      try {
+        $directAction = $action
+        if ([string]::IsNullOrWhiteSpace($directAction) -and $payload.mode -eq 'write') { $directAction = 'exec_sql' }
+        $result = Invoke-WriteAction -Database $directDb -Action $directAction -Payload $payload
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        $result | ConvertTo-Json -Compress -Depth 20
+      } finally {
+        try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
+      }
+      exit 0
+    }
+
     $db = $access.CurrentDb()
-    $action = [string]$payload.action
     Write-DysflowProgress -Percent 40 -Message "Executing operation"
     if ([string]::IsNullOrWhiteSpace($action) -or $action -eq 'query_sql') {
       if ($payload.mode -eq 'read') {
@@ -1205,9 +1267,14 @@ try {
     }
 
     if ($action -eq 'list_tables') {
-      $tables = @(Get-TableNames -Database $db)
-      Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+      $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      try {
+        $tables = @(Get-TableNames -Database $readDb.Database)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+      } finally {
+        if ($readDb.Owned) { $readDb.Database.Close() }
+      }
       exit 0
     }
 
@@ -1220,9 +1287,14 @@ try {
 
     if ($action -eq 'get_schema') {
       if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for get_schema." }
-      $schema = @(Get-TableSchema -Database $db -TableName ([string]$payload.tableName))
-      Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
+      $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      try {
+        $schema = @(Get-TableSchema -Database $readDb.Database -TableName ([string]$payload.tableName))
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
+      } finally {
+        if ($readDb.Owned) { $readDb.Database.Close() }
+      }
       exit 0
     }
 
@@ -1268,9 +1340,14 @@ try {
     }
 
     if ($action -eq 'get_relationships') {
-      $relationships = @(Get-Relationships -Database $db)
-      Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
+      $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      try {
+        $relationships = @(Get-Relationships -Database $readDb.Database)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
+      } finally {
+        if ($readDb.Owned) { $readDb.Database.Close() }
+      }
       exit 0
     }
 
@@ -1338,9 +1415,17 @@ try {
     }
 
     if ($action -in @('exec_sql', 'run_script', 'create_table', 'drop_table', 'seed_fixture', 'teardown_fixture')) {
-      $result = Invoke-WriteAction -Database $db -Action $action -Payload $payload
-      Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      $writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      try {
+        $result = Invoke-WriteAction -Database $writeDb.Database -Action $action -Payload $payload
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        $result | ConvertTo-Json -Compress -Depth 20
+      } finally {
+        if ($writeDb.Owned) {
+          try { $writeDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($writeDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
+      }
       exit 0
     }
 

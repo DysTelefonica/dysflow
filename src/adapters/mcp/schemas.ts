@@ -296,6 +296,17 @@ export const ACCESS_OVERRIDE = {
   destinationRoot: SCHEMA_PROPS.destinationRoot,
   projectRoot: SCHEMA_PROPS.projectRoot,
 };
+const WRITE_TARGET_OVERRIDE = {
+  ...ACCESS_OVERRIDE,
+  databasePath: SCHEMA_PROPS.databasePath,
+  sourcePath: SCHEMA_PROPS.sourcePath,
+};
+const READ_TARGET_OVERRIDE = {
+  accessPath: SCHEMA_PROPS.accessPath,
+  backendPath: SCHEMA_PROPS.backendPath,
+  databasePath: SCHEMA_PROPS.databasePath,
+  sourcePath: SCHEMA_PROPS.sourcePath,
+};
 /** Strict context guard props. */
 export const STRICT_CTX = {
   strictContext: SCHEMA_PROPS.strictContext,
@@ -333,7 +344,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       sql: SCHEMA_PROPS.sql,
       query: SCHEMA_PROPS.query,
       dryRun: SCHEMA_PROPS.dryRun,
@@ -349,7 +360,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       scriptPath: SCHEMA_PROPS.scriptPath,
       path: SCHEMA_PROPS.path,
       dryRun: SCHEMA_PROPS.dryRun,
@@ -365,7 +376,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       definition: SCHEMA_PROPS.definition,
@@ -379,7 +390,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       dryRun: SCHEMA_PROPS.dryRun,
@@ -391,7 +402,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       rows: SCHEMA_PROPS.rows,
@@ -408,7 +419,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
+      ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       dryRun: SCHEMA_PROPS.dryRun,
@@ -650,7 +661,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      accessPath: SCHEMA_PROPS.accessPath,
+      ...READ_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
     },
@@ -703,7 +714,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   get_relationships: {
     type: "object",
     additionalProperties: false,
-    properties: { ...CTX_PROPS, accessPath: SCHEMA_PROPS.accessPath },
+    properties: { ...CTX_PROPS, ...READ_TARGET_OVERRIDE },
   },
   list_links: {
     type: "object",

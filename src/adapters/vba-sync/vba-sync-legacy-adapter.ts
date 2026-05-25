@@ -84,6 +84,7 @@ export type VbaManagerExecutionRequest = {
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
   timeoutMs: number;
+  cwd?: string;
   env?: Record<string, string | undefined>;
   signal?: AbortSignal;
 };
@@ -263,6 +264,7 @@ export class VbaSyncLegacyAdapter implements LegacyVbaSyncPort {
       json: mapping.json ?? false,
       extra: mapping.extra(params),
       timeoutMs: effectiveTimeoutMs,
+      cwd: target.data.projectRoot ?? this.cwd,
       env:
         password === undefined
           ? undefined
@@ -828,6 +830,7 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
     command: POWERSHELL_EXE,
     args,
     timeoutMs: request.timeoutMs,
+    cwd: request.cwd,
     env: request.env,
     signal: request.signal,
   });

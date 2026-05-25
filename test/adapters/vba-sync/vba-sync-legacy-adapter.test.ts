@@ -141,6 +141,7 @@ describe("VbaSyncLegacyService", () => {
           ACCESS_VBA_PASSWORD: "secret",
         },
         timeoutMs: 30_000,
+        cwd: process.cwd(),
         signal: expect.any(AbortSignal),
       },
     ]);
@@ -709,14 +710,16 @@ describe("VbaSyncLegacyService", () => {
   it("-NonInteractive present in spawned args at correct position", async () => {
     let capturedArgs: readonly string[] = [];
     let capturedEnv: Record<string, string | undefined> | undefined;
+    let capturedCwd: string | undefined;
     spawnMock.mockImplementationOnce(
       (
         _command: string,
         args: readonly string[],
-        options?: { env?: Record<string, string | undefined> },
+        options?: { cwd?: string; env?: Record<string, string | undefined> },
       ) => {
         capturedArgs = args;
         capturedEnv = options?.env;
+        capturedCwd = options?.cwd;
         const child = new EventEmitter() as EventEmitter & {
           stdout: EventEmitter;
           stderr: EventEmitter;
@@ -741,6 +744,7 @@ describe("VbaSyncLegacyService", () => {
       password: "super-secret",
       env: { DYSFLOW_ACCESS_PASSWORD: "super-secret", ACCESS_VBA_PASSWORD: "super-secret" },
       timeoutMs: 1_000,
+      cwd: "C:/repo",
     });
 
     expect(capturedArgs.slice(0, 4)).toEqual([
@@ -755,6 +759,7 @@ describe("VbaSyncLegacyService", () => {
       DYSFLOW_ACCESS_PASSWORD: "super-secret",
       ACCESS_VBA_PASSWORD: "super-secret",
     });
+    expect(capturedCwd).toBe("C:/repo");
   });
 
   it("maps legacy list/exists tools with JSON output enabled", async () => {
@@ -834,6 +839,58 @@ describe("VbaSyncLegacyService", () => {
         moduleNames: [],
         json: true,
         extra: {},
+      }),
+    ]);
+  });
+
+  it("maps MCP-style compile_vba through project cwd config instead of runtime-default paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-mcp-style-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "fixture",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+        timeoutMs: 90_000,
+        passwordEnv: "DYSFLOW_ACCESS_PASSWORD",
+      }),
+      "utf8",
+    );
+
+    const calls: unknown[] = [];
+    const service = new VbaSyncLegacyService({
+      cwd: root,
+      env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
+      accessPassword: "secret",
+      processTimeoutMs: 90_000,
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      executor: async (request) => {
+        calls.push(request);
+        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+      },
+    });
+
+    await expect(service.execute("compile_vba", { timeoutMs: 8_000 })).resolves.toMatchObject({
+      ok: true,
+      data: { ok: true },
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        action: "Compile",
+        accessPath: join(root, "front.accdb"),
+        destinationRoot: join(root, "src"),
+        cwd: root,
+        moduleNames: [],
+        json: true,
+        timeoutMs: 8_000,
+        env: expect.objectContaining({
+          DYSFLOW_ACCESS_PASSWORD: "secret",
+          ACCESS_VBA_PASSWORD: "secret",
+        }),
       }),
     ]);
   });

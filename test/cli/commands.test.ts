@@ -411,12 +411,35 @@ describe("dysflow command modules", () => {
   });
 
   it("routes dysflow access relink-directory to the access handler", async () => {
-    const result = await runCli(["access", "relink-directory", "--root", "C:\\data", "--dry-run"]);
+    const result = await runCli(["access", "relink-directory", "--root", "C:\\data", "--dry-run"], {
+      accessQueryService: {
+        execute: async () =>
+          successResult({
+            relinkDirectory: {
+              mode: "dry-run",
+              root: "C:\\data",
+              filesScanned: 0,
+              linkedTablesFound: 0,
+              alreadyLocal: 0,
+              plannedRelinks: 0,
+              appliedRelinks: 0,
+              unresolved: [],
+              removed: [],
+              externalLinkCount: 0,
+              datosteLinkCount: 0,
+              brokenLinkCount: 0,
+              backupPaths: [],
+              errors: [],
+              fileResults: [],
+            },
+          }),
+      },
+    });
     // Service is now wired in access.ts — the handler should NOT return
     // "service not available". The runner may fail for other reasons (PS not
     // found, C:\data not a real directory) but routing and service wiring are correct.
     expect(result.stderr).not.toMatch(/not available/i);
-  }, 30_000);
+  });
 
   it("returns unknown subcommand error for unknown access subcommand", async () => {
     const result = await runCli(["access", "unknown-cmd"]);

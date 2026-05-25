@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -234,6 +235,143 @@ describe("AccessPowerShellRunner", () => {
       action: "localize_backend_links",
       backendPath: "C:/data/config-backend.accdb",
     });
+  });
+
+  it("preserves explicit write databasePath ahead of config.backendPath fallback", async () => {
+    const calls: { args: readonly string[] }[] = [];
+    const executor: PowerShellExecutor = async (_cmd, args) => {
+      calls.push({ args });
+      return {
+        exitCode: 0,
+        stdout: '{"rows":[]}',
+        stderr: "",
+        durationMs: 8,
+        timedOut: false,
+      };
+    };
+
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    await runner.run(
+      {
+        kind: "query",
+        request: {
+          action: "create_table",
+          mode: "write",
+          sql: "",
+          tableName: "ZZZ_Target",
+          definition: "Id INTEGER",
+          databasePath: "C:/data/explicit-write.accdb",
+        },
+      },
+      {
+        ...config,
+        backendPath: "C:/data/config-backend.accdb",
+      },
+    );
+
+    const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
+    const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+    const payload = payloadArg ? (JSON.parse(payloadArg) as Record<string, unknown>) : undefined;
+
+    expect(payload).toMatchObject({
+      action: "create_table",
+      mode: "write",
+      databasePath: "C:/data/explicit-write.accdb",
+    });
+    expect(payload).not.toHaveProperty("backendPath");
+  });
+
+  it("dispatches write actions through a selected database helper instead of CurrentDb directly", () => {
+    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
+
+    expect(script).toContain("$isDirectTargetQuery = $Operation -eq 'query'");
+    expect(script).toContain(
+      "Open-DatabaseWithBackendPassword -DbEngine $access.DBEngine -DatabasePath $targetPath",
+    );
+    expect(script).toContain("function Resolve-WriteActionDatabase");
+    expect(script).toContain("Resolve-WriteActionDatabase -DbEngine");
+    expect(script).toContain("Invoke-WriteAction -Database $writeDb.Database");
+    expect(script).not.toContain(
+      "Invoke-WriteAction -Database $db -Action $action -Payload $payload",
+    );
+  });
+
+  it("dispatches read schema actions through a read-only selected database helper", () => {
+    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
+
+    expect(script).toContain("function Resolve-ReadActionDatabase");
+    expect(script).toContain(
+      "Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $targetPath -ReadOnly $true",
+    );
+    expect(script).toContain(
+      "Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
+    );
+    expect(script).toContain("Get-TableNames -Database $readDb.Database");
+    expect(script).toContain("Get-TableSchema -Database $readDb.Database");
+    expect(script).toContain("Get-Relationships -Database $readDb.Database");
+    expect(script).toContain("if ($readDb.Owned)");
+    expect(script).not.toContain("Get-TableNames -Database $db\n      Write-DysflowProgress");
+    expect(script).not.toContain("Get-TableSchema -Database $db");
+    expect(script).not.toContain("Get-Relationships -Database $db");
+  });
+
+  it("serializes concurrent executor invocations for the same Access database", async () => {
+    const events: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    let notifyFirstStarted: (() => void) | undefined;
+    const firstStarted = new Promise<void>((resolve) => {
+      notifyFirstStarted = resolve;
+    });
+    const executor: PowerShellExecutor = async (_command, _args, options) => {
+      events.push(`start:${options.operationId}`);
+      if (options.operationId === "op-1") {
+        notifyFirstStarted?.();
+        await new Promise<void>((release) => {
+          releaseFirst = release;
+        });
+      }
+      events.push(`end:${options.operationId}`);
+      return {
+        exitCode: 0,
+        stdout: '{"returnValue":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+
+    const runner = new AccessPowerShellRunner({
+      executor,
+      operationIdFactory: (() => {
+        let count = 0;
+        return () => `op-${++count}`;
+      })(),
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const firstRun = runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "First" } },
+      config,
+    );
+    const secondRun = runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "Second" } },
+      config,
+    );
+
+    await firstStarted;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toEqual(["start:op-1"]);
+
+    releaseFirst?.();
+    await Promise.all([firstRun, secondRun]);
+
+    expect(events).toEqual(["start:op-1", "end:op-1", "start:op-2", "end:op-2"]);
   });
 
   it("redacts backend passwords from diagnostics and runner failures", async () => {

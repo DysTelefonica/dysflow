@@ -239,6 +239,107 @@ describe("legacy Dysflow MCP parity inventory", () => {
     ]);
   });
 
+  it("preserves explicit legacy write targets instead of substituting the frontend", async () => {
+    const queryCalls: unknown[] = [];
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(),
+        queryService: {
+          execute: async (request: unknown) => {
+            queryCalls.push(request);
+            return successResult({ rows: [{ ok: true }] });
+          },
+        },
+        diagnosticsService: new FakeDiagnosticsService(),
+      },
+      true,
+    );
+
+    await tools
+      .find((tool) => tool.name === "exec_sql")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        backendPath: "C:/backend.accdb",
+        sql: "UPDATE People SET Name='Ada'",
+        apply: true,
+      });
+    await tools
+      .find((tool) => tool.name === "create_table")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        databasePath: "C:/write-target.accdb",
+        tableName: "ZZZ_Target",
+        definition: "Id INTEGER",
+        apply: true,
+      });
+    await tools
+      .find((tool) => tool.name === "drop_table")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        sourcePath: "C:/source-alias.accdb",
+        tableName: "ZZZ_Target",
+        apply: true,
+      });
+    await tools
+      .find((tool) => tool.name === "run_script")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        backendPath: "C:/script-backend.accdb",
+        path: "fixtures/backend-ddl.sql",
+        apply: true,
+      });
+    await tools
+      .find((tool) => tool.name === "seed_fixture")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        databasePath: "C:/seed-target.accdb",
+        tableName: "ZZZ_Target",
+        rows: [{ Id: 1 }],
+        apply: true,
+      });
+    await tools
+      .find((tool) => tool.name === "teardown_fixture")
+      ?.handler({
+        accessPath: "C:/frontend.accdb",
+        sourcePath: "C:/teardown-target.accdb",
+        tableName: "ZZZ_Target",
+        apply: true,
+      });
+
+    expect(queryCalls).toEqual([
+      expect.objectContaining({
+        action: "exec_sql",
+        backendPath: "C:/backend.accdb",
+        databasePath: undefined,
+      }),
+      expect.objectContaining({
+        action: "create_table",
+        backendPath: undefined,
+        databasePath: "C:/write-target.accdb",
+      }),
+      expect.objectContaining({
+        action: "drop_table",
+        backendPath: undefined,
+        databasePath: "C:/source-alias.accdb",
+      }),
+      expect.objectContaining({
+        action: "run_script",
+        backendPath: "C:/script-backend.accdb",
+        databasePath: undefined,
+      }),
+      expect.objectContaining({
+        action: "seed_fixture",
+        backendPath: undefined,
+        databasePath: "C:/seed-target.accdb",
+      }),
+      expect.objectContaining({
+        action: "teardown_fixture",
+        backendPath: undefined,
+        databasePath: "C:/teardown-target.accdb",
+      }),
+    ]);
+  });
+
   it("declares maintenance query access modes in the parity registry", () => {
     expect(getLegacyParityToolDefinition("list_links")).toMatchObject({ queryMode: "read" });
     expect(getLegacyParityToolDefinition("export_queries")).toMatchObject({ queryMode: "read" });

@@ -40,6 +40,7 @@ const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>([
   "failed",
   "cleanup_pending",
 ]);
+const DEFAULT_OPERATION_TIMEOUT_MS = 3_000;
 
 export class AccessOperationPreflightCleanupService implements AccessOperationPreflightCleanup {
   constructor(
@@ -48,6 +49,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       processInspector: ProcessInspector;
       processKiller: ProcessKiller;
       processScanner?: ProcessScanner;
+      operationTimeoutMs?: number;
       clock?: () => string;
     },
   ) {}
@@ -110,7 +112,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
 
     let process: OsProcessInfo | undefined;
     try {
-      process = await this.options.processInspector.getProcess(record.accessPid);
+      process = await withTimeout(
+        this.options.processInspector.getProcess(record.accessPid),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
     } catch (error) {
       result.errors.push({
         operationId: record.operationId,
@@ -143,7 +148,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     handledPids.add(record.accessPid);
 
     try {
-      await this.options.processKiller.kill(record.accessPid);
+      await withTimeout(
+        this.options.processKiller.kill(record.accessPid),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
       result.killed.push(record.accessPid);
     } catch (error) {
       result.errors.push({
@@ -164,7 +172,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
   ): Promise<void> {
     let processes: OsProcessInfo[];
     try {
-      processes = await scanner.listProcesses();
+      processes = await withTimeout(
+        scanner.listProcesses(),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
     } catch (error) {
       result.errors.push({
         operationId: "orphan_scanner",
@@ -183,7 +194,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       if (!pathMatchesAccessPath(process.commandLine, normalizedAccessPath)) continue;
 
       try {
-        await this.options.processKiller.kill(process.pid);
+        await withTimeout(
+          this.options.processKiller.kill(process.pid),
+          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+        );
         result.orphanedKilled.push(process.pid);
       } catch (error) {
         result.errors.push({
@@ -258,4 +272,22 @@ function pathMatchesAccessPath(commandLine: string, normalizedAccessPath: string
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | undefined): Promise<T> {
+  if (timeoutMs === undefined || timeoutMs <= 0) return promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`operation timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }

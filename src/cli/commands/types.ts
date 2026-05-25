@@ -1,6 +1,7 @@
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
+import type { AccessQueryService } from "../../core/services/query-service.js";
 import type { AgentName } from "./install-utils.js";
 import type { StartHttpAdapter } from "./serve.js";
 
@@ -24,6 +25,7 @@ export type CliCommandContext = {
       includeEnvironment?: boolean;
     }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
+  accessQueryService?: Pick<AccessQueryService, "execute">;
   startHttpAdapter?: StartHttpAdapter;
   runTui?: (args: readonly string[], context?: CliCommandContext) => Promise<CliResult> | CliResult;
   localVersion?: string;

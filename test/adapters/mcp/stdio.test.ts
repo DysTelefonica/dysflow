@@ -1,13 +1,14 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
   createUnavailableServices,
   JsonLineMcpStdioRuntime,
   MCP_PROTOCOL_VERSION,
+  resolveMcpWriteAccessForInput,
   resolveProjectOperationRegistryPath,
   startMcpStdioAdapter,
 } from "../../../src/adapters/mcp/stdio.js";
@@ -74,6 +75,71 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(stdioSource).toContain("function startMcpStdioAdapter(");
     expect(stdioSource).toContain("runtime?: McpStdioRuntime");
     expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
+  });
+
+  it("configures legacy VBA sync through project cwd instead of runtime-default paths", () => {
+    expect(stdioSource).toContain("cwd: config.projectRoot ?? process.cwd()");
+    expect(stdioSource).toContain("env: process.env");
+    expect(stdioSource).not.toContain("accessPath: config.accessDbPath");
+    expect(stdioSource).not.toContain("destinationRoot: config.destinationRoot");
+  });
+
+  it("allows project-scoped writes from projectRoot config even when explicit paths are present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-write-access-"));
+    const project = join(root, "project");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    writeFileSync(join(project, "front.accdb"), "", "utf8");
+    writeFileSync(join(project, "backend.accdb"), "", "utf8");
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "backend-ddl-project",
+        accessPath: "front.accdb",
+        backendPath: "backend.accdb",
+        allowWrites: true,
+      }),
+      "utf8",
+    );
+
+    await expect(
+      resolveMcpWriteAccessForInput({
+        projectId: "backend-ddl-project",
+        projectRoot: project,
+        accessPath: resolve(project, "front.accdb"),
+        backendPath: resolve(project, "backend.accdb"),
+        tableName: "ZZZ_DDL_TARGET",
+        apply: true,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("keeps explicit-path writes blocked when the project config does not allow writes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-write-denied-"));
+    const project = join(root, "project");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    writeFileSync(join(project, "front.accdb"), "", "utf8");
+    writeFileSync(join(project, "backend.accdb"), "", "utf8");
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "readonly-ddl-project",
+        accessPath: "front.accdb",
+        backendPath: "backend.accdb",
+        allowWrites: false,
+      }),
+      "utf8",
+    );
+
+    await expect(
+      resolveMcpWriteAccessForInput({
+        projectId: "readonly-ddl-project",
+        projectRoot: project,
+        accessPath: resolve(project, "front.accdb"),
+        backendPath: resolve(project, "backend.accdb"),
+        tableName: "ZZZ_DDL_TARGET",
+        apply: true,
+      }),
+    ).resolves.toBe(false);
   });
 
   it("declares the targeted MCP protocol version as a named maintenance constant", () => {

@@ -544,6 +544,62 @@ describe("MCP tool registration over core services", () => {
       expect(schema?.properties).not.toHaveProperty("rows");
     });
 
+    it("read/schema tools accept explicit backend and database target aliases", async () => {
+      for (const toolName of ["get_schema", "get_relationships"] as const) {
+        const schema = LEGACY_TOOL_SCHEMAS[toolName];
+        expect(schema?.properties, `${toolName} should accept backendPath`).toHaveProperty(
+          "backendPath",
+        );
+        expect(schema?.properties, `${toolName} should accept databasePath`).toHaveProperty(
+          "databasePath",
+        );
+        expect(schema?.properties, `${toolName} should accept sourcePath`).toHaveProperty(
+          "sourcePath",
+        );
+      }
+
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      await expect(
+        tools
+          .find((tool) => tool.name === "get_schema")
+          ?.handler({
+            tableName: "People",
+            backendPath: "C:/backend.accdb",
+            databasePath: "C:/schema-target.accdb",
+          }),
+      ).resolves.toMatchObject({ isError: false });
+      await expect(
+        tools
+          .find((tool) => tool.name === "get_relationships")
+          ?.handler({
+            backendPath: "C:/backend.accdb",
+            sourcePath: "C:/relationships-source.accdb",
+          }),
+      ).resolves.toMatchObject({ isError: false });
+
+      expect(query.requests).toEqual([
+        expect.objectContaining({
+          action: "get_schema",
+          mode: "read",
+          tableName: "People",
+          backendPath: "C:/backend.accdb",
+          databasePath: "C:/schema-target.accdb",
+        }),
+        expect.objectContaining({
+          action: "get_relationships",
+          mode: "read",
+          backendPath: "C:/backend.accdb",
+          databasePath: "C:/relationships-source.accdb",
+        }),
+      ]);
+    });
+
     it("seed_fixture schema does not include query property", () => {
       const schema = LEGACY_TOOL_SCHEMAS.seed_fixture;
       expect(schema).toBeDefined();

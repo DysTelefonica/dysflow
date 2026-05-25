@@ -256,6 +256,7 @@ function appendLegacyCompatibilityTools(
       tools.push(tool);
     }
   };
+  const cleanupSchema = legacySchemaFor("cleanup_access_operation");
 
   add({
     name: "list_access_operations",
@@ -271,9 +272,9 @@ function appendLegacyCompatibilityTools(
   add({
     name: "cleanup_access_operation",
     description: "Legacy-compatible alias for safe Access operation cleanup.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.cleanup_access_operation!,
+    inputSchema: cleanupSchema,
     handler: async (input) => {
-      const validation = validateInput(input, LEGACY_TOOL_SCHEMAS.cleanup_access_operation!);
+      const validation = validateInput(input, cleanupSchema);
       if (validation !== undefined) return invalidInput(validation);
       if (services.cleanupService === undefined) {
         return {
@@ -296,12 +297,13 @@ function appendLegacyCompatibilityTools(
       );
     },
   });
+  const runVbaSchema = legacySchemaFor("run_vba");
   add({
     name: "run_vba",
     description: "Legacy-compatible alias for executing a public VBA procedure.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.run_vba!,
+    inputSchema: runVbaSchema,
     handler: async (input) => {
-      const validation = validateInput(input, LEGACY_TOOL_SCHEMAS.run_vba!);
+      const validation = validateInput(input, runVbaSchema);
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
       const parsedArgs = parseLegacyArgsJson(request.argsJson);
@@ -315,7 +317,8 @@ function appendLegacyCompatibilityTools(
       );
     },
   });
-  const querySqlSchema = LEGACY_TOOL_SCHEMAS.query_sql!;
+  const querySqlSchema = legacySchemaFor("query_sql");
+  const execSqlSchema = legacySchemaFor("exec_sql");
   add({
     name: "query_sql",
     description: "Legacy-compatible alias for read-only Access SQL queries.",
@@ -335,76 +338,61 @@ function appendLegacyCompatibilityTools(
   add({
     name: "exec_sql",
     description: "Legacy-compatible alias for executing guarded Access SQL writes.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.exec_sql!,
+    inputSchema: execSqlSchema,
     handler: async (input) =>
-      handleValidatedLegacyWrite(
-        input,
-        LEGACY_TOOL_SCHEMAS.exec_sql!,
-        writesEnabled,
-        writeAccessResolver,
-        () => services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input)),
+      handleValidatedLegacyWrite(input, execSqlSchema, writesEnabled, writeAccessResolver, () =>
+        services.queryService.execute(toLegacyWriteFixtureRequest("exec_sql", input)),
       ),
   });
+  const runScriptSchema = legacySchemaFor("run_script");
   add({
     name: "run_script",
     description: "Legacy-compatible alias for executing a guarded Access script.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.run_script!,
+    inputSchema: runScriptSchema,
     handler: async (input) =>
-      handleValidatedLegacyWrite(
-        input,
-        LEGACY_TOOL_SCHEMAS.run_script!,
-        writesEnabled,
-        writeAccessResolver,
-        () => services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input)),
+      handleValidatedLegacyWrite(input, runScriptSchema, writesEnabled, writeAccessResolver, () =>
+        services.queryService.execute(toLegacyWriteFixtureRequest("run_script", input)),
       ),
   });
+  const createTableSchema = legacySchemaFor("create_table");
   add({
     name: "create_table",
     description: "Legacy-compatible alias for creating a table through guarded Access writes.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.create_table!,
+    inputSchema: createTableSchema,
     handler: async (input) =>
-      handleValidatedLegacyWrite(
-        input,
-        LEGACY_TOOL_SCHEMAS.create_table!,
-        writesEnabled,
-        writeAccessResolver,
-        () => services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input)),
+      handleValidatedLegacyWrite(input, createTableSchema, writesEnabled, writeAccessResolver, () =>
+        services.queryService.execute(toLegacyWriteFixtureRequest("create_table", input)),
       ),
   });
+  const dropTableSchema = legacySchemaFor("drop_table");
   add({
     name: "drop_table",
     description: "Legacy-compatible alias for dropping a table through guarded Access writes.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.drop_table!,
+    inputSchema: dropTableSchema,
     handler: async (input) =>
-      handleValidatedLegacyWrite(
-        input,
-        LEGACY_TOOL_SCHEMAS.drop_table!,
-        writesEnabled,
-        writeAccessResolver,
-        () => services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input)),
+      handleValidatedLegacyWrite(input, dropTableSchema, writesEnabled, writeAccessResolver, () =>
+        services.queryService.execute(toLegacyWriteFixtureRequest("drop_table", input)),
       ),
   });
+  const seedFixtureSchema = legacySchemaFor("seed_fixture");
   add({
     name: "seed_fixture",
     description: "Legacy-compatible alias for seeding fixtures through guarded Access writes.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.seed_fixture!,
+    inputSchema: seedFixtureSchema,
     handler: async (input) =>
-      handleValidatedLegacyWrite(
-        input,
-        LEGACY_TOOL_SCHEMAS.seed_fixture!,
-        writesEnabled,
-        writeAccessResolver,
-        () => services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input)),
+      handleValidatedLegacyWrite(input, seedFixtureSchema, writesEnabled, writeAccessResolver, () =>
+        services.queryService.execute(toLegacyWriteFixtureRequest("seed_fixture", input)),
       ),
   });
+  const teardownFixtureSchema = legacySchemaFor("teardown_fixture");
   add({
     name: "teardown_fixture",
     description: "Legacy-compatible alias for tearing down fixtures through guarded Access writes.",
-    inputSchema: LEGACY_TOOL_SCHEMAS.teardown_fixture!,
+    inputSchema: teardownFixtureSchema,
     handler: async (input) =>
       handleValidatedLegacyWrite(
         input,
-        LEGACY_TOOL_SCHEMAS.teardown_fixture!,
+        teardownFixtureSchema,
         writesEnabled,
         writeAccessResolver,
         () => services.queryService.execute(toLegacyWriteFixtureRequest("teardown_fixture", input)),
@@ -429,6 +417,14 @@ export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
   "reconcile_binary",
 ]);
 
+function legacySchemaFor(name: keyof typeof LEGACY_TOOL_SCHEMAS): JsonObjectSchema {
+  const schema = LEGACY_TOOL_SCHEMAS[name];
+  if (schema === undefined) {
+    throw new Error(`Missing legacy tool schema: ${String(name)}`);
+  }
+  return schema;
+}
+
 function createLegacyDispatchTool(
   name: LegacyDysflowMcpToolName,
   services: DysflowMcpServices,
@@ -438,7 +434,7 @@ function createLegacyDispatchTool(
 ): DysflowMcpTool {
   const definition = getLegacyParityToolDefinition(name);
   // LEGACY_TOOL_SCHEMAS is the sole source of truth for all legacy tool schemas (#200).
-  const schema = LEGACY_TOOL_SCHEMAS[name]!;
+  const schema = legacySchemaFor(name);
   return {
     name,
     description: definition.description,
@@ -556,8 +552,8 @@ function toLegacyQueryRequest(name: LegacyDysflowMcpToolName, input: unknown): A
     tableName,
     columnName,
     backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
-    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
     databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
+    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
     exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
     importPath: stringValue(params.importPath) ?? stringValue(params.path),
     queryDefinitions:
@@ -578,6 +574,7 @@ function toLegacyWriteFixtureRequest(
     tableName,
     columnName: stringValue(params.columnName) ?? stringValue(params.column),
     backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
+    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
     rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
     scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
     definition: stringValue(params.definition) ?? stringValue(params.fields),

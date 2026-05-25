@@ -233,7 +233,71 @@ describe("AccessOperationPreflightCleanupService", () => {
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });
 
+  it("does not block cleanup when process inspection hangs", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(baseRecord);
+    const service = new AccessOperationPreflightCleanupService({
+      registry,
+      processInspector: {
+        getProcess: async () => new Promise<OsProcessInfo | undefined>(() => undefined),
+      },
+      processKiller: {
+        kill: async () => {
+          throw new Error("should not kill");
+        },
+      },
+      operationTimeoutMs: 10,
+    });
+
+    const result = await service.cleanup({
+      accessPath: "C:/data/app.accdb",
+      projectRoot: "C:/repo/app",
+    });
+
+    expect(result.cleaned).toEqual([]);
+    expect(result.killed).toEqual([]);
+    expect(result.orphanedKilled).toEqual([]);
+    expect(result.errors).toEqual([
+      {
+        operationId: "op-stale",
+        message: "Failed to inspect process 1234: operation timed out after 10ms",
+      },
+    ]);
+  });
+
   describe("orphan MSACCESS process scanning", () => {
+    it("does not block cleanup when orphan process scanning hangs", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async () => {
+            throw new Error("should not kill");
+          },
+        },
+        processScanner: {
+          listProcesses: async () => new Promise<OsProcessInfo[]>(() => undefined),
+        },
+        operationTimeoutMs: 10,
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.cleaned).toEqual([]);
+      expect(result.killed).toEqual([]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toEqual([
+        {
+          operationId: "orphan_scanner",
+          message: "Failed to enumerate processes: operation timed out after 10ms",
+        },
+      ]);
+    });
+
     it("kills an orphan MSACCESS with commandLine containing the same accessPath", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       await registry.create(baseRecord);

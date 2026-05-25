@@ -25,6 +25,10 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
       return handleRelinkDirectoryCommand(rest, context);
     }
 
+    if (context?.accessQueryService !== undefined) {
+      return handleRelinkDirectoryCommand(rest, context, { service: context.accessQueryService });
+    }
+
     const env = context?.env ?? process.env;
     const configResult = loadDysflowConfig({
       accessDbPath: rootPath,

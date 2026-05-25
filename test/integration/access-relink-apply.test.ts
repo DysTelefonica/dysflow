@@ -1,18 +1,17 @@
 /**
  * Integration tests for `relink_directory` apply mode.
  *
- * These tests require DAO.DBEngine.120 (Windows + Access runtime installed)
- * and are excluded from the standard vitest run. Run manually or in a
- * Windows CI pipeline that has the Access runtime available.
+ * These tests require explicit opt-in plus DAO.DBEngine.120 (Windows + Access
+ * runtime installed). Run manually or in a Windows CI pipeline that has the
+ * Access runtime available.
  *
- * Guard: hasDaoCom() — checks that DAO.DBEngine.120 is instantiable.
+ * Guard: DYSFLOW_RUN_ACCESS_RELINK_APPLY=1 + hasDaoCom().
  *
  * Tasks covered: 6.11, 6.12, 6.13, 6.14
  */
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleRelinkDirectoryCommand } from "../../src/cli/commands/access/relink-directory.js";
@@ -45,10 +44,12 @@ function hasDaoCom(): boolean {
   }
 }
 
-const canRun = hasDaoCom();
+const integrationOptIn = process.env.DYSFLOW_RUN_ACCESS_RELINK_APPLY === "1";
+const fixtureRoot = process.env.DYSFLOW_ACCESS_TEST_ROOT ?? "C:\\00repos\\datos";
+const canRun = integrationOptIn && hasDaoCom();
 if (!canRun) {
   console.warn(
-    "[dysflow] Skipping relink-directory integration tests: DAO.DBEngine.120 unavailable.",
+    "[dysflow] Skipping relink-directory integration tests: set DYSFLOW_RUN_ACCESS_RELINK_APPLY=1 and ensure DAO.DBEngine.120 is available.",
   );
 }
 
@@ -157,8 +158,8 @@ describe("relink-directory apply integration", { timeout: 90_000 }, () => {
 
   beforeEach(() => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    tmpRoot = join(tmpdir(), `dysflow-rlint-${id}`);
-    extRoot = join(tmpdir(), `dysflow-rlext-${id}`);
+    tmpRoot = join(fixtureRoot, `dysflow-rlint-${id}`);
+    extRoot = join(fixtureRoot, `dysflow-rlext-${id}`);
     mkdirSync(tmpRoot, { recursive: true });
     mkdirSync(extRoot, { recursive: true });
   });

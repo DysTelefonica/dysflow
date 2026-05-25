@@ -337,16 +337,23 @@ describe("handleRelinkDirectoryCommand", () => {
 
 describe("handleAccessCommand service wiring", () => {
   it("routes relink-directory and does not return 'service not available' error when rootPath is provided", async () => {
-    // When access.ts is properly wired, the service will be injected.
+    const service = new FakeQueryService();
+
+    // When access.ts is properly wired, the injected service will be used.
     // Without wiring, the handler returns exitCode 1 with "service is not available".
-    // The runner may fail for other reasons (PS not found, path not exist) but must
-    // NOT return the "not available" sentinel — that would mean service is not wired.
     const result = await handleAccessCommand(
       ["relink-directory", "--root", "C:\\data", "--dry-run"],
-      {},
+      { accessQueryService: service },
     );
+
     // With proper service wiring, this should NOT contain the "not available" sentinel.
     // If service wiring is missing, this fails RED as expected in TDD.
     expect(result.stderr).not.toContain("not available");
-  }, 30_000);
+    expect(service.requests).toHaveLength(1);
+    expect(service.requests[0]).toMatchObject({
+      action: "relink_directory",
+      rootPath: "C:\\data",
+      dryRun: true,
+    });
+  });
 });

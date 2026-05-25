@@ -2,6 +2,13 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.4] - 2026-05-25
+
+### Fixed
+
+- **MCP backend DDL targeting**: write/DDL tools now honor explicit `databasePath`/`backendPath` targets and can run directly against the requested backend instead of opening the configured frontend first. Closes #347.
+- **Project-scoped MCP write gate**: calls that include explicit paths still resolve `allowWrites` from the matching repo `.dysflow/project.json`, preventing false `MCP_WRITES_DISABLED` failures for allowed projects.
+
 ## [0.9.3] - 2026-05-25
 
 ### Fixed

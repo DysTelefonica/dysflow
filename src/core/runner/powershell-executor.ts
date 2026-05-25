@@ -12,6 +12,7 @@ export type PowerShellProcessOptions = {
   command?: string;
   args: readonly string[];
   timeoutMs: number;
+  cwd?: string;
   env?: Record<string, string | undefined>;
   signal?: AbortSignal;
   onStdout?(text: string): void;
@@ -28,6 +29,7 @@ export function spawnPowerShellProcess(
     const child = spawn(options.command ?? POWERSHELL_EXE, options.args, {
       shell: false,
       windowsHide: true,
+      cwd: options.cwd,
       env: { ...process.env, ...options.env },
     });
     let stdout = "";

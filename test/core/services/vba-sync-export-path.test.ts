@@ -6,6 +6,10 @@ import {
   VbaSyncLegacyService,
 } from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter.js";
 
+const noOpPreflightCleanup = {
+  cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
+};
+
 // Issue #185: export_modules must respect exportPath parameter
 describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", () => {
   it("passes exportPath to the VBA manager executor when provided", async () => {
@@ -20,6 +24,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: "src",
+      preflightCleanup: noOpPreflightCleanup,
     });
 
     const exportPath = join(tmpdir(), "nc_export_check");
@@ -43,6 +48,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: configDestinationRoot,
+      preflightCleanup: noOpPreflightCleanup,
     });
 
     await service.execute("export_modules", { moduleNames: ["TestModule"] });
@@ -63,6 +69,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",
       destinationRoot: "src",
+      preflightCleanup: noOpPreflightCleanup,
     });
 
     const tempExportPath = join(tmpdir(), "opencode", "nc_export_check");
