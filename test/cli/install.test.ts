@@ -2,7 +2,13 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const mockCreateInterface = vi.fn();
+vi.mock("node:readline/promises", () => ({
+  createInterface: (...args: any[]) => mockCreateInterface(...args),
+}));
+
 import {
   applyIntegrationSelection,
   createGitHubReleaseRequestHeaders,
@@ -1104,6 +1110,89 @@ describe("applyIntegrationSelection error catch", () => {
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain("Cannot install: runtime distribution not found");
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("handleInstallCommand argument validation errors", () => {
+  it("returns exitCode 1 on invalid arguments", async () => {
+    const result = await handleInstallCommand(["--agents", "unknown-agent"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Unknown agent(s): unknown-agent.");
+  });
+
+  it("returns exitCode 0 and usage on --help", async () => {
+    const result = await handleInstallCommand(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Usage: dysflow install");
+    expect(result.stderr).toBe("");
+  });
+});
+
+describe("handleUpdateCommand argument validation errors", () => {
+  it("returns exitCode 1 on invalid arguments", async () => {
+    const result = await handleUpdateCommand(["--unknown-flag"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Unsupported update option: --unknown-flag");
+  });
+
+  it("returns exitCode 0 and usage on --help", async () => {
+    const result = await handleUpdateCommand(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Usage: dysflow update");
+    expect(result.stderr).toBe("");
+  });
+});
+
+describe("handleInstallCommand interactive agent selection", () => {
+  it("selects agents interactively when agents is empty, interactive is true, and stdin is TTY", async () => {
+    const originalIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const mockQuestion = vi
+      .fn()
+      .mockResolvedValueOnce("y") // codex -> selected
+      .mockResolvedValueOnce("n") // opencode -> skipped
+      .mockResolvedValueOnce("yes") // claude -> selected
+      .mockResolvedValueOnce("no"); // pi -> skipped
+    const mockClose = vi.fn();
+    mockCreateInterface.mockReturnValue({
+      question: mockQuestion,
+      close: mockClose,
+    } as any);
+
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-interactive-"));
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "DUMMY_RUNTIME");
+
+    try {
+      const result = await handleInstallCommand(["--runtime-dir", runtimeDir], {
+        env: { USERPROFILE: root },
+        packageRoot,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(mockCreateInterface).toHaveBeenCalled();
+      expect(mockQuestion).toHaveBeenCalledTimes(4); // codex, opencode, claude, pi
+      expect(mockClose).toHaveBeenCalled();
+
+      // codex and claude should be configured (stdout report lists configured agents)
+      expect(result.stdout).toContain("Configured agents: codex, claude");
+      expect(result.stdout).not.toMatch(/Configured agents:.*opencode/);
+      expect(result.stdout).not.toMatch(/Configured agents:.*pi/);
+    } finally {
+      mockCreateInterface.mockReset();
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: originalIsTTY,
+        configurable: true,
+        writable: true,
+      });
       await rm(root, { recursive: true, force: true });
     }
   });

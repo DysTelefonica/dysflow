@@ -220,7 +220,7 @@ function Resolve-QueryDefinitions {
         sql = [string]$query.SQL
         returnsRecords = [bool]$query.ReturnsRecords
       })
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
   }
   return $definitions
 }
@@ -298,7 +298,7 @@ function Get-LinkNames {
       if (-not [string]::IsNullOrWhiteSpace([string]$table.Connect)) {
         [void]$names.Add($name)
       }
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
   }
   return @($names | Sort-Object -Unique)
 }
@@ -337,7 +337,7 @@ function Update-LinkTables {
     $updated = New-Object System.Collections.ArrayList
     foreach ($tableName in $targetNames) {
       $linked = $null
-      try { $linked = $Database.TableDefs.Item([string]$tableName) } catch {}
+      try { $linked = $Database.TableDefs.Item([string]$tableName) } catch { Write-Debug "Diagnostics: $_" }
       if ($null -eq $linked) {
         if ($RefreshOnly) {
           throw "Linked table not found: $tableName"
@@ -362,13 +362,13 @@ function Update-LinkTables {
         if ([string]::IsNullOrWhiteSpace([string]$linked.SourceTableName)) {
           $linked.SourceTableName = [string]$tableName
         }
-        try { $linked.RefreshLink() } catch {}
+        try { $linked.RefreshLink() } catch { Write-Debug "Diagnostics: $_" }
       }
       [void]$updated.Add([ordered]@{
         name = [string]$tableName
         backendPath = $backendPath
       })
-      try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($linked) | Out-Null } catch {}
+      try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($linked) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
     }
 
     return [ordered]@{
@@ -376,9 +376,9 @@ function Update-LinkTables {
       linkedTables = $updated
     }
   } finally {
-    try { $backendDb.Close() } catch {}
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($backendDb) } catch {}
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch {}
+    try { $backendDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($backendDb) } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
   }
 }
 
@@ -393,14 +393,14 @@ function Remove-LinkTable {
   $removed = New-Object System.Collections.ArrayList
   foreach ($tableName in $tableNames) {
     $table = $null
-    try { $table = $Database.TableDefs.Item([string]$tableName) } catch {}
+    try { $table = $Database.TableDefs.Item([string]$tableName) } catch { Write-Debug "Diagnostics: $_" }
     if ($null -eq $table) { continue }
     if ([string]::IsNullOrWhiteSpace([string]$table.Connect)) {
       throw "Table $tableName is not linked."
     }
     $Database.TableDefs.Delete([string]$tableName)
     [void]$removed.Add([string]$tableName)
-    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($table) | Out-Null } catch {}
+    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($table) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
   }
 
   return [ordered]@{
@@ -463,7 +463,7 @@ function Compact-RepairDatabase {
       compacted = $true
     }
   } finally {
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch {}
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
   }
 }
 
@@ -513,9 +513,9 @@ function Compare-BackendTables {
       }
     }
   } finally {
-    try { $backendDb.Close() } catch {}
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($backendDb) } catch {}
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch {}
+    try { $backendDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($backendDb) } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
   }
 }
 
@@ -831,8 +831,8 @@ function Resolve-LinkChain {
         -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex `
         -Visited $Visited -Depth ($Depth + 1) -MaxDepth $MaxDepth
     } finally {
-      try { $nextDb.Close() } catch {}
-      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch {}
+      try { $nextDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch { Write-Debug "Diagnostics: $_" }
     }
   } catch {
     return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
@@ -952,8 +952,8 @@ function Invoke-RelinkDirectory {
             [void]$fileResult.links.Add($linkEntry)
           }
         } finally {
-          try { $db.Close() } catch {}
-          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch {}
+          try { $db.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" }
         }
 
         # Phase 2: apply (when not dry-run and there is work)
@@ -1018,17 +1018,17 @@ function Invoke-RelinkDirectory {
                   if ($chain.resolvedTable -and $currentSource -ne [string]$chain.resolvedTable) {
                     $linkName = $tdW.Name
                     $attributes = $tdW.Attributes
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
                     $dbWrite.TableDefs.Delete($linkName)
                     $newTd = $dbWrite.CreateTableDef($linkName, $attributes, $chain.resolvedTable, $newConnect)
                     $dbWrite.TableDefs.Append($newTd)
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch {}
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch { Write-Debug "Diagnostics: $_" }
                   } else {
                     if ($currentConnect -ne $newConnect) {
                       $tdW.Connect = $newConnect
                       $tdW.RefreshLink()
                     }
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch {}
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
                   }
 
                   $plan.linkEntry.classification = "applied"
@@ -1055,8 +1055,8 @@ function Invoke-RelinkDirectory {
                 }
               }
             } finally {
-              try { $dbWrite.Close() } catch {}
-              try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbWrite) } catch {}
+              try { $dbWrite.Close() } catch { Write-Debug "Diagnostics: $_" }
+              try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbWrite) } catch { Write-Debug "Diagnostics: $_" }
             }
           }
         }
@@ -1068,7 +1068,7 @@ function Invoke-RelinkDirectory {
       [void]$fileResults.Add($fileResult)
     }
   } finally {
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch {}
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
   }
 
   Write-DysflowProgress -Percent 90 -Message "Finalizing"
@@ -1334,8 +1334,8 @@ try {
   exit 1
 } finally {
   if ($null -ne $access) {
-    try { $access.CloseCurrentDatabase() } catch {}
-    try { $access.Quit() } catch {}
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch {}
+    try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
+    try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch { Write-Debug "Diagnostics: $_" }
   }
 }

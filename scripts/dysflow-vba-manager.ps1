@@ -90,7 +90,7 @@ function Write-DysflowOperationMarker {
             try {
                 $p = Get-Process -Id $AccessPid -ErrorAction Stop
                 $startTime = $p.StartTime.ToUniversalTime().ToString("o")
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
         $record = [pscustomobject]@{
             operationId      = $OperationId
@@ -125,7 +125,7 @@ if (-not $Password) {
             $secrets = Get-Content $resolvedSecretsPath -Raw | ConvertFrom-Json
             if ($secrets.PSObject.Properties['access_password']) { $Password = [string]$secrets.access_password }
             elseif ($secrets.PSObject.Properties['AccessVbaPassword']) { $Password = [string]$secrets.AccessVbaPassword }
-        } catch { }
+        } catch { Write-Debug "Diagnostics: $_" }
     }
 }
 
@@ -160,7 +160,7 @@ function New-DaoDbEngine {
         try {
             $engine = New-Object -ComObject $progId
             if ($engine) { return $engine }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
     }
 
     return $null
@@ -200,9 +200,9 @@ function Get-AllowBypassKeyState {
             return [pscustomobject]@{ Existed = $false; Value = $null }
         }
     } finally {
-        if ($database) { try { $database.Close() } catch {} }
+        if ($database) { try { $database.Close() } catch { Write-Debug "Diagnostics: $_" } }
         foreach ($obj in @($prop, $database, $dbEngine)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -247,9 +247,9 @@ function Enable-AllowBypassKey {
         }
         return $true
     } finally {
-        if ($database) { try { $database.Close() } catch {} }
+        if ($database) { try { $database.Close() } catch { Write-Debug "Diagnostics: $_" } }
         foreach ($obj in @($newProp, $prop, $database, $dbEngine)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -290,12 +290,12 @@ function Restore-AllowBypassKey {
             $prop = $database.Properties("AllowBypassKey")
             $prop.Value = [bool]$OriginalState.Value
         } else {
-            try { $database.Properties.Delete("AllowBypassKey") } catch {}
+            try { $database.Properties.Delete("AllowBypassKey") } catch { Write-Debug "Diagnostics: $_" }
         }
     } finally {
-        if ($database) { try { $database.Close() } catch {} }
+        if ($database) { try { $database.Close() } catch { Write-Debug "Diagnostics: $_" } }
         foreach ($obj in @($prop, $database, $dbEngine)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -347,14 +347,14 @@ function Disable-StartupFeatures {
                     break
                 }
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         try {
             $prop = $db.Properties("StartupForm")
             $restoreInfo.OriginalStartupForm = $prop.Value
             $restoreInfo.HasStartupForm = $true
             $db.Properties.Delete("StartupForm")
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         return [pscustomobject]$restoreInfo
 
@@ -362,9 +362,9 @@ function Disable-StartupFeatures {
         $detail = if ($_.Exception -and $_.Exception.Message) { $_.Exception.Message } else { [string]$_ }
         throw ("CRITICAL: No se pudo deshabilitar AutoExec/StartupForm mediante DAO. Detalle: {0}. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution." -f $detail)
     } finally {
-        if ($db) { try { $db.Close() } catch {} }
+        if ($db) { try { $db.Close() } catch { Write-Debug "Diagnostics: $_" } }
         foreach ($obj in @($db, $dbEngine)) {
-            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -400,7 +400,7 @@ function Restore-StartupFeatures {
                         break
                     }
                 }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
 
         if ($RestoreInfo.HasStartupForm) {
@@ -411,14 +411,13 @@ function Restore-StartupFeatures {
                     # 10 = dbText, sin cast [int16] para evitar problemas COM
                     $newProp = $db.CreateProperty("StartupForm", 10, $RestoreInfo.OriginalStartupForm)
                     $db.Properties.Append($newProp)
-                } catch {}
+                } catch { Write-Debug "Diagnostics: $_" }
             }
         }
-    } catch {
-    } finally {
-        if ($db) { try { $db.Close() } catch {} }
+    } catch { Write-Debug "Diagnostics: $_" } finally {
+        if ($db) { try { $db.Close() } catch { Write-Debug "Diagnostics: $_" } }
         foreach ($obj in @($db, $dbEngine)) {
-            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($null -ne $obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -1033,7 +1032,7 @@ public class RotManager {
                     } catch {
                         // No tiene BD abierta o instancia corrupta — saltar
                     } finally {
-                        if (db != null) try { Marshal.ReleaseComObject(db); } catch {}
+                        if (db != null) try { Marshal.ReleaseComObject(db); } catch { Write-Debug "Diagnostics: $_" }
                     }
 
                     if (!string.IsNullOrEmpty(openDbName) &&
@@ -1042,13 +1041,13 @@ public class RotManager {
                             comObj.GetType().InvokeMember("CloseCurrentDatabase",
                                 BindingFlags.InvokeMethod, null, comObj, null);
                             result.ClosedCount++;
-                        } catch {}
+                        } catch { Write-Debug "Diagnostics: $_" }
                     }
                 } catch {
                     // Este moniker no sirve — continuar
                 } finally {
-                    if (comObj != null) try { Marshal.ReleaseComObject(comObj); } catch {}
-                    try { Marshal.ReleaseComObject(monikers[0]); } catch {}
+                    if (comObj != null) try { Marshal.ReleaseComObject(comObj); } catch { Write-Debug "Diagnostics: $_" }
+                    try { Marshal.ReleaseComObject(monikers[0]); } catch { Write-Debug "Diagnostics: $_" }
                     monikers[0] = null;
                 }
             }
@@ -1056,9 +1055,9 @@ public class RotManager {
             result.Success = false;
             result.Error = ex.Message;
         } finally {
-            if (enumMk != null) try { Marshal.ReleaseComObject(enumMk); } catch {}
-            if (bindCtx != null) try { Marshal.ReleaseComObject(bindCtx); } catch {}
-            if (rot != null) try { Marshal.ReleaseComObject(rot); } catch {}
+            if (enumMk != null) try { Marshal.ReleaseComObject(enumMk); } catch { Write-Debug "Diagnostics: $_" }
+            if (bindCtx != null) try { Marshal.ReleaseComObject(bindCtx); } catch { Write-Debug "Diagnostics: $_" }
+            if (rot != null) try { Marshal.ReleaseComObject(rot); } catch { Write-Debug "Diagnostics: $_" }
         }
         return result;
     }
@@ -1076,9 +1075,7 @@ public class RotManager {
         if ($result.Error) {
             Write-Status -Message ("ROT warning: {0}" -f $result.Error) -Color DarkYellow
         }
-    } catch {
-        # ROT no disponible — no es critico
-    }
+    } catch { Write-Debug "Diagnostics: $_" }
 
     # Fallback: si el ROT no cerro nada, buscar proceso MSACCESS con lock bloqueado
     if (-not $closedViaRot) {
@@ -1178,10 +1175,10 @@ function Open-AccessDatabase {
             if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
                 $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         $access.OpenCurrentDatabase($AccessPath, $false, $Password)
-        try { $access.DoCmd.SetWarnings($false) } catch {}
+        try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
         try {
             if (-not $accessPid) {
                 $hwnd2 = [IntPtr]$access.hWndAccessApp
@@ -1189,7 +1186,7 @@ function Open-AccessDatabase {
                     $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
                 }
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         try {
             $post = @(Get-Process MSACCESS -ErrorAction SilentlyContinue | Select-Object -Property Id, StartTime)
@@ -1199,7 +1196,7 @@ function Open-AccessDatabase {
             } elseif ($new.Count -gt 1 -and -not $accessPid) {
                 Write-Status -Message ("WARN: se detectaron varias instancias nuevas de MSACCESS y no se pudo identificar con certeza cuál pertenece a '{0}'. Se evita fijar un PID ambiguo." -f $AccessPath) -Color DarkYellow
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         if (-not $accessPid) {
             Write-Status -Message ("WARN: no se pudo determinar el PID de Access para '{0}'. El cierre final se hara por COM/ROT y el lock podria persistir si Access queda vivo." -f $AccessPath) -Color DarkYellow
@@ -1220,17 +1217,17 @@ function Open-AccessDatabase {
         }
     } catch {
         if ($access) {
-            try { $access.Quit() } catch {}
-            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null } catch {}
+            try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
         }
         foreach ($obj in @($vbProject, $vbe)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
         if ($originalBypass) {
-            try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $originalBypass } catch {}
+            try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $originalBypass } catch { Write-Debug "Diagnostics: $_" }
         }
         if ($startupInfo) {
-            try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch {}
+            try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
         }
         throw
     }
@@ -1267,16 +1264,16 @@ function Close-AccessDatabase {
     $accessPid = $Session.ProcessId
 
     if ($access) {
-        try { $access.CloseCurrentDatabase() } catch {}
-        try { $access.Quit() } catch {}
+        try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
+        try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
     }
 
     foreach ($obj in @($Session.VbProject, $Session.Vbe, $Session.AccessApplication)) {
-        if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+        if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
-    try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $orig } catch {}
-    try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch {}
+    try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $orig } catch { Write-Debug "Diagnostics: $_" }
+    try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
 
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
@@ -1284,16 +1281,16 @@ function Close-AccessDatabase {
     $lockPath = Get-AccessLockFilePath -AccessPath $AccessPath
 
     if ($accessPid) {
-        try { Stop-Process -Id $accessPid -Force -ErrorAction SilentlyContinue } catch {}
+        try { Stop-Process -Id $accessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
     } else {
         Write-Status -Message ("WARN: se cierra '{0}' sin PID de Access resuelto. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
-        try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch {}
+        try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
     }
 
     if ($lockPath) {
         Start-Sleep -Milliseconds 300
         if (Test-Path -LiteralPath $lockPath) {
-            try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch {}
+            try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
             Start-Sleep -Milliseconds 300
             if (Test-Path -LiteralPath $lockPath) {
                 Write-Status -Message ("WARN: el archivo de lock sigue presente tras cerrar '{0}': {1}" -f $AccessPath, $lockPath) -Color DarkYellow
@@ -1351,7 +1348,7 @@ function Export-VbaModule {
             $baseName = $ModuleName -replace '^(Form|Report)_', ''
             foreach ($candidate in @("Form_$baseName", "Report_$baseName") | Select-Object -Unique) {
                 if ($component) { break }
-                try { $component = $VbProject.VBComponents.Item($candidate); if ($component) { $actualName = $candidate } } catch {}
+                try { $component = $VbProject.VBComponents.Item($candidate); if ($component) { $actualName = $candidate } } catch { Write-Debug "Diagnostics: $_" }
             }
         }
         if ($component) {
@@ -1397,7 +1394,7 @@ function Export-VbaModule {
             # Un .form.txt/.report.txt valido siempre contiene la linea Begin correspondiente.
             $savedContent = $null
             if (Test-Path -Path $tmp) {
-                try { $savedContent = [System.IO.File]::ReadAllText($tmp, [System.Text.Encoding]::GetEncoding(1252)) } catch {}
+                try { $savedContent = [System.IO.File]::ReadAllText($tmp, [System.Text.Encoding]::GetEncoding(1252)) } catch { Write-Debug "Diagnostics: $_" }
             }
             if (-not $savedContent -or $savedContent -notmatch [regex]::Escape($beginMarker)) {
                 throw ("SaveAsText produjo un archivo incompleto para '{0}' (falta '{1}'). " +
@@ -1427,7 +1424,7 @@ function Export-VbaModule {
         }
     } finally {
         if ($tmp -and (Test-Path -Path $tmp)) { Remove-Item -Path $tmp -Force -ErrorAction SilentlyContinue }
-        if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {} }
+        if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 }
 
@@ -1506,7 +1503,7 @@ function Remove-ExistingComponent {
                 break
             }
         } finally {
-            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch {}
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
         }
     }
 }
@@ -1545,7 +1542,7 @@ function Remove-AccessObjectOrComponent {
     try {
         $component = $components.Item($componentName)
         $components.Remove($component)
-        try { $AccessApplication.RunCommand(126) } catch {}
+        try { $AccessApplication.RunCommand(126) } catch { Write-Debug "Diagnostics: $_" }
         return [pscustomobject]@{
             module = $ModuleName
             status = "ok"
@@ -1555,8 +1552,8 @@ function Remove-AccessObjectOrComponent {
     } catch {
         throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $_.Exception.Message)
     } finally {
-        if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {} }
-        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch {} }
+        if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 }
 
@@ -1575,10 +1572,10 @@ function Resolve-ExistingComponentName {
         try {
             $component = $VbProject.VBComponents.Item($candidate)
             if ($component) {
-                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {}
+                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
                 return $candidate
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
     }
 
     return $null
@@ -1600,11 +1597,11 @@ function Get-AccessObjectNames {
             try {
                 if ($obj -and $obj.Name) { $result.Add([string]$obj.Name) }
             } finally {
-                if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+                if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
             }
         }
     } finally {
-        if ($allObjects) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($allObjects) | Out-Null } catch {} }
+        if ($allObjects) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($allObjects) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
     return @($result | Sort-Object -Unique)
@@ -1682,11 +1679,11 @@ function Get-FrontendInventory {
                     100 { $documentModules.Add($name) }
                 }
             } finally {
-                if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {} }
+                if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
             }
         }
     } finally {
-        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch {} }
+        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
     return [pscustomobject]@{
@@ -1722,7 +1719,7 @@ function Get-ExistsInfo {
             $moduleExists = ($componentType -eq 1)
             $classExists = ($componentType -eq 2)
         } finally {
-            if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {} }
+            if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
     }
 
@@ -1802,10 +1799,10 @@ function New-VbComponentFromCodeFile {
                     break
                 }
             } finally {
-                if ($candidateComponent) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidateComponent) | Out-Null } catch {} }
+                if ($candidateComponent) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($candidateComponent) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
             }
         }
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
 
     try {
         $existingVariant = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
@@ -1839,7 +1836,7 @@ function New-VbComponentFromCodeFile {
         }
     } finally {
         foreach ($obj in @($newCodeModule, $newComponent)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
     }
 }
@@ -1855,13 +1852,13 @@ function Save-VbaProjectModules {
         # acCmdCompileAndSaveAllModules = 126
         $AccessApplication.RunCommand(126)
         return
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
 
     try {
         # acCmdSaveAllModules = 280
         $AccessApplication.DoCmd.RunCommand(280)
         return
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
 
     $failures = New-Object System.Collections.Generic.List[string]
     foreach ($moduleName in @($ModuleNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
@@ -1906,26 +1903,26 @@ function Get-ActiveVbeLocation {
                 $column = [int]$startColumn
                 $endLine = [int]$selectedEndLine
                 $endColumn = [int]$selectedEndColumn
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
 
             try {
                 $codeModule = $pane.CodeModule
                 if ($codeModule) {
-                    try { $componentName = [string]$codeModule.Parent.Name } catch {}
+                    try { $componentName = [string]$codeModule.Parent.Name } catch { Write-Debug "Diagnostics: $_" }
                     if ($line -and $line -gt 0) {
-                        try { $sourceLine = [string]$codeModule.Lines($line, 1) } catch {}
+                        try { $sourceLine = [string]$codeModule.Lines($line, 1) } catch { Write-Debug "Diagnostics: $_" }
                     }
                 }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
 
         if (-not $componentName) {
             try {
                 $selected = $vbe.SelectedVBComponent
                 if ($selected) { $componentName = [string]$selected.Name }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
-    } catch {}
+    } catch { Write-Debug "Diagnostics: $_" }
 
     return [pscustomobject]@{
         component  = $componentName
@@ -2036,9 +2033,9 @@ function Import-VbaModule {
             Assert-AccessDocumentTextLooksLoadable -DocumentText $importDocumentText -Kind $documentKindLabel -SourcePath $src
 
             [System.IO.File]::WriteAllText($tmpAnsi, $importDocumentText, [System.Text.Encoding]::GetEncoding(1252))
-            try { $AccessApplication.DoCmd.SetWarnings($false) } catch {}
+            try { $AccessApplication.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
             # Cerrar el documento si esta abierto — LoadFromText falla con "Cancelo la operacion anterior" si no
-            try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch {}  # acSaveNo=1
+            try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch { Write-Debug "Diagnostics: $_" }  # acSaveNo=1
 
             $importErrorsPath = $null
             try {
@@ -2049,14 +2046,14 @@ function Import-VbaModule {
                         Remove-Item -LiteralPath $importErrorsPath -Force -ErrorAction SilentlyContinue
                     }
                 }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
 
             try {
                 $AccessApplication.LoadFromText($objectType, $objectName, $tmpAnsi)
             } catch {
                 $detail = $null
                 if ($importErrorsPath -and (Test-Path -LiteralPath $importErrorsPath)) {
-                    try { $detail = [System.IO.File]::ReadAllText($importErrorsPath, [System.Text.Encoding]::GetEncoding(1252)) } catch {}
+                    try { $detail = [System.IO.File]::ReadAllText($importErrorsPath, [System.Text.Encoding]::GetEncoding(1252)) } catch { Write-Debug "Diagnostics: $_" }
                 }
                 if ($detail) {
                     throw ("LoadFromText falló para '{0}'. Detalle de errors.txt: {1}" -f $objectName, ($detail.Trim()))
@@ -2118,7 +2115,7 @@ function Import-VbaModule {
         if ($tmpCanonical -and (Test-Path -Path $tmpCanonical)) { Remove-Item -Path $tmpCanonical -Force -ErrorAction SilentlyContinue }
         if ($tmpAnsiSanitized -and (Test-Path -Path $tmpAnsiSanitized)) { Remove-Item -Path $tmpAnsiSanitized -Force -ErrorAction SilentlyContinue }
         foreach ($obj in @($codeModule, $component)) {
-            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch {} }
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         }
     }
 }
@@ -2193,7 +2190,7 @@ function Export-DataStructure {
                 if ($td.Name -notmatch "^MSys" -and $td.Name -notmatch "^~") {
                     $tables += $td.Name
                 }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
         $tables = $tables | Sort-Object
 
@@ -2218,7 +2215,7 @@ function Export-DataStructure {
                             }
                         }
                     }
-                } catch {}
+                } catch { Write-Debug "Diagnostics: $_" }
 
                 for ($i = 0; $i -lt $td.Fields.Count; $i++) {
                     try {
@@ -2229,7 +2226,7 @@ function Export-DataStructure {
                         $required = if ($field.Required) { "Si" } else { "No" }
                         $isPk = if ($pkFields -contains $field.Name) { "PK" } else { "" }
                         [void]$sb.AppendLine("| $($field.Name) | $typeName | $size | $required | $isPk |")
-                    } catch {}
+                    } catch { Write-Debug "Diagnostics: $_" }
                 }
                 [void]$sb.AppendLine("")
             } catch {
@@ -2257,11 +2254,11 @@ function Export-DataStructure {
                             $foreignField = $rf.ForeignName
                         }
                         [void]$sb.AppendLine("| $($rel.Name) | $($rel.Table) | $originField | $($rel.ForeignTable) | $foreignField |")
-                    } catch {}
+                    } catch { Write-Debug "Diagnostics: $_" }
                 }
                 [void]$sb.AppendLine("")
             }
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
 
         # FIX: renombrada $tdConnect para no sobreescribir $connect del scope exterior
         $linkedSources = @{}
@@ -2276,7 +2273,7 @@ function Export-DataStructure {
                     }
                     $linkedSources[$linkedDbPath].Add($td.Name)
                 }
-            } catch {}
+            } catch { Write-Debug "Diagnostics: $_" }
         }
 
         $unreachableBackends = @($linkedSources.Keys | Where-Object { -not (Test-Path -Path $_) })
@@ -2298,11 +2295,11 @@ function Export-DataStructure {
 
     } finally {
         if ($database) {
-            try { $database.Close() } catch {}
-            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) | Out-Null } catch {}
+            try { $database.Close() } catch { Write-Debug "Diagnostics: $_" }
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
         }
         if ($dbEngine) {
-            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) | Out-Null } catch {}
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
@@ -2332,7 +2329,7 @@ function Fix-EncodingInAccess {
                 $ext = Get-ComponentExtension -Component $c -ModuleName $c.Name
                 if ($ext) { $names += $c.Name }
             } finally {
-                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch {}
+                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
             }
         }
     }
@@ -2552,7 +2549,7 @@ function Get-VbaProcedureParameterMetadata {
                 $metadata = @(Get-VbaProcedureParameterMetadataFromText -SourceText $source -ProcedureName $ProcedureName)
                 if ($metadata.Count -gt 0) { return @($metadata) }
             } finally {
-                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch {}
+                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
             }
         }
     } catch {
@@ -2797,7 +2794,7 @@ function Invoke-AccessProcedureBatch {
         $sw.Stop()
         try {
             $r | Add-Member -NotePropertyName durationMs -NotePropertyValue ([int64]$sw.ElapsedMilliseconds) -Force
-        } catch {}
+        } catch { Write-Debug "Diagnostics: $_" }
         $list.Add($r)
     }
     return , @($list)
@@ -2860,7 +2857,7 @@ try {
                 } catch {
                     $baseName = $requestedName -replace '^(Form|Report)_', ''
                     foreach ($candidate in @("Form_$baseName", "Report_$baseName")) {
-                        try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch {}
+                        try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch { Write-Debug "Diagnostics: $_" }
                     }
                 }
                 if (-not $found) {
@@ -2874,7 +2871,7 @@ try {
                     $ext = Get-ComponentExtension -Component $c -ModuleName $c.Name
                     if ($ext) { $targets += $c.Name }
                 } finally {
-                    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch {}
+                    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
                 }
             }
             $targets = $targets | Sort-Object -Unique
@@ -3143,6 +3140,6 @@ try {
     }
 } finally {
     if ($session) {
-        try { Close-AccessDatabase -Session $session -AccessPath $AccessPath -Password $Password } catch {}
+        try { Close-AccessDatabase -Session $session -AccessPath $AccessPath -Password $Password } catch { Write-Debug "Diagnostics: $_" }
     }
 }

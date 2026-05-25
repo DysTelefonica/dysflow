@@ -2,6 +2,22 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.0] - 2026-05-25
+
+### Features
+
+- **MCP tool partitioning**: Split `tools.ts` to extract schemas, validator, and dispatch into separate files (`schemas.ts` and `validator.ts`) for better maintainability (#326)
+- **Dependency injection & contracts**: Refactored HTTP server to use dependency injection, introduced `LegacyVbaSyncPort` to decouple core from adapters, and moved pure import plan helpers to core services (#338, #340, #341)
+
+### PowerShell Diagnostics
+
+- **Silent catches replaced**: Replaced all silent `catch {}` blocks in `dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1` with diagnostic `Write-Debug` statements to aid troubleshooting (#327)
+
+### Quality Gates & Test Coverage
+
+- **Coverage improvements**: Raised `install.ts` coverage to ≥85% by testing edge cases and interactive selection, covered HTTP cleanup route, and increased `stdio.ts` coverage to ≥85% (#329, #334)
+- **Tooling upgrades**: Migrated to TypeScript 6.0 and Vitest 4.0, and integrated Biome check for linting and formatting (#335, #336)
+
 ## [0.8.0] - 2026-05-24
 
 ### Features
