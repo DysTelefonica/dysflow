@@ -315,6 +315,8 @@ function Disable-StartupFeatures {
         RenamedAutoExec     = $false
         OriginalStartupForm = $null
         HasStartupForm      = $false
+        OriginalAppIcon     = $null
+        HasAppIcon          = $false
     }
 
     try {
@@ -354,6 +356,13 @@ function Disable-StartupFeatures {
             $restoreInfo.OriginalStartupForm = $prop.Value
             $restoreInfo.HasStartupForm = $true
             $db.Properties.Delete("StartupForm")
+        } catch { Write-Debug "Diagnostics: $_" }
+
+        try {
+            $prop = $db.Properties("AppIcon")
+            $restoreInfo.OriginalAppIcon = $prop.Value
+            $restoreInfo.HasAppIcon = $true
+            $db.Properties.Delete("AppIcon")
         } catch { Write-Debug "Diagnostics: $_" }
 
         return [pscustomobject]$restoreInfo
@@ -410,6 +419,17 @@ function Restore-StartupFeatures {
                 try {
                     # 10 = dbText, sin cast [int16] para evitar problemas COM
                     $newProp = $db.CreateProperty("StartupForm", 10, $RestoreInfo.OriginalStartupForm)
+                    $db.Properties.Append($newProp)
+                } catch { Write-Debug "Diagnostics: $_" }
+            }
+        }
+
+        if ($RestoreInfo.HasAppIcon) {
+            try {
+                $db.Properties("AppIcon").Value = $RestoreInfo.OriginalAppIcon
+            } catch {
+                try {
+                    $newProp = $db.CreateProperty("AppIcon", 10, $RestoreInfo.OriginalAppIcon)
                     $db.Properties.Append($newProp)
                 } catch { Write-Debug "Diagnostics: $_" }
             }
@@ -1040,6 +1060,10 @@ public class RotManager {
                         try {
                             comObj.GetType().InvokeMember("CloseCurrentDatabase",
                                 BindingFlags.InvokeMethod, null, comObj, null);
+                            try {
+                                comObj.GetType().InvokeMember("Quit",
+                                    BindingFlags.InvokeMethod, null, comObj, null);
+                            } catch { }
                             result.ClosedCount++;
                         } catch { }
                     }
@@ -1152,6 +1176,8 @@ function Open-AccessDatabase {
                 RenamedAutoExec     = $false
                 OriginalStartupForm = $null
                 HasStartupForm      = $false
+                OriginalAppIcon     = $null
+                HasAppIcon          = $false
             }
         } else {
             $startupInfo = Disable-StartupFeatures -AccessPath $AccessPath -Password $Password
@@ -1171,7 +1197,7 @@ function Open-AccessDatabase {
         $access.UserControl = $false
         $access.AutomationSecurity = 1
         try {
-            $hwnd = [IntPtr]$access.hWndAccessApp
+            $hwnd = [IntPtr]$access.hWndAccessApp()
             if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
                 $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
             }
@@ -1181,7 +1207,7 @@ function Open-AccessDatabase {
         try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
         try {
             if (-not $accessPid) {
-                $hwnd2 = [IntPtr]$access.hWndAccessApp
+                $hwnd2 = [IntPtr]$access.hWndAccessApp()
                 if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
                     $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
                 }
@@ -1272,20 +1298,23 @@ function Close-AccessDatabase {
         if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
-    try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $orig } catch { Write-Debug "Diagnostics: $_" }
-    try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
-
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 
-    $lockPath = Get-AccessLockFilePath -AccessPath $AccessPath
-
+    # Kill Access BEFORE DAO restore operations so the file lock is guaranteed released
     if ($accessPid) {
         try { Stop-Process -Id $accessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
+        Start-Sleep -Milliseconds 300
     } else {
         Write-Status -Message ("WARN: se cierra '{0}' sin PID de Access resuelto. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
         try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
+        Start-Sleep -Milliseconds 300
     }
+
+    try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $orig } catch { Write-Debug "Diagnostics: $_" }
+    try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
+
+    $lockPath = Get-AccessLockFilePath -AccessPath $AccessPath
 
     if ($lockPath) {
         Start-Sleep -Milliseconds 300
