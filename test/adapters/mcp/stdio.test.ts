@@ -13,7 +13,11 @@ import {
   startMcpStdioAdapter,
 } from "../../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import { failureResult, type OperationResult, successResult } from "../../../src/core/contracts/index.js";
+import {
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../../../src/core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";

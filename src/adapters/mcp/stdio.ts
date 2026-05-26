@@ -22,10 +22,10 @@ import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { VbaSyncLegacyService } from "../vba-sync/vba-sync-legacy-adapter.js";
 import {
   createDysflowMcpTools,
-  sanitizeMcpErrorMessage,
   type DysflowMcpServices,
   type DysflowMcpTool,
   type McpToolResult,
+  sanitizeMcpErrorMessage,
 } from "./tools.js";
 import type { McpToolContext } from "./types.js";
 
