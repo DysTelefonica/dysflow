@@ -19,6 +19,7 @@ PASS
 | `pnpm test` | PASS — 49 files passed, 603 tests passed, 3 skipped |
 | `pnpm build` | PASS |
 | Short E2E MCP probe from `E2E_testing`: `initialize` + one `tools/call dysflow_doctor` | PASS — exit 0, no stderr, terminal response `isError:false`, checks `access-db-path: configured` and `access-open: opened` |
+| Installed runtime probe from `E2E_testing`: persistent stdin + one `tools/call list_tables` | PASS — exit 0, no stderr, terminal response `isError:false`, returned table list |
 
 ## Diff Reviewed
 
@@ -46,7 +47,7 @@ Excluded from this verdict:
 |---|---|---|
 | MCP successful call after startup emits one terminal response | Focused MCP adapter/tool tests pass; E2E `dysflow_doctor` returned terminal `isError:false`. | PASS |
 | Core timeout/failure maps to terminal tool response | Focused MCP tests pass for bounded core failure and thrown handler failure with safe content. | PASS |
-| E2E project context preserves request completion | Short `E2E_testing` MCP probe returned terminal response with Access path configured and Access opened. | PASS |
+| E2E project context preserves request completion | Short `E2E_testing` MCP probes returned terminal responses for `dysflow_doctor` and installed-runtime `list_tables`. | PASS |
 | Runner timeout returns structured metadata | Focused runner tests pass; timeout operation status is `timed_out`. | PASS |
 | Non-timeout subprocess failure returns diagnostics | Focused executor/runner tests pass. | PASS |
 | E2E diagnostics path remains bounded | Short probe completed before the 20s timeout. | PASS |
