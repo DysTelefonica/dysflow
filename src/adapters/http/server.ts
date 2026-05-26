@@ -156,7 +156,7 @@ async function routeRequest(
       return;
     }
     const sql = String(body.data.sql ?? "");
-    if (!isReadOnlySql(sql)) {
+    if (!looksLikeReadOnlySql(sql)) {
       sendOperationResult(
         response,
         failureResult(
@@ -220,7 +220,12 @@ async function routeRequest(
   );
 }
 
-function isReadOnlySql(sql: string): boolean {
+/**
+ * Heuristic check — not a security boundary.
+ * Returns true if sql looks like a single SELECT with no INTO clause.
+ * writesEnabled is the authoritative write gate.
+ */
+function looksLikeReadOnlySql(sql: string): boolean {
   // Step 1: strip line comments and block comments
   const withoutComments = sql
     .replace(/--.*$/gm, "")
@@ -241,13 +246,7 @@ function isReadOnlySql(sql: string): boolean {
   if (statements.length !== 1) return false;
 
   const firstToken = statements[0].match(/^[a-z]+/)?.[0];
-  return (
-    firstToken === "select" &&
-    !/\binto\b/.test(tokenized) &&
-    !/\b(alter|create|delete|drop|exec|execute|insert|parameters|transform|update)\b/.test(
-      tokenized,
-    )
-  );
+  return firstToken === "select" && !/\binto\b/.test(tokenized);
 }
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
