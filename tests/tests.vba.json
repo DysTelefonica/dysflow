@@ -205,16 +205,16 @@
       "tags": ["atomic", "issue-18", "materialized-cache", "trust-contract"]
     },
     {
-      "name": "Issue36 Proyecto inicia cache materializado sin cabecera",
+      "name": "Issue36/38 Proyecto refresco manual regenera cache materializado",
       "procedure": "Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-36", "materialized-cache", "startup", "trust-contract"]
+      "tags": ["atomic", "issue-36", "issue-38", "materialized-cache", "manual-refresh", "trust-contract"]
     },
     {
-      "name": "Issue37 Auditoría inicia cache materializado sin cabecera",
+      "name": "Issue37/38 Auditoría refresco manual regenera cache materializado",
       "procedure": "Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic",
       "expect": { "ok": true },
-      "tags": ["atomic", "issue-37", "materialized-cache", "startup", "trust-contract", "auditoria"]
+      "tags": ["atomic", "issue-37", "issue-38", "materialized-cache", "manual-refresh", "trust-contract", "auditoria"]
     },
     {
       "name": "Cache indicadores materializado ignora estados no OK",

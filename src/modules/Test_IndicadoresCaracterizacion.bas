@@ -1194,13 +1194,13 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
     Set previousUser = m_ObjUsuarioConectado
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
     pError = ""
-    Call PintarIndicadores(EnumSino.No, "PROYECTO", pError)
-    TestHelper.AddLog logs, "Act Issue36: PintarIndicadores PROYECTO devuelve pError='" & pError & "'"
+    Call PintarIndicadores(p_Reiniciando:=EnumSino.Sí, p_Modo:="PROYECTO", p_Error:=pError)
+    TestHelper.AddLog logs, "Act Issue36: PintarIndicadores manual PROYECTO devuelve pError='" & pError & "'"
 
     headerOKAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1 AND Estado='OK'")
     rowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
     poisonRowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDEntidad=993601")
-    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores no debe fallar por cabecera ausente al abrir Proyecto", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores manual no debe fallar por cabecera ausente al refrescar Proyecto", logs, assertError)
     Call TestHelper.AssertTrue(headerOKAfter = 1, "Debe inicializar una cabecera OK unica tras MISS inicial", logs, assertError)
     Call TestHelper.AssertTrue(rowsAfter > 0, "Debe materializar detalle desde fixture negocio controlada", logs, assertError)
     Call TestHelper.AssertTrue(poisonRowsAfter = 0, "No debe tratar el detalle poison sin cabecera como HIT reutilizable", logs, assertError)
@@ -1268,14 +1268,14 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
     Set previousUser = m_ObjUsuarioConectado
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
     pError = ""
-    Call PintarIndicadores(EnumSino.No, "AUDITORIA", pError)
-    TestHelper.AddLog logs, "Act Issue37: PintarIndicadores AUDITORIA devuelve pError='" & pError & "'"
+    Call PintarIndicadores(p_Reiniciando:=EnumSino.Sí, p_Modo:="AUDITORIA", p_Error:=pError)
+    TestHelper.AddLog logs, "Act Issue37: PintarIndicadores manual AUDITORIA devuelve pError='" & pError & "'"
 
     headerOKAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2 AND Estado='OK'")
     rowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2")
     poisonRowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDEntidad=993701")
     targetAuditRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202")
-    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores no debe fallar por cabecera ausente al abrir Auditoria", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores manual no debe fallar por cabecera ausente al refrescar Auditoria", logs, assertError)
     Call TestHelper.AssertTrue(headerOKAfter = 1, "Debe inicializar una cabecera Auditoria OK unica tras MISS inicial", logs, assertError)
     Call TestHelper.AssertTrue(rowsAfter > 0, "Debe materializar detalle Auditoria desde fixture negocio controlada", logs, assertError)
     Call TestHelper.AssertTrue(poisonRowsAfter = 0, "No debe tratar el detalle poison Auditoria sin cabecera como HIT reutilizable", logs, assertError)
