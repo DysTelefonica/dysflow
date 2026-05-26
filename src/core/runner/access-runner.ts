@@ -29,6 +29,27 @@ import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
+export const RUNNER_INVALID_OUTPUT = "RUNNER_INVALID_OUTPUT";
+
+export function ensureResultShape<TData>(
+  result: OperationResult<TData>,
+  isValid: (data: unknown) => boolean,
+): OperationResult<TData> {
+  if (!result.ok) return result;
+  if (isValid(result.data)) return result;
+  return failureResult<TData>(
+    createDysflowError(
+      RUNNER_INVALID_OUTPUT,
+      "PowerShell runner produced output with an unexpected shape.",
+    ),
+    {
+      diagnostics: result.diagnostics,
+      durationMs: result.durationMs,
+      ...(result.operation ? { operation: result.operation } : {}),
+    },
+  );
+}
+
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 const PROGRESS_MARKER = "DYSFLOW_PROGRESS ";

@@ -1,6 +1,11 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { OperationResult } from "../contracts/index.js";
-import type { AccessDiagnosticsRequest, AccessRunner } from "../runner/access-runner.js";
+import {
+  type AccessDiagnosticsRequest,
+  type AccessRunner,
+  ensureResultShape,
+} from "../runner/access-runner.js";
+import { isRecord } from "../utils/index.js";
 
 export type AccessDiagnosticCheck = {
   name: string;
@@ -26,7 +31,17 @@ export class AccessDiagnosticsService {
     this.config = options.config;
   }
 
-  run(request: AccessDiagnosticsRequest = {}): Promise<OperationResult<AccessDiagnosticsResult>> {
-    return this.runner.run<AccessDiagnosticsResult>({ kind: "diagnostics", request }, this.config);
+  async run(
+    request: AccessDiagnosticsRequest = {},
+  ): Promise<OperationResult<AccessDiagnosticsResult>> {
+    const result = await this.runner.run<AccessDiagnosticsResult>(
+      { kind: "diagnostics", request },
+      this.config,
+    );
+    return ensureResultShape(result, (d) => {
+      if (!isRecord(d)) return false;
+      const checks = (d as Record<string, unknown>).checks;
+      return checks === undefined || Array.isArray(checks);
+    });
   }
 }
