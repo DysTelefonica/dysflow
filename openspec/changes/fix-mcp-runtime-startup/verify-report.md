@@ -25,22 +25,8 @@ PASS
 
 ## Diff Reviewed
 
-Included:
-
-- `README.md`
-- `src/cli/commands/install.ts`
-- `test/cli/install.test.ts`
-- `openspec/changes/fix-mcp-runtime-startup/*`
-
-Excluded from verdict:
-
-- `.atl/skill-registry.md` — pre-existing unrelated registry refresh diff.
-
-Tracked implementation/doc/test diff:
-
-- `README.md`: 4 insertions, 3 deletions
-- `src/cli/commands/install.ts`: 21 insertions, 5 deletions
-- `test/cli/install.test.ts`: 44 insertions, 1 deletion
+Included: `README.md`, `src/cli/commands/install.ts`, `test/cli/install.test.ts`, and `openspec/changes/fix-mcp-runtime-startup/*`.
+Excluded: `.atl/skill-registry.md` because it is an unrelated registry refresh diff.
 
 ## Spec Compliance Matrix
 
@@ -54,17 +40,9 @@ Tracked implementation/doc/test diff:
 
 ## Findings
 
-### CRITICAL
-
-None.
-
-### WARNING
-
-- Access-backed MCP tools cannot be fully validated from this worktree until a local `.dysflow/project.json` or explicit Access paths are provided. Startup/protocol/tool registration works, but project-configured Access operations report `CONFIG_MISSING_ACCESS_PATH`.
-
-### SUGGESTION
-
-- Keep the PR description explicit that OpenCode now depends on `node` being discoverable in the client environment.
+- CRITICAL: none.
+- WARNING: Access-backed MCP tools were not part of #361; that execution path is covered by #362.
+- SUGGESTION: mention in the PR that OpenCode must have `node` discoverable.
 
 ## Risks
 
