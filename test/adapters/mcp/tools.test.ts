@@ -699,6 +699,54 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
+  it("routes dysflow_doctor runner timeouts to safe MCP tool error content", async () => {
+    const diagnostics = new FakeDiagnosticsService(
+      failureResult({
+        code: "RUNNER_TIMEOUT",
+        message: "Timed out opening C:\\Users\\Jane\\E2E_testing\\front.accdb",
+        retryable: true,
+      }),
+    );
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: diagnostics,
+    });
+
+    await expect(
+      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ projectId: "dysflow" }),
+    ).resolves.toEqual({
+      content: [{ type: "text", text: "RUNNER_TIMEOUT: Timed out opening [PATH]" }],
+      isError: true,
+    });
+    expect(diagnostics.requests).toEqual([{ projectId: "dysflow" }]);
+  });
+
+  it("routes list_tables runner failures to safe MCP tool error content", async () => {
+    const query = new FakeQueryService(
+      failureResult({
+        code: "RUNNER_FAILED",
+        message: "PowerShell failed for C:\\Users\\Jane\\E2E_testing\\front.accdb",
+        retryable: false,
+      }),
+    );
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools.find((tool) => tool.name === "list_tables")?.handler({ projectId: "dysflow" }),
+    ).resolves.toEqual({
+      content: [{ type: "text", text: "RUNNER_FAILED: PowerShell failed for [PATH]" }],
+      isError: true,
+    });
+    expect(query.requests).toEqual([
+      expect.objectContaining({ action: "list_tables", mode: "read" }),
+    ]);
+  });
+
   // Issue #184: dryRun:true must bypass the write guard for relink_tables
   it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));

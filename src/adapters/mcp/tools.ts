@@ -663,7 +663,7 @@ export function translateCoreResultToMcpContent<TData>(
       content: [
         {
           type: "text",
-          text: `${result.error.code}: ${sanitizeErrorMessage(result.error.message)}`,
+          text: `${result.error.code}: ${sanitizeMcpErrorMessage(result.error.message)}`,
         },
       ],
       isError: true,
@@ -676,7 +676,7 @@ export function translateCoreResultToMcpContent<TData>(
   };
 }
 
-function sanitizeErrorMessage(message: string): string {
+export function sanitizeMcpErrorMessage(message: string): string {
   // Each alternative is applied sequentially to avoid nested unbounded quantifiers
   // in a single combined pattern (defense against catastrophic backtracking).
   // UNC paths: \\server\share[\subdir...][\ ]
