@@ -346,6 +346,52 @@ describe("dysflow configuration", () => {
     }
   });
 
+  it("resolves E2E_testing-style repo config paths, env passwords, and 90000ms timeout", async () => {
+    const workspace = createTempWorkspace();
+    try {
+      const e2eRoot = join(workspace.root, "E2E_testing");
+      mkdirSync(e2eRoot, { recursive: true });
+      writeRepoProjectConfig(e2eRoot, {
+        id: "lanzadera",
+        accessPath: "Expedientes.accdb",
+        backendPath: "Expedientes_datos.accdb",
+        destinationRoot: "src",
+        allowWrites: true,
+        timeoutMs: 90_000,
+        passwordEnv: "DYSFLOW_ACCESS_PASSWORD",
+        backendPasswordEnv: "DYSFLOW_BACKEND_PASSWORD",
+      });
+      writeFileSync(join(e2eRoot, "Expedientes.accdb"), "", "utf8");
+      writeFileSync(join(e2eRoot, "Expedientes_datos.accdb"), "", "utf8");
+
+      const result = await loadDysflowConfigAsync({
+        cwd: e2eRoot,
+        env: {
+          DYSFLOW_ACCESS_PASSWORD: "front-secret",
+          DYSFLOW_BACKEND_PASSWORD: "backend-secret",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected async config success");
+      expect(result.data).toMatchObject({
+        configSource: "repo-config",
+        allowWrites: true,
+        projectId: "lanzadera",
+        accessDbPath: resolve(e2eRoot, "Expedientes.accdb"),
+        backendPath: resolve(e2eRoot, "Expedientes_datos.accdb"),
+        destinationRoot: resolve(e2eRoot, "src"),
+        projectRoot: e2eRoot,
+        timeoutMs: 90_000,
+        processTimeoutMs: 90_000,
+        accessPassword: "front-secret",
+        backendPassword: "backend-secret",
+      });
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   it("does not share generic passwordEnv with backend passwords", () => {
     const workspace = createTempWorkspace();
     try {
