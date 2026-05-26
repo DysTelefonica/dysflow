@@ -2,6 +2,16 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.9] - 2026-05-26
+
+### Fixed
+
+- Fixed four Access automation hang bugs in `dysflow-vba-manager.ps1` that caused MSACCESS.exe to never close and MCP tool calls to timeout:
+  - `hWndAccessApp()` was called as a property instead of a method, silently failing PID capture via HWND.
+  - `Stop-Process` was called after DAO restore operations; moved it before so the file lock is guaranteed released before DAO reopens the DB.
+  - `RotManager.CloseDatabaseIfOpen` called `CloseCurrentDatabase()` but not `Quit()`, leaving zombie MSACCESS processes that accumulated across calls.
+  - `Disable-StartupFeatures` now saves and removes the `AppIcon` DB property before `OpenCurrentDatabase`; UNC paths to unreachable servers caused 30-40s network timeouts inside `OpenCurrentDatabase` that raced the MCP 30s hard timeout. `Restore-StartupFeatures` restores it after Access closes.
+
 ## [0.9.8] - 2026-05-26
 
 ### Fixed
