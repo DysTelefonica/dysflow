@@ -10,11 +10,11 @@ import {
   spawnPowerShellProcess,
 } from "../../../src/core/runner/powershell-executor.js";
 
-const originalSystemRoot = process.env["SystemRoot"];
+const originalSystemRoot = process.env.SystemRoot;
 
 beforeEach(() => {
-  process.env["SECRET_TOKEN"] = "should-not-leak";
-  process.env["SystemRoot"] = "C:\\Windows";
+  process.env.SECRET_TOKEN = "should-not-leak";
+  process.env.SystemRoot = "C:\\Windows";
 
   mockSpawn.mockImplementation(() => ({
     stdout: { on: vi.fn() },
@@ -27,11 +27,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete process.env["SECRET_TOKEN"];
+  delete process.env.SECRET_TOKEN;
   if (originalSystemRoot === undefined) {
-    delete process.env["SystemRoot"];
+    delete process.env.SystemRoot;
   } else {
-    process.env["SystemRoot"] = originalSystemRoot;
+    process.env.SystemRoot = originalSystemRoot;
   }
   mockSpawn.mockReset();
 });
@@ -45,7 +45,7 @@ describe("spawnPowerShellProcess — child env construction", () => {
 
     const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
     expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env!["SECRET_TOKEN"]).toBeUndefined();
+    expect(capturedOptions.env?.SECRET_TOKEN).toBeUndefined();
   });
 
   it("forwards allowlisted system vars that are present in process.env", async () => {
@@ -56,7 +56,7 @@ describe("spawnPowerShellProcess — child env construction", () => {
 
     const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
     expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env!["SystemRoot"]).toBe("C:\\Windows");
+    expect(capturedOptions.env?.SystemRoot).toBe("C:\\Windows");
   });
 
   it("forwards caller-supplied options.env overrides to the child process", async () => {
@@ -68,12 +68,12 @@ describe("spawnPowerShellProcess — child env construction", () => {
 
     const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
     expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env!["DYSFLOW_ACCESS_PASSWORD"]).toBe("secret-pass");
+    expect(capturedOptions.env?.DYSFLOW_ACCESS_PASSWORD).toBe("secret-pass");
   });
 
   it("does not inject undefined string values for allowlisted keys absent from process.env", async () => {
-    const saved = process.env["COMPUTERNAME"];
-    delete process.env["COMPUTERNAME"];
+    const saved = process.env.COMPUTERNAME;
+    delete process.env.COMPUTERNAME;
 
     try {
       await spawnPowerShellProcess({
@@ -84,14 +84,14 @@ describe("spawnPowerShellProcess — child env construction", () => {
       const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, string> };
       expect(capturedOptions.env).toBeDefined();
       // Either the key is absent, or if present its value must not be the string "undefined"
-      const val = capturedOptions.env!["COMPUTERNAME"];
+      const val = capturedOptions.env?.COMPUTERNAME;
       expect(val).not.toBe("undefined");
       if (val !== undefined) {
         expect(typeof val).toBe("string");
       }
     } finally {
       if (saved !== undefined) {
-        process.env["COMPUTERNAME"] = saved;
+        process.env.COMPUTERNAME = saved;
       }
     }
   });
