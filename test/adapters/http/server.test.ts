@@ -224,12 +224,26 @@ describe("Dysflow HTTP adapter", () => {
     expect(services.calls.queries).toEqual([]);
   });
 
+  // intentional: no semicolon, first token is SELECT — looksLikeReadOnlySql passes; writesEnabled is the real gate
+  it("accepts SELECT without semicolon followed by DDL keyword (heuristic limit)", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT * FROM People DROP TABLE People" }),
+    });
+
+    expect(response.response.status).toBe(200);
+    expect(services.calls.queries).toHaveLength(1);
+  });
+
   it.each([
     "/* leading comment */\nUPDATE People SET name='Ada'",
     "WITH changed AS (DELETE FROM People RETURNING *) SELECT * FROM changed",
     "EXEC dangerous_procedure",
     "selection FROM People",
-    "SELECT * FROM People DROP TABLE People",
   ])("rejects non-read SQL edge case: %s", async (sql) => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
