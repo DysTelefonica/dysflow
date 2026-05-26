@@ -21,6 +21,34 @@ export type PowerShellProcessOptions = {
 
 export const POWERSHELL_EXE = "powershell.exe";
 
+export const POWERSHELL_SYSTEM_ENV_KEYS = [
+  "SystemRoot",
+  "windir",
+  "PATH",
+  "PATHEXT",
+  "TEMP",
+  "TMP",
+  "USERPROFILE",
+  "USERNAME",
+  "COMPUTERNAME",
+  "LOCALAPPDATA",
+  "APPDATA",
+  "HOMEDRIVE",
+  "HOMEPATH",
+] as const;
+
+function buildChildEnv(
+  override?: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const base: Record<string, string | undefined> = {};
+  for (const key of POWERSHELL_SYSTEM_ENV_KEYS) {
+    if (process.env[key] !== undefined) {
+      base[key] = process.env[key];
+    }
+  }
+  return { ...base, ...override };
+}
+
 export function spawnPowerShellProcess(
   options: PowerShellProcessOptions,
 ): Promise<PowerShellProcessResult> {
@@ -30,7 +58,7 @@ export function spawnPowerShellProcess(
       shell: false,
       windowsHide: true,
       cwd: options.cwd,
-      env: { ...process.env, ...options.env },
+      env: buildChildEnv(options.env),
     });
     let stdout = "";
     let stderr = "";
