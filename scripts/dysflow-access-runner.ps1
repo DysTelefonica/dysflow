@@ -1254,20 +1254,34 @@ try {
     Write-DysflowProgress -Percent 40 -Message "Executing operation"
     if ([string]::IsNullOrWhiteSpace($action) -or $action -eq 'query_sql') {
       if ($payload.mode -eq 'read') {
-        $rs = $db.OpenRecordset([string]$payload.sql)
+        $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+        $rs = $null
         try {
+          $rs = $readDb.Database.OpenRecordset([string]$payload.sql)
           $rows = @(Convert-RecordsetRows $rs)
           Write-DysflowProgress -Percent 90 -Message "Finalizing"
           [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
         } finally {
           if ($null -ne $rs) { $rs.Close() }
+          if ($readDb.Owned) {
+            try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+          }
         }
         exit 0
       }
 
-      $db.Execute([string]$payload.sql, 128)
-      Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ affectedRows = $db.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+      $writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      try {
+        $writeDb.Database.Execute([string]$payload.sql, 128)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ affectedRows = $writeDb.Database.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+      } finally {
+        if ($writeDb.Owned) {
+          try { $writeDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($writeDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
+      }
       exit 0
     }
 

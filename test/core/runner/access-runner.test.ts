@@ -320,6 +320,21 @@ describe("AccessPowerShellRunner", () => {
     expect(script).not.toContain("Get-Relationships -Database $db");
   });
 
+  it("dispatches generic SQL reads and writes through selected database helpers", () => {
+    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
+
+    expect(script).toContain(
+      "$readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
+    );
+    expect(script).toContain("$rs = $readDb.Database.OpenRecordset([string]$payload.sql)");
+    expect(script).toContain(
+      "$writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
+    );
+    expect(script).toContain("$writeDb.Database.Execute([string]$payload.sql, 128)");
+    expect(script).not.toContain("$rs = $db.OpenRecordset([string]$payload.sql)");
+    expect(script).not.toContain("$db.Execute([string]$payload.sql, 128)");
+  });
+
   it("serializes concurrent executor invocations for the same Access database", async () => {
     const events: string[] = [];
     let releaseFirst: (() => void) | undefined;

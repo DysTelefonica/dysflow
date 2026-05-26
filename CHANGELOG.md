@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.8] - 2026-05-26
+
+### Fixed
+
+- Fixed MCP generic SQL tools so `dysflow_query_execute` and legacy `query_sql` expose and forward explicit backend/database targets, and the Access runner executes generic reads/writes against the selected database instead of the frontend. Closes #370.
+
 ## [0.9.7] - 2026-05-26
 
 ### Fixed

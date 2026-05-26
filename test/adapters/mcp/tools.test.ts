@@ -230,6 +230,65 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
+  it("forwards explicit database targets on modern query execution", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({
+          sql: "SELECT * FROM BackendOnlyTable",
+          mode: "read",
+          backendPath: "C:/backend.accdb",
+          databasePath: "C:/target.accdb",
+          sourcePath: "C:/source.accdb",
+        }),
+    ).resolves.toMatchObject({ isError: false });
+
+    expect(query.requests).toEqual([
+      {
+        sql: "SELECT * FROM BackendOnlyTable",
+        mode: "read",
+        backendPath: "C:/backend.accdb",
+        databasePath: "C:/target.accdb",
+        sourcePath: "C:/source.accdb",
+      },
+    ]);
+  });
+
+  it("forwards explicit database targets on legacy read-only query_sql", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools
+        .find((tool) => tool.name === "query_sql")
+        ?.handler({
+          query: "SELECT * FROM BackendOnlyTable",
+          backendPath: "C:/backend.accdb",
+          sourcePath: "C:/source.accdb",
+        }),
+    ).resolves.toMatchObject({ isError: false });
+
+    expect(query.requests).toEqual([
+      {
+        sql: "SELECT * FROM BackendOnlyTable",
+        mode: "read",
+        backendPath: "C:/backend.accdb",
+        databasePath: "C:/source.accdb",
+      },
+    ]);
+  });
+
   it("rejects invalid MCP inputs before calling core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));

@@ -86,4 +86,17 @@ describe("dysflow-access-runner.ps1", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting literal PowerShell variable reference syntax
     expect(script).toContain("Delete ${linkName}:");
   });
+
+  it("routes generic SQL reads and writes through selected database helpers", () => {
+    expect(script).toContain(
+      "$readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
+    );
+    expect(script).toContain("$rs = $readDb.Database.OpenRecordset([string]$payload.sql)");
+    expect(script).toContain(
+      "$writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
+    );
+    expect(script).toContain("$writeDb.Database.Execute([string]$payload.sql, 128)");
+    expect(script).not.toContain("$rs = $db.OpenRecordset([string]$payload.sql)");
+    expect(script).not.toContain("$db.Execute([string]$payload.sql, 128)");
+  });
 });

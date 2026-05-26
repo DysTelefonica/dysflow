@@ -326,11 +326,19 @@ function appendLegacyCompatibilityTools(
     handler: async (input) => {
       const validation = validateInput(input, querySqlSchema);
       if (validation !== undefined) return invalidInput(validation);
-      const request = input as { sql?: string; query?: string };
+      const request = input as {
+        sql?: string;
+        query?: string;
+        backendPath?: string;
+        databasePath?: string;
+        sourcePath?: string;
+      };
       return translateCoreResultToMcpContent(
         await services.queryService.execute({
           sql: request.sql ?? request.query ?? "",
           mode: "read",
+          backendPath: request.backendPath,
+          databasePath: request.databasePath ?? request.sourcePath,
         }),
       );
     },

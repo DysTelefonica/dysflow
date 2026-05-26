@@ -51,11 +51,17 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     const queryExecute = tools.find((t) => t.name === "dysflow_query_execute");
     expect(queryExecute).toBeDefined();
     expect(queryExecute?.inputSchema?.properties?.mode?.enum).toEqual(["read", "write"]);
+    expect(queryExecute?.inputSchema?.properties).toHaveProperty("backendPath");
+    expect(queryExecute?.inputSchema?.properties).toHaveProperty("databasePath");
+    expect(queryExecute?.inputSchema?.properties).toHaveProperty("sourcePath");
 
     // Verify read-only legacy sql query
     const querySql = tools.find((t) => t.name === "query_sql");
     expect(querySql).toBeDefined();
     expect(querySql?.inputSchema?.properties?.sql).toBeDefined();
+    expect(querySql?.inputSchema?.properties).toHaveProperty("backendPath");
+    expect(querySql?.inputSchema?.properties).toHaveProperty("databasePath");
+    expect(querySql?.inputSchema?.properties).toHaveProperty("sourcePath");
 
     // Verify write legacy sql exec
     const execSql = tools.find((t) => t.name === "exec_sql");

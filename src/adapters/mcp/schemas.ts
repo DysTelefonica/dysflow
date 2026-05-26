@@ -60,6 +60,15 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
         "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
     },
     sql: { type: "string", description: "Access SQL to execute." },
+    backendPath: {
+      type: "string",
+      description: "Optional override for Access backend database path.",
+    },
+    databasePath: { type: "string", description: "Database path." },
+    sourcePath: {
+      type: "string",
+      description: "Source path alias for databasePath.",
+    },
     mode: {
       type: "string",
       enum: ["read", "write"],
@@ -337,7 +346,12 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   query_sql: {
     type: "object",
     additionalProperties: false,
-    properties: { ...CTX_PROPS, sql: SCHEMA_PROPS.sql, query: SCHEMA_PROPS.query },
+    properties: {
+      ...CTX_PROPS,
+      ...READ_TARGET_OVERRIDE,
+      sql: SCHEMA_PROPS.sql,
+      query: SCHEMA_PROPS.query,
+    },
   },
   exec_sql: {
     type: "object",
