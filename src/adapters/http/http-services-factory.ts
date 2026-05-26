@@ -7,6 +7,7 @@ import {
 } from "../../core/operations/access-operation-registry.js";
 import {
   WindowsMsAccessProcessInspector,
+  WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../../core/operations/windows-processes.js";
 import {
@@ -43,6 +44,7 @@ export async function createHttpServices(
       registry: operationRegistry,
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
+      processScanner: new WindowsMsAccessProcessScanner(),
     }),
   };
 }

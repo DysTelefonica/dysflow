@@ -29,11 +29,9 @@ export class AccessVbaService {
     request: AccessVbaRequest,
     onProgress?: AccessRunnerProgressCallback,
   ): Promise<OperationResult<AccessVbaResult>> {
-    const result = await this.runner.run<AccessVbaResult>(
-      { kind: "vba", request },
-      this.config,
-      { onProgress },
-    );
+    const result = await this.runner.run<AccessVbaResult>({ kind: "vba", request }, this.config, {
+      onProgress,
+    });
     return ensureResultShape(result, isRecord);
   }
 }

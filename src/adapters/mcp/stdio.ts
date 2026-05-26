@@ -10,6 +10,7 @@ import {
 } from "../../core/operations/access-operation-registry.js";
 import {
   WindowsMsAccessProcessInspector,
+  WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../../core/operations/windows-processes.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
@@ -326,6 +327,7 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
       registry: operationRegistry,
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
+      processScanner: new WindowsMsAccessProcessScanner(),
     }),
     legacyToolService: new VbaSyncLegacyService({
       processTimeoutMs: config.processTimeoutMs,

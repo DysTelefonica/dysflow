@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
+import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
 import {
   FileAccessOperationRegistry,
   InMemoryAccessOperationRegistry,
@@ -568,7 +569,7 @@ describe("Access operation registry and cleanup safety", () => {
     });
   });
 
-  it("refuses pid_unknown operations", async () => {
+  it("refuses pid_unknown operations without force", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({
       ...base,
@@ -592,6 +593,156 @@ describe("Access operation registry and cleanup safety", () => {
       ok: false,
       error: { code: "CLEANUP_PID_UNKNOWN" },
     });
+  });
+
+  it("force cleanup retires stale pid_unknown operations when no matching Access process exists", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      ...base,
+      status: "pid_unknown",
+      accessPid: null,
+      processStartTime: null,
+      updatedAt: "2026-05-15T10:00:00.000Z",
+    });
+    const killed: number[] = [];
+    const service = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: {
+        kill: async (pid) => {
+          killed.push(pid);
+        },
+      },
+      processScanner: { listProcesses: async () => [] },
+    });
+
+    const result = await service.cleanup({
+      operationId: "op-1",
+      accessPath: "C:/data/app.accdb",
+      force: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { operationId: "op-1", accessPid: null, status: "cleaned" },
+    });
+    expect(killed).toEqual([]);
+    await expect(registry.get("op-1")).resolves.toBeUndefined();
+  });
+
+  it("force cleanup refuses pid_unknown operations when an unowned Access process matches accessPath", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      ...base,
+      status: "pid_unknown",
+      accessPid: null,
+      processStartTime: null,
+      updatedAt: "2026-05-15T10:00:00.000Z",
+    });
+    const killed: number[] = [];
+    const service = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: {
+        kill: async (pid) => {
+          killed.push(pid);
+        },
+      },
+      processScanner: {
+        listProcesses: async () => [
+          {
+            pid: 9876,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T10:15:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+          },
+        ],
+      },
+    });
+
+    const result = await service.cleanup({
+      operationId: "op-1",
+      accessPath: "C:/data/app.accdb",
+      force: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "CLEANUP_UNOWNED_ACCESS_PROCESS" },
+    });
+    expect(killed).toEqual([]);
+    await expect(registry.get("op-1")).resolves.toMatchObject({ status: "pid_unknown" });
+  });
+});
+
+describe("Access operation preflight cleanup safety", () => {
+  it("marks stale pid_unknown operations cleaned when no matching Access process exists", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      ...base,
+      status: "pid_unknown",
+      accessPid: null,
+      processStartTime: null,
+      updatedAt: "2026-05-15T10:00:00.000Z",
+    });
+    const service = new AccessOperationPreflightCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: { kill: async () => undefined },
+      processScanner: { listProcesses: async () => [] },
+    });
+
+    const result = await service.cleanup({
+      accessPath: "C:/data/app.accdb",
+      projectRoot: "C:/repo/app",
+    });
+
+    expect(result).toEqual({ cleaned: ["op-1"], killed: [], orphanedKilled: [], errors: [] });
+    await expect(registry.get("op-1")).resolves.toBeUndefined();
+  });
+
+  it("refuses to mark pid_unknown cleaned when an unowned Access process matches accessPath", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      ...base,
+      status: "pid_unknown",
+      accessPid: null,
+      processStartTime: null,
+      updatedAt: "2026-05-15T10:00:00.000Z",
+    });
+    const killed: number[] = [];
+    const service = new AccessOperationPreflightCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: {
+        kill: async (pid) => {
+          killed.push(pid);
+        },
+      },
+      processScanner: {
+        listProcesses: async () => [
+          {
+            pid: 9876,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T10:15:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+          },
+        ],
+      },
+    });
+
+    const result = await service.cleanup({
+      accessPath: "C:/data/app.accdb",
+      projectRoot: "C:/repo/app",
+    });
+
+    expect(result.cleaned).toEqual([]);
+    expect(result.killed).toEqual([]);
+    expect(result.orphanedKilled).toEqual([]);
+    expect(result.errors).toMatchObject([{ operationId: "op-1" }]);
+    expect(result.errors[0]?.message).toContain("unowned Access process");
+    expect(killed).toEqual([]);
+    await expect(registry.get("op-1")).resolves.toMatchObject({ status: "pid_unknown" });
   });
 });
 

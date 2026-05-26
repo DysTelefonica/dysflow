@@ -48,7 +48,7 @@ describe("AccessOperationPreflightCleanupService", () => {
     await expect(registry.get("op-stale")).resolves.toBeUndefined();
   });
 
-  it("marks matching stale operations without a pid as cleaned without inspecting or killing", async () => {
+  it("refuses to mark stale operations without a pid as cleaned when processes cannot be scanned", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({ ...baseRecord, accessPid: null, processStartTime: null });
     const service = new AccessOperationPreflightCleanupService({
@@ -69,13 +69,18 @@ describe("AccessOperationPreflightCleanupService", () => {
     await expect(
       service.cleanup({ accessPath: "C:/data/app.accdb", projectRoot: "C:/repo/app" }),
     ).resolves.toEqual({
-      cleaned: ["op-stale"],
+      cleaned: [],
       killed: [],
       orphanedKilled: [],
-      errors: [],
+      errors: [
+        {
+          operationId: "op-stale",
+          message:
+            "Refused to mark operation cleaned because it has no owned Access PID and processes cannot be scanned.",
+        },
+      ],
     });
-    // cleaned records are purged from InMemory registry (parity with FileRegistry)
-    await expect(registry.get("op-stale")).resolves.toBeUndefined();
+    await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });
 
   it("kills the registered live pid before marking the operation cleaned", async () => {
@@ -507,8 +512,14 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.cleaned).toEqual(["op-scanner-err"]);
+      expect(result.cleaned).toEqual([]);
       expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          operationId: "op-scanner-err",
+          message: expect.stringContaining("WMI query failed"),
+        }),
+      );
       expect(result.errors).toContainEqual(
         expect.objectContaining({
           operationId: "orphan_scanner",

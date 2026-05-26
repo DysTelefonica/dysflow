@@ -39,6 +39,7 @@ const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>([
   "timed_out",
   "failed",
   "cleanup_pending",
+  "pid_unknown",
 ]);
 const DEFAULT_OPERATION_TIMEOUT_MS = 3_000;
 
@@ -106,7 +107,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     handledPids: Set<number>,
   ): Promise<void> {
     if (record.accessPid === null || record.processStartTime === null) {
-      await this.markCleaned(record, result);
+      await this.retireUnownedRecord(record, result, handledPids);
       return;
     }
 
@@ -224,6 +225,50 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         message: `Failed to mark operation cleaned: ${formatError(error)}`,
       });
     }
+  }
+
+  private async retireUnownedRecord(
+    record: AccessOperationRecord,
+    result: AccessOperationPreflightCleanupResult,
+    handledPids: Set<number>,
+  ): Promise<void> {
+    if (this.options.processScanner === undefined) {
+      result.errors.push({
+        operationId: record.operationId,
+        message:
+          "Refused to mark operation cleaned because it has no owned Access PID and processes cannot be scanned.",
+      });
+      return;
+    }
+
+    let processes: OsProcessInfo[];
+    try {
+      processes = await this.options.processScanner.listProcesses();
+    } catch (error) {
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to enumerate processes: ${formatError(error)}`,
+      });
+      return;
+    }
+
+    const normalizedAccessPath = normalizePathForMatching(record.accessPath);
+    const matchingProcess = processes.find(
+      (process) =>
+        process.name.toUpperCase() === "MSACCESS.EXE" &&
+        process.commandLine !== undefined &&
+        pathMatchesAccessPath(process.commandLine, normalizedAccessPath),
+    );
+    if (matchingProcess !== undefined) {
+      handledPids.add(matchingProcess.pid);
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Refused to mark operation cleaned because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+      });
+      return;
+    }
+
+    await this.markCleaned(record, result);
   }
 }
 

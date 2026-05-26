@@ -56,7 +56,7 @@ function buildMixedStderrExecutor(capturedPids: number[]): PowerShellExecutor {
 
 describe("AccessPowerShellRunner — progress callback", () => {
   it("calls onProgress exactly twice with correct args for valid progress lines", async () => {
-    const onProgress = vi.fn<(percent: number, total?: number, message?: string) => void>();
+    const onProgress = vi.fn();
     const capturedPids: number[] = [];
 
     const executor = buildMixedStderrExecutor(capturedPids);

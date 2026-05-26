@@ -27,7 +27,7 @@ export type ProcessScanner = {
 
 export type AccessCleanupResult = {
   operationId: string;
-  accessPid: number;
+  accessPid: number | null;
   status: "cleaned";
 };
 
@@ -39,6 +39,7 @@ export class AccessOperationCleanupService {
       registry: AccessOperationRegistry;
       processInspector: ProcessInspector;
       processKiller: ProcessKiller;
+      processScanner?: ProcessScanner;
     },
   ) {}
 
@@ -66,18 +67,30 @@ export class AccessOperationCleanupService {
       );
     }
 
-    if (
-      record.accessPid === null ||
-      record.processStartTime === null ||
-      record.status === "pid_unknown" ||
-      record.status === "running_untracked"
-    ) {
+    if (record.status === "running_untracked") {
       return failureResult(
         createDysflowError(
           "CLEANUP_PID_UNKNOWN",
           "Cleanup refused because the operation has no owned Access PID.",
         ),
       );
+    }
+
+    if (
+      record.accessPid === null ||
+      record.processStartTime === null ||
+      record.status === "pid_unknown"
+    ) {
+      if (!request.force) {
+        return failureResult(
+          createDysflowError(
+            "CLEANUP_PID_UNKNOWN",
+            "Cleanup refused because the operation has no owned Access PID.",
+          ),
+        );
+      }
+
+      return this.retireUnownedOperation(record.operationId, record.accessPath);
     }
 
     if (!request.force && !ELIGIBLE_STATUSES.has(record.status)) {
@@ -141,4 +154,75 @@ export class AccessOperationCleanupService {
       status: "cleaned",
     });
   }
+
+  private async retireUnownedOperation(
+    operationId: string,
+    accessPath: string,
+  ): Promise<OperationResult<AccessCleanupResult>> {
+    if (this.options.processScanner === undefined) {
+      return failureResult(
+        createDysflowError(
+          "CLEANUP_PID_UNKNOWN",
+          "Cleanup refused because the operation has no owned Access PID and processes cannot be scanned.",
+        ),
+      );
+    }
+
+    let processes: OsProcessInfo[];
+    try {
+      processes = await this.options.processScanner.listProcesses();
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "CLEANUP_PROCESS_SCAN_FAILED",
+          `Cleanup refused because process enumeration failed: ${formatError(error)}`,
+        ),
+      );
+    }
+    const matchingProcess = processes.find(
+      (process) =>
+        process.name.toUpperCase() === "MSACCESS.EXE" &&
+        process.commandLine !== undefined &&
+        pathMatchesAccessPath(process.commandLine, accessPath),
+    );
+    if (matchingProcess !== undefined) {
+      return failureResult(
+        createDysflowError(
+          "CLEANUP_UNOWNED_ACCESS_PROCESS",
+          `Cleanup refused because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+        ),
+      );
+    }
+
+    await this.options.registry.update(operationId, {
+      status: "cleaned",
+      updatedAt: new Date().toISOString(),
+    });
+    return successResult({ operationId, accessPid: null, status: "cleaned" });
+  }
+}
+
+function pathMatchesAccessPath(commandLine: string, accessPath: string): boolean {
+  const normalizedAccessPath = normalizePathForMatching(accessPath);
+  const tokenPattern = /"([^"]*)"|(\S+)/g;
+  let match: RegExpExecArray | null;
+  match = tokenPattern.exec(commandLine);
+  while (match !== null) {
+    const token = match[1] ?? match[2] ?? "";
+    if (normalizePathForMatching(token) === normalizedAccessPath) return true;
+    match = tokenPattern.exec(commandLine);
+  }
+
+  return false;
+}
+
+function normalizePathForMatching(value: string): string {
+  return value
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase();
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
