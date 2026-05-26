@@ -22,6 +22,7 @@ import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { VbaSyncLegacyService } from "../vba-sync/vba-sync-legacy-adapter.js";
 import {
   createDysflowMcpTools,
+  sanitizeMcpErrorMessage,
   type DysflowMcpServices,
   type DysflowMcpTool,
   type McpToolResult,
@@ -237,7 +238,10 @@ export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
       return await tool.handler(call.arguments, context);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Tool call failed.";
-      return { content: [{ type: "text", text: `MCP_TOOL_ERROR: ${message}` }], isError: true };
+      return {
+        content: [{ type: "text", text: `MCP_TOOL_ERROR: ${sanitizeMcpErrorMessage(message)}` }],
+        isError: true,
+      };
     }
   }
 

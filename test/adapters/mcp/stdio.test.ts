@@ -13,7 +13,7 @@ import {
   startMcpStdioAdapter,
 } from "../../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
+import { failureResult, type OperationResult, successResult } from "../../../src/core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";
@@ -266,6 +266,101 @@ describe("JsonLineMcpStdioRuntime", () => {
         },
       }),
     ]);
+  });
+
+  it("returns a terminal safe tool response when a handler throws before resolving", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const runtime = new JsonLineMcpStdioRuntime({ input, output });
+    runtime.registerTool({
+      name: "dysflow.timeout_probe",
+      description: "Tool that simulates a bounded handler failure",
+      handler: async () => {
+        throw new Error("RUNNER_TIMEOUT while opening C:\\Users\\Jane\\E2E_testing\\front.accdb");
+      },
+    });
+
+    const started = runtime.start();
+    writeMessage(input, { jsonrpc: "2.0", id: 61, method: "initialize", params: {} });
+    writeMessage(input, { jsonrpc: "2.0", id: 62, method: "tools/list" });
+    writeMessage(input, {
+      jsonrpc: "2.0",
+      id: 63,
+      method: "tools/call",
+      params: { name: "dysflow.timeout_probe", arguments: {} },
+    });
+    input.end();
+    await started;
+    output.end();
+
+    const responses = (await collectOutput(output)) as Array<{
+      id: unknown;
+      error?: unknown;
+      result?: { content?: Array<{ text?: string }>; isError?: boolean };
+    }>;
+    const terminal = responses.find((response) => response.id === 63);
+
+    expect(responses.map((response) => response.id)).toEqual([61, 62, 63]);
+    expect(terminal).toEqual(
+      expect.objectContaining({
+        id: 63,
+        result: {
+          content: [{ type: "text", text: "MCP_TOOL_ERROR: RUNNER_TIMEOUT while opening [PATH]" }],
+          isError: true,
+        },
+      }),
+    );
+    expect(terminal?.error).toBeUndefined();
+  });
+
+  it("returns a terminal JSON-RPC tool response for a bounded core timeout", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const runtime = new JsonLineMcpStdioRuntime({ input, output });
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(),
+      diagnosticsService: {
+        run: async () =>
+          failureResult({
+            code: "RUNNER_TIMEOUT",
+            message: "Timed out opening C:\\Users\\Jane\\E2E_testing\\front.accdb",
+            retryable: true,
+          }),
+      },
+    });
+    for (const tool of tools) runtime.registerTool(tool);
+
+    const started = runtime.start();
+    writeMessage(input, { jsonrpc: "2.0", id: 64, method: "initialize", params: {} });
+    writeMessage(input, {
+      jsonrpc: "2.0",
+      id: 65,
+      method: "tools/call",
+      params: { name: "dysflow_doctor", arguments: { projectId: "dysflow" } },
+    });
+    input.end();
+    await started;
+    output.end();
+
+    const responses = (await collectOutput(output)) as Array<{
+      id: unknown;
+      error?: unknown;
+      result?: { content?: Array<{ text?: string }>; isError?: boolean };
+    }>;
+    const terminal = responses.find((response) => response.id === 65);
+
+    expect(responses.map((response) => response.id)).toEqual([64, 65]);
+    expect(terminal).toEqual(
+      expect.objectContaining({
+        id: 65,
+        result: {
+          content: [{ type: "text", text: "RUNNER_TIMEOUT: Timed out opening [PATH]" }],
+          isError: true,
+        },
+      }),
+    );
+    expect(terminal?.error).toBeUndefined();
   });
 
   it("rejects oversized JSON-RPC lines before parsing and continues processing subsequent frames", async () => {
