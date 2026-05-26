@@ -298,10 +298,10 @@ export class AccessPowerShellRunner implements AccessRunner {
     execution: PowerShellExecutionResult,
   ): Promise<AccessOperationRecord> {
     const status =
-      execution.accessProcess === undefined && record.accessPid === null
-        ? "pid_unknown"
-        : execution.timedOut
-          ? "timed_out"
+      execution.timedOut
+        ? "timed_out"
+        : execution.accessProcess === undefined && record.accessPid === null
+          ? "pid_unknown"
           : execution.exitCode === 0
             ? "completed"
             : "failed";

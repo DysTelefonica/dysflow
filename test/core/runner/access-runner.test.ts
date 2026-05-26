@@ -612,7 +612,41 @@ describe("AccessPowerShellRunner", () => {
         },
       ],
       durationMs: 1_501,
-      operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
+      operation: { accessPath: "C:/data/finance.accdb", status: "timed_out" },
+    });
+  });
+
+  it("records timed-out operation metadata even when Access PID was never captured", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      durationMs: 1_500,
+      timedOut: true,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "diagnostics", request: { includeEnvironment: true } },
+      config,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "RUNNER_TIMEOUT",
+        retryable: true,
+      },
+      durationMs: 1_500,
+      operation: {
+        operationId: expect.stringMatching(/^dysflow-/),
+        accessPath: "C:/data/finance.accdb",
+        status: "timed_out",
+      },
     });
   });
 

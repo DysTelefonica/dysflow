@@ -79,6 +79,7 @@ export function spawnPowerShellProcess(
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
+      finish(null);
     }, options.timeoutMs);
 
     options.signal?.addEventListener(
@@ -86,6 +87,7 @@ export function spawnPowerShellProcess(
       () => {
         timedOut = true;
         child.kill();
+        finish(null);
       },
       { once: true },
     );
@@ -101,6 +103,7 @@ export function spawnPowerShellProcess(
     });
     child.on("error", (error: Error) => {
       stderr += error.message;
+      finish(null);
     });
     child.on("close", finish);
   });

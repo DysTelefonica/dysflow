@@ -97,6 +97,79 @@ describe("spawnPowerShellProcess — child env construction", () => {
   });
 });
 
+describe("spawnPowerShellProcess — bounded timeout settlement", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves a timeout result when kill does not produce a close event", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-26T10:00:00.000Z"));
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(true);
+    await expect(resultPromise).resolves.toMatchObject({
+      exitCode: null,
+      timedOut: true,
+      durationMs: 250,
+    });
+  });
+
+  it("resolves an aborted execution when kill does not produce a close event", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-26T10:00:00.000Z"));
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+    const controller = new AbortController();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 1_000,
+      signal: controller.signal,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(125);
+    controller.abort();
+    await Promise.resolve();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(true);
+    await expect(resultPromise).resolves.toMatchObject({
+      exitCode: null,
+      timedOut: true,
+      durationMs: 125,
+    });
+  });
+});
+
 describe("POWERSHELL_SYSTEM_ENV_KEYS", () => {
   it("is a non-empty readonly string array containing required Windows system keys", () => {
     expect(Array.isArray(POWERSHELL_SYSTEM_ENV_KEYS)).toBe(true);
