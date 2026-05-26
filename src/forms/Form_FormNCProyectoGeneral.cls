@@ -305,7 +305,7 @@ Public Sub ComandoGrabar_Click()
     
     ' Validación: si RequiereControlEficacia="No" debe haber motivo
     If Nz(Me.RequiereControlEficacia, "") = "No" And Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos NR'."
+        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos No CE'."
         Err.Raise 1000
     End If
     
@@ -335,6 +335,18 @@ Public Sub ComandoGrabar_Click()
     Set m_NCOp = New NCProyectoOperaciones
     With m_NCOp
         Set m_NCOp.nc = m_ObjNCProyectoActiva
+        ' Issue #19: Gate CE - si todas las ARs finalizadas y CE pendiente sin detalle, bloquear cierre
+        Dim m_GateCE As String
+        m_GateCE = .MotivoCierreControlEficaciaNoOK(m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_GateCE <> "" Then
+            DoCmd.Hourglass False
+            pregunta = MsgBox(m_GateCE, vbExclamation, "Control de Eficacia pendiente")
+            DoCmd.Hourglass True
+            Exit Sub
+        End If
         If Not m_NCAsociada Is Nothing Then
             .RegistrarCambiosDatosUnicosConVinculoNC Form_FormNCProyecto.m_NCAlInicio, m_Error
         Else
@@ -696,9 +708,9 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
                 Else
-                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
@@ -841,9 +853,9 @@ If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
             Else
-                Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
@@ -1156,9 +1168,9 @@ Private Sub ComandoVerNoRequiere_Click()
     
     ' Update button caption
     If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
     Else
-        Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
     End If
     
     VBA.DoEvents

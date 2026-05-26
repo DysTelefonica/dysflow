@@ -1,4 +1,4 @@
-VERSION 1.0 CLASS
+﻿VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
@@ -117,7 +117,7 @@ Public Function Registrar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     Dim m_RepOP As ReplanificacionesAuditoriaOperaciones
@@ -358,7 +358,7 @@ errores:
 End Function
 
 Private Function BuenaFecha( _
-                            Optional p_Error As String _
+                            Optional ByRef p_Error As String _
                             ) As String
     
     
@@ -400,7 +400,7 @@ errores:
 End Function
 Private Function AccionRepetida( _
                                 p_AR As String, _
-                                Optional p_Error As String _
+                                Optional ByRef p_Error As String _
                                 ) As EnumSino
         
     Dim m_ID As Variant
@@ -467,7 +467,7 @@ Public Function Replanificar( _
                             Optional ByRef p_Error As String _
                             ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_RepOP As ReplanificacionesAuditoriaOperaciones
     Dim m_Rep As ReplanificacionesAuditoria
@@ -524,7 +524,7 @@ Public Function RegistrarNAccion( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -570,7 +570,7 @@ Public Function RegistrarResponsable( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     

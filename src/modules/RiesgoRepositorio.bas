@@ -5,7 +5,7 @@ Option Explicit
 
 ' Obtiene los riesgos asociados a una NC específica desde la tabla de unión local
 Public Function GetRiesgosAsociados(ByVal p_IDNC As Long, ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim m_SQL As String
     Dim m_Riesgo As riesgo
     Dim m_Col As Scripting.Dictionary
@@ -14,13 +14,12 @@ Public Function GetRiesgosAsociados(ByVal p_IDNC As Long, ByRef p_Error As Strin
     Set m_Col = New Scripting.Dictionary
     m_Col.CompareMode = TextCompare
     
-    ' Nota: Consultamos la tabla de unión TbRiesgosNC en la BD local de NC
-    ' pero traemos los datos descriptivos de la BD de Riesgos mediante getdbRiesgos
+    ' Nota: Consultamos la tabla de unión TbRiesgosNC y los datos descriptivos mediante getdb().
     m_SQL = "SELECT R.* FROM TbRiesgos AS R " & _
             "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
             "WHERE L.IDNC = " & p_IDNC
             
-    Set rcd = getdbRiesgos().OpenRecordset(m_SQL)
+    Set rcd = getdb().OpenRecordset(m_SQL)
     
     Do While Not rcd.EOF
         Set m_Riesgo = New riesgo
@@ -45,7 +44,7 @@ End Function
 
 ' Obtiene los riesgos candidatos de la ÚLTIMA edición del proyecto vinculado al expediente
 Public Function GetRiesgosDisponibles(ByVal p_IDExpediente As Long, ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim m_SQL As String
     Dim m_Riesgo As riesgo
     Dim m_Col As Scripting.Dictionary
@@ -60,7 +59,7 @@ Public Function GetRiesgosDisponibles(ByVal p_IDExpediente As Long, ByRef p_Erro
                     "ON E.IDProyecto = P.IDProyecto WHERE P.IDExpediente =" & p_IDExpediente & ")) " & _
                     "AND ((R.FechaRetirado) Is Null));"
     
-    Set rcd = getdbRiesgos().OpenRecordset(m_SQL)
+    Set rcd = getdb().OpenRecordset(m_SQL)
     
     Do While Not rcd.EOF
         Set m_Riesgo = New riesgo
@@ -82,14 +81,14 @@ errores:
 End Function
 
 Public Sub GuardarAsociaciones(ByVal p_IDNC As Long, ByRef p_ColIDs As Collection, ByRef p_Error As String)
-    Dim dbRiesgos As dao.Database
+    Dim dbRiesgos As DAO.Database
     Dim varIDRiesgo As Variant
     Dim nuevoID As Long
     Dim m_Fecha As String
     On Error GoTo errores
     
     ' 1. Obtener conexión al repositorio externo (Fuente: 03_Environment_Config)
-    Set dbRiesgos = getdbRiesgos()
+    Set dbRiesgos = getdb()
     
     ' 2. Limpiar asociaciones previas
     ' Nota: Validar si el campo es IDNC o IDNoConformidad según el esquema físico

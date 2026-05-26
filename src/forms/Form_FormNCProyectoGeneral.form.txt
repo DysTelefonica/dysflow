@@ -2474,14 +2474,14 @@ Begin Form
                     OverlapFlags =85
                     Left =6578
                     Top =5767
-                    Width =2085
+                    Width =2715
                     Height =297
                     FontSize =9
                     FontWeight =700
                     TabIndex =27
                     ForeColor =16737792
                     Name ="ComandoVerNoRequiere"
-                    Caption ="Ver Motivos NR"
+                    Caption ="⍾   Ver Motivos No CE"
                     OnClick ="[Event Procedure]"
                     FontName ="Segoe UI"
                     ControlTipText ="Formulario de entrada de datos de control de eficacia"
@@ -2491,7 +2491,7 @@ Begin Form
 
                     LayoutCachedLeft =6578
                     LayoutCachedTop =5767
-                    LayoutCachedWidth =8663
+                    LayoutCachedWidth =9293
                     LayoutCachedHeight =6064
                     ForeThemeColorIndex =-1
                     ForeTint =100.0
@@ -2822,7 +2822,7 @@ Public Sub ComandoGrabar_Click()
     
     ' Validación: si RequiereControlEficacia="No" debe haber motivo
     If Nz(Me.RequiereControlEficacia, "") = "No" And Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos NR'."
+        m_Error = "Si 'No requiere control de eficacia', debe indicar el motivo. Use el botón 'Meter Motivos No CE'."
         Err.Raise 1000
     End If
     
@@ -3213,9 +3213,9 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
                 Else
-                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
@@ -3358,9 +3358,9 @@ If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
             Else
-                Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
@@ -3673,9 +3673,9 @@ Private Sub ComandoVerNoRequiere_Click()
     
     ' Update button caption
     If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = "Ver Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
     Else
-        Me.ComandoVerNoRequiere.Caption = "Meter Motivos NR"
+        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
     End If
     
     VBA.DoEvents

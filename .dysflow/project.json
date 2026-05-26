@@ -1,0 +1,13 @@
+{
+  "id": "00-no-conformidades-staging-clean",
+  "name": "NoConformidades staging clean",
+  "accessPath": "NoConformidades.accdb",
+  "backendPath": "NoConformidades_Datos.accdb",
+  "destinationRoot": "src",
+  "projectRoot": ".",
+  "allowWrites": true,
+  "timeoutMs": 300000,
+  "passwordEnv": "ACCESS_VBA_PASSWORD",
+  "frontendPasswordEnv": "ACCESS_VBA_PASSWORD",
+  "backendPasswordEnv": "ACCESS_VBA_PASSWORD"
+}

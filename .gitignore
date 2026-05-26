@@ -1,4 +1,8 @@
+
+.atl/
 .access-vba-skill/
+
+openspec/
 *.laccdb
 *.ldb
 

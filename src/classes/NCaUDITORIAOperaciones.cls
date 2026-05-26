@@ -86,6 +86,11 @@ Private Function MotivoDatosUnicosNoOK( _
                 Exit Function
             End If
             
+        ElseIf .RequiereControlEficacia = "No" Then
+            If .MotivoNoRequiereControlEficacia = "" Then
+                MotivoDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+                Exit Function
+            End If
         End If
         If IsDate(.FPREVCIERRE) Then
             If CDate(.FPREVCIERRE) < CDate(.FechaApertura) Then
@@ -109,7 +114,7 @@ Public Function RegistrarDatosUnicos( _
                                     Optional ByRef p_Error As String _
                                     ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoDatosUnicosNoOK As String
     Dim m_EstadoAlInicio As String
@@ -206,6 +211,11 @@ Public Function RegistrarDatosUnicos( _
             rcdDatos.Fields("PuntoNorma") = Me.nc.PuntoNorma
             rcdDatos.Fields("RESPONSABLEIMPLANTACION") = Me.nc.RESPONSABLEIMPLANTACION
             rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
+            If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
+                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
+            Else
+                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Null
+            End If
             rcdDatos.Fields("FECHAAPERTURA") = Me.nc.FechaApertura
             
             
@@ -288,7 +298,7 @@ Public Function Eliminar( _
                             ) As String
     
     Dim m_SQL As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_Documentos As Scripting.Dictionary
     Dim m_Documento As DocumentoAuditoria
     Dim m_IDDOC As Variant
@@ -428,7 +438,7 @@ End Function
 Public Function Habilitar( _
                             Optional ByRef p_Error As String _
                             ) As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     On Error GoTo errores
@@ -485,7 +495,7 @@ Public Function RegistrarControlEficacia( _
                                         Optional ByRef p_Error As String _
                                         ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -562,7 +572,7 @@ Public Function RegistrarResultadoControlEficacia( _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     
@@ -663,7 +673,7 @@ Public Function EliminarResultadoControlEficacia( _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
                                         
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
     

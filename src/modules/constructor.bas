@@ -1,8 +1,8 @@
-Attribute VB_Name = "constructor"
+﻿Attribute VB_Name = "constructor"
 Option Compare Database
 Option Explicit
 Public Function getRiesgosNC(p_IDNC As Long, Optional ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Riesgo As riesgo
     Dim m_Col As Scripting.Dictionary
@@ -42,7 +42,7 @@ Public Function getUsuariosTecnicos( _
                                         Optional p_Activos As EnumSino = EnumSino.Sí, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Usuario As usuario
@@ -59,7 +59,7 @@ Public Function getUsuariosTecnicos( _
                 "ORDER BY Nombre;"
     End If
     
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -124,7 +124,7 @@ Public Function getUsuario( _
                             Optional ByRef p_Error As String _
                             ) As usuario
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_Campo As Variant
     Dim m_NombreCampoID As String
     Dim m_EsNumeroID As Boolean
@@ -164,7 +164,7 @@ Public Function getUsuario( _
         m_Where = m_NombreCampoID & "='" & m_ValorID & "';"
     End If
     m_SQL = m_SQLInicial & "WHERE " & m_Where
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             Exit Function
@@ -195,7 +195,7 @@ Public Function getAplicacionesPermisos( _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_Campo As Variant
     Dim m_SQL As String
     Dim m_ObjUsuarioAplicacionPermisos As UsuarioAplicacionPermisos
@@ -207,7 +207,7 @@ Public Function getAplicacionesPermisos( _
     m_SQL = "SELECT TbUsuariosAplicacionesPermisos.* " & _
             "FROM TbUsuariosAplicacionesPermisos " & _
             "WHERE CorreoUsuario='" & p_CorreoUsuario & "';"
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -248,7 +248,7 @@ End Function
 
 Public Function getDocumentosAyuda(Optional ByRef p_Error As String) As Scripting.Dictionary
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
        
@@ -289,7 +289,7 @@ Public Function getListaUsuarios( _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ObjUsuario As usuario
@@ -320,7 +320,7 @@ Public Function getListaUsuarios( _
             "TbUsuariosAplicacionesPermisos.IDAplicacion=" & IDAplicacion & " AND " & _
             m_Particula & ";"
     m_SQL = m_SQLInicial & m_Where
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -364,7 +364,7 @@ Public Function getUsuariosCalidad( _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ObjUsuario As usuario
@@ -380,7 +380,7 @@ Public Function getUsuariosCalidad( _
             "ON TbUsuariosAplicaciones.CorreoUsuario = TbUsuariosAplicacionesPermisos.CorreoUsuario " & _
             "WHERE (((TbUsuariosAplicacionesPermisos.IDAplicacion)=" & IDAplicacion & _
             ") AND ((TbUsuariosAplicacionesPermisos.EsUsuarioCalidad)='Sí'));"
-    Set rcdDatos = getdbLanzadera().OpenRecordset(m_SQL)
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -422,11 +422,11 @@ End Function
 Public Function getNCProyecto( _
                                 Optional p_IDNC As String, _
                                 Optional p_IDAC As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As NCProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -437,7 +437,7 @@ Public Function getNCProyecto( _
     End If
     ' --- INICIO INTEGRACIÓN CACHÉ (FASE 1) ---
     ' Intentamos carga desde caché si tenemos IDNC y no se especifica una DB externa
-    If p_IDNC <> "" And p_db Is Nothing Then
+    If p_IDNC <> "" And p_Db Is Nothing Then
         If AplicarCache Then
             Set getNCProyecto = CacheNCProyecto.ObtenerNCConCache(p_IDNC, False, p_Error)
             If Not getNCProyecto Is Nothing Then
@@ -448,8 +448,8 @@ Public Function getNCProyecto( _
         End If
     End If
     ' --- FIN INTEGRACIÓN CACHÉ ---
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDNC <> "" Then
          m_SQL = "SELECT * FROM " & _
@@ -462,7 +462,7 @@ Public Function getNCProyecto( _
                 "WHERE (((TbNCAccionCorrectivas.IDAccionCorrectiva)=" & p_IDAC & "));"
     End If
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -493,11 +493,11 @@ Public Function getDocumentoProyecto( _
                                     Optional p_NombreDoc As String, _
                                     Optional p_IDNC As String, _
                                     Optional p_IDNCResultante As String, _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As DocumentoProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     
@@ -511,8 +511,8 @@ Public Function getDocumentoProyecto( _
             Exit Function
         End If
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDNCResultante <> "" Then
          m_SQL = "SELECT * FROM " & _
@@ -532,7 +532,7 @@ Public Function getDocumentoProyecto( _
     
    
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -561,11 +561,11 @@ Public Function getDocumentoAuditoria( _
                                     Optional p_IDDocumento As String, _
                                     Optional p_IDAuditoria As String, _
                                     Optional p_NombreDoc As String, _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As DocumentoAuditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     
@@ -579,8 +579,8 @@ Public Function getDocumentoAuditoria( _
             Exit Function
         End If
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDDocumento <> "" Then
          m_SQL = "SELECT * FROM " & _
@@ -593,7 +593,7 @@ Public Function getDocumentoAuditoria( _
     End If
    
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -621,11 +621,11 @@ End Function
 Public Function getDocumentosProyecto( _
                                         Optional p_IDNC As String, _
                                         Optional p_IDAR As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Documento As DocumentoProyecto
@@ -634,8 +634,8 @@ Public Function getDocumentosProyecto( _
     If p_IDNC = "" And p_IDAR = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDNC <> "" Then
         m_SQL = "SELECT * FROM " & _
@@ -648,7 +648,7 @@ Public Function getDocumentosProyecto( _
     End If
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -688,11 +688,11 @@ errores:
 End Function
 Public Function getDocumentosCompletosProyecto( _
                                                 Optional p_IDNC As String, _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Documento As DocumentoProyecto
@@ -701,13 +701,13 @@ Public Function getDocumentosCompletosProyecto( _
     If p_IDNC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbNCDocumentos " & _
             "WHERE IDNoConformidad=" & p_IDNC & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -739,7 +739,7 @@ Public Function getDocumentosCompletosProyecto( _
             "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva) " & _
             "INNER JOIN TbNCDocumentos ON TbNCAccionesRealizadas.IDAccionRealizada = TbNCDocumentos.IDAccionRealizada " & _
             "WHERE (((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & "));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -775,11 +775,11 @@ errores:
 End Function
 Public Function getACProyecto( _
                         Optional p_IDAC As String, _
-                        Optional p_db As dao.Database, _
+                        Optional p_Db As DAO.Database, _
                         Optional ByRef p_Error As String _
                         ) As ACProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -788,14 +788,14 @@ Public Function getACProyecto( _
     If p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbNCAccionCorrectivas " & _
             "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -823,11 +823,11 @@ End Function
 Public Function getACsProyecto( _
                                 Optional p_IDNC As String, _
                                 Optional p_EnumOrden As EnumOrden, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ACProyecto As ACProyecto
@@ -837,8 +837,8 @@ Public Function getACsProyecto( _
     If p_IDNC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_EnumOrden = Empty Then
         p_EnumOrden = EnumOrden.PorNAccion
@@ -859,7 +859,7 @@ Public Function getACsProyecto( _
             "WHERE IDNoConformidad=" & p_IDNC & " " & _
             m_OrderBy & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -899,11 +899,11 @@ errores:
 End Function
 Public Function getARProyecto( _
                                 Optional p_IDAR As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As ARProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -912,14 +912,14 @@ Public Function getARProyecto( _
     If p_IDAR = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbNCAccionesRealizadas " & _
             "WHERE IDAccionRealizada=" & p_IDAR & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -947,11 +947,11 @@ End Function
 
 Public Function getARProyectoUltima( _
                                     Optional p_IDAC As String, _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As ARProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_SQLUltima As String
     Dim m_Campo As Variant
@@ -961,8 +961,8 @@ Public Function getARProyectoUltima( _
     If p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQLUltima = "SELECT Last(IDAccionRealizada) AS ÚltimoDeIDAccionRealizada " & _
@@ -971,7 +971,7 @@ Public Function getARProyectoUltima( _
     m_SQL = "SELECT * FROM " & _
             "TbNCAccionesRealizadas " & _
             "WHERE IDAccionRealizada In(" & m_SQLUltima & ");"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -998,11 +998,11 @@ errores:
 End Function
 Public Function getARsProyecto( _
                                 p_IDAC As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARProyecto As ARProyecto
@@ -1012,8 +1012,8 @@ Public Function getARsProyecto( _
     If p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT * FROM " & _
              "TbNCAccionesRealizadas " & _
@@ -1021,7 +1021,7 @@ Public Function getARsProyecto( _
 
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1062,11 +1062,11 @@ End Function
 Public Function getARsDeACProyecto( _
                                 p_IDAC As String, _
                                 Optional p_EnumOrden As EnumOrden, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARProyecto As ARProyecto
@@ -1076,8 +1076,8 @@ Public Function getARsDeACProyecto( _
     If p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
    If p_EnumOrden = Empty Then
         p_EnumOrden = EnumOrden.PorNAccion
@@ -1100,7 +1100,7 @@ Public Function getARsDeACProyecto( _
 
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1143,11 +1143,11 @@ End Function
 Public Function getID( _
                         p_NOmbreTabla As String, _
                         p_NombreCampoID As String, _
-                        Optional ByRef db As dao.Database, _
+                        Optional ByRef db As DAO.Database, _
                         Optional ByRef p_Error As String _
                         ) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim lngOrdinalMaximo As Long
     On Error GoTo errores
@@ -1187,11 +1187,11 @@ End Function
 
 Public Function getLogsProyecto( _
                                 p_Objeto As Object, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Log  As LogNCProyecto
@@ -1203,8 +1203,8 @@ Public Function getLogsProyecto( _
         p_Error = "Tipo de Objeto no válido"
         Err.Raise 1000
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If TypeOf p_Objeto Is NCProyecto Then
         m_NombreCampoID = "IDNC"
@@ -1221,7 +1221,7 @@ Public Function getLogsProyecto( _
                 "WHERE TbLog." & m_NombreCampoID & " =" & m_ValorID & " " & _
                 "ORDER BY TbLog.Fecha;"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1263,11 +1263,11 @@ End Function
 
 Public Function getLogsAuditoria( _
                                 p_Objeto As Object, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Log  As LogNCAuditoria
@@ -1279,8 +1279,8 @@ Public Function getLogsAuditoria( _
         p_Error = "Tipo de Objeto no válido"
         Err.Raise 1000
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If TypeOf p_Objeto Is NCAuditoria Then
         m_NombreCampoID = "IDNC"
@@ -1297,7 +1297,7 @@ Public Function getLogsAuditoria( _
                 "WHERE TbLogAuditoria." & m_NombreCampoID & " =" & m_ValorID & " " & _
                 "ORDER BY TbLogAuditoria.Fecha;"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1338,11 +1338,11 @@ End Function
 Public Function getTipologiaNCProyecto( _
                                         Optional p_IDTipo As String, _
                                         Optional p_Tipologia As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As TipologiaNCProyectos
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -1351,8 +1351,8 @@ Public Function getTipologiaNCProyecto( _
     If p_IDTipo = "" And p_Tipologia = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDTipo <> "" Then
         m_SQL = "SELECT * FROM " & _
@@ -1366,7 +1366,7 @@ Public Function getTipologiaNCProyecto( _
     End If
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1392,24 +1392,24 @@ errores:
     End If
 End Function
 Public Function getTipologiasNCProyecto( _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Tipologia As TipologiaNCProyectos
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbTiposNCProyectos " & _
             "ORDER BY Tipologia;"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1449,22 +1449,22 @@ errores:
     End If
 End Function
 Public Function getExpedientes( _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Expediente As Expediente
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "TbExpedientes"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1505,11 +1505,11 @@ errores:
 End Function
 Public Function getNCsPorTipo( _
                                 p_CodTipo As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -1520,13 +1520,13 @@ Public Function getNCsPorTipo( _
     If p_CodTipo = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
             "WHERE TIPO='" & p_CodTipo & "';"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1566,11 +1566,11 @@ errores:
 End Function
 Public Function getNCsPorTipoNCProyecto( _
                                         p_IDTipo As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -1581,13 +1581,13 @@ Public Function getNCsPorTipoNCProyecto( _
     If p_IDTipo = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
             "WHERE IDTipo=" & p_IDTipo & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1626,11 +1626,11 @@ errores:
     End If
 End Function
 Public Function getNCsProyecto( _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -1638,14 +1638,14 @@ Public Function getNCsProyecto( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
             "WHERE Borrado=False " & _
             "ORDER BY FECHAAPERTURA DESC;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1686,11 +1686,11 @@ errores:
     End If
 End Function
 Public Function getNCsProyectoSeguimiento( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -1698,8 +1698,8 @@ Public Function getNCsProyectoSeguimiento( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
@@ -1708,7 +1708,7 @@ Public Function getNCsProyectoSeguimiento( _
             "or ESTADO='CERRADACENOCONFORME' " & _
             "or ESTADO='ACSSINTAREAS' " & _
             "or ESTADO='REGISTRADA') AND  IDNCAsociada Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1749,11 +1749,11 @@ errores:
     End If
 End Function
 Public Function getNCsAuditoriaSeguimiento( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
@@ -1761,8 +1761,8 @@ Public Function getNCsAuditoriaSeguimiento( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidadesAuditoria " & _
@@ -1771,7 +1771,7 @@ Public Function getNCsAuditoriaSeguimiento( _
             "or ESTADO='CERRADACENOCONFORME' " & _
             "or ESTADO='ACSSINTAREAS' " & _
             "or ESTADO='REGISTRADA';"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1812,11 +1812,11 @@ errores:
     End If
 End Function
 Public Function getNCsDeAuditoria( _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
@@ -1824,14 +1824,14 @@ Public Function getNCsDeAuditoria( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidadesAuditoria " & _
             "WHERE Borrado=False " & _
             "ORDER BY Numero;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1872,11 +1872,11 @@ errores:
     End If
 End Function
 Public Function getNCsProyectoAbiertas( _
-                                         Optional p_db As dao.Database, _
+                                         Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -1884,8 +1884,8 @@ Public Function getNCsProyectoAbiertas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
 
     m_SQL = "SELECT DISTINCT TbNoConformidades.* " & _
@@ -1895,7 +1895,7 @@ Public Function getNCsProyectoAbiertas( _
             "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNoConformidades.Borrado)=False) " & _
             "AND ((TbNCAccionesRealizadas.FechaFinReal) Is Null)) ORDER BY FECHAAPERTURA DESC;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1936,11 +1936,11 @@ errores:
     End If
 End Function
 Public Function getNCsAuditoriaAbiertas( _
-                                             Optional p_db As dao.Database, _
+                                             Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
@@ -1948,8 +1948,8 @@ Public Function getNCsAuditoriaAbiertas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT distinct TbNoConformidadesAuditoria.* " & _
             "FROM TbNoConformidadesAuditoria INNER JOIN (TbNCAuditoriaAccionCorrectivas " & _
@@ -1958,7 +1958,7 @@ Public Function getNCsAuditoriaAbiertas( _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
             "WHERE (((TbNoConformidadesAuditoria.Borrado)=False) " & _
             "AND ((TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null)) ORDER BY Tipo,Numero;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1999,11 +1999,11 @@ errores:
     End If
 End Function
 Public Function getNCsProyectosTotales( _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -2011,14 +2011,14 @@ Public Function getNCsProyectosTotales( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
 
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
             "ORDER BY FECHAAPERTURA DESC;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2058,11 +2058,11 @@ errores:
 End Function
 
 Public Function getNCsProyectosTotalesParaAbiertas( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -2070,14 +2070,14 @@ Public Function getNCsProyectosTotalesParaAbiertas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
 
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidades " & _
             "ORDER BY FECHAAPERTURA DESC;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2117,11 +2117,11 @@ errores:
 End Function
 Public Function getACsProyectoSinFinalizar( _
                                                 p_IDNC As String, _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARProyecto As ARProyecto
@@ -2129,15 +2129,15 @@ Public Function getACsProyectoSinFinalizar( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNCAccionesRealizadas.* " & _
             "FROM TbNCAccionCorrectivas INNER JOIN TbNCAccionesRealizadas " & _
             "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & ") " & _
             "AND ((TbNCAccionesRealizadas.FechaFinReal) Is Null));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2179,10 +2179,10 @@ End Function
 
 Public Function getExpedienteJuridicas( _
                                         p_IDExp As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Juridica As Juridica
@@ -2193,14 +2193,14 @@ Public Function getExpedienteJuridicas( _
     If p_IDExp = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbJuridicas.* " & _
             "FROM TbExpedientesJuridicas INNER JOIN TbJuridicas " & _
             "ON TbExpedientesJuridicas.IDJuridica = TbJuridicas.IDJuridica " & _
             "WHERE TbExpedientesJuridicas.IDExpediente=" & p_IDExp & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2238,10 +2238,10 @@ errores:
 End Function
 Public Function getExpediente( _
                                 p_IDExpediente As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Expediente
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     
@@ -2252,14 +2252,14 @@ Public Function getExpediente( _
     If p_IDExpediente = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "S"
     m_SQL = "SELECT * " & _
             "FROM TbExpedientes " & _
             "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2286,10 +2286,10 @@ errores:
 End Function
 Public Function getExpedientePorCodigo( _
                                         p_Cod As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Expediente
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     
@@ -2300,14 +2300,14 @@ Public Function getExpedientePorCodigo( _
     If p_Cod = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
             "FROM TbExpedientes " & _
             "WHERE CodExp='" & p_Cod & "' OR CodigoActividad='" & p_Cod & "';"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2336,10 +2336,10 @@ End Function
 
 Public Function getExpedienteResponsables( _
                                             p_IDExp As String, _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ExpedienteResponsable As ExpedienteResponsable
@@ -2350,14 +2350,14 @@ Public Function getExpedienteResponsables( _
     If p_IDExp = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
             "FROM TbExpedientesResponsables " & _
             "WHERE IDExpediente=" & p_IDExp & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2397,11 +2397,11 @@ End Function
 Public Function getExpedientesBusqueda( _
                                         Optional p_PC As String, _
                                         Optional p_IDRC As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Expediente As Expediente
@@ -2415,10 +2415,10 @@ Public Function getExpedientesBusqueda( _
         m_SQL = "SELECT * " & _
                 "FROM TbExpedientes;"
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbExpedientes()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -2719,11 +2719,11 @@ End Function
 Public Function getRiesgo( _
                             p_IDProyecto As String, _
                             p_CodigoRiesgo As String, _
-                            Optional p_db As dao.Database, _
+                            Optional p_Db As DAO.Database, _
                             Optional ByRef p_Error As String _
                             ) As riesgo
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -2732,8 +2732,8 @@ Public Function getRiesgo( _
     If p_IDProyecto = "" And p_CodigoRiesgo = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbRiesgos()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbRiesgos.* " & _
             "FROM TbRiesgos " & _
@@ -2744,7 +2744,7 @@ Public Function getRiesgo( _
     
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2771,11 +2771,11 @@ errores:
 End Function
 Public Function getRiesgosDeExpediente( _
                                         p_IDExpediente As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Riesgo As riesgo
@@ -2786,15 +2786,15 @@ Public Function getRiesgosDeExpediente( _
     If p_IDExpediente = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbRiesgos()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbRiesgos.* " & _
             "FROM TbRiesgos " & _
             "WHERE (((TbRiesgos.IDEdicion) In (SELECT Max(TbProyectosEdiciones.IDEdicion) AS MáxDeIDEdicion " & _
             "FROM TbProyectos INNER JOIN TbProyectosEdiciones ON TbProyectos.IDProyecto = TbProyectosEdiciones.IDProyecto " & _
             "WHERE (((TbProyectos.IDExpediente)=" & p_IDExpediente & "));)));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2834,11 +2834,11 @@ errores:
 End Function
 Public Function getUltimoProyecto( _
                                     p_IDExpediente As String, _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     
         
@@ -2847,8 +2847,8 @@ Public Function getUltimoProyecto( _
     If p_IDExpediente = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdbRiesgos()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT IDProyecto " & _
             "FROM TbProyectos " & _
@@ -2857,7 +2857,7 @@ Public Function getUltimoProyecto( _
     
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             getUltimoProyecto = Nz(.Fields("IDProyecto"), "")
@@ -2877,11 +2877,11 @@ End Function
 
 Public Function getReplanificacionProyecto( _
                                             Optional p_IDRep As String, _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As ReplanificacionesProyecto
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -2890,14 +2890,14 @@ Public Function getReplanificacionProyecto( _
     If p_IDRep = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbReplanificacionesProyecto " & _
             "WHERE IDReplanificacion=" & p_IDRep & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2924,11 +2924,11 @@ errores:
 End Function
 Public Function getReplanificacionAuditoria( _
                                             Optional p_IDRep As String, _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As ReplanificacionesAuditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -2937,14 +2937,14 @@ Public Function getReplanificacionAuditoria( _
     If p_IDRep = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbReplanificacionesAuditoria " & _
             "WHERE IDReplanificacion=" & p_IDRep & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -2972,11 +2972,11 @@ End Function
 
 Public Function getReplanificacionesDeNCProyecto( _
                                                     p_IDNC As String, _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Rep As ReplanificacionesProyecto
@@ -2985,15 +2985,15 @@ Public Function getReplanificacionesDeNCProyecto( _
     If p_IDNC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
             "FROM TbReplanificacionesProyecto " & _
             "WHERE IDNoConformidad=" & p_IDNC & ";"
     
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3033,11 +3033,11 @@ errores:
 End Function
 Public Function getReplanificacionesDeNCAuditoria( _
                                                     p_IDNC As String, _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Rep As ReplanificacionesAuditoria
@@ -3046,15 +3046,15 @@ Public Function getReplanificacionesDeNCAuditoria( _
     If p_IDNC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = "SELECT * " & _
             "FROM TbReplanificacionesAuditoria " & _
             "WHERE IDNoConformidad=" & p_IDNC & ";"
     
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3093,22 +3093,22 @@ errores:
     End If
 End Function
 Public Function getJuridicasDistintas( _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Juridica As String
     
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT distinct Juridica " & _
             "FROM TbNoConformidades " & _
             "WHERE Not Juridica Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3143,11 +3143,11 @@ End Function
 
 Public Function getNCsProyectoPorPalabraClave( _
                                                 p_PC As String, _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCProyecto
@@ -3155,8 +3155,8 @@ Public Function getNCsProyectoPorPalabraClave( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.* " & _
             "FROM (TbNoConformidades LEFT JOIN TbNCAccionCorrectivas " & _
@@ -3167,7 +3167,7 @@ Public Function getNCsProyectoPorPalabraClave( _
             "OR (((TbNoConformidades.CausaYAnalisRaiz) Like '*" & p_PC & "*')) " & _
             "OR (((TbNCAccionCorrectivas.AccionCorrectiva) Like '*" & p_PC & "*')) " & _
             "OR (((TbNCAccionesRealizadas.AccionRealizada) Like '*" & p_PC & "*'));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3207,11 +3207,11 @@ errores:
 End Function
 
 Public Function getARsProyectoSeguimiento( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARProyecto As ARProyecto
@@ -3219,8 +3219,8 @@ Public Function getARsProyectoSeguimiento( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNCAccionesRealizadas.* " & _
             "FROM TbNoConformidades INNER JOIN (TbNCAccionCorrectivas INNER JOIN TbNCAccionesRealizadas " & _
@@ -3228,7 +3228,7 @@ Public Function getARsProyectoSeguimiento( _
             "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad  " & _
             "WHERE (TbNCAccionesRealizadas.ESTADO='PTEREPLANIFICAR' OR TbNCAccionesRealizadas.ESTADO='IRREGULAR') " & _
             "AND  TbNoConformidades.IDNCAsociada Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3268,11 +3268,11 @@ errores:
 End Function
 
 Public Function getSegsTareasProyecto( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasProyecto
@@ -3280,13 +3280,13 @@ Public Function getSegsTareasProyecto( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasProyectos & _
             ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3326,11 +3326,11 @@ errores:
 End Function
 
 Public Function getSegsTareasProyectoActivas( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasProyecto
@@ -3338,15 +3338,15 @@ Public Function getSegsTareasProyectoActivas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasProyectos & _
             "WHERE Not FechaInicio Is Null " & _
             "AND Not FechaFinPrevista Is Null " & _
             "AND FechaFinReal Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3391,11 +3391,11 @@ errores:
     End If
 End Function
 Public Function getSegsTareasProyectoPteReplanificar( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasProyecto
@@ -3403,15 +3403,15 @@ Public Function getSegsTareasProyectoPteReplanificar( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasProyectos & _
             "WHERE Not FechaInicio Is Null " & _
             "AND FechaFinPrevista<=Date() " & _
             "AND FechaFinReal Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3459,11 +3459,11 @@ End Function
 
 
 Public Function getSegsTareasAuditoriaActivas( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasAuditoria
@@ -3471,15 +3471,15 @@ Public Function getSegsTareasAuditoriaActivas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasAuditorias & _
             "WHERE Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null " & _
             "AND Not FechaFinPrevista Is Null " & _
             "AND FechaFinReal Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3518,11 +3518,11 @@ errores:
     End If
 End Function
 Public Function getSegsTareasAuditoriaTotales( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasAuditoria
@@ -3530,13 +3530,13 @@ Public Function getSegsTareasAuditoriaTotales( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasAuditorias & _
             ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3575,11 +3575,11 @@ errores:
     End If
 End Function
 Public Function getSegsTareasAuditoriaPteReplanificar( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_CampoTabla As String
@@ -3588,15 +3588,15 @@ Public Function getSegsTareasAuditoriaPteReplanificar( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasAuditorias & _
             "WHERE Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null " & _
             "AND FechaFinPrevista<=Date() " & _
             "AND FechaFinReal Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3638,11 +3638,11 @@ errores:
 End Function
 
 Public Function getSegsTareasAuditoriaIrregulares( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegTareas As SegTareasAuditoria
@@ -3650,8 +3650,8 @@ Public Function getSegsTareasAuditoriaIrregulares( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     
     m_SQL = m_SQLAlInicioSegTareasAuditorias & _
@@ -3659,7 +3659,7 @@ Public Function getSegsTareasAuditoriaIrregulares( _
             "TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null AND (Not FechaFinPrevista Is Null or Not FechaFinReal Is Null) AND TbNoConformidadesAuditoria.Borrado=False;"
 
             
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
              .MoveFirst
@@ -3692,7 +3692,7 @@ Public Function getSegsTareasAuditoriaIrregulares( _
             "FechaFinPrevista Is Null AND (Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null or Not FechaFinReal Is Null)AND TbNoConformidadesAuditoria.Borrado=False;"
 
             
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
              .MoveFirst
@@ -3729,11 +3729,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCProyectoRegistradas( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -3741,21 +3741,20 @@ Public Function getSegsNCProyectoRegistradas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-                "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+                "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
                 "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
                 "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
                 "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-                "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
-                "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+                "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
                 "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
                 "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
                 "WHERE TbNCAccionCorrectivas.IDAccionCorrectiva Is Null AND TbNoConformidades.Borrado=False;"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3794,11 +3793,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCProyectoTotales( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -3806,21 +3805,20 @@ Public Function getSegsNCProyectoTotales( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
             "WHERE (((TbNoConformidades.Borrado)=False));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3859,11 +3857,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCProyectoAccionesSinTareas( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -3871,23 +3869,22 @@ Public Function getSegsNCProyectoAccionesSinTareas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT distinct TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "LEFT JOIN TbNCAccionesRealizadas " & _
             "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNCAccionesRealizadas.IDAccionRealizada) Is Null) AND TbNoConformidades.FECHACIERRE Is Null);"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3927,11 +3924,11 @@ errores:
 End Function
 
 Public Function getSegsNCProyectoCENoConforme( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -3939,22 +3936,22 @@ Public Function getSegsNCProyectoCENoConforme( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) " & _
-            "LEFT JOIN TbUsuariosAplicaciones ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNoConformidades.ConformeControlEficacia)='No') " & _
             "AND (NOt(TbNCAccionesRealizadas.FechaFinReal) Is Null));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -3993,11 +3990,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCProyectoCECaducada( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -4005,16 +4002,15 @@ Public Function getSegsNCProyectoCECaducada( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas " & _
@@ -4023,7 +4019,7 @@ Public Function getSegsNCProyectoCECaducada( _
             "AND ((TbNoConformidades.FechaControlEficacia) Is Null) " & _
             "AND ((TbNoConformidades.FechaPrevistaControlEficacia)<=Date()));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4063,11 +4059,11 @@ errores:
 End Function
 
 Public Function getSegsNCProyectoPteCE( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCProyecto
@@ -4075,16 +4071,15 @@ Public Function getSegsNCProyectoPteCE( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas " & _
@@ -4093,7 +4088,7 @@ Public Function getSegsNCProyectoPteCE( _
             "AND ((TbNoConformidades.FechaControlEficacia) Is Null) " & _
             " AND (Not (TbNoConformidades.FechaPrevistaControlEficacia) Is Null));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4132,11 +4127,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaRegistradas( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4144,8 +4139,8 @@ Public Function getSegsNCAuditoriaRegistradas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero,TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
@@ -4158,7 +4153,7 @@ Public Function getSegsNCAuditoriaRegistradas( _
             "WHERE (((TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva) Is Null) " & _
             "AND ((TbNoConformidadesAuditoria.RequiereAccionCorrectiva)='Sí')AND TbNoConformidadesAuditoria.Borrado=False);"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4197,11 +4192,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaTotales( _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4209,8 +4204,8 @@ Public Function getSegsNCAuditoriaTotales( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID, TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
@@ -4222,7 +4217,7 @@ Public Function getSegsNCAuditoriaTotales( _
             "LEFT JOIN TbNCAuditoriaAccionCorrectivas ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
             "WHERE (((TbNoConformidadesAuditoria.Borrado)=False));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4261,11 +4256,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaAccionesSinTareas( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4273,15 +4268,15 @@ Public Function getSegsNCAuditoriaAccionesSinTareas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4289,7 +4284,7 @@ Public Function getSegsNCAuditoriaAccionesSinTareas( _
             "WHERE (((TbNoConformidadesAuditoria.RequiereAccionCorrectiva)='Sí') " & _
             "AND ((TbNCAuditoriaAccionesRealizadas.IDAccionRealizada) Is Null));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4328,11 +4323,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaPteCE( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4340,15 +4335,15 @@ Public Function getSegsNCAuditoriaPteCE( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4357,7 +4352,7 @@ Public Function getSegsNCAuditoriaPteCE( _
             "AND (Not(TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null) " & _
             "AND ((TbNoConformidadesAuditoria.ResultadoControlEficacia) Is Null));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4396,11 +4391,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaCECaducada( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4408,15 +4403,15 @@ Public Function getSegsNCAuditoriaCECaducada( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4426,7 +4421,7 @@ Public Function getSegsNCAuditoriaCECaducada( _
             "AND ((TbNoConformidadesAuditoria.FechaControlEficacia) Is Null) " & _
             "AND ((TbNoConformidadesAuditoria.FechaPrevistaControlEficacia)<=Date()));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4465,11 +4460,11 @@ errores:
     End If
 End Function
 Public Function getSegsNCAuditoriaCENoConforme( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_SegNC As SegNCAuditoria
@@ -4477,15 +4472,15 @@ Public Function getSegsNCAuditoriaCENoConforme( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
             "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4495,7 +4490,7 @@ Public Function getSegsNCAuditoriaCENoConforme( _
             "AND (Not (TbNoConformidadesAuditoria.FechaControlEficacia) Is Null) " & _
             "AND ((TbNoConformidadesAuditoria.ConformeControlEficacia)='No'));"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4534,11 +4529,11 @@ errores:
     End If
 End Function
 Public Function getARsAuditoriaSeguimiento( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARAuditoria As ARAuditoria
@@ -4546,13 +4541,13 @@ Public Function getARsAuditoriaSeguimiento( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNCAuditoriaAccionesRealizadas  " & _
             "WHERE ESTADO='PTEREPLANIFICAR' OR ESTADO='IRREGULAR' ;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4591,11 +4586,11 @@ errores:
     End If
 End Function
 Public Function getARsAuditoriaSeguimientoActivas( _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARAuditoria As ARAuditoria
@@ -4603,13 +4598,13 @@ Public Function getARsAuditoriaSeguimientoActivas( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNCAuditoriaAccionesRealizadas  " & _
             "WHERE Not ESTADO Like 'FINALIZADA' ;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4649,11 +4644,11 @@ errores:
 End Function
 
 Public Function getARsAuditorias( _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_AR As ARAuditoria
@@ -4661,11 +4656,11 @@ Public Function getARsAuditorias( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "TbNCAuditoriaAccionesRealizadas"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4704,28 +4699,28 @@ errores:
     End If
 End Function
 Public Function getJefesProyecto( _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
     'aquellos usuarios que están como Jefes de proyecto en todos los expedientes con Pecal,además hay que meter a los de calidad
     
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_JP As usuario
     
     
     On Error GoTo errores
-   If p_db Is Nothing Then
-        Set p_db = getdb()
+   If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT DISTINCT TbUsuariosAplicaciones.* " & _
             "FROM (TbExpedientesResponsables INNER JOIN TbExpedientes " & _
             "ON TbExpedientesResponsables.IdExpediente = TbExpedientes.IDExpediente) " & _
             "INNER JOIN TbUsuariosAplicaciones ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
             "ORDER BY TbUsuariosAplicaciones.Nombre;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -4758,7 +4753,7 @@ Public Function getJefesProyecto( _
             "FROM TbNoConformidades INNER JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed " & _
             "ORDER BY TbUsuariosAplicaciones.Nombre; "
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -4796,11 +4791,11 @@ End Function
 
 Public Function getAuditoria( _
                                 Optional p_ID As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Auditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -4809,14 +4804,14 @@ Public Function getAuditoria( _
     If p_ID = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbAuditorias " & _
             "WHERE IDAuditoria=" & p_ID & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4843,24 +4838,24 @@ errores:
 End Function
 
 Public Function getAuditorias( _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Auditoria As Auditoria
     
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT * " & _
             "FROM TbAuditorias ORDER BY IDAuditoria DESC;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4901,11 +4896,11 @@ Public Function getDocumentosAuditoria( _
                                         Optional p_IDAuditoria As String, _
                                         Optional p_IDNC As String, _
                                         Optional p_IDAR As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Documento As DocumentoAuditoria
@@ -4914,8 +4909,8 @@ Public Function getDocumentosAuditoria( _
     If p_IDAuditoria = "" And p_IDNC = "" And p_IDAR = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDAuditoria <> "" Then
         m_SQL = "SELECT * FROM " & _
@@ -4932,7 +4927,7 @@ Public Function getDocumentosAuditoria( _
     End If
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4972,11 +4967,11 @@ errores:
 End Function
 Public Function getDocumentosCompletosAuditoria( _
                                                     Optional p_IDNC As String, _
-                                                    Optional p_db As dao.Database, _
+                                                    Optional p_Db As DAO.Database, _
                                                     Optional ByRef p_Error As String _
                                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_Documento As DocumentoAuditoria
@@ -4985,15 +4980,15 @@ Public Function getDocumentosCompletosAuditoria( _
     If p_IDNC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT * FROM " & _
             "TbDocumentosAuditorias " & _
             "WHERE IDNoConformidad=" & p_IDNC & ";"
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -5027,7 +5022,7 @@ Public Function getDocumentosCompletosAuditoria( _
             "WHERE (((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & "));"
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
@@ -5062,11 +5057,11 @@ errores:
 End Function
 Public Function getACAuditoria( _
                                 Optional p_IDAC As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As ACAuditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -5075,14 +5070,14 @@ Public Function getACAuditoria( _
     If p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbNCAuditoriaAccionCorrectivas " & _
             "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5111,11 +5106,11 @@ End Function
 Public Function getACsAuditoria( _
                                 Optional p_IDNC As String, _
                                 Optional p_EnumOrden As EnumOrden, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ACAuditoria As ACAuditoria
@@ -5129,8 +5124,8 @@ Public Function getACsAuditoria( _
     If p_EnumOrden = Empty Then
         p_EnumOrden = EnumOrden.PorNAccion
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If Not m_ObjEntorno.ColEnumOrdenOrderBy.Exists(CStr(p_EnumOrden)) Then
         p_Error = "No se puede saber el orden que se desea"
@@ -5148,7 +5143,7 @@ Public Function getACsAuditoria( _
             "WHERE ID=" & p_IDNC & " " & _
             m_OrderBy & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5188,11 +5183,11 @@ errores:
 End Function
 Public Function getACsAuditoriasSinFinalizar( _
                                                 p_IDNC As String, _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARAuditoria As ARAuditoria
@@ -5200,15 +5195,15 @@ Public Function getACsAuditoriasSinFinalizar( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNCAuditoriaAccionesRealizadas.* " & _
             "FROM TbNCAuditoriaAccionCorrectivas INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
             "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & ") " & _
             "AND ((TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5247,11 +5242,11 @@ errores:
     End If
 End Function
 Public Function getACsDeAuditorias( _
-                                    Optional p_db As dao.Database, _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_AC As ACAuditoria
@@ -5259,11 +5254,11 @@ Public Function getACsDeAuditorias( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "TbNCAuditoriaAccionCorrectivas"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5303,11 +5298,11 @@ errores:
 End Function
 Public Function getACsAuditoriasSinAR( _
                                         p_IDNC As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_AC As ACAuditoria
@@ -5315,15 +5310,15 @@ Public Function getACsAuditoriasSinAR( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT DISTINCT TbNCAuditoriaAccionCorrectivas.* " & _
             "FROM TbNCAuditoriaAccionCorrectivas LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
             "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva) Is Null) " & _
             "AND ((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & "));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5363,11 +5358,11 @@ errores:
 End Function
 Public Function getACsProyectosSinAR( _
                                         p_IDNC As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_AC As ACProyecto
@@ -5375,15 +5370,15 @@ Public Function getACsProyectosSinAR( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT DISTINCT TbNCAccionCorrectivas.* " & _
             "FROM TbNCAccionCorrectivas LEFT JOIN TbNCAccionesRealizadas " & _
             "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNCAccionesRealizadas.IDAccionCorrectiva) Is Null) " & _
             "AND ((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & "));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5423,24 +5418,24 @@ errores:
 End Function
 Public Function getCodRiesgosAsociados( _
                                         p_IDNC As String, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As String
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_CodRiesgo As String
     Dim m_Resultado As String
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbRiesgos.CodigoRiesgo " & _
             "FROM TbRiesgos INNER JOIN TbRiesgosNC ON TbRiesgos.IDRiesgo = TbRiesgosNC.IDRiesgo " & _
             "WHERE (((TbRiesgosNC.IDNC)=" & p_IDNC & "));"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5479,11 +5474,11 @@ End Function
 Public Function getNCAuditoria( _
                                 Optional p_IDNC As String, _
                                 Optional p_IDAC As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As NCAuditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -5492,8 +5487,8 @@ Public Function getNCAuditoria( _
     If p_IDNC = "" And p_IDAC = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     If p_IDNC <> "" Then
          m_SQL = "SELECT * FROM " & _
@@ -5506,7 +5501,7 @@ Public Function getNCAuditoria( _
                 "WHERE (((TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva)=" & p_IDAC & "));"
     End If
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5535,11 +5530,11 @@ End Function
 Public Function getARsDeACAuditoria( _
                                         p_IDAC As String, _
                                         Optional p_EnumOrden As EnumOrden, _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_ARAuditoria As ARAuditoria
@@ -5564,8 +5559,8 @@ Public Function getARsDeACAuditoria( _
     End If
     dato = Split(m_Resultado, "|")
     m_OrderBy = dato(1)
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT * FROM " & _
              "TbNCAuditoriaAccionesRealizadas " & _
@@ -5574,7 +5569,7 @@ Public Function getARsDeACAuditoria( _
 
     
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5615,11 +5610,11 @@ End Function
 
 Public Function getARAuditoria( _
                                     Optional p_IDAR As String, _
-                                     Optional p_db As dao.Database, _
+                                     Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As ARAuditoria
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
         
@@ -5628,14 +5623,14 @@ Public Function getARAuditoria( _
     If p_IDAR = "" Then
         Exit Function
     End If
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * FROM " & _
             "TbNCAuditoriaAccionesRealizadas " & _
             "WHERE IDAccionRealizada=" & p_IDAR & ";"
    
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5707,24 +5702,24 @@ End Function
 
 Public Function getNCsAuditoria( _
                                 p_ID As String, _
-                                Optional p_db As dao.Database, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
   
     On Error GoTo errores
     
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "SELECT *  " & _
             "FROM TbNoConformidadesAuditoria " & _
             "WHERE IDAuditoria=" & p_ID & ";"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5760,11 +5755,11 @@ errores:
     End If
 End Function
 Public Function getNCsAuditoriasTotales( _
-                                        Optional p_db As dao.Database, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
@@ -5772,13 +5767,13 @@ Public Function getNCsAuditoriasTotales( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM TbNoConformidadesAuditoria " & _
             "ORDER BY Tipo,Numero;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5822,11 +5817,11 @@ End Function
 
 Public Function getNCsAuditoriaPorPalabraClave( _
                                                 p_PC As String, _
-                                                Optional p_db As dao.Database, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NC As NCAuditoria
@@ -5834,8 +5829,8 @@ Public Function getNCsAuditoriaPorPalabraClave( _
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidadesAuditoria.* " & _
             "FROM (TbNoConformidadesAuditoria LEFT JOIN TbNCAuditoriaAccionCorrectivas " & _
@@ -5847,7 +5842,7 @@ Public Function getNCsAuditoriaPorPalabraClave( _
             "OR (((TbNCAuditoriaAccionCorrectivas.AccionCorrectiva) Like '*" & p_PC & "*')) " & _
             "OR (((TbNCAuditoriaAccionesRealizadas.AccionRealizada) Like '*" & p_PC & "*')) " & _
             "ORDER BY TbNoConformidadesAuditoria.Tipo,TbNoConformidadesAuditoria.Numero;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5888,24 +5883,24 @@ End Function
 
 
 Public Function getResponsablesImplantacionDistintos( _
-                                                        Optional p_db As dao.Database, _
+                                                        Optional p_Db As DAO.Database, _
                                                         Optional ByRef p_Error As String _
                                                         ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_RESPONSABLEIMPLANTACION As String
    
    
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT distinct RESPONSABLEIMPLANTACION " & _
             "FROM TbNoConformidadesAuditoria " & _
             "WHERE Not RESPONSABLEIMPLANTACION Is Null;"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5941,22 +5936,22 @@ End Function
 
 
 Public Function getColPuntosNormaAuditoria( _
-                                            Optional p_db As dao.Database, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
 
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Punto As String
     
     
     On Error GoTo errores
-    If p_db Is Nothing Then
-        Set p_db = getdb()
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
      m_SQL = "TbAuxPuntoNorma"
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5992,7 +5987,7 @@ Public Function getNCAuditorias( _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
 
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NCAuditoria As NCAuditoria

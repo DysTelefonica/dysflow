@@ -1,4 +1,4 @@
-VERSION 1.0 CLASS
+﻿VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
@@ -16,7 +16,7 @@ Public Function GenerarWordNoConformidades( _
                                             p_EsDeProyecto As EnumSino, _
                                             Optional p_col As Scripting.Dictionary, _
                                             Optional p_NC As Object, _
-                                            Optional p_Error As String _
+                                            Optional ByRef p_Error As String _
                                             ) As String
     
     Dim m_ID As Variant
@@ -124,7 +124,7 @@ errores:
 End Function
 Public Function PrepararPlantilla( _
                                     p_EsDeProyecto As EnumSino, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As String
     
     Dim m_URLServidor As String
@@ -169,7 +169,7 @@ errores:
     
     
 End Function
-Private Function CrearEncabezado(wordDoc As Object, p_Nombre As String, Optional p_Error As String) As String
+Private Function CrearEncabezado(wordDoc As Object, p_Nombre As String, Optional ByRef p_Error As String) As String
    
     
     
@@ -265,7 +265,7 @@ Private Function InsertarTablaTareas( _
                                     wordDoc As Object, _
                                     m_AC As Object, _
                                     rng As Object, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As Object
     Dim m_AR As Object
     Dim m_Col As Scripting.Dictionary
@@ -357,7 +357,7 @@ Private Function InsertarAccionesCorrectivas( _
                                                 wordDoc As Object, _
                                                 p_NC As Object, _
                                                 rng As Object, _
-                                                Optional p_Error As String _
+                                                Optional ByRef p_Error As String _
                                                 ) As String
     Dim m_Col As Scripting.Dictionary
     Dim m_ID As Variant
@@ -463,7 +463,7 @@ Private Function getTb1DatosPrincipalesNCProyecto( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     On Error GoTo errores
@@ -547,15 +547,11 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     On Error GoTo errores
-   If p_NC.RequiereControlEficacia = "Sí" Then
-        Set tblDatos = wordDoc.Tables.Add(rng, 4, 2)
-    Else
-        Set tblDatos = wordDoc.Tables.Add(rng, 5, 2)
-    End If
+   Set tblDatos = wordDoc.Tables.Add(rng, 5, 2)
     
     With tblDatos
         .Borders.Enable = True
@@ -621,7 +617,7 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
             .Font.Color = RGB(0, 0, 0)
             .ParagraphFormat.Alignment = 0
         End With
-        .AutoFitBehavior 2
+        ' HOTFIX-20260517: restaurar motivo de control de eficacia no requerida en informes.
         If p_NC.RequiereControlEficacia = "No" Then
             With .Cell(5, 1).Range
                 .Text = "Motivo C.Eficacia No Requerida"
@@ -638,6 +634,7 @@ Private Function getTb2DatosPrincipalesNCProyecto( _
                 .ParagraphFormat.Alignment = 0
             End With
         End If
+        .AutoFitBehavior 2
     End With
     Set getTb2DatosPrincipalesNCProyecto = tblDatos
     Exit Function
@@ -651,7 +648,7 @@ Private Function getTb1DatosPrincipalesNCAudoria( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     
@@ -702,7 +699,7 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
                                                     wordDoc As Object, _
                                                     p_NC As Object, _
                                                     rng As Object, _
-                                                    Optional p_Error As String _
+                                                    Optional ByRef p_Error As String _
                                                     ) As Object
     Dim tblDatos As Object
     
@@ -713,7 +710,6 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
     If p_NC.RequiereAccionCorrectiva = "No" Then numFilas = numFilas + 1
     If p_NC.RequiereControlEficacia = "No" Then numFilas = numFilas + 1
     Set tblDatos = wordDoc.Tables.Add(rng, numFilas, 2)
-    
     Dim fila As Integer
     fila = 1
     With tblDatos
@@ -724,94 +720,115 @@ Private Function getTb2DatosPrincipalesNCAudoria( _
         .Columns(2).PreferredWidthType = 2
         .Columns(1).PreferredWidth = 15
         .Columns(2).PreferredWidth = 85
-        
-        .Cell(fila, 1).Range.Text = "Descripción"
-        .Cell(fila, 1).Range.Font.Bold = True
-        .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-        .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-        .Cell(fila, 2).Range.Text = p_NC.Descripcion
-        .Cell(fila, 2).Range.Font.Bold = False
-        .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-        .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+        With .Cell(fila, 1).Range
+            .Text = "Descripción"
+            .Font.Bold = True
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 102, 255)
+            .ParagraphFormat.Alignment = 0
+        End With
+        With .Cell(fila, 2).Range
+            .Text = p_NC.Descripcion
+            .Font.Bold = False
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 0, 0)
+            .ParagraphFormat.Alignment = 0
+        End With
         fila = fila + 1
-        
-        .Cell(fila, 1).Range.Text = "Causa"
-        .Cell(fila, 1).Range.Font.Bold = True
-        .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-        .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-        .Cell(fila, 2).Range.Text = p_NC.CAUSARAIZ
-        .Cell(fila, 2).Range.Font.Bold = False
-        .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-        .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+        With .Cell(fila, 1).Range
+            .Text = "Causa"
+            .Font.Bold = True
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 102, 255)
+            .ParagraphFormat.Alignment = 0
+        End With
+        With .Cell(fila, 2).Range
+            .Text = p_NC.CAUSARAIZ
+            .Font.Bold = False
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 0, 0)
+            .ParagraphFormat.Alignment = 0
+        End With
         fila = fila + 1
-        
-        .Cell(fila, 1).Range.Text = "Resp. Implant."
-        .Cell(fila, 1).Range.Font.Bold = True
-        .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-        .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-        .Cell(fila, 2).Range.Text = p_NC.RESPONSABLEIMPLANTACION
-        .Cell(fila, 2).Range.Font.Bold = False
-        .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-        .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+        With .Cell(fila, 1).Range
+            .Text = "Resp. Implant."
+            .Font.Bold = True
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 102, 255)
+            .ParagraphFormat.Alignment = 0
+        End With
+        With .Cell(fila, 2).Range
+            .Text = p_NC.RESPONSABLEIMPLANTACION
+            .Font.Bold = False
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 0, 0)
+            .ParagraphFormat.Alignment = 0
+        End With
         fila = fila + 1
-        
-        .Cell(fila, 1).Range.Text = "Notas"
-        .Cell(fila, 1).Range.Font.Bold = True
-        .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-        .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-        .Cell(fila, 2).Range.Text = p_NC.Notas
-        .Cell(fila, 2).Range.Font.Bold = False
-        .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-        .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+        With .Cell(fila, 1).Range
+            .Text = "Notas"
+            .Font.Bold = True
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 102, 255)
+            .ParagraphFormat.Alignment = 0
+        End With
+        With .Cell(fila, 2).Range
+            .Text = p_NC.Notas
+            .Font.Bold = False
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 0, 0)
+            .ParagraphFormat.Alignment = 0
+        End With
         fila = fila + 1
-        
-        .Cell(fila, 1).Range.Text = "C.Eficacia"
-        .Cell(fila, 1).Range.Font.Bold = True
-        .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-        .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-        .Cell(fila, 2).Range.Text = p_NC.ControlEficacia
-        .Cell(fila, 2).Range.Font.Bold = False
-        .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-        .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-        .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+        With .Cell(fila, 1).Range
+            .Text = "C.Eficacia"
+            .Font.Bold = True
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 102, 255)
+            .ParagraphFormat.Alignment = 0
+        End With
+        With .Cell(fila, 2).Range
+            .Text = p_NC.ControlEficacia
+            .Font.Bold = False
+            .Font.Name = "Segoe UI"
+            .Font.Color = RGB(0, 0, 0)
+            .ParagraphFormat.Alignment = 0
+        End With
         fila = fila + 1
-        
         If p_NC.RequiereAccionCorrectiva = "No" Then
-            .Cell(fila, 1).Range.Text = "Motivo No AC"
-            .Cell(fila, 1).Range.Font.Bold = True
-            .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-            .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-            .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-            .Cell(fila, 2).Range.Text = p_NC.MotivoNoAccionCorrectiva
-            .Cell(fila, 2).Range.Font.Bold = False
-            .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-            .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-            .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+            With .Cell(fila, 1).Range
+                .Text = "Motivo No AC"
+                .Font.Bold = True
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 102, 255)
+                .ParagraphFormat.Alignment = 0
+            End With
+            With .Cell(fila, 2).Range
+                .Text = p_NC.MotivoNoAccionCorrectiva
+                .Font.Bold = False
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 0, 0)
+                .ParagraphFormat.Alignment = 0
+            End With
             fila = fila + 1
         End If
-        
+        ' HOTFIX-20260517: restaurar motivo de control de eficacia no requerida en informes.
         If p_NC.RequiereControlEficacia = "No" Then
-            .Cell(fila, 1).Range.Text = "Motivo C.Eficacia No Requerida"
-            .Cell(fila, 1).Range.Font.Bold = True
-            .Cell(fila, 1).Range.Font.Name = "Segoe UI"
-            .Cell(fila, 1).Range.Font.Color = RGB(0, 102, 255)
-            .Cell(fila, 1).Range.ParagraphFormat.Alignment = 0
-            .Cell(fila, 2).Range.Text = p_NC.MotivoNoRequiereControlEficacia
-            .Cell(fila, 2).Range.Font.Bold = False
-            .Cell(fila, 2).Range.Font.Name = "Segoe UI"
-            .Cell(fila, 2).Range.Font.Color = RGB(0, 0, 0)
-            .Cell(fila, 2).Range.ParagraphFormat.Alignment = 0
+            With .Cell(fila, 1).Range
+                .Text = "Motivo C.Eficacia No Requerida"
+                .Font.Bold = True
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 102, 255)
+                .ParagraphFormat.Alignment = 0
+            End With
+            With .Cell(fila, 2).Range
+                .Text = p_NC.MotivoNoRequiereControlEficacia
+                .Font.Bold = False
+                .Font.Name = "Segoe UI"
+                .Font.Color = RGB(0, 0, 0)
+                .ParagraphFormat.Alignment = 0
+            End With
         End If
-        
         .AutoFitBehavior 2
     End With
     
@@ -827,7 +844,7 @@ Private Function InsertarNoConformidad( _
                                         p_EsDeProyecto As EnumSino, _
                                         wordDoc As Object, _
                                         p_NC As Object, _
-                                        Optional p_Error As String _
+                                        Optional ByRef p_Error As String _
                                         ) As String
     
    
@@ -917,7 +934,7 @@ errores:
         p_Error = "El método Informe.InsertarNoConformidad ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
-Private Function InsertarSeparadorNoConformidad(wordDoc As Object, Optional p_Error As String) As String
+Private Function InsertarSeparadorNoConformidad(wordDoc As Object, Optional ByRef p_Error As String) As String
     Dim rng As Object
     On Error GoTo errores
     ' Posicionar al final del documento
@@ -942,7 +959,7 @@ errores:
         p_Error = "El método Informe.InsertarSeparadorNoConformidad ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
-Private Function CrearPiePaginaSimple(wordDoc As Object, Optional p_Error As String) As String
+Private Function CrearPiePaginaSimple(wordDoc As Object, Optional ByRef p_Error As String) As String
     Dim footerRange As Object
     On Error GoTo errores
     ' Configurar el pie de página para todas las páginas

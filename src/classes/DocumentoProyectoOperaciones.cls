@@ -1,4 +1,4 @@
-VERSION 1.0 CLASS
+﻿VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
@@ -78,11 +78,11 @@ Private Function DocumentoRepetido( _
                                     p_NombreDocumento As String, _
                                     Optional p_IDNoConformidad As String, _
                                     Optional p_IDAccionRealizada As String, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As EnumSino
         
     Dim m_SQL As String
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
    
     
     On Error GoTo errores
@@ -194,7 +194,7 @@ Public Function Registrar( _
                             Optional ByRef p_Error As String _
                             ) As String
     
-    Dim rcdDatos As dao.Recordset
+    Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     Dim m_URLFinal As String

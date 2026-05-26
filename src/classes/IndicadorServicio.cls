@@ -44,7 +44,7 @@ End Sub
 
 ' Función auxiliar privada para ejecutar el COUNT sobre una SQL
 Private Function ContarRegistros(sSQL As String) As Long
-    Dim rcd As dao.Recordset
+    Dim rcd As DAO.Recordset
     Dim sqlCount As String
     Dim sSqlLimpia As String
     
