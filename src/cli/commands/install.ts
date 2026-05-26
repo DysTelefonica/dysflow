@@ -717,7 +717,10 @@ export async function handleInstallCommand(
       }
 
       if (agent === "opencode") {
-        await configureOpencode(agentConfigPaths.opencode, await opencodeCommandForConfig(runtimeDir));
+        await configureOpencode(
+          agentConfigPaths.opencode,
+          await opencodeCommandForConfig(runtimeDir),
+        );
         continue;
       }
 
