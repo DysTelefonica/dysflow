@@ -13,6 +13,99 @@ import { AccessDiagnosticsService } from "../../../src/core/services/diagnostics
 import { AccessQueryService } from "../../../src/core/services/query-service.js";
 import { AccessVbaService } from "../../../src/core/services/vba-service.js";
 
+// ---------------------------------------------------------------------------
+// Shape validation — RED tests (must fail before Phase 3 wires the guards)
+// ---------------------------------------------------------------------------
+
+describe("runner output shape validation", () => {
+  describe("DiagnosticsService", () => {
+    it("rejects runner output that is not a record (returns RUNNER_INVALID_OUTPUT)", async () => {
+      const runner = new FakeRunner(successResult(42 as unknown));
+      const service = new AccessDiagnosticsService({ runner, config });
+
+      const result = await service.run({});
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("RUNNER_INVALID_OUTPUT");
+    });
+
+    it("rejects record with non-array checks field (returns RUNNER_INVALID_OUTPUT)", async () => {
+      const runner = new FakeRunner(successResult({ checks: "nope" } as unknown));
+      const service = new AccessDiagnosticsService({ runner, config });
+
+      const result = await service.run({});
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("RUNNER_INVALID_OUTPUT");
+    });
+
+    it("accepts empty record {} as valid (empty stdout case)", async () => {
+      const runner = new FakeRunner(successResult({} as unknown, { durationMs: 1 }));
+      const service = new AccessDiagnosticsService({ runner, config });
+
+      const result = await service.run({});
+
+      expect(result.ok).toBe(true);
+    });
+
+    it("passes through a runner failure (RUNNER_TIMEOUT) without extra wrapping", async () => {
+      const runner = new FakeRunner(
+        failureResult({ code: "RUNNER_TIMEOUT", message: "timed out", retryable: true }),
+      );
+      const service = new AccessDiagnosticsService({ runner, config });
+
+      const result = await service.run({});
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("RUNNER_TIMEOUT");
+    });
+  });
+
+  describe("QueryService", () => {
+    it("rejects non-object runner output (null) with RUNNER_INVALID_OUTPUT", async () => {
+      const runner = new FakeRunner(successResult(null as unknown));
+      const service = new AccessQueryService({ runner, config });
+
+      const result = await service.execute({ sql: "SELECT 1", mode: "read" });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("RUNNER_INVALID_OUTPUT");
+    });
+
+    it("accepts valid record output", async () => {
+      const runner = new FakeRunner(successResult({ rows: [] } as unknown, { durationMs: 2 }));
+      const service = new AccessQueryService({ runner, config });
+
+      const result = await service.execute({ sql: "SELECT 1", mode: "read" });
+
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe("VbaService", () => {
+    it("rejects non-object runner output (string) with RUNNER_INVALID_OUTPUT", async () => {
+      const runner = new FakeRunner(successResult("string-result" as unknown));
+      const service = new AccessVbaService({ runner, config });
+
+      const result = await service.execute({ moduleName: "M", procedureName: "P" });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("RUNNER_INVALID_OUTPUT");
+    });
+
+    it("accepts valid record output", async () => {
+      const runner = new FakeRunner(
+        successResult({ returnValue: 0 } as unknown, { durationMs: 3 }),
+      );
+      const service = new AccessVbaService({ runner, config });
+
+      const result = await service.execute({ moduleName: "M", procedureName: "P" });
+
+      expect(result.ok).toBe(true);
+    });
+  });
+});
+
 const config = {
   configSource: "explicit-request",
   allowWrites: false,

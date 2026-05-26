@@ -4,7 +4,12 @@ import type {
   OperationResult,
   RelinkDirectoryReport,
 } from "../contracts/index.js";
-import type { AccessRunner, AccessRunnerProgressCallback } from "../runner/access-runner.js";
+import {
+  type AccessRunner,
+  type AccessRunnerProgressCallback,
+  ensureResultShape,
+} from "../runner/access-runner.js";
+import { isRecord } from "../utils/index.js";
 
 export type AccessQueryResult = {
   rows?: readonly Record<string, unknown>[];
@@ -34,12 +39,15 @@ export class AccessQueryService {
     this.config = options.config;
   }
 
-  execute(
+  async execute(
     request: AccessQueryRequest,
     onProgress?: AccessRunnerProgressCallback,
   ): Promise<OperationResult<AccessQueryResult>> {
-    return this.runner.run<AccessQueryResult>({ kind: "query", request }, this.config, {
-      onProgress,
-    });
+    const result = await this.runner.run<AccessQueryResult>(
+      { kind: "query", request },
+      this.config,
+      { onProgress },
+    );
+    return ensureResultShape(result, isRecord);
   }
 }
