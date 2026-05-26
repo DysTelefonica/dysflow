@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.10] - 2026-05-26
+
+### Fixed
+
+- Fixed `Close-TargetAccessDbIfOpen` hanging indefinitely when zombie MSACCESS processes are stuck on unreachable network I/O (e.g. UNC paths): replaced bare `Get-CimInstance Win32_Process` with a `Start-Job` + `Wait-Job -Timeout 4` guard; if WMI does not respond within 4 seconds, falls back to `Get-Process` (no WMI) and kills all MSACCESS instances to release the lock.
+
 ## [0.9.9] - 2026-05-26
 
 ### Fixed

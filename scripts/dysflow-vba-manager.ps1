@@ -1107,24 +1107,40 @@ public class RotManager {
         if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {
             Write-Status -Message ("Detectado lock activo: {0}" -f $lockPath) -Color Yellow
 
-            # Buscar MSACCESS.EXE por CommandLine (contiene la ruta del .accdb que abrio)
-            $cimProcs = @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)
+            # Buscar MSACCESS.EXE por CommandLine. Get-CimInstance puede deadlockear si hay
+            # procesos zombie colgados en I/O de red (e.g. UNC inalcanzable); Job con timeout
+            # como guardia: si WMI no responde en 4s, fallback a Get-Process sin WMI.
+            $cimProcs = @()
+            $wmiJob = Start-Job -ScriptBlock { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
+            if (Wait-Job $wmiJob -Timeout 4) {
+                $cimProcs = @(Receive-Job $wmiJob -ErrorAction SilentlyContinue)
+            } else {
+                Stop-Job $wmiJob -ErrorAction SilentlyContinue
+                Write-Status -Message "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Fallback: cerrar todos los MSACCESS." -Color DarkYellow
+            }
+            Remove-Job $wmiJob -Force -ErrorAction SilentlyContinue
             $killed = $false
 
-            foreach ($cim in $cimProcs) {
-                if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
-                    Write-Status -Message ("Cerrando MSACCESS PID {0} (CommandLine contiene: {1})" -f $cim.ProcessId, $resolved) -Color Yellow
-                    try {
-                        Stop-Process -Id $cim.ProcessId -Force -ErrorAction Stop
-                        $killed = $true
-                    } catch {
-                        Write-Status -Message ("No se pudo cerrar MSACCESS PID {0}: {1}" -f $cim.ProcessId, $_.Exception.Message) -Color Red
+            if ($cimProcs.Count -gt 0) {
+                foreach ($cim in $cimProcs) {
+                    if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
+                        Write-Status -Message ("Cerrando MSACCESS PID {0} (CommandLine contiene: {1})" -f $cim.ProcessId, $resolved) -Color Yellow
+                        try {
+                            Stop-Process -Id $cim.ProcessId -Force -ErrorAction Stop
+                            $killed = $true
+                        } catch {
+                            Write-Status -Message ("No se pudo cerrar MSACCESS PID {0}: {1}" -f $cim.ProcessId, $_.Exception.Message) -Color Red
+                        }
                     }
                 }
-            }
-
-            if (-not $killed -and $cimProcs.Count -gt 0) {
-                Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
+                if (-not $killed) {
+                    Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
+                }
+            } else {
+                foreach ($p in @(Get-Process MSACCESS -ErrorAction SilentlyContinue)) {
+                    Write-Status -Message ("Fallback: cerrando MSACCESS PID {0}" -f $p.Id) -Color Yellow
+                    try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; $killed = $true } catch { Write-Debug "Diagnostics: $_" }
+                }
             }
 
             if ($killed) {
