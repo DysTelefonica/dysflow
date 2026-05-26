@@ -239,6 +239,19 @@ function commandPathForConfig(runtimeDir: string): string {
   return path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
 }
 
+async function opencodeCommandForConfig(runtimeDir: string): Promise<string[]> {
+  const entrypoint = path.join(runtimeDir, "app", "dist", "cli", "index.js");
+  const normalizedEntrypoint = entrypoint.replaceAll("\\", "/");
+
+  if (!(await fileExists(entrypoint))) {
+    throw new Error(
+      `Cannot configure OpenCode MCP: runtime entrypoint not found at ${normalizedEntrypoint}.`,
+    );
+  }
+
+  return ["node", normalizedEntrypoint, "mcp"];
+}
+
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {
   if (agent === "codex") {
     const raw = await readFile(filePath, "utf8").catch(() => "");
@@ -294,13 +307,13 @@ async function configureCodex(filePath: string, commandPath: string): Promise<vo
   await writeFile(filePath, updated, "utf8");
 }
 
-async function configureOpencode(filePath: string, commandPath: string): Promise<void> {
+async function configureOpencode(filePath: string, command: readonly string[]): Promise<void> {
   const root = await readJson(filePath);
   const mcp = ensureObject(root.mcp);
   mcp.dysflow = {
     enabled: true,
     type: "local",
-    command: [commandPath, "mcp"],
+    command: [...command],
   };
   root.mcp = mcp;
   await writeJson(filePath, root);
@@ -348,7 +361,7 @@ export async function applyIntegrationSelection(
     await installRuntime(runtimePaths, packageRoot, env);
     for (const agent of ALL_AGENTS) {
       if (selected.has(agent)) {
-        await configureAgent(agent, agentConfigPaths, commandPath);
+        await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir);
         continue;
       }
       await removeAgentConfig(agent, agentConfigPaths);
@@ -369,9 +382,12 @@ async function configureAgent(
   agent: AgentName,
   agentConfigPaths: AgentConfigPaths,
   commandPath: string,
+  runtimeDir: string,
 ): Promise<void> {
   if (agent === "codex") return configureCodex(agentConfigPaths.codex, commandPath);
-  if (agent === "opencode") return configureOpencode(agentConfigPaths.opencode, commandPath);
+  if (agent === "opencode") {
+    return configureOpencode(agentConfigPaths.opencode, await opencodeCommandForConfig(runtimeDir));
+  }
   if (agent === "claude")
     return configureClaude(await resolveClaudeConfigPath(agentConfigPaths), commandPath);
   return configurePi(agentConfigPaths.pi, commandPath);
@@ -701,7 +717,10 @@ export async function handleInstallCommand(
       }
 
       if (agent === "opencode") {
-        await configureOpencode(agentConfigPaths.opencode, commandPath);
+        await configureOpencode(
+          agentConfigPaths.opencode,
+          await opencodeCommandForConfig(runtimeDir),
+        );
         continue;
       }
 
