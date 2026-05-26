@@ -660,6 +660,7 @@ Public Function InvalidarCache( _
     Dim SQL As String
     Dim usuario As String
     Dim qdf As DAO.QueryDef
+    Dim syncError As String
     
     On Error GoTo errores
     
@@ -675,6 +676,11 @@ Public Function InvalidarCache( _
     Set qdf = Nothing
     
     LogCacheOperacion p_IDNC, "Invalidar", p_Razon, usuario, True
+    If Not Cache_IndicadoresProyectoMaterializado_Sincronizar(syncError) Then
+        p_Error = "CacheNCProyecto.InvalidarCache no pudo sincronizar indicadores de Proyecto: " & syncError
+        InvalidarCache = False
+        Exit Function
+    End If
     
     InvalidarCache = True
     Exit Function
@@ -1865,10 +1871,10 @@ End Function
 ' INVALIDACIÓN EN CASCADA (Spec-008)
 ' ============================================
 
-' Invalida el caché en cascada según tipo de entidad
+' Sincroniza el caché en cascada según tipo de entidad
 ' p_TipoEntidad: "NC", "AC", "AR", "Replanificacion", "Riesgo"
 ' p_ID: ID de la entidad afectada
-' Implementa invalidación lazy: marca inválida pero no rebuild inmediato
+' La llamada a InvalidarCache conserva el nombre legacy, pero sincroniza indicadores de Proyecto inmediatamente.
 Public Function InvalidateCascada( _
                             ByVal p_TipoEntidad As String, _
                             ByVal p_ID As Long, _
@@ -1922,8 +1928,7 @@ Public Function InvalidateCascada( _
         Exit Function
     End If
     
-    ' Invalidar el caché de la NC padre
-    ' Lazy: solo se marca, no se regenera ahora
+    ' Sincronizar el caché afectado de la NC padre e indicadores de Proyecto.
     If Not InvalidarCache(idNC, "Invalidacion cascada (" & p_TipoEntidad & " ID:" & p_ID & ")", errItem) Then
         p_Error = errItem
         Exit Function

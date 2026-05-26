@@ -115,6 +115,12 @@
       "tags": ["atomic", "indicator-fast-counts", "runtime", "issue-13"]
     },
     {
+      "name": "Indicadores runtime auditoría usa fast counts",
+      "procedure": "Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-fast-counts", "runtime", "issue-18", "auditoria"]
+    },
+    {
       "name": "Indicadores caption formato",
       "procedure": "Test_Indicadores_FormatearCaption_Totales_Atomic",
       "expect": { "ok": true },
@@ -179,6 +185,84 @@
       "procedure": "Test_Cache_ConsistenciaConEntorno_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "cache-sync", "issue-18"]
+    },
+    {
+      "name": "Cache indicadores materializado cuenta desde detalle compartido",
+      "procedure": "Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache"]
+    },
+    {
+      "name": "Cache indicadores materializado limpia snapshot anterior",
+      "procedure": "Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache"]
+    },
+    {
+      "name": "Cache indicadores materializado falla sin cabecera",
+      "procedure": "Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "trust-contract"]
+    },
+    {
+      "name": "Issue36 Proyecto inicia cache materializado sin cabecera",
+      "procedure": "Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-36", "materialized-cache", "startup", "trust-contract"]
+    },
+    {
+      "name": "Issue37 Auditoría inicia cache materializado sin cabecera",
+      "procedure": "Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-37", "materialized-cache", "startup", "trust-contract", "auditoria"]
+    },
+    {
+      "name": "Cache indicadores materializado ignora estados no OK",
+      "procedure": "Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "trust-contract"]
+    },
+    {
+      "name": "Cache indicadores materializado falla con OK sin detalle",
+      "procedure": "Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "trust-contract"]
+    },
+    {
+      "name": "Cache indicadores auditoría materializado cuenta desde detalle compartido",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "auditoria"]
+    },
+    {
+      "name": "Cache indicadores auditoría materializado ignora estados no OK",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "auditoria", "trust-contract"]
+    },
+    {
+      "name": "Cache indicadores auditoría materializado sincroniza desde negocio",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "auditoria", "producer"]
+    },
+    {
+      "name": "Cache indicadores materializado separa proyecto y auditoría",
+      "procedure": "Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "trust-contract"]
+    },
+    {
+      "name": "Cache indicadores incremental NC acota mutación",
+      "procedure": "Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "incremental", "proyecto"]
+    },
+    {
+      "name": "Cache indicadores incremental NC header inválido no muta",
+      "procedure": "Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-18", "materialized-cache", "incremental", "proyecto", "trust-contract"]
     },
     {
       "name": "Issue19 CE alta si sin detalle no bloquea",

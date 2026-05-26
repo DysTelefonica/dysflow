@@ -104,9 +104,16 @@ Public Function PintarIndicadores( _
     Dim m_TelemetriaResumen As String
     Dim m_TelemetriaError As String
     Dim m_ModoNormalizado As String
-    Dim m_ConteosProyectoRapidos As Scripting.Dictionary
-    Dim m_ProyectoFastPath As Boolean
-    Dim m_ProyectoFastError As String
+    Dim m_ConteosProyectoCache As Scripting.Dictionary
+    Dim m_ConteosAuditoriaCache As Scripting.Dictionary
+    Dim m_ProyectoCachePath As Boolean
+    Dim m_AuditoriaCachePath As Boolean
+    Dim m_ProyectoCacheError As String
+    Dim m_AuditoriaCacheError As String
+    Dim m_ProyectoSyncError As String
+    Dim m_AuditoriaSyncError As String
+    Dim m_ProyectoSyncOk As Boolean
+    Dim m_AuditoriaSyncOk As Boolean
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -138,20 +145,31 @@ Public Function PintarIndicadores( _
 
     If m_IncluirProyecto Then
         If m_ModoNormalizado = "PROYECTO" Then
-            Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-start", m_TelemetriaError)
-            Set m_ConteosProyectoRapidos = Indicadores_ObtenerConteosProyectoRapidos(m_Usuario, p_Error:=m_ProyectoFastError)
-            m_ProyectoFastPath = (m_ProyectoFastError = "" And Not m_ConteosProyectoRapidos Is Nothing)
-            If m_ProyectoFastPath Then
-                Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-finish", m_TelemetriaError)
-            ElseIf m_ProyectoFastError <> "" Then
-                Debug.Print "Indicadores Proyecto fast counts fallback: " & m_ProyectoFastError
-                m_ProyectoFastError = ""
-                Set m_ConteosProyectoRapidos = Nothing
-                Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-fast-counts-fallback", m_TelemetriaError)
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-materialized-cache-start", m_TelemetriaError)
+            Set m_ConteosProyectoCache = Cache_IndicadoresProyectoMaterializado_CargarConteos(m_Usuario, m_ProyectoCacheError)
+            m_ProyectoCachePath = (m_ProyectoCacheError = "" And Not m_ConteosProyectoCache Is Nothing)
+            Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-materialized-cache", m_ProyectoCachePath, m_TelemetriaError)
+            If Not m_ProyectoCachePath Then
+                Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-materialized-cache-sync-start", m_TelemetriaError)
+                m_ProyectoSyncError = ""
+                m_ProyectoSyncOk = Cache_IndicadoresProyectoMaterializado_Sincronizar(m_ProyectoSyncError)
+                Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-materialized-cache-sync", m_ProyectoSyncOk, m_TelemetriaError)
+
+                If m_ProyectoSyncOk Then
+                    m_ProyectoCacheError = ""
+                    Set m_ConteosProyectoCache = Cache_IndicadoresProyectoMaterializado_CargarConteos(m_Usuario, m_ProyectoCacheError)
+                    m_ProyectoCachePath = (m_ProyectoCacheError = "" And Not m_ConteosProyectoCache Is Nothing)
+                    Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-materialized-cache-after-sync", m_ProyectoCachePath, m_TelemetriaError)
+                End If
+
+                If Not m_ProyectoCachePath Then
+                    Set m_ConteosProyectoCache = Nothing
+                    Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-legacy-fallback", True, m_TelemetriaError)
+                End If
             End If
         End If
 
-        If Not m_ProyectoFastPath Then
+        If Not m_ProyectoCachePath Then
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
             Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
             Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
@@ -165,14 +183,41 @@ Public Function PintarIndicadores( _
     End If
 
     If m_IncluirAuditoria Then
-        Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-start", m_TelemetriaError)
-        Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
-        Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
-        Set m_ColSegsNCAuditoriaAccionesSinTareas = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
-        Set m_ColSegsNCAuditoriaPteCE = m_ObjEntorno.ColSegsNCAuditoriaPteCE
-        Set m_ColSegsNCAuditoriaCECaducada = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
-        Set m_ColSegsNCAuditoriaCENoConforme = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
-        Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-finish", m_TelemetriaError)
+        If m_ModoNormalizado = "AUDITORIA" Then
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-materialized-cache-start", m_TelemetriaError)
+            Set m_ConteosAuditoriaCache = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(m_Usuario, m_AuditoriaCacheError)
+            m_AuditoriaCachePath = (m_AuditoriaCacheError = "" And Not m_ConteosAuditoriaCache Is Nothing)
+            Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "auditoria-materialized-cache", m_AuditoriaCachePath, m_TelemetriaError)
+            If Not m_AuditoriaCachePath Then
+                Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-materialized-cache-sync-start", m_TelemetriaError)
+                m_AuditoriaSyncError = ""
+                m_AuditoriaSyncOk = Cache_IndicadoresAuditoriaMaterializado_Sincronizar(m_AuditoriaSyncError)
+                Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "auditoria-materialized-cache-sync", m_AuditoriaSyncOk, m_TelemetriaError)
+
+                If m_AuditoriaSyncOk Then
+                    m_AuditoriaCacheError = ""
+                    Set m_ConteosAuditoriaCache = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(m_Usuario, m_AuditoriaCacheError)
+                    m_AuditoriaCachePath = (m_AuditoriaCacheError = "" And Not m_ConteosAuditoriaCache Is Nothing)
+                    Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "auditoria-materialized-cache-after-sync", m_AuditoriaCachePath, m_TelemetriaError)
+                End If
+
+                If Not m_AuditoriaCachePath Then
+                    Set m_ConteosAuditoriaCache = Nothing
+                    Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "auditoria-legacy-fallback", True, m_TelemetriaError)
+                End If
+            End If
+        End If
+
+        If Not m_AuditoriaCachePath Then
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-start", m_TelemetriaError)
+            Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
+            Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
+            Set m_ColSegsNCAuditoriaAccionesSinTareas = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
+            Set m_ColSegsNCAuditoriaPteCE = m_ObjEntorno.ColSegsNCAuditoriaPteCE
+            Set m_ColSegsNCAuditoriaCECaducada = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
+            Set m_ColSegsNCAuditoriaCENoConforme = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
+            Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-finish", m_TelemetriaError)
+        End If
     End If
 
     Call Indicadores_TelemetriaEtapa(m_Telemetria, "calcular-start", m_TelemetriaError)
@@ -193,7 +238,8 @@ Public Function PintarIndicadores( _
                         m_ColSegsNCAuditoriaCENoConforme, _
                         p_Modo, _
                         p_Error, _
-                        m_ConteosProyectoRapidos)
+                        m_ConteosProyectoCache, _
+                        m_ConteosAuditoriaCache)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -443,14 +489,22 @@ Public Function Indicadores_CalcularDesdeColecciones( _
                                      ByVal p_ColSegsNCAuditoriaCENoConforme As Scripting.Dictionary, _
                                      Optional ByVal p_Modo As String = "AMBOS", _
                                      Optional ByRef p_Error As String, _
-                                     Optional ByVal p_ConteosProyectoRapidos As Scripting.Dictionary _
-                                     ) As Scripting.Dictionary
+                                     Optional ByVal p_ConteosProyectoRapidos As Scripting.Dictionary, _
+                                     Optional ByVal p_ConteosAuditoriaRapidos As Scripting.Dictionary _
+                                      ) As Scripting.Dictionary
     Dim m_Datos As Scripting.Dictionary
     On Error GoTo errores
 
     If UCase$(Trim$(p_Modo)) = "PROYECTO" Then
         If Not p_ConteosProyectoRapidos Is Nothing Then
             Set Indicadores_CalcularDesdeColecciones = Indicadores_CalcularProyectoDesdeConteos(p_ConteosProyectoRapidos, p_Error)
+            Exit Function
+        End If
+    End If
+
+    If UCase$(Trim$(p_Modo)) = "AUDITORIA" Then
+        If Not p_ConteosAuditoriaRapidos Is Nothing Then
+            Set Indicadores_CalcularDesdeColecciones = Indicadores_CalcularAuditoriaDesdeConteos(p_ConteosAuditoriaRapidos, p_Error)
             Exit Function
         End If
     End If
@@ -592,6 +646,40 @@ Public Function Indicadores_CalcularProyectoDesdeConteos( _
 errores:
     If Err.Number <> 1000 Then
         p_Error = "El método Indicadores_CalcularProyectoDesdeConteos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+Public Function Indicadores_CalcularAuditoriaDesdeConteos( _
+                                    ByVal p_Conteos As Scripting.Dictionary, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    Dim m_Resultados As Scripting.Dictionary
+    On Error GoTo errores
+
+    p_Error = ""
+
+    Set m_Resultados = New Scripting.Dictionary
+    m_Resultados.CompareMode = TextCompare
+
+    m_Resultados("AuditoriaTotal") = Indicadores_ConteoLong(p_Conteos, "AuditoriaTareasPteReplanificarTotal") + _
+                                      Indicadores_ConteoLong(p_Conteos, "AuditoriaNCAccionesSinTareasTotal") + _
+                                      Indicadores_ConteoLong(p_Conteos, "AuditoriaNCRegistradasTotal") + _
+                                      Indicadores_ConteoLong(p_Conteos, "AuditoriaNCPteCETotal") + _
+                                      Indicadores_ConteoLong(p_Conteos, "AuditoriaNCCECaducadaTotal") + _
+                                      Indicadores_ConteoLong(p_Conteos, "AuditoriaNCCENoConformeTotal")
+
+    m_Resultados("AuditoriaUsuario") = Indicadores_ConteoLong(p_Conteos, "AuditoriaTareasPteReplanificarUsuario") + _
+                                        Indicadores_ConteoLong(p_Conteos, "AuditoriaNCRegistradasUsuario") + _
+                                        Indicadores_ConteoLong(p_Conteos, "AuditoriaNCAccionesSinTareasUsuario") + _
+                                        Indicadores_ConteoLong(p_Conteos, "AuditoriaNCPteCEUsuario") + _
+                                        Indicadores_ConteoLong(p_Conteos, "AuditoriaNCCECaducadaUsuario") + _
+                                        Indicadores_ConteoLong(p_Conteos, "AuditoriaNCCENoConformeUsuario")
+
+    Set Indicadores_CalcularAuditoriaDesdeConteos = m_Resultados
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método Indicadores_CalcularAuditoriaDesdeConteos ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
 

@@ -3745,12 +3745,11 @@ Public Function getSegsNCProyectoRegistradas( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-                "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+                "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
                 "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
                 "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
                 "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-                "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
-                "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+                "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
                 "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
                 "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
                 "WHERE TbNCAccionCorrectivas.IDAccionCorrectiva Is Null AND TbNoConformidades.Borrado=False;"
@@ -3810,12 +3809,11 @@ Public Function getSegsNCProyectoTotales( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM ((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
             "WHERE (((TbNoConformidades.Borrado)=False));"
@@ -3875,12 +3873,11 @@ Public Function getSegsNCProyectoAccionesSinTareas( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT distinct TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "LEFT JOIN TbNCAccionesRealizadas " & _
@@ -3943,12 +3940,12 @@ Public Function getSegsNCProyectoCENoConforme( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) " & _
-            "LEFT JOIN TbUsuariosAplicaciones ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
             "WHERE (((TbNoConformidades.ConformeControlEficacia)='No') " & _
@@ -4009,12 +4006,11 @@ Public Function getSegsNCProyectoCECaducada( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas " & _
@@ -4079,12 +4075,11 @@ Public Function getSegsNCProyectoPteCE( _
         Set p_Db = getdb()
     End If
     m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
-            "TbNoConformidades.DESCRIPCION, TbExpedientes.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
             "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
             "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
             "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
-            "FROM (((TbNoConformidades INNER JOIN TbExpedientes " & _
-            "ON TbNoConformidades.IDExpediente = TbExpedientes.IDExpediente) LEFT JOIN TbUsuariosAplicaciones " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
             "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
             "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
             "INNER JOIN TbNCAccionesRealizadas " & _
@@ -4281,7 +4276,7 @@ Public Function getSegsNCAuditoriaAccionesSinTareas( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4348,7 +4343,7 @@ Public Function getSegsNCAuditoriaPteCE( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4416,7 +4411,7 @@ Public Function getSegsNCAuditoriaCECaducada( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4485,7 +4480,7 @@ Public Function getSegsNCAuditoriaCENoConforme( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _

@@ -498,6 +498,69 @@ errores:
     Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
 End Function
 
+Public Function Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim conteos As Scripting.Dictionary
+    Dim resultados As Scripting.Dictionary
+    Dim usr As usuario
+    Dim pError As String
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    Set conteos = New Scripting.Dictionary
+    conteos.CompareMode = TextCompare
+    conteos("AuditoriaTareasPteReplanificarTotal") = 2
+    conteos("AuditoriaNCAccionesSinTareasTotal") = 3
+    conteos("AuditoriaNCRegistradasTotal") = 5
+    conteos("AuditoriaNCPteCETotal") = 7
+    conteos("AuditoriaNCCECaducadaTotal") = 11
+    conteos("AuditoriaNCCENoConformeTotal") = 13
+    conteos("AuditoriaTareasPteReplanificarUsuario") = 1
+    conteos("AuditoriaNCRegistradasUsuario") = 2
+    conteos("AuditoriaNCAccionesSinTareasUsuario") = 3
+    conteos("AuditoriaNCPteCEUsuario") = 4
+    conteos("AuditoriaNCCECaducadaUsuario") = 5
+    conteos("AuditoriaNCCENoConformeUsuario") = 6
+
+    Set usr = New usuario
+    usr.Nombre = "QA User"
+
+    Set resultados = Indicadores_CalcularDesdeColecciones( _
+                    usr, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    Nothing, _
+                    "AUDITORIA", _
+                    pError, _
+                    Nothing, _
+                    conteos)
+
+    Call TestHelper.AssertTrue(pError = "", "Runtime Auditoria con conteos rapidos no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("AuditoriaTotal")) = 41, "AuditoriaTotal debe salir de conteos rapidos", logs, assertError)
+    Call TestHelper.AssertTrue(CLng(resultados("AuditoriaUsuario")) = 21, "AuditoriaUsuario debe salir de conteos rapidos", logs, assertError)
+    Call TestHelper.AssertTrue(Not resultados.Exists("ProyectoTotal"), "Runtime fast AUDITORIA no debe devolver ProyectoTotal", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonOk(logs, "runtime_auditoria_fast_counts_ok")
+    End If
+    Exit Function
+errores:
+    Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
 Private Function BuildDatosVacios() As Scripting.Dictionary
     Dim datos As Scripting.Dictionary
     Set datos = New Scripting.Dictionary
@@ -632,6 +695,1165 @@ End Function
 ' Verifica que el cache global de indicadores funciona correctamente
 ' y no corrompe datos al invalidar/recargar.
 ' ============================================================
+
+Private Sub CacheMaterializado_Cleanup(ByRef p_Logs As Collection, ByRef p_AssertError As String)
+    Dim pError As String
+    Dim db As DAO.Database
+
+    Set db = getdb(pError)
+    If pError <> "" Or db Is Nothing Then
+        TestHelper.AddLog p_Logs, "Cleanup materialized indicator cache blocked: no se pudo abrir backend sandbox"
+        If p_AssertError = "" Then p_AssertError = "TESTS BLOCKED: no se pudo abrir backend sandbox para limpiar cache materializado"
+        Exit Sub
+    End If
+
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        TestHelper.AddLog p_Logs, "Cleanup materialized indicator cache blocked: " & pError
+        If p_AssertError = "" Then p_AssertError = pError
+        Exit Sub
+    End If
+
+    If Not Cache_Test_IndicadoresProyectoMaterializado_Limpiar(pError) Then
+        TestHelper.AddLog p_Logs, "Cleanup materialized indicator cache failed: " & pError
+        If p_AssertError = "" Then p_AssertError = pError
+    Else
+        TestHelper.AddLog p_Logs, "Cleanup materialized indicator cache OK"
+    End If
+End Sub
+
+Private Sub CacheMaterializadoAuditoria_Cleanup(ByRef p_Logs As Collection, ByRef p_AssertError As String)
+    Dim pError As String
+    Dim db As DAO.Database
+
+    Set db = getdb(pError)
+    If pError <> "" Or db Is Nothing Then
+        TestHelper.AddLog p_Logs, "Cleanup auditoria materialized indicator cache blocked: no se pudo abrir backend sandbox"
+        If p_AssertError = "" Then p_AssertError = "TESTS BLOCKED: no se pudo abrir backend sandbox para limpiar cache materializado auditoria"
+        Exit Sub
+    End If
+
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        TestHelper.AddLog p_Logs, "Cleanup auditoria materialized indicator cache blocked: " & pError
+        If p_AssertError = "" Then p_AssertError = pError
+        Exit Sub
+    End If
+
+    If Not Cache_Test_IndicadoresAuditoriaMaterializado_Limpiar(pError) Then
+        TestHelper.AddLog p_Logs, "Cleanup auditoria materialized indicator cache failed: " & pError
+        If p_AssertError = "" Then p_AssertError = pError
+    Else
+        TestHelper.AddLog p_Logs, "Cleanup auditoria materialized indicator cache OK"
+    End If
+End Sub
+
+Private Function CacheMaterializado_SchemaExiste(ByVal p_Db As DAO.Database, Optional ByRef p_Error As String) As Boolean
+    On Error GoTo noSchema
+
+    p_Error = ""
+    p_Db.TableDefs.Refresh
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoHeader", "IDCacheIndicadorProyecto", dbLong, False, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoHeader", "FechaSincronizacion", dbDate, True, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoHeader", "UsuarioSincronizacion", dbText, False, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoHeader", "Estado", dbText, False, p_Error) Then Exit Function
+
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDCacheIndicadorProyecto", dbLong, True, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "Bucket", dbText, True, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "TipoFila", dbText, True, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDEntidad", dbLong, True, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "ResponsableCalidad", dbText, False, p_Error) Then Exit Function
+    If Not CacheMaterializado_FieldReady(p_Db, "TbCacheIndicadoresProyectoDetalle", "FechaSnapshot", dbDate, True, p_Error) Then Exit Function
+
+    CacheMaterializado_SchemaExiste = True
+    Exit Function
+
+noSchema:
+    p_Error = "TESTS BLOCKED: schema de cache materializado no inspeccionable: " & Err.Description
+    CacheMaterializado_SchemaExiste = False
+End Function
+
+Private Function CacheMaterializado_FieldReady( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_TableName As String, _
+                        ByVal p_FieldName As String, _
+                        ByVal p_ExpectedType As Integer, _
+                        ByVal p_Required As Boolean, _
+                        ByRef p_Error As String _
+                    ) As Boolean
+    Dim tdf As DAO.TableDef
+    Dim fld As DAO.Field
+    Dim rs As DAO.Recordset
+    On Error GoTo noSchema
+
+    Set rs = p_Db.OpenRecordset("SELECT [" & p_FieldName & "] FROM [" & p_TableName & "] WHERE 1=0", dbOpenSnapshot)
+    Set fld = rs.Fields(0)
+
+    If fld.Type <> p_ExpectedType Then
+        p_Error = "TESTS BLOCKED: tipo inesperado en " & p_TableName & "." & p_FieldName & " esperado=" & CStr(p_ExpectedType) & " real=" & CStr(fld.Type)
+        GoTo salir
+    End If
+
+    CacheMaterializado_FieldReady = True
+
+salir:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Exit Function
+
+noSchema:
+    p_Error = "TESTS BLOCKED: falta schema requerido " & p_TableName & "." & p_FieldName & " — " & Err.Description
+    CacheMaterializado_FieldReady = False
+    Resume salir
+End Function
+
+Private Function CacheMaterializado_RequireSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Dim schemaError As String
+
+    CacheMaterializado_RequireSchema = CacheMaterializado_SchemaExiste(p_Db, schemaError)
+    If Not CacheMaterializado_RequireSchema Then
+        TestHelper.AddLog p_Logs, schemaError
+        If p_AssertError = "" Then p_AssertError = schemaError
+    Else
+        TestHelper.AddLog p_Logs, "Schema cache materializado OK: header/detalle backend inspeccionados"
+    End If
+End Function
+
+Private Sub CacheMaterializado_InsertFixtureRow( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_Bucket As String, _
+                        ByVal p_TipoFila As String, _
+                        ByVal p_IDEntidad As Long, _
+                        ByVal p_Responsable As String, _
+                        Optional ByVal p_CacheId As Long = 1 _
+                    )
+    Dim rs As DAO.Recordset
+
+    Set rs = p_Db.OpenRecordset("TbCacheIndicadoresProyectoDetalle", dbOpenDynaset)
+    rs.AddNew
+    rs!IDCacheIndicadorProyecto = p_CacheId
+    rs!Bucket = p_Bucket
+    rs!TipoFila = p_TipoFila
+    rs!IDEntidad = p_IDEntidad
+    rs!IDNoConformidad = p_IDEntidad
+    rs!ResponsableCalidad = p_Responsable
+    rs!FechaSnapshot = Now()
+    rs.Update
+    rs.Close
+    Set rs = Nothing
+End Sub
+
+Private Sub CacheMaterializado_InsertHeader(ByVal p_Db As DAO.Database)
+    CacheMaterializado_InsertHeaderEstado p_Db, "OK"
+End Sub
+
+Private Sub CacheMaterializado_InsertHeaderEstado(ByVal p_Db As DAO.Database, ByVal p_Estado As String, Optional ByVal p_CacheId As Long = 1)
+    p_Db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=" & CStr(p_CacheId), dbFailOnError
+    p_Db.Execute "INSERT INTO TbCacheIndicadoresProyectoHeader (IDCacheIndicadorProyecto, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & CStr(p_CacheId) & ", Now(), 'TEST', " & TestHelper.SqlText(p_Estado) & ")", dbFailOnError
+End Sub
+
+Private Function CacheMaterializado_TestUsuario(ByVal p_Nombre As String) As usuario
+    Dim usr As New usuario
+
+    usr.Nombre = p_Nombre
+    Set CacheMaterializado_TestUsuario = usr
+End Function
+
+Private Function CacheMaterializado_CountRows(ByVal p_Db As DAO.Database, ByVal p_SQL As String) As Long
+    Dim rs As DAO.Recordset
+
+    Set rs = p_Db.OpenRecordset(p_SQL, dbOpenSnapshot)
+    If Not rs.EOF Then CacheMaterializado_CountRows = CLng(Nz(rs.Fields("Total").Value, 0))
+    rs.Close
+    Set rs = Nothing
+End Function
+
+Private Function CacheMaterializado_RequireProyectoBusinessSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Dim schemaError As String
+
+    CacheMaterializado_RequireProyectoBusinessSchema = False
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "IDNoConformidad", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "CodigoNoConformidad", dbText, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "EXPEDIENTE", dbText, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "RESPONSABLETELEFONICA", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "RESPONSABLECALIDAD", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "IDExpediente", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "Nemotecnico", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "ConformeControlEficacia", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "FechaControlEficacia", dbDate, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "FechaPrevistaControlEficacia", dbDate, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAccionCorrectivas", "IDAccionCorrectiva", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAccionCorrectivas", "IDNoConformidad", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAccionesRealizadas", "IDAccionRealizada", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAccionesRealizadas", "IDAccionCorrectiva", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbUsuariosAplicaciones", "CorreoUsuario", dbText, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbUsuariosAplicaciones", "UsuarioRed", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbUsuariosAplicaciones", "Nombre", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbUsuariosAplicaciones", "Id", dbInteger, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbTiposNCProyectos", "IDTipo", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbTiposNCProyectos", "Tipologia", dbText, False, schemaError) Then GoTo blocked
+
+    TestHelper.AddLog p_Logs, "Schema negocio Proyecto OK: NC/AC/AR/usuarios/tipos inspeccionados; TbExpedientes no es dependencia del constructor incremental"
+    CacheMaterializado_RequireProyectoBusinessSchema = True
+    Exit Function
+
+blocked:
+    TestHelper.AddLog p_Logs, schemaError
+    If p_AssertError = "" Then p_AssertError = schemaError
+End Function
+
+Private Sub CacheMaterializado_ProyectoBusinessCleanup(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    On Error Resume Next
+    p_Db.Execute "DELETE FROM TbNCAccionesRealizadas WHERE IDAccionRealizada IN (992021)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva IN (992011)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad IN (992001)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbTiposNCProyectos WHERE IDTipo=992001", dbFailOnError
+    p_Db.Execute "DELETE FROM TbUsuariosAplicaciones WHERE UsuarioRed='TEST_ISSUE18_USER' OR CorreoUsuario='TEST_ISSUE18_USER@local.test'", dbFailOnError
+    TestHelper.AddLog p_Logs, "Teardown negocio Proyecto: filas TEST_ISSUE18 eliminadas en orden inverso FK"
+    On Error GoTo 0
+End Sub
+
+Private Sub CacheMaterializado_SeedProyectoBusinessFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    Call CacheMaterializado_ProyectoBusinessCleanup(p_Db, p_Logs)
+
+    p_Db.Execute "INSERT INTO TbTiposNCProyectos (IDTipo, Tipologia) VALUES (992001, 'TEST_ISSUE18_TIPO')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbUsuariosAplicaciones (CorreoUsuario, UsuarioRed, Nombre, Id, Activado) VALUES ('TEST_ISSUE18_USER@local.test', 'TEST_ISSUE18_USER', 'QA User', 32760, True)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, DESCRIPCION, RESPONSABLETELEFONICA, RESPONSABLECALIDAD, IDExpediente, Nemotecnico, Borrado, RequiereControlEficacia, ResultadoControlEficacia, ConformeControlEficacia, FechaControlEficacia, FechaPrevistaControlEficacia, IDTipo, ESTADO) " & _
+                 "VALUES (992001, 'TEST-ISSUE18-NC-992001', 'TEST-ISSUE18-EXP', 'Fixture incremental Proyecto Issue 18', 'TEST_ISSUE18_USER', 'QA User', 992001, 'TEST-ISSUE18-NEMO', False, 'Si', 'No conforme', 'No', Date(), Date()-1, 992001, 'Abierta')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAccionCorrectivas (IDAccionCorrectiva, IDNoConformidad, NAccion, AccionCorrectiva, FechaAccionCorrectiva, ESTADO, Responsable) VALUES (992011, 992001, 1, 'TEST ISSUE18 AC', Date(), 'Abierta', 'TEST_ISSUE18_USER')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, FechaAccionRealizada, FechaInicio, FechaFinPrevista, FechaFinReal, ESTADO, Responsable) VALUES (992021, 992011, 1, 'TEST ISSUE18 AR cerrada', Date(), Date()-3, Date()-1, Date(), 'Cerrada', 'TEST_ISSUE18_USER')", dbFailOnError
+
+    TestHelper.AddLog p_Logs, "Arrange negocio Proyecto: seeded NC=992001, AC=992011, AR=992021, usuario y tipo deterministicos"
+End Sub
+
+Private Function CacheMaterializado_RequireAuditoriaBusinessSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Dim schemaError As String
+
+    CacheMaterializado_RequireAuditoriaBusinessSchema = False
+    If Not CacheMaterializado_FieldReady(p_Db, "TbAuditorias", "IDAuditoria", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbAuditorias", "Tipo", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbAuditorias", "FechaInicio", dbDate, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "ID", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "IDAuditoria", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "Numero", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "DESCRIPCION", dbMemo, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "CAUSARAIZ", dbMemo, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "RESPONSABLEIMPLANTACION", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "RequiereControlEficacia", dbText, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "FechaControlEficacia", dbDate, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "ResultadoControlEficacia", dbMemo, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "ConformeControlEficacia", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "RequiereAccionCorrectiva", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "ESTADO", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidadesAuditoria", "Borrado", dbBoolean, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionCorrectivas", "IDAccionCorrectiva", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionCorrectivas", "ID", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionCorrectivas", "NAccion", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionCorrectivas", "AccionCorrectiva", dbMemo, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionCorrectivas", "Responsable", dbText, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "IDAccionRealizada", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "IDAccionCorrectiva", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "NAccion", dbLong, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "AccionRealizada", dbMemo, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "FechaFinReal", dbDate, False, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbNCAuditoriaAccionesRealizadas", "Responsable", dbText, False, schemaError) Then GoTo blocked
+
+    TestHelper.AddLog p_Logs, "Schema negocio Auditoria OK: Auditoria/NC/AC/AR inspeccionados con FKs Auditoria->NC->AC->AR"
+    CacheMaterializado_RequireAuditoriaBusinessSchema = True
+    Exit Function
+
+blocked:
+    TestHelper.AddLog p_Logs, schemaError
+    If p_AssertError = "" Then p_AssertError = schemaError
+End Function
+
+Private Sub CacheMaterializado_AuditoriaBusinessCleanup(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    On Error Resume Next
+    p_Db.Execute "DELETE FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada IN (992221)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva IN (992211)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID IN (992201, 992202)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria IN (992201)", dbFailOnError
+    TestHelper.AddLog p_Logs, "Teardown negocio Auditoria: filas TEST_ISSUE18_AUD eliminadas en orden inverso FK"
+    On Error GoTo 0
+End Sub
+
+Private Sub CacheMaterializado_SeedAuditoriaBusinessFixture(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection)
+    Call CacheMaterializado_AuditoriaBusinessCleanup(p_Db, p_Logs)
+
+    p_Db.Execute "INSERT INTO TbAuditorias (IDAuditoria, Tipo, FechaInicio, FechaFin) VALUES (992201, 'TEST_ISSUE18_AUD', Date(), Date())", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNoConformidadesAuditoria (ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereControlEficacia, FechaControlEficacia, FechaPrevistaControlEficacia, ResultadoControlEficacia, ConformeControlEficacia, RequiereAccionCorrectiva, Tipo, ESTADO, Borrado) " & _
+                 "VALUES (992202, 992201, Date(), 'TEST-AUD-NC-992202', 'Fixture Auditoria Issue 18', 'Fixture root cause', 'QA User', 'Sí', Date(), Date()-1, 'No conforme', 'No', 'Sí', 'TEST_AUD', 'Abierta', False)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAuditoriaAccionCorrectivas (IDAccionCorrectiva, ID, NAccion, AccionCorrectiva, FechaAccionCorrectiva, ESTADO, Responsable) VALUES (992211, 992202, 1, 'TEST ISSUE18 AUD AC', Date(), 'Abierta', 'QA User')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAuditoriaAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, FechaAccionRealizada, FechaInicio, FechaFinPrevista, FechaFinReal, ESTADO, Responsable) VALUES (992221, 992211, 1, 'TEST ISSUE18 AUD AR cerrada', Date(), Date()-3, Date()-1, Date(), 'Cerrada', 'QA User')", dbFailOnError
+
+    TestHelper.AddLog p_Logs, "Arrange negocio Auditoria: seeded Auditoria=992201, NC=992202, AC=992211, AR=992221 para CE no conforme"
+End Sub
+
+Public Function Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then
+        GoTo finalizar
+    End If
+    Call CacheMaterializado_InsertHeader(db)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", 990001, "QA User")
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", 990002, "Otro User")
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 990003, "QA User")
+    TestHelper.AddLog logs, "Arrange: seeded 3 shared backend detail rows"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteos = Cache_IndicadoresProyectoMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Cargar conteos desde detalle materializado no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not conteos Is Nothing, "Debe devolver conteos derivados del detalle backend", logs, assertError)
+    If Not conteos Is Nothing Then
+        Call TestHelper.AssertTrue(CLng(conteos("ProyectoTareasPteReplanificarTotal")) = 2, "Total tarea pte replanificar debe contar todas las filas compartidas", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("ProyectoTareasPteReplanificarUsuario")) = 1, "Usuario debe filtrar por ResponsableCalidad", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("ProyectoNCRegistradasTotal")) = 1, "Total NC registradas debe derivar del bucket cacheado", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("ProyectoNCRegistradasUsuario")) = 1, "Usuario NC registradas debe derivar del bucket cacheado", logs, assertError)
+    End If
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonOk(logs, "materialized_counts_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim rowsBefore As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then
+        GoTo finalizar
+    End If
+    Call CacheMaterializado_InsertHeader(db)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 990010, "QA User")
+    rowsBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
+    Call TestHelper.AssertTrue(rowsBefore = 1, "Precondicion: existe una fila fixture de cache materializado", logs, assertError)
+
+    Call TestHelper.AssertTrue(Cache_Test_IndicadoresProyectoMaterializado_Limpiar(pError), "Act: limpieza controlada elimina snapshot compartido", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "Limpieza de snapshot no debe fallar", logs, assertError)
+    rowsBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
+    Call TestHelper.AssertTrue(rowsBefore = 0, "Assert: snapshot compartido queda vacío sin semántica CacheValida", logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic = TestHelper.BuildJsonOk(logs, "materialized_cleanup_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 990020, "QA User")
+    TestHelper.AddLog logs, "Arrange: detalle fixture sin cabecera de cache"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteos = Cache_IndicadoresProyectoMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError <> "", "Debe fallar si falta cabecera de snapshot", logs, assertError)
+    Call TestHelper.AssertTrue(conteos Is Nothing, "No debe devolver conteos cuando falta cabecera", logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic = TestHelper.BuildJsonOk(logs, "materialized_missing_header_fails")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim previousUser As usuario
+    Dim headerBefore As Long
+    Dim headerOKAfter As Long
+    Dim rowsAfter As Long
+    Dim poisonRowsAfter As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    If Not CacheMaterializado_RequireProyectoBusinessSchema(db, logs, assertError) Then GoTo finalizar
+
+    Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 993601, "QA User")
+    headerBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1")
+    Call TestHelper.AssertTrue(headerBefore = 0, "Precondicion Issue36: detalle poison sin cabecera, cache materializado no puede ser HIT", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set previousUser = m_ObjUsuarioConectado
+    Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
+    pError = ""
+    Call PintarIndicadores(EnumSino.No, "PROYECTO", pError)
+    TestHelper.AddLog logs, "Act Issue36: PintarIndicadores PROYECTO devuelve pError='" & pError & "'"
+
+    headerOKAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1 AND Estado='OK'")
+    rowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
+    poisonRowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDEntidad=993601")
+    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores no debe fallar por cabecera ausente al abrir Proyecto", logs, assertError)
+    Call TestHelper.AssertTrue(headerOKAfter = 1, "Debe inicializar una cabecera OK unica tras MISS inicial", logs, assertError)
+    Call TestHelper.AssertTrue(rowsAfter > 0, "Debe materializar detalle desde fixture negocio controlada", logs, assertError)
+    Call TestHelper.AssertTrue(poisonRowsAfter = 0, "No debe tratar el detalle poison sin cabecera como HIT reutilizable", logs, assertError)
+
+finalizar:
+    Set m_ObjUsuarioConectado = previousUser
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonOk(logs, "issue36_pintar_proyecto_sync_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    Set m_ObjUsuarioConectado = previousUser
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim previousUser As usuario
+    Dim headerBefore As Long
+    Dim headerOKAfter As Long
+    Dim rowsAfter As Long
+    Dim poisonRowsAfter As Long
+    Dim targetAuditRows As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    If Not CacheMaterializado_RequireAuditoriaBusinessSchema(db, logs, assertError) Then GoTo finalizar
+
+    Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_AUD_REGISTRADAS, "NC", 993701, "QA User", 2)
+    headerBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2")
+    Call TestHelper.AssertTrue(headerBefore = 0, "Precondicion Issue37: detalle poison Auditoria sin cabecera, cache materializado no puede ser HIT", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set previousUser = m_ObjUsuarioConectado
+    Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
+    pError = ""
+    Call PintarIndicadores(EnumSino.No, "AUDITORIA", pError)
+    TestHelper.AddLog logs, "Act Issue37: PintarIndicadores AUDITORIA devuelve pError='" & pError & "'"
+
+    headerOKAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2 AND Estado='OK'")
+    rowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2")
+    poisonRowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDEntidad=993701")
+    targetAuditRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202")
+    Call TestHelper.AssertTrue(pError = "", "PintarIndicadores no debe fallar por cabecera ausente al abrir Auditoria", logs, assertError)
+    Call TestHelper.AssertTrue(headerOKAfter = 1, "Debe inicializar una cabecera Auditoria OK unica tras MISS inicial", logs, assertError)
+    Call TestHelper.AssertTrue(rowsAfter > 0, "Debe materializar detalle Auditoria desde fixture negocio controlada", logs, assertError)
+    Call TestHelper.AssertTrue(poisonRowsAfter = 0, "No debe tratar el detalle poison Auditoria sin cabecera como HIT reutilizable", logs, assertError)
+    Call TestHelper.AssertTrue(targetAuditRows = 1, "Debe materializar la NC Auditoria fixture con ID distinto de IDAuditoria", logs, assertError)
+
+finalizar:
+    Set m_ObjUsuarioConectado = previousUser
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonOk(logs, "issue37_pintar_auditoria_sync_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    Set m_ObjUsuarioConectado = previousUser
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    Dim estado As Variant
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+
+    For Each estado In Array("ERROR", "SYNCING")
+        Call CacheMaterializado_Cleanup(logs, assertError)
+        If assertError <> "" Then GoTo finalizar
+        Call CacheMaterializado_InsertHeaderEstado(db, CStr(estado))
+        Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 990030, "QA User")
+        TestHelper.AddLog logs, "Arrange: cabecera " & CStr(estado) & " con detalle fixture"
+
+        pError = ""
+        Set conteos = Cache_IndicadoresProyectoMaterializado_CargarConteos(usr, pError)
+        Call TestHelper.AssertTrue(pError <> "", "Debe fallar con Estado=" & CStr(estado), logs, assertError)
+        Call TestHelper.AssertTrue(conteos Is Nothing, "No debe contar detalle si Estado=" & CStr(estado), logs, assertError)
+        If assertError <> "" Then GoTo finalizar
+    Next estado
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonOk(logs, "materialized_non_ok_state_fails")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK")
+    TestHelper.AddLog logs, "Arrange: cabecera OK sin filas detalle"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteos = Cache_IndicadoresProyectoMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError <> "", "Debe fallar con cabecera OK sin detalle", logs, assertError)
+    Call TestHelper.AssertTrue(conteos Is Nothing, "No debe devolver conteos para snapshot vacío ambiguo", logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic = TestHelper.BuildJsonOk(logs, "materialized_empty_snapshot_fails")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", 991001, "QA User", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", 991002, "Otro User", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_AUD_REGISTRADAS, "NC", 991003, "QA User", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_AUD_SIN_TAREAS, "NC", 991004, "Otro User", 2)
+    TestHelper.AddLog logs, "Arrange: seeded 4 auditoria backend detail rows bajo IDCache=2"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteos = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Cargar conteos auditoria desde detalle materializado no debe fallar", logs, assertError)
+    Call TestHelper.AssertTrue(Not conteos Is Nothing, "Debe devolver conteos auditoria derivados del detalle backend", logs, assertError)
+    If Not conteos Is Nothing Then
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaTareasPteReplanificarTotal")) = 2, "Total tarea auditoria pte replanificar debe contar todas las filas IDCache=2", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaTareasPteReplanificarUsuario")) = 1, "Usuario auditoria debe filtrar por ResponsableCalidad", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaNCRegistradasTotal")) = 1, "Total NC auditoria registradas debe derivar del bucket cacheado", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaNCRegistradasUsuario")) = 1, "Usuario NC auditoria registradas debe derivar del bucket cacheado", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaNCAccionesSinTareasTotal")) = 1, "Total NC auditoria sin tareas debe derivar del bucket cacheado", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(conteos("AuditoriaNCAccionesSinTareasUsuario")) = 0, "Usuario NC auditoria sin tareas debe respetar filtro", logs, assertError)
+    End If
+
+finalizar:
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonOk(logs, "auditoria_materialized_counts_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteos As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertHeaderEstado(db, "ERROR", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_AUD_REGISTRADAS, "NC", 991020, "QA User", 2)
+    TestHelper.AddLog logs, "Arrange: cabecera auditoria ERROR con detalle fixture"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteos = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError <> "", "Debe fallar si Auditoria tiene Estado=ERROR", logs, assertError)
+    Call TestHelper.AssertTrue(conteos Is Nothing, "No debe devolver conteos auditoria si Estado=ERROR", logs, assertError)
+
+finalizar:
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonOk(logs, "auditoria_materialized_non_ok_state_fails")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim syncOk As Boolean
+    Dim projectRowsBefore As Long
+    Dim projectRowsAfter As Long
+    Dim auditHeaderOK As Long
+    Dim auditRows As Long
+    Dim targetAuditRows As Long
+    Dim ceNoConformeRows As Long
+    Dim registradasRows As Long
+    Dim sinTareasRows As Long
+    Dim pteCERows As Long
+    Dim ceCaducadaRows As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    If Not CacheMaterializado_RequireAuditoriaBusinessSchema(db, logs, assertError) Then GoTo finalizar
+
+    Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992301, "QA User", 1)
+    projectRowsBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
+    Call TestHelper.AssertTrue(projectRowsBefore = 1, "Precondicion: scope Proyecto tiene una fila control", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    syncOk = Cache_IndicadoresAuditoriaMaterializado_Sincronizar(pError)
+    TestHelper.AddLog logs, "Act: sync full Auditoria devuelve " & CStr(syncOk) & "; pError=" & pError
+    Call TestHelper.AssertTrue(syncOk, "Act: productor Auditoria debe finalizar OK con fixture negocio legal", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "Act: productor Auditoria no debe reportar pError", logs, assertError)
+
+    auditHeaderOK = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2 AND Estado='OK'")
+    auditRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2")
+    targetAuditRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202")
+    ceNoConformeRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202 AND Bucket='" & BUCKET_NC_AUD_CE_NO_CONFORME & "'")
+    registradasRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202 AND Bucket='" & BUCKET_NC_AUD_REGISTRADAS & "'")
+    sinTareasRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202 AND Bucket='" & BUCKET_NC_AUD_SIN_TAREAS & "'")
+    pteCERows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202 AND Bucket='" & BUCKET_NC_AUD_PTE_CE & "'")
+    ceCaducadaRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202 AND Bucket='" & BUCKET_NC_AUD_CE_CADUCADA & "'")
+    projectRowsAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1")
+    TestHelper.AddLog logs, "Assert diagnostics Auditoria: auditRows=" & CStr(auditRows) & "; targetAuditRows=" & CStr(targetAuditRows) & "; CE_NO_CONF=" & CStr(ceNoConformeRows) & "; REG=" & CStr(registradasRows) & "; SIN_TAREAS=" & CStr(sinTareasRows) & "; PTE_CE=" & CStr(pteCERows) & "; CE_CAD=" & CStr(ceCaducadaRows)
+    Call TestHelper.AssertTrue(auditHeaderOK = 1, "Assert: cabecera Auditoria queda unica y OK", logs, assertError)
+    Call TestHelper.AssertTrue(targetAuditRows = 1, "Assert: snapshot Auditoria contiene exactamente la fila esperada para la NC fixture", logs, assertError)
+    Call TestHelper.AssertTrue(ceNoConformeRows = 1, "Assert: CE no conforme Auditoria se materializa desde negocio", logs, assertError)
+    Call TestHelper.AssertTrue(registradasRows = 0, "Assert: NC Auditoria con AC no queda en registradas", logs, assertError)
+    Call TestHelper.AssertTrue(sinTareasRows = 0, "Assert: NC Auditoria con AR no queda en acciones sin tareas", logs, assertError)
+    Call TestHelper.AssertTrue(pteCERows = 0, "Assert: CE ya resuelto no queda pendiente", logs, assertError)
+    Call TestHelper.AssertTrue(ceCaducadaRows = 0, "Assert: CE con fecha realizada no queda caducada", logs, assertError)
+    Call TestHelper.AssertTrue(projectRowsAfter = projectRowsBefore, "Assert: sync Auditoria no toca detalle scope Proyecto", logs, assertError)
+
+finalizar:
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic = TestHelper.BuildJsonOk(logs, "auditoria_materialized_sync_business_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim usr As usuario
+    Dim conteosProyecto As Scripting.Dictionary
+    Dim conteosAuditoria As Scripting.Dictionary
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", 991101, "QA User", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", 991102, "QA User", 2)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", 991103, "QA User", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", 991104, "QA User", 2)
+    TestHelper.AddLog logs, "Arrange: seeded filas cruzadas para probar separacion por IDCache y bucket"
+
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    Set conteosProyecto = Cache_IndicadoresProyectoMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Proyecto materializado no debe fallar", logs, assertError)
+    pError = ""
+    Set conteosAuditoria = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(usr, pError)
+    Call TestHelper.AssertTrue(pError = "", "Auditoria materializado no debe fallar", logs, assertError)
+    If Not conteosProyecto Is Nothing Then
+        Call TestHelper.AssertTrue(CLng(conteosProyecto("ProyectoTareasPteReplanificarTotal")) = 1, "Proyecto no debe contar fila AUD ni fila IDCache=2", logs, assertError)
+    End If
+    If Not conteosAuditoria Is Nothing Then
+        Call TestHelper.AssertTrue(CLng(conteosAuditoria("AuditoriaTareasPteReplanificarTotal")) = 1, "Auditoria no debe contar fila PROY ni fila IDCache=1", logs, assertError)
+    End If
+
+finalizar:
+    Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic = TestHelper.BuildJsonOk(logs, "materialized_scope_separation_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim syncOk As Boolean
+    Dim targetBefore As Long
+    Dim otherBefore As Long
+    Dim targetAfter As Long
+    Dim otherAfter As Long
+    Dim headerCount As Long
+    Dim targetPteReplanAfter As Long
+    Dim targetRegistradasAfter As Long
+    Dim targetSinTareasAfter As Long
+    Dim targetPteCEAfter As Long
+    Dim targetIrregularAfter As Long
+    Dim targetCECaducadaAfter As Long
+    Dim targetCENoConformeAfter As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    If Not CacheMaterializado_RequireProyectoBusinessSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992001, "QA User", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_PTE_CE, "NC", 992001, "QA User", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992002, "Otro User", 1)
+    TestHelper.AddLog logs, "Arrange: seeded cache stale target NC=992001 y control NC=992002"
+
+    targetBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001")
+    otherBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992002")
+    Call TestHelper.AssertTrue(targetBefore = 2, "Precondicion: target NC tiene 2 filas de detalle", logs, assertError)
+    Call TestHelper.AssertTrue(otherBefore = 1, "Precondicion: otra NC tiene 1 fila de detalle", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    syncOk = Cache_IndicadoresProyectoMaterializado_SincronizarNC(992001, pError)
+    TestHelper.AddLog logs, "Act: sincronizacion incremental NC con fixture negocio devuelve " & CStr(syncOk) & "; pError=" & pError
+    Call TestHelper.AssertTrue(syncOk, "Act: con fixture de negocio la sincronizacion incremental NC debe finalizar OK", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "Act: no debe reportar pError con fixture legal", logs, assertError)
+
+    targetAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001")
+    otherAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992002")
+    headerCount = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1 AND Estado='OK'")
+    targetPteReplanAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_TAR_PROY_PTE_REPLAN & "'")
+    targetRegistradasAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_NC_PROY_REGISTRADAS & "'")
+    targetSinTareasAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_NC_PROY_SIN_TAREAS & "'")
+    targetPteCEAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_NC_PROY_PTE_CE & "'")
+    targetIrregularAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='TAR_PROY_IRREGULARES'")
+    targetCECaducadaAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_NC_PROY_CE_CADUCADA & "'")
+    targetCENoConformeAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001 AND Bucket='" & BUCKET_NC_PROY_CE_NO_CONFORME & "'")
+    TestHelper.AddLog logs, "Assert diagnostics target buckets: TAR_PTE_REPLAN=" & CStr(targetPteReplanAfter) & "; NC_REG=" & CStr(targetRegistradasAfter) & "; NC_SIN_TAREAS=" & CStr(targetSinTareasAfter) & "; NC_PTE_CE=" & CStr(targetPteCEAfter) & "; TAR_IRREG_USR=" & CStr(targetIrregularAfter) & "; NC_CE_CAD=" & CStr(targetCECaducadaAfter) & "; NC_CE_NO_CONF=" & CStr(targetCENoConformeAfter)
+    Call TestHelper.AssertTrue(targetAfter = 1, "Assert: target NC queda reemplazada por la unica fila recalculada esperada", logs, assertError)
+    Call TestHelper.AssertTrue(targetPteReplanAfter = 0, "Assert: AR cerrada no queda en tareas pendientes de replanificar", logs, assertError)
+    Call TestHelper.AssertTrue(targetRegistradasAfter = 0, "Assert: bucket stale NC registradas del target fue eliminado", logs, assertError)
+    Call TestHelper.AssertTrue(targetSinTareasAfter = 0, "Assert: NC con AR no queda en acciones sin tareas", logs, assertError)
+    Call TestHelper.AssertTrue(targetPteCEAfter = 0, "Assert: bucket stale NC pte CE del target fue eliminado", logs, assertError)
+    Call TestHelper.AssertTrue(targetIrregularAfter = 0, "Assert: TAR_PROY_IRREGULARES no se exige como fila total para AR cerrada; el indicador expuesto es usuario-only", logs, assertError)
+    Call TestHelper.AssertTrue(targetCECaducadaAfter = 0, "Assert: NC con CE ya realizada no queda en CE caducada", logs, assertError)
+    Call TestHelper.AssertTrue(targetCENoConformeAfter = 1, "Assert: CE no conforme target se materializa desde negocio", logs, assertError)
+    Call TestHelper.AssertTrue(otherAfter = otherBefore, "Assert: otra NC de scope Proyecto queda preservada", logs, assertError)
+    Call TestHelper.AssertTrue(headerCount = 1, "Assert: cabecera Proyecto sigue unica y OK tras sync incremental", logs, assertError)
+
+finalizar:
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic = TestHelper.BuildJsonOk(logs, "materialized_incremental_nc_scoped_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim syncOk As Boolean
+    Dim targetBefore As Long
+    Dim otherBefore As Long
+    Dim targetAfter As Long
+    Dim otherAfter As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtiene backend sandbox", logs, assertError)
+    If pError <> "" Then GoTo finalizar
+    If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
+    Call CacheMaterializado_InsertHeaderEstado(db, "ERROR", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992101, "QA User", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992102, "Otro User", 1)
+    TestHelper.AddLog logs, "Arrange: cabecera ERROR con detalle target y control"
+
+    targetBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992101")
+    otherBefore = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992102")
+    Call TestHelper.AssertTrue(targetBefore = 1, "Precondicion: target NC existe antes del intento", logs, assertError)
+    Call TestHelper.AssertTrue(otherBefore = 1, "Precondicion: otra NC existe antes del intento", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    syncOk = Cache_IndicadoresProyectoMaterializado_SincronizarNC(992101, pError)
+    Call TestHelper.AssertTrue(Not syncOk, "Act: header no OK bloquea sincronizacion incremental", logs, assertError)
+    Call TestHelper.AssertTrue(pError <> "", "Act: header no OK debe reportar error", logs, assertError)
+
+    targetAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992101")
+    otherAfter = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992102")
+    Call TestHelper.AssertTrue(targetAfter = targetBefore, "Assert: target NC queda intacta si header invalido", logs, assertError)
+    Call TestHelper.AssertTrue(otherAfter = otherBefore, "Assert: otra NC queda intacta si header invalido", logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic = TestHelper.BuildJsonOk(logs, "materialized_incremental_header_invalid_no_mutation")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
 
 Private Function CacheTest_NewDict() As Scripting.Dictionary
     Set CacheTest_NewDict = New Scripting.Dictionary
