@@ -658,7 +658,7 @@ dysflow update
 
 ## OpenCode MCP config
 
-Point OpenCode to the installed runtime binary, e.g.:
+Point OpenCode to the installed runtime entrypoint with Node, e.g.:
 
 ```json
 {
@@ -667,7 +667,8 @@ Point OpenCode to the installed runtime binary, e.g.:
       "enabled": true,
       "type": "local",
       "command": [
-        "C:/Users/<user>/AppData/Local/dysflow/bin/dysflow.cmd",
+        "node",
+        "C:/Users/<user>/AppData/Local/dysflow/app/dist/cli/index.js",
         "mcp"
       ]
     }
@@ -675,7 +676,7 @@ Point OpenCode to the installed runtime binary, e.g.:
 }
 ```
 
-If you installed with `--runtime-dir`, point OpenCode to that runtime's `bin\\dysflow.cmd` instead.
+If you installed with `--runtime-dir`, replace the runtime prefix with that directory, for example `C:/Dysflow/app/dist/cli/index.js`.
 
 Validate:
 

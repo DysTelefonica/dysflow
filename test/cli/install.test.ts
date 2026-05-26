@@ -34,6 +34,18 @@ const readJson = async (path: string): Promise<Record<string, unknown>> => {
   return JSON.parse(raw) as Record<string, unknown>;
 };
 
+const expectedOpenCodeCommand = (runtimeDir: string): string[] => [
+  "node",
+  join(runtimeDir, "app", "dist", "cli", "index.js").replaceAll("\\", "/"),
+  "mcp",
+];
+
+const expectNoDirectCmdLauncher = (command: unknown): void => {
+  expect(command).toEqual(expect.any(Array));
+  expect((command as string[]).join(" ").toLowerCase()).not.toContain("dysflow.cmd");
+  expect((command as string[])[0].toLowerCase()).not.toMatch(/\.cmd$/);
+};
+
 const getLocalDysflowVersion = async (): Promise<string> => {
   const sourcePackage = await readFile(join(process.cwd(), "package.json"), "utf8");
   const parsed = JSON.parse(sourcePackage) as { version?: string };
@@ -309,6 +321,10 @@ describe("Dysflow MCP config state", () => {
         type: "remote",
         url: "https://example.test",
       });
+      const updatedOpenCodeDysflow = (updatedOpenCode.mcp as Record<string, unknown>)
+        .dysflow as Record<string, unknown>;
+      expect(updatedOpenCodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
+      expectNoDirectCmdLauncher(updatedOpenCodeDysflow.command);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -432,7 +448,8 @@ describe("handleInstallCommand end-to-end", () => {
     const opencodeDysflow = opencodeMcp.dysflow as Record<string, unknown>;
     expect(opencodeDysflow.enabled).toBe(true);
     expect(opencodeDysflow.type).toBe("local");
-    expect(opencodeDysflow.command).toEqual([expectedCmd, "mcp"]);
+    expect(opencodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
+    expectNoDirectCmdLauncher(opencodeDysflow.command);
     expect(opencodeDysflow).not.toHaveProperty("args");
 
     const claude = await readJson(claudeSettings);
@@ -1009,6 +1026,32 @@ describe("formatAgentsLine", () => {
 });
 
 describe("handleInstallCommand error catch", () => {
+  it("returns an actionable error when the OpenCode runtime entrypoint is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-opencode-entrypoint-error-"));
+    const badPackageRoot = join(root, "bad-package");
+
+    try {
+      await mkdir(join(badPackageRoot, "dist"), { recursive: true });
+      await writeFile(join(badPackageRoot, "dist", "placeholder.js"), "missing cli", "utf8");
+      await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+
+      const runtimeDir = join(root, "runtime");
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "opencode", "--no-tui"],
+        { env: { USERPROFILE: root }, packageRoot: badPackageRoot },
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("Cannot configure OpenCode MCP");
+      expect(result.stderr).toContain(
+        join(runtimeDir, "app", "dist", "cli", "index.js").replaceAll("\\", "/"),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns exitCode 1 when installRuntime throws an Error", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-install-error-"));
     try {
