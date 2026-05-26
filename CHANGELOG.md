@@ -2,6 +2,14 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.7] - 2026-05-26
+
+### Fixed
+
+- Fixed OpenCode MCP startup on Windows by generating a direct Node runtime entrypoint instead of direct `.cmd` spawning. Closes #361.
+- Fixed MCP `tools/call` hangs from Access project contexts by settling runner timeout/abort paths, preserving `timed_out` metadata, and returning terminal client-safe tool responses. Closes #362, #364, #365.
+- Added SDD verification evidence for the MCP tool-call hang fix, including short `E2E_testing` probes for `dysflow_doctor` and `list_tables`. Closes #366.
+
 ## [0.9.6] - 2026-05-26
 
 ### Fixed
