@@ -243,7 +243,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
 
     let processes: OsProcessInfo[];
     try {
-      processes = await this.options.processScanner.listProcesses();
+      processes = await withTimeout(
+        this.options.processScanner.listProcesses(),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
     } catch (error) {
       result.errors.push({
         operationId: record.operationId,

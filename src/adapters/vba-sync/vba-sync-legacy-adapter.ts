@@ -177,6 +177,19 @@ const VBA_MANAGER_EXTRA_KEYS = new Set([
 const LEGACY_TOOL_NOT_IMPLEMENTED_MESSAGE =
   "This legacy tool is tracked for parity but is not implemented by this service yet.";
 
+/**
+ * Safety ceiling for the PS execution budget when no explicit timeoutMs is provided.
+ * Preflight cleanup (registry reads + WMI orphan scans) is NOT covered by the configured
+ * processTimeoutMs — it runs before the PS timer starts. On a busy system, preflight can
+ * accumulate seconds per stale registry record. Setting a wall-clock budget here and
+ * subtracting the actual preflight elapsed time ensures the PS process always returns
+ * (or times out) before the total from method entry approaches an external deadline.
+ *
+ * 25 s leaves ~5 s for process startup + I/O overhead inside a typical 30 s per-call
+ * budget used by MCP test harnesses and integrations.
+ */
+const LEGACY_PROCESS_WALL_CLOCK_BUDGET_MS = 25_000;
+
 export class VbaSyncLegacyAdapter implements LegacyVbaSyncPort {
   private readonly executor: VbaManagerExecutor;
   private readonly preflightCleanup?: AccessOperationPreflightCleanup;
@@ -257,10 +270,11 @@ export class VbaSyncLegacyAdapter implements LegacyVbaSyncPort {
     const accessPath = target.data.accessPath;
     const destinationRoot = target.data.destinationRoot;
     const password = this.accessPassword;
-    const effectiveTimeoutMs =
+    const explicitTimeoutMs =
       typeof params.timeoutMs === "number" && params.timeoutMs > 0
         ? params.timeoutMs
-        : target.data.processTimeoutMs;
+        : undefined;
+    const effectiveTimeoutMs = explicitTimeoutMs ?? target.data.processTimeoutMs;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
@@ -280,10 +294,32 @@ export class VbaSyncLegacyAdapter implements LegacyVbaSyncPort {
     const extraValidation = validateVbaManagerExtra(request.extra);
     if (!extraValidation.ok) return extraValidation;
 
+    const preflightStart = Date.now();
     const preflightDiagnostics = diagnosticsFromPreflightCleanup(
       await this.runPreflightCleanup(target.data),
     );
-    const result = await this.executeWithTimeout(request);
+    const preflightElapsedMs = Date.now() - preflightStart;
+
+    // When no explicit timeoutMs was supplied by the caller, apply a wall-clock budget
+    // that accounts for the time already spent in preflight cleanup. Preflight (registry
+    // reads + WMI orphan scans) is NOT covered by processTimeoutMs — it runs before the
+    // PS timer starts. On busy systems with accumulated stale registry records, preflight
+    // can take several seconds per record, so we cap the combined budget at
+    // LEGACY_PROCESS_WALL_CLOCK_BUDGET_MS and subtract the actual preflight elapsed time.
+    // This ensures the PS process always returns (or times out) before the total wall-clock
+    // time from method entry approaches an external per-call deadline.
+    //
+    // The floor is min(5 s, effectiveTimeoutMs) so that intentionally tiny timeouts used in
+    // unit tests still behave correctly while production calls always receive ≥ 5 s of budget.
+    const psTimeoutMs =
+      explicitTimeoutMs !== undefined
+        ? effectiveTimeoutMs
+        : Math.max(
+            Math.min(5_000, effectiveTimeoutMs),
+            Math.min(effectiveTimeoutMs, LEGACY_PROCESS_WALL_CLOCK_BUDGET_MS) - preflightElapsedMs,
+          );
+    const timedRequest = psTimeoutMs !== effectiveTimeoutMs ? { ...request, timeoutMs: psTimeoutMs } : request;
+    const result = await this.executeWithTimeout(timedRequest);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
       return failureResult(

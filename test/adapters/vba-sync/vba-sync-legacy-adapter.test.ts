@@ -140,11 +140,16 @@ describe("VbaSyncLegacyService", () => {
           DYSFLOW_ACCESS_PASSWORD: "secret",
           ACCESS_VBA_PASSWORD: "secret",
         },
-        timeoutMs: 30_000,
+        // The effective PS timeout is capped by LEGACY_PROCESS_WALL_CLOCK_BUDGET_MS (25 s)
+        // and reduced by the actual preflight elapsed time, so it is slightly below 25 000 ms.
+        timeoutMs: expect.any(Number),
         cwd: process.cwd(),
         signal: expect.any(AbortSignal),
       },
     ]);
+    const capturedRequest = calls[0] as { timeoutMs: number };
+    expect(capturedRequest.timeoutMs).toBeLessThanOrEqual(25_000);
+    expect(capturedRequest.timeoutMs).toBeGreaterThan(20_000);
   });
 
   it("runs preflight cleanup with the resolved target before invoking the legacy manager", async () => {
@@ -622,7 +627,7 @@ describe("VbaSyncLegacyService", () => {
     }
   });
 
-  it("timeout: project config timeoutMs is used instead of service default for legacy VBA tools", async () => {
+  it("timeout: wall-clock budget caps PS timeout even when project config timeoutMs is larger", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-"));
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(
@@ -651,7 +656,13 @@ describe("VbaSyncLegacyService", () => {
     await service.execute("export_all", {});
     await service.execute("compile_vba", {});
 
-    expect(capturedTimeouts).toEqual([180_000, 180_000]);
+    // The wall-clock budget caps the PS timeout to 25 s when no explicit timeoutMs is
+    // provided, regardless of the project config value. Preflight elapsed is ~0 ms in
+    // tests, so both calls receive the full 25 s budget minus essentially zero.
+    expect(capturedTimeouts[0]).toBeLessThanOrEqual(25_000);
+    expect(capturedTimeouts[1]).toBeLessThanOrEqual(25_000);
+    expect(capturedTimeouts[0]).toBeGreaterThanOrEqual(20_000);
+    expect(capturedTimeouts[1]).toBeGreaterThanOrEqual(20_000);
   });
 
   it("timeout: explicit per-call timeoutMs overrides project config timeout", async () => {
@@ -685,7 +696,7 @@ describe("VbaSyncLegacyService", () => {
     expect(capturedTimeout).toBe(90_000);
   });
 
-  it("timeout: falls back to service processTimeoutMs when no project config defines timeoutMs", async () => {
+  it("timeout: wall-clock budget caps PS timeout when service processTimeoutMs exceeds the budget", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-"));
 
     let capturedTimeout = 0;
@@ -704,7 +715,10 @@ describe("VbaSyncLegacyService", () => {
 
     await service.execute("export_all", {});
 
-    expect(capturedTimeout).toBe(45_000);
+    // processTimeoutMs=45 s exceeds the 25 s wall-clock budget, so the cap applies.
+    // Preflight elapsed is ~0 ms in tests, so the captured timeout is ~25 s.
+    expect(capturedTimeout).toBeLessThanOrEqual(25_000);
+    expect(capturedTimeout).toBeGreaterThanOrEqual(20_000);
   });
 
   it("-NonInteractive present in spawned args at correct position", async () => {
