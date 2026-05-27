@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "E2E KillSwitch escribe y restaura TbConfiguracion",
+      "procedure": "Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "killswitch", "cache-readiness", "write-controlled"]
+    },
+    {
+      "name": "E2E KillSwitch OFF ON OFF restore",
+      "procedure": "Test_E2E_KillSwitch_OffOnOff_Restore_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "killswitch", "cache-readiness", "write-controlled"]
+    }
+  ]
+}

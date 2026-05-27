@@ -685,7 +685,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      accessPath: SCHEMA_PROPS.accessPath,
+      ...READ_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       sql: SCHEMA_PROPS.sql,
@@ -697,7 +697,7 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      accessPath: SCHEMA_PROPS.accessPath,
+      ...READ_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       columnName: SCHEMA_PROPS.columnName,

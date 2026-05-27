@@ -18,6 +18,127 @@ if ([string]::IsNullOrEmpty($AccessPassword)) {
 }
 
 $BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD
+$MSO_AUTOMATION_SECURITY_LOW = 1
+$startupInfo = $null
+$originalAutomationSecurity = $null
+
+function New-DaoDbEngine {
+  $engineCandidates = @(
+    "DAO.DBEngine.160",
+    "DAO.DBEngine.150",
+    "DAO.DBEngine.140",
+    "DAO.DBEngine.120",
+    "DAO.DBEngine.36"
+  )
+
+  foreach ($progId in $engineCandidates) {
+    try {
+      $engine = New-Object -ComObject $progId
+      if ($engine) { return $engine }
+    } catch { Write-Debug "DAO engine probe failed for ${progId}: $_" }
+  }
+
+  throw "No se pudo crear DAO.DBEngine."
+}
+
+function Invoke-WithDaoDatabase {
+  param(
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [string] $Password = "",
+    [Parameter(Mandatory = $true)] [scriptblock] $Action,
+    [Parameter(Mandatory = $false)] $DefaultOnError = $null
+  )
+
+  $dbEngine = $null
+  $db = $null
+  try {
+    $dbEngine = New-DaoDbEngine
+    $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $DatabasePath -Password $Password
+    return (& $Action $db)
+  } catch {
+    if ($PSBoundParameters.ContainsKey('DefaultOnError')) { return $DefaultOnError }
+    throw
+  } finally {
+    if ($null -ne $db) { try { $db.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $db) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $dbEngine) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" } }
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+  }
+}
+
+function Disable-StartupFeatures {
+  param(
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [string] $Password = ""
+  )
+
+  Invoke-WithDaoDatabase -DatabasePath $DatabasePath -Password $Password -Action {
+    param($db)
+    $restoreInfo = [ordered]@{
+      RenamedAutoExec = $false
+      OriginalStartupForm = $null
+      HasStartupForm = $false
+    }
+
+    try {
+      $scripts = $db.Containers("Scripts")
+      foreach ($doc in $scripts.Documents) {
+        if ($doc.Name -eq "AutoExec_TraeBackup") {
+          $autoExecExists = $false
+          foreach ($candidate in $scripts.Documents) { if ($candidate.Name -eq "AutoExec") { $autoExecExists = $true } }
+          if (-not $autoExecExists) { $doc.Name = "AutoExec" }
+        }
+      }
+      foreach ($doc in $scripts.Documents) {
+        if ($doc.Name -eq "AutoExec") {
+          $doc.Name = "AutoExec_TraeBackup"
+          $restoreInfo.RenamedAutoExec = $true
+          break
+        }
+      }
+    } catch { Write-Debug "Disable AutoExec skipped: $_" }
+
+    try {
+      $prop = $db.Properties("StartupForm")
+      $restoreInfo.OriginalStartupForm = $prop.Value
+      $restoreInfo.HasStartupForm = $true
+      $db.Properties.Delete("StartupForm")
+    } catch { Write-Debug "Disable StartupForm skipped: $_" }
+
+    return [pscustomobject]$restoreInfo
+  }
+}
+
+function Restore-StartupFeatures {
+  param(
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [string] $Password = "",
+    [Parameter(Mandatory = $false)] $RestoreInfo
+  )
+
+  if ($null -eq $RestoreInfo) { return }
+  Invoke-WithDaoDatabase -DatabasePath $DatabasePath -Password $Password -Action {
+    param($db)
+    if ($RestoreInfo.RenamedAutoExec) {
+      try {
+        $scripts = $db.Containers("Scripts")
+        foreach ($doc in $scripts.Documents) {
+          if ($doc.Name -eq "AutoExec_TraeBackup") {
+            $doc.Name = "AutoExec"
+            break
+          }
+        }
+      } catch { Write-Debug "Restore AutoExec skipped: $_" }
+    }
+    if ($RestoreInfo.HasStartupForm) {
+      try {
+        $newProp = $db.CreateProperty("StartupForm", 10, $RestoreInfo.OriginalStartupForm)
+        $db.Properties.Append($newProp)
+      } catch { Write-Debug "Restore StartupForm skipped: $_" }
+    }
+  } | Out-Null
+}
 
 function Open-DatabaseWithPassword {
   param(
@@ -178,6 +299,7 @@ function Get-TableNames {
     if ($name.StartsWith("MSys")) { continue }
     $isLinked = -not [string]::IsNullOrWhiteSpace([string]$table.Connect)
     if ($LinkedOnly -and -not $isLinked) { continue }
+    if (-not $LinkedOnly -and $isLinked) { continue }
     [void]$names.Add($name)
   }
   return $names
@@ -365,7 +487,7 @@ function Update-LinkTables {
     $dryRun = [bool]$Payload.dryRun
   }
 
-  $dbEngine = New-Object -ComObject DAO.DBEngine.120
+  $dbEngine = New-DaoDbEngine
   $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath
   try {
     $targetNames = @(Resolve-LinkTargetNames -Database $Database -Payload $Payload)
@@ -497,7 +619,7 @@ function Compact-RepairDatabase {
     }
   }
 
-  $dbEngine = New-Object -ComObject DAO.DBEngine.120
+  $dbEngine = New-DaoDbEngine
   try {
     $dbEngine.CompactDatabase($sourceFull, $targetPath)
     if (Test-Path -LiteralPath $targetPath) {
@@ -530,7 +652,7 @@ function Compare-BackendTables {
     throw "Backend database not found: $BackendPath"
   }
 
-  $dbEngine = New-Object -ComObject DAO.DBEngine.120
+  $dbEngine = New-DaoDbEngine
   $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $BackendPath
   try {
     $currentTables = @(Get-TableNames -Database $CurrentDb)
@@ -937,7 +1059,7 @@ function Invoke-RelinkDirectory {
 
   Write-DysflowProgress -Percent 20 -Message "Scanning files" -Total $files.Count
 
-  $dbEngine = New-Object -ComObject DAO.DBEngine.120
+  $dbEngine = New-DaoDbEngine
   try {
     $fileIdx = 0
     foreach ($file in $files) {
@@ -1179,6 +1301,85 @@ if ($Operation -eq 'query') {
       exit 1
     }
   }
+
+  $earlyAction = [string]$earlyPayload.action
+  $earlyTargetPath = [string]$earlyPayload.databasePath
+  if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.backendPath }
+  $isDirectTargetRead = -not [string]::IsNullOrWhiteSpace($earlyTargetPath) -and $earlyPayload.mode -eq 'read' -and (
+    [string]::IsNullOrWhiteSpace($earlyAction) -or
+    $earlyAction -in @('query_sql', 'list_tables', 'get_schema', 'count_rows', 'distinct_values', 'get_relationships')
+  )
+
+  if ($isDirectTargetRead) {
+    $directDbEngine = $null
+    $directDb = $null
+    $directRs = $null
+    try {
+      $directDbEngine = New-DaoDbEngine
+      $directDb = Open-DatabaseWithBackendPassword -DbEngine $directDbEngine -DatabasePath $earlyTargetPath -ReadOnly $true
+      Write-DysflowProgress -Percent 40 -Message "Executing operation"
+
+      if ([string]::IsNullOrWhiteSpace($earlyAction) -or $earlyAction -eq 'query_sql') {
+        $directRs = $directDb.OpenRecordset([string]$earlyPayload.sql)
+        $rows = @(Convert-RecordsetRows $directRs)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+
+      if ($earlyAction -eq 'list_tables') {
+        $tables = @(Get-TableNames -Database $directDb)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+        exit 0
+      }
+
+      if ($earlyAction -eq 'get_schema') {
+        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for get_schema." }
+        $schema = @(Get-TableSchema -Database $directDb -TableName ([string]$earlyPayload.tableName))
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+
+      if ($earlyAction -eq 'count_rows') {
+        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for count_rows." }
+        $directRs = $directDb.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$earlyPayload.tableName)]")
+        $rows = @(Convert-RecordsetRows $directRs)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        exit 0
+      }
+
+      if ($earlyAction -eq 'distinct_values') {
+        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for distinct_values." }
+        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.columnName)) { throw "columnName is required for distinct_values." }
+        $directRs = $directDb.OpenRecordset("SELECT DISTINCT [$([string]$earlyPayload.columnName)] AS [Value] FROM [$([string]$earlyPayload.tableName)]")
+        $rows = @(Convert-RecordsetRows $directRs)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        exit 0
+      }
+
+      if ($earlyAction -eq 'get_relationships') {
+        $relationships = @(Get-Relationships -Database $directDb)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+    } catch {
+      [Console]::Error.WriteLine($_.Exception.Message)
+      exit 1
+    } finally {
+      if ($null -ne $directRs) { try { $directRs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+      if ($null -ne $directDb) {
+        try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
+      }
+      if ($null -ne $directDbEngine) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDbEngine) } catch { Write-Debug "Diagnostics: $_" } }
+    }
+  }
 }
 
 $access = $null
@@ -1200,8 +1401,21 @@ try {
     throw "Access database not found: $AccessDbPath"
   }
 
+  if (-not $isDirectTargetQuery) {
+    $startupInfo = Disable-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword
+    if ($null -eq $startupInfo) {
+      throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm. Se aborta la apertura para evitar ejecucion no desatendida."
+    }
+  }
+
   $access = New-Object -ComObject Access.Application
   $access.Visible = $false
+  try { $access.UserControl = $false } catch { Write-Debug "Diagnostics: $_" }
+  try {
+    $originalAutomationSecurity = $access.AutomationSecurity
+    $access.AutomationSecurity = $MSO_AUTOMATION_SECURITY_LOW
+  } catch { Write-Debug "Diagnostics: $_" }
+  Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
 
   if (-not $isDirectTargetQuery) {
     if ([string]::IsNullOrEmpty($AccessPassword)) {
@@ -1210,6 +1424,7 @@ try {
       $access.OpenCurrentDatabase($AccessDbPath, $false, $AccessPassword)
     }
     Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+    try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
   }
 
   Write-DysflowProgress -Percent 10 -Message "Opening database"
@@ -1319,13 +1534,19 @@ try {
 
     if ($action -eq 'count_rows') {
       if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for count_rows." }
-      $rs = $db.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$payload.tableName)]")
+      $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      $rs = $null
       try {
+        $rs = $readDb.Database.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$payload.tableName)]")
         $rows = @(Convert-RecordsetRows $rs)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }
+        if ($readDb.Owned) {
+          try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
       exit 0
     }
@@ -1333,13 +1554,19 @@ try {
     if ($action -eq 'distinct_values') {
       if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for distinct_values." }
       if ([string]::IsNullOrWhiteSpace([string]$payload.columnName)) { throw "columnName is required for distinct_values." }
-      $rs = $db.OpenRecordset("SELECT DISTINCT [$([string]$payload.columnName)] AS Value FROM [$([string]$payload.tableName)]")
+      $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      $rs = $null
       try {
+        $rs = $readDb.Database.OpenRecordset("SELECT DISTINCT [$([string]$payload.columnName)] AS [Value] FROM [$([string]$payload.tableName)]")
         $rows = @(Convert-RecordsetRows $rs)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($null -ne $rs) { $rs.Close() }
+        if ($readDb.Owned) {
+          try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
       exit 0
     }
@@ -1457,8 +1684,16 @@ try {
   exit 1
 } finally {
   if ($null -ne $access) {
+    if ($null -ne $originalAutomationSecurity) {
+      try { $access.AutomationSecurity = $originalAutomationSecurity } catch { Write-Debug "Diagnostics: $_" }
+    }
     try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
     try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch { Write-Debug "Diagnostics: $_" }
   }
+  if ($null -ne $startupInfo) {
+    try { Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
+  }
+  [System.GC]::Collect()
+  [System.GC]::WaitForPendingFinalizers()
 }

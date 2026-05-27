@@ -2,6 +2,13 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.11] - 2026-05-27
+
+### Changed
+
+- Synced the Access E2E fixture source snapshot, test runner, OpenSpec relink-directory artifacts, redacted Engram project export, and E2E fixture databases for machine handoff.
+- Removed the hardcoded E2E backend password from exported VBA source; the fixture now reads the backend password from environment variables.
+
 ## [0.9.10] - 2026-05-26
 
 ### Fixed

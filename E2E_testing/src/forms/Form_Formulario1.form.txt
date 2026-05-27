@@ -565,13 +565,13 @@ Private Sub InitializeFirebase()
                   "<script src='https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js'></script>" & vbCrLf & _
                   "<script>" & vbCrLf & _
                   "const firebaseConfig = {" & vbCrLf & _
-                  "  apiKey: '<firebase-api-key>'," & vbCrLf & _
-                  "  authDomain: '<firebase-auth-domain>'," & vbCrLf & _
-                  "  databaseURL: 'https://example.invalid/firebase-database'," & vbCrLf & _
-                  "  projectId: '<firebase-project-id>'," & vbCrLf & _
-                  "  storageBucket: '<firebase-storage-bucket>'," & vbCrLf & _
-                  "  messagingSenderId: '<firebase-messaging-sender-id>'," & vbCrLf & _
-                  "  appId: '<firebase-app-id>'" & vbCrLf & _
+                  "  apiKey: 'AIzaSyCaPdLLadH3-naRZIwIm0He0ztm7DUFB9A'," & vbCrLf & _
+                  "  authDomain: 'defensayseguridad-c5a21.firebaseapp.com'," & vbCrLf & _
+                  "  databaseURL: 'https://defensayseguridad-c5a21-default-rtdb.europe-west1.firebasedatabase.app'," & vbCrLf & _
+                  "  projectId: 'defensayseguridad-c5a21'," & vbCrLf & _
+                  "  storageBucket: 'defensayseguridad-c5a21.firebasestorage.app'," & vbCrLf & _
+                  "  messagingSenderId: '333347675713'," & vbCrLf & _
+                  "  appId: '1:333347675713:web:da5d23cbc8113fa0de30c0'" & vbCrLf & _
                   "};" & vbCrLf & _
                   "firebase.initializeApp(firebaseConfig);" & vbCrLf & _
                   "const db = firebase.database();" & vbCrLf & _

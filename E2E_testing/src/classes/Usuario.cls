@@ -10,17 +10,16 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
-
 Public CorreoUsuario As String
 Public Password As String
-Public usuarioRed As String
+Public UsuarioRed As String
 Public Nombre As String
 Public Matricula As String
 Public FechaAlta As String
 Public Activado As Boolean
 Public FechaProximoCambioContrasenia As String
 Public FechaUltimaConexion As String
-Public TieneQueCambiarLaContrasenia As Boolean
+Public TieneQueCambiarLaPass As Boolean
 Public Telefono As String
 Public Movil As String
 Public Observaciones As String
@@ -32,7 +31,7 @@ Public PasswordNuncaCaduca As Boolean
 Public MantenerLanzaderaAbierta As Boolean
 Public PassIncialPlana As String
 Public UsuarioSSID As String
-Public ID As String
+Public id As String
 Public JefeDelUsuario As String
 Public PermisoPruebas As String
 Public ParaTareasProgramadas As Boolean
@@ -40,38 +39,36 @@ Public FechaBloqueo As String
 
 
 
-Private m_eEsAdministradorCalculado As EnumSiNo
-Private m_eEsUsuarioAdministradorCalculado As EnumSiNo
-Private m_eEsUsuarioCalidadCalculado As EnumSiNo
-Private m_eEsUsuarioEconomiaCalculado As EnumSiNo
-Private m_eEsUsuarioSecretariaCalculado As EnumSiNo
-Private m_eEsUsuarioTecnicoCalculado As EnumSiNo
-Private m_eEsUsuarioSinAccesoCalculado As EnumSiNo
-Private m_eEsUsuarioCalidadAvisosCalculado As EnumSiNo
-
+Private m_eEsAdministradorCalculado As EnumSino
+Private m_eEsUsuarioAdministradorCalculado As EnumSino
+Private m_eEsUsuarioCalidadCalculado As EnumSino
+Private m_eEsUsuarioEconomiaCalculado As EnumSino
+Private m_eEsUsuarioSecretariaCalculado As EnumSino
+Private m_eEsUsuarioTecnicoCalculado As EnumSino
+Private m_eEsUsuarioSinAccesoCalculado As EnumSino
+Private m_eEsUsuarioCalidadAvisosCalculado As EnumSino
 
 Private m_objColAplicacionesPermisos As Scripting.Dictionary
 Private m_objPermisos As UsuarioAplicacionPermisos
-Private m_objColCampos As Collection
+
 Public Error As String
 Private m_Error As String
+Private m_objColCampos As Collection
 
-Public Property Get EsAdministradorCalculado() As EnumSiNo
+
+Public Property Get EsAdministradorCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
-    If m_eEsAdministradorCalculado <> Empty Then
-        EsAdministradorCalculado = m_eEsAdministradorCalculado
-        Exit Property
-    End If
+    
+    
     If Me.EsAdministrador = "Sí" Then
-        m_eEsAdministradorCalculado = EnumSiNo.Sí
+        m_eEsAdministradorCalculado = EnumSino.Sí
         EsAdministradorCalculado = m_eEsAdministradorCalculado
         Exit Property
     End If
     If Me.Permisos Is Nothing Then
-        m_eEsAdministradorCalculado = EnumSiNo.No
+        m_eEsAdministradorCalculado = EnumSino.No
         EsAdministradorCalculado = m_eEsAdministradorCalculado
         Exit Property
     End If
@@ -84,21 +81,20 @@ Public Property Get EsAdministradorCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsAdministradorCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsAdministradorCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
     
 
 End Property
 
-Public Property Get EsUsuarioTecnicoCalculado() As EnumSiNo
+Public Property Get EsUsuarioTecnicoCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
+    
     
     If Me.Permisos Is Nothing Then
-        m_eEsUsuarioTecnicoCalculado = EnumSiNo.No
+        m_eEsUsuarioTecnicoCalculado = EnumSino.No
         EsUsuarioTecnicoCalculado = m_eEsUsuarioTecnicoCalculado
         Exit Property
     End If
@@ -111,20 +107,20 @@ Public Property Get EsUsuarioTecnicoCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsUsuarioTecnicoCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsUsuarioTecnicoCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
+    
 
 End Property
 
-Public Property Get EsUsuarioCalidadCalculado() As EnumSiNo
+Public Property Get EsUsuarioCalidadCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
+    
     
     If Me.Permisos Is Nothing Then
-        m_eEsUsuarioCalidadCalculado = EnumSiNo.No
+        m_eEsUsuarioCalidadCalculado = EnumSino.No
         EsUsuarioCalidadCalculado = m_eEsUsuarioCalidadCalculado
         Exit Property
     End If
@@ -137,20 +133,20 @@ Public Property Get EsUsuarioCalidadCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsUsuarioCalidadCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsUsuarioCalidadCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
+    
 
 End Property
 
-Public Property Get EsUsuarioEconomiaCalculado() As EnumSiNo
+Public Property Get EsUsuarioEconomiaCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
+    
     
     If Me.Permisos Is Nothing Then
-        m_eEsUsuarioEconomiaCalculado = EnumSiNo.No
+        m_eEsUsuarioEconomiaCalculado = EnumSino.No
         EsUsuarioEconomiaCalculado = m_eEsUsuarioEconomiaCalculado
         Exit Property
     End If
@@ -163,21 +159,20 @@ Public Property Get EsUsuarioEconomiaCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsUsuarioEconomiaCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsUsuarioEconomiaCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
     
 
 End Property
 
-Public Property Get EsUsuarioSecretariaCalculado() As EnumSiNo
+Public Property Get EsUsuarioSecretariaCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
+    
     
     If Me.Permisos Is Nothing Then
-        m_eEsUsuarioSecretariaCalculado = EnumSiNo.No
+        m_eEsUsuarioSecretariaCalculado = EnumSino.No
         EsUsuarioSecretariaCalculado = m_eEsUsuarioSecretariaCalculado
         Exit Property
     End If
@@ -190,25 +185,24 @@ Public Property Get EsUsuarioSecretariaCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsUsuarioSecretariaCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsUsuarioSecretariaCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
     
 
 End Property
 
-Public Property Get EsUsuarioCalidadAvisosCalculado() As EnumSiNo
+Public Property Get EsUsuarioCalidadAvisosCalculado() As EnumSino
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
+    
     
     If Me.Permisos Is Nothing Then
-        m_eEsUsuarioCalidadAvisosCalculado = EnumSiNo.No
+        m_eEsUsuarioCalidadAvisosCalculado = EnumSino.No
         EsUsuarioCalidadAvisosCalculado = m_eEsUsuarioCalidadAvisosCalculado
         Exit Property
     End If
-    m_eEsUsuarioCalidadAvisosCalculado = Me.EsUsuarioCalidadAvisosCalculado
+    m_eEsUsuarioCalidadAvisosCalculado = Me.Permisos.EsUsuarioCalidadAvisosCalculado
     Me.Error = Me.Permisos.Error
     If Me.Error <> "" Then
         Err.Raise 1000
@@ -217,9 +211,8 @@ Public Property Get EsUsuarioCalidadAvisosCalculado() As EnumSiNo
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.EsUsuarioCalidadAvisosCalculado ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.EsUsuarioCalidadAvisosCalculado ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
     
 
 End Property
@@ -228,7 +221,6 @@ Public Property Get ColAplicacionesPermisos() As Scripting.Dictionary
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
     If Not m_objColAplicacionesPermisos Is Nothing Then
         Set ColAplicacionesPermisos = m_objColAplicacionesPermisos
         Exit Property
@@ -236,18 +228,14 @@ Public Property Get ColAplicacionesPermisos() As Scripting.Dictionary
     If Me.CorreoUsuario = "" Then
         Exit Property
     End If
-    Set m_objColAplicacionesPermisos = constructor.getAplicacionesPermisos(Me.CorreoUsuario, m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
+    Set m_objColAplicacionesPermisos = constructor.getAplicacionesPermisos(Me.CorreoUsuario, Me.Error)
     
     Set ColAplicacionesPermisos = m_objColAplicacionesPermisos
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.ColAplicacionesPermisos ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.colAplicacionesPermisos ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
 End Property
 
 
@@ -255,7 +243,6 @@ Public Property Get Permisos() As UsuarioAplicacionPermisos
 
     On Error GoTo errores
     Me.Error = ""
-    m_Error = ""
     If Not m_objPermisos Is Nothing Then
         Set Permisos = m_objPermisos
         Exit Property
@@ -266,18 +253,22 @@ Public Property Get Permisos() As UsuarioAplicacionPermisos
         End If
         Exit Property
     End If
-    Set m_objPermisos = Me.ColAplicacionesPermisos(CStr(IDAplicacion))
+    If Me.ColAplicacionesPermisos.Exists(CStr(IDAplicacion)) Then
+        Set m_objPermisos = Me.ColAplicacionesPermisos(CStr(IDAplicacion))
+    End If
+    
     
     
     Set Permisos = m_objPermisos
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.Permisos ha devuelto el error: " & vbNewLine & Err.Description
+        Me.Error = "El método Usuario.Permisos ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
 
 End Property
+
+
 
 Public Property Get ColCampos() As Collection
 
@@ -319,21 +310,22 @@ Public Property Get ColCampos() As Collection
         .Add "FechaBloqueo"
     End With
     Set ColCampos = m_objColCampos
-   Exit Property
+    Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.ColCampos ha devuelto el error: " & vbNewLine & Err.Description
+        m_Error = "El método UsuariosAplicacion.ColCampos ha devuelto el error:" & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
+    m_Error = Me.Error
 End Property
 
 
 Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Error As String) As Variant
-
+    
     On Error GoTo errores
-
+    
     Me.Error = ""
-    m_Error = ""
+    p_Error = ""
+    
     If m_NombrePropiedad = "CorreoUsuario" Then
         getPropiedad = Me.CorreoUsuario
         Exit Function
@@ -343,7 +335,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "UsuarioRed" Then
-        getPropiedad = Me.usuarioRed
+        getPropiedad = Me.UsuarioRed
         Exit Function
     End If
     If m_NombrePropiedad = "Nombre" Then
@@ -364,14 +356,6 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
     End If
     If m_NombrePropiedad = "FechaProximoCambioContrasenia" Then
         getPropiedad = Me.FechaProximoCambioContrasenia
-        Exit Function
-    End If
-    If m_NombrePropiedad = "FechaUltimaConexion" Then
-        getPropiedad = Me.FechaUltimaConexion
-        Exit Function
-    End If
-    If m_NombrePropiedad = "TieneQueCambiarLaContrasenia" Then
-        getPropiedad = Me.TieneQueCambiarLaContrasenia
         Exit Function
     End If
     If m_NombrePropiedad = "Telefono" Then
@@ -419,7 +403,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "Id" Then
-        getPropiedad = Me.ID
+        getPropiedad = Me.id
         Exit Function
     End If
     If m_NombrePropiedad = "JefeDelUsuario" Then
@@ -438,24 +422,32 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         getPropiedad = Me.FechaBloqueo
         Exit Function
     End If
+    If m_NombrePropiedad = "TieneQueCambiarLaContrasenia" Then
+        getPropiedad = Me.TieneQueCambiarLaPass
+        Exit Function
+    End If
+    If m_NombrePropiedad = "FechaUltimaConexion" Then
+        getPropiedad = Me.FechaUltimaConexion
+        Exit Function
+    End If
     p_Error = "Propiedad no reconocida en Usuario.getPropiedad"
     Err.Raise 1000
     Exit Function
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.getPropiedad ha devuelto el error: " & vbNewLine & Err.Description
+        p_Error = "El metodo Usuario.getPropiedad ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
 End Function
 
 
 
 Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As Variant, Optional ByRef p_Error As String) As String
+    
     On Error GoTo errores
-
+    
     Me.Error = ""
     p_Error = ""
-    m_Error = ""
+    
     If m_NombrePropiedad = "CorreoUsuario" Then
         Me.CorreoUsuario = m_ValorPropiedad
         Exit Function
@@ -465,7 +457,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "UsuarioRed" Then
-        Me.usuarioRed = m_ValorPropiedad
+        Me.UsuarioRed = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "Nombre" Then
@@ -486,14 +478,6 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
     End If
     If m_NombrePropiedad = "FechaProximoCambioContrasenia" Then
         Me.FechaProximoCambioContrasenia = m_ValorPropiedad
-        Exit Function
-    End If
-    If m_NombrePropiedad = "FechaUltimaConexion" Then
-        Me.FechaUltimaConexion = m_ValorPropiedad
-        Exit Function
-    End If
-    If m_NombrePropiedad = "TieneQueCambiarLaContrasenia" Then
-        Me.TieneQueCambiarLaContrasenia = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "Telefono" Then
@@ -541,7 +525,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "Id" Then
-        Me.ID = m_ValorPropiedad
+        Me.id = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "JefeDelUsuario" Then
@@ -560,15 +544,20 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Me.FechaBloqueo = m_ValorPropiedad
         Exit Function
     End If
+    If m_NombrePropiedad = "TieneQueCambiarLaContrasenia" Then
+        Me.TieneQueCambiarLaPass = m_ValorPropiedad
+        Exit Function
+    End If
+    If m_NombrePropiedad = "FechaUltimaConexion" Then
+        Me.FechaUltimaConexion = m_ValorPropiedad
+        Exit Function
+    End If
     p_Error = "Propiedad no reconocida en Usuario.SetPropiedad"
     Err.Raise 1000
     Exit Function
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Usuario.SetPropiedad ha devuelto el error: " & vbNewLine & Err.Description
+        p_Error = "El metodo Usuario.SetPropiedad ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    Me.Error = m_Error
 End Function
-
-
 

@@ -10,311 +10,391 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
-Public URLArchivoUltimo As String
+Public URLUltimoArchivo As String
 
+Private m_sCSS As String
+Private m_sCSS1 As String
+Private m_sURLDirectorioAplicaciones As String
+Private m_sURLDirAplicacion As String
 Private m_objColAdministradores As Scripting.Dictionary
 Private m_objColUsuariosCalidad As Scripting.Dictionary
-Private m_objColUsuariosTecnicos As Scripting.Dictionary
-Private m_objColUsuarios As Scripting.Dictionary
-Private m_sCSS As String
-Private m_sURLAchivoIni As String
-Private m_sURLArchivoCSS As String
-Private m_sURLDirectorioAplicaciones As String
-Private m_sURLDirectorioAplicacion As String
-Private m_sURLDirectorioDocumentacion As String
-Private m_sURLDirectorioIconos As String
-Private m_sURLDirectorioLocal As String
-Private m_sURLDirectorioDocumentacionAyuda As String
+Private m_sCadenaCorreosCalidad As String
+Private m_sCadenaCorreosCalidadEnPruebas As String
+Private m_sURLArchivoIni As String
 Private m_sVersionAplicacion As String
-Private m_sDiasParaAvisoFinExpediente As String
-Private m_sDiasParaOfertasSinDecision As String
+Private m_sURLDirectorioDocumentacion As String
+Private m_sURLDirectorioPlantillas As String
+Private m_sURLDirectorioDocumentacionAuditorias As String
+Private m_sURLPlantillaInformeNCProyecto As String
+Private m_sURLPlantillaInformeNCAuditoria As String
+Private m_sURLDirectorioLocal As String
+Private m_sURLDirectorioInformesLocal As String
+Private m_sURLDirectorioDocumentacionAyuda As String
 
-Private m_objColGradosClasificacionesEnExpedientes As Scripting.Dictionary
-Private m_objColComercialesEnExpedientes As Scripting.Dictionary
-Private m_objColCPVSEnExpedientes As Scripting.Dictionary
-Private m_objColejercitoSEnExpedientes As Scripting.Dictionary
-Private m_objColEstados As Scripting.Dictionary
-Private m_objColEstadosTexto As Scripting.Dictionary
-Private m_objColEstadosTitulo As Scripting.Dictionary
-Private m_objColEstadosTituloMejorado As Scripting.Dictionary
-Private m_ObjcolExplicacionTipoTarea As Scripting.Dictionary
-Private m_objColJefaturaSEnExpedientes As Scripting.Dictionary
-Private m_objColJuridicaSEnExpedientes As Scripting.Dictionary
-Private m_objColLugarEjecucionSEnExpedientes As Scripting.Dictionary
-Private m_objColOficinaProgramaSEnExpedientes As Scripting.Dictionary
-Private m_objColExpedientesEstadoDesconocido As Scripting.Dictionary
-Private m_objColExpedientesAPuntoDeRecepcionarCompleto As Scripting.Dictionary
-Private m_objColExpedientesAPuntoDeRecepcionarHito As Scripting.Dictionary
-Private m_objColExpedientesAdjudicadosSinContrato As Scripting.Dictionary
-Private m_objColExpedientesAdjudicadosTSOLSinCodS4H As Scripting.Dictionary
-Private m_objColExpedientesFaseOfertaPorMuchoTiempo As Scripting.Dictionary
-Private m_objColOrganoContratacioneSEnExpedientes As Scripting.Dictionary
-Private m_objColPECALeSEnExpedientes As Scripting.Dictionary
-Private m_objColRACSEnExpedientes As Scripting.Dictionary
-Private m_ObjColExpedientesParaCombo As Scripting.Dictionary
+Private m_sURLVideoAyudaNCProyecto As String
+Private m_sURLVideoAyudaNCProyectoParaTecnico As String
+Private m_sURLVideoAyudaNCAuditoria As String
 
-Private m_ObjColOrganosContrataciones As Scripting.Dictionary
-Private m_ObjComerciales As Scripting.Dictionary
-Private m_ObjJPs As Scripting.Dictionary
-Private m_ObjCPVs As Scripting.Dictionary
-Private m_ObjEjercitos As Scripting.Dictionary
+Private m_sURLArchivoCSS As String
+Private m_sURLArchivoCSS1 As String
+Private m_sURLDirRecursos As String
+
+Private m_sURLAyudaIndicadores As String
 
 
-Private m_ObjJuridicas As Scripting.Dictionary
-Private m_ObjCadenaSuministradores As Scripting.Dictionary
-Private m_ObjLugaresEjecucion As Scripting.Dictionary
-Private m_ObjOficinasDePrograma As Scripting.Dictionary
-Private m_ObjOrganosContratacion As Scripting.Dictionary
-Private m_ObjPECALES As Scripting.Dictionary
-Private m_ObjRACS As Scripting.Dictionary
-Private m_ObjSuministradores As Scripting.Dictionary
-Private m_ObjGradosClasificaciones As Scripting.Dictionary
+Private m_objColNCsProyecto As Scripting.Dictionary
+Private m_objColNCsAuditoria As Scripting.Dictionary
+Private m_ObjColJuridicasDistintas As Scripting.Dictionary
 
-Private m_ObjOtrasOpciones As Scripting.Dictionary
-Private m_ObjOtrasOpcionesFormularios As Scripting.Dictionary
-Private m_objColTiposExpedientes As Scripting.Dictionary
-Private m_objColExpedientesTipos As Scripting.Dictionary
-Private m_objColTiposExpedientesParaBusqueda As Scripting.Dictionary
-
-
-Private m_objColTiposExpedientesParaAM As Scripting.Dictionary
-Private m_objColTiposExpedientesParaLote As Scripting.Dictionary
-Private m_objColTiposExpedientesNoDerivados As Scripting.Dictionary
-
-Private m_objColExpedientesParaAMTipos As Scripting.Dictionary
-Private m_objColExpedientesParaLoteTipos As Scripting.Dictionary
-Private m_objColExpedientesParaNoDerivadosTipos As Scripting.Dictionary
-
-Private m_objColAplicaAgedysTipos As Scripting.Dictionary
-Private m_objColTiposAplicaAgedys As Scripting.Dictionary
-
-Private m_objColExpedientesTodos As Scripting.Dictionary
-Private m_ObjUltimoCambio As UltimoCambio
 
 Private m_sTituloUsuarioConectado As String
-Private m_objColCamposInformeSimple As Scripting.Dictionary
-Private m_objColCamposInformeCompleto As Scripting.Dictionary
-Private m_objColExpedientesCompletos As Scripting.Dictionary
-Private m_objColExpedientesEnGestionDeRiesgos As Scripting.Dictionary
-Private m_objColImagenes As Scripting.Dictionary
+Private m_objExpedientes As Scripting.Dictionary
+Private m_objColTipos As Scripting.Dictionary
+Private m_objUsuariosActivos As Scripting.Dictionary
+Private m_objUsuarios As Scripting.Dictionary
 
-Private m_sURLIconoCadenaContratacionOrganoControl As String
-Private m_sURLIconoCadenaContratacionEmpresaNoGrupo As String
-Private m_sURLIconoCadenaContratacionEmpresaGrupo As String
 
-Private m_sURLIconoEmpresaLista As String
+Private m_ObjColEstadosNC As Scripting.Dictionary
+Private m_ObjColEstadosNCTexto As Scripting.Dictionary
+Private m_objColEstadosNCTitulo As Scripting.Dictionary
 
-Public Error As String
+Private m_ObjColEstadosAC As Scripting.Dictionary
+Private m_ObjColEstadosACTexto As Scripting.Dictionary
+Private m_ObjColEstadosACTitulo As Scripting.Dictionary
+
+Private m_ObjColEstadosAR As Scripting.Dictionary
+Private m_ObjColEstadosARTexto As Scripting.Dictionary
+Private m_ObjColEstadosARTitulo As Scripting.Dictionary
+
+
+Private m_ObjColEnumOrdenOrderBy As Scripting.Dictionary
+Private m_ObjColEnumOrdenTitulo As Scripting.Dictionary
+
+Private m_objColJefesProyecto As Scripting.Dictionary
+Private m_objColAuditorias As Scripting.Dictionary
+Private m_objColAuditoriasNombres As Scripting.Dictionary
+Private m_objColResponsablesImplantacionDistintos As Scripting.Dictionary
+Private m_objColPuntosNormaNCAuditorias As Scripting.Dictionary
+
+Private m_objColAuditoriaSegTareas As Scripting.Dictionary
+Private m_objColAuditoriaSegTareasActivas As Scripting.Dictionary
+Private m_objColAuditoriaSegNC As Scripting.Dictionary
+
+Private m_objColProyectoSegTareas As Scripting.Dictionary
+Private m_objColProyectoSegNC As Scripting.Dictionary
+
+Private m_objColSegsTareasProyecto As Scripting.Dictionary
+Private m_objColSegsTareasProyectoActivas As Scripting.Dictionary
+Private m_objColSegsTareasProyectoPteReplanificar As Scripting.Dictionary
+
+Private m_objColSegsNCProyectoRegistradas As Scripting.Dictionary
+Private m_objColSegsNCProyectoTotales As Scripting.Dictionary
+Private m_objColSegsNCProyectoAccionesSinTareas As Scripting.Dictionary
+Private m_objColSegsNCProyectoPteCE As Scripting.Dictionary
+Private m_objColSegsNCProyectoCECaducada As Scripting.Dictionary
+Private m_objColSegsNCProyectoCENoConforme As Scripting.Dictionary
+
+Private m_objColSegsTareasAuditoriaTotales As Scripting.Dictionary
+Private m_objColSegsTareasAuditoriaActivas As Scripting.Dictionary
+Private m_objColSegsTareasAuditoriaPteReplanificar As Scripting.Dictionary
+Private m_objColSegsTareasAuditoriaIrregulares   As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaRegistradas As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaTotales As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaAccionesSinTareas As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaPteCE As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaCECaducada As Scripting.Dictionary
+Private m_objColSegsNCAuditoriaCENoConforme As Scripting.Dictionary
+
+
 Private m_Error As String
+Public Error As String
 Private m_objColItems As Scripting.Dictionary
 
 
 
-Public Property Get ColImagenes() As Scripting.Dictionary
-    
+Public Property Get ColEnumOrdenOrderBy() As Scripting.Dictionary
     On Error GoTo errores
+    
     Me.Error = ""
     m_Error = ""
-    If Not m_objColImagenes Is Nothing Then
-        Set ColImagenes = m_objColImagenes
+    If Not m_ObjColEnumOrdenOrderBy Is Nothing Then
+        Set ColEnumOrdenOrderBy = m_ObjColEnumOrdenOrderBy
         Exit Property
     End If
-    Set m_objColImagenes = New Scripting.Dictionary
-    m_objColImagenes.CompareMode = TextCompare
-    With m_objColImagenes
-        .Add m_ObjEntorno.URLIconoCadenaContratacionOrganoControl, m_ObjEntorno.URLIconoCadenaContratacionOrganoControl
-        .Add m_ObjEntorno.URLIconoCadenaContratacionEmpresaNoGrupo, m_ObjEntorno.URLIconoCadenaContratacionEmpresaNoGrupo
-        .Add m_ObjEntorno.URLIconoCadenaContratacionEmpresaGrupo, m_ObjEntorno.URLIconoCadenaContratacionEmpresaGrupo
-        .Add m_ObjEntorno.URLIconoEmpresaLista, m_ObjEntorno.URLIconoEmpresaLista
-        
+    Set m_ObjColEnumOrdenOrderBy = New Scripting.Dictionary
+    m_ObjColEnumOrdenOrderBy.CompareMode = TextCompare
+    With m_ObjColEnumOrdenOrderBy
+        .Add CStr(EnumOrden.PorFechaInicio), "order by FechaInicialMinima,IDAccionCorrectiva|order by FechaInicio,IDAccionRealizada"
+        .Add CStr(EnumOrden.PorFechaFinPrevista), "order by FechaFinPrevistaUltima,IDAccionCorrectiva|order by FechaFinPrevista,IDAccionRealizada"
+        .Add CStr(EnumOrden.PorNAccion), "order by NAccion,IDAccionCorrectiva|order by NAccion,IDAccionRealizada"
         
     End With
-    Set ColImagenes = m_objColImagenes
+    Set ColEnumOrdenOrderBy = m_ObjColEnumOrdenOrderBy
     
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColImagenes ha devuelto el error: " & vbNewLine & Err.Description
+        m_Error = "El método Entorno.ColEnumOrdenOrderBy ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Get ColEnumOrdenTitulo() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEnumOrdenTitulo Is Nothing Then
+        Set ColEnumOrdenTitulo = m_ObjColEnumOrdenTitulo
+        Exit Property
+    End If
+    Set m_ObjColEnumOrdenTitulo = New Scripting.Dictionary
+    m_ObjColEnumOrdenTitulo.CompareMode = TextCompare
+    With m_ObjColEnumOrdenTitulo
+        .Add CStr(EnumOrden.PorFechaInicio), "Cronológico - Fecha inicio"
+        .Add CStr(EnumOrden.PorFechaFinPrevista), "Cronológico - Fecha fin prevista"
+        .Add CStr(EnumOrden.PorNAccion), "Nº Acción"
+        
+    End With
+    Set ColEnumOrdenTitulo = m_ObjColEnumOrdenTitulo
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEnumOrdenTitulo ha devuelto el error: " & vbNewLine & Err.Description
     End If
     Me.Error = m_Error
 End Property
 
-Public Property Get DiasParaAvisoFinExpediente() As String
-
+Public Property Get ColEstadosAR() As Scripting.Dictionary
     On Error GoTo errores
-
+    
     Me.Error = ""
     m_Error = ""
-    If m_sDiasParaAvisoFinExpediente <> "" Then
-        DiasParaAvisoFinExpediente = m_sDiasParaAvisoFinExpediente
+    If Not m_ObjColEstadosAR Is Nothing Then
+        Set ColEstadosAR = m_ObjColEstadosAR
         Exit Property
     End If
-    m_sDiasParaAvisoFinExpediente = "15"
-    DiasParaAvisoFinExpediente = m_sDiasParaAvisoFinExpediente
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.DiasParaAvisoFinExpediente ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-
-
-Public Property Get DiasParaOfertasSinDecision() As String
-
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    If m_sDiasParaOfertasSinDecision <> "" Then
-        DiasParaOfertasSinDecision = m_sDiasParaOfertasSinDecision
-        Exit Property
-    End If
-    m_sDiasParaOfertasSinDecision = Application.TempVars("DiasParaOfertasSinDecision")
-    DiasParaOfertasSinDecision = m_sDiasParaOfertasSinDecision
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.DiasParaOfertasSinDecision ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-
-Public Property Get ColCamposInformeSimple() As Scripting.Dictionary
-
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColCamposInformeSimple Is Nothing Then
-        Set ColCamposInformeSimple = m_objColCamposInformeSimple
-        Exit Property
-    End If
-    Set m_objColCamposInformeSimple = New Scripting.Dictionary
-    m_objColCamposInformeSimple.CompareMode = TextCompare
-    With m_objColCamposInformeSimple
-        .Add "CadenaContratistas", "Contratistas"
-        .Add "Tipo", "Tipo"
-        .Add "Titulo", "Título"
-        .Add "CodExp", "Nº Exp. Corto"
-        .Add "Ejercito", "Ejército"
-        .Add "Estado", "ESTADOCalculadoTexto"
-        .Add "FechaInicioContrato", "Fecha Inicio"
-        .Add "FechaFinContrato", "Fecha Fin"
-        .Add "CadenaJPs", "Jefe Proyecto"
-        .Add "ResponsableCalidad", "Calidad"
-        .Add "ResponsableSeguridad", "Seguridad"
+    Set m_ObjColEstadosAR = New Scripting.Dictionary
+    m_ObjColEstadosAR.CompareMode = TextCompare
+    With m_ObjColEstadosAR
+        .Add CStr(EnumEstadoAR.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAR.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAR.PTEREPLANIFICAR), "PTEREPLANIFICAR"
+        .Add CStr(EnumEstadoAR.IRREGULAR), "IRREGULAR"
+        .Add CStr(EnumEstadoAR.REGISTRADA), "REGISTRADA"
     End With
-    Set ColCamposInformeSimple = m_objColCamposInformeSimple
+    Set ColEstadosAR = m_ObjColEstadosAR
+    
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColCamposInformeSimple ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El método Entorno.ColEstadosAR ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    m_Error = Me.Error
+    Me.Error = m_Error
 End Property
-Public Property Get ColCamposInformeCompleto() As Scripting.Dictionary
 
+
+Public Property Get ColEstadosARTexto() As Scripting.Dictionary
     On Error GoTo errores
-
+    
     Me.Error = ""
     m_Error = ""
-    If Not m_objColCamposInformeCompleto Is Nothing Then
-        Set ColCamposInformeCompleto = m_objColCamposInformeCompleto
+    If Not m_ObjColEstadosARTexto Is Nothing Then
+        Set ColEstadosARTexto = m_ObjColEstadosARTexto
         Exit Property
     End If
-    Set m_objColCamposInformeCompleto = New Scripting.Dictionary
-    m_objColCamposInformeCompleto.CompareMode = TextCompare
-    With m_objColCamposInformeCompleto
-        .Add "IDExpediente", "ID"
-        .Add "IDExpedientePadre", "IDExpedientePadre"
-        .Add "CadenaContratistas", "Contratistas"
-        .Add "Nemotecnico", "Nemotécnico"
-        .Add "Titulo", "Título"
-        .Add "ObjetoContrato", "ObjetoContrato"
-        .Add "ImporteLicitacion", "Importe Licitación"
-        .Add "ImporteContratacion", "Importe Contratación"
-        .Add "CodProyecto", "Cod Proyecto"
-        .Add "CodExp", "Nº Exp. Corto"
-        .Add "CodExpLargo", "Nº Exp. Largo"
-        .Add "CodS4H", "CodS4H"
-        .Add "CodigoActividad", "Cod. Actividad"
-        .Add "FechaInicioContrato", "Fecha Inicio"
-        .Add "FechaFinContrato", "Fecha Fin"
-        .Add "GARANTIAMESES", "Garantía (meses)"
-        .Add "FechaFinGarantia", "Fecha Fin Garantía"
-        .Add "EsAM", "AM"
-        .Add "EsLote", "Lote"
-        .Add "EsBasado", "Basado"
-        .Add "EsExpediente", "Expediente"
-        .Add "Ordinal", "Número"
-        .Add "Clasificacion", "Clasificación"
-        .Add "OrganoContratacion", "OrganoContratación"
-        .Add "OficinaPrograma", "Oficina de Programa"
-        .Add "Ejercito", "Ejército"
-        .Add "AccesoSharepoint", "AccesoSharepoint"
-        .Add "Observaciones", "Observaciones"
-        .Add "Ambito", "Se Ejecuta en Defensa"
-        .Add "NPedido", "NPedido"
-        .Add "ResponsableCalidad", "Calidad"
-        .Add "ResponsableSeguridad", "Seguridad"
-        .Add "AGEDYSAplica", "Para AGEDYS"
-        .Add "AGEDYSGenerico", "AGEDYS Genérico"
-        .Add "HPSAplica", "Para HPS"
-        .Add "Tipo", "Tipo"
-        .Add "CadenaPecal", "CadenaPecal"
-        .Add "Pecal", "Pecal"
-        .Add "POSTAGEDO", "POSTAGEDO"
-        .Add "APLICAESTADO", "Aplica Estado"
-        .Add "FECHAPREOFERTA", "F.PreOferta"
-        .Add "FECHAOFERTA", "F.Oferta"
-        .Add "FECHAADJUDICACION", "F.Adjudicación"
-        .Add "FECHAFIRMACONTRATO", "F.Firma"
-        .Add "FECHACERTIFICACION", "F.Certificación"
-        .Add "FECHAPERDIDA", "F.Perdida"
-        .Add "FECHADESESTIMADA", "F.Desestimada"
-        .Add "Estado", "ESTADOCalculadoTexto"
-        .Add "CadenaJPs", "Jefe Proyecto"
-        .Add "CadenaComerciales", "Comerciales"
-        .Add "CadenaRACs", "Racs"
-        .Add "CadenaHitos", "Hitos"
+    Set m_ObjColEstadosARTexto = New Scripting.Dictionary
+    m_ObjColEstadosARTexto.CompareMode = TextCompare
+    With m_ObjColEstadosARTexto
+        .Add "ACTIVA", EnumEstadoAR.ACTIVA
+        .Add "FINALIZADA", EnumEstadoAR.FINALIZADA
+        .Add "PTEREPLANIFICAR", EnumEstadoAR.PTEREPLANIFICAR
+        .Add "IRREGULAR", EnumEstadoAR.IRREGULAR
+        .Add "REGISTRADA", EnumEstadoAR.REGISTRADA
     End With
-    Set ColCamposInformeCompleto = m_objColCamposInformeCompleto
+    Set ColEstadosARTexto = m_ObjColEstadosARTexto
+    
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColCamposInformeCompleto ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El método Entorno.ColEstadosARTexto ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    m_Error = Me.Error
+    Me.Error = m_Error
 End Property
-Public Property Get UltimoCambio() As UltimoCambio
-    
-    
+Public Property Get ColEstadosARTitulo() As Scripting.Dictionary
     On Error GoTo errores
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjUltimoCambio Is Nothing Then
-        Set UltimoCambio = m_ObjUltimoCambio
+    If Not m_ObjColEstadosARTitulo Is Nothing Then
+        Set ColEstadosARTitulo = m_ObjColEstadosARTitulo
         Exit Property
     End If
-    Set m_ObjUltimoCambio = constructor.getUltimoCambio(p_IDUsuario:=m_ObjUsuarioConectado.ID, p_Error:=m_Error)
+    Set m_ObjColEstadosARTitulo = New Scripting.Dictionary
+    m_ObjColEstadosARTitulo.CompareMode = TextCompare
+    With m_ObjColEstadosARTitulo
+        .Add CStr(EnumEstadoAR.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAR.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAR.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
+        .Add CStr(EnumEstadoAR.IRREGULAR), "ESTADO IRREGULAR"
+        .Add CStr(EnumEstadoAR.REGISTRADA), "REGISTRADA"
+    End With
+    Set ColEstadosARTitulo = m_ObjColEstadosARTitulo
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosARTitulo ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Get ColEstadosAC() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEstadosAC Is Nothing Then
+        Set ColEstadosAC = m_ObjColEstadosAC
+        Exit Property
+    End If
+    Set m_ObjColEstadosAC = New Scripting.Dictionary
+    m_ObjColEstadosAC.CompareMode = TextCompare
+    With m_ObjColEstadosAC
+        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAC.SINACCIONES), "SINACCIONES"
+        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PTEREPLANIFICAR"
+        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "PTEREREGULARIZAR"
+        .Add CStr(EnumEstadoAC.REGISTRADA), "REGISTRADA"
+    End With
+    Set ColEstadosAC = m_ObjColEstadosAC
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosAC ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get ColEstadosACTexto() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEstadosACTexto Is Nothing Then
+        Set ColEstadosACTexto = m_ObjColEstadosACTexto
+        Exit Property
+    End If
+    Set m_ObjColEstadosACTexto = New Scripting.Dictionary
+    m_ObjColEstadosACTexto.CompareMode = TextCompare
+    With m_ObjColEstadosACTexto
+        .Add "ACTIVA", EnumEstadoAC.ACTIVA
+        .Add "SINACCIONES", EnumEstadoAC.SINACCIONES
+        .Add "FINALIZADA", EnumEstadoAC.FINALIZADA
+        .Add "PTEREPLANIFICAR", EnumEstadoAC.PTEREPLANIFICAR
+        .Add "PTEREREGULARIZAR", EnumEstadoAC.PTEREREGULARIZAR
+        .Add "REGISTRADA", EnumEstadoAC.REGISTRADA
+    End With
+    Set ColEstadosACTexto = m_ObjColEstadosACTexto
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosACTexto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get ColEstadosACTitulo() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEstadosACTitulo Is Nothing Then
+        Set ColEstadosACTitulo = m_ObjColEstadosACTitulo
+        Exit Property
+    End If
+    Set m_ObjColEstadosACTitulo = New Scripting.Dictionary
+    m_ObjColEstadosACTitulo.CompareMode = TextCompare
+    With m_ObjColEstadosACTitulo
+        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAC.SINACCIONES), "SIN ACCIONES"
+        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
+        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "ALGUNA ACCIÓN IRREGULAR"
+        .Add CStr(EnumEstadoAC.REGISTRADA), "TODAS LAS ACCIONES SIN PLANIFICAR"
+    End With
+    Set ColEstadosACTitulo = m_ObjColEstadosACTitulo
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosACTitulo ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get UsuariosActivos() As Scripting.Dictionary
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objUsuariosActivos Is Nothing Then
+        Set UsuariosActivos = m_objUsuariosActivos
+        Exit Property
+    End If
+    
+    Avance "Usuarios Administradores"
+    Set m_objUsuariosActivos = constructor.getUsuariosTecnicos(p_Activos:=EnumSino.Sí, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000
     End If
-    Set UltimoCambio = m_ObjUltimoCambio
+    Set UsuariosActivos = m_objUsuariosActivos
     
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.UltimoCambio ha devuelto el error: " & vbNewLine & Err.Description
+        m_Error = "El método Entorno.UsuariosActivos ha devuelto el error: " & vbNewLine & Err.Description
     End If
     Me.Error = m_Error
+
 End Property
-Public Property Set UltimoCambio(p_Valor As Variant)
+
+Public Property Set UsuariosActivos(p_Valor As Variant)
+    Set m_objUsuariosActivos = p_Valor
+End Property
+
+Public Property Get Usuarios() As Scripting.Dictionary
+
+    On Error GoTo errores
     
-    Set m_ObjUltimoCambio = p_Valor
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objUsuarios Is Nothing Then
+        Set Usuarios = m_objUsuarios
+        Exit Property
+    End If
     
+    Avance "Usuarios Administradores"
+    Set m_objUsuarios = constructor.getUsuariosTecnicos(p_Activos:=EnumSino.No, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set Usuarios = m_objUsuarios
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.Usuarios ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+Public Property Set Usuarios(p_Valor As Variant)
+    Set m_objUsuarios = p_Valor
 End Property
 Public Property Get TituloUsuarioConectado() As String
     
@@ -327,15 +407,19 @@ Public Property Get TituloUsuarioConectado() As String
         TituloUsuarioConectado = m_sTituloUsuarioConectado
         Exit Property
     End If
-    
-    If EsAdministrador = EnumSiNo.Sí Then
+    If EsAdministrador = EnumSino.Sí Then
         m_Colectivo = "Administrador"
-    ElseIf EsCalidad = EnumSiNo.Sí Then
+    ElseIf EsCalidad = EnumSino.Sí Then
         m_Colectivo = "Calidad"
     Else
         m_Colectivo = "Técnico"
     End If
-    m_sTituloUsuarioConectado = "Usuario conectado: " & m_ObjUsuarioConectado.Nombre & " ( " & m_Colectivo & " )" & m_TextoWin64
+    
+    If Application.TempVars("EnPruebas") = "Sí" Then
+        m_sTituloUsuarioConectado = "Usuario conectado: " & m_ObjUsuarioConectado.Nombre & " ( " & m_Colectivo & " ) EN PRUEBAS"
+    Else
+        m_sTituloUsuarioConectado = "Usuario conectado: " & m_ObjUsuarioConectado.Nombre & " ( " & m_Colectivo & " )"
+    End If
     
     TituloUsuarioConectado = m_sTituloUsuarioConectado
     
@@ -347,1670 +431,8 @@ errores:
     Me.Error = m_Error
 End Property
 
-Public Property Get ColTiposExpedientes() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposExpedientes Is Nothing Then
-        Set ColTiposExpedientes = m_objColTiposExpedientes
-        Exit Property
-    End If
-    
-    Set m_objColTiposExpedientes = New Scripting.Dictionary
-    m_objColTiposExpedientes.CompareMode = TextCompare
-    With m_objColTiposExpedientes
-        .Add CStr(EnumTipoExpediente.AM), "Acuerdo Marco"
-        .Add CStr(EnumTipoExpediente.Lote), "Lote"
-        .Add CStr(EnumTipoExpediente.BasadoDeAM), "Contrato Basado de AM"
-        .Add CStr(EnumTipoExpediente.BasadoDeLote), "Contrato Basado de Lote"
-        .Add CStr(EnumTipoExpediente.EXPIndividual), "Expediente individual"
-        
-    End With
-    
-    Set ColTiposExpedientes = m_objColTiposExpedientes
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColAplicaAgedysTipos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColAplicaAgedysTipos Is Nothing Then
-        Set ColAplicaAgedysTipos = m_objColAplicaAgedysTipos
-        Exit Property
-    End If
-    
-    Set m_objColAplicaAgedysTipos = New Scripting.Dictionary
-    m_objColAplicaAgedysTipos.CompareMode = TextCompare
-    With m_objColAplicaAgedysTipos
-        .Add "No", EnumAPLICAAGEDYS.No
-        .Add "Sí Exp Normal", EnumAPLICAAGEDYS.SiExpNormal
-        .Add "Sí Exp Genérico (OTROS_COMERCIALES)", EnumAPLICAAGEDYS.SiExpGenerico
-        
-    End With
-    
-    Set ColAplicaAgedysTipos = m_objColAplicaAgedysTipos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColAplicaAgedysTipos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColTiposAplicaAgedys() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposAplicaAgedys Is Nothing Then
-        Set ColTiposAplicaAgedys = m_objColTiposAplicaAgedys
-        Exit Property
-    End If
-    
-    Set m_objColTiposAplicaAgedys = New Scripting.Dictionary
-    m_objColTiposAplicaAgedys.CompareMode = TextCompare
-    With m_objColTiposAplicaAgedys
-        .Add CStr(EnumAPLICAAGEDYS.No), "No"
-        .Add CStr(EnumAPLICAAGEDYS.SiExpNormal), "Sí Exp Normal"
-        .Add CStr(EnumAPLICAAGEDYS.SiExpGenerico), "Sí Exp Genérico (OTROS_COMERCIALES)"
-        
-    End With
-    
-    Set ColTiposAplicaAgedys = m_objColTiposAplicaAgedys
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposAplicaAgedys ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
 
-Public Property Get ColTiposExpedientesParaBusqueda() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposExpedientesParaBusqueda Is Nothing Then
-        Set ColTiposExpedientesParaBusqueda = m_objColTiposExpedientesParaBusqueda
-        Exit Property
-    End If
-    
-    Set m_objColTiposExpedientesParaBusqueda = New Scripting.Dictionary
-    m_objColTiposExpedientesParaBusqueda.CompareMode = TextCompare
-    With m_objColTiposExpedientesParaBusqueda
-        .Add "Acuerdo Marco", "Acuerdo Marco"
-        .Add "Lote", "Lote"
-        .Add "Basado", "Basado"
-        .Add "BasadoDeAM", "Basado de Acuerdo Marco"
-        .Add "BasadoDeLote", "Basado de Lote"
-        .Add "Expediente", "Expediente"
-    End With
-    
-    Set ColTiposExpedientesParaBusqueda = m_objColTiposExpedientesParaBusqueda
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposExpedientesParaBusqueda ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColTiposExpedientesParaAM() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposExpedientesParaAM Is Nothing Then
-        Set ColTiposExpedientesParaAM = m_objColTiposExpedientesParaAM
-        Exit Property
-    End If
-    
-    Set m_objColTiposExpedientesParaAM = New Scripting.Dictionary
-    m_objColTiposExpedientesParaAM.CompareMode = TextCompare
-    With m_objColTiposExpedientesParaAM
-        .Add CStr(EnumTipoExpediente.Lote), "Lote de Acuerdo Marco"
-        .Add CStr(EnumTipoExpediente.BasadoDeAM), "Contrato Basado de AM"
-    End With
-    
-    Set ColTiposExpedientesParaAM = m_objColTiposExpedientesParaAM
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposExpedientesParaAM ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
 
-Public Property Get ColTiposExpedientesNoDerivados() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposExpedientesNoDerivados Is Nothing Then
-        Set ColTiposExpedientesNoDerivados = m_objColTiposExpedientesNoDerivados
-        Exit Property
-    End If
-    
-    Set m_objColTiposExpedientesNoDerivados = New Scripting.Dictionary
-    m_objColTiposExpedientesNoDerivados.CompareMode = TextCompare
-    With m_objColTiposExpedientesNoDerivados
-        .Add CStr(EnumTipoExpediente.AM), "Acuerdo Marco"
-        .Add CStr(EnumTipoExpediente.Lote), "Lote"
-        .Add CStr(EnumTipoExpediente.EXPIndividual), "Expediente individual"
-        .Add CStr(EnumTipoExpediente.EXPHPS), "Expediente Sólo para HPS"
-    End With
-    
-    Set ColTiposExpedientesNoDerivados = m_objColTiposExpedientesNoDerivados
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposExpedientesNoDerivados ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColTiposExpedientesParaLote() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColTiposExpedientesParaLote Is Nothing Then
-        Set ColTiposExpedientesParaLote = m_objColTiposExpedientesParaLote
-        Exit Property
-    End If
-    
-    Set m_objColTiposExpedientesParaLote = New Scripting.Dictionary
-    m_objColTiposExpedientesParaLote.CompareMode = TextCompare
-    With m_objColTiposExpedientesParaLote
-        .Add CStr(EnumTipoExpediente.BasadoDeLote), "Contrato Basado de Lote"
-    End With
-    
-    Set ColTiposExpedientesParaLote = m_objColTiposExpedientesParaLote
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColTiposExpedientesParaLote ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColExpedientesTipos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesTipos Is Nothing Then
-        Set ColExpedientesTipos = m_objColExpedientesTipos
-        Exit Property
-    End If
-    
-    Set m_objColExpedientesTipos = New Scripting.Dictionary
-    m_objColExpedientesTipos.CompareMode = TextCompare
-    With m_objColExpedientesTipos
-        .Add "Acuerdo Marco", EnumTipoExpediente.AM
-        .Add "Lote", EnumTipoExpediente.Lote
-        .Add "Contrato Basado de AM", EnumTipoExpediente.BasadoDeAM
-        .Add "Contrato Basado de Lote", EnumTipoExpediente.BasadoDeLote
-        .Add "Expediente individual", EnumTipoExpediente.EXPIndividual
-        .Add "Expediente Sólo para HPS", EnumTipoExpediente.EXPHPS
-    End With
-    
-    Set ColExpedientesTipos = m_objColExpedientesTipos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesTipos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColExpedientesParaAMTipos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesTipos Is Nothing Then
-        Set ColExpedientesParaAMTipos = m_objColExpedientesParaAMTipos
-        Exit Property
-    End If
-    
-    Set m_objColExpedientesParaAMTipos = New Scripting.Dictionary
-    m_objColExpedientesParaAMTipos.CompareMode = TextCompare
-    With m_objColExpedientesParaAMTipos
-        .Add "Lote de Acuerdo Marco", EnumTipoExpediente.Lote
-        .Add "Contrato Basado de AM", EnumTipoExpediente.BasadoDeAM
-    End With
-    
-    Set ColExpedientesParaAMTipos = m_objColExpedientesParaAMTipos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesParaAMTipos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColExpedientesParaLoteTipos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesParaLoteTipos Is Nothing Then
-        Set ColExpedientesParaLoteTipos = m_objColExpedientesParaLoteTipos
-        Exit Property
-    End If
-    
-    Set m_objColExpedientesParaLoteTipos = New Scripting.Dictionary
-    m_objColExpedientesParaLoteTipos.CompareMode = TextCompare
-    With m_objColExpedientesParaLoteTipos
-        .Add "Contrato Basado de Lote", EnumTipoExpediente.BasadoDeLote
-    End With
-    
-    Set ColExpedientesParaLoteTipos = m_objColExpedientesParaLoteTipos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesParaLoteTipos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColExpedientesParaNoDerivadosTipos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesParaNoDerivadosTipos Is Nothing Then
-        Set ColExpedientesParaNoDerivadosTipos = m_objColExpedientesParaNoDerivadosTipos
-        Exit Property
-    End If
-    
-    Set m_objColExpedientesParaNoDerivadosTipos = New Scripting.Dictionary
-    m_objColExpedientesParaNoDerivadosTipos.CompareMode = TextCompare
-    With m_objColExpedientesParaNoDerivadosTipos
-        
-        .Add "Acuerdo Marco", EnumTipoExpediente.AM
-        .Add "Lote", EnumTipoExpediente.Lote
-        .Add "Expediente individual", EnumTipoExpediente.EXPIndividual
-        .Add "Expediente Sólo para HPS", EnumTipoExpediente.EXPHPS
-    End With
-    
-    Set ColExpedientesParaNoDerivadosTipos = m_objColExpedientesParaNoDerivadosTipos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesParaNoDerivadosTipos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get OtrasOpciones() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjOtrasOpciones Is Nothing Then
-        Set OtrasOpciones = m_ObjOtrasOpciones
-        Exit Property
-    End If
-    
-    Set m_ObjOtrasOpciones = New Scripting.Dictionary
-    m_ObjOtrasOpciones.CompareMode = TextCompare
-    With m_ObjOtrasOpciones
-        .Add CStr(EnumOtrasOpciones.Comerciales), "Comerciales"
-        .Add CStr(EnumOtrasOpciones.CPVs), "CPVs"
-        .Add CStr(EnumOtrasOpciones.Ejercitos), "Ejercitos"
-        .Add CStr(EnumOtrasOpciones.GradosClasificacion), "Grados de Clasificacion"
-        .Add CStr(EnumOtrasOpciones.EMPRESAS), "Empresas"
-        .Add CStr(EnumOtrasOpciones.Lugares), "Lugares de Ejecución"
-        .Add CStr(EnumOtrasOpciones.OfProgramas), "Oficinas de Programa"
-        .Add CStr(EnumOtrasOpciones.OrganoContratacion), "Órganos de Contratación"
-        .Add CStr(EnumOtrasOpciones.PECALES), "PECALES"
-        .Add CStr(EnumOtrasOpciones.RACs), "RACS"
-        
-    End With
-    
-    Set OtrasOpciones = m_ObjOtrasOpciones
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.OtrasOpciones ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get OtrasOpcionesFormularios() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjOtrasOpcionesFormularios Is Nothing Then
-        Set OtrasOpcionesFormularios = m_ObjOtrasOpcionesFormularios
-        Exit Property
-    End If
-    
-    Set m_ObjOtrasOpcionesFormularios = New Scripting.Dictionary
-    m_ObjOtrasOpcionesFormularios.CompareMode = TextCompare
-    With m_ObjOtrasOpcionesFormularios
-        .Add CStr(EnumOtrasOpciones.Comerciales), "FormComercialesGestion"
-        .Add CStr(EnumOtrasOpciones.CPVs), "FormCPVsGestion"
-        .Add CStr(EnumOtrasOpciones.Ejercitos), "FormEjercitosGestion"
-        .Add CStr(EnumOtrasOpciones.GradosClasificacion), "FormGradosClasificacionGestion"
-        .Add CStr(EnumOtrasOpciones.EMPRESAS), "FormSuministradoresGestion"
-        .Add CStr(EnumOtrasOpciones.Lugares), "FormLugarEjecucionGestion"
-        .Add CStr(EnumOtrasOpciones.OfProgramas), "FormOficinasProgramaGestion"
-        .Add CStr(EnumOtrasOpciones.OrganoContratacion), "FormOrganoContratacionGestion"
-        .Add CStr(EnumOtrasOpciones.PECALES), "FormPECALESGestion"
-        .Add CStr(EnumOtrasOpciones.RACs), "FormRACSGestion"
-        
-    End With
-    
-    Set OtrasOpcionesFormularios = m_ObjOtrasOpcionesFormularios
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.OtrasOpcionesFormularios ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColExpedientesTodos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesTodos Is Nothing Then
-        Set ColExpedientesTodos = m_objColExpedientesTodos
-        Exit Property
-    End If
-    Set m_objColExpedientesTodos = constructor.getExpedientes(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesTodos = m_objColExpedientesTodos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesTodos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get Comerciales() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjComerciales Is Nothing Then
-        Set Comerciales = m_ObjComerciales
-        Exit Property
-    End If
-    Set m_ObjComerciales = constructor.getComerciales(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set Comerciales = m_ObjComerciales
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.Comerciales ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set Comerciales(p_Valor As Variant)
-
-    Set m_ObjComerciales = p_Valor
-    
-End Property
-Public Property Get JPs() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjJPs Is Nothing Then
-        Set JPs = m_ObjJPs
-        Exit Property
-    End If
-    Set m_ObjJPs = constructor.getJPs(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set JPs = m_ObjJPs
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.JPs ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set JPs(p_Valor As Variant)
-
-    Set m_ObjJPs = p_Valor
-    
-End Property
-Public Property Get ColExpedientesParaCombo() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjColExpedientesParaCombo Is Nothing Then
-        Set ColExpedientesParaCombo = m_ObjColExpedientesParaCombo
-        Exit Property
-    End If
-    Set m_ObjColExpedientesParaCombo = constructor.getExpedientesParaCombo(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesParaCombo = m_ObjColExpedientesParaCombo
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesParaCombo ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesParaCombo(p_Valor As Variant)
-
-    Set m_ObjColExpedientesParaCombo = p_Valor
-    
-End Property
-Public Property Get CPVs() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjCPVs Is Nothing Then
-        Set CPVs = m_ObjCPVs
-        Exit Property
-    End If
-    Set m_ObjCPVs = constructor.getCPVs(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set CPVs = m_ObjCPVs
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.CPVs ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set CPVs(p_Valor As Variant)
-
-    Set m_ObjCPVs = p_Valor
-    
-End Property
-
-Public Property Get Ejercitos() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjEjercitos Is Nothing Then
-        Set Ejercitos = m_ObjEjercitos
-        Exit Property
-    End If
-    Set m_ObjEjercitos = constructor.getEjercitos(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set Ejercitos = m_ObjEjercitos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.Ejercitos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set Ejercitos(p_Valor As Variant)
-
-    Set m_ObjEjercitos = p_Valor
-    
-End Property
-
-
-
-Public Property Get CadenaSuministradores() As Scripting.Dictionary
-    'SON LOS QUE HAN FORMADO PARTE DE CONTRATISTA ALGUNA VEZ
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjCadenaSuministradores Is Nothing Then
-        Set CadenaSuministradores = m_ObjCadenaSuministradores
-        Exit Property
-    End If
-    Set m_ObjCadenaSuministradores = constructor.getCadenaSuministradores(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set CadenaSuministradores = m_ObjCadenaSuministradores
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.CadenaSuministradores ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set CadenaSuministradores(p_Valor As Variant)
-
-    Set m_ObjCadenaSuministradores = p_Valor
-    
-End Property
-Public Property Get PECALES() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjPECALES Is Nothing Then
-        Set PECALES = m_ObjPECALES
-        Exit Property
-    End If
-    Set m_ObjPECALES = constructor.getPELCALES(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set PECALES = m_ObjPECALES
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.PECALES ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set PECALES(p_Valor As Variant)
-
-    Set m_ObjPECALES = p_Valor
-    
-End Property
-
-
-Public Property Get RACs() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjRACS Is Nothing Then
-        Set RACs = m_ObjRACS
-        Exit Property
-    End If
-    Set m_ObjRACS = constructor.getRACs(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set RACs = m_ObjRACS
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.RACS ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set RACs(p_Valor As Variant)
-
-    Set m_ObjRACS = p_Valor
-    
-End Property
-Public Property Get Suministradores() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjSuministradores Is Nothing Then
-        Set Suministradores = m_ObjSuministradores
-        Exit Property
-    End If
-    Set m_ObjSuministradores = constructor.getSuministradores(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set Suministradores = m_ObjSuministradores
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.Suministradores ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set Suministradores(p_Valor As Variant)
-
-    Set m_ObjSuministradores = p_Valor
-    
-End Property
-Public Property Get LugaresEjecucion() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjLugaresEjecucion Is Nothing Then
-        Set LugaresEjecucion = m_ObjLugaresEjecucion
-        Exit Property
-    End If
-    Set m_ObjLugaresEjecucion = constructor.getLugaresEjecucion(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set LugaresEjecucion = m_ObjLugaresEjecucion
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.LugaresEjecucion ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set LugaresEjecucion(p_Valor As Variant)
-
-    Set m_ObjLugaresEjecucion = p_Valor
-    
-End Property
-
-Public Property Get OficinasDePrograma() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjOficinasDePrograma Is Nothing Then
-        Set OficinasDePrograma = m_ObjOficinasDePrograma
-        Exit Property
-    End If
-    Set m_ObjOficinasDePrograma = constructor.getOficinasPrograma(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set OficinasDePrograma = m_ObjOficinasDePrograma
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.OficinasDePrograma ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set OficinasDePrograma(p_Valor As Variant)
-
-    Set m_ObjOficinasDePrograma = p_Valor
-    
-End Property
-Public Property Get OrganosContratacion() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjOrganosContratacion Is Nothing Then
-        Set OrganosContratacion = m_ObjOrganosContratacion
-        Exit Property
-    End If
-    Set m_ObjOrganosContratacion = constructor.getOrganosContrataciones(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set OrganosContratacion = m_ObjOrganosContratacion
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.OrganosContratacion ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set OrganosContratacion(p_Valor As Variant)
-
-    Set m_ObjOrganosContratacion = p_Valor
-    
-End Property
-
-Public Property Get GradosClasificaciones() As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjGradosClasificaciones Is Nothing Then
-        Set GradosClasificaciones = m_ObjGradosClasificaciones
-        Exit Property
-    End If
-    Set m_ObjGradosClasificaciones = constructor.getGradosClasificaciones(p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set GradosClasificaciones = m_ObjGradosClasificaciones
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.GradosClasificaciones ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set GradosClasificaciones(p_Valor As Variant)
-
-    Set m_ObjGradosClasificaciones = p_Valor
-    
-End Property
-
-Public Property Get ColOrganosContrataciones() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjColOrganosContrataciones Is Nothing Then
-        Set ColOrganosContrataciones = m_ObjColOrganosContrataciones
-        Exit Property
-    End If
-    Set m_ObjColOrganosContrataciones = constructor.getOrganosContrataciones(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColOrganosContrataciones = m_ObjColOrganosContrataciones
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColOrganosContrataciones ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColOrganosContrataciones(p_Valor As Variant)
-
-    Set m_ObjColOrganosContrataciones = p_Valor
-
-End Property
-
-Public Property Get ColOrganoContratacioneSEnExpedientes() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColOrganoContratacioneSEnExpedientes Is Nothing Then
-        Set ColOrganoContratacioneSEnExpedientes = m_objColOrganoContratacioneSEnExpedientes
-        Exit Property
-    End If
-    Set m_objColOrganoContratacioneSEnExpedientes = constructor.getOrganoContratacioneSEnExpedientes(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColOrganoContratacioneSEnExpedientes = m_objColOrganoContratacioneSEnExpedientes
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColOrganoContratacioneSEnExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColOrganoContratacioneSEnExpedientes(p_Valor As Variant)
-
-    Set m_objColOrganoContratacioneSEnExpedientes = p_Valor
-
-End Property
-
-Public Property Get ColOficinaProgramaSEnExpedientes() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColOficinaProgramaSEnExpedientes Is Nothing Then
-        Set ColOficinaProgramaSEnExpedientes = m_objColOficinaProgramaSEnExpedientes
-        Exit Property
-    End If
-    Set m_objColOficinaProgramaSEnExpedientes = constructor.getOficinaProgramaSEnExpedientes(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColOficinaProgramaSEnExpedientes = m_objColOficinaProgramaSEnExpedientes
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColOficinaProgramaSEnExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColOficinaProgramaSEnExpedientes(p_Valor As Variant)
-
-    Set m_objColOficinaProgramaSEnExpedientes = p_Valor
-
-End Property
-
-Public Property Get ColExpedientesEstadoDesconocido() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesEstadoDesconocido Is Nothing Then
-        Set ColExpedientesEstadoDesconocido = m_objColExpedientesEstadoDesconocido
-        Exit Property
-    End If
-    Set m_objColExpedientesEstadoDesconocido = constructor.getExpedientesEstadoDesconocido(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesEstadoDesconocido = m_objColExpedientesEstadoDesconocido
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesEstadoDesconocido ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesEstadoDesconocido(p_Valor As Variant)
-
-    Set m_objColExpedientesEstadoDesconocido = p_Valor
-
-End Property
-
-Public Property Get ColExpedientesAPuntoDeRecepcionarCompleto() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesAPuntoDeRecepcionarCompleto Is Nothing Then
-        Set ColExpedientesAPuntoDeRecepcionarCompleto = m_objColExpedientesAPuntoDeRecepcionarCompleto
-        Exit Property
-    End If
-    Set m_objColExpedientesAPuntoDeRecepcionarCompleto = constructor.getColExpedientesAPuntoDeRecepcionarCompleto(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesAPuntoDeRecepcionarCompleto = m_objColExpedientesAPuntoDeRecepcionarCompleto
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesAPuntoDeRecepcionarCompleto ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesAPuntoDeRecepcionarCompleto(p_Valor As Variant)
-
-    Set m_objColExpedientesAPuntoDeRecepcionarCompleto = p_Valor
-
-End Property
-
-Public Property Get ColExpedientesAPuntoDeRecepcionarHito() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesAPuntoDeRecepcionarHito Is Nothing Then
-        Set ColExpedientesAPuntoDeRecepcionarHito = m_objColExpedientesAPuntoDeRecepcionarHito
-        Exit Property
-    End If
-    Set m_objColExpedientesAPuntoDeRecepcionarHito = constructor.getColExpedientesAPuntoDeRecepcionarHito(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesAPuntoDeRecepcionarHito = m_objColExpedientesAPuntoDeRecepcionarHito
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesAPuntoDeRecepcionarHito ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesAPuntoDeRecepcionarHito(p_Valor As Variant)
-
-    Set m_objColExpedientesAPuntoDeRecepcionarHito = p_Valor
-
-End Property
-
-Public Property Get ColExpedientesAdjudicadosSinContrato() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesAdjudicadosSinContrato Is Nothing Then
-        Set ColExpedientesAdjudicadosSinContrato = m_objColExpedientesAdjudicadosSinContrato
-        Exit Property
-    End If
-    Set m_objColExpedientesAdjudicadosSinContrato = constructor.getColExpedientesAdjudicadosSinContrato(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesAdjudicadosSinContrato = m_objColExpedientesAdjudicadosSinContrato
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesAdjudicadosSinContrato ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesAdjudicadosSinContrato(p_Valor As Variant)
-
-    Set m_objColExpedientesAdjudicadosSinContrato = p_Valor
-
-End Property
-Public Property Get ColExpedientesAdjudicadosTSOLSinCodS4H() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesAdjudicadosTSOLSinCodS4H Is Nothing Then
-        Set ColExpedientesAdjudicadosTSOLSinCodS4H = m_objColExpedientesAdjudicadosTSOLSinCodS4H
-        Exit Property
-    End If
-    Set m_objColExpedientesAdjudicadosTSOLSinCodS4H = constructor.getColExpedientesAdjudicadosTSOLSinCodS4H(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesAdjudicadosTSOLSinCodS4H = m_objColExpedientesAdjudicadosTSOLSinCodS4H
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesAdjudicadosTSOLSinCodS4H ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesAdjudicadosTSOLSinCodS4H(p_Valor As Variant)
-
-    Set m_objColExpedientesAdjudicadosTSOLSinCodS4H = p_Valor
-
-End Property
-Public Property Get ColExpedientesFaseOfertaPorMuchoTiempo() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesFaseOfertaPorMuchoTiempo Is Nothing Then
-        Set ColExpedientesFaseOfertaPorMuchoTiempo = m_objColExpedientesFaseOfertaPorMuchoTiempo
-        Exit Property
-    End If
-    Set m_objColExpedientesFaseOfertaPorMuchoTiempo = constructor.getColExpedientesFaseOfertaPorMuchoTiempo(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesFaseOfertaPorMuchoTiempo = m_objColExpedientesFaseOfertaPorMuchoTiempo
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesFaseOfertaPorMuchoTiempo ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesFaseOfertaPorMuchoTiempo(p_Valor As Variant)
-
-    Set m_objColExpedientesFaseOfertaPorMuchoTiempo = p_Valor
-
-End Property
-Public Property Get ColExpedientesCompletos() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesCompletos Is Nothing Then
-        Set ColExpedientesCompletos = m_objColExpedientesCompletos
-        Exit Property
-    End If
-    Set m_objColExpedientesCompletos = constructor.getExpedientesCompletos(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesCompletos = m_objColExpedientesCompletos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesCompletos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColExpedientesCompletos(p_Valor As Variant)
-
-    Set m_objColExpedientesCompletos = p_Valor
-
-End Property
-Public Property Get ColExpedientesEnGestionDeRiesgos() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColExpedientesEnGestionDeRiesgos Is Nothing Then
-        Set ColExpedientesEnGestionDeRiesgos = m_objColExpedientesEnGestionDeRiesgos
-        Exit Property
-    End If
-    Set m_objColExpedientesEnGestionDeRiesgos = constructor.getExpedientesEnGestionDeRiesgos(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColExpedientesEnGestionDeRiesgos = m_objColExpedientesEnGestionDeRiesgos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColExpedientesEnGestionDeRiesgos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColEstados() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColEstados Is Nothing Then
-        Set ColEstados = m_objColEstados
-        Exit Property
-    End If
-    Set m_objColEstados = New Scripting.Dictionary
-    m_objColEstados.CompareMode = TextCompare
-    With m_objColEstados
-        .Add CStr(EnumEstados.Preoferta), "PreOferta"
-        .Add CStr(EnumEstados.Oferta), "Oferta"
-        .Add CStr(EnumEstados.Adjudicada), "Adjudicada"
-        .Add CStr(EnumEstados.EnEjecucion), "EnEjecucion"
-        .Add CStr(EnumEstados.EnGarantia), "EnGarantia"
-        .Add CStr(EnumEstados.Cerrado), "Cerrado"
-        .Add CStr(EnumEstados.Desestimado), "Desestimado"
-        .Add CStr(EnumEstados.Perdido), "Perdido"
-        .Add CStr(EnumEstados.NoAPlica), "NoAPlica"
-        .Add CStr(EnumEstados.Desconocido), "Desconocido"
-    End With
-    Set ColEstados = m_objColEstados
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColEstados ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColEstadosTexto() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColEstadosTexto Is Nothing Then
-        Set ColEstadosTexto = m_objColEstadosTexto
-        Exit Property
-    End If
-    Set m_objColEstadosTexto = New Scripting.Dictionary
-    m_objColEstadosTexto.CompareMode = TextCompare
-    With m_objColEstadosTexto
-        .Add "Preoferta", EnumEstados.Preoferta
-        .Add "Oferta", EnumEstados.Oferta
-        .Add "Adjudicada", EnumEstados.Adjudicada
-        .Add "EnEjecucion", EnumEstados.EnEjecucion
-        .Add "EnGarantia", EnumEstados.EnGarantia
-        .Add "Cerrado", EnumEstados.Cerrado
-        .Add "Desestimado", EnumEstados.Desestimado
-        .Add "Perdido", EnumEstados.Perdido
-        .Add "NoAPlica", EnumEstados.NoAPlica
-        .Add "Desconocido", EnumEstados.Desconocido
-    End With
-    Set ColEstadosTexto = m_objColEstadosTexto
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColEstadosTexto ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColEstadosTitulo() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColEstadosTitulo Is Nothing Then
-        Set ColEstadosTitulo = m_objColEstadosTitulo
-        Exit Property
-    End If
-    Set m_objColEstadosTitulo = New Scripting.Dictionary
-    m_objColEstadosTitulo.CompareMode = TextCompare
-    With m_objColEstadosTitulo
-        .Add CStr(EnumEstados.Preoferta), "PreOferta"
-        .Add CStr(EnumEstados.Oferta), "Oferta"
-        .Add CStr(EnumEstados.Adjudicada), "Adjudicada"
-        .Add CStr(EnumEstados.EnEjecucion), "Ejecución"
-        .Add CStr(EnumEstados.EnGarantia), "Garantía"
-        .Add CStr(EnumEstados.Cerrado), "Cerrado"
-        .Add CStr(EnumEstados.Desestimado), "Desestimado"
-        .Add CStr(EnumEstados.Perdido), "Perdido"
-        .Add CStr(EnumEstados.NoAPlica), "NoAPlica"
-        .Add CStr(EnumEstados.Desconocido), "Desconocido"
-    End With
-    Set ColEstadosTitulo = m_objColEstadosTitulo
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColEstadosTitulo ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get ColEstadosTituloMejorado() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColEstadosTituloMejorado Is Nothing Then
-        Set ColEstadosTituloMejorado = m_objColEstadosTituloMejorado
-        Exit Property
-    End If
-    Set m_objColEstadosTituloMejorado = New Scripting.Dictionary
-    m_objColEstadosTituloMejorado.CompareMode = TextCompare
-    With m_objColEstadosTituloMejorado
-        .Add CStr(EnumEstados.Preoferta), "En fase de PreOferta"
-        .Add CStr(EnumEstados.Oferta), "En fase de Oferta"
-        .Add CStr(EnumEstados.Adjudicada), "Adjudicada"
-        .Add CStr(EnumEstados.EnEjecucion), "En fase de Ejecución"
-        .Add CStr(EnumEstados.EnGarantia), "En Garantía"
-        .Add CStr(EnumEstados.Cerrado), "Cerrado"
-        .Add CStr(EnumEstados.Desestimado), "Desestimado"
-        .Add CStr(EnumEstados.Perdido), "Perdido"
-        .Add CStr(EnumEstados.NoAPlica), "NoAPlica"
-        .Add CStr(EnumEstados.Desconocido), "Desconocido"
-    End With
-    Set ColEstadosTituloMejorado = m_objColEstadosTituloMejorado
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColEstadosTituloMejorado ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get colExplicacionTipoTarea() As Scripting.Dictionary
-
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    
-    If Not m_ObjcolExplicacionTipoTarea Is Nothing Then
-        Set colExplicacionTipoTarea = m_ObjcolExplicacionTipoTarea
-        Exit Property
-    End If
-    Set m_ObjcolExplicacionTipoTarea = New Scripting.Dictionary
-    With m_ObjcolExplicacionTipoTarea
-        .CompareMode = TextCompare
-        
-        .Add CStr(EnumTipoTarea.EstadoDesconocido), "Expedientes que aplica estado y que no tienen ninguno definido"
-        .Add CStr(EnumTipoTarea.APuntoDeRecepcionarCompleto), "Expedientes para los que se está a punto de Recepcionar"
-        .Add CStr(EnumTipoTarea.APuntoDeRecepcionarHito), "Expedientes para los que algún hito está a punto de Recepcionar"
-        .Add CStr(EnumTipoTarea.AdjudicadoSinContrato), "Expedientes Adjudicados para los que no se tienen datos del contrato"
-        .Add CStr(EnumTipoTarea.AdjudicadosTSOLSinCodS4H), "Expedientes Adjudicados de TSOL sin CodS4H"
-        .Add CStr(EnumTipoTarea.EnFaseOfertaPorMuchoTiempo), "Exp.En Fase Oferta sin decidir por más de " & m_ObjEntorno.DiasParaOfertasSinDecision & " días"
-    End With
-    
-    Set colExplicacionTipoTarea = m_ObjcolExplicacionTipoTarea
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.colExplicacionTipoTarea ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-
-End Property
-
-Public Property Get ColGradosClasificacionesEnExpedientes() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColGradosClasificacionesEnExpedientes Is Nothing Then
-        Set ColGradosClasificacionesEnExpedientes = m_objColGradosClasificacionesEnExpedientes
-        Exit Property
-    End If
-    Set m_objColGradosClasificacionesEnExpedientes = constructor.getGradosClasificacionesEnExpedientes(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColGradosClasificacionesEnExpedientes = m_objColGradosClasificacionesEnExpedientes
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColGradosClasificacionesEnExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColGradosClasificacionesEnExpedientes(p_Valor As Variant)
-
-    Set m_objColGradosClasificacionesEnExpedientes = p_Valor
-
-End Property
-
-Public Property Get ColComercialesEnExpedientes() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColComercialesEnExpedientes Is Nothing Then
-        Set ColComercialesEnExpedientes = m_objColComercialesEnExpedientes
-        Exit Property
-    End If
-    Set m_objColComercialesEnExpedientes = constructor.getExpedientesConComercial(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColComercialesEnExpedientes = m_objColComercialesEnExpedientes
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColComercialesEnExpedientes ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Set ColComercialesEnExpedientes(p_Valor As Variant)
-
-    Set m_objColComercialesEnExpedientes = p_Valor
-
-End Property
-
-Public Property Get ColAdministradores() As Scripting.Dictionary
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColAdministradores Is Nothing Then
-        Set ColAdministradores = m_objColAdministradores
-        Exit Property
-    End If
-    Set m_objColAdministradores = getUsuariosAdministradores(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColAdministradores = m_objColAdministradores
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColUsuariosAdministradores ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get ColUsuariosCalidad() As Scripting.Dictionary
-
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColUsuariosCalidad Is Nothing Then
-        Set ColUsuariosCalidad = m_objColUsuariosCalidad
-        Exit Property
-    End If
-    Set m_objColUsuariosCalidad = getUsuariosCalidad(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColUsuariosCalidad = m_objColUsuariosCalidad
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColUsuariosCalidad ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-
-End Property
-Public Property Get ColUsuariosTecnicos() As Scripting.Dictionary
-
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColUsuariosTecnicos Is Nothing Then
-        Set ColUsuariosTecnicos = m_objColUsuariosTecnicos
-        Exit Property
-    End If
-    Set m_objColUsuariosTecnicos = getUsuariosTecnicos(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColUsuariosTecnicos = m_objColUsuariosTecnicos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColUsuariosTecnicos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-
-End Property
-Public Property Get ColUsuarios() As Scripting.Dictionary
-
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_objColUsuarios Is Nothing Then
-        Set ColUsuarios = m_objColUsuarios
-        Exit Property
-    End If
-    Set m_objColUsuarios = getUsuarios(m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    Set ColUsuarios = m_objColUsuarios
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColUsuarios ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-
-End Property
-Public Property Get URLAchivoIni() As String
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If m_sURLAchivoIni <> "" Then
-        URLAchivoIni = m_sURLAchivoIni
-        Exit Property
-    End If
-    m_sURLAchivoIni = Application.CurrentProject.Path & "\" & fso.GetBaseName(Application.CurrentProject.Name) & ".ini"
-    If Not fso.FileExists(m_sURLAchivoIni) Then
-        m_Error = "No es alcanzable m_sURLAchivoIni " & vbNewLine & m_sURLAchivoIni
-        m_sURLAchivoIni = ""
-        Err.Raise 1000
-    End If
-    URLAchivoIni = m_sURLAchivoIni
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLAchivoIni ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get VersionAplicacion() As String
-    On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If m_sVersionAplicacion <> "" Then
-        VersionAplicacion = m_sVersionAplicacion
-        Exit Property
-    End If
-    m_sVersionAplicacion = LeerIni("VersionAplicacion", "#ERR#")
-    
-    VersionAplicacion = m_sVersionAplicacion
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.VersionAplicacion ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-Public Property Get URLDirectorioAplicaciones() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLDirectorioAplicaciones <> "" Then
-        URLDirectorioAplicaciones = m_sURLDirectorioAplicaciones
-        Exit Property
-    End If
-    ' Derivar del parent de URLDirectorioAplicacion (que viene de TempVars)
-    m_sURLDirectorioAplicaciones = fso.GetParentFolderName(Application.TempVars("RutaDirectorioAplicacion"))
-    
-    URLDirectorioAplicaciones = m_sURLDirectorioAplicaciones
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioAplicaciones ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
-Public Property Get URLDirectorioAplicacion() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLDirectorioAplicacion <> "" Then
-        URLDirectorioAplicacion = m_sURLDirectorioAplicacion
-        Exit Property
-    End If
-    m_sURLDirectorioAplicacion = Application.TempVars("RutaDirectorioAplicacion")
-    
-    URLDirectorioAplicacion = m_sURLDirectorioAplicacion
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioAplicacion ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-
-Public Property Get URLDirectorioIconos() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLDirectorioIconos <> "" Then
-        URLDirectorioIconos = m_sURLDirectorioIconos
-        Exit Property
-    End If
-    m_sURLDirectorioIconos = Application.TempVars("RutaDirectorioAplicacion") & "recursos\Iconos\"
-    
-    URLDirectorioIconos = m_sURLDirectorioIconos
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioIconos ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-Public Property Get URLArchivoCSS() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLArchivoCSS <> "" Then
-        URLArchivoCSS = m_sURLArchivoCSS
-        Exit Property
-    End If
-    ' CSS.txt vive en el parent de RutaDirectorioAplicacion
-    m_sURLArchivoCSS = fso.GetParentFolderName(Application.TempVars("RutaDirectorioAplicacion")) & "\CSS.txt"
-    
-    URLArchivoCSS = m_sURLArchivoCSS
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLArchivoCSS ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-Public Property Get URLIconoCadenaContratacionOrganoControl() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLIconoCadenaContratacionOrganoControl <> "" Then
-        URLIconoCadenaContratacionOrganoControl = m_sURLIconoCadenaContratacionOrganoControl
-        Exit Property
-    End If
-    m_sURLIconoCadenaContratacionOrganoControl = Me.URLDirectorioIconos & "\suministradores\icono_organo.ico"
-    If Not fso.FileExists(m_sURLIconoCadenaContratacionOrganoControl) Then
-        m_Error = "No es alcanzable URLIconoCadenaContratacionOrganoControl " & Me.URLIconoCadenaContratacionOrganoControl
-        Err.Raise 1000
-    End If
-    
-    URLIconoCadenaContratacionOrganoControl = m_sURLIconoCadenaContratacionOrganoControl
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLIconoCadenaContratacionOrganoControl ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-
-Public Property Get URLIconoCadenaContratacionEmpresaNoGrupo() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLIconoCadenaContratacionEmpresaNoGrupo <> "" Then
-        URLIconoCadenaContratacionEmpresaNoGrupo = m_sURLIconoCadenaContratacionEmpresaNoGrupo
-        Exit Property
-    End If
-    m_sURLIconoCadenaContratacionEmpresaNoGrupo = Me.URLDirectorioIconos & "\suministradores\icono_empresa.ico"
-    If Not fso.FileExists(m_sURLIconoCadenaContratacionEmpresaNoGrupo) Then
-        m_Error = "No es alcanzable URLIconoCadenaContratacionEmpresaNoGrupo " & Me.URLIconoCadenaContratacionEmpresaNoGrupo
-        Err.Raise 1000
-    End If
-    
-    URLIconoCadenaContratacionEmpresaNoGrupo = m_sURLIconoCadenaContratacionEmpresaNoGrupo
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLIconoCadenaContratacionEmpresaNoGrupo ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-
-Public Property Get URLIconoCadenaContratacionEmpresaGrupo() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLIconoCadenaContratacionEmpresaGrupo <> "" Then
-        URLIconoCadenaContratacionEmpresaGrupo = m_sURLIconoCadenaContratacionEmpresaGrupo
-        Exit Property
-    End If
-    m_sURLIconoCadenaContratacionEmpresaGrupo = Me.URLDirectorioIconos & "\suministradores\icono_telefonica.ico"
-    If Not fso.FileExists(m_sURLIconoCadenaContratacionEmpresaGrupo) Then
-        m_Error = "No es alcanzable URLIconoCadenaContratacionEmpresaGrupo " & Me.URLIconoCadenaContratacionEmpresaGrupo
-        Err.Raise 1000
-    End If
-    
-    URLIconoCadenaContratacionEmpresaGrupo = m_sURLIconoCadenaContratacionEmpresaGrupo
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLIconoCadenaContratacionEmpresaGrupo ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
-Public Property Get URLIconoEmpresaLista() As String
-    On Error GoTo errores
-
-    Me.Error = ""
-    m_Error = ""
-    
-    If m_sURLIconoEmpresaLista <> "" Then
-        URLIconoEmpresaLista = m_sURLIconoEmpresaLista
-        Exit Property
-    End If
-    m_sURLIconoEmpresaLista = Me.URLDirectorioIconos & "\suministradores\Icono_empresa_lista.ico"
-    If Not fso.FileExists(m_sURLIconoEmpresaLista) Then
-        m_Error = "No es alcanzable URLIconoEmpresaLista " & Me.URLIconoEmpresaLista
-        Err.Raise 1000
-    End If
-    
-    URLIconoEmpresaLista = m_sURLIconoEmpresaLista
-    
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLIconoEmpresaLista ha devuelto el error:" & vbNewLine & Err.Description
-    End If
-    m_Error = Me.Error
-End Property
 Public Property Get CSS() As String
     
     Dim ObjDatos As TextStream
@@ -2050,73 +472,798 @@ errores:
     End If
     m_Error = Me.Error
 End Property
-
-Public Property Get URLDirectorioDocumentacion() As String
+Public Property Get CSS1() As String
+    
+    Dim ObjDatos As TextStream
     Dim m_URL As String
+    
     On Error GoTo errores
 
     Me.Error = ""
     m_Error = ""
     
-    If m_sURLDirectorioDocumentacion <> "" Then
-        URLDirectorioDocumentacion = m_sURLDirectorioDocumentacion
+    If m_sCSS1 <> "" Then
+        CSS1 = m_sCSS1
         Exit Property
     End If
-    m_URL = Me.URLDirectorioAplicacion
+    m_URL = Me.URLArchivoCSS1
     m_Error = Me.Error
     If m_Error <> "" Then
         Err.Raise 1000
     End If
-    m_sURLDirectorioDocumentacion = m_URL & "ANEXOS\"
+    If Not fso.FileExists(m_URL) Then
+        m_Error = "Ne es alcanzable el archivo URLArchivoCSS1" & vbNewLine & Me.URLArchivoCSS1
+        Err.Raise 1000
+    End If
+    Set ObjDatos = fso.OpenTextFile(m_URL, ForReading, False, TristateMixed)
+    While Not ObjDatos.AtEndOfStream
+          m_sCSS1 = m_sCSS1 & ObjDatos.ReadAll
+    Wend
+    Set ObjDatos = Nothing
     
-    If Not fso.FolderExists(m_sURLDirectorioDocumentacion) Then
-        m_Error = "No es alcanzable m_sURLDirectorioDocumentacion " & m_sURLDirectorioDocumentacion
+
+    CSS1 = m_sCSS1
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.CSS1 ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLDirectorioAplicaciones() As String
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLDirectorioAplicaciones <> "" Then
+        URLDirectorioAplicaciones = m_sURLDirectorioAplicaciones
+        Exit Property
+    End If
+    If Application.TempVars("DatosEnLocal") = "Sí" Then
+        m_sURLDirectorioAplicaciones = m_URLRutaAplicacionesLocal
+    ElseIf Application.TempVars("DatosEnLocal") = "No" Then
+        m_sURLDirectorioAplicaciones = m_URLRutaAplicacionesRemotas
+    Else
+        m_Error = "No se sabe si se está usando en local o en remoto"
         Err.Raise 1000
     End If
     
+   
+    If Not fso.FolderExists(m_sURLDirectorioAplicaciones) Then
+        m_Error = "No es alcanzable m_sURLDirectorioAplicaciones " & m_sURLDirectorioAplicaciones
+        Err.Raise 1000
+    End If
+    
+    URLDirectorioAplicaciones = m_sURLDirectorioAplicaciones
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirectorioAplicaciones ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+
+Public Property Get URLArchivoIni() As String
+    
+    Dim m_URLAplicacion As String
+    Dim m_URLDirectorio As String
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLArchivoIni <> "" Then
+        URLArchivoIni = m_sURLArchivoIni
+        Exit Property
+    End If
+    m_URLDirectorio = Application.CurrentProject.Path & "\"
+
+    m_sURLArchivoIni = m_URLDirectorio & fso.GetBaseName(Application.CurrentProject.Name) & ".ini"
+    If Not fso.FileExists(m_sURLArchivoIni) Then
+        m_Error = "No es alcanzable m_sURLArchivoIni & vbnewline & m_sURLArchivoIni"
+        m_sURLArchivoIni = ""
+        Err.Raise 1000
+    End If
+    
+    
+    URLArchivoIni = m_sURLArchivoIni
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLArchivoIni  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLPlantillaInformeNCProyecto() As String
+    
+   
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLPlantillaInformeNCProyecto <> "" Then
+        URLPlantillaInformeNCProyecto = m_sURLPlantillaInformeNCProyecto
+        Exit Property
+    End If
+    m_sURLPlantillaInformeNCProyecto = Me.URLDirectorioPlantillas & "Plantilla_InformeNC.docx"
+    
+   
+
+   
+    If Not fso.FileExists(m_sURLPlantillaInformeNCProyecto) Then
+        m_Error = "No es alcanzable m_sURLPlantillaInformeNCProyecto & vbnewline & m_sURLPlantillaInformeNCProyecto"
+        m_sURLPlantillaInformeNCProyecto = ""
+        Err.Raise 1000
+    End If
+    
+    
+    URLPlantillaInformeNCProyecto = m_sURLPlantillaInformeNCProyecto
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLPlantillaInformeNCProyecto  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLPlantillaInformeNCAuditoria() As String
+    
+   
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLPlantillaInformeNCAuditoria <> "" Then
+        URLPlantillaInformeNCAuditoria = m_sURLPlantillaInformeNCAuditoria
+        Exit Property
+    End If
+    m_sURLPlantillaInformeNCAuditoria = Me.URLDirectorioPlantillas & "Plantilla_InformeNCAuditoria.docx"
+    
+   
+
+   
+    If Not fso.FileExists(m_sURLPlantillaInformeNCAuditoria) Then
+        m_Error = "No es alcanzable m_sURLPlantillaInformeNCAuditoria & vbnewline & m_sURLPlantillaInformeNCAuditoria"
+        m_sURLPlantillaInformeNCAuditoria = ""
+        Err.Raise 1000
+    End If
+    
+    
+    URLPlantillaInformeNCAuditoria = m_sURLPlantillaInformeNCAuditoria
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLPlantillaInformeNCAuditoria  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+
+Public Property Get URLVideoAyudaNCProyecto() As String
+    
+   
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLVideoAyudaNCProyecto <> "" Then
+        URLVideoAyudaNCProyecto = m_sURLVideoAyudaNCProyecto
+        Exit Property
+    End If
+'    If m_EnOficina <> EnumSino.Sí Then
+'        Exit Property
+'    End If
+    
+    
+    m_sURLVideoAyudaNCProyecto = "\\datoste\aplicaciones_dys\Aplicaciones PpD\No Conformidades\Anexos\Doc Ayuda\BBDD - NC Proyecto - Formación 2.mp4"
+    
+    
+    
+    URLVideoAyudaNCProyecto = m_sURLVideoAyudaNCProyecto
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLVideoAyudaNCProyecto  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLVideoAyudaNCProyectoParaTecnico() As String
+    
+   
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLVideoAyudaNCProyectoParaTecnico <> "" Then
+        URLVideoAyudaNCProyectoParaTecnico = m_sURLVideoAyudaNCProyectoParaTecnico
+        Exit Property
+    End If
+'    If m_EnOficina <> EnumSino.Sí Then
+'        Exit Property
+'    End If
+    
+    
+    m_sURLVideoAyudaNCProyectoParaTecnico = "\\datoste\aplicaciones_dys\Aplicaciones PpD\No Conformidades\Anexos\Doc Ayuda\BBDD - NC Proyecto - Formación JP 23062025.mp4"
+    
+    
+    
+    URLVideoAyudaNCProyectoParaTecnico = m_sURLVideoAyudaNCProyectoParaTecnico
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLVideoAyudaNCProyectoParaTecnico  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+
+Public Property Get URLVideoAyudaNCAuditoria() As String
+    
+   
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLVideoAyudaNCAuditoria <> "" Then
+        URLVideoAyudaNCAuditoria = m_sURLVideoAyudaNCAuditoria
+        Exit Property
+    End If
+'    If m_EnOficina <> EnumSino.Sí Then
+'        Exit Property
+'    End If
+    
+    
+   m_sURLVideoAyudaNCAuditoria = "\\datoste\aplicaciones_dys\Aplicaciones PpD\No Conformidades\Anexos\Doc Ayuda\BBDD - NC Auditoría - Formación 2.mp4"
+    
+    
+    
+    URLVideoAyudaNCAuditoria = m_sURLVideoAyudaNCAuditoria
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLVideoAyudaNCAuditoria  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLDirAplicacion() As String
+    
+    Dim m_URLConfigurada As String
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLDirAplicacion <> "" Then
+        URLDirAplicacion = m_sURLDirAplicacion
+        Exit Property
+    End If
+    If Nz(Application.TempVars("DatosEnLocal"), "") = "Sí" Then
+        m_URLConfigurada = m_URLRutaAplicacionLocal
+    Else
+        m_URLConfigurada = m_URLRutaAplicacionRemota
+    End If
+    m_sURLDirAplicacion = NormalizarURLFolder(m_URLConfigurada)
+    
+    If FormatoCorrectoURL(m_sURLDirAplicacion) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirAplicacion" & vbNewLine & m_sURLDirAplicacion
+        Err.Raise 1000
+    End If
+    
+    If Not fso.FolderExists(m_sURLDirAplicacion) Then
+        m_Error = "No es alcanzable m_sURLDirectorioAplicaciones & vbnewline & m_sURLDirAplicacion"
+        m_sURLDirAplicacion = ""
+        Err.Raise 1000
+    End If
+    
+    
+    URLDirAplicacion = m_sURLDirAplicacion
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirAplicacion  ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+
+Public Function ValidarInfraCritica(Optional ByRef p_Error As String) As Boolean
+    On Error GoTo errores
+
+    Dim m_Diag As String
+    Dim m_URL As String
+
+    p_Error = ""
+    m_Diag = ""
+
+    m_URL = ""
+    m_URL = Me.URLDirAplicacion
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "RutaDirectorioAplicacion", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirRecursos
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirRecursos", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacion
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacion", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacionAuditorias
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacionAuditorias", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioPlantillas
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioPlantillas", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    m_URL = ""
+    m_URL = Me.URLDirectorioDocumentacionAyuda
+    If Me.Error <> "" Then
+        Call AppendInfraDiag(m_Diag, "URLDirectorioDocumentacionAyuda", m_URL, Me.Error)
+        Me.Error = ""
+    End If
+
+    If m_Diag <> "" Then
+        p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & m_Diag
+        ValidarInfraCritica = False
+    Else
+        ValidarInfraCritica = True
+    End If
+
+    Exit Function
+errores:
+    If p_Error = "" Then p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & "- Campo=InfraStartup; Ruta=; Causa=" & Err.Description
+    ValidarInfraCritica = False
+End Function
+
+Private Function NormalizarURLFolder(ByVal p_URL As String) As String
+    Dim m_URL As String
+    m_URL = Trim$(Nz(p_URL, ""))
+    If m_URL = "" Then Exit Function
+    m_URL = Replace$(m_URL, "/", "\")
+    If Right$(m_URL, 1) <> "\" Then m_URL = m_URL & "\"
+    NormalizarURLFolder = m_URL
+End Function
+
+Private Sub AppendInfraDiag(ByRef p_Diag As String, ByVal p_Field As String, ByVal p_Ruta As String, ByVal p_Causa As String)
+    Dim m_Causa As String
+    Dim m_Linea As String
+
+    m_Causa = Replace$(Replace$(Trim$(Nz(p_Causa, "")), vbCr, " "), vbLf, " ")
+    m_Linea = "- Campo=" & p_Field & "; Ruta=" & p_Ruta & "; Causa=" & m_Causa
+    If p_Diag = "" Then
+        p_Diag = m_Linea
+    Else
+        p_Diag = p_Diag & vbNewLine & m_Linea
+    End If
+End Sub
+
+
+Public Property Get URLArchivoCSS() As String
+    
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLArchivoCSS <> "" Then
+        URLArchivoCSS = m_sURLArchivoCSS
+        Exit Property
+    End If
+    m_sURLArchivoCSS = Me.URLDirRecursos & "css.txt"
+    If Not fso.FileExists(m_sURLArchivoCSS) Then
+        m_sURLArchivoCSS = Me.URLDirectorioAplicaciones & "css.txt"
+        If Not fso.FileExists(m_sURLArchivoCSS) Then
+             m_Error = "No es alcanzable URLArchivoCSS "
+            Err.Raise 1000
+        End If
+    End If
+    
+   
+    
+    URLArchivoCSS = m_sURLArchivoCSS
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLArchivoCSS ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLArchivoCSS1() As String
+    
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLArchivoCSS1 <> "" Then
+        URLArchivoCSS1 = m_sURLArchivoCSS1
+        Exit Property
+    End If
+    m_sURLArchivoCSS1 = Me.URLDirRecursos & "css2.css"
+    If Not fso.FileExists(m_sURLArchivoCSS1) Then
+        m_sURLArchivoCSS1 = Me.URLDirectorioAplicaciones & "css2.css"
+        If Not fso.FileExists(m_sURLArchivoCSS1) Then
+             m_Error = "No es alcanzable URLArchivoCSS1 "
+            Err.Raise 1000
+        End If
+    End If
+    
+   
+    
+    URLArchivoCSS1 = m_sURLArchivoCSS1
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLArchivoCSS1 ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get URLAyudaIndicadores() As String
+    
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLAyudaIndicadores <> "" Then
+        URLAyudaIndicadores = m_sURLAyudaIndicadores
+        Exit Property
+    End If
+    m_sURLAyudaIndicadores = Me.URLDirRecursos & "Plantillas\Indicadores.html"
+    If Not fso.FileExists(m_sURLAyudaIndicadores) Then
+        m_Error = "No es alcanzable URLAyudaIndicadores "
+        Err.Raise 1000
+        
+    End If
+    
+   
+    
+    URLAyudaIndicadores = m_sURLAyudaIndicadores
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLAyudaIndicadores ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get ColAdministradores() As Scripting.Dictionary
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColAdministradores Is Nothing Then
+        Set ColAdministradores = m_objColAdministradores
+        Exit Property
+    End If
+    
+    Avance "Usuarios Administradores"
+    Set m_objColAdministradores = constructor.getListaUsuarios(EnumTipoUsuario.Administrador, m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAdministradores = m_objColAdministradores
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAdministradores ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+Public Property Get Expedientes() As Scripting.Dictionary
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objExpedientes Is Nothing Then
+        Set Expedientes = m_objExpedientes
+        Exit Property
+    End If
+    
+   
+    Set m_objExpedientes = constructor.getExpedientes(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set Expedientes = m_objExpedientes
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.Expedientes ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+Public Property Get ColUsuariosCalidad() As Scripting.Dictionary
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    
+    Avance "Usuarios Calidad"
+    If Not m_objColUsuariosCalidad Is Nothing Then
+        Set ColUsuariosCalidad = m_objColUsuariosCalidad
+        Exit Property
+    End If
+    Set m_objColUsuariosCalidad = constructor.getUsuariosCalidad(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColUsuariosCalidad = m_objColUsuariosCalidad
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColUsuariosCalidad ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+Public Property Get CadenaCorreosCalidad() As String
+    
+    Dim m_Col As Scripting.Dictionary
+    Dim m_ID As Variant
+    Dim m_Usuario As usuario
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sCadenaCorreosCalidad <> "" Then
+        CadenaCorreosCalidad = m_sCadenaCorreosCalidad
+        Exit Property
+    End If
+    Set m_Col = Me.ColUsuariosCalidad
+    m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If m_Col Is Nothing Then
+        m_Error = "No hay ningún usuario marcado como calidad"
+        Err.Raise 1000
+    End If
+    For Each m_ID In m_Col
+        Set m_Usuario = m_Col(m_ID)
+        If InStr(1, m_Usuario.CorreoUsuario, "@") <> 0 Then
+            If m_sCadenaCorreosCalidad = "" Then
+                m_sCadenaCorreosCalidad = m_Usuario.CorreoUsuario
+            Else
+                m_sCadenaCorreosCalidad = m_sCadenaCorreosCalidad & ";" & m_Usuario.CorreoUsuario
+            End If
+        End If
+        Set m_Usuario = Nothing
+    Next
+    If m_sCadenaCorreosCalidad = "" Then
+        m_Error = "No hay ningún usuario marcado como calidad que tenga correo"
+        Err.Raise 1000
+    End If
+    CadenaCorreosCalidad = m_sCadenaCorreosCalidad
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.CadenaCorreosCalidad ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Let CadenaCorreosCalidad(p_Valor As String)
+    
+    m_sCadenaCorreosCalidad = ""
+End Property
+Public Property Get CadenaCorreosCalidadEnPruebas() As String
+    
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sCadenaCorreosCalidadEnPruebas <> "" Then
+        CadenaCorreosCalidadEnPruebas = m_sCadenaCorreosCalidadEnPruebas
+        Exit Property
+    End If
+    
+    m_sCadenaCorreosCalidadEnPruebas = Application.TempVars("CadenaCorreosCalidadEnPruebas")
+    
+  
+    CadenaCorreosCalidadEnPruebas = m_sCadenaCorreosCalidadEnPruebas
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.CadenaCorreosCalidadEnPruebas ha devuelto el error:" & vbNewLine & Err.Description
+    End If
+    m_Error = Me.Error
+End Property
+Public Property Get VersionAplicacion() As String
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If m_sVersionAplicacion <> "" Then
+        VersionAplicacion = m_sVersionAplicacion
+        Exit Property
+    End If
+    m_sVersionAplicacion = LeerIni("VersionAplicacion", "", m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    VersionAplicacion = m_sVersionAplicacion
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.VersionAplicacion  ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+
+
+Public Property Get URLDirectorioDocumentacion() As String
+    
+    Dim m_URLDirAplicacion As String
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If m_sURLDirectorioDocumentacion <> "" Then
+        URLDirectorioDocumentacion = m_sURLDirectorioDocumentacion
+        Exit Property
+    End If
+    m_URLDirAplicacion = Me.URLDirAplicacion
+    m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    m_sURLDirectorioDocumentacion = m_URLDirAplicacion & "Anexos\"
+    If FormatoCorrectoURL(m_sURLDirectorioDocumentacion) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirectorioDocumentacion" & vbNewLine & m_sURLDirectorioDocumentacion
+        Err.Raise 1000
+    End If
+    If Not fso.FolderExists(m_sURLDirectorioDocumentacion) Then
+        m_Error = "No es alcanzable URLDirectorioDocumentacion " & m_sURLDirectorioDocumentacion
+        m_sURLDirectorioDocumentacion = ""
+        Err.Raise 1000
+    End If
     URLDirectorioDocumentacion = m_sURLDirectorioDocumentacion
     
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioDocumentacion ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El método Entorno.URLDirectorioDocumentacion ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    m_Error = Me.Error
+    Me.Error = m_Error
+
 End Property
-
-Public Property Get URLDirectorioDocumentacionAyuda() As String
+Public Property Get URLDirectorioPlantillas() As String
     
+    Dim m_URLDirRecursos As String
     On Error GoTo errores
-
+    
     Me.Error = ""
     m_Error = ""
-    
-    If m_sURLDirectorioDocumentacionAyuda <> "" Then
-        URLDirectorioDocumentacionAyuda = m_sURLDirectorioDocumentacionAyuda
+    If m_sURLDirectorioPlantillas <> "" Then
+        URLDirectorioPlantillas = m_sURLDirectorioPlantillas
         Exit Property
     End If
-   
-    m_sURLDirectorioDocumentacionAyuda = Me.URLDirectorioDocumentacion & "documentos de ayuda\"
-    
-    If Not fso.FolderExists(m_sURLDirectorioDocumentacionAyuda) Then
-        m_Error = "No es alcanzable m_sURLDirectorioDocumentacionAyuda " & m_sURLDirectorioDocumentacionAyuda
+    m_URLDirRecursos = Me.URLDirRecursos
+    m_Error = Me.Error
+    If m_Error <> "" Then
         Err.Raise 1000
     End If
-    
-    URLDirectorioDocumentacionAyuda = m_sURLDirectorioDocumentacionAyuda
+    m_sURLDirectorioPlantillas = m_URLDirRecursos & "Plantillas\"
+    If FormatoCorrectoURL(m_sURLDirectorioPlantillas) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirectorioPlantillas" & vbNewLine & m_sURLDirectorioPlantillas
+        Err.Raise 1000
+    End If
+    If Not fso.FolderExists(m_sURLDirectorioPlantillas) Then
+        m_Error = "No es alcanzable URLDirectorioPlantillas " & m_sURLDirectorioPlantillas
+        m_sURLDirectorioPlantillas = ""
+        Err.Raise 1000
+    End If
+    URLDirectorioPlantillas = m_sURLDirectorioPlantillas
     
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioDocumentacionAyuda ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El método Entorno.URLDirectorioPlantillas ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    m_Error = Me.Error
+    Me.Error = m_Error
+
 End Property
+Public Property Get URLDirectorioDocumentacionAuditorias() As String
+    
+    Dim m_URLDirAplicacion As String
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If m_sURLDirectorioDocumentacionAuditorias <> "" Then
+        URLDirectorioDocumentacionAuditorias = m_sURLDirectorioDocumentacionAuditorias
+        Exit Property
+    End If
+    m_URLDirAplicacion = Me.URLDirAplicacion
+    m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    m_sURLDirectorioDocumentacionAuditorias = m_URLDirAplicacion & "Anexos Auditorias\"
+    If FormatoCorrectoURL(m_sURLDirectorioDocumentacionAuditorias) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirectorioDocumentacionAuditorias" & vbNewLine & m_sURLDirectorioDocumentacionAuditorias
+        Err.Raise 1000
+    End If
+    If Not fso.FolderExists(m_sURLDirectorioDocumentacionAuditorias) Then
+        m_Error = "No es alcanzable URLDirectorioDocumentacionAuditorias " & m_sURLDirectorioDocumentacionAuditorias
+        m_sURLDirectorioDocumentacionAuditorias = ""
+        Err.Raise 1000
+    End If
+    URLDirectorioDocumentacionAuditorias = m_sURLDirectorioDocumentacionAuditorias
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirectorioDocumentacionAuditorias ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+
+
+
 Public Property Get URLDirectorioLocal() As String
     
-    Dim m_URL As String
+    Dim m_URLDirectorioAplicaciones As String
     On Error GoTo errores
-
+    
     Me.Error = ""
     m_Error = ""
     
@@ -2124,38 +1271,1263 @@ Public Property Get URLDirectorioLocal() As String
         URLDirectorioLocal = m_sURLDirectorioLocal
         Exit Property
     End If
-    m_URL = Environ("APPDATA") & "\Aplicaciones DYSN\"
-    If Not fso.FolderExists(m_URL) Then
-        fso.CreateFolder m_URL
+   
+    m_URLDirectorioAplicaciones = Environ("APPDATA") & "\" & "Aplicaciones DYSN\"
+    If Not fso.FolderExists(m_URLDirectorioAplicaciones) Then
+        fso.CreateFolder m_URLDirectorioAplicaciones
     End If
-    m_sURLDirectorioLocal = m_URL & "Expedientes\"
+    m_sURLDirectorioLocal = m_URLDirectorioAplicaciones & "No Conformidades\"
+    
+    
     If Not fso.FolderExists(m_sURLDirectorioLocal) Then
         fso.CreateFolder m_sURLDirectorioLocal
     End If
-    m_sURLDirectorioLocal = m_sURLDirectorioLocal & "docs\"
-    
-    If fso.FolderExists(m_sURLDirectorioLocal) Then
-        On Error Resume Next
-        EliminarContenidoCarpeta m_sURLDirectorioLocal
-        If Err.Number <> 0 Then
-            Err.Clear
-        End If
-        On Error GoTo errores
-    Else
-        fso.CreateFolder m_sURLDirectorioLocal
-    End If
-    If Right(m_sURLDirectorioLocal, 1) <> "\" Then
-        m_sURLDirectorioLocal = m_sURLDirectorioLocal & "\"
-    End If
-    
     URLDirectorioLocal = m_sURLDirectorioLocal
     
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.URLDirectorioLocal ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El método Entorno.URLDirectorioLocal ha devuelto el error: " & vbNewLine & Err.Description
     End If
+    Me.Error = m_Error
+End Property
+Public Property Get URLDirectorioInformesLocal() As String
+    
+    
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLDirectorioInformesLocal <> "" Then
+        URLDirectorioInformesLocal = m_sURLDirectorioInformesLocal
+        Exit Property
+    End If
+    m_sURLDirectorioInformesLocal = Me.URLDirectorioLocal & "Informes\"
+   
+    
+    
+    If Not fso.FolderExists(m_sURLDirectorioInformesLocal) Then
+        fso.CreateFolder m_sURLDirectorioInformesLocal
+    Else
+        BorrarContenidoCarpeta m_sURLDirectorioInformesLocal
+    End If
+    URLDirectorioInformesLocal = m_sURLDirectorioInformesLocal
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirectorioInformesLocal ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Get URLDirectorioDocumentacionAyuda() As String
+    
+    Dim m_URLDirDocumentacion As String
+    
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If m_sURLDirectorioDocumentacionAyuda <> "" Then
+        URLDirectorioDocumentacionAyuda = m_sURLDirectorioDocumentacionAyuda
+        Exit Property
+    End If
+    m_URLDirDocumentacion = Me.URLDirectorioDocumentacion
     m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    m_sURLDirectorioDocumentacionAyuda = m_URLDirDocumentacion & "Doc Ayuda\"
+    If FormatoCorrectoURL(m_sURLDirectorioDocumentacionAyuda) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirectorioDocumentacionAyuda" & vbNewLine & m_sURLDirectorioDocumentacionAyuda
+        Err.Raise 1000
+    End If
+    If Not fso.FolderExists(m_sURLDirectorioDocumentacionAyuda) Then
+        m_Error = "No es alcanzable URLDirectorioDocumentacionAyuda " & m_sURLDirectorioDocumentacionAyuda
+        m_sURLDirectorioDocumentacionAyuda = ""
+        Err.Raise 1000
+    End If
+    URLDirectorioDocumentacionAyuda = m_sURLDirectorioDocumentacionAyuda
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirectorioDocumentacionAyuda ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+
+
+Public Property Get URLDirRecursos() As String
+    
+    Dim m_URLDirAplicacion As String
+    
+    On Error GoTo errores
+
+    Me.Error = ""
+    m_Error = ""
+    
+    If m_sURLDirRecursos <> "" Then
+        URLDirRecursos = m_sURLDirRecursos
+        Exit Property
+    End If
+    m_URLDirAplicacion = Me.URLDirAplicacion
+    m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    m_sURLDirRecursos = m_URLDirAplicacion & "recursos\"
+    If FormatoCorrectoURL(m_sURLDirRecursos) = EnumSino.No Then
+        m_Error = "No es alcanzable el archivo URLDirRecursos" & vbNewLine & m_sURLDirRecursos
+        Err.Raise 1000
+    End If
+    If Not fso.FolderExists(m_sURLDirRecursos) Then
+        m_Error = "No es alcanzable m_sURLDirRecursos" & vbNewLine & m_sURLDirRecursos
+        m_sURLDirRecursos = ""
+        Err.Raise 1000
+    End If
+    URLDirRecursos = m_sURLDirRecursos
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.URLDirRecursos  ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+
+
+
+
+Public Property Get ColEstadosNC() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEstadosNC Is Nothing Then
+        Set ColEstadosNC = m_ObjColEstadosNC
+        Exit Property
+    End If
+    Set m_ObjColEstadosNC = New Scripting.Dictionary
+    m_ObjColEstadosNC.CompareMode = TextCompare
+    With m_ObjColEstadosNC
+        .Add CStr(EnumEstadoNC.BORRADA), "BORRADA"
+        .Add CStr(EnumEstadoNC.REGISTRADA), "REGISTRADA"
+        .Add CStr(EnumEstadoNC.PLANIFICADA), "PLANIFICADA"
+        .Add CStr(EnumEstadoNC.ENEJECUCION), "ENEJECUCION"
+        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "ENEJECUCIONFUERADEPLAZO"
+        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "ACSSINTAREAS"
+        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
+        .Add CStr(EnumEstadoNC.CERRADAPTECE), "CERRADAPTECE"
+        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "CERRADAPTECECADUCADA"
+        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "CERRADACENOCONFORME"
+    End With
+    Set ColEstadosNC = m_ObjColEstadosNC
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosNC ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get ColEstadosNCTexto() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColEstadosNCTexto Is Nothing Then
+        Set ColEstadosNCTexto = m_ObjColEstadosNCTexto
+        Exit Property
+    End If
+    Set m_ObjColEstadosNCTexto = New Scripting.Dictionary
+    m_ObjColEstadosNCTexto.CompareMode = TextCompare
+    With m_ObjColEstadosNCTexto
+        .Add "BORRADA", EnumEstadoNC.BORRADA
+        .Add "REGISTRADA", EnumEstadoNC.REGISTRADA 'aún sin acciones
+        .Add "PLANIFICADA", EnumEstadoNC.PLANIFICADA 'todas las acciones sin fecha
+        .Add "ENEJECUCION", EnumEstadoNC.ENEJECUCION
+        .Add "ENEJECUCIONFUERADEPLAZO", EnumEstadoNC.ENEJECUCIONFUERADEPLAZO
+        .Add "ACSSINTAREAS", EnumEstadoNC.ACSSINTAREAS
+        .Add "Cerrada", EnumEstadoNC.Cerrada
+        .Add "CERRADAPTECE", EnumEstadoNC.CERRADAPTECE
+        .Add "CERRADAPTECECADUCADA", EnumEstadoNC.CERRADAPTECECADUCADA
+        .Add "CERRADACENOCONFORME", EnumEstadoNC.CERRADACENOCONFORME
+    End With
+    Set ColEstadosNCTexto = m_ObjColEstadosNCTexto
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosNCTexto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Get ColEstadosNCTitulo() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColEstadosNCTitulo Is Nothing Then
+        Set ColEstadosNCTitulo = m_objColEstadosNCTitulo
+        Exit Property
+    End If
+    Set m_objColEstadosNCTitulo = New Scripting.Dictionary
+    With m_objColEstadosNCTitulo
+        .CompareMode = TextCompare
+        .Add CStr(EnumEstadoNC.BORRADA), "Borrada"
+        .Add CStr(EnumEstadoNC.REGISTRADA), "Registrada"
+        .Add CStr(EnumEstadoNC.PLANIFICADA), "Planificada"
+        .Add CStr(EnumEstadoNC.ENEJECUCION), "En ejecución"
+        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "En ejecución fuera de plazo"
+        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "Acciones sin tareas"
+        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
+        .Add CStr(EnumEstadoNC.CERRADAPTECE), "Cerrada Pendiente de control de eficacia"
+        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "Cerrada Pendiente de control de eficacia caducada"
+        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "Cerrada con Control de eficacia no conforme"
+    End With
+    Set ColEstadosNCTitulo = m_objColEstadosNCTitulo
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColEstadosNCTitulo ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get ColNCsProyecto() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColNCsProyecto Is Nothing Then
+        Set ColNCsProyecto = m_objColNCsProyecto
+        Exit Property
+    End If
+    Set m_objColNCsProyecto = constructor.getNCsProyecto(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColNCsProyecto = m_objColNCsProyecto
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColNCsProyecto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColNCsProyecto(ByVal objNewValue As Variant)
+
+    Set m_objColNCsProyecto = objNewValue
+    
+End Property
+
+Public Property Get ColNCsAuditoria() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColNCsAuditoria Is Nothing Then
+        Set ColNCsAuditoria = m_objColNCsAuditoria
+        Exit Property
+    End If
+    Set m_objColNCsAuditoria = constructor.getNCsDeAuditoria(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColNCsAuditoria = m_objColNCsAuditoria
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColNCsAuditoria ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColNCsAuditoria(ByVal objNewValue As Variant)
+
+    Set m_objColNCsAuditoria = objNewValue
+    
+End Property
+Public Property Get ColJuridicasDistintas() As Scripting.Dictionary
+    
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_ObjColJuridicasDistintas Is Nothing Then
+        Set ColJuridicasDistintas = m_ObjColJuridicasDistintas
+        Exit Property
+    End If
+    Set m_ObjColJuridicasDistintas = constructor.getJuridicasDistintas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    
+    Set ColJuridicasDistintas = m_ObjColJuridicasDistintas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColJuridicasDistintas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColJuridicasDistintas(ByVal objNewValue As Variant)
+
+    Set m_ObjColJuridicasDistintas = objNewValue
+
+End Property
+
+
+
+Public Property Get ColJefesProyecto() As Scripting.Dictionary
+   
+    Dim m_ID As Variant
+    Dim m_Usuario As usuario
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColJefesProyecto Is Nothing Then
+        Set ColJefesProyecto = m_objColJefesProyecto
+        Exit Property
+    End If
+    Set m_objColJefesProyecto = constructor.getJefesProyecto(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not Me.ColUsuariosCalidad Is Nothing Then
+        For Each m_ID In Me.ColUsuariosCalidad
+            Set m_Usuario = Me.ColUsuariosCalidad(m_ID)
+            If m_objColJefesProyecto Is Nothing Then
+                Set m_objColJefesProyecto = New Scripting.Dictionary
+                m_objColJefesProyecto.CompareMode = TextCompare
+            End If
+            If Not m_objColJefesProyecto.Exists(m_Usuario.UsuarioRed) Then
+                m_objColJefesProyecto.Add m_Usuario.UsuarioRed, m_Usuario
+            End If
+            Set m_Usuario = Nothing
+        Next
+    End If
+    Set ColJefesProyecto = m_objColJefesProyecto
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColJefesProyecto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Get ColAuditoriaSegTareas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColAuditoriaSegTareas Is Nothing Then
+        Set ColAuditoriaSegTareas = m_objColAuditoriaSegTareas
+        Exit Property
+    End If
+    Set m_objColAuditoriaSegTareas = constructor.getARsAuditoriaSeguimiento(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAuditoriaSegTareas = m_objColAuditoriaSegTareas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAuditoriaSegTareas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColAuditoriaSegTareas(ByVal objNewValue As Variant)
+
+    Set m_objColAuditoriaSegTareas = objNewValue
+
+End Property
+Public Property Get ColAuditoriaSegTareasActivas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColAuditoriaSegTareasActivas Is Nothing Then
+        Set ColAuditoriaSegTareasActivas = m_objColAuditoriaSegTareasActivas
+        Exit Property
+    End If
+    Set m_objColAuditoriaSegTareasActivas = constructor.getARsAuditoriaSeguimientoActivas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAuditoriaSegTareasActivas = m_objColAuditoriaSegTareasActivas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAuditoriaSegTareasActivas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColAuditoriaSegTareasActivas(ByVal objNewValue As Variant)
+
+    Set m_objColAuditoriaSegTareasActivas = objNewValue
+
+End Property
+Public Property Get ColAuditoriaSegNC() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColAuditoriaSegNC Is Nothing Then
+        Set ColAuditoriaSegNC = m_objColAuditoriaSegNC
+        Exit Property
+    End If
+    Set m_objColAuditoriaSegNC = constructor.getNCsAuditoriaSeguimiento(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAuditoriaSegNC = m_objColAuditoriaSegNC
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAuditoriaSegNC ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColAuditoriaSegNC(ByVal objNewValue As Variant)
+
+    Set m_objColAuditoriaSegNC = objNewValue
+
+End Property
+Public Property Get ColProyectoSegTareas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColProyectoSegTareas Is Nothing Then
+        Set ColProyectoSegTareas = m_objColProyectoSegTareas
+        Exit Property
+    End If
+    Set m_objColProyectoSegTareas = constructor.getARsProyectoSeguimiento(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColProyectoSegTareas = m_objColProyectoSegTareas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColProyectoSegTareas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColProyectoSegTareas(ByVal objNewValue As Variant)
+
+    Set m_objColProyectoSegTareas = objNewValue
+
+End Property
+
+Public Property Get ColProyectoSegNC() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColProyectoSegNC Is Nothing Then
+        Set ColProyectoSegNC = m_objColProyectoSegNC
+        Exit Property
+    End If
+    Set m_objColProyectoSegNC = constructor.getNCsProyectoSeguimiento(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColProyectoSegNC = m_objColProyectoSegNC
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColProyectoSegNC ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColProyectoSegNC(ByVal objNewValue As Variant)
+
+    Set m_objColProyectoSegNC = objNewValue
+
+End Property
+Public Property Get ColSegsTareasProyecto() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsTareasProyecto Is Nothing Then
+        Set ColSegsTareasProyecto = m_objColSegsTareasProyecto
+        Exit Property
+    End If
+    Set m_objColSegsTareasProyecto = constructor.getSegsTareasProyecto(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsTareasProyecto = m_objColSegsTareasProyecto
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasProyecto ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasProyecto(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasProyecto = objNewValue
+
+End Property
+Public Property Get ColSegsTareasProyectoActivas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsTareasProyectoActivas Is Nothing Then
+        Set ColSegsTareasProyectoActivas = m_objColSegsTareasProyectoActivas
+        Exit Property
+    End If
+    Set m_objColSegsTareasProyectoActivas = constructor.getSegsTareasProyectoActivas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsTareasProyectoActivas = m_objColSegsTareasProyectoActivas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasProyectoActivas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasProyectoActivas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasProyectoActivas = objNewValue
+
+End Property
+Public Property Get ColSegsTareasProyectoPteReplanificar() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsTareasProyectoPteReplanificar = m_Cached
+    End If
+    If Not m_objColSegsTareasProyectoPteReplanificar Is Nothing Then
+        Set ColSegsTareasProyectoPteReplanificar = m_objColSegsTareasProyectoPteReplanificar
+        Exit Property
+    End If
+    Set m_objColSegsTareasProyectoPteReplanificar = constructor.getSegsTareasProyectoPteReplanificar(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsTareasProyectoPteReplanificar = m_objColSegsTareasProyectoPteReplanificar
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasProyectoPteReplanificar ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasProyectoPteReplanificar(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasProyectoPteReplanificar = objNewValue
+
+End Property
+
+
+Public Property Get ColSegsNCProyectoRegistradas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoRegistradas = m_Cached
+    End If
+    If Not m_objColSegsNCProyectoRegistradas Is Nothing Then
+        Set ColSegsNCProyectoRegistradas = m_objColSegsNCProyectoRegistradas
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoRegistradas = constructor.getSegsNCProyectoRegistradas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCProyectoRegistradas = m_objColSegsNCProyectoRegistradas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoRegistradas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoRegistradas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoRegistradas = objNewValue
+
+End Property
+Public Property Get ColSegsNCProyectoTotales() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsNCProyectoTotales Is Nothing Then
+        Set ColSegsNCProyectoTotales = m_objColSegsNCProyectoTotales
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoTotales = constructor.getSegsNCProyectoTotales(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsNCProyectoTotales = m_objColSegsNCProyectoTotales
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoTotales ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoTotales(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoTotales = objNewValue
+
+End Property
+Public Property Get ColSegsNCProyectoAccionesSinTareas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_SIN_TAREAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoAccionesSinTareas = m_Cached
+    End If
+    If Not m_objColSegsNCProyectoAccionesSinTareas Is Nothing Then
+        Set ColSegsNCProyectoAccionesSinTareas = m_objColSegsNCProyectoAccionesSinTareas
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoAccionesSinTareas = constructor.getSegsNCProyectoAccionesSinTareas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_SIN_TAREAS, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCProyectoAccionesSinTareas = m_objColSegsNCProyectoAccionesSinTareas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoAccionesSinTareas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoAccionesSinTareas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoAccionesSinTareas = objNewValue
+
+End Property
+Public Property Get ColSegsNCProyectoPteCE() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_PTE_CE, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoPteCE = m_Cached
+    End If
+    If Not m_objColSegsNCProyectoPteCE Is Nothing Then
+        Set ColSegsNCProyectoPteCE = m_objColSegsNCProyectoPteCE
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoPteCE = constructor.getSegsNCProyectoPteCE(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_PTE_CE, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCProyectoPteCE = m_objColSegsNCProyectoPteCE
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoPteCE ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoPteCE(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoPteCE = objNewValue
+
+End Property
+Public Property Get ColSegsNCProyectoCECaducada() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_CADUCADA, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoCECaducada = m_Cached
+    End If
+    If Not m_objColSegsNCProyectoCECaducada Is Nothing Then
+        Set ColSegsNCProyectoCECaducada = m_objColSegsNCProyectoCECaducada
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoCECaducada = constructor.getSegsNCProyectoCECaducada(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_CADUCADA, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCProyectoCECaducada = m_objColSegsNCProyectoCECaducada
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoCECaducada ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoCECaducada(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoCECaducada = objNewValue
+
+End Property
+
+Public Property Get ColSegsNCProyectoCENoConforme() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_NO_CONFORME, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCProyectoCENoConforme = m_Cached
+    End If
+    If Not m_objColSegsNCProyectoCENoConforme Is Nothing Then
+        Set ColSegsNCProyectoCENoConforme = m_objColSegsNCProyectoCENoConforme
+        Exit Property
+    End If
+    Set m_objColSegsNCProyectoCENoConforme = constructor.getSegsNCProyectoCENoConforme(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Proyecto(BUCKET_NC_PROY_CE_NO_CONFORME, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCProyectoCENoConforme = m_objColSegsNCProyectoCENoConforme
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCProyectoCENoConforme ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCProyectoCENoConforme(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCProyectoCENoConforme = objNewValue
+
+End Property
+Public Property Get ColSegsTareasAuditoriaTotales() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsTareasAuditoriaTotales Is Nothing Then
+        Set ColSegsTareasAuditoriaTotales = m_objColSegsTareasAuditoriaTotales
+        Exit Property
+    End If
+    Set m_objColSegsTareasAuditoriaTotales = constructor.getSegsTareasAuditoriaTotales(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsTareasAuditoriaTotales = m_objColSegsTareasAuditoriaTotales
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasAuditoriaTotales ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasAuditoriaTotales(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasAuditoriaTotales = objNewValue
+
+End Property
+Public Property Get ColSegsTareasAuditoriaActivas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsTareasAuditoriaActivas Is Nothing Then
+        Set ColSegsTareasAuditoriaActivas = m_objColSegsTareasAuditoriaActivas
+        Exit Property
+    End If
+    Set m_objColSegsTareasAuditoriaActivas = constructor.getSegsTareasAuditoriaActivas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsTareasAuditoriaActivas = m_objColSegsTareasAuditoriaActivas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasAuditoriaActivas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasAuditoriaActivas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasAuditoriaActivas = objNewValue
+
+End Property
+Public Property Get ColSegsTareasAuditoriaPteReplanificar() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsTareasAuditoriaPteReplanificar = m_Cached
+    End If
+    If Not m_objColSegsTareasAuditoriaPteReplanificar Is Nothing Then
+        Set ColSegsTareasAuditoriaPteReplanificar = m_objColSegsTareasAuditoriaPteReplanificar
+        Exit Property
+    End If
+    Set m_objColSegsTareasAuditoriaPteReplanificar = constructor.getSegsTareasAuditoriaPteReplanificar(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_TAR_AUD_PTE_REPLAN, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsTareasAuditoriaPteReplanificar = m_objColSegsTareasAuditoriaPteReplanificar
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasAuditoriaPteReplanificar ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasAuditoriaPteReplanificar(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasAuditoriaPteReplanificar = objNewValue
+
+End Property
+Public Property Get ColSegsTareasAuditoriaIrregulares() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsTareasAuditoriaIrregulares Is Nothing Then
+        Set ColSegsTareasAuditoriaIrregulares = m_objColSegsTareasAuditoriaIrregulares
+        Exit Property
+    End If
+    Set m_objColSegsTareasAuditoriaIrregulares = constructor.getSegsTareasAuditoriaIrregulares(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsTareasAuditoriaIrregulares = m_objColSegsTareasAuditoriaIrregulares
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsTareasAuditoriaIrregulares ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsTareasAuditoriaIrregulares(ByVal objNewValue As Variant)
+
+    Set m_objColSegsTareasAuditoriaIrregulares = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaRegistradas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_REGISTRADAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaRegistradas = m_Cached
+    End If
+    If Not m_objColSegsNCAuditoriaRegistradas Is Nothing Then
+        Set ColSegsNCAuditoriaRegistradas = m_objColSegsNCAuditoriaRegistradas
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaRegistradas = constructor.getSegsNCAuditoriaRegistradas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_REGISTRADAS, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCAuditoriaRegistradas = m_objColSegsNCAuditoriaRegistradas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaRegistradas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaRegistradas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaRegistradas = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaTotales() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColSegsNCAuditoriaTotales Is Nothing Then
+        Set ColSegsNCAuditoriaTotales = m_objColSegsNCAuditoriaTotales
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaTotales = constructor.getSegsNCAuditoriaTotales(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColSegsNCAuditoriaTotales = m_objColSegsNCAuditoriaTotales
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaTotales ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaTotales(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaTotales = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaAccionesSinTareas() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_SIN_TAREAS, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaAccionesSinTareas = m_Cached
+    End If
+    If Not m_objColSegsNCAuditoriaAccionesSinTareas Is Nothing Then
+        Set ColSegsNCAuditoriaAccionesSinTareas = m_objColSegsNCAuditoriaAccionesSinTareas
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaAccionesSinTareas = constructor.getSegsNCAuditoriaAccionesSinTareas(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_SIN_TAREAS, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCAuditoriaAccionesSinTareas = m_objColSegsNCAuditoriaAccionesSinTareas
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaAccionesSinTareas ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaAccionesSinTareas(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaAccionesSinTareas = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaPteCE() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_PTE_CE, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaPteCE = m_Cached
+    End If
+    If Not m_objColSegsNCAuditoriaPteCE Is Nothing Then
+        Set ColSegsNCAuditoriaPteCE = m_objColSegsNCAuditoriaPteCE
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaPteCE = constructor.getSegsNCAuditoriaPteCE(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_PTE_CE, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCAuditoriaPteCE = m_objColSegsNCAuditoriaPteCE
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaPteCE ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaPteCE(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaPteCE = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaCECaducada() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_CADUCADA, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaCECaducada = m_Cached
+    End If
+    If Not m_objColSegsNCAuditoriaCECaducada Is Nothing Then
+        Set ColSegsNCAuditoriaCECaducada = m_objColSegsNCAuditoriaCECaducada
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaCECaducada = constructor.getSegsNCAuditoriaCECaducada(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_CADUCADA, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCAuditoriaCECaducada = m_objColSegsNCAuditoriaCECaducada
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaCECaducada ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaCECaducada(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaCECaducada = objNewValue
+
+End Property
+Public Property Get ColSegsNCAuditoriaCENoConforme() As Scripting.Dictionary
+   
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_NO_CONFORME, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsNCAuditoriaCENoConforme = m_Cached
+    End If
+    If Not m_objColSegsNCAuditoriaCENoConforme Is Nothing Then
+        Set ColSegsNCAuditoriaCENoConforme = m_objColSegsNCAuditoriaCENoConforme
+        Exit Property
+    End If
+    Set m_objColSegsNCAuditoriaCENoConforme = constructor.getSegsNCAuditoriaCENoConforme(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    ' Store in module cache
+    Call Cache_Indicadores_Auditoria(BUCKET_NC_AUD_CE_NO_CONFORME, p_Reset:=True, p_Error:=m_Error)
+    Set ColSegsNCAuditoriaCENoConforme = m_objColSegsNCAuditoriaCENoConforme
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColSegsNCAuditoriaCENoConforme ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColSegsNCAuditoriaCENoConforme(ByVal objNewValue As Variant)
+
+    Set m_objColSegsNCAuditoriaCENoConforme = objNewValue
+
+End Property
+Public Property Get ColTipos() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColTipos Is Nothing Then
+        Set ColTipos = m_objColTipos
+        Exit Property
+    End If
+    Set m_objColTipos = constructor.getTipologiasNCProyecto(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColTipos = m_objColTipos
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColTipos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColTipos(ByVal objNewValue As Variant)
+
+    Set m_objColTipos = objNewValue
+
+End Property
+Public Property Get ColAuditorias() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColAuditorias Is Nothing Then
+        Set ColAuditorias = m_objColAuditorias
+        Exit Property
+    End If
+    Set m_objColAuditorias = constructor.getAuditorias(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAuditorias = m_objColAuditorias
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAuditorias ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColAuditorias(ByVal objNewValue As Variant)
+
+    Set m_objColAuditorias = objNewValue
+
+End Property
+
+Public Property Get ColResponsablesImplantacionDistintos() As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColResponsablesImplantacionDistintos Is Nothing Then
+        Set ColResponsablesImplantacionDistintos = m_objColResponsablesImplantacionDistintos
+        Exit Property
+    End If
+    Set m_objColResponsablesImplantacionDistintos = constructor.getResponsablesImplantacionDistintos(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColResponsablesImplantacionDistintos = m_objColResponsablesImplantacionDistintos
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColResponsablesImplantacionDistintos ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+
+Public Property Set ColResponsablesImplantacionDistintos(ByVal objNewValue As Variant)
+
+    Set m_objColResponsablesImplantacionDistintos = objNewValue
+
+End Property
+
+Public Property Get ColAuditoriasNombres() As Scripting.Dictionary
+    Dim m_Col As Scripting.Dictionary
+    On Error GoTo errores
+    Me.Error = ""
+    m_Error = ""
+    Set m_Col = Me.ColAuditorias
+    m_Error = Me.Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set m_objColAuditoriasNombres = constructor.getAuditoriasNombres(p_col:=m_Col, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColAuditoriasNombres = m_objColAuditoriasNombres
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColAuditoriasNombres ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+End Property
+Public Property Set ColAuditoriasNombres(ByVal objNewValue As Variant)
+
+    Set m_objColAuditoriasNombres = objNewValue
+
+End Property
+
+Public Property Get ColPuntosNormaNCAuditorias() As Scripting.Dictionary
+
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not m_objColPuntosNormaNCAuditorias Is Nothing Then
+        Set ColPuntosNormaNCAuditorias = m_objColPuntosNormaNCAuditorias
+        Exit Property
+    End If
+    
+    
+    Set m_objColPuntosNormaNCAuditorias = constructor.getColPuntosNormaAuditoria(p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    Set ColPuntosNormaNCAuditorias = m_objColPuntosNormaNCAuditorias
+    
+    Exit Property
+errores:
+    If Err.Number <> 1000 Then
+        m_Error = "El método Entorno.ColPuntosNormaNCAuditorias ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Me.Error = m_Error
+
+End Property
+
+Public Property Set ColPuntosNormaNCAuditorias(p_Valor As Variant)
+    Set m_objColPuntosNormaNCAuditorias = p_Valor
 End Property
 
 Public Property Get ColItems() As Scripting.Dictionary
@@ -2170,97 +2542,62 @@ Public Property Get ColItems() As Scripting.Dictionary
     End If
     Set m_objColItems = New Scripting.Dictionary
     With m_objColItems
+        .Add "CSS", ""
+        .Add "URLArchivoCSS", ""
+        .Add "URLDirectorioAplicaciones", ""
+        .Add "URLDirAplicacion", ""
         .Add "ColAdministradores", "o"
         .Add "ColUsuariosCalidad", "o"
-        .Add "URLAchivoIni", ""
+        .Add "CadenaCorreosCalidad", ""
+        .Add "URLArchivoIni", ""
         .Add "VersionAplicacion", ""
-        .Add "URLDirectorioAplicaciones", ""
-        .Add "URLArchivoCSS", ""
-        .Add "CSS", ""
-        .Add "URLDirectorioAplicacion", ""
         .Add "URLDirectorioDocumentacion", ""
         .Add "URLDirectorioLocal", ""
+        .Add "URLDirectorioInformesLocal", ""
         .Add "URLDirectorioDocumentacionAyuda", ""
-        .Add "ColEstados", "o"
-        .Add "ColEstadosTexto", "o"
-        .Add "ColEstadosTitulo", "o"
-        .Add "colExplicacionTipoTarea", "o"
-        .Add "DiasParaAvisoFinExpediente", ""
-        .Add "DiasParaOfertasSinDecision", ""
-        .Add "ColImagenes", "o"
-        .Add "URLDirectorioIconos", ""
-        .Add "URLIconoCadenaContratacionOrganoControl", ""
-        .Add "URLIconoCadenaContratacionEmpresaNoGrupo", ""
-        .Add "URLIconoCadenaContratacionEmpresaGrupo", ""
-        .Add "URLIconoEmpresaLista", ""
+        .Add "URLDirRecursos", ""
+        .Add "URLDirectorioPlantillas", ""
+        .Add "URLPlantillaInformeNCProyecto", ""
+        .Add "URLPlantillaInformeNCAuditoria", ""
+        .Add "URLDirectorioDocumentacionAuditorias", ""
+        .Add "ColEstadosNC", "o"
+        .Add "ColEstadosNCTexto", "o"
+        .Add "ColEstadosNCTitulo", "o"
+        .Add "ColEstadosAC", "o"
+        .Add "ColEstadosACTexto", "o"
+        .Add "ColEstadosACTitulo", "o"
+        .Add "ColEstadosAR", "o"
+        .Add "ColEstadosARTexto", "o"
+        .Add "ColEstadosARTitulo", "o"
+        .Add "ColJuridicasDistintas", "o"
+        .Add "CadenaCorreosCalidadEnPruebas", ""
+        .Add "ColEnumOrdenOrderBy", "o"
+        .Add "ColEnumOrdenTitulo", "o"
+        .Add "URLArchivoCSS1", ""
+        .Add "URLVideoAyudaNCProyecto", ""
+        .Add "URLVideoAyudaNCProyectoParaTecnico", ""
     End With
     Set ColItems = m_objColItems
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método Entorno.ColItems ha devuelto el error:" & vbNewLine & Err.Description
+        m_Error = "El metodo Entorno.m_objColItems ha devuelto el error: " & vbNewLine & Err.Description
     End If
-    m_Error = Me.Error
+    Me.Error = m_Error
 End Property
-
-
-
-Public Function getPropiedad(p_NombrePropiedad As Variant, Optional ByRef p_Error As String) As Variant
-    
+Public Function getPropiedad( _
+                                    p_NombreCampo As Variant, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Variant
     
     On Error GoTo errores
-    Me.Error = ""
-    If p_NombrePropiedad = "ColAdministradores" Then
-        Set getPropiedad = Me.ColAdministradores
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
+    m_Error = ""
+    p_Error = ""
     
-    If p_NombrePropiedad = "ColUsuariosCalidad" Then
-        Set getPropiedad = Me.ColUsuariosCalidad
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
+   
     
-    If p_NombrePropiedad = "URLAchivoIni" Then
-        getPropiedad = Me.URLAchivoIni
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
-    If p_NombrePropiedad = "VersionAplicacion" Then
-        getPropiedad = Me.VersionAplicacion
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
-    If p_NombrePropiedad = "URLDirectorioAplicaciones" Then
-        getPropiedad = Me.URLDirectorioAplicaciones
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
-    If p_NombrePropiedad = "URLArchivoCSS" Then
-        getPropiedad = Me.URLArchivoCSS
-        p_Error = Me.Error
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Exit Function
-    End If
-    If p_NombrePropiedad = "CSS" Then
+    
+    If p_NombreCampo = "CSS" Then
         getPropiedad = Me.CSS
         p_Error = Me.Error
         If p_Error <> "" Then
@@ -2268,16 +2605,72 @@ Public Function getPropiedad(p_NombrePropiedad As Variant, Optional ByRef p_Erro
         End If
         Exit Function
     End If
-    
-    If p_NombrePropiedad = "URLDirectorioAplicacion" Then
-        getPropiedad = Me.URLDirectorioAplicacion
+    If p_NombreCampo = "URLArchivoCSS" Then
+        getPropiedad = Me.URLArchivoCSS
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLDirectorioDocumentacion" Then
+    If p_NombreCampo = "URLDirectorioAplicaciones" Then
+        getPropiedad = Me.URLDirectorioAplicaciones
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLDirAplicacion" Then
+        getPropiedad = Me.URLDirAplicacion
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "ColAdministradores" Then
+        Set getPropiedad = Me.ColAdministradores
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "ColUsuariosCalidad" Then
+        Set getPropiedad = Me.ColUsuariosCalidad
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "CadenaCorreosCalidad" Then
+        getPropiedad = Me.CadenaCorreosCalidad
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLArchivoIni" Then
+        getPropiedad = Me.URLArchivoIni
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "VersionAplicacion" Then
+        getPropiedad = Me.VersionAplicacion
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    
+    If p_NombreCampo = "URLDirectorioDocumentacion" Then
         getPropiedad = Me.URLDirectorioDocumentacion
         p_Error = Me.Error
         If p_Error <> "" Then
@@ -2285,8 +2678,7 @@ Public Function getPropiedad(p_NombrePropiedad As Variant, Optional ByRef p_Erro
         End If
         Exit Function
     End If
-    
-    If p_NombrePropiedad = "URLDirectorioLocal" Then
+    If p_NombreCampo = "URLDirectorioLocal" Then
         getPropiedad = Me.URLDirectorioLocal
         p_Error = Me.Error
         If p_Error <> "" Then
@@ -2294,8 +2686,15 @@ Public Function getPropiedad(p_NombrePropiedad As Variant, Optional ByRef p_Erro
         End If
         Exit Function
     End If
-    
-    If p_NombrePropiedad = "URLDirectorioDocumentacionAyuda" Then
+    If p_NombreCampo = "URLDirectorioInformesLocal" Then
+        getPropiedad = Me.URLDirectorioInformesLocal
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLDirectorioDocumentacionAyuda" Then
         getPropiedad = Me.URLDirectorioDocumentacionAyuda
         p_Error = Me.Error
         If p_Error <> "" Then
@@ -2303,108 +2702,190 @@ Public Function getPropiedad(p_NombrePropiedad As Variant, Optional ByRef p_Erro
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "ColEstados" Then
-        Set getPropiedad = Me.ColEstados
+    
+    If p_NombreCampo = "URLDirRecursos" Then
+        getPropiedad = Me.URLDirRecursos
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "ColEstadosTexto" Then
-        Set getPropiedad = Me.ColEstadosTexto
+    If p_NombreCampo = "URLDirectorioPlantillas" Then
+        getPropiedad = Me.URLDirectorioPlantillas
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "ColEstadosTitulo" Then
-        Set getPropiedad = Me.ColEstadosTitulo
+    If p_NombreCampo = "URLPlantillaInformeNCProyecto" Then
+        getPropiedad = Me.URLPlantillaInformeNCProyecto
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "colExplicacionTipoTarea" Then
-        Set getPropiedad = Me.colExplicacionTipoTarea
+    If p_NombreCampo = "URLPlantillaInformeNCAuditoria" Then
+        getPropiedad = Me.URLPlantillaInformeNCAuditoria
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "DiasParaAvisoFinExpediente" Then
-        getPropiedad = Me.DiasParaAvisoFinExpediente
+    
+    If p_NombreCampo = "URLDirectorioDocumentacionAuditorias" Then
+        getPropiedad = Me.URLDirectorioDocumentacionAuditorias
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "DiasParaOfertasSinDecision" Then
-        getPropiedad = Me.DiasParaOfertasSinDecision
+    
+    If p_NombreCampo = "ColEstadosNC" Then
+        Set getPropiedad = Me.ColEstadosNC
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "ColImagenes" Then
-        Set getPropiedad = Me.ColImagenes
+    If p_NombreCampo = "ColEstadosNCTexto" Then
+        Set getPropiedad = Me.ColEstadosNCTexto
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLDirectorioIconos" Then
-        getPropiedad = Me.URLDirectorioIconos
+    If p_NombreCampo = "ColEstadosNCTitulo" Then
+        Set getPropiedad = Me.ColEstadosNCTitulo
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLIconoCadenaContratacionOrganoControl" Then
-        getPropiedad = Me.URLIconoCadenaContratacionOrganoControl
+    
+    If p_NombreCampo = "ColEstadosAC" Then
+        Set getPropiedad = Me.ColEstadosAC
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLIconoCadenaContratacionEmpresaNoGrupo" Then
-        getPropiedad = Me.URLIconoCadenaContratacionEmpresaNoGrupo
+    If p_NombreCampo = "ColEstadosACTexto" Then
+        Set getPropiedad = Me.ColEstadosACTexto
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLIconoCadenaContratacionEmpresaGrupo" Then
-        getPropiedad = Me.URLIconoCadenaContratacionEmpresaGrupo
+    If p_NombreCampo = "ColEstadosACTitulo" Then
+        Set getPropiedad = Me.ColEstadosACTitulo
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    If p_NombrePropiedad = "URLIconoEmpresaLista" Then
-        getPropiedad = Me.URLIconoEmpresaLista
+    If p_NombreCampo = "ColEstadosAR" Then
+        Set getPropiedad = Me.ColEstadosAR
         p_Error = Me.Error
         If p_Error <> "" Then
             Err.Raise 1000
         End If
         Exit Function
     End If
-    p_Error = "La propiedad " & p_NombrePropiedad & " no está codificada en Entorno.getPropiedad"
+    If p_NombreCampo = "ColEstadosARTexto" Then
+        Set getPropiedad = Me.ColEstadosARTexto
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "ColEstadosARTitulo" Then
+        Set getPropiedad = Me.ColEstadosARTitulo
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "ColJuridicasDistintas" Then
+        Set getPropiedad = Me.ColJuridicasDistintas
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "CadenaCorreosCalidadEnPruebas" Then
+        getPropiedad = Me.CadenaCorreosCalidadEnPruebas
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    
+    If p_NombreCampo = "ColEnumOrdenOrderBy" Then
+        Set getPropiedad = Me.ColEnumOrdenOrderBy
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "ColEnumOrdenTitulo" Then
+        Set getPropiedad = Me.ColEnumOrdenTitulo
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLArchivoCSS1" Then
+        getPropiedad = Me.URLArchivoCSS1
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLVideoAyudaNCProyecto" Then
+        getPropiedad = Me.URLVideoAyudaNCProyecto
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    If p_NombreCampo = "URLVideoAyudaNCProyectoParaTecnico" Then
+        getPropiedad = Me.URLVideoAyudaNCProyectoParaTecnico
+        p_Error = Me.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Exit Function
+    End If
+    p_Error = "La propiedad " & p_NombreCampo & " no esta registrada en Entorno.getPropiedad "
     Err.Raise 1000
     Exit Function
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método Entorno.getPropiedad ha devuelto el error: " & vbNewLine & Err.Description
+        p_Error = "El metodo Entorno.getPropiedad ha devuelto el error: " & vbNewLine & Err.Description
     End If
+    
 End Function
+
+
+
+
 

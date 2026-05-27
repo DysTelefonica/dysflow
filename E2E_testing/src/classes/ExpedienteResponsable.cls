@@ -18,7 +18,7 @@ Public CorreoSiempre As String
 Public EsJefeProyecto As String
 
 Private m_sIDExpedienteResponsableCalculado As String
-Private m_ObjUsuario As USUARIO
+Private m_ObjUsuario As usuario
 Private m_ObjExpediente As Expediente
 
 Private m_objColCampos As Collection
@@ -47,14 +47,14 @@ errores:
     End If
     Me.Error = m_Error
 End Property
-Public Property Get USUARIO() As USUARIO
+Public Property Get usuario() As usuario
     
     On Error GoTo errores
     
     Me.Error = ""
     m_Error = ""
     If Not m_ObjUsuario Is Nothing Then
-        Set USUARIO = m_ObjUsuario
+        Set usuario = m_ObjUsuario
         Exit Property
     End If
     If Me.IdUsuario = "" Then
@@ -65,7 +65,7 @@ Public Property Get USUARIO() As USUARIO
     If m_Error <> "" Then
         Err.Raise 1000
     End If
-    Set USUARIO = m_ObjUsuario
+    Set usuario = m_ObjUsuario
     
     Exit Property
 errores:
@@ -199,4 +199,5 @@ errores:
         p_Error = "El método ExpedienteResponsable.SetPropiedad ha devuelto el error:" & vbNewLine & Err.Description
     End If
 End Function
+
 

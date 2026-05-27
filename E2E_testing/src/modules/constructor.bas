@@ -1,10 +1,102 @@
 Attribute VB_Name = "constructor"
 Option Compare Database
 Option Explicit
+Public Function getRiesgosNC(p_IDNC As Long, Optional ByRef p_Error As String) As Scripting.Dictionary
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Riesgo As riesgo
+    Dim m_Col As Scripting.Dictionary
+    
+    On Error GoTo errores
+    Set m_Col = New Scripting.Dictionary
+    m_Col.CompareMode = TextCompare
+    
+    ' Consulta de unión entre la tabla de enlace y el catálogo de riesgos [cite: 7, 8]
+    m_SQL = "SELECT TbRiesgos.* " & _
+            "FROM TbRiesgos INNER JOIN TbRiesgosNC ON TbRiesgos.IDRiesgo = TbRiesgosNC.IDRiesgo " & _
+            "WHERE TbRiesgosNC.IDNoConformidad = " & p_IDNC & ";"
+            
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    
+    Do While Not rcdDatos.EOF
+        Set m_Riesgo = New riesgo
+        ' Mapeo de campos estándar del dominio Riesgo [cite: 5, 8]
+        m_Riesgo.idRiesgo = rcdDatos!idRiesgo
+        m_Riesgo.CodigoRiesgo = Nz(rcdDatos!CodigoRiesgo, "")
+        m_Riesgo.Descripcion = Nz(rcdDatos!Descripcion, "")
+        m_Riesgo.Estado = Nz(rcdDatos!Estado, "")
+        
+        m_Col.Add CStr(m_Riesgo.idRiesgo), m_Riesgo
+        rcdDatos.MoveNext
+    Loop
+    
+    Set getRiesgosNC = m_Col
+    rcdDatos.Close
+    Exit Function
+
+errores:
+    p_Error = "Error en constructor.getRiesgosNC: " & Err.Description
+    Set getRiesgosNC = New Scripting.Dictionary
+End Function
+Public Function getUsuariosTecnicos( _
+                                        Optional p_Activos As EnumSino = EnumSino.Sí, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Usuario As usuario
+    
+    
+    On Error GoTo errores
+    If p_Activos = EnumSino.Sí Then
+        m_SQL = "SELECT * " & _
+                "FROM TbUsuariosAplicaciones " & _
+                "WHERE FechaBaja Is Null ORDER BY Nombre;"
+    Else
+        m_SQL = "SELECT * " & _
+                "FROM TbUsuariosAplicaciones " & _
+                "ORDER BY Nombre;"
+    End If
+    
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_Usuario = New usuario
+                For Each m_Campo In m_Usuario.ColCampos
+                    m_Usuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                     If p_Error <> "" Then
+                         Err.Raise 1000
+                     End If
+                 Next
+                 If getUsuariosTecnicos Is Nothing Then
+                    Set getUsuariosTecnicos = New Scripting.Dictionary
+                    getUsuariosTecnicos.CompareMode = TextCompare
+                 End If
+                 If Not getUsuariosTecnicos.Exists(m_Usuario.id) Then
+                    getUsuariosTecnicos.Add m_Usuario.id, m_Usuario
+                 End If
+                 
+                 Set m_Usuario = Nothing
+                .MoveNext
+            Loop
+        End If
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getUsuariosTecnicos ha devuelto el error: " & Err.Description
+    End If
+End Function
 
 Public Function getUsuarioConectadoPorMaquina( _
                                                 Optional ByRef p_Error As String _
-                                                ) As USUARIO
+                                                ) As usuario
     Dim objNetwork As Object
     On Error GoTo errores
     Set objNetwork = CreateObject("Wscript.Network")
@@ -21,16 +113,18 @@ errores:
     End If
 End Function
 
+
+
+
 Public Function getUsuario( _
                             Optional p_ID As String, _
                             Optional p_UsuarioRed As String, _
                             Optional p_Nombre As String, _
                             Optional p_Correo As String, _
                             Optional ByRef p_Error As String _
-                            ) As USUARIO
+                            ) As usuario
 
     Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
     Dim m_Campo As Variant
     Dim m_NombreCampoID As String
     Dim m_EsNumeroID As Boolean
@@ -73,14 +167,14 @@ Public Function getUsuario( _
     Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
+            Exit Function
             rcdDatos.Close
             Set rcdDatos = Nothing
-            Exit Function
         End If
-        Set getUsuario = New USUARIO
+        Set getUsuario = New usuario
         For Each m_Campo In getUsuario.ColCampos
-            getUsuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
+            getUsuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
                 Err.Raise 1000
             End If
         Next
@@ -102,8 +196,8 @@ Public Function getAplicacionesPermisos( _
                                             ) As Scripting.Dictionary
 
     Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
     Dim m_Campo As Variant
+    Dim m_SQL As String
     Dim m_ObjUsuarioAplicacionPermisos As UsuarioAplicacionPermisos
             
     On Error GoTo errores
@@ -123,9 +217,9 @@ Public Function getAplicacionesPermisos( _
         .MoveFirst
         Do While Not .EOF
             Set m_ObjUsuarioAplicacionPermisos = New UsuarioAplicacionPermisos
-            For Each m_Campo In m_ObjUsuarioAplicacionPermisos.ColCampos
-                m_ObjUsuarioAplicacionPermisos.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
+                For Each m_Campo In m_ObjUsuarioAplicacionPermisos.ColCampos
+                m_ObjUsuarioAplicacionPermisos.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
                     Err.Raise 1000
                 End If
             Next
@@ -134,7 +228,7 @@ Public Function getAplicacionesPermisos( _
                 Set getAplicacionesPermisos = New Scripting.Dictionary
                 getAplicacionesPermisos.CompareMode = TextCompare
             End If
-            If Not getAplicacionesPermisos.exists(CStr(m_ObjUsuarioAplicacionPermisos.IDAplicacion)) Then
+            If Not getAplicacionesPermisos.Exists(CStr(m_ObjUsuarioAplicacionPermisos.IDAplicacion)) Then
                 getAplicacionesPermisos.Add m_ObjUsuarioAplicacionPermisos.IDAplicacion, m_ObjUsuarioAplicacionPermisos
             End If
             Set m_ObjUsuarioAplicacionPermisos = Nothing
@@ -151,126 +245,172 @@ errores:
         p_Error = "El método getAplicacionesPermisos ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getUsuariosAdministradores( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
+
+Public Function getDocumentosAyuda(Optional ByRef p_Error As String) As Scripting.Dictionary
+    
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Usuario As USUARIO
     
-    
+       
     On Error GoTo errores
     
-    
-    
-    m_SQL = "SELECT * " & _
-            "FROM TbUsuariosAplicaciones " & _
-            "WHERE EsAdministrador='Sí' AND FechaBaja Is Null;"
-
+    m_SQL = "TbHerramientaDocAyuda"
     Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
-        If Not .EOF Then
-            .MoveFirst
-            Do While Not .EOF
-                Set m_Usuario = New USUARIO
-                For Each m_Campo In m_Usuario.ColCampos
-                    m_Usuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                     If p_Error <> "" Then
-                         Err.Raise 1000
-                     End If
-                 Next
-                 If getUsuariosAdministradores Is Nothing Then
-                    Set getUsuariosAdministradores = New Scripting.Dictionary
-                    getUsuariosAdministradores.CompareMode = TextCompare
-                 End If
-                 If Not getUsuariosAdministradores.exists(m_Usuario.ID) Then
-                    getUsuariosAdministradores.Add m_Usuario.ID, m_Usuario
-                 End If
-                 
-                 Set m_Usuario = Nothing
-                .MoveNext
-            Loop
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
         End If
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    
-    m_SQL = "SELECT TbUsuariosAplicaciones.* " & _
-            "FROM TbUsuariosAplicacionesPermisos INNER JOIN TbUsuariosAplicaciones " & _
-            "ON TbUsuariosAplicacionesPermisos.CorreoUsuario = TbUsuariosAplicaciones.CorreoUsuario " & _
-            "WHERE (((TbUsuariosAplicacionesPermisos.EsUsuarioAdministrador)='Sí') " & _
-            "AND ((TbUsuariosAplicaciones.FechaBaja) Is Null) " & _
-            "AND ((TbUsuariosAplicacionesPermisos.IDAplicacion)=" & IDAplicacion & "));"
-
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If Not .EOF Then
-            .MoveFirst
-            Do While Not .EOF
-                Set m_Usuario = New USUARIO
-                For Each m_Campo In m_Usuario.ColCampos
-                    m_Usuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                     If p_Error <> "" Then
-                         Err.Raise 1000
-                     End If
-                 Next
-                 If getUsuariosAdministradores Is Nothing Then
-                    Set getUsuariosAdministradores = New Scripting.Dictionary
-                    getUsuariosAdministradores.CompareMode = TextCompare
-                 End If
-                 If Not getUsuariosAdministradores.exists(m_Usuario.ID) Then
-                    getUsuariosAdministradores.Add m_Usuario.ID, m_Usuario
-                 End If
-                 
-                 Set m_Usuario = Nothing
-                .MoveNext
-            Loop
-        End If
+        .MoveFirst
+        Do While Not .EOF
+            If getDocumentosAyuda Is Nothing Then
+                Set getDocumentosAyuda = New Scripting.Dictionary
+                getDocumentosAyuda.CompareMode = TextCompare
+            End If
+            If Not getDocumentosAyuda.Exists(.Fields("NombreFormulario").Value) Then
+                getDocumentosAyuda.Add .Fields("NombreFormulario").Value, .Fields("NombreArchivoAyuda").Value
+            End If
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
     Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentosAyuda ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+    End If
+End Function
+
+Public Function getListaUsuarios( _
+                                    p_Tipo As EnumTipoUsuario, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ObjUsuario As usuario
+    Dim m_NombreCampo As String
+    Dim m_Where As String
+    Dim m_Particula As String
+    Dim m_SQLInicial As String
+    On Error GoTo errores
+    
+    m_SQLInicial = "SELECT TbUsuariosAplicaciones.* " & _
+                    "FROM TbUsuariosAplicaciones INNER JOIN TbUsuariosAplicacionesPermisos ON " & _
+                    "TbUsuariosAplicaciones.CorreoUsuario = TbUsuariosAplicacionesPermisos.CorreoUsuario "
+    
+    
+    If p_Tipo = EnumTipoUsuario.Administrador Then
+        m_Particula = "EsUsuarioAdministrador='Sí'"
+    ElseIf p_Tipo = EnumTipoUsuario.Calidad Then
+        m_Particula = "EsUsuarioCalidad='Sí'"
+    ElseIf p_Tipo = EnumTipoUsuario.Economia Then
+        m_Particula = "EsUsuarioEconomia='Sí'"
+    ElseIf p_Tipo = EnumTipoUsuario.Secretaria Then
+        m_Particula = "EsUsuarioSecretaria='Sí'"
+    Else
+        Exit Function
+    End If
+    m_Where = "WHERE " & _
+            "Activado=True AND " & _
+            "TbUsuariosAplicacionesPermisos.IDAplicacion=" & IDAplicacion & " AND " & _
+            m_Particula & ";"
+    m_SQL = m_SQLInicial & m_Where
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ObjUsuario = New usuario
+            For Each m_Campo In m_ObjUsuario.ColCampos
+                m_ObjUsuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+
+            
+            If getListaUsuarios Is Nothing Then
+                Set getListaUsuarios = New Scripting.Dictionary
+                getListaUsuarios.CompareMode = TextCompare
+            End If
+            If Not getListaUsuarios.Exists(CStr(m_ObjUsuario.UsuarioRed)) Then
+                getListaUsuarios.Add CStr(m_ObjUsuario.UsuarioRed), m_ObjUsuario
+            End If
+            Set m_ObjUsuario = Nothing
+            .MoveNext
+        Loop
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getUsuariosAdministradores ha devuelto el error: " & Err.Description
+        p_Error = "El método getListaUsuarios ha devuelto el error: " & Err.Description
     End If
 End Function
+
 Public Function getUsuariosCalidad( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    
-    Dim m_Usuario As USUARIO
-    Dim m_ColUsuariosRed As New Collection
-    Dim m_ID As Variant
-    
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ObjUsuario As usuario
+    Dim m_NombreCampo As String
+    Dim m_Where As String
+    Dim m_Particula As String
+    Dim m_SQLInicial As String
     On Error GoTo errores
-    With m_ColUsuariosRed
-        .Add "amrc"
-        .Add "sgm"
-        .Add "ncg"
-        .Add "bng"
-        .Add "mma"
-    End With
-    For Each m_ID In m_ColUsuariosRed
-        Set m_Usuario = constructor.getUsuario(p_UsuarioRed:=CStr(m_ID), p_Error:=p_Error)
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        If Not m_Usuario Is Nothing Then
-            If getUsuariosCalidad Is Nothing Then
-               Set getUsuariosCalidad = New Scripting.Dictionary
-               getUsuariosCalidad.CompareMode = TextCompare
-            End If
-            If Not getUsuariosCalidad.exists(m_Usuario.ID) Then
-               getUsuariosCalidad.Add m_Usuario.ID, m_Usuario
-            End If
-        End If
-        
-        Set m_Usuario = Nothing
-    Next
     
+    
+    m_SQL = "SELECT TbUsuariosAplicaciones.* " & _
+            "FROM TbUsuariosAplicaciones INNER JOIN TbUsuariosAplicacionesPermisos " & _
+            "ON TbUsuariosAplicaciones.CorreoUsuario = TbUsuariosAplicacionesPermisos.CorreoUsuario " & _
+            "WHERE (((TbUsuariosAplicacionesPermisos.IDAplicacion)=" & IDAplicacion & _
+            ") AND ((TbUsuariosAplicacionesPermisos.EsUsuarioCalidad)='Sí'));"
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ObjUsuario = New usuario
+            For Each m_Campo In m_ObjUsuario.ColCampos
+                m_ObjUsuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            
+            
+            If getUsuariosCalidad Is Nothing Then
+                Set getUsuariosCalidad = New Scripting.Dictionary
+                getUsuariosCalidad.CompareMode = TextCompare
+            End If
+            If Not getUsuariosCalidad.Exists(CStr(m_ObjUsuario.UsuarioRed)) Then
+                getUsuariosCalidad.Add CStr(m_ObjUsuario.UsuarioRed), m_ObjUsuario
+            End If
+            Set m_ObjUsuario = Nothing
+            .MoveNext
+        Loop
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
     
     Exit Function
     
@@ -279,665 +419,1419 @@ errores:
         p_Error = "El método getUsuariosCalidad ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getUsuariosTecnicos( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
+Public Function getNCProyecto( _
+                                Optional p_IDNC As String, _
+                                Optional p_IDAC As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As ncProyecto
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_Usuario As USUARIO
+        
+    
+    On Error GoTo errores
+    If p_IDNC = "" And p_IDAC = "" Then
+        Exit Function
+    End If
+    ' --- INICIO INTEGRACIÓN CACHÉ (FASE 1) ---
+    ' Intentamos carga desde caché si tenemos IDNC y no se especifica una DB externa
+    If p_IDNC <> "" And p_Db Is Nothing Then
+        If AplicarCache Then
+            Set getNCProyecto = CacheNCProyecto.ObtenerNCConCache(p_IDNC, False, p_Error)
+            If Not getNCProyecto Is Nothing Then
+                Exit Function
+            End If
+            ' Si no se obtiene nada (error o no existe), limpiamos error y fallback a BD
+            p_Error = ""
+        End If
+    End If
+    ' --- FIN INTEGRACIÓN CACHÉ ---
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDNC <> "" Then
+         m_SQL = "SELECT * FROM " & _
+            "TbNoConformidades " & _
+            "WHERE IDNoConformidad=" & p_IDNC & ";"
+    Else
+        m_SQL = "SELECT TbNoConformidades.* " & _
+                "FROM TbNoConformidades INNER JOIN TbNCAccionCorrectivas " & _
+                "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
+                "WHERE (((TbNCAccionCorrectivas.IDAccionCorrectiva)=" & p_IDAC & "));"
+    End If
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getNCProyecto = New ncProyecto
+        For Each m_Campo In getNCProyecto.ColCampos
+            getNCProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getDocumentoProyecto( _
+                                    Optional p_IDDocumento As String, _
+                                    Optional p_NombreDoc As String, _
+                                    Optional p_IDNC As String, _
+                                    Optional p_IDNCResultante As String, _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As DocumentoProyecto
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
     
     
     On Error GoTo errores
+    If p_IDDocumento = "" And p_NombreDoc = "" And p_IDNC = "" And p_IDNCResultante = "" Then
+        Exit Function
+    End If
+    If p_IDDocumento = "" And p_IDNCResultante = "" Then
+        If p_NombreDoc = "" Or p_IDNC = "" Then
+            Exit Function
+        End If
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDNCResultante <> "" Then
+         m_SQL = "SELECT * FROM " & _
+                    "TbNCDocumentos " & _
+                    "WHERE IDDocumento=" & p_IDNCResultante & ";"
+    Else
+        If p_IDDocumento <> "" Then
+             m_SQL = "SELECT * FROM " & _
+                    "TbNCDocumentos " & _
+                    "WHERE IDDocumento=" & p_IDDocumento & ";"
+        Else
+             m_SQL = "SELECT * FROM " & _
+                    "TbNCDocumentos " & _
+                    "WHERE IDNoConformidad=" & p_IDNC & " AND Documento='" & p_NombreDoc & "' ;"
+        End If
+    End If
     
-    m_SQL = "SELECT * " & _
-            "FROM TbUsuariosAplicaciones " & _
-            "WHERE FechaBaja Is Null ORDER BY Nombre;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+   
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        Set getDocumentoProyecto = New DocumentoProyecto
+        For Each m_Campo In getDocumentoProyecto.ColCampos
+            getDocumentoProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentoProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getDocumentoAuditoria( _
+                                    Optional p_IDDocumento As String, _
+                                    Optional p_IDAuditoria As String, _
+                                    Optional p_NombreDoc As String, _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As DocumentoAuditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    
+    
+    On Error GoTo errores
+    If p_IDDocumento = "" And p_NombreDoc = "" And p_IDAuditoria = "" Then
+        Exit Function
+    End If
+    If p_IDDocumento = "" Then
+        If p_NombreDoc = "" Or p_IDAuditoria = "" Then
+            Exit Function
+        End If
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDDocumento <> "" Then
+         m_SQL = "SELECT * FROM " & _
+                "TbDocumentosAuditorias " & _
+                "WHERE IDDocumento=" & p_IDDocumento & ";"
+    Else
+         m_SQL = "SELECT * FROM " & _
+                "TbDocumentosAuditorias " & _
+                "WHERE Documento='" & p_NombreDoc & "' AND IDAuditoriaResultante=" & p_IDAuditoria & ";"
+    End If
+   
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        Set getDocumentoAuditoria = New DocumentoAuditoria
+        For Each m_Campo In getDocumentoAuditoria.ColCampos
+            getDocumentoAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentoAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getDocumentosProyecto( _
+                                        Optional p_IDNC As String, _
+                                        Optional p_IDAR As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Documento As DocumentoProyecto
+    
+    On Error GoTo errores
+    If p_IDNC = "" And p_IDAR = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDNC <> "" Then
+        m_SQL = "SELECT * FROM " & _
+                "TbNCDocumentos " & _
+                "WHERE IDNoConformidad=" & p_IDNC & ";"
+    Else
+        m_SQL = "SELECT * FROM " & _
+                "TbNCDocumentos " & _
+                "WHERE IDAccionRealizada=" & p_IDAR & ";"
+    End If
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Documento = New DocumentoProyecto
+            For Each m_Campo In m_Documento.ColCampos
+                m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getDocumentosProyecto Is Nothing Then
+                Set getDocumentosProyecto = New Scripting.Dictionary
+                getDocumentosProyecto.CompareMode = TextCompare
+            End If
+            If Not getDocumentosProyecto.Exists(CStr(m_Documento.IDDocumento)) Then
+                getDocumentosProyecto.Add CStr(m_Documento.IDDocumento), m_Documento
+            End If
+            Set m_Documento = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentosProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getDocumentosCompletosProyecto( _
+                                                Optional p_IDNC As String, _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Documento As DocumentoProyecto
+    
+    On Error GoTo errores
+    If p_IDNC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbNCDocumentos " & _
+            "WHERE IDNoConformidad=" & p_IDNC & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
             Do While Not .EOF
-                Set m_Usuario = New USUARIO
-                For Each m_Campo In m_Usuario.ColCampos
-                    m_Usuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                     If p_Error <> "" Then
-                         Err.Raise 1000
-                     End If
-                 Next
-                 If getUsuariosTecnicos Is Nothing Then
-                    Set getUsuariosTecnicos = New Scripting.Dictionary
-                    getUsuariosTecnicos.CompareMode = TextCompare
-                 End If
-                 If Not getUsuariosTecnicos.exists(m_Usuario.ID) Then
-                    getUsuariosTecnicos.Add m_Usuario.ID, m_Usuario
-                 End If
-                 
-                 Set m_Usuario = Nothing
+                Set m_Documento = New DocumentoProyecto
+                For Each m_Campo In m_Documento.ColCampos
+                    m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getDocumentosCompletosProyecto Is Nothing Then
+                    Set getDocumentosCompletosProyecto = New Scripting.Dictionary
+                    getDocumentosCompletosProyecto.CompareMode = TextCompare
+                End If
+                If Not getDocumentosCompletosProyecto.Exists(CStr(m_Documento.IDDocumento)) Then
+                    getDocumentosCompletosProyecto.Add CStr(m_Documento.IDDocumento), m_Documento
+                End If
+                Set m_Documento = Nothing
                 .MoveNext
             Loop
         End If
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    'parte de las tareas
+    m_SQL = "SELECT TbNCDocumentos.* " & _
+            "FROM (TbNCAccionCorrectivas INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva) " & _
+            "INNER JOIN TbNCDocumentos ON TbNCAccionesRealizadas.IDAccionRealizada = TbNCDocumentos.IDAccionRealizada " & _
+            "WHERE (((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & "));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_Documento = New DocumentoProyecto
+                For Each m_Campo In m_Documento.ColCampos
+                    m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getDocumentosCompletosProyecto Is Nothing Then
+                    Set getDocumentosCompletosProyecto = New Scripting.Dictionary
+                    getDocumentosCompletosProyecto.CompareMode = TextCompare
+                End If
+                If Not getDocumentosCompletosProyecto.Exists(CStr(m_Documento.IDDocumento)) Then
+                    getDocumentosCompletosProyecto.Add CStr(m_Documento.IDDocumento), m_Documento
+                End If
+                Set m_Documento = Nothing
+                .MoveNext
+            Loop
+        End If
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getUsuariosTecnicos ha devuelto el error: " & Err.Description
+        p_Error = "El método getDocumentosCompletosProyecto ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getUsuarios( _
+Public Function getACProyecto( _
+                        Optional p_IDAC As String, _
+                        Optional p_Db As DAO.Database, _
+                        Optional ByRef p_Error As String _
+                        ) As ACProyecto
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAccionCorrectivas " & _
+            "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getACProyecto = New ACProyecto
+        For Each m_Campo In getACProyecto.ColCampos
+            getACProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACsProyecto( _
+                                Optional p_IDNC As String, _
+                                Optional p_EnumOrden As EnumOrden, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_Usuario As USUARIO
+    Dim m_ACProyecto As ACProyecto
+    Dim m_OrderBy As String
+    Dim m_Resultado As String
+    On Error GoTo errores
+    If p_IDNC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_EnumOrden = Empty Then
+        p_EnumOrden = EnumOrden.PorNAccion
+    End If
+    If Not m_ObjEntorno.ColEnumOrdenOrderBy.Exists(CStr(p_EnumOrden)) Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    m_Resultado = m_ObjEntorno.ColEnumOrdenOrderBy(CStr(p_EnumOrden))
+    If InStr(1, m_Resultado, "|") = 0 Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    dato = Split(m_Resultado, "|")
+    m_OrderBy = dato(0)
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAccionCorrectivas " & _
+            "WHERE IDNoConformidad=" & p_IDNC & " " & _
+            m_OrderBy & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ACProyecto = New ACProyecto
+            For Each m_Campo In m_ACProyecto.ColCampos
+                m_ACProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsProyecto Is Nothing Then
+                Set getACsProyecto = New Scripting.Dictionary
+                getACsProyecto.CompareMode = TextCompare
+            End If
+            If Not getACsProyecto.Exists(CStr(m_ACProyecto.IdAccionCorrectiva)) Then
+                getACsProyecto.Add CStr(m_ACProyecto.IdAccionCorrectiva), m_ACProyecto
+            End If
+            Set m_ACProyecto = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARProyecto( _
+                                Optional p_IDAR As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As ARProyecto
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDAR = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAccionesRealizadas " & _
+            "WHERE IDAccionRealizada=" & p_IDAR & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getARProyecto = New ARProyecto
+        For Each m_Campo In getARProyecto.ColCampos
+            getARProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getARProyectoUltima( _
+                                    Optional p_IDAC As String, _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As ARProyecto
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_SQLUltima As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQLUltima = "SELECT Last(IDAccionRealizada) AS ÚltimoDeIDAccionRealizada " & _
+                "FROM TbNCAccionesRealizadas " & _
+                "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAccionesRealizadas " & _
+            "WHERE IDAccionRealizada In(" & m_SQLUltima & ");"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getARProyectoUltima = New ARProyecto
+        For Each m_Campo In getARProyectoUltima.ColCampos
+            getARProyectoUltima.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARProyectoUltima ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARsProyecto( _
+                                p_IDAC As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARProyecto As ARProyecto
     
     
     On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT * FROM " & _
+             "TbNCAccionesRealizadas " & _
+             "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
+
     
-    m_SQL = "SELECT * " & _
-            "FROM TbUsuariosAplicaciones " & _
-            "ORDER BY Nombre;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARProyecto = New ARProyecto
+            For Each m_Campo In m_ARProyecto.ColCampos
+                m_ARProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsProyecto Is Nothing Then
+                Set getARsProyecto = New Scripting.Dictionary
+                getARsProyecto.CompareMode = TextCompare
+            End If
+            If Not getARsProyecto.Exists(CStr(m_ARProyecto.IDAccionRealizada)) Then
+                getARsProyecto.Add CStr(m_ARProyecto.IDAccionRealizada), m_ARProyecto
+            End If
+            Set m_ARProyecto = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARsDeACProyecto( _
+                                p_IDAC As String, _
+                                Optional p_EnumOrden As EnumOrden, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARProyecto As ARProyecto
+    Dim m_OrderBy As String
+    Dim m_Resultado As String
+    On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+   If p_EnumOrden = Empty Then
+        p_EnumOrden = EnumOrden.PorNAccion
+    End If
+    If Not m_ObjEntorno.ColEnumOrdenOrderBy.Exists(CStr(p_EnumOrden)) Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    m_Resultado = m_ObjEntorno.ColEnumOrdenOrderBy(CStr(p_EnumOrden))
+    If InStr(1, m_Resultado, "|") = 0 Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    dato = Split(m_Resultado, "|")
+    m_OrderBy = dato(1)
+     m_SQL = "SELECT * FROM " & _
+             "TbNCAccionesRealizadas " & _
+             "WHERE IDAccionCorrectiva=" & p_IDAC & " " & _
+            m_OrderBy & ";"
+
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARProyecto = New ARProyecto
+            For Each m_Campo In m_ARProyecto.ColCampos
+                m_ARProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsDeACProyecto Is Nothing Then
+                Set getARsDeACProyecto = New Scripting.Dictionary
+                getARsDeACProyecto.CompareMode = TextCompare
+            End If
+            If Not getARsDeACProyecto.Exists(CStr(m_ARProyecto.IDAccionRealizada)) Then
+                getARsDeACProyecto.Add CStr(m_ARProyecto.IDAccionRealizada), m_ARProyecto
+            End If
+            Set m_ARProyecto = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsDeACProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getID( _
+                        p_NOmbreTabla As String, _
+                        p_NombreCampoID As String, _
+                        Optional ByRef db As DAO.Database, _
+                        Optional ByRef p_Error As String _
+                        ) As String
+    
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim lngOrdinalMaximo As Long
+    On Error GoTo errores
+    If p_NOmbreTabla = "" Then
+        p_Error = "No se introducido un nombre de tabla adecuado"
+        Err.Raise 1000
+    End If
+    If p_NombreCampoID = "" Then
+        p_Error = "No se introducido un nombre de tabla adecuado"
+        Err.Raise 1000
+    End If
+    If db Is Nothing Then
+        Set db = getdb()
+    End If
+    m_SQL = "SELECT Max(" & p_NOmbreTabla & "." & p_NombreCampoID & ") AS Maximo " & _
+            "FROM " & p_NOmbreTabla & ";"
+    Set rcdDatos = db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
-            .MoveFirst
-            Do While Not .EOF
-                Set m_Usuario = New USUARIO
-                For Each m_Campo In m_Usuario.ColCampos
-                    m_Usuario.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                     If p_Error <> "" Then
-                         Err.Raise 1000
-                     End If
-                 Next
-                 If getUsuarios Is Nothing Then
-                    Set getUsuarios = New Scripting.Dictionary
-                    getUsuarios.CompareMode = TextCompare
-                 End If
-                 If Not getUsuarios.exists(m_Usuario.ID) Then
-                    getUsuarios.Add m_Usuario.ID, m_Usuario
-                 End If
-                 
-                 Set m_Usuario = Nothing
-                .MoveNext
-            Loop
+            If IsNumeric(Nz(.Fields("Maximo"), "")) Then
+                lngOrdinalMaximo = .Fields("Maximo")
+            End If
         End If
+        
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
-    Exit Function
+    getID = CStr(lngOrdinalMaximo + 1)
     
+    Exit Function
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getUsuarios ha devuelto el error: " & Err.Description
+        p_Error = "El método getID ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
+    
 End Function
-Public Function getComercial( _
-                                Optional p_IDComercial As String, _
-                                Optional p_Comercial As String, _
+
+Public Function getLogsProyecto( _
+                                p_Objeto As Object, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
-                                ) As Comercial
+                                ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_Log  As LogNCProyecto
+    Dim m_NombreCampoID As String
+    Dim m_ValorID As String
     
     On Error GoTo errores
-    
-    If p_IDComercial = "" And p_Comercial = "" Then
-        Exit Function
+    If Not TypeOf p_Objeto Is ncProyecto And Not TypeOf p_Objeto Is ACProyecto And Not TypeOf p_Objeto Is ARProyecto Then
+        p_Error = "Tipo de Objeto no válido"
+        Err.Raise 1000
     End If
-    If p_IDComercial <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbComerciales " & _
-                "WHERE IDComercial=" & p_IDComercial & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbComerciales " & _
-                "WHERE Comercial='" & p_Comercial & "';"
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    If TypeOf p_Objeto Is ncProyecto Then
+        m_NombreCampoID = "IDNC"
+        m_ValorID = p_Objeto.IDNoConformidad
+    ElseIf TypeOf p_Objeto Is ACProyecto Then
+        m_NombreCampoID = "IDAC"
+        m_ValorID = p_Objeto.IdAccionCorrectiva
+    ElseIf TypeOf p_Objeto Is ARProyecto Then
+        m_NombreCampoID = "IDAR"
+        m_ValorID = p_Objeto.IDAccionRealizada
+    End If
+    m_SQL = "SELECT TbLog.* " & _
+                "FROM TbLog " & _
+                "WHERE TbLog." & m_NombreCampoID & " =" & m_ValorID & " " & _
+                "ORDER BY TbLog.Fecha;"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getComercial = New Comercial
-        For Each m_Campo In getComercial.ColCampos
-            getComercial.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Log = New LogNCProyecto
+            For Each m_Campo In m_Log.ColCampos
+                m_Log.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getLogsProyecto Is Nothing Then
+                Set getLogsProyecto = New Scripting.Dictionary
+                getLogsProyecto.CompareMode = TextCompare
+            End If
+            If Not getLogsProyecto.Exists(CStr(m_Log.IDLog)) Then
+                getLogsProyecto.Add CStr(m_Log.IDLog), m_Log
+            End If
+            Set m_Log = Nothing
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getComercial ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getCPV( _
-                        Optional p_IDCPV As String, _
-                        Optional p_CPV As String, _
-                        Optional ByRef p_Error As String _
-                        ) As CPV
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDCPV = "" And p_CPV = "" Then
-        Exit Function
-    End If
-    If p_IDCPV <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbCPV " & _
-                "WHERE IDCPV=" & p_IDCPV & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbCPV " & _
-                "WHERE CPV='" & p_CPV & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getCPV = New CPV
-        For Each m_Campo In getCPV.ColCampos
-            getCPV.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getCPV ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getEjercito( _
-                            Optional p_IDEjercito As String, _
-                            Optional p_Ejercito As String, _
-                            Optional ByRef p_Error As String _
-                            ) As Ejercito
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDEjercito = "" And p_Ejercito = "" Then
-        Exit Function
-    End If
-    If p_IDEjercito <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbEjercitos " & _
-                "WHERE IDEjercito=" & p_IDEjercito & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbEjercitos " & _
-                "WHERE Ejercito='" & p_Ejercito & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getEjercito = New Ejercito
-        For Each m_Campo In getEjercito.ColCampos
-            getEjercito.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getEjercito ha devuelto el error: " & Err.Description
+        p_Error = "El método getLogsProyecto ha devuelto el error: " & Err.Description
     End If
 End Function
 
 
-
-
-
-Public Function getExpedienteEntidad( _
-                                        p_IDExpediente As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As ExpedienteEntidad
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-     m_SQL = "SELECT * " & _
-            "FROM TbExpedientesConEntidades " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteEntidad = New ExpedienteEntidad
-        For Each m_Campo In getExpedienteEntidad.ColCampos
-            getExpedienteEntidad.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteEntidad ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getGradoClasificacion( _
-                                        Optional p_IdGradoClasificacion As String, _
-                                        Optional p_GradoClasificacion As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As GradoClasificacion
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IdGradoClasificacion = "" And p_GradoClasificacion = "" Then
-        Exit Function
-    End If
-    If p_IdGradoClasificacion <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbGradosClasificacion " & _
-                "WHERE IDGradoClasificacion=" & p_IdGradoClasificacion & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbGradosClasificacion " & _
-                "WHERE GradoClasificacion='" & p_GradoClasificacion & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getGradoClasificacion = New GradoClasificacion
-        For Each m_Campo In getGradoClasificacion.ColCampos
-            getGradoClasificacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getGradoClasificacion ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-
-Public Function getUltimoCambio( _
-                                Optional p_IDUsuario As String, _
+Public Function getLogsAuditoria( _
+                                p_Objeto As Object, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
-                                ) As UltimoCambio
+                                ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_Log  As LogNCAuditoria
+    Dim m_NombreCampoID As String
+    Dim m_ValorID As String
     
     On Error GoTo errores
-    If p_IDUsuario <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbUltimoCambio " & _
-                "WHERE IDUsuarioCambio = " & p_IDUsuario & " " & _
-                "ORDER BY FechaCambio DESC;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbUltimoCambio " & _
-                "ORDER BY FechaCambio DESC;"
+    If Not TypeOf p_Objeto Is ncAuditoria And Not TypeOf p_Objeto Is ACAuditoria And Not TypeOf p_Objeto Is ARAuditoria Then
+        p_Error = "Tipo de Objeto no válido"
+        Err.Raise 1000
     End If
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If TypeOf p_Objeto Is ncAuditoria Then
+        m_NombreCampoID = "IDNC"
+        m_ValorID = p_Objeto.id
+    ElseIf TypeOf p_Objeto Is ACAuditoria Then
+        m_NombreCampoID = "IDAC"
+        m_ValorID = p_Objeto.IdAccionCorrectiva
+    ElseIf TypeOf p_Objeto Is ARAuditoria Then
+        m_NombreCampoID = "IDAR"
+        m_ValorID = p_Objeto.IDAccionRealizada
+    End If
+    m_SQL = "SELECT * " & _
+                "FROM TbLogAuditoria " & _
+                "WHERE TbLogAuditoria." & m_NombreCampoID & " =" & m_ValorID & " " & _
+                "ORDER BY TbLogAuditoria.Fecha;"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getUltimoCambio = New UltimoCambio
-        For Each m_Campo In getUltimoCambio.ColCampos
-            getUltimoCambio.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Log = New LogNCAuditoria
+            For Each m_Campo In m_Log.ColCampos
+                m_Log.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getLogsAuditoria Is Nothing Then
+                Set getLogsAuditoria = New Scripting.Dictionary
+                getLogsAuditoria.CompareMode = TextCompare
+            End If
+            If Not getLogsAuditoria.Exists(CStr(m_Log.IDLog)) Then
+                getLogsAuditoria.Add CStr(m_Log.IDLog), m_Log
+            End If
+            Set m_Log = Nothing
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getUltimoCambio ha devuelto el error: " & Err.Description
+        p_Error = "El método getLogsAuditoria ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getLugarEjecucion( _
-                                    Optional p_IDLugarEjecucion As String, _
-                                    Optional p_LugarEjecucion As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As LugarEjecucion
+Public Function getTipologiaNCProyecto( _
+                                        Optional p_IDTipo As String, _
+                                        Optional p_Tipologia As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As TipologiaNCProyectos
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+        
     
     On Error GoTo errores
-    
-    If p_IDLugarEjecucion = "" And p_LugarEjecucion = "" Then
+    If p_IDTipo = "" And p_Tipologia = "" Then
         Exit Function
     End If
-    If p_IDLugarEjecucion <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbLugaresEjecucion " & _
-                "WHERE IDLugarEjecucion=" & p_IDLugarEjecucion & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbLugaresEjecucion " & _
-                "WHERE LugarEjecucion='" & p_LugarEjecucion & "';"
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    If p_IDTipo <> "" Then
+        m_SQL = "SELECT * FROM " & _
+            "TbTiposNCProyectos " & _
+            "WHERE IDTipo=" & p_IDTipo & ";"
+    Else
+    
+        m_SQL = "SELECT * FROM " & _
+            "TbTiposNCProyectos " & _
+            "WHERE Tipologia='" & p_Tipologia & "';"
+    End If
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getLugarEjecucion = New LugarEjecucion
-        For Each m_Campo In getLugarEjecucion.ColCampos
-            getLugarEjecucion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+       Set getTipologiaNCProyecto = New TipologiaNCProyectos
+        For Each m_Campo In getTipologiaNCProyecto.ColCampos
+            getTipologiaNCProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getLugarEjecucion ha devuelto el error: " & Err.Description
+        p_Error = "El método getTipologiaNCProyecto ha devuelto el error: " & Err.Description
     End If
 End Function
+Public Function getTipologiasNCProyecto( _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
 
-Public Function getOficinaPrograma( _
-                                    Optional p_IDOficinaPrograma As String, _
-                                    Optional p_OficinaPrograma As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As OficinaPrograma
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_Tipologia As TipologiaNCProyectos
     
     On Error GoTo errores
-    
-    If p_IDOficinaPrograma = "" And p_OficinaPrograma = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    If p_IDOficinaPrograma <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbOficinasPrograma " & _
-                "WHERE IDOficinaPrograma=" & p_IDOficinaPrograma & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbOficinasPrograma " & _
-                "WHERE OficinaPrograma='" & p_OficinaPrograma & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "SELECT * " & _
+            "FROM TbTiposNCProyectos " & _
+            "ORDER BY Tipologia;"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getOficinaPrograma = New OficinaPrograma
-        For Each m_Campo In getOficinaPrograma.ColCampos
-            getOficinaPrograma.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Tipologia = New TipologiaNCProyectos
+            For Each m_Campo In m_Tipologia.ColCampos
+                m_Tipologia.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getTipologiasNCProyecto Is Nothing Then
+                Set getTipologiasNCProyecto = New Scripting.Dictionary
+                getTipologiasNCProyecto.CompareMode = TextCompare
+            End If
+            If Not getTipologiasNCProyecto.Exists(CStr(m_Tipologia.IDTipo)) Then
+                getTipologiasNCProyecto.Add CStr(m_Tipologia.IDTipo), m_Tipologia
+            End If
+            Set m_Tipologia = Nothing
+            .MoveNext
+        Loop
+       
+        
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getOficinaPrograma ha devuelto el error: " & Err.Description
+        p_Error = "El método getTipologiasNCProyecto ha devuelto el error: " & Err.Description
     End If
 End Function
+Public Function getExpedientes( _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
 
-Public Function getOrganoContratacion( _
-                                    Optional p_IDOrganoContratacion As String, _
-                                    Optional p_OrganoContratacion As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As OrganoContratacion
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_Expediente As Expediente
     
     On Error GoTo errores
-    
-    If p_IDOrganoContratacion = "" And p_OrganoContratacion = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    If p_IDOrganoContratacion <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbOrganosContratacion " & _
-                "WHERE IDOrganoContratacion=" & p_IDOrganoContratacion & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbOrganosContratacion " & _
-                "WHERE OrganoContratacion='" & p_OrganoContratacion & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "TbExpedientes"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getOrganoContratacion = New OrganoContratacion
-        For Each m_Campo In getOrganoContratacion.ColCampos
-            getOrganoContratacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Expediente = New Expediente
+            For Each m_Campo In m_Expediente.ColCampos
+                m_Expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getExpedientes Is Nothing Then
+                Set getExpedientes = New Scripting.Dictionary
+                getExpedientes.CompareMode = TextCompare
+            End If
+            If Not getExpedientes.Exists(m_Expediente.IDExpediente) Then
+                getExpedientes.Add m_Expediente.IDExpediente, m_Expediente
+            End If
+            Set m_Expediente = Nothing
+            .MoveNext
+        Loop
+       
+        
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getOrganoContratacion ha devuelto el error: " & Err.Description
+        p_Error = "El método getExpedientes ha devuelto el error: " & Err.Description
     End If
 End Function
+Public Function getNCsPorTipo( _
+                                p_CodTipo As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
 
-Public Function getPecal( _
-                            Optional p_IDPEcal As String, _
-                            Optional p_PECAL As String, _
-                            Optional ByRef p_Error As String _
-                            ) As PECAL
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_NC As ncProyecto
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDPEcal = "" And p_PECAL = "" Then
+    If p_CodTipo = "" Then
         Exit Function
     End If
-    If p_IDPEcal <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbPECAL " & _
-                "WHERE IDPecal=" & p_IDPEcal & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbPECAL " & _
-                "WHERE Pecal='" & p_PECAL & "';"
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidades " & _
+            "WHERE TIPO='" & p_CodTipo & "';"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getPecal = New PECAL
-        For Each m_Campo In getPecal.ColCampos
-            getPecal.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsPorTipo Is Nothing Then
+                Set getNCsPorTipo = New Scripting.Dictionary
+                getNCsPorTipo.CompareMode = TextCompare
+            End If
+            If Not getNCsPorTipo.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsPorTipo.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getPecal ha devuelto el error: " & Err.Description
+        p_Error = "El método getNCsPorTipo ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getRAC( _
-                            Optional p_IDRac As String, _
-                            Optional p_RAC As String, _
-                            Optional ByRef p_Error As String _
-                            ) As RAC
+Public Function getNCsPorTipoNCProyecto( _
+                                        p_IDTipo As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_NC As ncProyecto
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDRac = "" And p_RAC = "" Then
+    If p_IDTipo = "" Then
         Exit Function
     End If
-    If p_IDRac <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbRACS " & _
-                "WHERE IDRAC=" & p_IDRac & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbRACS " & _
-                "WHERE RAC='" & p_RAC & "';"
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidades " & _
+            "WHERE IDTipo=" & p_IDTipo & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getRAC = New RAC
-        For Each m_Campo In getRAC.ColCampos
-            getRAC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsPorTipoNCProyecto Is Nothing Then
+                Set getNCsPorTipoNCProyecto = New Scripting.Dictionary
+                getNCsPorTipoNCProyecto.CompareMode = TextCompare
+            End If
+            If Not getNCsPorTipoNCProyecto.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsPorTipoNCProyecto.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getRAC ha devuelto el error: " & Err.Description
+        p_Error = "El método getNCsPorTipoNCProyecto ha devuelto el error: " & Err.Description
     End If
 End Function
+Public Function getNCsProyecto( _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
 
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidades " & _
+            "WHERE Borrado=False " & _
+            "ORDER BY FECHAAPERTURA DESC;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyecto Is Nothing Then
+                Set getNCsProyecto = New Scripting.Dictionary
+                getNCsProyecto.CompareMode = TextCompare
+            End If
+            If Not getNCsProyecto.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyecto.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsProyectoSeguimiento( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
 
-Public Function getExpedienteHitos( _
-                                    p_IDExpediente As String, _
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidades " & _
+            "WHERE (ESTADO='CERRADAPTECE' " & _
+            "or ESTADO='CERRADAPTECECADUCADA' " & _
+            "or ESTADO='CERRADACENOCONFORME' " & _
+            "or ESTADO='ACSSINTAREAS' " & _
+            "or ESTADO='REGISTRADA') AND  IDNCAsociada Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyectoSeguimiento Is Nothing Then
+                Set getNCsProyectoSeguimiento = New Scripting.Dictionary
+                getNCsProyectoSeguimiento.CompareMode = TextCompare
+            End If
+            If Not getNCsProyectoSeguimiento.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyectoSeguimiento.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsProyectoSeguimiento ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsAuditoriaSeguimiento( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidadesAuditoria " & _
+            "WHERE ESTADO='CERRADAPTECE' " & _
+            "or ESTADO='CERRADAPTECECADUCADA' " & _
+            "or ESTADO='CERRADACENOCONFORME' " & _
+            "or ESTADO='ACSSINTAREAS' " & _
+            "or ESTADO='REGISTRADA';"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsAuditoriaSeguimiento Is Nothing Then
+                Set getNCsAuditoriaSeguimiento = New Scripting.Dictionary
+                getNCsAuditoriaSeguimiento.CompareMode = TextCompare
+            End If
+            If Not getNCsAuditoriaSeguimiento.Exists(CStr(m_NC.id)) Then
+                getNCsAuditoriaSeguimiento.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsAuditoriaSeguimiento ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsDeAuditoria( _
+                                    Optional p_Db As DAO.Database, _
                                     Optional ByRef p_Error As String _
                                     ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_Hito As ExpedienteHito
-    
+    Dim m_NC As ncAuditoria
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
     m_SQL = "SELECT * " & _
-            "FROM TbExpedientesHitos " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+            "FROM TbNoConformidadesAuditoria " & _
+            "WHERE Borrado=False " & _
+            "ORDER BY Numero;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -946,53 +1840,125 @@ Public Function getExpedienteHitos( _
         End If
         .MoveFirst
         Do While Not .EOF
-            Set m_Hito = New ExpedienteHito
-            For Each m_Campo In m_Hito.ColCampos
-                m_Hito.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteHitos Is Nothing Then
-                Set getExpedienteHitos = New Scripting.Dictionary
-                getExpedienteHitos.CompareMode = TextCompare
-             End If
-             If Not getExpedienteHitos.exists(CStr(m_Hito.IDHitoExpediente)) Then
-                getExpedienteHitos.Add CStr(m_Hito.IDHitoExpediente), m_Hito
-             End If
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsDeAuditoria Is Nothing Then
+                Set getNCsDeAuditoria = New Scripting.Dictionary
+                getNCsDeAuditoria.CompareMode = TextCompare
+            End If
+            If Not getNCsDeAuditoria.Exists(CStr(m_NC.id)) Then
+                getNCsDeAuditoria.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
             .MoveNext
         Loop
-        
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteHitos ha devuelto el error: " & Err.Description
+        p_Error = "El método getNCsDeAuditoria ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getExpedienteContratistas( _
-                                            p_IDExpediente As String, _
+Public Function getNCsProyectoAbiertas( _
+                                         Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+
+    m_SQL = "SELECT DISTINCT TbNoConformidades.* " & _
+            "FROM (TbNoConformidades INNER JOIN TbNCAccionCorrectivas " & _
+            "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidades.Borrado)=False) " & _
+            "AND ((TbNCAccionesRealizadas.FechaFinReal) Is Null)) ORDER BY FECHAAPERTURA DESC;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyectoAbiertas Is Nothing Then
+                Set getNCsProyectoAbiertas = New Scripting.Dictionary
+                getNCsProyectoAbiertas.CompareMode = TextCompare
+            End If
+            If Not getNCsProyectoAbiertas.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyectoAbiertas.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsProyectoAbiertas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsAuditoriaAbiertas( _
+                                             Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
+    Dim m_NC As ncAuditoria
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    m_SQL = "SELECT TbSuministradores.* " & _
-            "FROM TbExpedientesSuministradores INNER JOIN TbSuministradores " & _
-            "ON TbExpedientesSuministradores.IDSuministrador = TbSuministradores.IDSuministrador " & _
-            "WHERE TbExpedientesSuministradores.IDExpediente=" & p_IDExpediente & " AND ContratistaPrincipal='Sí';"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "SELECT distinct TbNoConformidadesAuditoria.* " & _
+            "FROM TbNoConformidadesAuditoria INNER JOIN (TbNCAuditoriaAccionCorrectivas " & _
+            "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva) " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
+            "WHERE (((TbNoConformidadesAuditoria.Borrado)=False) " & _
+            "AND ((TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null)) ORDER BY Tipo,Numero;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1001,152 +1967,117 @@ Public Function getExpedienteContratistas( _
         End If
         .MoveFirst
         Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteContratistas Is Nothing Then
-                Set getExpedienteContratistas = New Scripting.Dictionary
-                getExpedienteContratistas.CompareMode = TextCompare
-             End If
-             If Not getExpedienteContratistas.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getExpedienteContratistas.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+                'If CStr(m_Campo) = "IDTipo" Then Stop
+                'Debug.Print m_Campo
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsAuditoriaAbiertas Is Nothing Then
+                Set getNCsAuditoriaAbiertas = New Scripting.Dictionary
+                getNCsAuditoriaAbiertas.CompareMode = TextCompare
+            End If
+            If Not getNCsAuditoriaAbiertas.Exists(CStr(m_NC.id)) Then
+                getNCsAuditoriaAbiertas.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
             .MoveNext
         Loop
-        
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteContratistas ha devuelto el error: " & Err.Description
+        p_Error = "El método getNCsAuditoriaAbiertas ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getExpedienteSubContratistas( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
+Public Function getNCsProyectosTotales( _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT TbSuministradores.* " & _
-            "FROM TbExpedientesSuministradores INNER JOIN TbSuministradores " & _
-            "ON TbExpedientesSuministradores.IDSuministrador = TbSuministradores.IDSuministrador " & _
-            "WHERE TbExpedientesSuministradores.IDExpediente=" & p_IDExpediente & " AND SubContratista='Sí';"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteSubContratistas Is Nothing Then
-                Set getExpedienteSubContratistas = New Scripting.Dictionary
-                getExpedienteSubContratistas.CompareMode = TextCompare
-             End If
-             If Not getExpedienteSubContratistas.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getExpedienteSubContratistas.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteSubContratistas ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteLugarEjecucion( _
-                                            p_IDExpedienteLugarEjecucion As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As ExpedienteLugarEjecucion
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
+    Dim m_NC As ncProyecto
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDExpedienteLugarEjecucion = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
+
     m_SQL = "SELECT * " & _
-            "FROM TbExpedientesLugaresEjecucion " & _
-            "WHERE IDExpedienteLugarEjecucion=" & p_IDExpedienteLugarEjecucion & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+            "FROM TbNoConformidades " & _
+            "ORDER BY FECHAAPERTURA DESC;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getExpedienteLugarEjecucion = New ExpedienteLugarEjecucion
-        For Each m_Campo In getExpedienteLugarEjecucion.ColCampos
-            getExpedienteLugarEjecucion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyectosTotales Is Nothing Then
+                Set getNCsProyectosTotales = New Scripting.Dictionary
+                getNCsProyectosTotales.CompareMode = TextCompare
+            End If
+            If Not getNCsProyectosTotales.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyectosTotales.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteLugarEjecucion ha devuelto el error: " & Err.Description
+        p_Error = "El método getNCsProyectosTotales ha devuelto el error: " & Err.Description
     End If
 End Function
 
-Public Function getExpedienteLugaresEjecucion( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
+Public Function getNCsProyectosTotalesParaAbiertas( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_LugarEjecucion As LugarEjecucion
-    
+    Dim m_NC As ncProyecto
+   
+   
     
     On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-        m_SQL = "SELECT TbLugaresEjecucion.* " & _
-                "FROM TbExpedientesLugaresEjecucion INNER JOIN TbLugaresEjecucion " & _
-                "ON TbExpedientesLugaresEjecucion.IDLugarEjecucion = TbLugaresEjecucion.IDLugarEjecucion " & _
-                "WHERE TbExpedientesLugaresEjecucion.IDExpediente=" & p_IDExpediente & ";"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidades " & _
+            "ORDER BY FECHAAPERTURA DESC;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1155,19 +2086,142 @@ Public Function getExpedienteLugaresEjecucion( _
         End If
         .MoveFirst
         Do While Not .EOF
-            Set m_LugarEjecucion = New LugarEjecucion
-            For Each m_Campo In m_LugarEjecucion.ColCampos
-                m_LugarEjecucion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyectosTotalesParaAbiertas Is Nothing Then
+                Set getNCsProyectosTotalesParaAbiertas = New Scripting.Dictionary
+                getNCsProyectosTotalesParaAbiertas.CompareMode = TextCompare
+            End If
+            If Not getNCsProyectosTotalesParaAbiertas.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyectosTotalesParaAbiertas.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsProyectosTotalesParaAbiertas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACsProyectoSinFinalizar( _
+                                                p_IDNC As String, _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARProyecto As ARProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNCAccionesRealizadas.* " & _
+            "FROM TbNCAccionCorrectivas INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & ") " & _
+            "AND ((TbNCAccionesRealizadas.FechaFinReal) Is Null));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARProyecto = New ARProyecto
+            For Each m_Campo In m_ARProyecto.ColCampos
+                m_ARProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsProyectoSinFinalizar Is Nothing Then
+                Set getACsProyectoSinFinalizar = New Scripting.Dictionary
+                getACsProyectoSinFinalizar.CompareMode = TextCompare
+            End If
+            If Not getACsProyectoSinFinalizar.Exists(CStr(m_ARProyecto.IDAccionRealizada)) Then
+                getACsProyectoSinFinalizar.Add CStr(m_ARProyecto.IDAccionRealizada), m_ARProyecto
+            End If
+            Set m_ARProyecto = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsProyectoSinFinalizar ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getExpedienteJuridicas( _
+                                        p_IDExp As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Juridica As Juridica
+    
+    
+    On Error GoTo errores
+    
+    If p_IDExp = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbJuridicas.* " & _
+            "FROM TbExpedientesJuridicas INNER JOIN TbJuridicas " & _
+            "ON TbExpedientesJuridicas.IDJuridica = TbJuridicas.IDJuridica " & _
+            "WHERE TbExpedientesJuridicas.IDExpediente=" & p_IDExp & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Juridica = New Juridica
+            For Each m_Campo In m_Juridica.ColCampos
+                m_Juridica.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
                  If p_Error <> "" Then
                      Err.Raise 1000
                  End If
              Next
-             If getExpedienteLugaresEjecucion Is Nothing Then
-                Set getExpedienteLugaresEjecucion = New Scripting.Dictionary
-                getExpedienteLugaresEjecucion.CompareMode = TextCompare
+             If getExpedienteJuridicas Is Nothing Then
+                Set getExpedienteJuridicas = New Scripting.Dictionary
+                getExpedienteJuridicas.CompareMode = TextCompare
              End If
-             If Not getExpedienteLugaresEjecucion.exists(CStr(m_LugarEjecucion.IDLugarEjecucion)) Then
-                getExpedienteLugaresEjecucion.Add CStr(m_LugarEjecucion.IDLugarEjecucion), m_LugarEjecucion
+             If Not getExpedienteJuridicas.Exists(CStr(m_Juridica.IDJuridica)) Then
+                getExpedienteJuridicas.Add CStr(m_Juridica.IDJuridica), m_Juridica
              End If
             .MoveNext
         Loop
@@ -1179,14 +2233,12 @@ Public Function getExpedienteLugaresEjecucion( _
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteLugaresEjecucion ha devuelto el error: " & Err.Description
+        p_Error = "El método getExpedienteJuridicas ha devuelto el error: " & Err.Description
     End If
 End Function
-
 Public Function getExpediente( _
-                                Optional p_IDExpediente As String, _
-                                Optional p_Expediente As String, _
-                                Optional p_Nemotecnico As String, _
+                                p_IDExpediente As String, _
+                                Optional p_Db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Expediente
     Dim rcdDatos As DAO.Recordset
@@ -1197,24 +2249,17 @@ Public Function getExpediente( _
     
     On Error GoTo errores
     
-    If p_IDExpediente = "" And p_Expediente = "" And p_Nemotecnico = "" Then
+    If p_IDExpediente = "" Then
         Exit Function
     End If
-    If p_IDExpediente <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientes " & _
-                "WHERE IDExpediente=" & p_IDExpediente & ";"
-    ElseIf p_Expediente <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientes " & _
-                "WHERE Expediente='" & p_Expediente & "';"
-    Else
-        
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientes " & _
-                "WHERE Nemotecnico='" & p_Nemotecnico & "';"
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    m_SQL = "S"
+    m_SQL = "SELECT * " & _
+            "FROM TbExpedientes " & _
+            "WHERE IDExpediente=" & p_IDExpediente & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -1223,14 +2268,12 @@ Public Function getExpediente( _
         End If
         Set getExpediente = New Expediente
         For Each m_Campo In getExpediente.ColCampos
-            'If CStr(m_Campo) = "IDResponsableSeguridad" Then Stop
-            'If CStr(m_Campo) = "IDResponsableCalidad" Then Stop
-            getExpediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
+            'If CStr(m_Campo) = "TipoInforme" Then Stop
+            getExpediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
              If p_Error <> "" Then
                  Err.Raise 1000
              End If
          Next
-        
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
@@ -1241,11 +2284,11 @@ errores:
         p_Error = "El método getExpediente ha devuelto el error: " & Err.Description
     End If
 End Function
-
-Public Function getExpedienteCompleto( _
-                                        Optional p_IDExpediente As String, _
+Public Function getExpedientePorCodigo( _
+                                        p_Cod As String, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
-                                        ) As ExpedienteCompleto
+                                        ) As Expediente
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
@@ -1253,205 +2296,28 @@ Public Function getExpedienteCompleto( _
     
     
     On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
+    'p_Cod puede ser CodExp o CodigoActividad
+    If p_Cod = "" Then
         Exit Function
     End If
-    m_SQL = "SELECT TbExpedientes.*, " & _
-            "TbExpedientesConEntidades.Clasificacion, " & _
-            "TbExpedientesConEntidades.OrganoContratacion, " & _
-            "TbExpedientesConEntidades.OficinaPrograma, TbExpedientesConEntidades.Ejercito, " & _
-            "TbExpedientesConEntidades.ResponsableCalidad,TbExpedientesConEntidades.ResponsableSeguridad, " & _
-            "TbExpedientesConEntidades.CadenaContratistas, TbExpedientesConEntidades.CadenaComerciales, " & _
-            "TbExpedientesConEntidades.CadenaJPs, TbExpedientesConEntidades.CadenaRACs, " & _
-            "TbExpedientesConEntidades.CadenaCorreoRACs,TbExpedientesConEntidades.CadenaHitos " & _
-            "FROM TbExpedientes LEFT JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE  TbExpedientes.IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteCompleto = New ExpedienteCompleto
-        For Each m_Campo In getExpedienteCompleto.ColCampos
-            'If CStr(m_Campo) = "ESTADO" Then Stop
-            getExpedienteCompleto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCompleto ha devuelto el error: " & Err.Description
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-End Function
-Public Function getExpedientesCompletos(Optional ByRef p_Error As String) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpC As ExpedienteCompleto
     
-    
-    On Error GoTo errores
-    
-   
-    m_SQL = "SELECT TbExpedientes.*, " & _
-            "TbExpedientesConEntidades.Clasificacion, " & _
-            "TbExpedientesConEntidades.OrganoContratacion, " & _
-            "TbExpedientesConEntidades.OficinaPrograma, TbExpedientesConEntidades.Ejercito, " & _
-            "TbExpedientesConEntidades.ResponsableCalidad,TbExpedientesConEntidades.ResponsableSeguridad, " & _
-            "TbExpedientesConEntidades.CadenaContratistas, TbExpedientesConEntidades.CadenaComerciales, " & _
-            "TbExpedientesConEntidades.CadenaJPs, TbExpedientesConEntidades.CadenaRACs, " & _
-            "TbExpedientesConEntidades.CadenaCorreoRACs,TbExpedientesConEntidades.CadenaHitos, " & _
-            "TbExpedientesConEntidades.TipoParaLista " & _
-            "FROM TbExpedientes LEFT JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_ExpC = New ExpedienteCompleto
-            For Each m_Campo In m_ExpC.ColCampos
-                m_ExpC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesCompletos Is Nothing Then
-                Set getExpedientesCompletos = New Scripting.Dictionary
-                getExpedientesCompletos.CompareMode = TextCompare
-             End If
-             If Not getExpedientesCompletos.exists(CStr(m_ExpC.IDExpediente)) Then
-                getExpedientesCompletos.Add CStr(m_ExpC.IDExpediente), m_ExpC
-             End If
-            .MoveNext
-        Loop
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCompleto ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesDerivadosCompletos( _
-                                                    p_IDExpediente As String, _
-                                                    Optional ByRef p_Error As String _
-                                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpC As ExpedienteCompleto
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-     m_SQL = "SELECT TbExpedientes.*, " & _
-            "TbExpedientesConEntidades.Clasificacion, " & _
-            "TbExpedientesConEntidades.OrganoContratacion, " & _
-            "TbExpedientesConEntidades.OficinaPrograma, TbExpedientesConEntidades.Ejercito, " & _
-            "TbExpedientesConEntidades.ResponsableCalidad,TbExpedientesConEntidades.ResponsableSeguridad, " & _
-            "TbExpedientesConEntidades.CadenaContratistas, TbExpedientesConEntidades.CadenaComerciales, " & _
-            "TbExpedientesConEntidades.CadenaJPs, TbExpedientesConEntidades.CadenaRACs, " & _
-            "TbExpedientesConEntidades.CadenaCorreoRACs, " & _
-            "TbExpedientesConEntidades.TipoParaLista,TbExpedientesConEntidades.CadenaHitos  " & _
-            "FROM TbExpedientes LEFT JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE IDExpedientePadre=" & p_IDExpediente & ";"
-   
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_ExpC = New ExpedienteCompleto
-            For Each m_Campo In m_ExpC.ColCampos
-                m_ExpC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesDerivadosCompletos Is Nothing Then
-                Set getExpedientesDerivadosCompletos = New Scripting.Dictionary
-                getExpedientesDerivadosCompletos.CompareMode = TextCompare
-             End If
-             If Not getExpedientesDerivadosCompletos.exists(CStr(m_ExpC.IDExpediente)) Then
-                getExpedientesDerivadosCompletos.Add CStr(m_ExpC.IDExpediente), m_ExpC
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesDerivadosCompletos ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteUltimoLoteDerivado( _
-                                                    Optional p_IDExpediente As String, _
-                                                    Optional p_Expediente As Expediente, _
-                                                    Optional ByRef p_Error As String _
-                                                    ) As Expediente
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" And p_Expediente Is Nothing Then
-        Exit Function
-    End If
-    If p_IDExpediente = "" Then
-        p_IDExpediente = p_Expediente.IDExpediente
-        If p_IDExpediente = "" Then
-            Exit Function
-        End If
-    End If
     m_SQL = "SELECT * " & _
             "FROM TbExpedientes " & _
-            "WHERE IDExpedientePadre=" & p_IDExpediente & _
-            " AND EsLote='Sí' " & _
-            "ORDER BY Ordinal DESC;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+            "WHERE CodExp='" & p_Cod & "' OR CodigoActividad='" & p_Cod & "';"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
             Exit Function
         End If
-        Set getExpedienteUltimoLoteDerivado = New Expediente
-        For Each m_Campo In getExpedienteUltimoLoteDerivado.ColCampos
+        Set getExpedientePorCodigo = New Expediente
+        For Each m_Campo In getExpedientePorCodigo.ColCampos
             'If CStr(m_Campo) = "TipoInforme" Then Stop
-            getExpedienteUltimoLoteDerivado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
+            getExpedientePorCodigo.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
              If p_Error <> "" Then
                  Err.Raise 1000
              End If
@@ -1463,2819 +2329,14 @@ Public Function getExpedienteUltimoLoteDerivado( _
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteUltimoLoteDerivado ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteUltimoBasadoDerivado( _
-                                                    Optional p_IDExpediente As String, _
-                                                    Optional p_Expediente As Expediente, _
-                                                    Optional ByRef p_Error As String _
-                                                    ) As Expediente
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" And p_Expediente Is Nothing Then
-        Exit Function
-    End If
-    If p_IDExpediente = "" Then
-        p_IDExpediente = p_Expediente.IDExpediente
-        If p_IDExpediente = "" Then
-            Exit Function
-        End If
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE IDExpedientePadre=" & p_IDExpediente & _
-            " AND EsBasado='Sí' " & _
-            "ORDER BY Ordinal DESC;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteUltimoBasadoDerivado = New Expediente
-        For Each m_Campo In getExpedienteUltimoBasadoDerivado.ColCampos
-            'If CStr(m_Campo) = "TipoInforme" Then Stop
-            getExpedienteUltimoBasadoDerivado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteUltimoBasadoDerivado ha devuelto el error: " & Err.Description
+        p_Error = "El método getExpedientePorCodigo ha devuelto el error: " & Err.Description
     End If
 End Function
 
 
-Public Function getExpedientesEstadoDesconocido( _
-                                                Optional ByRef p_Error As String _
-                                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE " & _
-            "APLICAESTADO='Sí' " & _
-            "AND ESTADO='Desconocido';"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesEstadoDesconocido Is Nothing Then
-                Set getExpedientesEstadoDesconocido = New Scripting.Dictionary
-                getExpedientesEstadoDesconocido.CompareMode = TextCompare
-             End If
-             If Not getExpedientesEstadoDesconocido.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesEstadoDesconocido.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesEstadoDesconocido ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getColExpedientesAPuntoDeRecepcionar( _
-                                                Optional ByRef p_Error As String _
-                                                    ) As Scripting.Dictionary
-    Dim m_ID As Variant
-    Dim m_expediente As Expediente
-    Dim m_Col As Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    Set m_Col = getColExpedientesAPuntoDeRecepcionarCompleto(p_Error:=p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        For Each m_ID In m_Col
-            Set m_expediente = m_Col(m_ID)
-            If getColExpedientesAPuntoDeRecepcionar Is Nothing Then
-                Set getColExpedientesAPuntoDeRecepcionar = New Scripting.Dictionary
-                getColExpedientesAPuntoDeRecepcionar.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAPuntoDeRecepcionar.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAPuntoDeRecepcionar.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            Set m_expediente = Nothing
-        Next
-    End If
-    Set m_Col = getColExpedientesAPuntoDeRecepcionarHito(p_Error:=p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If Not m_Col Is Nothing Then
-        For Each m_ID In m_Col
-            Set m_expediente = m_Col(m_ID)
-            If getColExpedientesAPuntoDeRecepcionar Is Nothing Then
-                Set getColExpedientesAPuntoDeRecepcionar = New Scripting.Dictionary
-                getColExpedientesAPuntoDeRecepcionar.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAPuntoDeRecepcionar.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAPuntoDeRecepcionar.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            Set m_expediente = Nothing
-        Next
-    End If
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesAPuntoDeRecepcionar ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getColExpedientesAPuntoDeRecepcionarCompleto( _
-                                                            Optional ByRef p_Error As String _
-                                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE (((DateDiff('d',Date(),[FechaFinContrato]))>-1 " & _
-            "And (DateDiff('d',Date(),[FechaFinContrato]))<" & m_ObjEntorno.DiasParaAvisoFinExpediente & ") " & _
-            "AND ((TbExpedientes.EsBasado)='Sí')) OR (((DateDiff('d',Date(),[FechaFinContrato]))>-1 " & _
-            "And (DateDiff('d',Date(),[FechaFinContrato]))<" & m_ObjEntorno.DiasParaAvisoFinExpediente & ") " & _
-            "AND ((TbExpedientes.EsExpediente)='Sí'));"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getColExpedientesAPuntoDeRecepcionarCompleto Is Nothing Then
-                Set getColExpedientesAPuntoDeRecepcionarCompleto = New Scripting.Dictionary
-                getColExpedientesAPuntoDeRecepcionarCompleto.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAPuntoDeRecepcionarCompleto.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAPuntoDeRecepcionarCompleto.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesAPuntoDeRecepcionarCompleto ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getColExpedientesAPuntoDeRecepcionarHito( _
-                                                            Optional ByRef p_Error As String _
-                                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.* " & _
-                "FROM (TbExpedientesHitos INNER JOIN TbExpedientes " & _
-                "ON TbExpedientesHitos.IDExpediente = TbExpedientes.IDExpediente) " & _
-                "LEFT JOIN TbUsuariosAplicaciones ON TbExpedientes.IDResponsableCalidad = TbUsuariosAplicaciones.Id " & _
-                "WHERE (((DateDiff('d',Date(),[FechaHito]))>-1 " & _
-                "And (DateDiff('d',Date(),[FechaHito]))<" & m_ObjEntorno.DiasParaAvisoFinExpediente & "));"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getColExpedientesAPuntoDeRecepcionarHito Is Nothing Then
-                Set getColExpedientesAPuntoDeRecepcionarHito = New Scripting.Dictionary
-                getColExpedientesAPuntoDeRecepcionarHito.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAPuntoDeRecepcionarHito.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAPuntoDeRecepcionarHito.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesAPuntoDeRecepcionarHito ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getColExpedientesAdjudicadosSinContrato( _
-                                                        Optional ByRef p_Error As String _
-                                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE FechaInicioContrato Is Null AND GARANTIAMESES Is Null AND FechaFinContrato Is Null " & _
-            "AND Not FECHAADJUDICACION is Null AND APLICAESTADO<>'No';"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-            
-             If getColExpedientesAdjudicadosSinContrato Is Nothing Then
-                Set getColExpedientesAdjudicadosSinContrato = New Scripting.Dictionary
-                getColExpedientesAdjudicadosSinContrato.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAdjudicadosSinContrato.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAdjudicadosSinContrato.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesAdjudicadosSinContrato ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getColExpedientesAdjudicadosTSOLSinCodS4H( _
-                                                        Optional ByRef p_Error As String _
-                                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE (((TbExpedientesConEntidades.CadenaContratistas)='TSOL') " & _
-            "AND ((TbExpedientes.Adjudicado)='Sí')  " & _
-            "AND ((TbExpedientes.CodS4H) Is Null) " & _
-            "AND ((TbExpedientes.AplicaTareaS4H) <>'No'));"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-            
-             If getColExpedientesAdjudicadosTSOLSinCodS4H Is Nothing Then
-                Set getColExpedientesAdjudicadosTSOLSinCodS4H = New Scripting.Dictionary
-                getColExpedientesAdjudicadosTSOLSinCodS4H.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesAdjudicadosTSOLSinCodS4H.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesAdjudicadosTSOLSinCodS4H.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesAdjudicadosTSOLSinCodS4H ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getColExpedientesFaseOfertaPorMuchoTiempo( _
-                                                        Optional ByRef p_Error As String _
-                                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE ((Not (TbExpedientes.FECHAOFERTA) Is Null) AND ((TbExpedientes.FECHAPERDIDA) Is Null) " & _
-            "AND ((TbExpedientes.FECHADESESTIMADA) Is Null) AND ((TbExpedientes.FECHAADJUDICACION) Is Null) " & _
-            "AND ((DateDiff('d',[FECHAOFERTA],Date()))>=" & m_ObjEntorno.DiasParaOfertasSinDecision & "));"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-            
-             If getColExpedientesFaseOfertaPorMuchoTiempo Is Nothing Then
-                Set getColExpedientesFaseOfertaPorMuchoTiempo = New Scripting.Dictionary
-                getColExpedientesFaseOfertaPorMuchoTiempo.CompareMode = TextCompare
-             End If
-             If Not getColExpedientesFaseOfertaPorMuchoTiempo.exists(CStr(m_expediente.IDExpediente)) Then
-                getColExpedientesFaseOfertaPorMuchoTiempo.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getColExpedientesFaseOfertaPorMuchoTiempo ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientes( _
-                                Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "TbExpedientes"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientes Is Nothing Then
-                Set getExpedientes = New Scripting.Dictionary
-                getExpedientes.CompareMode = TextCompare
-             End If
-             If Not getExpedientes.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientes.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesEnGestionDeRiesgos( _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT  TbExpedientes1.* " & _
-            "FROM TbProyectos INNER JOIN TbExpedientes1 ON TbProyectos.IDExpediente = TbExpedientes1.IDExpediente;"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesEnGestionDeRiesgos Is Nothing Then
-                Set getExpedientesEnGestionDeRiesgos = New Scripting.Dictionary
-                getExpedientesEnGestionDeRiesgos.CompareMode = TextCompare
-             End If
-             If Not getExpedientesEnGestionDeRiesgos.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesEnGestionDeRiesgos.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesEnGestionDeRiesgos ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesNoEnEntidades( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.* " & _
-            "FROM TbExpedientes LEFT JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE (((TbExpedientesConEntidades.IDExpediente) Is Null));"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesNoEnEntidades Is Nothing Then
-                Set getExpedientesNoEnEntidades = New Scripting.Dictionary
-                getExpedientesNoEnEntidades.CompareMode = TextCompare
-             End If
-             If Not getExpedientesNoEnEntidades.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesNoEnEntidades.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesNoEnEntidades ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getLotes( _
-                            p_IDExpediente As String, _
-                            Optional ByRef p_Error As String _
-                            ) As Scripting.Dictionary
-    
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE " & _
-            "IDExpedientePadre=" & p_IDExpediente & " " & _
-            "AND EsLote='Sí' " & _
-            "ORDER BY IDExpediente;"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getLotes Is Nothing Then
-                Set getLotes = New Scripting.Dictionary
-                getLotes.CompareMode = TextCompare
-             End If
-             If Not getLotes.exists(CStr(m_expediente.IDExpediente)) Then
-                getLotes.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getLotes ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getBasados( _
-                            p_IDExpediente As String, _
-                            Optional ByRef p_Error As String _
-                            ) As Scripting.Dictionary
-    
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE " & _
-            "IDExpedientePadre=" & p_IDExpediente & " " & _
-            "AND EsBasado='Sí' " & _
-            "ORDER BY IDEjercito, Ordinal;"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getBasados Is Nothing Then
-                Set getBasados = New Scripting.Dictionary
-                getBasados.CompareMode = TextCompare
-             End If
-             If Not getBasados.exists(CStr(m_expediente.IDExpediente)) Then
-                getBasados.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getBasados ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getBasadosCompletos( _
-                                        p_IDExpediente As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpedienteC As ExpedienteCompleto
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.*, " & _
-            "TbExpedientesConEntidades.Clasificacion, " & _
-            "TbExpedientesConEntidades.OrganoContratacion, " & _
-            "TbExpedientesConEntidades.OficinaPrograma, TbExpedientesConEntidades.Ejercito, " & _
-            "TbExpedientesConEntidades.ResponsableCalidad,TbExpedientesConEntidades.ResponsableSeguridad, " & _
-            "TbExpedientesConEntidades.CadenaContratistas, TbExpedientesConEntidades.CadenaComerciales, " & _
-            "TbExpedientesConEntidades.CadenaJPs, TbExpedientesConEntidades.CadenaRACs, " & _
-            "TbExpedientesConEntidades.CadenaCorreoRACs,TbExpedientesConEntidades.CadenaHitos " & _
-            "FROM TbExpedientes LEFT JOIN TbExpedientesConEntidades " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesConEntidades.IDExpediente " & _
-            "WHERE " & _
-            "TbExpedientes.IDExpedientePadre=" & p_IDExpediente & " " & _
-            "AND TbExpedientes.EsBasado='Sí' " & _
-            "ORDER BY TbExpedientes.IDEjercito, TbExpedientes.Ordinal;"
-   
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_ExpedienteC = New ExpedienteCompleto
-            For Each m_Campo In m_ExpedienteC.ColCampos
-                'If CStr(m_Campo) = "CadenaHitos" Then Stop
-                m_ExpedienteC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getBasadosCompletos Is Nothing Then
-                Set getBasadosCompletos = New Scripting.Dictionary
-                getBasadosCompletos.CompareMode = TextCompare
-             End If
-             If Not getBasadosCompletos.exists(CStr(m_ExpedienteC.IDExpediente)) Then
-                getBasadosCompletos.Add CStr(m_ExpedienteC.IDExpediente), m_ExpedienteC
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getBasadosCompletos ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesParaCombo( _
-                                        Optional ByRef p_Error As String _
-                                         ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "ORDER BY IDExpediente;"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesParaCombo Is Nothing Then
-                Set getExpedientesParaCombo = New Scripting.Dictionary
-                getExpedientesParaCombo.CompareMode = TextCompare
-             End If
-             If Not getExpedientesParaCombo.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesParaCombo.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesParaCombo ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteUltimoDerivado( _
-                                            Optional p_ID As String, _
-                                            Optional p_Expediente As Expediente, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Expediente
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    
-    m_SQL = getSQLUltimoDerivado(p_ID:=p_ID, p_Expediente:=p_Expediente, p_Error:=p_Error)
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If m_SQL = "" Then
-        Exit Function
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteUltimoDerivado = New Expediente
-        For Each m_Campo In getExpedienteUltimoDerivado.ColCampos
-            getExpedienteUltimoDerivado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteUltimoDerivado ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getSQLLimitantePorTipoBusqueda( _
-                                                p_TipoBusqueda As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As String
-    Dim m_SQLInicial As String
-    Dim m_Where As String
-    
-    On Error GoTo errores
-    
-    If p_TipoBusqueda = "" Then
-        Exit Function
-    End If
-    
-    
-    If p_TipoBusqueda = "Acuerdo Marco" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                "FROM TbExpedientes "
-        m_Where = "EsAM='Sí' "
-    ElseIf p_TipoBusqueda = "Lote" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                "FROM TbExpedientes "
-        m_Where = "EsLote='Sí' "
-    ElseIf p_TipoBusqueda = "Basado" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                "FROM TbExpedientes "
-        m_Where = "EsBasado='Sí' "
-    ElseIf p_TipoBusqueda = "Basado de Acuerdo Marco" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                    "FROM TbExpedientes INNER JOIN TbExpedientes AS TbExpedientes_1 " & _
-                    "ON TbExpedientes.IDExpedientePadre = TbExpedientes_1.IDExpediente "
-        m_Where = "TbExpedientes.EsBasado='Sí' AND TbExpedientes_1.EsAM='Sí' "
-    ElseIf p_TipoBusqueda = "Basado de Lote" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                    "FROM TbExpedientes INNER JOIN TbExpedientes AS TbExpedientes_1 " & _
-                    "ON TbExpedientes.IDExpedientePadre = TbExpedientes_1.IDExpediente "
-        m_Where = "TbExpedientes.EsBasado='Sí' AND TbExpedientes_1.EsLote='Sí' "
-    ElseIf p_TipoBusqueda = "Expediente" Then
-        m_SQLInicial = "SELECT TbExpedientes.IDExpediente " & _
-                "FROM TbExpedientes "
-        m_Where = "EsExpediente='Sí' "
-    Else
-        Exit Function
-    End If
-    
-    getSQLLimitantePorTipoBusqueda = m_SQLInicial & _
-                                    "WHERE " & _
-                                    m_Where & ";"
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getSQLLimitantePorTipoBusqueda ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-Public Function getExpedientesBusquedaSimple( _
-                                                Optional p_VerTodos As EnumSiNo = EnumSiNo.No, _
-                                                Optional p_PalabraClave As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    Dim m_WhereTitulo As String
-    Dim m_WhereCodExp As String
-    Dim m_WhereCodExpLargo As String
-    Dim m_WhereNemotecnico As String
-    Dim m_WherePecal As String
-    Dim m_WherEJuridica As String
-    Dim m_WhereEstado As String
-    Dim m_WhereTipo As String
-    
-    Dim m_SQLInicial As String
-    Dim m_Where As String
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    m_SQLInicial = "SELECT * " & _
-                    "FROM TbExpedientes "
-    If p_VerTodos = EnumSiNo.Sí Then
-         m_SQL = m_SQLInicial & _
-                "ORDER BY IDExpediente DESC;"
-    Else
-        If p_PalabraClave = "" Then
-            Exit Function
-        End If
-         m_WhereTitulo = "Titulo Like '*" & p_PalabraClave & "*' "
-        m_WhereCodExp = "CodExp Like '*" & p_PalabraClave & "*' "
-        m_WhereCodExpLargo = "CodExpLargo Like '*" & p_PalabraClave & "*' "
-        m_WhereNemotecnico = "Nemotecnico Like '*" & p_PalabraClave & "*' "
-        
-        
-        m_Where = "WHERE " & _
-                m_WhereTitulo & " OR " & _
-                m_WhereCodExp & " OR " & _
-                m_WhereCodExpLargo & " OR " & _
-                m_WhereNemotecnico
-                
-        m_SQL = m_SQLInicial & _
-                m_Where & " " & _
-                "ORDER BY IDExpediente DESC;"
-    End If
-   
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            
-            For Each m_Campo In m_expediente.ColCampos
-                
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                If p_Error <> "" Then
-                    Err.Raise 1000
-                End If
-            Next
-            If getExpedientesBusquedaSimple Is Nothing Then
-               Set getExpedientesBusquedaSimple = New Scripting.Dictionary
-               getExpedientesBusquedaSimple.CompareMode = TextCompare
-            End If
-            If Not getExpedientesBusquedaSimple.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesBusquedaSimple.Add m_expediente.IDExpediente, m_expediente
-             End If
-             Set m_expediente = Nothing
-            .MoveNext
-        Loop
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesBusquedaSimple ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getGradosClasificacionesEnExpedientes( _
-                                                        Optional ByRef p_Error As String _
-                                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_GradoClasificacion As GradoClasificacion
-    
-    
-    On Error GoTo errores
-    
-   
-    m_SQL = "SELECT distinct TbGradosClasificacion.* " & _
-            "FROM TbExpedientes INNER JOIN TbGradosClasificacion " & _
-            "ON TbExpedientes.GradoClasificacion = TbGradosClasificacion.GradoClasificacion;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_GradoClasificacion = New GradoClasificacion
-            For Each m_Campo In m_GradoClasificacion.ColCampos
-                m_GradoClasificacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getGradosClasificacionesEnExpedientes Is Nothing Then
-                Set getGradosClasificacionesEnExpedientes = New Scripting.Dictionary
-                getGradosClasificacionesEnExpedientes.CompareMode = TextCompare
-             End If
-             If Not getGradosClasificacionesEnExpedientes.exists(CStr(m_GradoClasificacion.IdGradoClasificacion)) Then
-                getGradosClasificacionesEnExpedientes.Add CStr(m_GradoClasificacion.IdGradoClasificacion), m_GradoClasificacion
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getGradosClasificacionesEnExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesConComercial( _
-                                                p_IDComercial As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDComercial = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesComerciales  " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesComerciales.IDExpediente " & _
-            "WHERE TbExpedientesComerciales.IDComercial=" & p_IDComercial & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConComercial Is Nothing Then
-                Set getExpedientesConComercial = New Scripting.Dictionary
-                getExpedientesConComercial.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConComercial.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConComercial.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConComercial ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConSuministrador( _
-                                                p_IDSuministrador As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    If p_IDSuministrador = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbSuministradores.* " & _
-            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores  " & _
-            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-            "WHERE TbExpedientesSuministradores.IDSuministrador=" & p_IDSuministrador & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConSuministrador Is Nothing Then
-                Set getExpedientesConSuministrador = New Scripting.Dictionary
-                getExpedientesConSuministrador.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConSuministrador.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getExpedientesConSuministrador.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConSuministrador ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getJPs( _
-                        Optional ByRef p_Error As String _
-                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    
-    
-    On Error GoTo errores
-    
-    m_SQL = "SELECT DISTINCT TbUsuariosAplicaciones.Nombre " & _
-            "FROM TbExpedientesResponsables INNER JOIN TbUsuariosAplicaciones " & _
-            "ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
-            "WHERE (((TbExpedientesResponsables.EsJefeProyecto)='Sí')) " & _
-            "ORDER BY TbUsuariosAplicaciones.Nombre;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            
-             If getJPs Is Nothing Then
-                Set getJPs = New Scripting.Dictionary
-                getJPs.CompareMode = TextCompare
-             End If
-             If Not getJPs.exists(.Fields("Nombre").value) Then
-                getJPs.Add .Fields("Nombre").value, .Fields("Nombre").value
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getJPs ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getJPsPorExpediente( _
-                                    p_IDExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    
-    
-    On Error GoTo errores
-    If p_IDExpediente = "" Then
-        Err.Raise 1000
-    End If
-    m_SQL = "SELECT TbUsuariosAplicaciones.Nombre " & _
-            "FROM TbExpedientesResponsables INNER JOIN TbUsuariosAplicaciones " & _
-            "ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
-            "WHERE (((TbExpedientesResponsables.IdExpediente)=" & p_IDExpediente & "));"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            
-             If getJPsPorExpediente Is Nothing Then
-                Set getJPsPorExpediente = New Scripting.Dictionary
-                getJPsPorExpediente.CompareMode = TextCompare
-             End If
-             If Not getJPsPorExpediente.exists(.Fields("Nombre").value) Then
-                getJPsPorExpediente.Add .Fields("Nombre").value, .Fields("Nombre").value
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getJPsPorExpediente ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getComerciales( _
-                                Optional p_Nombre As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Comercial As Comercial
-    
-    
-    On Error GoTo errores
-    
-    If p_Nombre = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbComerciales ORDER BY Comercial;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbComerciales " & _
-                "WHERE Comercial Like '*" & p_Nombre & "*' ORDER BY Comercial;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Comercial = New Comercial
-            For Each m_Campo In m_Comercial.ColCampos
-                m_Comercial.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getComerciales Is Nothing Then
-                Set getComerciales = New Scripting.Dictionary
-                getComerciales.CompareMode = TextCompare
-             End If
-             If Not getComerciales.exists(CStr(m_Comercial.IDComercial)) Then
-                getComerciales.Add CStr(m_Comercial.IDComercial), m_Comercial
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getComerciales ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConCPV( _
-                                        p_IDCPV As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDCPV = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesCPVs ON TbExpedientes.IDExpediente = TbExpedientesCPVs.IDExpediente " & _
-            "WHERE TbExpedientesCPVs.IDCPV=" & p_IDCPV & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConCPV Is Nothing Then
-                Set getExpedientesConCPV = New Scripting.Dictionary
-                getExpedientesConCPV.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConCPV.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConCPV.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConCPV ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getCPVs( _
-                                Optional p_CPV As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_CPV As CPV
-    
-    
-    On Error GoTo errores
-    
-    If p_CPV = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbCPV ORDER BY CPV;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbCPV " & _
-                "WHERE CPV='" & p_CPV & "' ORDER BY CPV;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_CPV = New CPV
-            For Each m_Campo In m_CPV.ColCampos
-                m_CPV.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getCPVs Is Nothing Then
-                Set getCPVs = New Scripting.Dictionary
-                getCPVs.CompareMode = TextCompare
-             End If
-             If Not getCPVs.exists(CStr(m_CPV.IDCPV)) Then
-                getCPVs.Add CStr(m_CPV.IDCPV), m_CPV
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getCPVs ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getEjercitos( _
-                                Optional p_Ejercito As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Ejercito As Ejercito
-    
-    
-    On Error GoTo errores
-    
-    If p_Ejercito = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbEjercitos;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbEjercitos " & _
-                "WHERE Ejercito='" & p_Ejercito & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Ejercito = New Ejercito
-            For Each m_Campo In m_Ejercito.ColCampos
-                m_Ejercito.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getEjercitos Is Nothing Then
-                Set getEjercitos = New Scripting.Dictionary
-                getEjercitos.CompareMode = TextCompare
-             End If
-             If Not getEjercitos.exists(CStr(m_Ejercito.IDEjercito)) Then
-                getEjercitos.Add CStr(m_Ejercito.IDEjercito), m_Ejercito
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getEjercitos ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getGradosClasificaciones( _
-                                        Optional p_GradoClasificacion As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_GradoClasificacion As GradoClasificacion
-    
-    
-    On Error GoTo errores
-    
-    If p_GradoClasificacion = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbGradosClasificacion;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbGradosClasificacion " & _
-                "WHERE GradoClasificacion='" & p_GradoClasificacion & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_GradoClasificacion = New GradoClasificacion
-            For Each m_Campo In m_GradoClasificacion.ColCampos
-                m_GradoClasificacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getGradosClasificaciones Is Nothing Then
-                Set getGradosClasificaciones = New Scripting.Dictionary
-                getGradosClasificaciones.CompareMode = TextCompare
-             End If
-             If Not getGradosClasificaciones.exists(CStr(m_GradoClasificacion.IdGradoClasificacion)) Then
-                getGradosClasificaciones.Add CStr(m_GradoClasificacion.IdGradoClasificacion), m_GradoClasificacion
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getGradosClasificaciones ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-
-Public Function getRACs( _
-                                Optional p_RAC As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_RAC As RAC
-    
-    
-    On Error GoTo errores
-    
-    If p_RAC = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbRACS ORDER BY RAC;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbRACS " & _
-                "WHERE RAC='" & p_RAC & "' ORDER BY RAC;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_RAC = New RAC
-            For Each m_Campo In m_RAC.ColCampos
-                m_RAC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getRACs Is Nothing Then
-                Set getRACs = New Scripting.Dictionary
-                getRACs.CompareMode = TextCompare
-             End If
-             If Not getRACs.exists(CStr(m_RAC.IDRAC)) Then
-                getRACs.Add CStr(m_RAC.IDRAC), m_RAC
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getRACs ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getSuministradores( _
-                                    Optional p_CIF As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    If p_CIF = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores ORDER BY Nombre;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores " & _
-                "WHERE CIF='" & p_CIF & "' ORDER BY Nombre;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getSuministradores Is Nothing Then
-                Set getSuministradores = New Scripting.Dictionary
-                getSuministradores.CompareMode = TextCompare
-             End If
-             If Not getSuministradores.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getSuministradores.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getSuministradores ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getSuministradoresEnExpedientes( _
-                                                Optional p_ID As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    m_SQL = "SELECT distinct TbSuministradores.* " & _
-            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores " & _
-            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-            "WHERE (((TbExpedientesSuministradores.IDSuministrador)=" & p_ID & "));"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getSuministradoresEnExpedientes Is Nothing Then
-                Set getSuministradoresEnExpedientes = New Scripting.Dictionary
-                getSuministradoresEnExpedientes.CompareMode = TextCompare
-             End If
-             If Not getSuministradoresEnExpedientes.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getSuministradoresEnExpedientes.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getSuministradoresEnExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getCadenaSuministradores( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Suministrador As String
-    'SON LOS QUE HAN FORMADO PARTE DE CONTRATISTA ALGUNA VEZ
-    
-    On Error GoTo errores
-    m_SQL = "SELECT DISTINCT CadenaContratistas " & _
-                "FROM TbExpedientesConEntidades " & _
-                "WHERE Not CadenaContratistas Is Null;"
-   
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            m_Suministrador = .Fields("CadenaContratistas")
-             If getCadenaSuministradores Is Nothing Then
-                Set getCadenaSuministradores = New Scripting.Dictionary
-                getCadenaSuministradores.CompareMode = TextCompare
-             End If
-             If Not getCadenaSuministradores.exists(m_Suministrador) Then
-                getCadenaSuministradores.Add m_Suministrador, m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getCadenaSuministradores ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-
-Public Function getPELCALES( _
-                                Optional p_PECAL As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Pecal As PECAL
-    
-    
-    On Error GoTo errores
-    
-    If p_PECAL = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbPECAL ORDER BY PECAL;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbPECAL " & _
-                "WHERE PECAL='" & p_PECAL & "' ORDER BY PECAL;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Pecal = New PECAL
-            For Each m_Campo In m_Pecal.ColCampos
-                m_Pecal.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getPELCALES Is Nothing Then
-                Set getPELCALES = New Scripting.Dictionary
-                getPELCALES.CompareMode = TextCompare
-             End If
-             If Not getPELCALES.exists(CStr(m_Pecal.IDPECAL)) Then
-                getPELCALES.Add CStr(m_Pecal.IDPECAL), m_Pecal
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getPELCALES ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getLugaresEjecucion( _
-                                        Optional p_LugarEjecucion As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_LugarEjecucion As LugarEjecucion
-    
-    
-    On Error GoTo errores
-    
-    If p_LugarEjecucion = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbLugaresEjecucion ORDER BY LugarEjecucion;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbLugaresEjecucion " & _
-                "WHERE LugarEjecucion='" & p_LugarEjecucion & "' ORDER BY LugarEjecucion;"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_LugarEjecucion = New LugarEjecucion
-            For Each m_Campo In m_LugarEjecucion.ColCampos
-                m_LugarEjecucion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getLugaresEjecucion Is Nothing Then
-                Set getLugaresEjecucion = New Scripting.Dictionary
-                getLugaresEjecucion.CompareMode = TextCompare
-             End If
-             If Not getLugaresEjecucion.exists(CStr(m_LugarEjecucion.IDLugarEjecucion)) Then
-                getLugaresEjecucion.Add CStr(m_LugarEjecucion.IDLugarEjecucion), m_LugarEjecucion
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getLugaresEjecucion ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getOficinasPrograma( _
-                                        Optional p_OficinaPrograma As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_OficinaPrograma As OficinaPrograma
-    
-    
-    On Error GoTo errores
-    
-    If p_OficinaPrograma = "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbOficinasPrograma;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbOficinasPrograma " & _
-                "WHERE OficinaPrograma='" & p_OficinaPrograma & "';"
-    End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_OficinaPrograma = New OficinaPrograma
-            For Each m_Campo In m_OficinaPrograma.ColCampos
-                m_OficinaPrograma.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getOficinasPrograma Is Nothing Then
-                Set getOficinasPrograma = New Scripting.Dictionary
-                getOficinasPrograma.CompareMode = TextCompare
-             End If
-             If Not getOficinasPrograma.exists(CStr(m_OficinaPrograma.IDOficinaPrograma)) Then
-                getOficinasPrograma.Add CStr(m_OficinaPrograma.IDOficinaPrograma), m_OficinaPrograma
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getOficinasPrograma ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesConJuridica( _
-                                                p_IDJuridica As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDJuridica = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT distinct TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesJuridicas " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesJuridicas.IDExpediente " & _
-            "WHERE TbExpedientesJuridicas.IDJuridica=" & p_IDJuridica & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConJuridica Is Nothing Then
-                Set getExpedientesConJuridica = New Scripting.Dictionary
-                getExpedientesConJuridica.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConJuridica.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConJuridica.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConJuridica ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesConEjercito( _
-                                            p_IDEjercito As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDEjercito = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT distinct * " & _
-            "FROM TbExpedientes " & _
-            "WHERE IDEjercito=" & p_IDEjercito & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConEjercito Is Nothing Then
-                Set getExpedientesConEjercito = New Scripting.Dictionary
-                getExpedientesConEjercito.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConEjercito.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConEjercito.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConEjercito ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConJefatura( _
-                                            p_IDJefatura As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDJefatura = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT distinct TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesJefaturas ON TbExpedientes.IDExpediente = TbExpedientesJefaturas.IDExpediente " & _
-            "WHERE TbExpedientesJefaturas.IDJefatura=" & p_IDJefatura & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConJefatura Is Nothing Then
-                Set getExpedientesConJefatura = New Scripting.Dictionary
-                getExpedientesConJefatura.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConJefatura.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConJefatura.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConJefatura ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesConLugarEjecucion( _
-                                                p_IDLugarEjecucion As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDLugarEjecucion = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesLugaresEjecucion " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesLugaresEjecucion.IDExpediente " & _
-            "WHERE TbExpedientesLugaresEjecucion.IDLugarEjecucion=" & p_IDLugarEjecucion & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConLugarEjecucion Is Nothing Then
-                Set getExpedientesConLugarEjecucion = New Scripting.Dictionary
-                getExpedientesConLugarEjecucion.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConLugarEjecucion.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConLugarEjecucion.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConLugarEjecucion ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getOficinaProgramaSEnExpedientes( _
-                                                p_IDOficinaPrograma As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_OficinaPrograma As OficinaPrograma
-    
-    
-    On Error GoTo errores
-    
-    If p_IDOficinaPrograma = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbOficinasPrograma.* " & _
-            "FROM TbExpedientes INNER JOIN TbOficinasPrograma " & _
-            "ON TbExpedientes.OficinaPrograma = TbOficinasPrograma.OficinaPrograma " & _
-            "WHERE TbOficinasPrograma.IDOficinaPrograma=" & p_IDOficinaPrograma & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_OficinaPrograma = New OficinaPrograma
-            For Each m_Campo In m_OficinaPrograma.ColCampos
-                m_OficinaPrograma.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getOficinaProgramaSEnExpedientes Is Nothing Then
-                Set getOficinaProgramaSEnExpedientes = New Scripting.Dictionary
-                getOficinaProgramaSEnExpedientes.CompareMode = TextCompare
-             End If
-             If Not getOficinaProgramaSEnExpedientes.exists(CStr(m_OficinaPrograma.IDOficinaPrograma)) Then
-                getOficinaProgramaSEnExpedientes.Add CStr(m_OficinaPrograma.IDOficinaPrograma), m_OficinaPrograma
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getOficinaProgramaSEnExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getOrganosContrataciones( _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_OrganoContratacion As OrganoContratacion
-    
-    
-    On Error GoTo errores
-    
-   
-    m_SQL = "SELECT * " & _
-            "FROM TbOrganosContratacion;"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_OrganoContratacion = New OrganoContratacion
-            For Each m_Campo In m_OrganoContratacion.ColCampos
-                m_OrganoContratacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getOrganosContrataciones Is Nothing Then
-                Set getOrganosContrataciones = New Scripting.Dictionary
-                getOrganosContrataciones.CompareMode = TextCompare
-             End If
-             If Not getOrganosContrataciones.exists(CStr(m_OrganoContratacion.IDOrganoContratacion)) Then
-                getOrganosContrataciones.Add CStr(m_OrganoContratacion.IDOrganoContratacion), m_OrganoContratacion
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getOrganosContrataciones ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getOrganoContratacioneSEnExpedientes( _
-                                                    p_IDOrganoContratacion As String, _
-                                                    Optional ByRef p_Error As String _
-                                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_OrganoContratacion As OrganoContratacion
-    
-    
-    On Error GoTo errores
-    
-    If p_IDOrganoContratacion = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbOrganosContratacion.* " & _
-            "FROM TbExpedientes INNER JOIN TbOrganosContratacion " & _
-            "ON TbExpedientes.OrganoContratacion = TbOrganosContratacion.OrganoContratacion " & _
-            "WHERE TbOrganosContratacion.IDOrganoContratacion)=" & p_IDOrganoContratacion & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_OrganoContratacion = New OrganoContratacion
-            For Each m_Campo In m_OrganoContratacion.ColCampos
-                m_OrganoContratacion.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getOrganoContratacioneSEnExpedientes Is Nothing Then
-                Set getOrganoContratacioneSEnExpedientes = New Scripting.Dictionary
-                getOrganoContratacioneSEnExpedientes.CompareMode = TextCompare
-             End If
-             If Not getOrganoContratacioneSEnExpedientes.exists(CStr(m_OrganoContratacion.IDOrganoContratacion)) Then
-                getOrganoContratacioneSEnExpedientes.Add CStr(m_OrganoContratacion.IDOrganoContratacion), m_OrganoContratacion
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getOrganoContratacioneSEnExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-Public Function getPECALeSEnExpedientes( _
-                                        p_IDPEcal As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Pecal As PECAL
-    
-    
-    On Error GoTo errores
-    
-    If p_IDPEcal = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbPECAL.* " & _
-            "FROM TbExpedientesPECAL INNER JOIN TbPECAL ON TbExpedientesPECAL.IDPECAL = TbPECAL.IDPECAL " & _
-            "WHERE TbExpedientesPECAL.IDPECAL=" & p_IDPEcal & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Pecal = New PECAL
-            For Each m_Campo In m_Pecal.ColCampos
-                m_Pecal.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getPECALeSEnExpedientes Is Nothing Then
-                Set getPECALeSEnExpedientes = New Scripting.Dictionary
-                getPECALeSEnExpedientes.CompareMode = TextCompare
-             End If
-             If Not getPECALeSEnExpedientes.exists(CStr(m_Pecal.IDPECAL)) Then
-                getPECALeSEnExpedientes.Add CStr(m_Pecal.IDPECAL), m_Pecal
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getPECALeSEnExpedientes ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedientesConRAC( _
-                                        p_IDRac As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDRac = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesRACS ON TbExpedientes.IDExpediente = TbExpedientesRACS.IDExpediente " & _
-            "WHERE (((TbExpedientesRACS.IDRAC)=" & p_IDRac & "));"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConRAC Is Nothing Then
-                Set getExpedientesConRAC = New Scripting.Dictionary
-                getExpedientesConRAC.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConRAC.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConRAC.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConRAC ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConPECAL( _
-                                        p_IDPEcal As String, _
-                                        Optional ByRef p_Error As String _
-                                        ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDPEcal = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesPECAL ON TbExpedientes.IDExpediente = TbExpedientesPECAL.IDExpediente " & _
-            "WHERE TbExpedientesPECAL.IDPECAL=" & p_IDPEcal & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConPECAL Is Nothing Then
-                Set getExpedientesConPECAL = New Scripting.Dictionary
-                getExpedientesConPECAL.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConPECAL.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConPECAL.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConPECAL ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConResponsable( _
-                                                p_IDUsuario As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDUsuario = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesResponsables ON TbExpedientes.IDExpediente = TbExpedientesResponsables.IdExpediente " & _
-            "WHERE TbExpedientesResponsables.IdUsuario=" & p_IDUsuario & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConResponsable Is Nothing Then
-                Set getExpedientesConResponsable = New Scripting.Dictionary
-                getExpedientesConResponsable.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConResponsable.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConResponsable.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConResponsable ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesConCodigoCompra( _
-                                                p_ID As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_ID = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT DISTINCT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbExpedientesCodigoCompras " & _
-            "ON TbExpedientes.IDExpediente = TbExpedientesCodigoCompras.IDExpediente " & _
-            "WHERE TbExpedientesCodigoCompras.ID=" & p_ID & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConCodigoCompra Is Nothing Then
-                Set getExpedientesConCodigoCompra = New Scripting.Dictionary
-                getExpedientesConCodigoCompra.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConCodigoCompra.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConCodigoCompra.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConCodigoCompra ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientesDerivados( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE IDExpedientePadre=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesDerivados Is Nothing Then
-                Set getExpedientesDerivados = New Scripting.Dictionary
-                getExpedientesDerivados.CompareMode = TextCompare
-             End If
-             If Not getExpedientesDerivados.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesDerivados.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesDerivados ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteAnualidad( _
-                                            p_IDAnualidad As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As ExpedienteAnualidad
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDAnualidad = "" Then
-        Exit Function
-    End If
-   
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesAnualidades " & _
-            "WHERE IDAnualidad=" & p_IDAnualidad & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteAnualidad = New ExpedienteAnualidad
-        For Each m_Campo In getExpedienteAnualidad.ColCampos
-            getExpedienteAnualidad.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteAnualidad ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteHito( _
-                                    p_IDExpediente As String, _
-                                    Optional p_FechaHito As String, _
-                                    Optional p_DESCRIPCION As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As ExpedienteHito
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Or (p_FechaHito = "" And p_DESCRIPCION = "") Then
-        Exit Function
-    End If
-    If p_FechaHito <> "" Then
-         m_SQL = "SELECT * " & _
-                "FROM TbExpedientesHitos " & _
-                "WHERE IDExpediente=" & p_IDExpediente & " AND FechaHito=#" & Format(p_FechaHito, "mm/dd/yyyy") & "#;"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientesHitos " & _
-                "WHERE IDExpediente=" & p_IDExpediente & " AND DESCRIPCION='" & p_DESCRIPCION & "';"
-    End If
-   
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteHito = New ExpedienteHito
-        For Each m_Campo In getExpedienteHito.ColCampos
-            getExpedienteHito.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteHito ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteAnualidades( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpedienteAnualidad As ExpedienteAnualidad
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesAnualidades " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_ExpedienteAnualidad = New ExpedienteAnualidad
-            For Each m_Campo In m_ExpedienteAnualidad.ColCampos
-                m_ExpedienteAnualidad.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteAnualidades Is Nothing Then
-                Set getExpedienteAnualidades = New Scripting.Dictionary
-                getExpedienteAnualidades.CompareMode = TextCompare
-             End If
-             If Not getExpedienteAnualidades.exists(CStr(m_ExpedienteAnualidad.IDAnualidad)) Then
-                getExpedienteAnualidades.Add CStr(m_ExpedienteAnualidad.IDAnualidad), m_ExpedienteAnualidad
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteAnualidades ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteResponsable( _
-                                            p_IDExpedienteResponsable As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As ExpedienteResponsable
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpedienteResponsable = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesResponsables " & _
-            "WHERE IDExpedienteResponsable=" & p_IDExpedienteResponsable & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteResponsable = New ExpedienteResponsable
-        For Each m_Campo In getExpedienteResponsable.ColCampos
-            getExpedienteResponsable.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteResponsable ha devuelto el error: " & Err.Description
-    End If
-End Function
 Public Function getExpedienteResponsables( _
-                                            p_IDExpediente As String, _
+                                            p_IDExp As String, _
+                                            Optional p_Db As DAO.Database, _
                                             Optional ByRef p_Error As String _
                                             ) As Scripting.Dictionary
     Dim rcdDatos As DAO.Recordset
@@ -4286,13 +2347,17 @@ Public Function getExpedienteResponsables( _
     
     On Error GoTo errores
     
-    If p_IDExpediente = "" Then
+    If p_IDExp = "" Then
         Exit Function
     End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
     m_SQL = "SELECT * " & _
             "FROM TbExpedientesResponsables " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+            "WHERE IDExpediente=" & p_IDExp & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -4303,7 +2368,7 @@ Public Function getExpedienteResponsables( _
         Do While Not .EOF
             Set m_ExpedienteResponsable = New ExpedienteResponsable
             For Each m_Campo In m_ExpedienteResponsable.ColCampos
-                m_ExpedienteResponsable.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
+                m_ExpedienteResponsable.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
                  If p_Error <> "" Then
                      Err.Raise 1000
                  End If
@@ -4312,7 +2377,7 @@ Public Function getExpedienteResponsables( _
                 Set getExpedienteResponsables = New Scripting.Dictionary
                 getExpedienteResponsables.CompareMode = TextCompare
              End If
-             If Not getExpedienteResponsables.exists(CStr(m_ExpedienteResponsable.IDExpedienteResponsable)) Then
+             If Not getExpedienteResponsables.Exists(CStr(m_ExpedienteResponsable.IDExpedienteResponsable)) Then
                 getExpedienteResponsables.Add CStr(m_ExpedienteResponsable.IDExpedienteResponsable), m_ExpedienteResponsable
              End If
             .MoveNext
@@ -4328,1221 +2393,57 @@ errores:
         p_Error = "El método getExpedienteResponsables ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getExpedienteSuministradores( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT  TbSuministradores.* " & _
-            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores " & _
-            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-            "WHERE IDExpediente=" & p_IDExpediente & " AND ContratistaPrincipal='No' AND SubContratista='No';"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteSuministradores Is Nothing Then
-                Set getExpedienteSuministradores = New Scripting.Dictionary
-                getExpedienteSuministradores.CompareMode = TextCompare
-             End If
-             If Not getExpedienteSuministradores.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getExpedienteSuministradores.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteSuministradores ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteSuministradoresTotal( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT  TbSuministradores.* " & _
-            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores " & _
-            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Suministrador = New Suministrador
-            For Each m_Campo In m_Suministrador.ColCampos
-                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteSuministradoresTotal Is Nothing Then
-                Set getExpedienteSuministradoresTotal = New Scripting.Dictionary
-                getExpedienteSuministradoresTotal.CompareMode = TextCompare
-             End If
-             If Not getExpedienteSuministradoresTotal.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                getExpedienteSuministradoresTotal.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteSuministradoresTotal ha devuelto el error: " & Err.Description
-    End If
-End Function
-'Public Function getExpedienteContratistas( _
-'                                            p_IDExpediente As String, _
-'                                            Optional ByRef p_Error As String _
-'                                            ) As Scripting.Dictionary
-'    Dim rcdDatos As DAO.Recordset
-'    Dim m_SQL As String
-'    Dim m_Campo As Variant
-'    Dim m_Suministrador As Suministrador
-'
-'
-'    On Error GoTo errores
-'
-'    If p_IDExpediente = "" Then
-'        Exit Function
-'    End If
-'     m_SQL = "SELECT  TbSuministradores.* " & _
-'            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores " & _
-'            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-'            "WHERE IDExpediente=" & p_IDExpediente & " AND ContratistaPrincipal='Sí';"
-'    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-'    With rcdDatos
-'        If .EOF Then
-'            rcdDatos.Close
-'            Set rcdDatos = Nothing
-'            Exit Function
-'        End If
-'        .MoveFirst
-'        Do While Not .EOF
-'            Set m_Suministrador = New Suministrador
-'            For Each m_Campo In m_Suministrador.ColCampos
-'                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-'                 If p_Error <> "" Then
-'                     Err.Raise 1000
-'                 End If
-'             Next
-'             If getExpedienteContratistas Is Nothing Then
-'                Set getExpedienteContratistas = New Scripting.Dictionary
-'                getExpedienteContratistas.CompareMode = TextCompare
-'             End If
-'             If Not getExpedienteContratistas.Exists(CStr(m_Suministrador.IDSuministrador)) Then
-'                getExpedienteContratistas.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-'             End If
-'            .MoveNext
-'        Loop
-'
-'    End With
-'    rcdDatos.Close
-'    Set rcdDatos = Nothing
-'    Exit Function
-'
-'errores:
-'    If Err.Number <> 1000 Then
-'        p_Error = "El método getExpedienteContratistas ha devuelto el error: " & Err.Description
-'    End If
-'End Function
-'Public Function getExpedienteSubContratistas( _
-'                                            p_IDExpediente As String, _
-'                                            Optional ByRef p_Error As String _
-'                                            ) As Scripting.Dictionary
-'    Dim rcdDatos As DAO.Recordset
-'    Dim m_SQL As String
-'    Dim m_Campo As Variant
-'    Dim m_Suministrador As Suministrador
-'
-'
-'    On Error GoTo errores
-'
-'    If p_IDExpediente = "" Then
-'        Exit Function
-'    End If
-'     m_SQL = "SELECT  TbSuministradores.* " & _
-'            "FROM TbSuministradores INNER JOIN TbExpedientesSuministradores " & _
-'            "ON TbSuministradores.IDSuministrador = TbExpedientesSuministradores.IDSuministrador " & _
-'            "WHERE IDExpediente=" & p_IDExpediente & " AND SubContratista='Sí';"
-'    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-'    With rcdDatos
-'        If .EOF Then
-'            rcdDatos.Close
-'            Set rcdDatos = Nothing
-'            Exit Function
-'        End If
-'        .MoveFirst
-'        Do While Not .EOF
-'            Set m_Suministrador = New Suministrador
-'            For Each m_Campo In m_Suministrador.ColCampos
-'                m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-'                 If p_Error <> "" Then
-'                     Err.Raise 1000
-'                 End If
-'             Next
-'             If getExpedienteSubContratistas Is Nothing Then
-'                Set getExpedienteSubContratistas = New Scripting.Dictionary
-'                getExpedienteSubContratistas.CompareMode = TextCompare
-'             End If
-'             If Not getExpedienteSubContratistas.Exists(CStr(m_Suministrador.IDSuministrador)) Then
-'                getExpedienteSubContratistas.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
-'             End If
-'            .MoveNext
-'        Loop
-'
-'    End With
-'    rcdDatos.Close
-'    Set rcdDatos = Nothing
-'    Exit Function
-'
-'errores:
-'    If Err.Number <> 1000 Then
-'        p_Error = "El método getExpedienteSubContratistas ha devuelto el error: " & Err.Description
-'    End If
-'End Function
 
-Public Function getExpedienteCodigoCompra( _
-                                            p_ID As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As ExpedienteCodigoCompra
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_ID = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesCodigoCompras " & _
-            "WHERE ID=" & p_ID & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteCodigoCompra = New ExpedienteCodigoCompra
-        For Each m_Campo In getExpedienteCodigoCompra.ColCampos
-            getExpedienteCodigoCompra.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCodigoCompra ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteCodigoCompras( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpedienteCodigoCompra As ExpedienteCodigoCompra
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesCodigoCompras " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_ExpedienteCodigoCompra = New ExpedienteCodigoCompra
-            For Each m_Campo In m_ExpedienteCodigoCompra.ColCampos
-                m_ExpedienteCodigoCompra.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteCodigoCompras Is Nothing Then
-                Set getExpedienteCodigoCompras = New Scripting.Dictionary
-                getExpedienteCodigoCompras.CompareMode = TextCompare
-             End If
-             If Not getExpedienteCodigoCompras.exists(CStr(m_ExpedienteCodigoCompra.ID)) Then
-                getExpedienteCodigoCompras.Add CStr(m_ExpedienteCodigoCompra.ID), m_ExpedienteCodigoCompra
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCodigoCompras ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteComercial( _
-                                            p_IDComercialExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As ExpedienteComercial
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDComercialExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesComerciales " & _
-            "WHERE IDComercialExpediente=" & p_IDComercialExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteComercial = New ExpedienteComercial
-        For Each m_Campo In getExpedienteComercial.ColCampos
-            getExpedienteComercial.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteComercial ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteComerciales( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Comercial As Comercial
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-        
-    End If
-    m_SQL = "SELECT TbComerciales.* " & _
-            "FROM TbExpedientesComerciales INNER JOIN TbComerciales " & _
-            "ON TbExpedientesComerciales.IDComercial = TbComerciales.IDComercial " & _
-            "WHERE TbExpedientesComerciales.IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Comercial = New Comercial
-            For Each m_Campo In m_Comercial.ColCampos
-                m_Comercial.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteComerciales Is Nothing Then
-                Set getExpedienteComerciales = New Scripting.Dictionary
-                getExpedienteComerciales.CompareMode = TextCompare
-             End If
-             If Not getExpedienteComerciales.exists(CStr(m_Comercial.IDComercial)) Then
-                getExpedienteComerciales.Add CStr(m_Comercial.IDComercial), m_Comercial
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteComerciales ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteCPV( _
-                                    p_IDCPVExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As ExpedienteCPV
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDCPVExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesCPVs " & _
-            "WHERE IDCPVExpediente=" & p_IDCPVExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteCPV = New ExpedienteCPV
-        For Each m_Campo In getExpedienteCPV.ColCampos
-            getExpedienteCPV.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCPV ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteCPVS( _
-                                    p_IDExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_CPV As CPV
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT TbCPV.* " & _
-                "FROM TbExpedientesCPVs INNER JOIN TbCPV ON TbExpedientesCPVs.IDCPV = TbCPV.IDCPV " & _
-                "WHERE TbExpedientesCPVs.IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_CPV = New CPV
-            For Each m_Campo In m_CPV.ColCampos
-                m_CPV.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteCPVS Is Nothing Then
-                Set getExpedienteCPVS = New Scripting.Dictionary
-                getExpedienteCPVS.CompareMode = TextCompare
-             End If
-             If Not getExpedienteCPVS.exists(CStr(m_CPV.IDCPV)) Then
-                getExpedienteCPVS.Add CStr(m_CPV.IDCPV), m_CPV
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteCPVS ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteDatosGenerales( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Expediente
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientes " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteDatosGenerales = New Expediente
-        For Each m_Campo In getExpedienteDatosGenerales.ColCampos
-            getExpedienteDatosGenerales.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteDatosGenerales ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteAnexo( _
-                                        Optional p_IDDocumento As String, _
-                                        Optional p_IDExpediente As String, _
-                                        Optional p_NombreDocumento As String, _
+Public Function getExpedientesBusqueda( _
+                                        Optional p_PC As String, _
+                                        Optional p_IDRC As String, _
+                                        Optional p_Db As DAO.Database, _
                                         Optional ByRef p_Error As String _
-                                        ) As ExpedienteAnexo
+                                        ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    
-    
+    Dim m_Expediente As Expediente
     
     On Error GoTo errores
-    
-    If p_IDDocumento = "" And (p_IDExpediente = "" Or p_NombreDocumento = "") Then
-        Exit Function
-    End If
-    If p_IDDocumento <> "" Then
+    If p_IDRC <> "" Then
         m_SQL = "SELECT * " & _
-                "FROM TbExpedientesAnexos " & _
-                "WHERE IDDocumento=" & p_IDDocumento & ";"
+                "FROM TbExpedientes " & _
+                "WHERE IDResponsableCalidad =" & p_IDRC & ";"
     Else
         m_SQL = "SELECT * " & _
-                "FROM TbExpedientesAnexos " & _
-                "WHERE IDExpediente=" & p_IDExpediente & " AND NombreDocumento='" & p_NombreDocumento & "';"
+                "FROM TbExpedientes;"
     End If
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteAnexo = New ExpedienteAnexo
-        For Each m_Campo In getExpedienteAnexo.ColCampos
-            getExpedienteAnexo.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteAnexo ha devuelto el error: " & Err.Description
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-End Function
-
-Public Function getExpedienteAnexos( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Anexo As ExpedienteAnexo
-    
-    
-    On Error GoTo errores
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-     m_SQL = "SELECT * " & _
-                "FROM TbExpedientesAnexos " & _
-                "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Anexo = New ExpedienteAnexo
-            For Each m_Campo In m_Anexo.ColCampos
-                m_Anexo.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteAnexos Is Nothing Then
-                Set getExpedienteAnexos = New Scripting.Dictionary
-                getExpedienteAnexos.CompareMode = TextCompare
-             End If
-             If Not getExpedienteAnexos.exists(CStr(m_Anexo.IDDocumento)) Then
-                getExpedienteAnexos.Add CStr(m_Anexo.IDDocumento), m_Anexo
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteAnexos ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientePECAL( _
-                                    p_IDPECALExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As ExpedientePECAL
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDPECALExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesPECAL " & _
-            "WHERE IDPECALExpediente=" & p_IDPECALExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedientePECAL = New ExpedientePECAL
-        For Each m_Campo In getExpedientePECAL.ColCampos
-            getExpedientePECAL.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientePECAL ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedienteAGEDYS( _
-                                    Optional p_IDExpedienteAGEDYS As String, _
-                                    Optional p_IDExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As ExpedienteAGEDYS
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpedienteAGEDYS = "" And p_IDExpediente = "" Then
-        Exit Function
-    End If
-    If p_IDExpedienteAGEDYS <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientesDatosAGEDYS " & _
-                "WHERE IDExpedienteAGEDYS=" & p_IDExpedienteAGEDYS & ";"
-    Else
-        m_SQL = "SELECT * " & _
-                "FROM TbExpedientesDatosAGEDYS " & _
-                "WHERE IDExpediente=" & p_IDExpediente & ";"
-    End If
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteAGEDYS = New ExpedienteAGEDYS
-        For Each m_Campo In getExpedienteAGEDYS.ColCampos
-            getExpedienteAGEDYS.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteAGEDYS ha devuelto el error: " & Err.Description
-    End If
-End Function
-Public Function getExpedientePECALES( _
-                                    p_IDExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Pecal As PECAL
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT TbPECAL.* " & _
-            "FROM TbExpedientesPECAL INNER JOIN TbPECAL ON TbExpedientesPECAL.IDPECAL = TbPECAL.IDPECAL " & _
-            "WHERE TbExpedientesPECAL.IDExpediente=" & p_IDExpediente & ";"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_Pecal = New PECAL
-            For Each m_Campo In m_Pecal.ColCampos
-                m_Pecal.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientePECALES Is Nothing Then
-                Set getExpedientePECALES = New Scripting.Dictionary
-                getExpedientePECALES.CompareMode = TextCompare
-             End If
-             If Not getExpedientePECALES.exists(CStr(m_Pecal.IDPECAL)) Then
-                getExpedientePECALES.Add CStr(m_Pecal.IDPECAL), m_Pecal
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientePECALES ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteRAC( _
-                                    p_IDRACExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As ExpedienteRAC
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDRACExpediente = "" Then
-        Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbExpedientesRACS " & _
-            "WHERE IDRacExpediente=" & p_IDRACExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteRAC = New ExpedienteRAC
-        For Each m_Campo In getExpedienteRAC.ColCampos
-            getExpedienteRAC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteRAC ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteRACS( _
-                                    p_IDExpediente As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_RAC As RAC
-    
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-       Exit Function
-    End If
-    m_SQL = "SELECT TbRACS.* " & _
-                "FROM TbExpedientesRACS INNER JOIN TbRACS ON TbExpedientesRACS.IDRAC = TbRACS.IDRAC " & _
-                "WHERE TbExpedientesRACS.IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        .MoveFirst
-        Do While Not .EOF
-            Set m_RAC = New RAC
-            For Each m_Campo In m_RAC.ColCampos
-                m_RAC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteRACS Is Nothing Then
-                Set getExpedienteRACS = New Scripting.Dictionary
-                getExpedienteRACS.CompareMode = TextCompare
-             End If
-             If Not getExpedienteRACS.exists(CStr(m_RAC.IDRAC)) Then
-                getExpedienteRACS.Add CStr(m_RAC.IDRAC), m_RAC
-             End If
-            .MoveNext
-        Loop
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteRACS ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-
-Public Function getCambioPorID( _
-                                p_IDCambio As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Cambio
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_IDCambio = "" Then
-        Exit Function
-    End If
-     m_SQL = "SELECT * " & _
-            "FROM TbCambios " & _
-            "WHERE IDCambio=" & p_IDCambio & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getCambioPorID = New Cambio
-        For Each m_Campo In getCambioPorID.ColCampos
-            getCambioPorID.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getCambioPorID ha devuelto el error: " & Err.Description
-    End If
-End Function
-'Public Function getCambiosEnRegistroPorTabla( _
-'                                                p_TipoObjeto As EnumObjetos, _
-'                                                p_ValorID1 As String, _
-'                                                Optional p_ValorID2 As String, _
-'                                                Optional ByRef p_Error As String _
-'                                                ) As Scripting.Dictionary
-'    Dim rcdDatos As DAO.Recordset
-'    Dim m_SQL As String
-'    Dim m_Campo As Variant
-'
-'
-'
-'    On Error GoTo errores
-'
-'    If p_IDCambio = "" Then
-'        Exit Function
-'    End If
-'     m_SQL = "SELECT * " & _
-'            "FROM TbCambios " & _
-'            "WHERE IDCambio=" & p_IDCambio & ";"
-'    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-'    With rcdDatos
-'        If .EOF Then
-'            rcdDatos.Close
-'            Set rcdDatos = Nothing
-'            Exit Function
-'        End If
-'        Set getCambiosEnRegistroPorTabla = New Cambio
-'        For Each m_Campo In getCambiosEnRegistroPorTabla.ColCampos
-'            getCambiosEnRegistroPorTabla.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
-'             If p_Error <> "" Then
-'                 Err.Raise 1000
-'             End If
-'         Next
-'    End With
-'    rcdDatos.Close
-'    Set rcdDatos = Nothing
-'    Exit Function
-'
-'errores:
-'    If Err.Number <> 1000 Then
-'        p_Error = "El método getCambiosEnRegistroPorTabla ha devuelto el error: " & Err.Description
-'    End If
-'End Function
-'
-'Public Function getCambiosAltaEnExpediente( _
-'                                                p_IDExpediente As String, _
-'                                                Optional ByRef p_Error As String _
-'                                                ) As Scripting.Dictionary
-'    Dim rcdDatos As DAO.Recordset
-'    Dim m_SQL As String
-'    Dim m_Campo As Variant
-'    Dim m_Cambio As Cambio
-'    Dim m_nombreTabla As String
-'    Dim m_NombreCampoID As String
-'
-'    Dim m_Accion As String
-'
-'    On Error GoTo errores
-'
-'    If p_IDExpediente = "" Then
-'        Exit Function
-'    End If
-'    m_nombreTabla = "TbExpedientes"
-'    m_NombreCampoID = "IDExpediente"
-'    m_Accion = "Alta"
-'
-'     m_SQL = "SELECT * " & _
-'            "FROM TbCambios " & _
-'            "WHERE NombreTabla='" & m_nombreTabla & "' " & _
-'            "AND NombreCampoID='" & m_NombreCampoID & "' " & _
-'            "AND ValorCampoID=" & p_IDExpediente & " " & _
-'            "AND Accion='" & m_Accion & "' " & _
-'            "; "
-'    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-'    With rcdDatos
-'        If .EOF Then
-'            rcdDatos.Close
-'            Set rcdDatos = Nothing
-'            Exit Function
-'        End If
-'        Set m_Cambio = New Cambio
-'        For Each m_Campo In m_Cambio.ColCampos
-'            m_Cambio.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
-'             If p_Error <> "" Then
-'                 Err.Raise 1000
-'             End If
-'         Next
-'
-'         Set m_Cambio = Nothing
-'    End With
-'    rcdDatos.Close
-'    Set rcdDatos = Nothing
-'    Exit Function
-'
-'errores:
-'    If Err.Number <> 1000 Then
-'        p_Error = "El método getCambiosAltaEnExpediente ha devuelto el error: " & Err.Description
-'    End If
-'End Function
-
-Public Function getMostrarEstado( _
-                                p_UsuarioRed As String, _
-                                Optional ByRef p_Error As String _
-                                ) As MostrarEstado
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    
-    If p_UsuarioRed = "" Then
-        Exit Function
-    End If
-     m_SQL = "SELECT * " & _
-                "FROM TbConfMostrarEstado " & _
-                "WHERE UsuarioRed='" & p_UsuarioRed & "';"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getMostrarEstado = New MostrarEstado
-        For Each m_Campo In getMostrarEstado.ColCampos
-            getMostrarEstado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getMostrarEstado ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getGestionRiesgos( _
-                                    p_IDProyecto As String, _
-                                    Optional ByRef p_Error As String _
-                                    ) As GestionRiesgos
-    
-    
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    On Error GoTo errores
-    
-    If p_IDProyecto = "" Then
-       Exit Function
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbProyectos " & _
-            "WHERE IDProyecto=" & p_IDProyecto & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getGestionRiesgos = New GestionRiesgos
-        For Each m_Campo In getGestionRiesgos.ColCampos
-            getGestionRiesgos.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
-        Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "EL método constructor.getGestionRiesgos ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-Public Function getGestionRiesgosPorExpediente( _
-                                                p_IDExpediente As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As GestionRiesgos
-    
-    
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    On Error GoTo errores
-    
-    If p_IDExpediente = "" Then
-        p_Error = "Falta la p_IDExpediente"
-        Err.Raise 1000
-    End If
-    m_SQL = "SELECT * " & _
-            "FROM TbProyectos " & _
-            "WHERE IDExpediente=" & p_IDExpediente & ";"
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getGestionRiesgosPorExpediente = New GestionRiesgos
-        For Each m_Campo In getGestionRiesgosPorExpediente.ColCampos
-            getGestionRiesgosPorExpediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
-        Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "EL método constructor.getGestionRiesgosPorExpediente ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-Public Function getSuministradoresBusqueda( _
-                                                Optional p_PalabraClave As String, _
-                                                Optional ByRef p_Error As String _
-                                                ) As Scripting.Dictionary
-
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_Suministrador As Suministrador
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-            "FROM TbSuministradores " & _
-            "WHERE Nombre Like '" & p_PalabraClave & "*' " & _
-            "OR Nemotecnico Like '*" & p_PalabraClave & "*' " & _
-            "OR CIF Like '*" & p_PalabraClave & "*';"
-       
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
             .MoveFirst
             Do While Not .EOF
-                Set m_Suministrador = New Suministrador
-                For Each m_Campo In m_Suministrador.ColCampos
-                    m_Suministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
+                Set m_Expediente = New Expediente
+                For Each m_Campo In m_Expediente.ColCampos
+                    m_Expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
                     If p_Error <> "" Then
                         Err.Raise 1000
                     End If
                 Next
-                
-
-                If getSuministradoresBusqueda Is Nothing Then
-                    Set getSuministradoresBusqueda = New Scripting.Dictionary
-                    getSuministradoresBusqueda.CompareMode = TextCompare
+                If p_PC <> "" Then
+                    If p_PC <> m_Expediente.IDExpediente And _
+                        InStr(1, m_Expediente.Nemotecnico, p_PC) = 0 And _
+                        InStr(1, m_Expediente.Titulo, p_PC) = 0 Then
+                        GoTo siguiente
+                    End If
                 End If
-                If Not getSuministradoresBusqueda.exists(CStr(m_Suministrador.IDSuministrador)) Then
-                    getSuministradoresBusqueda.Add CStr(m_Suministrador.IDSuministrador), m_Suministrador
+
+                If getExpedientesBusqueda Is Nothing Then
+                    Set getExpedientesBusqueda = New Scripting.Dictionary
+                    getExpedientesBusqueda.CompareMode = TextCompare
+                End If
+                If Not getExpedientesBusqueda.Exists(CStr(m_Expediente.IDExpediente)) Then
+                    getExpedientesBusqueda.Add CStr(m_Expediente.IDExpediente), m_Expediente
                 End If
 siguiente:
                 .MoveNext
@@ -5558,151 +2459,2691 @@ siguiente:
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getSuministradoresBusqueda ha devuelto el error: " & Err.Description
+        p_Error = "El método getExpedientesBusqueda ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getSuministrador( _
-                                Optional p_IDSuministrador As String, _
-                                Optional p_CIF As String, _
-                                Optional p_Nombre As String, _
-                                Optional p_Nemotecnico As String, _
-                                Optional ByRef p_Error As String _
-                                ) As Suministrador
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
+
+Public Function getARsDeProyectoBusqueda( _
+                                        Optional p_ResponsableCalidad As String, _
+                                        Optional p_Responsable As String, _
+                                        Optional p_Estado As String, _
+                                        Optional p_IDExpediente As String, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim m_Col As Scripting.Dictionary
+    Dim m_AR As SegTareasProyecto
+    Dim m_ID As Variant
     
     On Error GoTo errores
     
-    If p_IDSuministrador = "" And p_CIF = "" And p_Nombre = "" And p_Nemotecnico = "" Then
+    If p_Estado = "ACTIVA" Then
+        Set m_Col = m_ObjEntorno.ColSegsTareasProyectoActivas
+    ElseIf p_Estado = "PENDIENTE DE REPLANIFICAR" Then
+        Set m_Col = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
+    
+    
+    Else
+        Set m_Col = m_ObjEntorno.ColSegsTareasProyecto
+    End If
+  
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+     For Each m_ID In m_Col
+        Set m_AR = m_Col(m_ID)
+        If p_ResponsableCalidad <> "" Then 'usuariored
+            If p_ResponsableCalidad <> m_AR.RespCalidad Then
+                GoTo siguiente
+            End If
+        End If
+        If p_Responsable <> "" Then 'usuariored
+            If p_Responsable <> m_AR.Tecnico Then
+                GoTo siguiente
+            End If
+        End If
+        
+        If p_IDExpediente <> "" Then
+            If p_IDExpediente <> m_AR.IDExpediente Then
+                GoTo siguiente
+            End If
+        End If
+        If getARsDeProyectoBusqueda Is Nothing Then
+            Set getARsDeProyectoBusqueda = New Scripting.Dictionary
+            getARsDeProyectoBusqueda.CompareMode = TextCompare
+        End If
+        If Not getARsDeProyectoBusqueda.Exists(CStr(m_AR.IDAccionRealizada)) Then
+            getARsDeProyectoBusqueda.Add CStr(m_AR.IDAccionRealizada), m_AR
+        End If
+
+
+siguiente:
+        Set m_AR = Nothing
+    Next
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsDeProyectoBusqueda ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsDeProyectoBusqueda( _
+                                        Optional p_ResponsableCalidad As String, _
+                                        Optional p_Responsable As String, _
+                                        Optional p_Estado As String, _
+                                        Optional p_IDExpediente As String, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    
+    Dim m_NC As SegNCProyecto
+    Dim m_ID As Variant
+    Dim m_Col As Scripting.Dictionary
+    
+    On Error GoTo errores
+    
+    If p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.REGISTRADA)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoRegistradas
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADAPTECE)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoPteCE
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADAPTECECADUCADA)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoCECaducada
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.ACSSINTAREAS)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoAccionesSinTareas
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADACENOCONFORME)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoCENoConforme
+    Else
+        Set m_Col = m_ObjEntorno.ColSegsNCProyectoTotales
+    End If
+    
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+    For Each m_ID In m_Col
+        Set m_NC = m_Col(m_ID)
+        If p_ResponsableCalidad <> "" Then 'nombre
+            If p_ResponsableCalidad <> m_NC.NombreCalidad Then
+                GoTo siguiente
+            End If
+        End If
+        If p_Responsable <> "" Then 'nombre
+            If p_Responsable <> m_NC.Tecnico Then
+                GoTo siguiente
+            End If
+        End If
+        
+        If p_IDExpediente <> "" Then
+            If p_IDExpediente <> m_NC.IDExpediente Then
+                GoTo siguiente
+            End If
+        End If
+        If getNCsDeProyectoBusqueda Is Nothing Then
+            Set getNCsDeProyectoBusqueda = New Scripting.Dictionary
+            getNCsDeProyectoBusqueda.CompareMode = TextCompare
+        End If
+        If Not getNCsDeProyectoBusqueda.Exists(CStr(m_NC.IDNoConformidad)) Then
+            getNCsDeProyectoBusqueda.Add CStr(m_NC.IDNoConformidad), m_NC
+        End If
+siguiente:
+        Set m_NC = Nothing
+    Next
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsDeProyectoBusqueda ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARsDeAuditoriaBusqueda( _
+                                        Optional p_Auditoria As String, _
+                                        Optional p_Responsable As String, _
+                                        Optional p_Estado As String, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim m_Col As Scripting.Dictionary
+    Dim m_ID As Variant
+    Dim m_AR As SegTareasAuditoria
+    Dim m_ColActivas As Scripting.Dictionary
+    Dim m_ColPtesReplan As Scripting.Dictionary
+    Dim m_ColEstadoIrregular As Scripting.Dictionary
+    
+    On Error GoTo errores
+    If p_Estado = "ACTIVA" Then
+        Set m_Col = m_ObjEntorno.ColSegsTareasAuditoriaActivas
+    ElseIf p_Estado = "PENDIENTE DE REPLANIFICAR" Then
+        Set m_Col = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
+    ElseIf p_Estado = "ESTADO IRREGULAR" Then
+        Set m_Col = m_ObjEntorno.ColSegsTareasAuditoriaIrregulares
+    
+    Else
+        Set m_Col = m_ObjEntorno.ColSegsTareasAuditoriaTotales
+        
+    End If
+    
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+     For Each m_ID In m_Col
+        Set m_AR = m_Col(m_ID)
+        If p_Auditoria <> "" Then 'usuariored
+            If p_Auditoria <> m_AR.Auditoria Then
+                GoTo siguiente
+            End If
+        End If
+        If p_Responsable <> "" Then 'usuariored
+            If p_Responsable <> m_AR.Responsable Then
+                GoTo siguiente
+            End If
+        End If
+        
+        
+        If getARsDeAuditoriaBusqueda Is Nothing Then
+            Set getARsDeAuditoriaBusqueda = New Scripting.Dictionary
+            getARsDeAuditoriaBusqueda.CompareMode = TextCompare
+        End If
+        If Not getARsDeAuditoriaBusqueda.Exists(CStr(m_AR.IDAccionRealizada)) Then
+            getARsDeAuditoriaBusqueda.Add CStr(m_AR.IDAccionRealizada), m_AR
+        End If
+
+siguiente:
+        Set m_AR = Nothing
+    Next
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsDeAuditoriaBusqueda ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsDeAuditoriaBusqueda( _
+                                        Optional p_IDAuditoria As String, _
+                                        Optional p_Responsable As String, _
+                                        Optional p_Estado As String, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+   Dim m_NC As SegNCAuditoria
+    Dim m_ID As Variant
+    Dim m_Col As Scripting.Dictionary
+    
+    On Error GoTo errores
+    
+    If p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.REGISTRADA)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADAPTECE)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaPteCE
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADAPTECECADUCADA)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaCECaducada
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.ACSSINTAREAS)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaAccionesSinTareas
+    ElseIf p_Estado = m_ObjEntorno.ColEstadosNCTitulo(CStr(EnumEstadoNC.CERRADACENOCONFORME)) Then
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaCENoConforme
+    Else
+        Set m_Col = m_ObjEntorno.ColSegsNCAuditoriaTotales
+    End If
+    
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+    For Each m_ID In m_Col
+        Set m_NC = m_Col(m_ID)
+        If p_Responsable <> "" Then 'nombre
+            If p_Responsable <> m_NC.Responsable Then
+                GoTo siguiente
+            End If
+        End If
+        If p_IDAuditoria <> "" Then
+            If p_IDAuditoria <> m_NC.IDAuditoria Then
+                GoTo siguiente
+            End If
+        End If
+        If getNCsDeAuditoriaBusqueda Is Nothing Then
+            Set getNCsDeAuditoriaBusqueda = New Scripting.Dictionary
+            getNCsDeAuditoriaBusqueda.CompareMode = TextCompare
+        End If
+        If Not getNCsDeAuditoriaBusqueda.Exists(CStr(m_NC.id)) Then
+            getNCsDeAuditoriaBusqueda.Add CStr(m_NC.id), m_NC
+        End If
+siguiente:
+        Set m_NC = Nothing
+    Next
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsDeAuditoriaBusqueda ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getRiesgo( _
+                            p_IDProyecto As String, _
+                            p_CodigoRiesgo As String, _
+                            Optional p_Db As DAO.Database, _
+                            Optional ByRef p_Error As String _
+                            ) As riesgo
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDProyecto = "" And p_CodigoRiesgo = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbRiesgos.* " & _
+            "FROM TbRiesgos " & _
+            "WHERE (((TbRiesgos.IDEdicion) In (SELECT Max(TbProyectosEdiciones.IDEdicion) AS MáxDeIDEdicion " & _
+            "FROM TbProyectosEdiciones " & _
+            "WHERE (((TbProyectosEdiciones.IDProyecto)=" & p_IDProyecto & "));)) " & _
+            "AND ((TbRiesgos.CodigoRiesgo)='" & p_CodigoRiesgo & "'));"
+    
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getRiesgo = New riesgo
+        For Each m_Campo In getRiesgo.ColCampos
+            getRiesgo.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getRiesgo ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getRiesgosDeExpediente( _
+                                        p_IDExpediente As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Riesgo As riesgo
+   
+   
+    
+    On Error GoTo errores
+    If p_IDExpediente = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbRiesgos.* " & _
+            "FROM TbRiesgos " & _
+            "WHERE (((TbRiesgos.IDEdicion) In (SELECT Max(TbProyectosEdiciones.IDEdicion) AS MáxDeIDEdicion " & _
+            "FROM TbProyectos INNER JOIN TbProyectosEdiciones ON TbProyectos.IDProyecto = TbProyectosEdiciones.IDProyecto " & _
+            "WHERE (((TbProyectos.IDExpediente)=" & p_IDExpediente & "));)));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Riesgo = New riesgo
+            For Each m_Campo In m_Riesgo.ColCampos
+                m_Riesgo.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getRiesgosDeExpediente Is Nothing Then
+                Set getRiesgosDeExpediente = New Scripting.Dictionary
+                getRiesgosDeExpediente.CompareMode = TextCompare
+            End If
+            If Not getRiesgosDeExpediente.Exists(CStr(m_Riesgo.idRiesgo)) Then
+                getRiesgosDeExpediente.Add CStr(m_Riesgo.idRiesgo), m_Riesgo
+            End If
+            Set m_Riesgo = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getRiesgosDeExpediente ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getUltimoProyecto( _
+                                    p_IDExpediente As String, _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As String
+    
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    
+        
+    
+    On Error GoTo errores
+    If p_IDExpediente = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT IDProyecto " & _
+            "FROM TbProyectos " & _
+            "WHERE IDExpediente = " & p_IDExpediente & " " & _
+            "ORDER BY IDProyecto DESC;"
+    
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            getUltimoProyecto = Nz(.Fields("IDProyecto"), "")
+        End If
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getUltimoProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getReplanificacionProyecto( _
+                                            Optional p_IDRep As String, _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As ReplanificacionesProyecto
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDRep = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbReplanificacionesProyecto " & _
+            "WHERE IDReplanificacion=" & p_IDRep & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getReplanificacionProyecto = New ReplanificacionesProyecto
+        For Each m_Campo In getReplanificacionProyecto.ColCampos
+            getReplanificacionProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getReplanificacionProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getReplanificacionAuditoria( _
+                                            Optional p_IDRep As String, _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As ReplanificacionesAuditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDRep = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbReplanificacionesAuditoria " & _
+            "WHERE IDReplanificacion=" & p_IDRep & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getReplanificacionAuditoria = New ReplanificacionesAuditoria
+        For Each m_Campo In getReplanificacionAuditoria.ColCampos
+            getReplanificacionAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getReplanificacionAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getReplanificacionesDeNCProyecto( _
+                                                    p_IDNC As String, _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Rep As ReplanificacionesProyecto
+    
+    On Error GoTo errores
+    If p_IDNC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = "SELECT * " & _
+            "FROM TbReplanificacionesProyecto " & _
+            "WHERE IDNoConformidad=" & p_IDNC & ";"
+    
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Rep = New ReplanificacionesProyecto
+            For Each m_Campo In m_Rep.ColCampos
+                m_Rep.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getReplanificacionesDeNCProyecto Is Nothing Then
+                Set getReplanificacionesDeNCProyecto = New Scripting.Dictionary
+                getReplanificacionesDeNCProyecto.CompareMode = TextCompare
+            End If
+            If Not getReplanificacionesDeNCProyecto.Exists(CStr(m_Rep.IDReplanificacion)) Then
+                getReplanificacionesDeNCProyecto.Add CStr(m_Rep.IDReplanificacion), m_Rep
+            End If
+            Set m_Rep = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getReplanificacionesDeNCProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getReplanificacionesDeNCAuditoria( _
+                                                    p_IDNC As String, _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Rep As ReplanificacionesAuditoria
+    
+    On Error GoTo errores
+    If p_IDNC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = "SELECT * " & _
+            "FROM TbReplanificacionesAuditoria " & _
+            "WHERE IDNoConformidad=" & p_IDNC & ";"
+    
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Rep = New ReplanificacionesAuditoria
+            For Each m_Campo In m_Rep.ColCampos
+                m_Rep.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getReplanificacionesDeNCAuditoria Is Nothing Then
+                Set getReplanificacionesDeNCAuditoria = New Scripting.Dictionary
+                getReplanificacionesDeNCAuditoria.CompareMode = TextCompare
+            End If
+            If Not getReplanificacionesDeNCAuditoria.Exists(CStr(m_Rep.IDReplanificacion)) Then
+                getReplanificacionesDeNCAuditoria.Add CStr(m_Rep.IDReplanificacion), m_Rep
+            End If
+            Set m_Rep = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getReplanificacionesDeNCAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getJuridicasDistintas( _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Juridica As String
+    
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT distinct Juridica " & _
+            "FROM TbNoConformidades " & _
+            "WHERE Not Juridica Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            m_Juridica = Nz(.Fields("Juridica").Value, "")
+            
+             If getJuridicasDistintas Is Nothing Then
+                Set getJuridicasDistintas = New Scripting.Dictionary
+                getJuridicasDistintas.CompareMode = TextCompare
+             End If
+             If Not getJuridicasDistintas.Exists(m_Juridica) Then
+                getJuridicasDistintas.Add m_Juridica, m_Juridica
+             End If
+            .MoveNext
+        Loop
+        
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getJuridicasDistintas ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getNCsProyectoPorPalabraClave( _
+                                                p_PC As String, _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.* " & _
+            "FROM (TbNoConformidades LEFT JOIN TbNCAccionCorrectivas " & _
+            "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "LEFT JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidades.DESCRIPCION) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNoConformidades.CausaYAnalisRaiz) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNCAccionCorrectivas.AccionCorrectiva) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNCAccionesRealizadas.AccionRealizada) Like '*" & p_PC & "*'));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncProyecto
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsProyectoPorPalabraClave Is Nothing Then
+                Set getNCsProyectoPorPalabraClave = New Scripting.Dictionary
+                getNCsProyectoPorPalabraClave.CompareMode = TextCompare
+            End If
+            If Not getNCsProyectoPorPalabraClave.Exists(CStr(m_NC.IDNoConformidad)) Then
+                getNCsProyectoPorPalabraClave.Add CStr(m_NC.IDNoConformidad), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsProyectoPorPalabraClave ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getARsProyectoSeguimiento( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARProyecto As ARProyecto
+    'HAY QUE QUITAR LOS QUE TIENEN VÍNCULOS
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNCAccionesRealizadas.* " & _
+            "FROM TbNoConformidades INNER JOIN (TbNCAccionCorrectivas INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva) " & _
+            "ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad  " & _
+            "WHERE (TbNCAccionesRealizadas.ESTADO='PTEREPLANIFICAR' OR TbNCAccionesRealizadas.ESTADO='IRREGULAR') " & _
+            "AND  TbNoConformidades.IDNCAsociada Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARProyecto = New ARProyecto
+            For Each m_Campo In m_ARProyecto.ColCampos
+                m_ARProyecto.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsProyectoSeguimiento Is Nothing Then
+                Set getARsProyectoSeguimiento = New Scripting.Dictionary
+                getARsProyectoSeguimiento.CompareMode = TextCompare
+            End If
+            If Not getARsProyectoSeguimiento.Exists(CStr(m_ARProyecto.IDAccionRealizada)) Then
+                getARsProyectoSeguimiento.Add CStr(m_ARProyecto.IDAccionRealizada), m_ARProyecto
+            End If
+            Set m_ARProyecto = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsProyectoSeguimiento ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getSegsTareasProyecto( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasProyectos & _
+            ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegTareas = New SegTareasProyecto
+            For Each m_Campo In m_SegTareas.ColCampos
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsTareasProyecto Is Nothing Then
+                Set getSegsTareasProyecto = New Scripting.Dictionary
+                getSegsTareasProyecto.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasProyecto.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasProyecto.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getSegsTareasProyectoActivas( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasProyecto
+    Dim m_NCProyecto As ncProyecto
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasProyectos & _
+            "WHERE Not FechaInicio Is Null " & _
+            "AND Not FechaFinPrevista Is Null " & _
+            "AND FechaFinReal Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NCProyecto = constructor.getNCProyecto(p_IDNC:=rcdDatos.Fields("IDNoConformidad"), p_Error:=p_Error)
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+            m_NCProyecto.EstadoGrabar
+            Set m_SegTareas = New SegTareasProyecto
+            For Each m_Campo In m_SegTareas.ColCampos
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            m_SegTareas.Estado = m_NCProyecto.Estado
+            If getSegsTareasProyectoActivas Is Nothing Then
+                Set getSegsTareasProyectoActivas = New Scripting.Dictionary
+                getSegsTareasProyectoActivas.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasProyectoActivas.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasProyectoActivas.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasProyectoActivas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsTareasProyectoPteReplanificar( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasProyecto
+    Dim m_NCProyecto As ncProyecto
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasProyectos & _
+            "WHERE Not FechaInicio Is Null " & _
+            "AND FechaFinPrevista<=Date() " & _
+            "AND FechaFinReal Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NCProyecto = constructor.getNCProyecto(p_IDNC:=rcdDatos.Fields("IDNoConformidad"), p_Error:=p_Error)
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+            m_NCProyecto.EstadoGrabar
+            Set m_SegTareas = New SegTareasProyecto
+            For Each m_Campo In m_SegTareas.ColCampos
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            m_SegTareas.Estado = m_NCProyecto.Estado
+            
+            If getSegsTareasProyectoPteReplanificar Is Nothing Then
+                Set getSegsTareasProyectoPteReplanificar = New Scripting.Dictionary
+                getSegsTareasProyectoPteReplanificar.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasProyectoPteReplanificar.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasProyectoPteReplanificar.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasProyectoPteReplanificar ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getSegsTareasAuditoriaActivas( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasAuditoria
+    Dim m_NCProyecto As ncProyecto
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasAuditorias & _
+            "WHERE Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null " & _
+            "AND Not FechaFinPrevista Is Null " & _
+            "AND FechaFinReal Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegTareas = New SegTareasAuditoria
+            For Each m_Campo In m_SegTareas.ColCampos
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsTareasAuditoriaActivas Is Nothing Then
+                Set getSegsTareasAuditoriaActivas = New Scripting.Dictionary
+                getSegsTareasAuditoriaActivas.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasAuditoriaActivas.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasAuditoriaActivas.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasAuditoriaActivas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsTareasAuditoriaTotales( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasAuditorias & _
+            ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegTareas = New SegTareasAuditoria
+            For Each m_Campo In m_SegTareas.ColCampos
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsTareasAuditoriaTotales Is Nothing Then
+                Set getSegsTareasAuditoriaTotales = New Scripting.Dictionary
+                getSegsTareasAuditoriaTotales.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasAuditoriaTotales.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasAuditoriaTotales.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasAuditoriaTotales ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsTareasAuditoriaPteReplanificar( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_CampoTabla As String
+    Dim m_SegTareas As SegTareasAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasAuditorias & _
+            "WHERE Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null " & _
+            "AND FechaFinPrevista<=Date() " & _
+            "AND FechaFinReal Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegTareas = New SegTareasAuditoria
+            For Each m_Campo In m_SegTareas.ColCampos
+                'Debug.Print m_Campo
+                'If CStr(m_Campo) = "FechaInicio" Then Stop
+                m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsTareasAuditoriaPteReplanificar Is Nothing Then
+                Set getSegsTareasAuditoriaPteReplanificar = New Scripting.Dictionary
+                getSegsTareasAuditoriaPteReplanificar.CompareMode = TextCompare
+            End If
+            If Not getSegsTareasAuditoriaPteReplanificar.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                getSegsTareasAuditoriaPteReplanificar.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+            End If
+            Set m_SegTareas = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasAuditoriaPteReplanificar ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getSegsTareasAuditoriaIrregulares( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegTareas As SegTareasAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    
+    m_SQL = m_SQLAlInicioSegTareasAuditorias & _
+            "WHERE " & _
+            "TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null AND (Not FechaFinPrevista Is Null or Not FechaFinReal Is Null) AND TbNoConformidadesAuditoria.Borrado=False;"
+
+            
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+             .MoveFirst
+            Do While Not .EOF
+                Set m_SegTareas = New SegTareasAuditoria
+                For Each m_Campo In m_SegTareas.ColCampos
+                    m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getSegsTareasAuditoriaIrregulares Is Nothing Then
+                    Set getSegsTareasAuditoriaIrregulares = New Scripting.Dictionary
+                    getSegsTareasAuditoriaIrregulares.CompareMode = TextCompare
+                End If
+                If Not getSegsTareasAuditoriaIrregulares.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                    getSegsTareasAuditoriaIrregulares.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+                End If
+                Set m_SegTareas = Nothing
+                .MoveNext
+            Loop
+        End If
+       
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    m_SQL = m_SQLAlInicioSegTareasAuditorias & _
+            "WHERE " & _
+            "FechaFinPrevista Is Null AND (Not TbNCAuditoriaAccionesRealizadas.FechaInicio Is Null or Not FechaFinReal Is Null)AND TbNoConformidadesAuditoria.Borrado=False;"
+
+            
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+             .MoveFirst
+            Do While Not .EOF
+                Set m_SegTareas = New SegTareasAuditoria
+                For Each m_Campo In m_SegTareas.ColCampos
+                    m_SegTareas.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getSegsTareasAuditoriaIrregulares Is Nothing Then
+                    Set getSegsTareasAuditoriaIrregulares = New Scripting.Dictionary
+                    getSegsTareasAuditoriaIrregulares.CompareMode = TextCompare
+                End If
+                If Not getSegsTareasAuditoriaIrregulares.Exists(CStr(m_SegTareas.IDAccionRealizada)) Then
+                    getSegsTareasAuditoriaIrregulares.Add CStr(m_SegTareas.IDAccionRealizada), m_SegTareas
+                End If
+                Set m_SegTareas = Nothing
+                .MoveNext
+            Loop
+        End If
+       
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsTareasAuditoriaIrregulares ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCProyectoRegistradas( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+                "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+                "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+                "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+                "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+                "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+                "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+                "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
+                "WHERE TbNCAccionCorrectivas.IDAccionCorrectiva Is Null AND TbNoConformidades.Borrado=False;"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoRegistradas Is Nothing Then
+                Set getSegsNCProyectoRegistradas = New Scripting.Dictionary
+                getSegsNCProyectoRegistradas.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoRegistradas.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoRegistradas.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoRegistradas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCProyectoTotales( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+            "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+            "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+            "FROM (TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "LEFT JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad " & _
+            "WHERE (((TbNoConformidades.Borrado)=False));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoTotales Is Nothing Then
+                Set getSegsNCProyectoTotales = New Scripting.Dictionary
+                getSegsNCProyectoTotales.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoTotales.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoTotales.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoTotales ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCProyectoAccionesSinTareas( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT distinct TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+            "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+            "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "LEFT JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNCAccionesRealizadas.IDAccionRealizada) Is Null) AND TbNoConformidades.FECHACIERRE Is Null);"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoAccionesSinTareas Is Nothing Then
+                Set getSegsNCProyectoAccionesSinTareas = New Scripting.Dictionary
+                getSegsNCProyectoAccionesSinTareas.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoAccionesSinTareas.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoAccionesSinTareas.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoAccionesSinTareas ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getSegsNCProyectoCENoConforme( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+            "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+            "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "INNER JOIN TbNCAccionesRealizadas ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidades.ConformeControlEficacia)='No') " & _
+            "AND (NOt(TbNCAccionesRealizadas.FechaFinReal) Is Null));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoCENoConforme Is Nothing Then
+                Set getSegsNCProyectoCENoConforme = New Scripting.Dictionary
+                getSegsNCProyectoCENoConforme.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoCENoConforme.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoCENoConforme.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoCENoConforme ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCProyectoCECaducada( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+            "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+            "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE ((Not(TbNCAccionesRealizadas.FechaFinReal) Is Null) " & _
+            "AND ((TbNoConformidades.FechaControlEficacia) Is Null) " & _
+            "AND ((TbNoConformidades.FechaPrevistaControlEficacia)<=Date()));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoCECaducada Is Nothing Then
+                Set getSegsNCProyectoCECaducada = New Scripting.Dictionary
+                getSegsNCProyectoCECaducada.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoCECaducada.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoCECaducada.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoCECaducada ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getSegsNCProyectoPteCE( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCProyecto
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidades.IDNoConformidad, TbNoConformidades.CodigoNoConformidad, " & _
+            "TbNoConformidades.DESCRIPCION, TbNoConformidades.Nemotecnico, TbNoConformidades.ESTADO, " & _
+            "TbNoConformidades.RESPONSABLECALIDAD AS NombreCalidad, TbUsuariosAplicaciones.Nombre AS Tecnico, " & _
+            "TbNoConformidades.IDExpediente, TbNoConformidades.RequiereControlEficacia, " & _
+            "TbNoConformidades.ResultadoControlEficacia, TbNoConformidades.FECHACIERRE " & _
+            "FROM ((TbNoConformidades LEFT JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed) " & _
+            "INNER JOIN TbNCAccionCorrectivas ON TbNoConformidades.IDNoConformidad = TbNCAccionCorrectivas.IDNoConformidad) " & _
+            "INNER JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE ((Not(TbNCAccionesRealizadas.FechaFinReal) Is Null) " & _
+            "AND ((TbNoConformidades.FechaControlEficacia) Is Null) " & _
+            " AND (Not (TbNoConformidades.FechaPrevistaControlEficacia) Is Null));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCProyecto
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCProyectoPteCE Is Nothing Then
+                Set getSegsNCProyectoPteCE = New Scripting.Dictionary
+                getSegsNCProyectoPteCE.CompareMode = TextCompare
+            End If
+            If Not getSegsNCProyectoPteCE.Exists(CStr(m_SegNC.IDNoConformidad)) Then
+                getSegsNCProyectoPteCE.Add CStr(m_SegNC.IDNoConformidad), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCProyectoPteCE ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaRegistradas( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero,TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
+            "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM (TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "LEFT JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
+            "WHERE (((TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva) Is Null) " & _
+            "AND ((TbNoConformidadesAuditoria.RequiereAccionCorrectiva)='Sí')AND TbNoConformidadesAuditoria.Borrado=False);"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaRegistradas Is Nothing Then
+                Set getSegsNCAuditoriaRegistradas = New Scripting.Dictionary
+                getSegsNCAuditoriaRegistradas.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaRegistradas.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaRegistradas.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaRegistradas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaTotales( _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID, TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION, " & _
+            "TbNoConformidadesAuditoria.FECHACIERRE, TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION AS responsable, " & _
+            "TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM (TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "LEFT JOIN TbNCAuditoriaAccionCorrectivas ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
+            "WHERE (((TbNoConformidadesAuditoria.Borrado)=False));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaTotales Is Nothing Then
+                Set getSegsNCAuditoriaTotales = New Scripting.Dictionary
+                getSegsNCAuditoriaTotales.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaTotales.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaTotales.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaTotales ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaAccionesSinTareas( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
+            "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
+            "LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidadesAuditoria.RequiereAccionCorrectiva)='Sí') " & _
+            "AND ((TbNCAuditoriaAccionesRealizadas.IDAccionRealizada) Is Null));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaAccionesSinTareas Is Nothing Then
+                Set getSegsNCAuditoriaAccionesSinTareas = New Scripting.Dictionary
+                getSegsNCAuditoriaAccionesSinTareas.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaAccionesSinTareas.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaAccionesSinTareas.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaAccionesSinTareas ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaPteCE( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
+            "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
+            "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidadesAuditoria.RequiereControlEficacia)='Sí') " & _
+            "AND (Not(TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null) " & _
+            "AND ((TbNoConformidadesAuditoria.ResultadoControlEficacia) Is Null));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaPteCE Is Nothing Then
+                Set getSegsNCAuditoriaPteCE = New Scripting.Dictionary
+                getSegsNCAuditoriaPteCE.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaPteCE.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaPteCE.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaPteCE ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaCECaducada( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
+            "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
+            "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidadesAuditoria.RequiereControlEficacia)='Sí') " & _
+            "AND (Not(TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null) " & _
+            "AND ((TbNoConformidadesAuditoria.FechaControlEficacia) Is Null) " & _
+            "AND ((TbNoConformidadesAuditoria.FechaPrevistaControlEficacia)<=Date()));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaCECaducada Is Nothing Then
+                Set getSegsNCAuditoriaCECaducada = New Scripting.Dictionary
+                getSegsNCAuditoriaCECaducada.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaCECaducada.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaCECaducada.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaCECaducada ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getSegsNCAuditoriaCENoConforme( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_SegNC As SegNCAuditoria
+    
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.ID,TbNoConformidadesAuditoria.Numero, TbAuditorias.IDAuditoria, " & _
+            "Format(Year([TbAuditorias].[FechaInicio]),'0000') & '_' & TbAuditorias.Tipo AS Auditoria, " & _
+            "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
+            "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
+            "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
+            "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
+            "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidadesAuditoria.RequiereControlEficacia)='Sí') " & _
+            "AND (Not(TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null) " & _
+            "AND (Not (TbNoConformidadesAuditoria.FechaControlEficacia) Is Null) " & _
+            "AND ((TbNoConformidadesAuditoria.ConformeControlEficacia)='No'));"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_SegNC = New SegNCAuditoria
+            For Each m_Campo In m_SegNC.ColCampos
+                m_SegNC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getSegsNCAuditoriaCENoConforme Is Nothing Then
+                Set getSegsNCAuditoriaCENoConforme = New Scripting.Dictionary
+                getSegsNCAuditoriaCENoConforme.CompareMode = TextCompare
+            End If
+            If Not getSegsNCAuditoriaCENoConforme.Exists(CStr(m_SegNC.id)) Then
+                getSegsNCAuditoriaCENoConforme.Add CStr(m_SegNC.id), m_SegNC
+            End If
+            Set m_SegNC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getSegsNCAuditoriaCENoConforme ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARsAuditoriaSeguimiento( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARAuditoria As ARAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNCAuditoriaAccionesRealizadas  " & _
+            "WHERE ESTADO='PTEREPLANIFICAR' OR ESTADO='IRREGULAR' ;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARAuditoria = New ARAuditoria
+            For Each m_Campo In m_ARAuditoria.ColCampos
+                m_ARAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsAuditoriaSeguimiento Is Nothing Then
+                Set getARsAuditoriaSeguimiento = New Scripting.Dictionary
+                getARsAuditoriaSeguimiento.CompareMode = TextCompare
+            End If
+            If Not getARsAuditoriaSeguimiento.Exists(CStr(m_ARAuditoria.IDAccionRealizada)) Then
+                getARsAuditoriaSeguimiento.Add CStr(m_ARAuditoria.IDAccionRealizada), m_ARAuditoria
+            End If
+            Set m_ARAuditoria = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsAuditoriaSeguimiento ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getARsAuditoriaSeguimientoActivas( _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARAuditoria As ARAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNCAuditoriaAccionesRealizadas  " & _
+            "WHERE Not ESTADO Like 'FINALIZADA' ;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARAuditoria = New ARAuditoria
+            For Each m_Campo In m_ARAuditoria.ColCampos
+                m_ARAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsAuditoriaSeguimientoActivas Is Nothing Then
+                Set getARsAuditoriaSeguimientoActivas = New Scripting.Dictionary
+                getARsAuditoriaSeguimientoActivas.CompareMode = TextCompare
+            End If
+            If Not getARsAuditoriaSeguimientoActivas.Exists(CStr(m_ARAuditoria.IDAccionRealizada)) Then
+                getARsAuditoriaSeguimientoActivas.Add CStr(m_ARAuditoria.IDAccionRealizada), m_ARAuditoria
+            End If
+            Set m_ARAuditoria = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsAuditoriaSeguimientoActivas ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getARsAuditorias( _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_AR As ARAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "TbNCAuditoriaAccionesRealizadas"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_AR = New ARAuditoria
+            For Each m_Campo In m_AR.ColCampos
+                m_AR.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsAuditorias Is Nothing Then
+                Set getARsAuditorias = New Scripting.Dictionary
+                getARsAuditorias.CompareMode = TextCompare
+            End If
+            If Not getARsAuditorias.Exists(CStr(m_AR.IDAccionRealizada)) Then
+                getARsAuditorias.Add CStr(m_AR.IDAccionRealizada), m_AR
+            End If
+            Set m_AR = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsAuditorias ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getJefesProyecto( _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+    'aquellos usuarios que están como Jefes de proyecto en todos los expedientes con Pecal,además hay que meter a los de calidad
+    
+    
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_JP As usuario
+    
+    
+    On Error GoTo errores
+   If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT DISTINCT TbUsuariosAplicaciones.* " & _
+            "FROM (TbExpedientesResponsables INNER JOIN TbExpedientes " & _
+            "ON TbExpedientesResponsables.IdExpediente = TbExpedientes.IDExpediente) " & _
+            "INNER JOIN TbUsuariosAplicaciones ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
+            "ORDER BY TbUsuariosAplicaciones.Nombre;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_JP = New usuario
+                For Each m_Campo In m_JP.ColCampos
+                    m_JP.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getJefesProyecto Is Nothing Then
+                    Set getJefesProyecto = New Scripting.Dictionary
+                    getJefesProyecto.CompareMode = TextCompare
+                End If
+                If Not getJefesProyecto.Exists(CStr(m_JP.UsuarioRed)) Then
+                    getJefesProyecto.Add CStr(m_JP.UsuarioRed), m_JP
+                End If
+                Set m_JP = Nothing
+                .MoveNext
+            Loop
+        End If
+        
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    'ahora los que ya son responsables en las NoConformidades existentes
+   m_SQL = "SELECT distinct TbUsuariosAplicaciones.* " & _
+            "FROM TbNoConformidades INNER JOIN TbUsuariosAplicaciones " & _
+            "ON TbNoConformidades.RESPONSABLETELEFONICA = TbUsuariosAplicaciones.UsuarioRed " & _
+            "ORDER BY TbUsuariosAplicaciones.Nombre; "
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_JP = New usuario
+                For Each m_Campo In m_JP.ColCampos
+                    m_JP.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getJefesProyecto Is Nothing Then
+                    Set getJefesProyecto = New Scripting.Dictionary
+                    getJefesProyecto.CompareMode = TextCompare
+                End If
+                If Not getJefesProyecto.Exists(CStr(m_JP.UsuarioRed)) Then
+                    getJefesProyecto.Add CStr(m_JP.UsuarioRed), m_JP
+                End If
+                Set m_JP = Nothing
+                .MoveNext
+            Loop
+        End If
+        
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getJefesProyecto ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getAuditoria( _
+                                Optional p_ID As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Auditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_ID = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbAuditorias " & _
+            "WHERE IDAuditoria=" & p_ID & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getAuditoria = New Auditoria
+        For Each m_Campo In getAuditoria.ColCampos
+            getAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getAuditorias( _
+                                Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Auditoria As Auditoria
+    
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT * " & _
+            "FROM TbAuditorias ORDER BY IDAuditoria DESC;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Auditoria = New Auditoria
+            For Each m_Campo In m_Auditoria.ColCampos
+                m_Auditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getAuditorias Is Nothing Then
+                Set getAuditorias = New Scripting.Dictionary
+                getAuditorias.CompareMode = TextCompare
+            End If
+            If Not getAuditorias.Exists(CStr(m_Auditoria.IDAuditoria)) Then
+                getAuditorias.Add CStr(m_Auditoria.IDAuditoria), m_Auditoria
+            End If
+            Set m_Auditoria = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getAuditorias ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getDocumentosAuditoria( _
+                                        Optional p_IDAuditoria As String, _
+                                        Optional p_IDNC As String, _
+                                        Optional p_IDAR As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Documento As DocumentoAuditoria
+    
+    On Error GoTo errores
+    If p_IDAuditoria = "" And p_IDNC = "" And p_IDAR = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDAuditoria <> "" Then
+        m_SQL = "SELECT * FROM " & _
+                "TbDocumentosAuditorias " & _
+                "WHERE IDAuditoria=" & p_IDAuditoria & ";"
+    ElseIf p_IDNC <> "" Then
+        m_SQL = "SELECT * FROM " & _
+                "TbDocumentosAuditorias " & _
+                "WHERE IDNoConformidad=" & p_IDNC & ";"
+    Else
+        m_SQL = "SELECT * FROM " & _
+                "TbDocumentosAuditorias " & _
+                "WHERE IDAccionRealizada=" & p_IDAR & ";"
+    End If
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_Documento = New DocumentoAuditoria
+            For Each m_Campo In m_Documento.ColCampos
+                m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getDocumentosAuditoria Is Nothing Then
+                Set getDocumentosAuditoria = New Scripting.Dictionary
+                getDocumentosAuditoria.CompareMode = TextCompare
+            End If
+            If Not getDocumentosAuditoria.Exists(CStr(m_Documento.IDDocumento)) Then
+                getDocumentosAuditoria.Add CStr(m_Documento.IDDocumento), m_Documento
+            End If
+            Set m_Documento = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentosAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getDocumentosCompletosAuditoria( _
+                                                    Optional p_IDNC As String, _
+                                                    Optional p_Db As DAO.Database, _
+                                                    Optional ByRef p_Error As String _
+                                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_Documento As DocumentoAuditoria
+    
+    On Error GoTo errores
+    If p_IDNC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT * FROM " & _
+            "TbDocumentosAuditorias " & _
+            "WHERE IDNoConformidad=" & p_IDNC & ";"
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_Documento = New DocumentoAuditoria
+                For Each m_Campo In m_Documento.ColCampos
+                    m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getDocumentosCompletosAuditoria Is Nothing Then
+                    Set getDocumentosCompletosAuditoria = New Scripting.Dictionary
+                    getDocumentosCompletosAuditoria.CompareMode = TextCompare
+                End If
+                If Not getDocumentosCompletosAuditoria.Exists(CStr(m_Documento.IDDocumento)) Then
+                    getDocumentosCompletosAuditoria.Add CStr(m_Documento.IDDocumento), m_Documento
+                End If
+                Set m_Documento = Nothing
+                .MoveNext
+            Loop
+        End If
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    m_SQL = "SELECT TbDocumentosAuditorias.* " & _
+            "FROM (TbNCAuditoriaAccionCorrectivas INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva) " & _
+            "INNER JOIN TbDocumentosAuditorias " & _
+            "ON TbNCAuditoriaAccionesRealizadas.IDAccionRealizada = TbDocumentosAuditorias.IDAccionRealizada " & _
+            "WHERE (((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & "));"
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If Not .EOF Then
+            .MoveFirst
+            Do While Not .EOF
+                Set m_Documento = New DocumentoAuditoria
+                For Each m_Campo In m_Documento.ColCampos
+                    m_Documento.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                    If p_Error <> "" Then
+                        Err.Raise 1000
+                    End If
+                Next
+                If getDocumentosCompletosAuditoria Is Nothing Then
+                    Set getDocumentosCompletosAuditoria = New Scripting.Dictionary
+                    getDocumentosCompletosAuditoria.CompareMode = TextCompare
+                End If
+                If Not getDocumentosCompletosAuditoria.Exists(CStr(m_Documento.IDDocumento)) Then
+                    getDocumentosCompletosAuditoria.Add CStr(m_Documento.IDDocumento), m_Documento
+                End If
+                Set m_Documento = Nothing
+                .MoveNext
+            Loop
+        End If
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getDocumentosCompletosAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACAuditoria( _
+                                Optional p_IDAC As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As ACAuditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAuditoriaAccionCorrectivas " & _
+            "WHERE IDAccionCorrectiva=" & p_IDAC & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getACAuditoria = New ACAuditoria
+        For Each m_Campo In getACAuditoria.ColCampos
+            getACAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getACsAuditoria( _
+                                Optional p_IDNC As String, _
+                                Optional p_EnumOrden As EnumOrden, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ACAuditoria As ACAuditoria
+     Dim m_OrderBy As String
+    Dim m_Resultado As String
+    On Error GoTo errores
+    If p_IDNC = "" Then
         Exit Function
     End If
     
-    
-    If p_IDSuministrador <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores " & _
-                "WHERE IDSuministrador=" & p_IDSuministrador & ";"
-    ElseIf p_CIF <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores " & _
-                "WHERE CIF='" & p_CIF & "';"
-    ElseIf p_Nombre <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores " & _
-                "WHERE Nombre='" & p_Nombre & "';"
-    ElseIf p_Nemotecnico <> "" Then
-        m_SQL = "SELECT * " & _
-                "FROM TbSuministradores " & _
-                "WHERE Nemotecnico='" & p_Nemotecnico & "';"
-    
+    If p_EnumOrden = Empty Then
+        p_EnumOrden = EnumOrden.PorNAccion
     End If
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getSuministrador = New Suministrador
-        For Each m_Campo In getSuministrador.ColCampos
-            getSuministrador.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getSuministrador ha devuelto el error: " & Err.Description
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
     End If
-End Function
-Public Function getExpedienteModificado( _
-                                        Optional p_IDExpedienteModificado As String, _
-                                        Optional p_IDExpediente As String, _
-                                        Optional p_FechaFirmaModificado As String, _
-                                        Optional p_DESCRIPCION As String, _
-                                        Optional ByRef p_Error As String _
-                                         ) As ExpedienteModificado
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    
-    
-    
-    On Error GoTo errores
-    If p_IDExpedienteModificado = "" Then
-        
-        If p_IDExpediente = "" And p_FechaFirmaModificado = "" And p_DESCRIPCION = "" Then
-            Exit Function
-        End If
+    If Not m_ObjEntorno.ColEnumOrdenOrderBy.Exists(CStr(p_EnumOrden)) Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
     End If
-    If p_IDExpedienteModificado <> "" Then
-         m_SQL = "SELECT * " & _
-                "FROM TbExpedientesModificados " & _
-                "WHERE IDExpedienteModificado=" & p_IDExpedienteModificado & ";"
-    Else
-        If p_FechaFirmaModificado <> "" Then
-             m_SQL = "SELECT * " & _
-                    "FROM TbExpedientesModificados " & _
-                    "WHERE IDExpediente=" & p_IDExpediente & " AND FechaFirmaModificado=#" & Format(p_FechaFirmaModificado, "mm/dd/yyyy") & "#;"
-        Else
-            m_SQL = "SELECT * " & _
-                    "FROM TbExpedientesModificados " & _
-                    "WHERE IDExpediente=" & p_IDExpediente & " AND DESCRIPCION='" & p_DESCRIPCION & "';"
-        End If
+    m_Resultado = m_ObjEntorno.ColEnumOrdenOrderBy(CStr(p_EnumOrden))
+    If InStr(1, m_Resultado, "|") = 0 Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
     End If
-    
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
-    With rcdDatos
-        If .EOF Then
-            rcdDatos.Close
-            Set rcdDatos = Nothing
-            Exit Function
-        End If
-        Set getExpedienteModificado = New ExpedienteModificado
-        For Each m_Campo In getExpedienteModificado.ColCampos
-            'If CStr(m_Campo) = "TipoInforme" Then Stop
-            getExpedienteModificado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-             If p_Error <> "" Then
-                 Err.Raise 1000
-             End If
-         Next
-        
-    End With
-    rcdDatos.Close
-    Set rcdDatos = Nothing
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteModificado ha devuelto el error: " & Err.Description
-    End If
-End Function
-
-Public Function getExpedienteModificados( _
-                                            p_IDExpediente As String, _
-                                            Optional ByRef p_Error As String _
-                                            ) As Scripting.Dictionary
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_Campo As Variant
-    Dim m_ExpedienteModificado As ExpedienteModificado
-    
-    
-    On Error GoTo errores
-    m_SQL = "SELECT * " & _
-                "FROM TbExpedientesModificados " & _
-                "WHERE IDExpediente=" & p_IDExpediente & ";"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    dato = Split(m_Resultado, "|")
+    m_OrderBy = dato(0)
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAuditoriaAccionCorrectivas " & _
+            "WHERE ID=" & p_IDNC & " " & _
+            m_OrderBy & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5711,48 +5152,58 @@ Public Function getExpedienteModificados( _
         End If
         .MoveFirst
         Do While Not .EOF
-            Set m_ExpedienteModificado = New ExpedienteModificado
-            For Each m_Campo In m_ExpedienteModificado.ColCampos
-                m_ExpedienteModificado.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedienteModificados Is Nothing Then
-                Set getExpedienteModificados = New Scripting.Dictionary
-                getExpedienteModificados.CompareMode = TextCompare
-             End If
-             If Not getExpedienteModificados.exists(CStr(m_ExpedienteModificado.IDExpedienteModificado)) Then
-                getExpedienteModificados.Add CStr(m_ExpedienteModificado.IDExpedienteModificado), m_ExpedienteModificado
-             End If
+            Set m_ACAuditoria = New ACAuditoria
+            For Each m_Campo In m_ACAuditoria.ColCampos
+                m_ACAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsAuditoria Is Nothing Then
+                Set getACsAuditoria = New Scripting.Dictionary
+                getACsAuditoria.CompareMode = TextCompare
+            End If
+            If Not getACsAuditoria.Exists(CStr(m_ACAuditoria.IdAccionCorrectiva)) Then
+                getACsAuditoria.Add CStr(m_ACAuditoria.IdAccionCorrectiva), m_ACAuditoria
+            End If
+            Set m_ACAuditoria = Nothing
             .MoveNext
         Loop
-        
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    
     Exit Function
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedienteModificados ha devuelto el error: " & Err.Description
+        p_Error = "El método getACsAuditoria ha devuelto el error: " & Err.Description
     End If
 End Function
-Public Function getExpedientesConResponsableSeguridad( _
+Public Function getACsAuditoriasSinFinalizar( _
+                                                p_IDNC As String, _
+                                                Optional p_Db As DAO.Database, _
                                                 Optional ByRef p_Error As String _
                                                 ) As Scripting.Dictionary
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_Campo As Variant
-    Dim m_expediente As Expediente
-    
+    Dim m_ARAuditoria As ARAuditoria
+   
+   
     
     On Error GoTo errores
-    m_SQL = "SELECT TbExpedientes.* " & _
-            "FROM TbExpedientes INNER JOIN TbUsuariosAplicaciones " & _
-            "ON TbExpedientes.IDResponsableSeguridad = TbUsuariosAplicaciones.Id;"
-    
-    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNCAuditoriaAccionesRealizadas.* " & _
+            "FROM TbNCAuditoriaAccionCorrectivas INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & ") " & _
+            "AND ((TbNCAuditoriaAccionesRealizadas.FechaFinReal) Is Null));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
@@ -5761,23 +5212,766 @@ Public Function getExpedientesConResponsableSeguridad( _
         End If
         .MoveFirst
         Do While Not .EOF
-            Set m_expediente = New Expediente
-            For Each m_Campo In m_expediente.ColCampos
-                m_expediente.SetPropiedad m_Campo, Nz(.Fields(m_Campo).value, ""), p_Error
-                 If p_Error <> "" Then
-                     Err.Raise 1000
-                 End If
-             Next
-             If getExpedientesConResponsableSeguridad Is Nothing Then
-                Set getExpedientesConResponsableSeguridad = New Scripting.Dictionary
-                getExpedientesConResponsableSeguridad.CompareMode = TextCompare
-             End If
-             If Not getExpedientesConResponsableSeguridad.exists(CStr(m_expediente.IDExpediente)) Then
-                getExpedientesConResponsableSeguridad.Add CStr(m_expediente.IDExpediente), m_expediente
-             End If
+            Set m_ARAuditoria = New ARAuditoria
+            For Each m_Campo In m_ARAuditoria.ColCampos
+                m_ARAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsAuditoriasSinFinalizar Is Nothing Then
+                Set getACsAuditoriasSinFinalizar = New Scripting.Dictionary
+                getACsAuditoriasSinFinalizar.CompareMode = TextCompare
+            End If
+            If Not getACsAuditoriasSinFinalizar.Exists(CStr(m_ARAuditoria.IDAccionRealizada)) Then
+                getACsAuditoriasSinFinalizar.Add CStr(m_ARAuditoria.IDAccionRealizada), m_ARAuditoria
+            End If
+            Set m_ARAuditoria = Nothing
             .MoveNext
         Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsAuditoriasSinFinalizar ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACsDeAuditorias( _
+                                    Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_AC As ACAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "TbNCAuditoriaAccionCorrectivas"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_AC = New ACAuditoria
+            For Each m_Campo In m_AC.ColCampos
+                m_AC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsDeAuditorias Is Nothing Then
+                Set getACsDeAuditorias = New Scripting.Dictionary
+                getACsDeAuditorias.CompareMode = TextCompare
+            End If
+            If Not getACsDeAuditorias.Exists(CStr(m_AC.IdAccionCorrectiva)) Then
+                getACsDeAuditorias.Add CStr(m_AC.IdAccionCorrectiva), m_AC
+            End If
+            Set m_AC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsDeAuditorias ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACsAuditoriasSinAR( _
+                                        p_IDNC As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_AC As ACAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT DISTINCT TbNCAuditoriaAccionCorrectivas.* " & _
+            "FROM TbNCAuditoriaAccionCorrectivas LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva) Is Null) " & _
+            "AND ((TbNCAuditoriaAccionCorrectivas.ID)=" & p_IDNC & "));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_AC = New ACAuditoria
+            For Each m_Campo In m_AC.ColCampos
+                m_AC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsAuditoriasSinAR Is Nothing Then
+                Set getACsAuditoriasSinAR = New Scripting.Dictionary
+                getACsAuditoriasSinAR.CompareMode = TextCompare
+            End If
+            If Not getACsAuditoriasSinAR.Exists(CStr(m_AC.IdAccionCorrectiva)) Then
+                getACsAuditoriasSinAR.Add CStr(m_AC.IdAccionCorrectiva), m_AC
+            End If
+            Set m_AC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsAuditoriasSinAR ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getACsProyectosSinAR( _
+                                        p_IDNC As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_AC As ACProyecto
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT DISTINCT TbNCAccionCorrectivas.* " & _
+            "FROM TbNCAccionCorrectivas LEFT JOIN TbNCAccionesRealizadas " & _
+            "ON TbNCAccionCorrectivas.IDAccionCorrectiva = TbNCAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNCAccionesRealizadas.IDAccionCorrectiva) Is Null) " & _
+            "AND ((TbNCAccionCorrectivas.IDNoConformidad)=" & p_IDNC & "));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_AC = New ACProyecto
+            For Each m_Campo In m_AC.ColCampos
+                m_AC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getACsProyectosSinAR Is Nothing Then
+                Set getACsProyectosSinAR = New Scripting.Dictionary
+                getACsProyectosSinAR.CompareMode = TextCompare
+            End If
+            If Not getACsProyectosSinAR.Exists(CStr(m_AC.IdAccionCorrectiva)) Then
+                getACsProyectosSinAR.Add CStr(m_AC.IdAccionCorrectiva), m_AC
+            End If
+            Set m_AC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getACsProyectosSinAR ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getCodRiesgosAsociados( _
+                                        p_IDNC As String, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As String
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_CodRiesgo As String
+    Dim m_Resultado As String
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbRiesgos.CodigoRiesgo " & _
+            "FROM TbRiesgos INNER JOIN TbRiesgosNC ON TbRiesgos.IDRiesgo = TbRiesgosNC.IDRiesgo " & _
+            "WHERE (((TbRiesgosNC.IDNC)=" & p_IDNC & "));"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            m_CodRiesgo = Nz(.Fields("CodigoRiesgo"), "")
+            
+            If m_CodRiesgo <> "" Then
+                If m_Resultado = "" Then
+                    m_Resultado = m_CodRiesgo
+                Else
+                    m_Resultado = m_Resultado & "|" & m_CodRiesgo
+                End If
+               
+            End If
+            
+            
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    getCodRiesgosAsociados = m_Resultado
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getCodRiesgosAsociados ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getNCAuditoria( _
+                                Optional p_IDNC As String, _
+                                Optional p_IDAC As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As ncAuditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
         
+    
+    On Error GoTo errores
+    If p_IDNC = "" And p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    If p_IDNC <> "" Then
+         m_SQL = "SELECT * FROM " & _
+            "TbNoConformidadesAuditoria " & _
+            "WHERE ID=" & p_IDNC & ";"
+    Else
+        m_SQL = "SELECT TbNoConformidadesAuditoria.* " & _
+                "FROM TbNoConformidadesAuditoria INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
+                "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID " & _
+                "WHERE (((TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva)=" & p_IDAC & "));"
+    End If
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getNCAuditoria = New ncAuditoria
+        For Each m_Campo In getNCAuditoria.ColCampos
+            getNCAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getARsDeACAuditoria( _
+                                        p_IDAC As String, _
+                                        Optional p_EnumOrden As EnumOrden, _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_ARAuditoria As ARAuditoria
+    Dim m_OrderBy As String
+    Dim m_Resultado As String
+    Dim dato As Variant
+    On Error GoTo errores
+    If p_IDAC = "" Then
+        Exit Function
+    End If
+    If p_EnumOrden = Empty Then
+        p_EnumOrden = EnumOrden.PorNAccion
+    End If
+    If Not m_ObjEntorno.ColEnumOrdenOrderBy.Exists(CStr(p_EnumOrden)) Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    m_Resultado = m_ObjEntorno.ColEnumOrdenOrderBy(CStr(p_EnumOrden))
+    If InStr(1, m_Resultado, "|") = 0 Then
+        p_Error = "No se puede saber el orden que se desea"
+        Err.Raise 1000
+    End If
+    dato = Split(m_Resultado, "|")
+    m_OrderBy = dato(1)
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT * FROM " & _
+             "TbNCAuditoriaAccionesRealizadas " & _
+             "WHERE IDAccionCorrectiva=" & p_IDAC & " " & _
+            m_OrderBy & ";"
+
+    
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_ARAuditoria = New ARAuditoria
+            For Each m_Campo In m_ARAuditoria.ColCampos
+                m_ARAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getARsDeACAuditoria Is Nothing Then
+                Set getARsDeACAuditoria = New Scripting.Dictionary
+                getARsDeACAuditoria.CompareMode = TextCompare
+            End If
+            If Not getARsDeACAuditoria.Exists(CStr(m_ARAuditoria.IDAccionRealizada)) Then
+                getARsDeACAuditoria.Add CStr(m_ARAuditoria.IDAccionRealizada), m_ARAuditoria
+            End If
+            Set m_ARAuditoria = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARsDeACAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getARAuditoria( _
+                                    Optional p_IDAR As String, _
+                                     Optional p_Db As DAO.Database, _
+                                    Optional ByRef p_Error As String _
+                                    ) As ARAuditoria
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+        
+    
+    On Error GoTo errores
+    If p_IDAR = "" Then
+        Exit Function
+    End If
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * FROM " & _
+            "TbNCAuditoriaAccionesRealizadas " & _
+            "WHERE IDAccionRealizada=" & p_IDAR & ";"
+   
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+       Set getARAuditoria = New ARAuditoria
+        For Each m_Campo In getARAuditoria.ColCampos
+            getARAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        Next
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getARAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function getAuditoriasNombres( _
+                                    p_col As Scripting.Dictionary, _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    
+    Dim m_ID As Variant
+    Dim m_Auditoria As Auditoria
+    Dim m_Nombre As String
+    
+    On Error GoTo errores
+   
+    If p_col Is Nothing Then
+        Exit Function
+    End If
+    For Each m_ID In p_col
+        Set m_Auditoria = p_col(m_ID)
+        m_Nombre = m_Auditoria.NombreAuditoria
+        p_Error = m_Auditoria.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_Nombre <> "" Then
+            If getAuditoriasNombres Is Nothing Then
+                Set getAuditoriasNombres = New Scripting.Dictionary
+                getAuditoriasNombres.CompareMode = TextCompare
+            End If
+            If Not getAuditoriasNombres.Exists(m_Nombre) Then
+                getAuditoriasNombres.Add m_Nombre, m_Nombre
+            End If
+        End If
+        
+        Set m_Auditoria = Nothing
+    Next
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getAuditoriasNombres ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getNCsAuditoria( _
+                                p_ID As String, _
+                                Optional p_Db As DAO.Database, _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncAuditoria
+  
+    On Error GoTo errores
+    
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "SELECT *  " & _
+            "FROM TbNoConformidadesAuditoria " & _
+            "WHERE IDAuditoria=" & p_ID & ";"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsAuditoria Is Nothing Then
+                Set getNCsAuditoria = New Scripting.Dictionary
+                getNCsAuditoria.CompareMode = TextCompare
+            End If
+            If Not getNCsAuditoria.Exists(CStr(m_NC.id)) Then
+                getNCsAuditoria.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsAuditoria ha devuelto el error: " & Err.Description
+    End If
+End Function
+Public Function getNCsAuditoriasTotales( _
+                                        Optional p_Db As DAO.Database, _
+                                        Optional ByRef p_Error As String _
+                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidadesAuditoria " & _
+            "ORDER BY Tipo,Numero;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+               ' Debug.Print m_Campo
+               'If CStr(m_Campo) = "ResultadoControlEficacia" Then Stop
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsAuditoriasTotales Is Nothing Then
+                Set getNCsAuditoriasTotales = New Scripting.Dictionary
+                getNCsAuditoriasTotales.CompareMode = TextCompare
+            End If
+            If Not getNCsAuditoriasTotales.Exists(CStr(m_NC.id)) Then
+                getNCsAuditoriasTotales.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsAuditoriasTotales ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getNCsAuditoriaPorPalabraClave( _
+                                                p_PC As String, _
+                                                Optional p_Db As DAO.Database, _
+                                                Optional ByRef p_Error As String _
+                                                ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NC As ncAuditoria
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT TbNoConformidadesAuditoria.* " & _
+            "FROM (TbNoConformidadesAuditoria LEFT JOIN TbNCAuditoriaAccionCorrectivas " & _
+            "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
+            "LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
+            "ON TbNCAuditoriaAccionCorrectivas.IDAccionCorrectiva = TbNCAuditoriaAccionesRealizadas.IDAccionCorrectiva " & _
+            "WHERE (((TbNoConformidadesAuditoria.DESCRIPCION) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNoConformidadesAuditoria.CAUSARAIZ) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNCAuditoriaAccionCorrectivas.AccionCorrectiva) Like '*" & p_PC & "*')) " & _
+            "OR (((TbNCAuditoriaAccionesRealizadas.AccionRealizada) Like '*" & p_PC & "*')) " & _
+            "ORDER BY TbNoConformidadesAuditoria.Tipo,TbNoConformidadesAuditoria.Numero;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            Set m_NC = New ncAuditoria
+            For Each m_Campo In m_NC.ColCampos
+                m_NC.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCsAuditoriaPorPalabraClave Is Nothing Then
+                Set getNCsAuditoriaPorPalabraClave = New Scripting.Dictionary
+                getNCsAuditoriaPorPalabraClave.CompareMode = TextCompare
+            End If
+            If Not getNCsAuditoriaPorPalabraClave.Exists(CStr(m_NC.id)) Then
+                getNCsAuditoriaPorPalabraClave.Add CStr(m_NC.id), m_NC
+            End If
+            Set m_NC = Nothing
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCsAuditoriaPorPalabraClave ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+Public Function getResponsablesImplantacionDistintos( _
+                                                        Optional p_Db As DAO.Database, _
+                                                        Optional ByRef p_Error As String _
+                                                        ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_RESPONSABLEIMPLANTACION As String
+   
+   
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+    m_SQL = "SELECT distinct RESPONSABLEIMPLANTACION " & _
+            "FROM TbNoConformidadesAuditoria " & _
+            "WHERE Not RESPONSABLEIMPLANTACION Is Null;"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            m_RESPONSABLEIMPLANTACION = .Fields("RESPONSABLEIMPLANTACION").Value
+            If getResponsablesImplantacionDistintos Is Nothing Then
+                Set getResponsablesImplantacionDistintos = New Scripting.Dictionary
+                getResponsablesImplantacionDistintos.CompareMode = TextCompare
+            End If
+            If Not getResponsablesImplantacionDistintos.Exists(m_RESPONSABLEIMPLANTACION) Then
+                getResponsablesImplantacionDistintos.Add m_RESPONSABLEIMPLANTACION, m_RESPONSABLEIMPLANTACION
+            End If
+            
+            .MoveNext
+        Loop
+       
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+    
+    Exit Function
+    
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getResponsablesImplantacionDistintos ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+
+
+Public Function getColPuntosNormaAuditoria( _
+                                            Optional p_Db As DAO.Database, _
+                                            Optional ByRef p_Error As String _
+                                            ) As Scripting.Dictionary
+
+    
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Punto As String
+    
+    
+    On Error GoTo errores
+    If p_Db Is Nothing Then
+        Set p_Db = getdb()
+    End If
+     m_SQL = "TbAuxPuntoNorma"
+    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    With rcdDatos
+        If .EOF Then
+            rcdDatos.Close
+            Set rcdDatos = Nothing
+            Exit Function
+        End If
+        .MoveFirst
+        Do While Not .EOF
+            m_Punto = .Fields("PuntoNorma")
+            If getColPuntosNormaAuditoria Is Nothing Then
+                Set getColPuntosNormaAuditoria = New Scripting.Dictionary
+                getColPuntosNormaAuditoria.CompareMode = TextCompare
+            End If
+            If Not getColPuntosNormaAuditoria.Exists(CStr(m_Punto)) Then
+                getColPuntosNormaAuditoria.Add CStr(m_Punto), m_Punto
+            End If
+            
+            .MoveNext
+        Loop
+       
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
@@ -5785,57 +5979,62 @@ Public Function getExpedientesConResponsableSeguridad( _
     
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método getExpedientesConResponsableSeguridad ha devuelto el error: " & Err.Description
+        p_Error = "El método getColPuntosNormaAuditoria ha devuelto el error: " & Err.Description
     End If
-End Function
-Public Function getSuministradoresFiltrados( _
-    Optional p_Texto As String, _
-    Optional p_SoloPropias As Boolean, _
-    Optional ByRef p_Error As String) As Scripting.Dictionary
-    
-    Dim rs As DAO.Recordset
-    Dim m_SQL As String
-    Dim sSum As Suministrador
-    Dim dict As New Scripting.Dictionary
-    
-    On Error GoTo errores
-    
-    m_SQL = "SELECT * FROM TbSuministradores WHERE 1=1 "
-    
-    ' Filtro de texto (Nombre, CIF o Nemotécnico)
-    If p_Texto <> "" Then
-        m_SQL = m_SQL & " AND (Nombre LIKE '*" & p_Texto & "*' OR CIF LIKE '*" & p_Texto & "*' OR Nemotecnico LIKE '*" & p_Texto & "*')"
-    End If
-    
-    ' Filtro de Consorcio
-    If p_SoloPropias Then
-        m_SQL = m_SQL & " AND (ConsorcioPropio = 'Sí')"
-    End If
-    
-    m_SQL = m_SQL & " ORDER BY Nombre;"
-    
-    Set rs = getdb().OpenRecordset(m_SQL, dbOpenSnapshot)
-    
-    If Not rs.EOF Then
-        Do While Not rs.EOF
-            Set sSum = New Suministrador
-            ' Hidratación rápida manual para no sobrecargar el constructor genérico en bucles grandes
-            sSum.IDSuministrador = Nz(rs!IDSuministrador, "")
-            sSum.Nombre = Nz(rs!Nombre, "")
-            sSum.Nemotecnico = Nz(rs!Nemotecnico, "")
-            sSum.CIF = Nz(rs!CIF, "")
-            ' ... resto de campos si los necesitas para visualizar ...
-            
-            dict.Add CStr(sSum.IDSuministrador), sSum
-            rs.MoveNext
-        Loop
-    End If
-    
-    rs.Close
-    Set getSuministradoresFiltrados = dict
-    Exit Function
-errores:
-    p_Error = Err.Description
 End Function
 
+Public Function getNCAuditorias( _
+                                    Optional ByRef p_Error As String _
+                                    ) As Scripting.Dictionary
+
+    Dim rcdDatos As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_Campo As Variant
+    Dim m_NCAuditoria As ncAuditoria
+
+
+    On Error GoTo errores
+    
+    m_SQL = "SELECT * " & _
+            "FROM TbNoConformidadesAuditoria ;"
+    Set rcdDatos = getdb().OpenRecordset(m_SQL)
+     With rcdDatos
+         If .EOF Then
+             rcdDatos.Close
+             Set rcdDatos = Nothing
+             Exit Function
+         End If
+         .MoveFirst
+         Do While Not .EOF
+            Set m_NCAuditoria = New ncAuditoria
+            For Each m_Campo In m_NCAuditoria.ColCampos
+               m_NCAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
+                If p_Error <> "" Then
+                    Err.Raise 1000
+                End If
+            Next
+            If getNCAuditorias Is Nothing Then
+                Set getNCAuditorias = New Scripting.Dictionary
+                getNCAuditorias.CompareMode = TextCompare
+            End If
+            If Not getNCAuditorias.Exists(CStr(m_NCAuditoria.id)) Then
+                getNCAuditorias.Add m_NCAuditoria.id, m_NCAuditoria
+            End If
+            Set m_NCAuditoria = Nothing
+            .MoveNext
+         Loop
+         
+    End With
+    rcdDatos.Close
+    Set rcdDatos = Nothing
+
+
+
+    Exit Function
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método getNCAuditorias ha devuelto el error: " & Err.Description
+    End If
+End Function
 

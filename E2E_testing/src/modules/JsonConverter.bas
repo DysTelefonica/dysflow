@@ -363,9 +363,9 @@ Public Function ConvertToJson(ByVal JsonValue As Variant, Optional ByVal Whitesp
         End If
 
         ' Dictionary
-        If VBA.TypeName(JsonValue) = "Dictionary" Then
+        If VBA.typeName(JsonValue) = "Dictionary" Then
             json_BufferAppend json_Buffer, "{", json_BufferPosition, json_BufferLength
-            For Each json_Key In JsonValue.keys
+            For Each json_Key In JsonValue.Keys
                 ' For Objects, undefined (Empty/Nothing) is not added to object
                 json_Converted = ConvertToJson(JsonValue(json_Key), Whitespace, json_CurrentIndentation + 1)
                 If json_Converted = "" Then
@@ -404,7 +404,7 @@ Public Function ConvertToJson(ByVal JsonValue As Variant, Optional ByVal Whitesp
             json_BufferAppend json_Buffer, json_Indentation & "}", json_BufferPosition, json_BufferLength
 
         ' Collection
-        ElseIf VBA.TypeName(JsonValue) = "Collection" Then
+        ElseIf VBA.typeName(JsonValue) = "Collection" Then
             json_BufferAppend json_Buffer, "[", json_BufferPosition, json_BufferLength
             For Each json_Value In JsonValue
                 If json_IsFirstItem Then
@@ -670,7 +670,7 @@ Private Function json_IsUndefined(ByVal json_Value As Variant) As Boolean
     Case VBA.vbEmpty
         json_IsUndefined = True
     Case VBA.vbObject
-        Select Case VBA.TypeName(json_Value)
+        Select Case VBA.typeName(json_Value)
         Case "Empty", "Nothing"
             json_IsUndefined = True
         End Select
@@ -1189,16 +1189,13 @@ Public Function TextoParsedoParaJSON(p_Texto As String, Optional ByRef p_Error A
     Dim m_Cadena As String
     Dim i As Long
     Dim m_Longitud As Long
-    
-    p_Texto = Replace(p_Texto, vbNewLine, " ")
-    p_Texto = Replace(p_Texto, "\", "/")
     If ColCaracteresAEscapar Is Nothing Then
         RellenarColCaracteresAEscapar
     End If
     m_Longitud = Len(p_Texto)
     For i = 1 To m_Longitud
         m_Letra = Mid(p_Texto, i, 1)
-        If ColCaracteresAEscapar.exists(m_Letra) Then
+        If ColCaracteresAEscapar.Exists(m_Letra) Then
             m_Letra = ColCaracteresAEscapar(m_Letra)
         End If
         m_Cadena = m_Cadena & m_Letra
@@ -1208,7 +1205,6 @@ End Function
 Public Function TextoParsedoParaTxt(p_Texto As String, Optional ByRef p_Error As String) As String
     Dim m_CaracteresEscapados As Variant
     Dim m_CaracteresASustituir As String
-    
     If ColCaracteresEscapados Is Nothing Then
         RellenarColCaracteresEscapados
     End If
@@ -1237,7 +1233,7 @@ Public Function getJSonDeTabla( _
     Dim m_SQL As String
     Dim fld As DAO.Field
     Dim m_CampoParseado As String
-    Dim m_valorParseado As String
+    Dim m_ValorParseado As String
     Dim m_JSON As String
     Dim items As New Scripting.Dictionary
     Dim item As New Collection
@@ -1297,8 +1293,8 @@ Public Function getJSonDeTabla( _
         Set items = New Scripting.Dictionary
         For Each fld In rcdDatos.Fields
             m_CampoParseado = TextoParsedoParaJSON(CStr(fld.Name))
-            m_valorParseado = TextoParsedoParaJSON(Nz(rcdDatos.Fields(fld.Name), ""))
-            items(m_CampoParseado) = m_valorParseado
+            m_ValorParseado = TextoParsedoParaJSON(Nz(rcdDatos.Fields(fld.Name), ""))
+            items(m_CampoParseado) = m_ValorParseado
         Next
         item.Add items
         
@@ -1327,7 +1323,7 @@ Public Function getJSonDeSQL( _
     Dim rcdDatos As DAO.Recordset
     Dim fld As DAO.Field
     Dim m_CampoParseado As String
-    Dim m_valorParseado As String
+    Dim m_ValorParseado As String
     Dim m_JSON As String
     Dim items As New Scripting.Dictionary
     Dim item As New Collection
@@ -1346,8 +1342,8 @@ Public Function getJSonDeSQL( _
         Set items = New Scripting.Dictionary
         For Each fld In rcdDatos.Fields
             m_CampoParseado = TextoParsedoParaJSON(CStr(fld.Name))
-            m_valorParseado = TextoParsedoParaJSON(Nz(rcdDatos.Fields(fld.Name), ""))
-            items(m_CampoParseado) = m_valorParseado
+            m_ValorParseado = TextoParsedoParaJSON(Nz(rcdDatos.Fields(fld.Name), ""))
+            items(m_CampoParseado) = m_ValorParseado
         Next
         item.Add items
         
@@ -1375,7 +1371,7 @@ Public Function GenerarTextoJSON( _
     Dim m_Campo As Variant
     Dim m_CampoParseado As String
     Dim m_Valor As String
-    Dim m_valorParseado As String
+    Dim m_ValorParseado As String
     Dim item As New Scripting.Dictionary
     Dim m_JSON As String
     
@@ -1384,8 +1380,8 @@ Public Function GenerarTextoJSON( _
         For Each m_Campo In .ColCampos
             m_CampoParseado = TextoParsedoParaJSON(CStr(m_Campo))
             m_Valor = .getPropiedad(m_Campo)
-            m_valorParseado = TextoParsedoParaJSON(m_Valor)
-            item(m_CampoParseado) = m_valorParseado
+            m_ValorParseado = TextoParsedoParaJSON(m_Valor)
+            item(m_CampoParseado) = m_ValorParseado
         Next
     End With
     
@@ -1394,57 +1390,11 @@ Public Function GenerarTextoJSON( _
     Exit Function
 errores:
     If Err.Number <> 1000 Then
-        p_Error = "El método GenerarTextoJSON ha devuelto" & vbNewLine & Err.Description
+        p_Error = "El método GenerarTextoJSONProyecto ha devuelto" & vbNewLine & Err.Description
     End If
     Debug.Print p_Error
 End Function
 
 
-Public Function SubItem( _
-                            p_Objeto As Object, _
-                            Optional ByRef p_Error As String _
-                            ) As Scripting.Dictionary
-    
-    Dim m_Campo As Variant
-    Dim m_CampoParseado As String
-    Dim m_Valor As String
-    Dim m_valorParseado As String
-    Dim item As New Scripting.Dictionary
-    
-    
-    On Error GoTo errores
-    If p_Objeto Is Nothing Then
-        Exit Function
-    End If
-    With p_Objeto
-        For Each m_Campo In .ColCampos
-            
-            m_CampoParseado = TextoParsedoParaJSON(CStr(m_Campo), p_Error)
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
-            m_Valor = .getPropiedad(m_Campo, p_Error)
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
-            If m_Valor <> "" Then
-                m_valorParseado = TextoParsedoParaJSON(m_Valor)
-            Else
-                m_valorParseado = m_Valor
-            End If
-            
-            item(m_CampoParseado) = m_valorParseado
-            If Err.Number <> 0 Then Err.Raise 1000
-        Next
-    End With
-    
-    
-    Set SubItem = item
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método SubItem ha devuelto" & vbNewLine & Err.Description
-    End If
-    Debug.Print p_Error
-End Function
+
 

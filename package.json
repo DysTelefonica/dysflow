@@ -1,6 +1,6 @@
 {
   "name": "dysflow",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "description": "Dysflow Access automation product foundation.",
   "type": "module",
   "private": true,
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:e2e:mcp": "node E2E_testing/mcp-e2e.mjs",
     "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/\"",
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/",

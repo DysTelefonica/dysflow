@@ -240,16 +240,23 @@ function commandPathForConfig(runtimeDir: string): string {
 }
 
 async function opencodeCommandForConfig(runtimeDir: string): Promise<string[]> {
+  const launcher = commandPathForConfig(runtimeDir);
+  const normalizedLauncher = launcher.replaceAll("\\", "/");
   const entrypoint = path.join(runtimeDir, "app", "dist", "cli", "index.js");
   const normalizedEntrypoint = entrypoint.replaceAll("\\", "/");
 
+  if (!(await fileExists(launcher))) {
+    throw new Error(
+      `Cannot configure OpenCode MCP: runtime launcher not found at ${normalizedLauncher}.`,
+    );
+  }
   if (!(await fileExists(entrypoint))) {
     throw new Error(
       `Cannot configure OpenCode MCP: runtime entrypoint not found at ${normalizedEntrypoint}.`,
     );
   }
 
-  return ["node", normalizedEntrypoint, "mcp"];
+  return [normalizedLauncher, "mcp"];
 }
 
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {

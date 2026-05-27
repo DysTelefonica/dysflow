@@ -122,7 +122,10 @@ type DirectMapping = {
 
 const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
-  export_all: mapping("Export"),
+  export_all: mapping("Export", false, (input) => {
+    const filter = stringValue(input.filter);
+    return filter === undefined ? [] : [filter];
+  }),
   import_modules: mapping(
     "Import",
     false,
@@ -148,7 +151,11 @@ const DIRECT_MAPPINGS: Record<string, DirectMapping> = {
     (input) => stringArray(input.moduleNames),
     (input) => ({ location: stringValue(input.location) }),
   ),
-  delete_module: mapping("Delete", true, (input) => stringArray(input.moduleNames)),
+  delete_module: mapping("Delete", true, (input) => {
+    const moduleNames = stringArray(input.moduleNames);
+    const moduleName = stringValue(input.moduleName);
+    return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
+  }),
   generate_erd: mapping(
     "Generate-ERD",
     false,

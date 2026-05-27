@@ -35,15 +35,13 @@ const readJson = async (path: string): Promise<Record<string, unknown>> => {
 };
 
 const expectedOpenCodeCommand = (runtimeDir: string): string[] => [
-  "node",
-  join(runtimeDir, "app", "dist", "cli", "index.js").replaceAll("\\", "/"),
+  join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/"),
   "mcp",
 ];
 
-const expectNoDirectCmdLauncher = (command: unknown): void => {
+const expectRuntimeLauncherCommand = (command: unknown): void => {
   expect(command).toEqual(expect.any(Array));
-  expect((command as string[]).join(" ").toLowerCase()).not.toContain("dysflow.cmd");
-  expect((command as string[])[0].toLowerCase()).not.toMatch(/\.cmd$/);
+  expect((command as string[])[0].toLowerCase()).toMatch(/dysflow\.cmd$/);
 };
 
 const getLocalDysflowVersion = async (): Promise<string> => {
@@ -324,7 +322,7 @@ describe("Dysflow MCP config state", () => {
       const updatedOpenCodeDysflow = (updatedOpenCode.mcp as Record<string, unknown>)
         .dysflow as Record<string, unknown>;
       expect(updatedOpenCodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
-      expectNoDirectCmdLauncher(updatedOpenCodeDysflow.command);
+      expectRuntimeLauncherCommand(updatedOpenCodeDysflow.command);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -449,7 +447,7 @@ describe("handleInstallCommand end-to-end", () => {
     expect(opencodeDysflow.enabled).toBe(true);
     expect(opencodeDysflow.type).toBe("local");
     expect(opencodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
-    expectNoDirectCmdLauncher(opencodeDysflow.command);
+    expectRuntimeLauncherCommand(opencodeDysflow.command);
     expect(opencodeDysflow).not.toHaveProperty("args");
 
     const claude = await readJson(claudeSettings);
