@@ -9,9 +9,22 @@ vi.mock("node:readline/promises", () => ({
   createInterface: (...args: unknown[]) => mockCreateInterface(...args),
 }));
 
+const execFileMock = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", () => ({
+  execFile: execFileMock,
+}));
+
+execFileMock.mockImplementation((_file, _args, options, callback) => {
+  const cb = typeof options === "function" ? options : callback;
+  if (cb) {
+    queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
+  }
+});
+
 import {
   applyIntegrationSelection,
   createGitHubReleaseRequestHeaders,
+  createGitHubReleaseUpdateProvider,
   formatAgentsLine,
   handleInstallCommand,
   handleUpdateCommand,
@@ -122,6 +135,7 @@ describe("install arg parsing", () => {
       options: {
         runtimeDir: "C:/tmp/runtime",
         force: true,
+        skipChecksum: false,
       },
     });
   });
@@ -1236,6 +1250,119 @@ describe("handleInstallCommand interactive agent selection", () => {
         writable: true,
       });
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("update arg parsing with skip-checksum", () => {
+  it("parses --skip-checksum flag correctly", () => {
+    expect(parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--skip-checksum"])).toEqual({
+      ok: true,
+      options: {
+        runtimeDir: "C:/tmp/runtime",
+        force: false,
+        skipChecksum: true,
+      },
+    });
+  });
+});
+
+describe("checksum verification during update", () => {
+  it("passes --skip-checksum down to provider.preparePackage", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-skip-checksum-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+    const installedPackageJson = join(appDir, "package.json");
+    const releasePackageRoot = await createPackageRoot(root, "9.9.9", "RELEASE_RUNTIME");
+    await mkdir(appDir, { recursive: true });
+    await writeFile(
+      installedPackageJson,
+      JSON.stringify({ name: "dysflow", version: "1.0.0", type: "module" }, null, 2),
+      "utf8",
+    );
+
+    const preparePackageSpy = vi.fn().mockResolvedValue({
+      packageRoot: releasePackageRoot,
+      commitSha: "0123456789abcdef0123456789abcdef01234567",
+    });
+
+    const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--skip-checksum"], {
+      releaseUpdateProvider: {
+        resolveLatestRelease: async () => ({ version: "9.9.9" }),
+        preparePackage: preparePackageSpy,
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(preparePackageSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ skipChecksum: true }),
+    );
+
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("verifies downloaded release package using SHA-256 hash checksums file", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+
+    try {
+      // Fake release archive file bytes
+      const archiveBytes = Buffer.from("FAKE_TAR_GZ_BINARY_CONTENT");
+      const expectedHash = "007278306256488645a7921e99fbd3e7075e499d4d157b121a88f75965ca4200"; // sha256 of "FAKE_TAR_GZ_BINARY_CONTENT"
+
+      // Mock fetch responses for preparePackage:
+      // 1st request: Archive download
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+      });
+      // 2nd request: Checksums download
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${expectedHash}  dysflow-v1.2.3.tar.gz\n`,
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      const prep = await provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" });
+
+      expect(prep.packageRoot).toBeDefined();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      await prep.cleanup?.();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws error when downloaded release package checksum does not match", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+
+    try {
+      // Fake release archive file bytes
+      const archiveBytes = Buffer.from("FAKE_TAR_GZ_BINARY_CONTENT");
+      const badHash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+      // Mock fetch responses:
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${badHash}  dysflow-v1.2.3.tar.gz\n`,
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("Checksum mismatch");
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   });
 });

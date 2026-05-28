@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { accessSync, constants } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -50,7 +51,10 @@ export type PreparedReleasePackage = {
 
 export type ReleaseUpdateProvider = {
   resolveLatestRelease(): Promise<ReleaseInfo>;
-  preparePackage(release: ReleaseInfo): Promise<PreparedReleasePackage>;
+  preparePackage(
+    release: ReleaseInfo,
+    options?: { skipChecksum?: boolean; env?: NodeJS.ProcessEnv },
+  ): Promise<PreparedReleasePackage>;
 };
 
 type InstallOptions = {
@@ -62,6 +66,7 @@ type InstallOptions = {
 type UpdateOptions = {
   runtimeDir?: string;
   force: boolean;
+  skipChecksum: boolean;
 };
 
 type RuntimePaths = {
@@ -160,6 +165,7 @@ export function parseUpdateArgs(
   const options: UpdateOptions = {
     runtimeDir: undefined,
     force: false,
+    skipChecksum: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -177,6 +183,11 @@ export function parseUpdateArgs(
 
     if (arg === "--force") {
       options.force = true;
+      continue;
+    }
+
+    if (arg === "--skip-checksum") {
+      options.skipChecksum = true;
       continue;
     }
 
@@ -565,7 +576,7 @@ async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> 
   }
 }
 
-function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
+export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
   return {
     async resolveLatestRelease(): Promise<ReleaseInfo> {
       const response = await fetch(GITHUB_LATEST_RELEASE_API, {
@@ -591,7 +602,10 @@ function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
       };
     },
 
-    async preparePackage(release: ReleaseInfo): Promise<PreparedReleasePackage> {
+    async preparePackage(
+      release: ReleaseInfo,
+      options?: { skipChecksum?: boolean; env?: NodeJS.ProcessEnv },
+    ): Promise<PreparedReleasePackage> {
       const tagName = validateReleaseTagName(release.tagName ?? `v${release.version}`);
       const tempRoot = await mkdtemp(path.join(tmpdir(), "dysflow-update-"));
       const packageRoot = path.join(tempRoot, "source");
@@ -599,19 +613,93 @@ function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         await rm(tempRoot, { recursive: true, force: true });
       };
 
+      const environment = options?.env ?? process.env;
+
       try {
-        await runCommand(
-          "git",
-          ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
-          tempRoot,
-        );
+        const archiveName = `dysflow-${tagName}.tar.gz`;
+        const archiveUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/${archiveName}`;
+        const checksumsUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/SHA256SUMS`;
+
+        // 1. Download archive
+        const archiveResponse = await fetch(archiveUrl, {
+          headers: createGitHubReleaseRequestHeaders(environment),
+        });
+        if (!archiveResponse.ok) {
+          throw new Error(
+            `Failed to download release archive from ${archiveUrl}: HTTP ${archiveResponse.status}`,
+          );
+        }
+        const archiveBuffer = Buffer.from(await archiveResponse.arrayBuffer());
+
+        // 2. Verification
+        if (!options?.skipChecksum) {
+          const checksumsResponse = await fetch(checksumsUrl, {
+            headers: createGitHubReleaseRequestHeaders(environment),
+          });
+          if (!checksumsResponse.ok) {
+            throw new Error(
+              `Failed to download checksums file from ${checksumsUrl}: HTTP ${checksumsResponse.status}. ` +
+                "Use --skip-checksum if you want to bypass verification.",
+            );
+          }
+          const checksumsText = await checksumsResponse.text();
+          const lines = checksumsText.split(/\r?\n/);
+          let expectedHash: string | undefined;
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2 && parts[1].replace(/^\*/, "") === archiveName) {
+              expectedHash = parts[0];
+              break;
+            }
+          }
+
+          if (expectedHash === undefined) {
+            throw new Error(`Expected hash for ${archiveName} not found in SHA256SUMS.`);
+          }
+
+          const actualHash = createHash("sha256").update(archiveBuffer).digest("hex");
+          if (actualHash !== expectedHash) {
+            throw new Error(
+              `Checksum mismatch for downloaded artifact.\n` +
+                `Expected: ${expectedHash}\n` +
+                `Got:      ${actualHash}`,
+            );
+          }
+        }
+
+        // 3. Write archive to temp folder
+        const archivePath = path.join(tempRoot, archiveName);
+        await writeFile(archivePath, archiveBuffer);
+
+        // 4. Extract archive
+        await mkdir(packageRoot, { recursive: true });
+        await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot);
+
         const commitSha = await tryResolveGitCommitSha(packageRoot);
-        await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
-        await runCommand("pnpm", ["build"], packageRoot);
         return { packageRoot, commitSha, cleanup };
       } catch (error) {
-        await cleanup();
-        throw error;
+        // Fallback to git clone if archive was not found
+        if (error instanceof Error && error.message.includes("Checksum mismatch")) {
+          await cleanup();
+          throw error;
+        }
+
+        try {
+          await runCommand(
+            "git",
+            ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
+            tempRoot,
+          );
+          const commitSha = await tryResolveGitCommitSha(packageRoot);
+          await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
+          await runCommand("pnpm", ["build"], packageRoot);
+          return { packageRoot, commitSha, cleanup };
+        } catch (cloneError) {
+          await cleanup();
+          throw new Error(
+            `Failed to prepare package: Archive error: ${error instanceof Error ? error.message : String(error)}. Clone error: ${cloneError instanceof Error ? cloneError.message : String(cloneError)}`,
+          );
+        }
       }
     },
   };
@@ -812,7 +900,10 @@ export async function handleUpdateCommand(
   const previousVersion = installedVersion ?? "not installed";
   let preparedPackage: PreparedReleasePackage | undefined;
   try {
-    preparedPackage = await provider.preparePackage(latestRelease);
+    preparedPackage = await provider.preparePackage(latestRelease, {
+      skipChecksum: parsed.options.skipChecksum,
+      env,
+    });
     const releaseRuntimePaths = resolveRuntimePaths(runtimeDir, preparedPackage.packageRoot);
     await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
     const previousVersionStr =
