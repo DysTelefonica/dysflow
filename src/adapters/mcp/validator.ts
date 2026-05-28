@@ -39,6 +39,16 @@ function validateJsonSchemaProperty(
       return `${path} must be one of: ${property.enum.join(", ")}.`;
   }
 
+  if (property.minLength !== undefined && typeof value === "string") {
+    if (value.trim().length < property.minLength)
+      return `${path} must be at least ${property.minLength} non-whitespace character${property.minLength === 1 ? "" : "s"}.`;
+  }
+
+  if (property.pattern !== undefined && typeof value === "string") {
+    if (!new RegExp(property.pattern).test(value))
+      return `${path} does not match the required pattern.`;
+  }
+
   if (property.type === "array" && property.items !== undefined && Array.isArray(value)) {
     for (const [index, item] of value.entries()) {
       const validation = validateJsonSchemaProperty(item, property.items, `${path}[${index}]`);

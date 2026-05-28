@@ -4,6 +4,8 @@ export type JsonSchemaProperty = {
   type?: JsonSchemaPrimitiveType;
   description?: string;
   enum?: readonly string[];
+  minLength?: number;
+  pattern?: string;
   items?: JsonSchemaProperty;
   additionalProperties?: boolean;
   properties?: Record<string, JsonSchemaProperty>;
@@ -39,7 +41,7 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
         "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
     },
     moduleName: { type: "string", description: "Optional VBA module name." },
-    procedureName: { type: "string", description: "Public VBA procedure to execute." },
+    procedureName: { type: "string", minLength: 1, description: "Public VBA procedure to execute." },
     arguments: { type: "array", items: {}, description: "Procedure arguments." },
   },
 };
@@ -59,7 +61,7 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
       description:
         "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
     },
-    sql: { type: "string", description: "Access SQL to execute." },
+    sql: { type: "string", minLength: 1, description: "Access SQL to execute." },
     backendPath: {
       type: "string",
       description: "Optional override for Access backend database path.",
@@ -172,8 +174,8 @@ export const SCHEMA_PROPS = {
   definition: { type: "string", description: "Table definition or fields." } as JsonSchemaProperty,
   fields: { type: "string", description: "Table definition alias." } as JsonSchemaProperty,
   // query / SQL
-  sql: { type: "string", description: "SQL text." } as JsonSchemaProperty,
-  query: { type: "string", description: "SQL query alias." } as JsonSchemaProperty,
+  sql: { type: "string", minLength: 1, description: "SQL text." } as JsonSchemaProperty,
+  query: { type: "string", minLength: 1, description: "SQL query alias." } as JsonSchemaProperty,
   queryDefinitions: {
     type: "array",
     items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } },

@@ -338,6 +338,40 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
+  it("rejects empty-string procedureName before reaching the runner (minLength guard)", async () => {
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    const tools = createDysflowMcpTools({
+      vbaService: vba,
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "" }),
+    ).resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining("procedureName") }] });
+    await expect(
+      tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "   " }),
+    ).resolves.toMatchObject({ isError: true });
+    expect(vba.requests).toHaveLength(0);
+  });
+
+  it("rejects empty-string sql before reaching the runner (minLength guard)", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools.find((t) => t.name === "dysflow_query_execute")?.handler({ sql: "", mode: "read" }),
+    ).resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining("sql") }] });
+    await expect(
+      tools.find((t) => t.name === "query_sql")?.handler({ sql: "" }),
+    ).resolves.toMatchObject({ isError: true });
+    expect(query.requests).toHaveLength(0);
+  });
+
   it("rejects invalid nested MCP inputs before calling core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
