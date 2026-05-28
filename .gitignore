@@ -31,5 +31,9 @@ E2E_testing/forms/*.form.json
 .antigravitycli/
 .dysflow/project.json
 E2E_testing/.mcp.json
+E2E_testing/.dysflow/mcp-e2e-temp/
 testResults.xml
+vitest-results*.txt
+/ARCHIVE_SUMMARY_*.md
+/AUDIT_*.md
 forms/
