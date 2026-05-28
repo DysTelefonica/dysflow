@@ -1,7 +1,7 @@
 Version =21
 VersionRequired =20
 PublishOption =1
-Checksum =-130793391
+Checksum =1336952635
 Begin Form
     AutoResize = NotDefault
     RecordSelectors = NotDefault
@@ -22,10 +22,10 @@ Begin Form
     Width =13039
     DatasheetFontHeight =11
     ItemSuffix =89
-    Left =1890
-    Top =1530
-    Right =14925
-    Bottom =8325
+    Left =-480
+    Top =600
+    Right =12555
+    Bottom =7395
     DatasheetGridlinesColor =14806254
     RecSrcDt = Begin
         0x7bf11d65d99ee540
@@ -44,13 +44,13 @@ Begin Form
         0x010000006801000000000000a10700000100000001000000
     End
     PrtDevMode = Begin
-        0x000000000000000000000000000000000000000000000000100917aaa3020000 ,
-        0x010403069c0050140f930100010009009a0b3408640001000700580201000200 ,
-        0x58020300000041340030bdb4a30200000004000000000000f6a9bc55f77f0000 ,
-        0x02000000a3020000000000000000000000000000010000000000000001000000 ,
+        0x00200ef30a000000e38dd514f97f000060200ef30a000000c053eca2f2010000 ,
+        0x010403069c0058140f930100010009009a0b3408640001000700580201000200 ,
+        0x580203000000413400f1eca0f2010000000000000000000000000000f87f0000 ,
+        0xf01e0ef30a000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
-        0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
-        0x0000000000000000050000000000050001000000000000000000000000000000 ,
+        0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
+        0x00000000000000000500000000002f0001000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -67,21 +67,21 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000100000000000000000000000000000000000000 ,
-        0x000000000000000000000000000000000000000000000000c8000000534d544a ,
-        0x000000001000b8007b00300038003400460030003100460041002d0045003600 ,
+        0x000000000000000000000000000000000000000000000000d0000000534d544a ,
+        0x000000001000c0007b00300038003400460030003100460041002d0045003600 ,
         0x330034002d0034004400370037002d0038003300450045002d00300037003400 ,
         0x3800310037004300300033003500380031007d000000524553444c4c00556e69 ,
-        0x726573444c4c00506170657253697a65004134004f7269656e746174696f6e00 ,
-        0x504f525452414954005265736f6c7574696f6e005265734f7074696f6e310043 ,
-        0x6f6c6f724d6f646500436f6c6f72000000000000000000000000000000000000 ,
-        0x2c1100005634444d01000000000000009c0a70221c000000ec00000003000000 ,
-        0xfa014f0834e6774d83ee074817c03581d00000004c0000000300000000080000 ,
-        0x000000000000000003000000000800002a000000000800000300000040000000 ,
-        0x560000000010000044006f00630075006d0065006e0074005500730065007200 ,
-        0x500061007300730077006f0072006400000044006f00630075006d0065006e00 ,
-        0x74004f0077006e0065007200500061007300730077006f007200640000004400 ,
-        0x6f00630075006d0065006e007400430072007900700074005300650063007500 ,
-        0x7200690074007900000000000000000000000000000000000000000000000000 ,
+        0x726573444c4c00506170657253697a65004c4554544552004f7269656e746174 ,
+        0x696f6e00504f525452414954005265736f6c7574696f6e005265734f7074696f ,
+        0x6e3100436f6c6f724d6f646500436f6c6f720000000000000000000000000000 ,
+        0x00000000000000002c1100005634444d01000000000000009c0a70221c000000 ,
+        0xec00000003000000fa014f0834e6774d83ee074817c03581d00000004c000000 ,
+        0x0300000000080000000000000000000003000000000800002a00000000080000 ,
+        0x0300000040000000560000000010000044006f00630075006d0065006e007400 ,
+        0x5500730065007200500061007300730077006f0072006400000044006f006300 ,
+        0x75006d0065006e0074004f0077006e0065007200500061007300730077006f00 ,
+        0x72006400000044006f00630075006d0065006e00740043007200790070007400 ,
+        0x5300650063007500720069007400790000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -211,12 +211,12 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x000000000000000000000000
+        0x0000000000000000000000000000000000000000
     End
     PrtDevNames = Begin
-        0x08001f0036000100000000000000000000000000000000000000000000000000 ,
-        0x00000000000000000000000000000000000000000000504f525450524f4d5054 ,
-        0x3a0000000000
+        0x080022004c000100000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x000000000000000000000000545330303100000000000000000000000000
     End
     OnLoad ="[Event Procedure]"
     AllowDatasheetView =0
@@ -233,15 +233,15 @@ Begin Form
     AlternateBackThemeColorIndex =1
     AlternateBackShade =95.0
     PrtDevModeW = Begin
-        0x0000878fa3020000eacc247afe7f000010d88a5023f200000300000000000000 ,
-        0xd8000000000000000e174ff5fd7f00000000000000000000a6217caaa3020000 ,
-        0x01040306dc0050140f930100010009009a0b3408640001000700580201000200 ,
-        0x580203000000410034000000000000000a0c000000000000a0c3247afe7f0000 ,
-        0x07000000c600000000000000fd7f0000c47f39e2f800000001040301f8000000 ,
-        0xa6217caaa3020000000000000000000000000000010000000000000001000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x01040306dc0058140f930100010009009a0b3408640001000700580201000200 ,
+        0x5802030000004100340000000100000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
-        0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
-        0x0000000000000000050000000000050001000000000000000000000000000000 ,
+        0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
+        0x00000000000000000500000000002f0001000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -258,21 +258,21 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000100000000000000000000000000000000000000 ,
-        0x000000000000000000000000000000000000000000000000c8000000534d544a ,
-        0x000000001000b8007b00300038003400460030003100460041002d0045003600 ,
+        0x000000000000000000000000000000000000000000000000d0000000534d544a ,
+        0x000000001000c0007b00300038003400460030003100460041002d0045003600 ,
         0x330034002d0034004400370037002d0038003300450045002d00300037003400 ,
         0x3800310037004300300033003500380031007d000000524553444c4c00556e69 ,
-        0x726573444c4c00506170657253697a65004134004f7269656e746174696f6e00 ,
-        0x504f525452414954005265736f6c7574696f6e005265734f7074696f6e310043 ,
-        0x6f6c6f724d6f646500436f6c6f72000000000000000000000000000000000000 ,
-        0x2c1100005634444d01000000000000009c0a70221c000000ec00000003000000 ,
-        0xfa014f0834e6774d83ee074817c03581d00000004c0000000300000000080000 ,
-        0x000000000000000003000000000800002a000000000800000300000040000000 ,
-        0x560000000010000044006f00630075006d0065006e0074005500730065007200 ,
-        0x500061007300730077006f0072006400000044006f00630075006d0065006e00 ,
-        0x74004f0077006e0065007200500061007300730077006f007200640000004400 ,
-        0x6f00630075006d0065006e007400430072007900700074005300650063007500 ,
-        0x7200690074007900000000000000000000000000000000000000000000000000 ,
+        0x726573444c4c00506170657253697a65004c4554544552004f7269656e746174 ,
+        0x696f6e00504f525452414954005265736f6c7574696f6e005265734f7074696f ,
+        0x6e3100436f6c6f724d6f646500436f6c6f720000000000000000000000000000 ,
+        0x00000000000000002c1100005634444d01000000000000009c0a70221c000000 ,
+        0xec00000003000000fa014f0834e6774d83ee074817c03581d00000004c000000 ,
+        0x0300000000080000000000000000000003000000000800002a00000000080000 ,
+        0x0300000040000000560000000010000044006f00630075006d0065006e007400 ,
+        0x5500730065007200500061007300730077006f0072006400000044006f006300 ,
+        0x75006d0065006e0074004f0077006e0065007200500061007300730077006f00 ,
+        0x72006400000044006f00630075006d0065006e00740043007200790070007400 ,
+        0x5300650063007500720069007400790000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
@@ -402,14 +402,15 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x000000000000000000000000
+        0x0000000000000000000000000000000000000000
     End
     PrtDevNamesW = Begin
-        0x04001b0032000100000000000000000000000000000000000000000000000000 ,
+        0x04001e0048000100000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
-        0x0000000050004f0052005400500052004f004d00500054003a00000000000000 ,
-        0x00000000
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000000000000000000054005300300030003100000000000000 ,
+        0x0000000000000000000000000000000000000000
     End
     NoSaveCTIWhenDisabled =1
     Begin
@@ -2021,7 +2022,7 @@ Begin Form
                 Begin Label
                     OverlapFlags =85
                     TextAlign =3
-                    Left =8760
+                    Left =9555
                     Top =5745
                     Width =885
                     Height =315
@@ -2036,9 +2037,9 @@ Begin Form
                         0x877f29c9b21bce4ea7e63d603c67665f
                     End
                     GridlineColor =0
-                    LayoutCachedLeft =8760
+                    LayoutCachedLeft =9555
                     LayoutCachedTop =5745
-                    LayoutCachedWidth =9645
+                    LayoutCachedWidth =10440
                     LayoutCachedHeight =6060
                     ThemeFontIndex =-1
                     BackThemeColorIndex =-1
@@ -2053,9 +2054,9 @@ Begin Form
                     OverlapFlags =85
                     TextAlign =1
                     IMESentenceMode =3
-                    Left =9771
+                    Left =10551
                     Top =5782
-                    Width =3141
+                    Width =2361
                     Height =297
                     FontSize =10
                     TabIndex =9
@@ -2068,7 +2069,7 @@ Begin Form
                         0x5ef7014deaad454d803e6e05fc674ace
                     End
 
-                    LayoutCachedLeft =9771
+                    LayoutCachedLeft =10551
                     LayoutCachedTop =5782
                     LayoutCachedWidth =12912
                     LayoutCachedHeight =6079
@@ -2474,14 +2475,14 @@ Begin Form
                     OverlapFlags =85
                     Left =6578
                     Top =5767
-                    Width =2715
+                    Width =2085
                     Height =297
                     FontSize =9
                     FontWeight =700
                     TabIndex =27
                     ForeColor =16737792
                     Name ="ComandoVerNoRequiere"
-                    Caption ="⍾   Ver Motivos No CE"
+                    Caption ="Ver Motivos No CE"
                     OnClick ="[Event Procedure]"
                     FontName ="Segoe UI"
                     ControlTipText ="Formulario de entrada de datos de control de eficacia"
@@ -2491,7 +2492,7 @@ Begin Form
 
                     LayoutCachedLeft =6578
                     LayoutCachedTop =5767
-                    LayoutCachedWidth =9293
+                    LayoutCachedWidth =8663
                     LayoutCachedHeight =6064
                     ForeThemeColorIndex =-1
                     ForeTint =100.0
@@ -2507,6 +2508,117 @@ Begin Form
                     WebImagePaddingRight =1
                     WebImagePaddingBottom =1
                 End
+                Begin Image
+                    Visible = NotDefault
+                    SizeMode =1
+                    Left =8730
+                    Top =5674
+                    Width =391
+                    Height =390
+                    BorderColor =0
+                    Name ="ImagenMotivosNoCE"
+                    ControlTipText ="Mostrar nota de la tarea seleccionada"
+                    Picture ="SeguimientoNC_50px.png"
+                    GUID = Begin
+                        0xbafff611c5f20a4290c1b09d7b9a6317
+                    End
+                    GridlineColor =0
+                    ImageData = Begin
+                        0x89504e470d0a1a0a0000000d49484452000000320000002f0806000000a17799 ,
+                        0xf4000000097048597300000b1300000b1301009a9c180000000774494d4507e9 ,
+                        0x040b0a31343560b7fa0000000774455874417574686f7200a9aecc480000000c ,
+                        0x744558744465736372697074696f6e00130921230000000a74455874436f7079 ,
+                        0x726967687400ac0fcc3a0000000e744558744372656174696f6e2074696d6500 ,
+                        0x35f70f090000000974455874536f667477617265005d70ff3a0000000b744558 ,
+                        0x74446973636c61696d657200b7c0b48f00000008744558745761726e696e6700 ,
+                        0xc01be6870000000774455874536f7572636500f5ff83eb000000087445587443 ,
+                        0x6f6d6d656e7400f6cc96bf00000006744558745469746c6500a8eed227000008 ,
+                        0xf7494441546881ed9a7b7054d51dc73fe7dc7b7737c9262421812cc1200f417c ,
+                        0x50448da80c2a6215d45650c7c754672c55aad8715a3bb576ea18a6b69d694bb5 ,
+                        0x4ed57fa88f526b19ad055a471145b008c8cbaa29040454020979111292cdeede ,
+                        0x7bceaf7f6c44848464b3e9d8e9f89d39b33bf7dcdff7773e77ef79dc73578908 ,
+                        0xff0fd25f7603064b5f819c4c41fc9db9c6acf9a18894fd37fc7b94880c6af1ed ,
+                        0x812bc4dc292295926a7bee2f83eddf5b7107fbc2a8a0e92cfc0fa06513e4cc3e ,
+                        0x3b83d0b08894747ff795528d99e41d74106b8cefa43cf08188abfa8ef0a748c7 ,
+                        0x927b6cd7d6cb6cb26584d8142a3424a92215ef3b4366fe0da62d564a75f4e532 ,
+                        0xe8203a5cda45c24983e8bc5efd45a4c874bdf06bb7f5cff394da80d37e08c7ff ,
+                        0xcc8408b94c47964f1766df1de4cfff81eb8e7ae564799daaaaaa410110914936 ,
+                        0xd87487746e9c671b979549671b121e19112767a2f2a28152d10620d97dfaf0a0 ,
+                        0xedc937bde46f6651bf81544717263c09f22f85dcf331ba8454671baaf163b45d ,
+                        0x37543b8db71a7dca21ed966f3a5903b22ad6da69b673f1eb41ed6d22fb268b7c ,
+                        0x1816d984c81644b622b2b742e4c02c312d55b541fc9ff75b6b8b132dcf6c907d ,
+                        0x15623622a9eaf1e2b72e116b5bc48a7497404ce27d497ef21d093621b20d91b6 ,
+                        0xbb2408f6dfd05b3b543633bb89bf7d9f6e7de631d5b91c9a5a210fc81f01c91c ,
+                        0x100d6e0a54131c8a430828ae24c8b9bede695b1e334debb1f967e19dfe122a34 ,
+                        0xa1fba2fad8a019edc5f8ac7305f50bd17babd0f96152c3167e122a7be00ca0eb ,
+                        0xf8b60c182468ffc7efddb6450ba85d0361a0eceb183565b3e4566e7074e879df ,
+                        0x9104263459db9a59b46cb8ceb5ef44e4602d2a076c02022717e7ec6538d12bd2 ,
+                        0x10a689d4ce6f43fb66dc339fc7c9bffc68ae54cd1cbcfa65a8f157624a9fb8d9 ,
+                        0x098d5d7a428306723b258facff991c9c25b21a917f978b6979a4cedabadb4444 ,
+                        0xf772fb8db76d2fbe2c7baf12f33612bc85243e9c2522be181131a93a897f70b5 ,
+                        0x046f21663592aafba51c2bfff06b12acf54476c424d5f4ece29e72643cb38b74 ,
+                        0x5de8b52ef9a954bf0ac531ecf087b6a8a29f542a155b02d89e629452bb54c10d ,
+                        0x73cd88071fd243c6112441155c08b86820b97711cefe57d01608404be80bf13a ,
+                        0xf72c0267041cae473af78def2947c620c9ba3fddaf9a5e44790e41c9bc5a3d74 ,
+                        0xfe554aa9fdfd89b5a66025268236805378f4b8139d80ce1b89888b0d408ebf1c ,
+                        0x3a0a44a1139495327a98363202e91029a569cde5343643e9749cd2790f002dfd ,
+                        0x8d57a1fc7cdc288e0149341d3d1e2abf13e7c237f1bd31e9f9c71ed76ffdc348 ,
+                        0xe210b82012690482ac402287575f1031db0b11483a1737a8d0a92f6712ef3863 ,
+                        0x7626cda84eadc134af41487c5ee9956082009b047b1c48d0ba0575a41ea2e590 ,
+                        0x37724b4fde198198433553e8fa14f28b91e898d57c3ec1f54b4aa9031454ae23 ,
+                        0x1ac139b89ea0fea5636af3d123ae2735ec229c92cb8e1eb512c7ec790ccf0722 ,
+                        0xe7a387ceec7186cf08c4c74ca1ab139c62746eaca9ef881315aab8e551865d4d ,
+                        0x3869b0db7e4cd0f266778d47f8f45f9177c96a74f45c0410e922b57501eefe75 ,
+                        0xe89222fcbc995b5c77d8aaac4134aa90c08271d03ac71b088872632b93436e79 ,
+                        0x5a869f8edb7e00b3760efef68548e76ed21d248c046d040d2bf1d75c8b5bf32c ,
+                        0x5e5811c4bed5c9a8bbeeeecd37a345a332ca90020c583f880f040420149bfb70 ,
+                        0x57fdaadb73a4c60dc58f20ef5661b73f8ecd9f006e1ec4f7a3da6b7052e00c2f ,
+                        0x4046dfdec1a9df9beb29afc7fe91318818d2e345a040a4cfa5756f524a3936a5 ,
+                        0x513e98dc229c580c7db8060e6d48cf441e50540c43a762cb666f5215f7dce72a ,
+                        0xb5f1649e99812069100b58e9c7b346afd2609024d8f20bac3d77e152d9bfaa54 ,
+                        0x12f5c395095c2285479cb2afd5ea6197bfa0d5b0bff6c730b35b4b488ff11650 ,
+                        0x3a67200447654101d6281b2eacfc3e85950ddd359a5e560827536633bb90fe45 ,
+                        0x7cd0da8d669aeca88d882f29491180b64aa7444a8fa9ce18023204116bc190ee ,
+                        0xecd6b40d2461b78cb2623060cd80da7d8232ff457cc08009cc09cf0499e41511 ,
+                        0x8d0f0aa551cac9c22b6d98c9c9261907931e56b476073c6a01caf5c20a1f3ce5 ,
+                        0x60c42fc8c20bc81044356db7a404f4105441ac7ea04995527546e5d5e1808a37 ,
+                        0xe0765467330202198088487128d17626472041115e64c28e2cf25a724b771189 ,
+                        0x40571dba71c7e42cbc800c4092edd553c27e734c9260878c8d0375d9240e954e ,
+                        0xac215a0e2d0d04cd7be664e3051980d89d6fdcccc1eda8e27cdc92896b33dd09 ,
+                        0x3c2171f9d415444f439a0254c3875381d159f9f5f3bc53dcbaf76e92036d5036 ,
+                        0x1967dc8ca7b3490ae03843df8d174edaa742106adc16497dfadabdd9f8f50ba4 ,
+                        0x63c7d28743b56ba3ca53f845e77fac23635764931440299570465fb288f289c8 ,
+                        0xce3dd8eabfdf25222307ead7274822d13c23fcc1d27966ef3e187d0e32694e95 ,
+                        0x522a35d084c72a3c76f693f1d24b3e520e446a9647e3dbfef8e880cdfad8452c ,
+                        0xee78f5fe5a79d015bbb050ba363ff58e887822e20e5251499bbcdd3e7785040b ,
+                        0x10f9c3c592dab77ec140b6a84eb241d75ad0b572d1aa9c8d4f54dae6c3d8a1c3 ,
+                        0xb113af6b32bedf2e18077a1efa3fb713be78ce8979948013cab1ba79e718bd7b ,
+                        0x0d8e116ce53708a6dd776368f48c974e0838897a058937fceb9bb9cbbebb8c8d ,
+                        0xef62238021bd8de3d1338322bd2d2a40a2fb33447a7d6d482f6d8e8f13c0766f ,
+                        0xff78a02c900f9db37fb1236fc683676402d2eb323ea7a0746b72d4957bbc70f9 ,
+                        0x581b58500afb19f4171a24a03da4f55364d76674c8c33ff3226c6e21ce27efe1 ,
+                        0x36eec3960cc71d7f11c648fa51a007098242700a4a0277c4f8c59940401f7bbf ,
+                        0x2252a494aae88f51e7badf3d9ebbf447d3535e01decfb7a2732ae87ce11ebce5 ,
+                        0x4f612ebdc644e6afb84929b5bb2f1f11e9524aedca8001e8e3c14a29d50ab4f6 ,
+                        0xc7c8a6e47d95179d2e4d6d043bd6e18cbd14fbf17b384042e5d808bc0e1ce9cb ,
+                        0x47a9812dbb06edadae376eda0a62e710e9f0e1a979f855e712aede88131b4278 ,
+                        0x4ce55b4aa93e21b2d1a081442ace7ba3fdec1b1f61ea4c429e2672e420a171a7 ,
+                        0x91baf88edda199f7ce1fac3cbd29ab173d3d2979b0fa1aaadfb855e2ad6e78dc ,
+                        0x791fa933aefd2d19ec0f0f54830ef265e9abbf70fcafe93f5522970ebddbbb7b ,
+                        0x0000000049454e44ae426082
+                    End
+
+                    LayoutCachedLeft =8730
+                    LayoutCachedTop =5674
+                    LayoutCachedWidth =9121
+                    LayoutCachedHeight =6064
+                    TabIndex =28
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =-1
+                    BorderShade =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
             End
         End
     End
@@ -2519,10 +2631,14 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
+Attribute m_FormExpedientes.VB_VarHelpID = -1
 Private m_NCAsociada As NCProyecto
 Private m_RiesgoAsociado As riesgo
+Private WithEvents m_FormMotivos As Form_FormMotivosNoRequiereControlEficacia
+Attribute m_FormMotivos.VB_VarHelpID = -1
 
 Private m_Error As String
+
 
 Private Sub m_FormExpedientes_Seleccionado(m_Exp As Expediente)
     
@@ -2852,6 +2968,18 @@ Public Sub ComandoGrabar_Click()
     Set m_NCOp = New NCProyectoOperaciones
     With m_NCOp
         Set m_NCOp.nc = m_ObjNCProyectoActiva
+        ' Issue #19: Gate CE - si todas las ARs finalizadas y CE pendiente sin detalle, bloquear cierre
+        Dim m_GateCE As String
+        m_GateCE = .MotivoCierreControlEficaciaNoOK(m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_GateCE <> "" Then
+            DoCmd.Hourglass False
+            pregunta = MsgBox(m_GateCE, vbExclamation, "Control de Eficacia pendiente")
+            DoCmd.Hourglass True
+            Exit Sub
+        End If
         If Not m_NCAsociada Is Nothing Then
             .RegistrarCambiosDatosUnicosConVinculoNC Form_FormNCProyecto.m_NCAlInicio, m_Error
         Else
@@ -3213,16 +3341,20 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = False
                 Else
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = True
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
+                Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
         If m_VEHICULO = "" Then
             Me.VEHICULO = m_VEHICULO
@@ -3300,6 +3432,17 @@ errores:
 End Function
 
 
+Private Sub m_FormMotivos_MotivoRegistrado(m_Motivo As String)
+    m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
+    If m_Motivo <> "" Then
+        Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = True
+    Else
+        Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = False
+    End If
+End Sub
+
 Private Sub PalabraClave_KeyDown(KeyCode As Integer, Shift As Integer)
     
     If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.No Then
@@ -3344,8 +3487,9 @@ Private Sub RequiereControlEficacia_AfterUpdate()
         If Nz(Me.RequiereControlEficacia, "") = "Sí" Then
             Me.ComandoControlEficaciaDatos.Enabled = True
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
             ' Warn if motivos will be lost
-If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+    If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
                 pregunta = MsgBox("Ya existen motivos de No Requiere Control de Eficacia." & vbNewLine & _
                         "Al cambiar a 'Sí' se perderán. ¿Continuar?", vbExclamation + vbYesNo + vbDefaultButton2, "Cambio de Requiere Control de Eficacia")
                 If pregunta <> vbYes Then
@@ -3357,14 +3501,18 @@ If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
         ElseIf Nz(Me.RequiereControlEficacia, "") = "No" Then
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
+            
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = False
             Else
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
     End If
 End Sub
@@ -3528,7 +3676,10 @@ Public Function HaHabidoCambios(Optional ByRef p_Error As String) As Boolean
         HaHabidoCambios = True
         Exit Function
     End If
-    
+    If m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia <> Form_FormNCProyecto.m_NCAlInicio.MotivoNoRequiereControlEficacia Then
+        HaHabidoCambios = True
+        Exit Function
+    End If
     
     With Me
         If Nz(.IDExpediente, "") <> Form_FormNCProyecto.m_NCAlInicio.IDExpediente Then
@@ -3660,23 +3811,20 @@ Private Sub ComandoVerNoRequiere_Click()
     DoCmd.Hourglass True
     VBA.DoEvents
     
+    
+    
+    
+    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", OpenArgs:=m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia
     ' Open the popup form as modal dialog
-    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", WindowMode:=acDialog
+    
     
     ' After dialog closes, read the value from the popup form's control
     If FormularioAbierto("FormMotivosNoRequiereControlEficacia") Then
-        ' The popup stores the text in its TxtMotivo control
-        m_Motivo = Nz(Forms("FormMotivosNoRequiereControlEficacia").MotivoNoRequiereControlEficacia, "")
-        m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
-        DoCmd.Close acForm, "FormMotivosNoRequiereControlEficacia", acSaveNo
+        Set m_FormMotivos = Forms("FormMotivosNoRequiereControlEficacia")
+        
     End If
     
-    ' Update button caption
-    If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
-    Else
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
-    End If
+   
     
     VBA.DoEvents
     DoCmd.Hourglass False
@@ -3717,3 +3865,8 @@ Private Sub ActualizarTextoRiesgosUI()
     
     Me.CodigoRiesgo = ""
 End Sub
+
+Private Function BellChar() As String
+    ' U+1F514 BELL — par sustituto UTF-16
+    BellChar = ChrW(&HD83D) & ChrW(&HDED4)
+End Function

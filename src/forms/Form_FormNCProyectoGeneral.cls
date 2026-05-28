@@ -1,11 +1,12 @@
 Option Compare Database
 Option Explicit
-
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
 Private m_NCAsociada As NCProyecto
 Private m_RiesgoAsociado As riesgo
+Private WithEvents m_FormMotivos As Form_FormMotivosNoRequiereControlEficacia
 
 Private m_Error As String
+
 
 Private Sub m_FormExpedientes_Seleccionado(m_Exp As Expediente)
     
@@ -708,16 +709,20 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = False
                 Else
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = True
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
+                Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
         If m_VEHICULO = "" Then
             Me.VEHICULO = m_VEHICULO
@@ -795,6 +800,17 @@ errores:
 End Function
 
 
+Private Sub m_FormMotivos_MotivoRegistrado(m_Motivo As String)
+    m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
+    If m_Motivo <> "" Then
+        Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = True
+    Else
+        Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = False
+    End If
+End Sub
+
 Private Sub PalabraClave_KeyDown(KeyCode As Integer, Shift As Integer)
     
     If Form_FormNCProyecto.m_PermitidoEditar = EnumSino.No Then
@@ -839,8 +855,9 @@ Private Sub RequiereControlEficacia_AfterUpdate()
         If Nz(Me.RequiereControlEficacia, "") = "Sí" Then
             Me.ComandoControlEficaciaDatos.Enabled = True
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
             ' Warn if motivos will be lost
-If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
+    If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
                 pregunta = MsgBox("Ya existen motivos de No Requiere Control de Eficacia." & vbNewLine & _
                         "Al cambiar a 'Sí' se perderán. ¿Continuar?", vbExclamation + vbYesNo + vbDefaultButton2, "Cambio de Requiere Control de Eficacia")
                 If pregunta <> vbYes Then
@@ -852,14 +869,18 @@ If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
         ElseIf Nz(Me.RequiereControlEficacia, "") = "No" Then
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
+            
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = False
             Else
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
     End If
 End Sub
@@ -1023,7 +1044,10 @@ Public Function HaHabidoCambios(Optional ByRef p_Error As String) As Boolean
         HaHabidoCambios = True
         Exit Function
     End If
-    
+    If m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia <> Form_FormNCProyecto.m_NCAlInicio.MotivoNoRequiereControlEficacia Then
+        HaHabidoCambios = True
+        Exit Function
+    End If
     
     With Me
         If Nz(.IDExpediente, "") <> Form_FormNCProyecto.m_NCAlInicio.IDExpediente Then
@@ -1155,23 +1179,20 @@ Private Sub ComandoVerNoRequiere_Click()
     DoCmd.Hourglass True
     VBA.DoEvents
     
+    
+    
+    
+    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", OpenArgs:=m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia
     ' Open the popup form as modal dialog
-    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", WindowMode:=acDialog
+    
     
     ' After dialog closes, read the value from the popup form's control
     If FormularioAbierto("FormMotivosNoRequiereControlEficacia") Then
-        ' The popup stores the text in its TxtMotivo control
-        m_Motivo = Nz(Forms("FormMotivosNoRequiereControlEficacia").MotivoNoRequiereControlEficacia, "")
-        m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
-        DoCmd.Close acForm, "FormMotivosNoRequiereControlEficacia", acSaveNo
+        Set m_FormMotivos = Forms("FormMotivosNoRequiereControlEficacia")
+        
     End If
     
-    ' Update button caption
-    If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
-    Else
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
-    End If
+   
     
     VBA.DoEvents
     DoCmd.Hourglass False
@@ -1212,3 +1233,8 @@ Private Sub ActualizarTextoRiesgosUI()
     
     Me.CodigoRiesgo = ""
 End Sub
+
+Private Function BellChar() As String
+    ' U+1F514 BELL — par sustituto UTF-16
+    BellChar = ChrW(&HD83D) & ChrW(&HDED4)
+End Function
