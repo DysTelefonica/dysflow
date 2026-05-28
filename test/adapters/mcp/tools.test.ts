@@ -5,6 +5,7 @@ import {
   type DysflowMcpServices,
   LEGACY_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
+  rejectWriteSqlInReadMode,
   translateCoreResultToMcpContent,
 } from "../../../src/adapters/mcp/tools";
 import {
@@ -1012,6 +1013,96 @@ describe("MCP tool registration over core services", () => {
       await expect(
         legacyTool?.handler({ procedureName: "LegacyProc" }, context),
       ).resolves.toMatchObject({ isError: false });
+    });
+  });
+
+  describe("read-only SQL guard — rejectWriteSqlInReadMode", () => {
+    it("returns undefined for SELECT queries", () => {
+      expect(rejectWriteSqlInReadMode("SELECT * FROM People")).toBeUndefined();
+      expect(rejectWriteSqlInReadMode("  select id from T")).toBeUndefined();
+      expect(rejectWriteSqlInReadMode("SELECT COUNT(*) FROM T WHERE x=1")).toBeUndefined();
+    });
+
+    it("rejects DDL and DML write keywords", () => {
+      const cases = [
+        "INSERT INTO T VALUES (1)",
+        "UPDATE T SET x=1",
+        "DELETE FROM T",
+        "DROP TABLE T",
+        "CREATE TABLE T (id INT)",
+        "ALTER TABLE T ADD col INT",
+        "TRUNCATE TABLE T",
+        "EXEC sp_something",
+        "EXECUTE sp_something",
+        "GRANT SELECT ON T TO user1",
+        "REVOKE SELECT ON T FROM user1",
+      ];
+      for (const sql of cases) {
+        expect(rejectWriteSqlInReadMode(sql), `should reject: ${sql}`).not.toBeUndefined();
+      }
+    });
+
+    it("is case-insensitive", () => {
+      expect(rejectWriteSqlInReadMode("delete from T")).not.toBeUndefined();
+      expect(rejectWriteSqlInReadMode("Drop Table T")).not.toBeUndefined();
+      expect(rejectWriteSqlInReadMode("INSERT into T values(1)")).not.toBeUndefined();
+    });
+
+    it("includes the blocked keyword in the error message", () => {
+      const result = rejectWriteSqlInReadMode("DROP TABLE People");
+      expect(result).toContain("DROP");
+    });
+
+    it("blocks DDL via query_sql tool and never calls queryService", async () => {
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      await expect(
+        tools.find((t) => t.name === "query_sql")?.handler({ sql: "DROP TABLE TbConfiguracion" }),
+      ).resolves.toMatchObject({ isError: true });
+
+      expect(query.requests).toEqual([]);
+    });
+
+    it("blocks DDL via dysflow_query_execute with mode read and never calls queryService", async () => {
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      await expect(
+        tools
+          .find((t) => t.name === "dysflow_query_execute")
+          ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "read" }),
+      ).resolves.toMatchObject({ isError: true });
+
+      expect(query.requests).toEqual([]);
+    });
+
+    it("allows write SQL via dysflow_query_execute with mode write when writes enabled", async () => {
+      const query = new FakeQueryService(successResult({ rows: [] }));
+      const tools = createDysflowMcpTools(
+        {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        true,
+      );
+
+      await expect(
+        tools
+          .find((t) => t.name === "dysflow_query_execute")
+          ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "write" }),
+      ).resolves.toMatchObject({ isError: false });
+
+      expect(query.requests).toHaveLength(1);
     });
   });
 

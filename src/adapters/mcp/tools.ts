@@ -103,6 +103,15 @@ function invalidInput(message: string): McpToolResult {
   return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
 }
 
+const WRITE_SQL_PATTERN =
+  /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|EXEC(?:UTE)?|GRANT|REVOKE)\b/i;
+
+export function rejectWriteSqlInReadMode(sql: string): string | undefined {
+  if (!WRITE_SQL_PATTERN.test(sql)) return undefined;
+  const keyword = sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "";
+  return `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
+}
+
 async function _handleValidatedLegacyQuery<TData>(
   input: unknown,
   schema: JsonObjectSchema,
@@ -172,6 +181,10 @@ export function createDysflowMcpTools(
         const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
         const request = input as AccessQueryRequest;
+        if (request.mode === "read") {
+          const sqlGuard = rejectWriteSqlInReadMode(request.sql);
+          if (sqlGuard !== undefined) return invalidInput(sqlGuard);
+        }
         if (
           request.mode === "write" &&
           !(await isWriteAllowed(request, writesEnabled, writeAccessResolver))
@@ -333,9 +346,12 @@ function appendLegacyCompatibilityTools(
         databasePath?: string;
         sourcePath?: string;
       };
+      const sql = request.sql ?? request.query ?? "";
+      const sqlGuard = rejectWriteSqlInReadMode(sql);
+      if (sqlGuard !== undefined) return invalidInput(sqlGuard);
       return translateCoreResultToMcpContent(
         await services.queryService.execute({
-          sql: request.sql ?? request.query ?? "",
+          sql,
           mode: "read",
           backendPath: request.backendPath,
           databasePath: request.databasePath ?? request.sourcePath,

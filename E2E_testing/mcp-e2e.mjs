@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,14 @@ const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_P
 if (!password) {
   console.error("Missing Access password. Set ACCESS_VBA_PASSWORD before running the MCP E2E suite.");
   process.exit(1);
+}
+
+for (const [label, fixturePath] of [["accessPath", accessPath], ["backendPath", backendPath]]) {
+  try { await access(fixturePath); } catch {
+    console.error(`Missing E2E fixture: ${label}=${fixturePath}`);
+    console.error("Copy the NoConformidades.accdb and NoConformidades_Datos.accdb files into E2E_testing/ before running the suite.");
+    process.exit(1);
+  }
 }
 
 await rm(tempRoot, { recursive: true, force: true });
@@ -134,6 +142,8 @@ await record("operations", "dysflow_access_operations_list", {});
 await record("operations", "dysflow_access_cleanup", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 
 await record("query", "query_sql", { projectId, ...backendTarget, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades" });
+await record("security", "query_sql", { projectId, sql: "DROP TABLE TbConfiguracion" }, { expected: "error" });
+await record("security", "dysflow_query_execute", { projectId, sql: "DELETE FROM TbNoConformidades", mode: "read" }, { expected: "error" });
 await record("query", "list_tables", { projectId, ...backendTarget });
 await record("query", "get_schema", { projectId, ...backendTarget, tableName: "TbNoConformidades" });
 await record("query", "count_rows", { projectId, accessPath, backendPath, tableName: "TbNoConformidades" });
