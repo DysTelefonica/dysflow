@@ -31,11 +31,10 @@ import type { McpToolContext } from "./types.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 
-/**
- * MCP protocol version intentionally targeted by Dysflow's hand-written stdio runtime.
- * When MCP protocol support changes, update this constant and the protocol maintenance tests together.
- */
-export const MCP_PROTOCOL_VERSION = "2024-11-05";
+// MCP protocol version this server implements.
+// Check https://spec.modelcontextprotocol.io for newer versions.
+// To upgrade: update PROTOCOL_VERSION (re-exported as MCP_PROTOCOL_VERSION) and verify tool schema compatibility.
+export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
 export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024;
 
 export type McpStdioRuntime = {
