@@ -796,7 +796,7 @@ Public Function HTMLNCProyecto( _
     Dim m_TablaAC As String
     Dim m_ColTablasAC As New Collection
     Dim m_mensajeTablaAC As Variant
-    
+    Dim m_devNotice As String
     On Error GoTo errores
     
     If p_NC Is Nothing Then
@@ -807,6 +807,7 @@ Public Function HTMLNCProyecto( _
         If p_Error <> "" Then
             Err.Raise 1000
         End If
+        
     End If
     m_TablaDatos = HTMTLDatosGeneralesProyecto(p_NC, p_Error)
     If p_Error <> "" Then
@@ -830,8 +831,11 @@ Public Function HTMLNCProyecto( _
     End If
     If p_SoloTablas = EnumSino.No Then
         m_mensaje = m_Cabecera & vbNewLine
+        If m_devNotice <> "" Then
+            m_mensaje = m_mensaje & m_devNotice & vbNewLine
+        End If
     End If
-   
+    
     
     
     m_mensaje = m_mensaje & m_TablaDatos & vbNewLine
@@ -862,6 +866,7 @@ Public Function HTMLNCAuditoria( _
                                 p_NC As NCAuditoria, _
                                 Optional p_ConAcciones As EnumSino = EnumSino.No, _
                                 Optional p_SoloTablas As EnumSino = EnumSino.No, _
+                                Optional ByRef p_devNotice As String, _
                                 Optional ByRef p_Error As String _
                                 ) As String
    Dim m_TablaDatos As String
@@ -908,7 +913,9 @@ Public Function HTMLNCAuditoria( _
     If p_SoloTablas = EnumSino.No Then
         m_mensaje = m_Cabecera & vbNewLine
     End If
-   
+     If p_devNotice <> "" Then
+        m_mensaje = m_mensaje & p_devNotice & vbNewLine
+    End If
     
     
     m_mensaje = m_mensaje & m_TablaDatos & vbNewLine
@@ -939,6 +946,7 @@ End Function
 Public Function HTMLNCProyectos( _
                                 p_col As Scripting.Dictionary, _
                                 Optional p_ConAcciones As EnumSino = EnumSino.No, _
+                                Optional ByRef p_devNotice As String, _
                                 Optional ByRef p_Error As String _
                                 ) As String
     
@@ -961,7 +969,9 @@ Public Function HTMLNCProyectos( _
         Err.Raise 1000
     End If
     m_mensaje = m_Cabecera & vbNewLine
-    
+    If p_devNotice <> "" Then
+        m_mensaje = m_mensaje & p_devNotice & vbNewLine
+    End If
     For Each m_ID In p_col
         Set m_NC = p_col(m_ID)
         m_mensajeNC = HTMLNCProyecto(p_NC:=m_NC, p_ConAcciones:=EnumSino.Sí, p_SoloTablas:=EnumSino.Sí, p_Error:=p_Error)
@@ -986,6 +996,7 @@ End Function
 Public Function HTMLNCAuditorias( _
                                 p_col As Scripting.Dictionary, _
                                 Optional p_ConAcciones As EnumSino = EnumSino.No, _
+                                Optional ByRef p_devNotice As String, _
                                 Optional ByRef p_Error As String _
                                 ) As String
     
@@ -1008,7 +1019,9 @@ Public Function HTMLNCAuditorias( _
         Err.Raise 1000
     End If
     m_mensaje = m_Cabecera & vbNewLine
-   
+    If p_devNotice <> "" Then
+        m_mensaje = m_mensaje & p_devNotice & vbNewLine
+    End If
     For Each m_ID In p_col
         Set m_NC = p_col(m_ID)
         m_mensajeNC = HTMLNCAuditoria(p_NC:=m_NC, p_ConAcciones:=EnumSino.Sí, p_SoloTablas:=EnumSino.Sí, p_Error:=p_Error)
@@ -1032,27 +1045,28 @@ errores:
 End Function
 Public Function DameCabeceraHTML( _
                                     p_Titulo As String, _
+                                    Optional ByVal devNotice As String, _
                                     Optional ByRef p_Error As String _
                                     ) As String
    
-    Dim m_mensaje As String
+    Dim html As String
     On Error GoTo errores
     
-    m_mensaje = "<!DOCTYPE html>" & vbNewLine
-    m_mensaje = m_mensaje & "<html lang=""es"">" & vbNewLine
-    m_mensaje = m_mensaje & "<head>" & vbNewLine
-    'm_mensaje = m_mensaje & "<meta http-equiv=""Content-Type"" content=""text/html; charset=utf-8"">" & vbNewLine
-    m_mensaje = m_mensaje & "<meta charset=""ISO-8859-1"" />" & vbNewLine
-    m_mensaje = m_mensaje & "<meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">" & vbNewLine
-    m_mensaje = m_mensaje & "<title>" & p_Titulo & "</title>" & vbNewLine
-    m_mensaje = m_mensaje & m_ObjEntorno.CSS1 & vbNewLine
+    
+    ' --- 0. Inicialización y CSS ---
+    html = "<!DOCTYPE html><html><head><style>" & m_ObjEntorno.CSS & "</style></head>"
+    html = html & "<body><div class='container'>"
+    
+    ' --- Cabecera ---
+    html = html & "<div class='header'><h2>Notificacion de No Conformidades</h2></div>"
+    html = html & "<div class='content'>"
+    html = html & "<title>" & p_Titulo & "</title>"
+    html = html & devNotice
     
     
-    m_mensaje = m_mensaje & "</head>" & vbNewLine
-    m_mensaje = m_mensaje & "<body>" & vbNewLine
     
     
-    DameCabeceraHTML = m_mensaje
+    DameCabeceraHTML = html
     Exit Function
 errores:
     If Err.Number <> 1000 Then
@@ -1104,6 +1118,7 @@ errores:
 End Function
 Public Function HTMLAltaNC( _
                             ByRef p_NC As NCProyecto, _
+                            Optional ByRef p_devNotice As String, _
                             Optional ByRef p_Error As String _
                             ) As String
     Dim m_mensaje As String
@@ -1111,7 +1126,7 @@ Public Function HTMLAltaNC( _
     Dim m_MensajeEnviador As String
     Dim m_mensajeNC As String
     Dim m_MensajeTitulo As String
-    
+   
    
     
     On Error GoTo errores
@@ -1121,6 +1136,7 @@ Public Function HTMLAltaNC( _
     If p_Error <> "" Then
         Err.Raise 1000
     End If
+    
     m_MensajeEnviador = HTMLEnviador(p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
@@ -1136,6 +1152,9 @@ Public Function HTMLAltaNC( _
     m_mensaje = m_mensaje & "<div class=""container"">" & vbNewLine
     m_mensaje = m_mensaje & m_MensajeEnviador & vbNewLine
     m_mensaje = m_mensaje & m_MensajeTitulo & vbNewLine
+    If p_devNotice <> "" Then
+        m_mensaje = m_mensaje & p_devNotice & vbNewLine
+    End If
     m_mensaje = m_mensaje & m_mensajeNC & vbNewLine
     m_mensaje = m_mensaje & "</div>" & vbNewLine
     m_mensaje = m_mensaje & "</body>" & vbNewLine
@@ -1151,6 +1170,7 @@ End Function
 
 Public Function HTMLAltaNCAuditoria( _
                                         ByRef p_NC As NCAuditoria, _
+                                        Optional ByRef p_devNotice As String, _
                                         Optional ByRef p_Error As String _
                                         ) As String
     Dim m_mensaje As String
@@ -1184,6 +1204,9 @@ Public Function HTMLAltaNCAuditoria( _
     m_mensaje = m_mensaje & "<div class=""container"">" & vbNewLine
     m_mensaje = m_mensaje & m_MensajeEnviador & vbNewLine
     m_mensaje = m_mensaje & m_MensajeTitulo & vbNewLine
+    If p_devNotice <> "" Then
+        m_mensaje = m_mensaje & p_devNotice & vbNewLine
+    End If
     m_mensaje = m_mensaje & m_mensajeNC & vbNewLine
     m_mensaje = m_mensaje & "</div>" & vbNewLine
     m_mensaje = m_mensaje & "</body>" & vbNewLine

@@ -1,37 +1,27 @@
 Option Compare Database
 Option Explicit
 Private m_Error As String
-Private m_CargaInicialIndicadoresPendiente As Boolean
-Private m_CargandoIndicadores As Boolean
-Private m_IndicadoresReiniciando As EnumSino
-Private m_IndicadoresModo As String
 
 
 Private Sub ComandoActualizar_Click()
-     On Error GoTo errores
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    
     m_Error = ""
-    If m_CargandoIndicadores Then Exit Sub
-
-    m_IndicadoresReiniciando = EnumSino.Sí
-    m_IndicadoresModo = "PROYECTO"
-    m_CargaInicialIndicadoresPendiente = True
-    Me.TimerInterval = 100
     Me.lblSeguimientos.Caption = "Seguimiento #/#"
-    Me.Repaint
+    
+    PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
     Exit Sub
 errores:
-    If m_CargandoIndicadores Then
-        AvanceCerrar
-        m_CargandoIndicadores = False
-    End If
-    If m_CargaInicialIndicadoresPendiente Then
-        m_CargaInicialIndicadoresPendiente = False
-        Me.TimerInterval = 0
-    End If
-    Me.lblEstado.Visible = False
     DoCmd.Hourglass False
-    m_IndicadoresReiniciando = EnumSino.No
-    m_IndicadoresModo = ""
     If Err.Number <> 1000 Then
         m_Error = "Al ComandoConfiguracion_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
         CorreoAlAdministrador m_Error
@@ -294,7 +284,7 @@ Private Sub Form_Open(Cancel As Integer)
     
    
     Me.ComandoConfiguracion.Enabled = False
-    Me.lblSeguimientos.Caption = "Seguimiento: preparando panel..."
+    Avance "Obteniendo Variables de estado"
    
     If Application.TempVars("EnPruebas") = "Sí" Then
         m_Titulo = "PARTE DE PROYECTOS VERSIÓN DE PRUEBAS"
@@ -313,11 +303,11 @@ Private Sub Form_Open(Cancel As Integer)
     Me.lblTitulo1.Caption = m_Titulo
     Me.lblVersion.Caption = "Versión: " & m_ObjEntorno.VersionAplicacion
     Me.Caption = m_ObjEntorno.TituloUsuarioConectado
-    ' HOTFIX-20260519: diferir carga pesada de indicadores para que el formulario pinte primero.
-    m_CargaInicialIndicadoresPendiente = True
-    m_IndicadoresReiniciando = EnumSino.No
-    m_IndicadoresModo = "PROYECTO"
-    Me.TimerInterval = 100
+    Avance "Obteniendo las tareas"
+    PintarIndicadores p_Reiniciando:=EnumSino.No, p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
     
    
    'RegistroApertura
@@ -327,6 +317,7 @@ Private Sub Form_Open(Cancel As Integer)
     
     Me.ComandoConfiguracion.Enabled = True
     
+    AvanceCerrar
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
@@ -343,72 +334,6 @@ errores:
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
     'DoCmd.Quit acQuitSaveNone
-End Sub
-
-Private Sub Form_Timer()
-     On Error GoTo errores
-     If Not m_CargaInicialIndicadoresPendiente Then Exit Sub
-     If m_CargandoIndicadores Then Exit Sub
-
-     Dim l_Modo As String
-     Dim l_Reiniciando As EnumSino
-
-     Me.TimerInterval = 0
-     m_CargandoIndicadores = True
-     m_CargaInicialIndicadoresPendiente = False
-     DoCmd.Hourglass True
-     m_Error = ""
-
-     l_Modo = m_IndicadoresModo
-     If Trim$(l_Modo) = "" Then
-         l_Modo = "PROYECTO"
-     End If
-     l_Reiniciando = m_IndicadoresReiniciando
-     If l_Reiniciando <> EnumSino.Sí Then
-         l_Reiniciando = EnumSino.No
-     End If
-
-     Me.lblSeguimientos.Caption = "Seguimiento: obteniendo tareas..."
-    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "INICIO")
-    Me.lblEstado.Visible = True
-    Avance Me.lblEstado.Caption
-    Me.Repaint
-    VBA.DoEvents
-
-    PintarIndicadores p_Reiniciando:=l_Reiniciando, p_Modo:=l_Modo, p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-
-    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "APLICAR")
-    Avance Me.lblEstado.Caption
-    Me.Repaint
-    VBA.DoEvents
-    AvanceCerrar
-    Me.lblEstado.Visible = False
-
-     DoCmd.Hourglass False
-     m_CargandoIndicadores = False
-     m_IndicadoresReiniciando = EnumSino.No
-     m_IndicadoresModo = ""
-     Exit Sub
-
-errores:
-    AvanceCerrar
-    Me.lblEstado.Visible = False
-    Me.TimerInterval = 0
-    m_CargandoIndicadores = False
-    m_IndicadoresReiniciando = EnumSino.No
-    m_IndicadoresModo = ""
-    DoCmd.Hourglass False
-    Me.lblSeguimientos.Caption = "Seguimiento: error al cargar"
-    If Err.Number <> 1000 Then
-        m_Error = "Al Form_Timer se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
-        CorreoAlAdministrador m_Error
-        pregunta = MsgBox(m_Error, vbCritical, "Error")
-    Else
-        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
-    End If
 End Sub
 
 Private Sub cmdSalir_Click()

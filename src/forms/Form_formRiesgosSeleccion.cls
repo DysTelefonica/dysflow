@@ -1,8 +1,8 @@
 Option Compare Database
 Option Explicit
 
-Private m_IDNC As Long
-Private m_IDExpediente As Long
+Private m_IdNC As Long
+Private m_IdExpediente As Long
 Private m_ObjNC As NCProyecto
 Private m_RiesgoServ As New RiesgoServicio
 Private m_DictCandidatos As Scripting.Dictionary ' Para recuperar los objetos Riesgo
@@ -22,10 +22,10 @@ Private Sub Form_Open(Cancel As Integer)
     ' Parseamos: "IDNoConformidad|IDExpediente"
     vArgs = Split(Me.OpenArgs, "|")
     If IsNumeric(vArgs(0)) Then
-        m_IDNC = CLng(vArgs(0))
+        m_IdNC = CLng(vArgs(0))
     End If
     If IsNumeric(vArgs(1)) Then
-        m_IDExpediente = CLng(vArgs(1))
+        m_IdExpediente = CLng(vArgs(1))
     End If
     
 End Sub
@@ -41,14 +41,14 @@ Private Sub Form_Load()
     ' Si m_IdNC > 0 estamos en edición: cargamos desde el constructor.
     ' Si m_IdNC = 0 estamos en alta: usamos el objeto global m_ObjNCProyectoActiva
     ' que ya reside en la memoria del formulario llamante.
-    If m_IDNC > 0 Then
-        Set m_ObjNC = constructor.getNCProyecto(CStr(m_IDNC))
+    If m_IdNC > 0 Then
+        Set m_ObjNC = constructor.getNCProyecto(CStr(m_IdNC))
     Else
         ' Crucial para ALTA: Referenciamos el objeto activo para no perder cambios en memoria
         Set m_ObjNC = m_ObjNCProyectoActiva
         
         ' Aseguramos que el objeto tenga el IDExpediente actual del formulario padre
-        If Not m_ObjNC Is Nothing Then m_ObjNC.IDExpediente = m_IDExpediente
+        If Not m_ObjNC Is Nothing Then m_ObjNC.IDExpediente = m_IdExpediente
     End If
     
     ' Validación de seguridad
@@ -148,22 +148,22 @@ Private Sub btnAceptar_Click()
     Next varItm
     
     ' 2. Bifurcación según el estado de la NC
-    If m_IDNC > 0 Then
+    If m_IdNC > 0 Then
         ' --- MODO EDICIÓN (Persistencia Inmediata en BD) ---
         
         ' Llamamos al servicio para guardar en TbRiesgosNC
-        If Not m_RiesgoServ.ActualizarRiesgosNC(m_IDNC, colSeleccion, p_Error) Then
+        If Not m_RiesgoServ.ActualizarRiesgosNC(m_IdNC, colSeleccion, p_Error) Then
             Err.Raise 1000, , p_Error
         End If
         
         ' Actualizamos el campo de texto plano en TbNoConformidades
-        m_RiesgoServ.SincronizarCampoTextoNC m_IDNC, p_Error
+        m_RiesgoServ.SincronizarCampoTextoNC m_IdNC, p_Error
         
         ' Actualizamos también el objeto en memoria del formulario padre por coherencia
         
         Set m_ObjNCProyectoActiva.Riesgos = dictMemoria
         ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache CStr(m_IDNC), "Cambio en Riesgos asociados", p_Error
+        CacheNCProyecto.InvalidarCache CStr(m_IdNC), "Cambio en Riesgos asociados", p_Error
         ' -------------------------
         If m_ObjNCProyectoActiva.Riesgos Is Nothing Then
             m_ObjNCProyectoActiva.CodRiesgosAsociados = ""

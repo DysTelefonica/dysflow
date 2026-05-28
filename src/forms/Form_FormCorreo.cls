@@ -17,6 +17,7 @@ Private Sub ComandoEnviarCorreo_Click()
     Dim m_CC As String
     Dim m_Asunto As String
     Dim m_Correo As Correo
+    Dim devNotice As String
     
     On Error GoTo errores
     
@@ -29,6 +30,8 @@ Private Sub ComandoEnviarCorreo_Click()
         m_Error = "El asunto está vacío"
         Err.Raise 1000
     End If
+    
+    
     If Nz(Me.DESTINATARIOS, "") = "" And Nz(Me.DestinatariosConCopia, "") = "" Then
         m_Error = "No hay destinatarios"
         Err.Raise 1000

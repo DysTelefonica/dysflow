@@ -14,7 +14,8 @@ Public Function GetRiesgosAsociados(ByVal p_IDNC As Long, ByRef p_Error As Strin
     Set m_Col = New Scripting.Dictionary
     m_Col.CompareMode = TextCompare
     
-    ' Nota: Consultamos la tabla de unión TbRiesgosNC y los datos descriptivos mediante getdb().
+    ' Nota: Consultamos la tabla de unión TbRiesgosNC en la BD local de NC
+    ' pero traemos los datos descriptivos de la BD de Riesgos mediante getdb
     m_SQL = "SELECT R.* FROM TbRiesgos AS R " & _
             "INNER JOIN TbRiesgosNC AS L ON R.IDRiesgo = L.IDRiesgo " & _
             "WHERE L.IDNC = " & p_IDNC

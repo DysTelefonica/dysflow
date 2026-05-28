@@ -1197,7 +1197,6 @@ Public Property Get ColCampos() As Collection
         .Add "FPREVCIERRE"
         .Add "RESPONSABLEIMPLANTACION"
         .Add "RequiereControlEficacia"
-        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1212,6 +1211,7 @@ Public Property Get ColCampos() As Collection
         .Add "MotivoBorrado"
         .Add "Notas"
         .Add "Cerrada"
+        .Add "MotivoNoRequiereControlEficacia"
     End With
     Set ColCampos = m_objColCampos
     Exit Property
@@ -1276,10 +1276,6 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         getPropiedad = Me.RequiereControlEficacia
         Exit Function
     End If
-    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
-        getPropiedad = Me.MotivoNoRequiereControlEficacia
-        Exit Function
-    End If
     If m_NombrePropiedad = "ControlEficacia" Then
         getPropiedad = Me.ControlEficacia
         Exit Function
@@ -1334,6 +1330,10 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
     End If
     If m_NombrePropiedad = "Estado" Then
         getPropiedad = Me.Estado
+        Exit Function
+    End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        getPropiedad = Me.MotivoNoRequiereControlEficacia
         Exit Function
     End If
     p_Error = "Propiedad no reconocida en NCAuditoria.getPropiedad"
@@ -1399,10 +1399,6 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Me.RequiereControlEficacia = m_ValorPropiedad
         Exit Function
     End If
-    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
-        Me.MotivoNoRequiereControlEficacia = m_ValorPropiedad
-        Exit Function
-    End If
     If m_NombrePropiedad = "ControlEficacia" Then
         Me.ControlEficacia = m_ValorPropiedad
         Exit Function
@@ -1459,6 +1455,10 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Me.Estado = m_ValorPropiedad
         Exit Function
     End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        Me.MotivoNoRequiereControlEficacia = m_ValorPropiedad
+        Exit Function
+    End If
     p_Error = "Propiedad no reconocida en NCAuditoria.SetPropiedad"
     Err.Raise 1000
     Exit Function
@@ -1467,4 +1467,5 @@ errores:
         p_Error = "El método NCAuditoria.SetPropiedad ha devuelto el error:" & vbNewLine & Err.Description
     End If
 End Function
+
 

@@ -9,45 +9,45 @@ Option Explicit
 
 ' 1. NC Abiertas en el periodo
 Public Function SQL_NC_AbiertasEnPeriodo(dInicio As Date, dFin As Date) As String
-    Dim SQL As String
-    SQL = "SELECT * FROM TbNoConformidades " & _
+    Dim sql As String
+    sql = "SELECT * FROM TbNoConformidades " & _
           "WHERE Borrado = False " & _
           "AND (FECHAAPERTURA >= #" & Format(dInicio, "mm/dd/yyyy") & "# AND FECHAAPERTURA <= #" & Format(dFin, "mm/dd/yyyy") & "#);"
-    SQL_NC_AbiertasEnPeriodo = SQL
+    SQL_NC_AbiertasEnPeriodo = sql
 End Function
 
 ' 2. NC Replanificadas en el periodo
 ' Join con TbReplanificacionesProyecto
 Public Function SQL_NC_ReplanificadasEnPeriodo(dInicio As Date, dFin As Date) As String
-    Dim SQL As String
-    SQL = "SELECT DISTINCT T.* " & _
+    Dim sql As String
+    sql = "SELECT DISTINCT T.* " & _
           "FROM TbNoConformidades AS T " & _
           "INNER JOIN TbReplanificacionesProyecto AS R ON T.IDNoConformidad = R.IDNoConformidad " & _
           "WHERE T.Borrado = False " & _
           "AND (R.FechaReprogramacion >= #" & Format(dInicio, "mm/dd/yyyy") & "# AND R.FechaReprogramacion <= #" & Format(dFin, "mm/dd/yyyy") & "#);"
-    SQL_NC_ReplanificadasEnPeriodo = SQL
+    SQL_NC_ReplanificadasEnPeriodo = sql
 End Function
 
 ' 3. Stock Activo
 ' Abiertas antes del inicio Y (no cerradas O cerradas dentro/después del periodo)
 Public Function SQL_NC_StockActivo(dInicio As Date, dFin As Date) As String
-    Dim SQL As String
-    SQL = "SELECT * FROM TbNoConformidades " & _
+    Dim sql As String
+    sql = "SELECT * FROM TbNoConformidades " & _
           "WHERE Borrado = False " & _
           "AND FECHAAPERTURA < #" & Format(dInicio, "mm/dd/yyyy") & "# " & _
           "AND (FECHACIERRE IS NULL OR FECHACIERRE >= #" & Format(dInicio, "mm/dd/yyyy") & "#);"
-    SQL_NC_StockActivo = SQL
+    SQL_NC_StockActivo = sql
 End Function
 
 ' 4. NC Con Riesgo
 ' Criterio: La fecha de la ÚLTIMA asociación (Max FechaRegistro) cae en el periodo.
 Public Function SQL_NC_ConRiesgo(dInicio As Date, dFin As Date) As String
-    Dim SQL As String
+    Dim sql As String
     
     ' CORRECCIÓN: Usamos 'FechaRegistro' que es el campo real en la tabla TbRiesgosNC
     ' en lugar de 'FechaDecision'.
     
-    SQL = "SELECT * FROM TbNoConformidades " & _
+    sql = "SELECT * FROM TbNoConformidades " & _
           "WHERE Borrado = False " & _
           "AND IDNoConformidad IN (" & _
                 "SELECT IDNC " & _
@@ -57,7 +57,7 @@ Public Function SQL_NC_ConRiesgo(dInicio As Date, dFin As Date) As String
                 "AND Max(FechaDecison) <= #" & Format(dFin, "mm/dd/yyyy") & "#" & _
           ");"
           
-    SQL_NC_ConRiesgo = SQL
+    SQL_NC_ConRiesgo = sql
 End Function
 
 ' =============================================================================

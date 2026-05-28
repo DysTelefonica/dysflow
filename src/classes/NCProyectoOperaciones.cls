@@ -108,14 +108,16 @@ Private Function MotivoAltaDatosUnicosNoOK( _
             MotivoAltaDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
             Exit Function
         End If
-If .RequiereControlEficacia = "Sí" Then
-            ' Issue #19: No validamos detalle CE (FechaPrevista + ControlEficacia) en alta.
-            ' El detalle CE se pide al cerrar, cuando acciones están finalizadas.
-        ElseIf .RequiereControlEficacia = "No" Then
-            If .MotivoNoRequiereControlEficacia = "" Then
-                MotivoAltaDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+        If .RequiereControlEficacia = "Sí" Then
+            If Not IsDate(.FechaPrevistaControlEficacia) Then
+                MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
                 Exit Function
             End If
+            If .ControlEficacia = "" Then
+                MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
+                Exit Function
+            End If
+            
         End If
         
         
@@ -181,16 +183,6 @@ Private Function MotivoEdicionDatosUnicosNoOK( _
                 Exit Function
             End If
             
-        End If
-        If .RequiereControlEficacia <> "Sí" And .RequiereControlEficacia <> "No" Then
-            MotivoEdicionDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
-            Exit Function
-        End If
-        If .RequiereControlEficacia = "No" Then
-            If .MotivoNoRequiereControlEficacia = "" Then
-                MotivoEdicionDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
-                Exit Function
-            End If
         End If
         
         
@@ -295,14 +287,16 @@ Private Function MotivoDatosUnicosNoOK( _
             MotivoDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
             Exit Function
         End If
-If .RequiereControlEficacia = "Sí" Then
-            ' Issue #19: No validamos detalle CE (FechaPrevista + ControlEficacia) en edición.
-            ' El detalle CE se pide al cerrar, cuando acciones están finalizadas.
-        ElseIf .RequiereControlEficacia = "No" Then
-            If .MotivoNoRequiereControlEficacia = "" Then
-                MotivoDatosUnicosNoOK = "Si no requiere control de eficacia se ha de indicar un motivo"
+        If .RequiereControlEficacia = "Sí" Then
+            If Not IsDate(.FechaPrevistaControlEficacia) Then
+                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
                 Exit Function
             End If
+            If .ControlEficacia = "" Then
+                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
+                Exit Function
+            End If
+            
         End If
         If Not IsDate(.FechaApertura) Then
             MotivoDatosUnicosNoOK = "No se conoce la fecha de apertura"
@@ -517,11 +511,6 @@ Public Function RegistrarDatosUnicos( _
             
             
             rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
-            If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
-                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
-            Else
-                rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Null
-            End If
             If Me.nc.RequiereControlEficacia <> "Sí" Then
                 Me.nc.FechaPrevistaControlEficacia = ""
                 Me.nc.ControlEficacia = ""
@@ -693,10 +682,6 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
         If Me.nc.FPREVCIERRE <> "" Then
             rcdDatos.Fields("FPREVCIERRE") = Me.nc.FPREVCIERRE
         End If
-        rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
-        If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
-            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
-        End If
         If Me.nc.FECHACIERRE <> "" Then
             rcdDatos.Fields("FECHACIERRE") = Me.nc.FECHACIERRE
         End If
@@ -824,12 +809,6 @@ Public Function RegistrarCambiosDatosUnicosConVinculoNC( _
             rcdDatos.Fields("CodConcesionAsociada") = Null
         End If
         rcdDatos.Fields("FechaApertura") = Me.nc.FechaApertura
-        rcdDatos.Fields("RequiereControlEficacia") = Me.nc.RequiereControlEficacia
-        If Me.nc.MotivoNoRequiereControlEficacia <> "" Then
-            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Me.nc.MotivoNoRequiereControlEficacia
-        Else
-            rcdDatos.Fields("MotivoNoRequiereControlEficacia") = Null
-        End If
         
     rcdDatos.Update
     
@@ -1575,38 +1554,3 @@ errores:
     Err.Raise 1000, , p_Error
 End Sub
 
-' Issue #19: Validación de gate CE al cerrar NC
-' Cuando todas las ARs están finalizadas y CE="Sí" con detalle pendiente,
-' se bloquea el cierre hasta que usuario complete FechaPrevistaControlEficacia y ControlEficacia.
-Public Function MotivoCierreControlEficaciaNoOK( _
-                                        Optional ByRef p_Error As String _
-                                        ) As String
-    On Error GoTo errores
-    Me.Error = ""
-    p_Error = ""
-    
-    With Me.nc
-        ' Solo aplica si RequiereCE = "Sí" y estado calculado es CERRADAPTECE*
-        If .RequiereControlEficacia <> "Sí" Then
-            MotivoCierreControlEficaciaNoOK = ""
-            Exit Function
-        End If
-        If .TodasLasArsFinalizadas <> EnumSino.Sí Then
-            MotivoCierreControlEficaciaNoOK = ""
-            Exit Function
-        End If
-        ' Estado: todas las ARs finalizadas + CE="Sí" -> CERRADAPTECE o CERRADAPTECECADUCADA
-        ' Gate: detalle CE obligatorio antes de cerrar
-        If .ControlEficacia = "" Or Not IsDate(.FechaPrevistaControlEficacia) Then
-            MotivoCierreControlEficaciaNoOK = "Para cerrar la NC es necesario completar el Control de Eficacia (descripción y fecha prevista)"
-            Exit Function
-        End If
-    End With
-    
-    MotivoCierreControlEficaciaNoOK = ""
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método NCProyectoOperaciones.MotivoCierreControlEficaciaNoOK ha devuelto el error: " & Err.Description
-    End If
-End Function

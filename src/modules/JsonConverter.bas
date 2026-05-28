@@ -1225,7 +1225,7 @@ Public Function getJSonDeTabla( _
                                  p_NOmbreTabla As String, _
                                  p_NombreCampoID As String, _
                                  p_ValorCampoID As String, _
-                                Optional p_Db As DAO.Database, _
+                                Optional p_db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Object
     
@@ -1253,21 +1253,21 @@ Public Function getJSonDeTabla( _
         p_Error = "Se ha de indicar el valor del campo ID"
         Err.Raise 1000
     End If
-    If p_Db Is Nothing Then
-        Set p_Db = getdb()
+    If p_db Is Nothing Then
+        Set p_db = getdb()
     End If
     m_SQL = "SELECT * " & _
             "FROM " & p_NOmbreTabla & " " & _
             "WHERE " & p_NombreCampoID & "=" & p_ValorCampoID & ";"
     On Error Resume Next
-    Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+    Set rcdDatos = p_db.OpenRecordset(m_SQL)
     If Err.Number <> 0 Then
         blnSaltoElError = True
         Err.Clear
         m_SQL = "SELECT * " & _
             "FROM " & p_NOmbreTabla & " " & _
             "WHERE " & p_NombreCampoID & "='" & p_ValorCampoID & "';"
-        Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+        Set rcdDatos = p_db.OpenRecordset(m_SQL)
         If Err.Number <> 0 Then
             On Error GoTo errores
             Err.Raise 1000
@@ -1278,7 +1278,7 @@ Public Function getJSonDeTabla( _
             m_SQL = "SELECT * " & _
                 "FROM " & p_NOmbreTabla & " " & _
                 "WHERE " & p_NombreCampoID & "='" & p_ValorCampoID & "';"
-            Set rcdDatos = p_Db.OpenRecordset(m_SQL)
+            Set rcdDatos = p_db.OpenRecordset(m_SQL)
             If Err.Number <> 0 Then
                 Exit Function
             End If
@@ -1316,7 +1316,7 @@ errores:
 End Function
 Public Function getJSonDeSQL( _
                                 p_SQL As String, _
-                                Optional p_Db As DAO.Database, _
+                                Optional p_db As DAO.Database, _
                                 Optional ByRef p_Error As String _
                                 ) As Object
     
@@ -1335,7 +1335,7 @@ Public Function getJSonDeSQL( _
         p_Error = "Se ha de indicar el p_SQL"
         Err.Raise 1000
     End If
-    Set rcdDatos = p_Db.OpenRecordset(p_SQL)
+    Set rcdDatos = p_db.OpenRecordset(p_SQL)
     
     rcdDatos.MoveFirst
     Do While Not rcdDatos.EOF

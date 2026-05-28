@@ -1,4 +1,4 @@
-﻿Attribute VB_Name = "Variables Globales"
+Attribute VB_Name = "Variables Globales"
 Option Compare Database
 Option Explicit
 
@@ -102,10 +102,15 @@ Public m_ObjUsuarioConectadoInicialmente As usuario
 Public wks As DAO.Workspace
 Private db As DAO.Database
 Private db1 As DAO.Database
+Private m_ActiveBackendURL As String   ' Set by LeeConfiguracionLocal()
+Private m_PasswordBackend As String    ' Set by LeeConfiguracionLocal()
+Private m_dbCached As DAO.Database
+Public IDAplicacion As String
+
 Public Const ColorEnlacePosible As Long = 16737792
 Public Const ColorEnlaceNoPosible As Long = 12566463
 
-Public IDAplicacion As String
+
 Public m_EnOficina As EnumSino
 
 
@@ -134,346 +139,158 @@ Public m_SQLAlInicioSegTareasAuditorias As String
 Public m_SQLAlInicioSegNCProyectos As String
 Public AplicarCache As Boolean
 Public m_ColFiltradoTareasNCProyectos As Scripting.Dictionary
-Public m_TestingMode As Boolean
-Public m_BackendSandboxURL As String
-Public m_BackendSandboxPassword As String
 
 
-    
-    
-Public Function getdb( _
-                        Optional ByRef p_Error As String, _
-                        Optional ByVal p_SkipConfigLoad As Boolean = False _
-                        ) As DAO.Database
-    
-    Dim m_URL As String
+Public Function getWorkspace(Optional ByRef p_Error As String) As DAO.Workspace
     On Error GoTo errores
-
-    If m_TestingMode Then
-        m_URL = Trim$(Nz(m_BackendSandboxURL, ""))
-        If m_URL = "" Then
-            p_Error = "getdb: m_TestingMode=True pero m_BackendSandboxURL está vacío. No se abre BackendActivo/producción."
-            Err.Raise 1000
-        End If
-
-        If Not fso.FileExists(m_URL) Then
-            p_Error = "getdb: m_TestingMode=True pero BackendSandbox no existe: " & m_URL
-            Err.Raise 1000
-        End If
-
-        On Error Resume Next
+    ' Retorna el workspace global para todas las conexiones getdb()
+    ' Uso: transactions futuras serán shareables entre conexiones abiertas via este workspace
+    If wks Is Nothing Then
         Set wks = DBEngine.Workspaces(0)
-        Set db = wks.OpenDatabase(m_URL, False, False, ";PWD=" & m_BackendSandboxPassword)
-        If Err.Number <> 0 Then
-            p_Error = "getdb: m_TestingMode=True pero BackendSandbox no se pudo abrir: " & Err.Number & " - " & Err.Description
-            Err.Clear
+    End If
+    Set getWorkspace = wks
+    Exit Function
+errores:
+    p_Error = "getWorkspace: " & Err.Description
+End Function
+    
+Public Function getdb(Optional ByRef p_Error As String) As DAO.Database
+    Dim dummy As String
+    On Error GoTo errores
+    
+    ' VALIDACIÓN CRÍTICA: Verificar que m_dbCached siga siendo válido
+    ' Error 3420 "objeto no válido" ocurre cuando VBA GC libera el objeto
+    ' aunque aún tengamos una referencia. .Name fuerza validación real.
+    If Not m_dbCached Is Nothing Then
+        On Error Resume Next
+        dummy = m_dbCached.Name
+        If Err.Number = 0 Then
             On Error GoTo errores
-            Err.Raise 1000
+            Set getdb = m_dbCached
+            Exit Function
+        End If
+        ' Si .Name falló, el objeto está inválido - limpiar y continuar
+        Err.Clear
+        On Error GoTo errores
+        Set m_dbCached = Nothing
+    End If
+    
+    ' Si m_ActiveBackendURL no está seteado, leer de TbConfiguracionBackends
+    If m_ActiveBackendURL = "" Then
+        Call LeeConfiguracionLocal(p_Error)
+    End If
+    
+    ' Abrir conexión fresca via workspace
+    Set m_dbCached = getWorkspace().OpenDatabase(m_ActiveBackendURL, False, False, ";pwd=" & m_PasswordBackend)
+    Set getdb = m_dbCached
+    Exit Function
+errores:
+    p_Error = "El método getdb ha devuelto el error: " & vbNewLine & Err.Description
+End Function
+
+Private Sub CheckAndReconnect(ByRef dbObject As DAO.Database, ByVal dbType As String, Optional ByRef p_Error As String)
+    Dim needsConnection As Boolean
+    Dim dummy As String
+    
+    On Error GoTo errores
+    
+    needsConnection = False
+    
+    If dbObject Is Nothing Then
+        needsConnection = True
+    Else
+        On Error Resume Next
+        dummy = dbObject.Name
+        If Err.Number <> 0 Then
+            needsConnection = True
+            Err.Clear
         End If
         On Error GoTo errores
-
-        Set getdb = db
-        Exit Function
     End If
     
-    If Not p_SkipConfigLoad Then
-        Call LeeConfiguracionLocal(p_Error)
-        If p_Error <> "" Then Err.Raise 1000
-    End If
-
-    m_URL = Nz(Application.TempVars("BackendPathConfigurado"), "")
-    If m_URL = "" Then
-        p_Error = "BackendPathConfigurado no está resuelto. Revise BackendActivo/BackendProduccion/BackendSandbox en TbConfiguracionBackends"
-        Err.Raise 1000
-    End If
-    
-    Set wks = DBEngine.Workspaces(0)
-    Set db = wks.OpenDatabase(m_URL, False, False, "MS Access;PWD=" & "dpddpd" & "")
-    Set getdb = db
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getdb ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-End Function
-
-Public Function LeeConfiguracionLocal( _
-                            Optional ByRef p_Error As String _
-                            ) As Boolean
-    Dim m_Db As DAO.Database
-    Dim m_Rs As DAO.Recordset
-    Dim m_BackendActivo As String
-    Dim m_BackendProduccion As String
-    Dim m_BackendSandbox As String
-    Dim m_EnPruebas As String
-    Dim m_IDAplicacionCfg As Variant
-    Dim m_RutaProd As String
-    Dim m_RutaLocal As String
-    Dim m_BackendPathActivo As String
-    Dim m_NombreCampoBackendActivo As String
-    Dim m_RutaAplicacionActiva As String
-    Dim m_NombreCampoRutaActiva As String
-    Dim m_DiagInfra As String
-
-    On Error GoTo errores
-
-    Set m_Db = CurrentDb
-    Set m_Rs = m_Db.OpenRecordset("SELECT TOP 1 * FROM TbConfiguracionBackends ORDER BY ID", dbOpenSnapshot)
-    If m_Rs.EOF Then
-        p_Error = "TbConfiguracionBackends no tiene filas de configuración"
-        Err.Raise 1000
-    End If
-
-    m_BackendActivo = UCase$(Trim$(Nz(m_Rs.Fields("BackendActivo").Value, "")))
-    m_BackendProduccion = Trim$(Nz(m_Rs.Fields("BackendProduccion").Value, ""))
-    m_BackendSandbox = Trim$(Nz(m_Rs.Fields("BackendSandbox").Value, ""))
-    m_EnPruebas = Trim$(Nz(m_Rs.Fields("EnPruebas").Value, ""))
-    m_IDAplicacionCfg = Nz(m_Rs.Fields("IDAplicacion").Value, 0)
-    m_RutaProd = Trim$(Nz(m_Rs.Fields("RutaDirectorioAplicacion_PROD").Value, ""))
-    m_RutaLocal = Trim$(Nz(m_Rs.Fields("RutaDirectorioAplicacion_LOCAL").Value, ""))
-
-    If m_EnPruebas <> "Sí" And m_EnPruebas <> "No" Then
-        p_Error = "EnPruebas debe ser texto 'Sí' o 'No' en TbConfiguracionBackends"
-        Err.Raise 1000
-    End If
-
-    If m_BackendActivo = "PROD" Then
-        Application.TempVars("DatosEnLocal") = "No"
-    ElseIf m_BackendActivo = "LOCAL" Or m_BackendActivo = "SANDBOX" Then
-        Application.TempVars("DatosEnLocal") = "Sí"
-    Else
-        p_Error = "BackendActivo inválido en TbConfiguracionBackends. Use PROD/LOCAL/SANDBOX"
-        Err.Raise 1000
-    End If
-
-    m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
-    m_RutaAplicacionActiva = SelectAppPathFromActiveProfile(m_BackendActivo, m_RutaProd, m_RutaLocal, m_NombreCampoRutaActiva)
-
-    m_RutaProd = SanitizarRutaUsuarioWindowsLocal(m_RutaProd)
-    m_RutaLocal = SanitizarRutaUsuarioWindowsLocal(m_RutaLocal)
-    m_RutaAplicacionActiva = SanitizarRutaUsuarioWindowsLocal(m_RutaAplicacionActiva)
-
-    m_RutaProd = NormalizeFolderPath(m_RutaProd)
-    m_RutaLocal = NormalizeFolderPath(m_RutaLocal)
-    m_RutaAplicacionActiva = NormalizeFolderPath(m_RutaAplicacionActiva)
-
-    Application.TempVars("BackendPathConfigurado") = m_BackendPathActivo
-
-    Application.TempVars("BackendPathProduccion") = m_BackendProduccion
-    Application.TempVars("BackendPathSandbox") = m_BackendSandbox
-
-    Application.TempVars("BackendActivo") = m_BackendActivo
-    Application.TempVars("EnPruebas") = m_EnPruebas
-
-    m_URLRutaAplicacionRemota = m_RutaProd
-    m_URLRutaAplicacionLocal = m_RutaLocal
-    If m_BackendActivo = "PROD" Then
-        m_URLRutaAplicacionRemota = m_RutaAplicacionActiva
-    Else
-        m_URLRutaAplicacionLocal = m_RutaAplicacionActiva
-    End If
-
-    m_URLRutaAplicacionesRemotas = GetParentFolderPath(m_URLRutaAplicacionRemota)
-    m_URLRutaAplicacionesLocal = GetParentFolderPath(m_URLRutaAplicacionLocal)
-
-    m_DiagInfra = ""
-    If m_BackendPathActivo = "" Then
-        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoBackendActivo, m_BackendPathActivo, "Ruta vacía")
-    ElseIf Not fso.FileExists(m_BackendPathActivo) Then
-        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoBackendActivo, m_BackendPathActivo, "File not found")
-    End If
-
-    If m_RutaAplicacionActiva = "" Then
-        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoRutaActiva, m_RutaAplicacionActiva, "Ruta vacía")
-    ElseIf Not fso.FolderExists(m_RutaAplicacionActiva) Then
-        Call AppendInfraDiagnostic(m_DiagInfra, m_NombreCampoRutaActiva, m_RutaAplicacionActiva, "Folder not found")
-    End If
-
-    If m_DiagInfra <> "" Then
-        p_Error = "INFRA CONFIG FAIL-FAST:" & vbNewLine & m_DiagInfra
-        Err.Raise 1000
-    End If
-
-    If Not ResolveCacheHabilitadaFromConfig(AplicarCache, p_Error) Then
-        Err.Raise 1000
-    End If
-
-    If CLng(m_IDAplicacionCfg) > 0 Then
-        IDAplicacion = CStr(m_IDAplicacionCfg)
-    ElseIf Application.TempVars("EnPruebas") = "Sí" Then
-        IDAplicacion = "81"
-    Else
-        IDAplicacion = "8"
-    End If
-
-    LeeConfiguracionLocal = True
-    m_Rs.Close
-    Set m_Rs = Nothing
-    Set m_Db = Nothing
-    Exit Function
-
-errores:
-    Dim errNumber As Long
-    Dim errDescription As String
-    errNumber = Err.Number
-    errDescription = Err.Description
-
-    On Error Resume Next
-    If Not m_Rs Is Nothing Then m_Rs.Close
-    On Error GoTo 0
-    Set m_Rs = Nothing
-    Set m_Db = Nothing
-
-    If errNumber <> 1000 Then
-        p_Error = "LeeConfiguracionLocal ha devuelto el error: " & vbNewLine & errDescription
-    ElseIf p_Error = "" Then
-        p_Error = errDescription
-    End If
-End Function
-
-Private Function ResolveCacheHabilitadaFromConfig(ByRef p_AplicarCache As Boolean, Optional ByRef p_Error As String) As Boolean
-    Dim m_Db As DAO.Database
-    Dim m_RsCfg As DAO.Recordset
-
-    On Error GoTo errores
-    ResolveCacheHabilitadaFromConfig = False
-    p_AplicarCache = False
-
-    Set m_Db = getdb(p_Error, True)
-    If m_Db Is Nothing Then
-        If p_Error = "" Then p_Error = "No se pudo abrir backend configurado con getdb() para resolver TbConfiguracion.CacheHabilitada"
-        GoTo salida
-    End If
-
-    Set m_RsCfg = m_Db.OpenRecordset("SELECT TOP 1 CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
-
-    If m_RsCfg.EOF Then
-        p_Error = "TbConfiguracion.ID=1 no existe en backend configurado"
-        GoTo salida
-    End If
-
-    p_AplicarCache = CBool(Nz(m_RsCfg.Fields("CacheHabilitada").Value, False))
-    ResolveCacheHabilitadaFromConfig = True
-
-salida:
-    On Error Resume Next
-    If Not m_RsCfg Is Nothing Then m_RsCfg.Close
-    If Not m_Db Is Nothing Then m_Db.Close
-    Set m_RsCfg = Nothing
-    Set m_Db = Nothing
-    Exit Function
-
-errores:
-    p_Error = "ResolveCacheHabilitadaFromConfig ha devuelto el error: " & Err.Description
-    Resume salida
-End Function
-
-Private Function NormalizeFolderPath(ByVal p_Path As String) As String
-    Dim m_Path As String
-    m_Path = Trim$(Nz(p_Path, ""))
-    If m_Path = "" Then Exit Function
-    m_Path = Replace$(m_Path, "/", "\")
-    If Right$(m_Path, 1) <> "\" Then m_Path = m_Path & "\"
-    NormalizeFolderPath = m_Path
-End Function
-
-Public Function SanitizarRutaUsuarioWindowsLocal(ByVal p_Ruta As String, Optional ByVal p_PerfilUsuarioActual As String = "") As String
-    Dim m_Ruta As String
-    Dim m_UserProfile As String
-    Dim m_PosicionInicioSuffix As Long
-
-    m_Ruta = Trim$(Nz(p_Ruta, ""))
-    If m_Ruta = "" Then Exit Function
-
-    m_Ruta = Replace$(m_Ruta, "/", "\")
-
-    If Left$(m_Ruta, 2) = "\\" Then
-        SanitizarRutaUsuarioWindowsLocal = m_Ruta
-        Exit Function
-    End If
-
-    If LCase$(Left$(m_Ruta, 9)) <> "c:\users\" Then
-        SanitizarRutaUsuarioWindowsLocal = m_Ruta
-        Exit Function
-    End If
-
-    m_PosicionInicioSuffix = InStr(10, m_Ruta, "\")
-    If m_PosicionInicioSuffix = 0 Then
-        SanitizarRutaUsuarioWindowsLocal = m_Ruta
-        Exit Function
-    End If
-
-    If Trim$(p_PerfilUsuarioActual) = "" Then
-        m_UserProfile = Trim$(Replace$(Environ$("USERPROFILE"), "/", "\"))
-    Else
-        m_UserProfile = Trim$(Replace$(p_PerfilUsuarioActual, "/", "\"))
-    End If
-
-    If m_UserProfile = "" Then
-        SanitizarRutaUsuarioWindowsLocal = m_Ruta
-        Exit Function
-    End If
-
-    If Right$(m_UserProfile, 1) = "\" Then
-        If Len(m_UserProfile) > 1 Then
-            m_UserProfile = Left$(m_UserProfile, Len(m_UserProfile) - 1)
+    If needsConnection Then
+        ' Cerrar conexión anterior si existe (evitar leaks)
+        If Not dbObject Is Nothing Then
+            On Error Resume Next
+            dbObject.Close
+            Err.Clear
+            On Error GoTo errores
         End If
+        
+        ' Abrir fresh via workspace
+        Set dbObject = getWorkspace().OpenDatabase(m_ActiveBackendURL, False, False, ";pwd=" & m_PasswordBackend)
     End If
-
-    If LCase$(Left$(m_UserProfile, 9)) <> "c:\users\" Then
-        SanitizarRutaUsuarioWindowsLocal = m_Ruta
-        Exit Function
-    End If
-
-    SanitizarRutaUsuarioWindowsLocal = m_UserProfile & Mid$(m_Ruta, m_PosicionInicioSuffix)
-End Function
-
-Private Function GetParentFolderPath(ByVal p_AppPath As String) As String
-    Dim m_AppPath As String
-    Dim m_Folder As String
-
-    m_AppPath = NormalizeFolderPath(p_AppPath)
-    If m_AppPath = "" Then Exit Function
-
-    On Error GoTo salida
-    m_Folder = fso.GetParentFolderName(Left$(m_AppPath, Len(m_AppPath) - 1))
-    If m_Folder <> "" Then
-        If Right$(m_Folder, 1) <> "\" Then m_Folder = m_Folder & "\"
-        GetParentFolderPath = m_Folder
-    End If
-salida:
-End Function
-
-Private Function SelectBackendPathFromActiveProfile(ByVal p_BackendActivo As String, ByVal p_BackendProduccion As String, ByVal p_BackendSandbox As String, ByRef p_FieldName As String) As String
-    If UCase$(Trim$(p_BackendActivo)) = "PROD" Then
-        p_FieldName = "BackendProduccion"
-        SelectBackendPathFromActiveProfile = Trim$(Nz(p_BackendProduccion, ""))
-    Else
-        p_FieldName = "BackendSandbox"
-        SelectBackendPathFromActiveProfile = Trim$(Nz(p_BackendSandbox, ""))
-    End If
-End Function
-
-Private Function SelectAppPathFromActiveProfile(ByVal p_BackendActivo As String, ByVal p_RutaProd As String, ByVal p_RutaLocal As String, ByRef p_FieldName As String) As String
-    If UCase$(Trim$(p_BackendActivo)) = "PROD" Then
-        p_FieldName = "RutaDirectorioAplicacion_PROD"
-        SelectAppPathFromActiveProfile = Trim$(Nz(p_RutaProd, ""))
-    Else
-        p_FieldName = "RutaDirectorioAplicacion_LOCAL"
-        SelectAppPathFromActiveProfile = Trim$(Nz(p_RutaLocal, ""))
-    End If
-End Function
-
-Private Sub AppendInfraDiagnostic(ByRef p_Diagnostic As String, ByVal p_FieldName As String, ByVal p_Path As String, ByVal p_Cause As String)
-    Dim m_Line As String
-    m_Line = "- Campo=" & p_FieldName & "; Ruta=" & p_Path & "; Causa=" & p_Cause
-    If p_Diagnostic = "" Then
-        p_Diagnostic = m_Line
-    Else
-        p_Diagnostic = p_Diagnostic & vbNewLine & m_Line
-    End If
+    
+    Exit Sub
+errores:
+    p_Error = "CheckAndReconnect: " & Err.Description
 End Sub
+
+
+Private Sub ResetGlobals()
+    ' =============================================================================
+    ' Resetear TODAS las variables de módulo a su estado inicial
+    ' Llamado al inicio de EVE() para garantizar un estado limpio antes de cargar
+    ' =============================================================================
+    
+    ' Limpiar TempVars ANTES de cargar nueva configuración
+   
+    
+    ' Strings
+    TempVars.RemoveAll
+    IDAplicacion = ""
+    
+    
+   
+    
+    m_ActiveBackendURL = ""
+    m_PasswordBackend = ""
+    
+    ' Enums ? defaults (0)
+    m_EnOficina = 0
+    EsAdministrador = 0
+    EsTecnico = 0
+    EsCalidad = 0
+    
+    
+    
+    
+    ' Flags
+    pregunta = 0
+    
+    
+    ' Objetos DAO ? Nothing
+    Set wks = Nothing
+    Set db = Nothing
+    Set db1 = Nothing
+    Set m_dbCached = Nothing
+    
+    ' Objetos de dominio ? Nothing
+    Set m_ObjUsuarioConectado = Nothing
+    Set m_ObjEntorno = Nothing
+    Set m_ObjNCProyectoActiva = Nothing
+    Set m_ObjNCProyectoActivaPVinculada = Nothing
+    Set m_ObjARProyectoActiva = Nothing
+    Set m_ObjDocumentoProyectoActivo = Nothing
+    Set m_ObjTipologiaProyectoActiva = Nothing
+    Set m_ObjLogProyectoActivo = Nothing
+    Set m_ObjAuditoriaActiva = Nothing
+    Set m_ObjNCAuditoriaActiva = Nothing
+    Set m_ObjACAuditoriaActiva = Nothing
+    Set m_ObjARAuditoriaActiva = Nothing
+    Set m_ObjColDocumentosAuditoriaParaAlta = Nothing
+    Set m_ColFiltradoTareasNCProyectos = Nothing
+    m_SQLAlInicioSegTareasProyectos = ""
+    m_SQLAlInicioSegTareasAuditorias = ""
+    m_SQLAlInicioSegNCProyectos = ""
+    AplicarCache = False
+    
+    Set m_ObjEntorno = Nothing
+    Set m_ObjEntorno = Nothing
+    Set lbl = Nothing
+End Sub
+
+
 Public Function EVE(Optional ByRef p_Error As String) As String
 
     Dim m_NombreCarpeta As String
@@ -508,21 +325,32 @@ Public Function EVE(Optional ByRef p_Error As String) As String
     'Application.TempVars("CadenaCorreosCalidadEnPruebas") = "andres.romandelperal@telefonica.com"
     Application.TempVars("NombreCSSEnPruebas") = "CSS_pruebas.txt"
     Application.TempVars("NombreCSSNoPruebas") = "CSS.txt"
+    AplicarCache = False
     'AplicarCache = True
-    Call LeeConfiguracionLocal(p_Error)
-    If p_Error <> "" Then Err.Raise 1000
-    If IDAplicacion = "" Then
-        If Application.TempVars("EnPruebas") = "Sí" Then
-            IDAplicacion = "81"
-        Else
-            IDAplicacion = "8"
-        End If
+    If Application.TempVars("EnPruebas") = "Sí" Then
+        IDAplicacion = "81"
+    Else
+        IDAplicacion = "8"
     End If
     
     Set m_ObjEntorno = New Entorno
-    p_Error = ""
-    Call m_ObjEntorno.ValidarInfraCritica(p_Error)
-    If p_Error <> "" Then Err.Raise 1000
+     m_URLRutaAplicacionesRemotas = "\\datoste\aplicaciones_dys\Aplicaciones PpD\"
+    If Application.TempVars("EnPruebas") = "Sí" Then
+        m_NombreCarpeta = "No Conformidades PRUEBA"
+    Else
+        m_NombreCarpeta = "No Conformidades"
+    End If
+    
+    m_URLRutaAplicacionRemota = m_URLRutaAplicacionesRemotas & m_NombreCarpeta & "\"
+    If Application.TempVars("DatosEnLocal") = "Sí" Then
+        m_URLRutaAplicacionesLocal = getRutaAplicacionesLocal(p_Error)
+        If m_URLRutaAplicacionesLocal <> "" Then
+            m_URLRutaAplicacionLocal = m_URLRutaAplicacionesLocal & m_NombreCarpeta & "\"
+        End If
+    Else
+       m_URLRutaAplicacionesLocal = ""
+       m_URLRutaAplicacionLocal = ""
+    End If
     m_Command = Nz(VBA.Command, "")
     Avance "Obteniendo variables de Entorno... En Oficina"
     
@@ -691,3 +519,88 @@ errores:
         p_Error = "LeerIni ha producido el error nº: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
+
+Public Function LeeConfiguracionLocal( _
+                        Optional ByRef p_Error As String _
+                        ) As String
+    ' Lee configuración desde TbConfiguracionBackends:
+    ' - Backend activo (PROD/SANDBOX/TEST)
+    ' - Rutas de backend de datos
+    ' - Ruta de directorio de aplicaciones (recursos, ayuda, plantillas)
+    
+    Dim rcdCfg As DAO.Recordset
+    Dim m_SQL As String
+    Dim m_BackendActivo As String
+    Dim m_URL As String
+    Dim m_Pwd As String
+    Dim m_RutaDirectorioAplicacion As String
+    
+    On Error GoTo errores
+    
+    m_SQL = "SELECT TOP 1 * FROM TbConfiguracionBackends;"
+    Set rcdCfg = CurrentDb.OpenRecordset(m_SQL)
+    
+    If rcdCfg.EOF Then
+        rcdCfg.Close
+        Set rcdCfg = Nothing
+        p_Error = "No se encontró configuración de backend habilitada"
+        Exit Function
+    End If
+    
+    rcdCfg.MoveFirst
+    
+    ' Leer campos de configuración de backend
+    m_BackendActivo = Nz(rcdCfg!backendActivo, "PROD")
+    Application.TempVars("BackendActivo") = m_BackendActivo
+    Application.TempVars("BackendProduccion") = Nz(rcdCfg!BackendProduccion, "")
+    Application.TempVars("BackendSandbox") = Nz(rcdCfg!BackendSandbox, "")
+    Application.TempVars("BackendTest") = Nz(rcdCfg!BackendTest, "")
+    Application.TempVars("EnDesarrollo") = Nz(rcdCfg!EnDesarrollo, "No")
+    m_Pwd = Nz(rcdCfg!PasswordBackend, m_PasswordBackend)
+    Application.TempVars("PasswordBackend") = m_Pwd
+
+    ' IDAplicacion — leído de la config, no hardcodeado
+    IDAplicacion = Nz(rcdCfg!IDAplicacion, "19")
+    Application.TempVars("IDAplicacion") = IDAplicacion
+
+    ' Leer ruta de directorio de aplicaciones según entorno
+    Select Case m_BackendActivo
+        Case "PROD"
+            m_RutaDirectorioAplicacion = Nz(rcdCfg!RutaDirectorioAplicacion_PROD, "")
+        Case Else  ' SANDBOX o TEST
+            m_RutaDirectorioAplicacion = Nz(rcdCfg!RutaDirectorioAplicacion_LOCAL, "")
+    End Select
+    Application.TempVars("RutaDirectorioAplicacion") = m_RutaDirectorioAplicacion
+    
+    ' Determinar URL de backend de datos según entorno activo
+    Select Case m_BackendActivo
+        Case "PROD"
+            m_URL = Nz(rcdCfg!BackendProduccion, "")
+        Case "SANDBOX"
+            m_URL = Nz(rcdCfg!BackendSandbox, "")
+        Case "TEST"
+            m_URL = Nz(rcdCfg!BackendTest, "")
+        Case Else
+            m_URL = Nz(rcdCfg!BackendProduccion, "")
+    End Select
+    
+    ' Guardar en variables de módulo para getdb()
+    m_ActiveBackendURL = m_URL
+    m_PasswordBackend = m_Pwd
+    
+    rcdCfg.Close
+    Set rcdCfg = Nothing
+    
+    Exit Function
+errores:
+    If rcdCfg Is Nothing = False Then
+        rcdCfg.Close
+        Set rcdCfg = Nothing
+    End If
+    If Err.Number <> 1000 Then
+        p_Error = "El método LeeConfiguracionLocal ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+End Function
+
+
+

@@ -81,7 +81,7 @@ Public Function GenerarCachesMasivo( _
 ) As Boolean
     
     Dim rcd As DAO.Recordset
-    Dim SQL As String
+    Dim sql As String
     Dim totalNCs As Long
     Dim ncActual As Long
     Dim ncID As String
@@ -102,8 +102,8 @@ Public Function GenerarCachesMasivo( _
     End If
     
     ' Contar NCs totales
-    SQL = "SELECT COUNT(*) AS Total FROM TbNoConformidades WHERE Borrado=False;"
-    Set rcd = getdb().OpenRecordset(SQL)
+    sql = "SELECT COUNT(*) AS Total FROM TbNoConformidades WHERE Borrado=False;"
+    Set rcd = getdb().OpenRecordset(sql)
     totalNCs = rcd!total
     rcd.Close
     
@@ -114,17 +114,17 @@ Public Function GenerarCachesMasivo( _
     
     ' Limpiar caches obsoletos si se solicita
     If p_LimpiarCachesAnteriores Then
-        SQL = "DELETE FROM TbCacheNCProyecto WHERE " & _
+        sql = "DELETE FROM TbCacheNCProyecto WHERE " & _
                "(FechaUltimoUso Is Null OR DATEDIFF('d', FechaUltimoUso, Now()) > " & p_UmbralDiasSinUso & ") " & _
                "AND IDNoConformidad IN (SELECT IDNoConformidad FROM TbNoConformidades WHERE Borrado=False);"
-        getdb().Execute SQL
+        getdb().Execute sql
         cachesLimpiados = getdb().RecordsAffected
     End If
     
     ' Obtener todas las NCs
-    SQL = "SELECT IDNoConformidad FROM TbNoConformidades " & _
+    sql = "SELECT IDNoConformidad FROM TbNoConformidades " & _
            "WHERE Borrado=False ORDER BY IDNoConformidad;"
-    Set rcd = getdb().OpenRecordset(SQL)
+    Set rcd = getdb().OpenRecordset(sql)
     
     ncActual = 0
     
@@ -289,7 +289,7 @@ Public Function ObtenerEstadisticasCache( _
                                         ) As String
     
     Dim rcd As DAO.Recordset
-    Dim SQL As String
+    Dim sql As String
     Dim resultado As String
     
     On Error GoTo errores
@@ -298,9 +298,9 @@ Public Function ObtenerEstadisticasCache( _
     resultado = ""
     
     ' Usar vista de estadísticas
-    SQL = "SELECT * FROM vCacheNCProyectoEstadisticas;"
+    sql = "SELECT * FROM vCacheNCProyectoEstadisticas;"
     
-    Set rcd = getdb().OpenRecordset(SQL)
+    Set rcd = getdb().OpenRecordset(sql)
     
     If Not rcd.EOF Then
         resultado = "ESTADÍSTICAS DEL CACHÉ" & vbNewLine & vbNewLine
@@ -342,7 +342,7 @@ Public Function ListarCachesObsoletos( _
 ) As String
     
     Dim rcd As DAO.Recordset
-    Dim SQL As String
+    Dim sql As String
     Dim resultado As String
     
     On Error GoTo errores
@@ -350,8 +350,8 @@ Public Function ListarCachesObsoletos( _
     p_Error = ""
     resultado = ""
     
-    SQL = "DELETE * FROM vCacheNCProyectoObsoletos WHERE DiasSinUso > " & p_DiasSinUso & ";"
-    Set rcd = getdb().OpenRecordset(SQL)
+    sql = "DELETE * FROM vCacheNCProyectoObsoletos WHERE DiasSinUso > " & p_DiasSinUso & ";"
+    Set rcd = getdb().OpenRecordset(sql)
     
     If Not rcd.EOF Then
         resultado = "CACHÉS OBSOLETOS (más de " & p_DiasSinUso & " días sin uso):" & vbNewLine & vbNewLine
@@ -444,7 +444,7 @@ Public Function VerificarIntegridadCache( _
     
     Dim rcdCache As DAO.Recordset
     Dim rcdNC As DAO.Recordset
-    Dim SQL As String
+    Dim sql As String
     Dim problemas As Integer
     Dim resultado As String
     
@@ -460,11 +460,11 @@ Public Function VerificarIntegridadCache( _
     resultado = "VERIFICACIÓN DE INTEGRIDAD DE CACHÉ" & vbNewLine & vbNewLine
     
     ' 1. Verificar caches sin NC correspondiente
-    SQL = "SELECT c.IDCache, c.IDNoConformidad FROM TbCacheNCProyecto AS c " & _
+    sql = "SELECT c.IDCache, c.IDNoConformidad FROM TbCacheNCProyecto AS c " & _
            "LEFT JOIN TbNoConformidades AS n ON c.IDNoConformidad = n.IDNoConformidad " & _
            "WHERE n.IDNoConformidad Is Null;"
     
-    Set rcdCache = getdb().OpenRecordset(SQL)
+    Set rcdCache = getdb().OpenRecordset(sql)
     
     If Not rcdCache.EOF Then
         resultado = resultado & "1. CACHÉS SIN NC CORRESPONDIENTE: " & rcdCache.RecordCount & vbNewLine
@@ -485,11 +485,11 @@ Public Function VerificarIntegridadCache( _
     Set rcdCache = Nothing
     
     ' 2. Verificar NCs sin caché válido
-    SQL = "SELECT n.IDNoConformidad, n.CodigoNoConformidad FROM TbNoConformidades AS n " & _
+    sql = "SELECT n.IDNoConformidad, n.CodigoNoConformidad FROM TbNoConformidades AS n " & _
            "LEFT JOIN TbCacheNCProyecto AS c ON n.IDNoConformidad = c.IDNoConformidad " & _
            "WHERE n.Borrado=False AND (c.IDNoConformidad Is Null OR c.CacheValida = False);"
     
-    Set rcdNC = getdb().OpenRecordset(SQL)
+    Set rcdNC = getdb().OpenRecordset(sql)
     
     If Not rcdNC.EOF Then
         resultado = resultado & "2. NCs SIN CACHÉ VÁLIDO: " & rcdNC.RecordCount & vbNewLine
@@ -510,12 +510,12 @@ Public Function VerificarIntegridadCache( _
     Set rcdNC = Nothing
     
     ' 3. Verificar caches con JSON inválido
-    SQL = "SELECT IDNoConformidad FROM TbCacheNCProyecto " & _
+    sql = "SELECT IDNoConformidad FROM TbCacheNCProyecto " & _
            "WHERE (DatosNC Is Null OR DatosNC = '') " & _
            "OR (DatosACs Is Null OR DatosACs = '') " & _
            "OR (DatosARs Is Null OR DatosARs = '');"
     
-    Set rcdCache = getdb().OpenRecordset(SQL)
+    Set rcdCache = getdb().OpenRecordset(sql)
     
     If Not rcdCache.EOF Then
         resultado = resultado & "3. CACHÉS CON JSON VACÍO/INVÁLIDO: " & rcdCache.RecordCount & vbNewLine
@@ -568,7 +568,7 @@ Public Function RepararProblemasIntegridad( _
     Optional ByRef p_Error As String _
 ) As Boolean
     
-    Dim SQL As String
+    Dim sql As String
     Dim rcd As DAO.Recordset
     Dim rcdNC As DAO.Recordset
     
@@ -580,23 +580,23 @@ Public Function RepararProblemasIntegridad( _
     
     If p_EliminarHuerfanos Then
         ' Eliminar caches sin NC correspondiente
-        SQL = "DELETE FROM TbCacheNCProyecto " & _
+        sql = "DELETE FROM TbCacheNCProyecto " & _
                "WHERE IDNoConformidad IN (" & _
                "SELECT c.IDNoConformidad FROM TbCacheNCProyecto AS c " & _
                "LEFT JOIN TbNoConformidades AS n ON c.IDNoConformidad = n.IDNoConformidad " & _
                "WHERE n.IDNoConformidad Is Null);"
         
-        getdb().Execute SQL
+        getdb().Execute sql
         p_Eliminados = p_Eliminados + getdb().RecordsAffected
     End If
     
     If p_RegenerarInvalidos Then
         ' Regenerar caches de NCs que tienen caché inválido
-        SQL = "SELECT n.IDNoConformidad FROM TbNoConformidades AS n " & _
+        sql = "SELECT n.IDNoConformidad FROM TbNoConformidades AS n " & _
                "INNER JOIN TbCacheNCProyecto AS c ON n.IDNoConformidad = c.IDNoConformidad " & _
                "WHERE n.Borrado=False AND c.CacheValida = False;"
         
-        Set rcd = getdb().OpenRecordset(SQL)
+        Set rcd = getdb().OpenRecordset(sql)
         
         If Not rcd.EOF Then
             rcd.MoveFirst
@@ -648,7 +648,7 @@ End Sub
 ' 1. LIMPIEZA DE CACHÉS OBSOLETOS (Renombrado para evitar conflicto)
 ' --------------------------------------------------------------------------------
 Public Sub InvalidarCachesObsoletos(Optional p_DiasSinUso As Integer = 30)
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     Dim afectados As Long
@@ -657,11 +657,11 @@ Public Sub InvalidarCachesObsoletos(Optional p_DiasSinUso As Integer = 30)
     Set db = getdb()
     
     ' Verificar cuántos se marcarán
-    SQL = "SELECT COUNT(*) AS Cantidad FROM TbCacheNCProyecto " & _
+    sql = "SELECT COUNT(*) AS Cantidad FROM TbCacheNCProyecto " & _
           "WHERE CacheValida = True " & _
           "AND (FechaUltimoUso Is Null OR DATEDIFF('d', Nz(FechaUltimoUso, FechaCache), Now()) > " & p_DiasSinUso & ");"
     
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         afectados = rcd!Cantidad
     End If
@@ -669,11 +669,11 @@ Public Sub InvalidarCachesObsoletos(Optional p_DiasSinUso As Integer = 30)
     
     If afectados > 0 Then
         ' Ejecutar actualización
-        SQL = "UPDATE TbCacheNCProyecto " & _
+        sql = "UPDATE TbCacheNCProyecto " & _
               "SET CacheValida = False " & _
               "WHERE CacheValida = True " & _
               "AND (FechaUltimoUso Is Null OR DATEDIFF('d', Nz(FechaUltimoUso, FechaCache), Now()) > " & p_DiasSinUso & ");"
-        db.Execute SQL, dbFailOnError
+        db.Execute sql, dbFailOnError
         Debug.Print ">> Se han invalidado " & afectados & " registros de caché no usados en los últimos " & p_DiasSinUso & " días."
     Else
         Debug.Print ">> No hay cachés obsoletos para invalidar (Criterio: > " & p_DiasSinUso & " días sin uso)."
@@ -688,7 +688,7 @@ End Sub
 ' 2. ELIMINACIÓN DE CACHÉS MARCADOS INVÁLIDOS
 ' --------------------------------------------------------------------------------
 Public Sub EliminarCachesInvalidos(Optional p_DiasInvalidos As Integer = 60)
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim registrosAntes As Long
     Dim registrosDespues As Long
@@ -700,11 +700,11 @@ Public Sub EliminarCachesInvalidos(Optional p_DiasInvalidos As Integer = 60)
     registrosAntes = DCount("*", "TbCacheNCProyecto")
     
     ' Eliminar
-    SQL = "DELETE FROM TbCacheNCProyecto " & _
+    sql = "DELETE FROM TbCacheNCProyecto " & _
           "WHERE CacheValida = False " & _
           "AND DATEDIFF('d', Nz(FechaUltimoUso, FechaCache), Now()) > " & p_DiasInvalidos & ";"
     
-    db.Execute SQL, dbFailOnError
+    db.Execute sql, dbFailOnError
     
     ' Contar después
     registrosDespues = DCount("*", "TbCacheNCProyecto")
@@ -720,7 +720,7 @@ End Sub
 ' 3. ESTADÍSTICAS DE USO DEL CACHÉ
 ' --------------------------------------------------------------------------------
 Public Sub MostrarEstadisticasUso()
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     
@@ -728,12 +728,12 @@ Public Sub MostrarEstadisticasUso()
     Set db = getdb()
     
     Debug.Print vbNewLine & "=== ESTADÍSTICAS GENERALES ==="
-    SQL = "SELECT COUNT(*) AS Total, SUM(HitsConsultas) AS Hits, " & _
+    sql = "SELECT COUNT(*) AS Total, SUM(HitsConsultas) AS Hits, " & _
           "COUNT(IIF(HitsConsultas > 0, 1, Null)) AS Usados, " & _
           "SUM(TamanioBytes) / 1024 / 1024 AS MB " & _
           "FROM TbCacheNCProyecto;"
     
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         Debug.Print "Total Cachés: " & Nz(rcd!total, 0)
         Debug.Print "Total Hits:   " & Nz(rcd!Hits, 0)
@@ -746,9 +746,9 @@ Public Sub MostrarEstadisticasUso()
     Debug.Print Format("ID NC", "@@@@@@") & " | " & Format("Hits", "@@@@@@") & " | " & Format("Último Uso", "@@@@@@@@@@@@@@@@@@@") & " | " & "Tamaño KB"
     Debug.Print String(50, "-")
     
-    SQL = "SELECT TOP 10 IDNoConformidad, HitsConsultas, FechaUltimoUso, TamanioBytes " & _
+    sql = "SELECT TOP 10 IDNoConformidad, HitsConsultas, FechaUltimoUso, TamanioBytes " & _
           "FROM TbCacheNCProyecto WHERE CacheValida = True ORDER BY HitsConsultas DESC;"
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     Do While Not rcd.EOF
         Debug.Print Format(rcd!IDNoConformidad, "@@@@@@") & " | " & _
                     Format(rcd!HitsConsultas, "@@@@@@") & " | " & _
@@ -762,9 +762,9 @@ Public Sub MostrarEstadisticasUso()
     Debug.Print Format("ID NC", "@@@@@@") & " | " & Format("KB", "@@@@@@@@") & " | " & "Versión"
     Debug.Print String(40, "-")
     
-    SQL = "SELECT TOP 10 IDNoConformidad, TamanioBytes, Version " & _
+    sql = "SELECT TOP 10 IDNoConformidad, TamanioBytes, Version " & _
           "FROM TbCacheNCProyecto WHERE CacheValida = True ORDER BY TamanioBytes DESC;"
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     Do While Not rcd.EOF
         Debug.Print Format(rcd!IDNoConformidad, "@@@@@@") & " | " & _
                     Format(rcd!tamanioBytes / 1024, "0.00") & " | " & _
@@ -782,7 +782,7 @@ End Sub
 ' 4. DIAGNÓSTICO DE PROBLEMAS DE INTEGRIDAD
 ' --------------------------------------------------------------------------------
 Public Sub DiagnosticarIntegridad()
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     Dim problemas As Long
@@ -794,10 +794,10 @@ Public Sub DiagnosticarIntegridad()
     Debug.Print vbNewLine & "=== DIAGNÓSTICO DE INTEGRIDAD ==="
     
     ' 1. Huérfanos
-    SQL = "SELECT c.IDCache, c.IDNoConformidad FROM TbCacheNCProyecto AS c " & _
+    sql = "SELECT c.IDCache, c.IDNoConformidad FROM TbCacheNCProyecto AS c " & _
           "LEFT JOIN TbNoConformidades AS n ON c.IDNoConformidad = n.IDNoConformidad " & _
           "WHERE n.IDNoConformidad Is Null;"
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         Debug.Print "[!] Se encontraron cachés huérfanos (sin NC en tabla principal):"
         Do While Not rcd.EOF
@@ -811,9 +811,9 @@ Public Sub DiagnosticarIntegridad()
     rcd.Close
     
     ' 2. JSON Vacíos
-    SQL = "SELECT IDNoConformidad FROM TbCacheNCProyecto " & _
+    sql = "SELECT IDNoConformidad FROM TbCacheNCProyecto " & _
           "WHERE CacheValida = True AND (Len(DatosNC) = 0 OR Len(DatosACs) = 0 OR Len(DatosARs) = 0);"
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         Debug.Print "[!] Se encontraron cachés con JSONs vacíos:"
         Do While Not rcd.EOF
@@ -827,11 +827,11 @@ Public Sub DiagnosticarIntegridad()
     rcd.Close
     
     ' 3. Posibles incompletos (ACs sin ARs, solo informativo)
-    SQL = "SELECT n.IDNoConformidad, c.HitsConsultas FROM TbNoConformidades AS n " & _
+    sql = "SELECT n.IDNoConformidad, c.HitsConsultas FROM TbNoConformidades AS n " & _
           "INNER JOIN TbCacheNCProyecto AS c ON n.IDNoConformidad = c.IDNoConformidad " & _
           "WHERE n.Borrado = False AND c.CacheValida = True " & _
           "AND Len(c.DatosACs) > 5 AND Len(c.DatosARs) < 5;" ' < 5 asume "[]" o empty
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         Debug.Print "[i] INFO: NCs con ACs pero sin ARs en caché (verificar si es correcto):"
         Do While Not rcd.EOF
@@ -858,7 +858,7 @@ End Sub
 
 ' Regenera caches marcados como inválidos
 Public Sub RegenerarCachesInvalidos()
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     Dim total As Long
@@ -869,8 +869,8 @@ Public Sub RegenerarCachesInvalidos()
     On Error GoTo errores
     Set db = getdb()
     
-    SQL = "SELECT IDNoConformidad FROM TbCacheNCProyecto WHERE CacheValida = False;"
-    Set rcd = db.OpenRecordset(SQL)
+    sql = "SELECT IDNoConformidad FROM TbCacheNCProyecto WHERE CacheValida = False;"
+    Set rcd = db.OpenRecordset(sql)
     
     If rcd.EOF Then
         Debug.Print ">> No hay cachés marcados como inválidos para regenerar."
@@ -908,7 +908,7 @@ End Sub
 
 ' Puebla la caché desde cero para todas las NCs activas
 Public Sub PoblarCacheMasivo(Optional p_SoloFaltantes As Boolean = True)
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     Dim total As Long
@@ -925,8 +925,8 @@ Public Sub PoblarCacheMasivo(Optional p_SoloFaltantes As Boolean = True)
         condicion = condicion & " AND IDNoConformidad NOT IN (SELECT IDNoConformidad FROM TbCacheNCProyecto WHERE CacheValida = True)"
     End If
     
-    SQL = "SELECT IDNoConformidad FROM TbNoConformidades " & condicion & " ORDER BY IDNoConformidad DESC;"
-    Set rcd = db.OpenRecordset(SQL)
+    sql = "SELECT IDNoConformidad FROM TbNoConformidades " & condicion & " ORDER BY IDNoConformidad DESC;"
+    Set rcd = db.OpenRecordset(sql)
     
     If rcd.EOF Then
         Debug.Print ">> No se encontraron NCs que cumplan el criterio para poblar caché."
@@ -995,7 +995,7 @@ End Sub
 ' 7. ESTADÍSTICAS DE RENDIMIENTO
 ' --------------------------------------------------------------------------------
 Public Sub MostrarRendimiento()
-    Dim SQL As String
+    Dim sql As String
     Dim db As DAO.Database
     Dim rcd As DAO.Recordset
     
@@ -1004,11 +1004,11 @@ Public Sub MostrarRendimiento()
     
     Debug.Print vbNewLine & "=== RENDIMIENTO DEL CACHÉ ==="
     
-    SQL = "SELECT COUNT(*) AS Caches, AVG(HitsConsultas) AS PromHits, " & _
+    sql = "SELECT COUNT(*) AS Caches, AVG(HitsConsultas) AS PromHits, " & _
           "SUM(HitsConsultas) AS TotalEvitadas " & _
           "FROM TbCacheNCProyecto WHERE CacheValida = True;"
     
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     If Not rcd.EOF Then
         Debug.Print "Cachés Activos:      " & Nz(rcd!Caches, 0)
         Debug.Print "Promedio Hits:       " & Format(Nz(rcd!PromHits, 0), "0.00")
@@ -1020,7 +1020,7 @@ Public Sub MostrarRendimiento()
     Debug.Print Format("Rango", "@@@@@@@@@@@@@@@") & " | " & Format("Cant.", "@@@@@") & " | " & "Prom. Hits"
     Debug.Print String(40, "-")
     
-    SQL = "SELECT " & _
+    sql = "SELECT " & _
           "SWITCH(TamanioBytes < 1024, '< 1 KB', " & _
           "TamanioBytes < 10240, '1-10 KB', " & _
           "TamanioBytes < 102400, '10-100 KB', " & _
@@ -1034,7 +1034,7 @@ Public Sub MostrarRendimiento()
           "TamanioBytes < 1048576, '100KB-1MB', " & _
           "True, '> 1 MB');"
           
-    Set rcd = db.OpenRecordset(SQL)
+    Set rcd = db.OpenRecordset(sql)
     Do While Not rcd.EOF
         Debug.Print Format(rcd!Rango, "@@@@@@@@@@@@@@@") & " | " & _
                     Format(rcd!Cantidad, "@@@@@") & " | " & _

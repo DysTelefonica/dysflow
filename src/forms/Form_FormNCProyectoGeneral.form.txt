@@ -2968,18 +2968,6 @@ Public Sub ComandoGrabar_Click()
     Set m_NCOp = New NCProyectoOperaciones
     With m_NCOp
         Set m_NCOp.nc = m_ObjNCProyectoActiva
-        ' Issue #19: Gate CE - si todas las ARs finalizadas y CE pendiente sin detalle, bloquear cierre
-        Dim m_GateCE As String
-        m_GateCE = .MotivoCierreControlEficaciaNoOK(m_Error)
-        If m_Error <> "" Then
-            Err.Raise 1000
-        End If
-        If m_GateCE <> "" Then
-            DoCmd.Hourglass False
-            pregunta = MsgBox(m_GateCE, vbExclamation, "Control de Eficacia pendiente")
-            DoCmd.Hourglass True
-            Exit Sub
-        End If
         If Not m_NCAsociada Is Nothing Then
             .RegistrarCambiosDatosUnicosConVinculoNC Form_FormNCProyecto.m_NCAlInicio, m_Error
         Else

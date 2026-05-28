@@ -121,7 +121,7 @@ Public Function RellenarAnexosAuditorias( _
     Dim m_URLAnexo As String
     Dim m_Documento As DocumentoAuditoria
     Dim m_NombreDocumento As String
-    Dim m_IDNC As String
+    Dim m_IdNC As String
     On Error GoTo errores
     m_SQL = "TbAnexosAuditoria"
     Set rcdDatosOrigen = getdb().OpenRecordset(m_SQL)
@@ -171,20 +171,20 @@ Public Function RellenarAnexosAuditorias( _
     Set rcdDatosOrigen = getdb().OpenRecordset(m_SQL)
     If Not rcdDatosOrigen.EOF Then
         Do While Not rcdDatosOrigen.EOF
-            m_IDNC = Nz(rcdDatosOrigen.Fields("IDNoConformidad"), "")
-            If IsNumeric(m_IDNC) Then
+            m_IdNC = Nz(rcdDatosOrigen.Fields("IDNoConformidad"), "")
+            If IsNumeric(m_IdNC) Then
                 m_NombreDocumento = rcdDatosOrigen.Fields("NombreArchivo")
                 m_NombreDocumento = fso.GetBaseName(m_NombreDocumento)
                 m_SQL = "SELECT * " & _
                     "FROM TbDocumentosAuditorias " & _
-                    "WHERE IDNoConformidad=" & m_IDNC & " " & _
+                    "WHERE IDNoConformidad=" & m_IdNC & " " & _
                     "AND Documento='" & m_NombreDocumento & "';"
                 Set rcdDatosDestino = getdb().OpenRecordset(m_SQL)
                 If rcdDatosDestino.EOF Then
                     Set m_Documento = New DocumentoAuditoria
                     With m_Documento
                         .IDDocumento = .IDDocumentoCalculado
-                        .IDNoConformidad = m_IDNC
+                        .IDNoConformidad = m_IdNC
                         .Documento = rcdDatosOrigen.Fields("NombreArchivo")
                         m_URLAnexo = .getURLAnexoFinal(.Documento)
                         .NombreAnexo = fso.GetFileName(m_URLAnexo)
@@ -257,7 +257,7 @@ End Function
 '            "INNER JOIN TbExpedientesResponsables ON TbExpedientes.IDExpediente = TbExpedientesResponsables.IdExpediente) " & _
 '            "INNER JOIN TbUsuariosAplicaciones ON TbExpedientesResponsables.IdUsuario = TbUsuariosAplicaciones.Id " & _
 '            "SET TbNoConformidades.RESPONSABLETELEFONICA = [TbUsuariosAplicaciones].[UsuarioRed];"
-'    getdb().Execute m_SQL
+'    getdbNoConformidades().Execute m_SQL
 '
 '
 '    Exit Function
@@ -1963,7 +1963,7 @@ Public Function RellenarNAccionesProyecto( _
     Dim m_SQL As String
     
     Dim m_Col As Scripting.Dictionary
-    Dim m_IDNC As Variant
+    Dim m_IdNC As Variant
     
     Dim NumAC As Long
     Dim NumAR As Long
@@ -1979,13 +1979,13 @@ Public Function RellenarNAccionesProyecto( _
     If m_Col Is Nothing Then
         Exit Function
     End If
-    For Each m_IDNC In m_Col
+    For Each m_IdNC In m_Col
        VBA.DoEvents
-       Debug.Print m_IDNC
+       Debug.Print m_IdNC
         VBA.DoEvents
         m_SQL = "SELECT  IDAccionCorrectiva,NAccion, IDNoConformidad " & _
                 "FROM TbNCAccionCorrectivas " & _
-                "WHERE IDNoConformidad = " & m_IDNC & " " & _
+                "WHERE IDNoConformidad = " & m_IdNC & " " & _
                 "ORDER BY IDAccionCorrectiva;"
         Set rcdDatosAC = getdb().OpenRecordset(m_SQL)
         If Not rcdDatosAC.EOF Then
@@ -2041,7 +2041,7 @@ Public Function RellenarNAccionesAuditoria( _
     Dim m_SQL As String
     
     Dim m_Col As Scripting.Dictionary
-    Dim m_IDNC As Variant
+    Dim m_IdNC As Variant
     
     Dim NumAC As Long
     Dim NumAR As Long
@@ -2057,13 +2057,13 @@ Public Function RellenarNAccionesAuditoria( _
     If m_Col Is Nothing Then
         Exit Function
     End If
-    For Each m_IDNC In m_Col
+    For Each m_IdNC In m_Col
        VBA.DoEvents
-       Debug.Print m_IDNC
+       Debug.Print m_IdNC
         VBA.DoEvents
         m_SQL = "SELECT  IDAccionCorrectiva,NAccion, ID " & _
                 "FROM TbNCAuditoriaAccionCorrectivas " & _
-                "WHERE ID = " & m_IDNC & " " & _
+                "WHERE ID = " & m_IdNC & " " & _
                 "ORDER BY IDAccionCorrectiva;"
         Set rcdDatosAC = getdb().OpenRecordset(m_SQL)
         If Not rcdDatosAC.EOF Then
@@ -2623,34 +2623,6 @@ errores:
     Debug.Print p_Error
 End Function
 
-Public Function CargarDatosDeTbOriginalAPruebas( _
-                                                Optional ByRef p_Error As String _
-                                                ) As String
-                                        
-    Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
-    Dim m_NC As NCProyecto
-    Dim m_ColNC As Scripting.Dictionary
-    Dim m_ColAC As Scripting.Dictionary
-    Dim m_ColAR As Scripting.Dictionary
-    Dim m_IDAC As Variant
-    Dim m_IDAR As Variant
-    
-    
-    
-    On Error GoTo errores
-    m_SQL = "DELETE * " & _
-            "FROM TbNoConformidades;"
-    getdb.Execute m_SQL
-    
-    
-    Exit Function
-    
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método CargarDatosDeTbOriginalAPruebas ha devuelto el error: " & Err.Description
-    End If
-End Function
 
 Public Function ListadoURLHuerfanas( _
                                             Optional ByRef p_Error As String _
@@ -2660,7 +2632,7 @@ Public Function ListadoURLHuerfanas( _
    
     Dim m_Listado As String
     Dim m_Col As Scripting.Dictionary
-    Dim m_IDNC As Variant
+    Dim m_IdNC As Variant
     Dim m_IDAC As Variant
     Dim m_IDAR As Variant
     Dim m_NC As NCProyecto
@@ -2677,9 +2649,9 @@ Public Function ListadoURLHuerfanas( _
     If m_Col Is Nothing Then
         Exit Function
     End If
-    For Each m_IDNC In m_Col
+    For Each m_IdNC In m_Col
        
-        Set m_NC = m_Col(m_IDNC)
+        Set m_NC = m_Col(m_IdNC)
         
         If Not m_NC.Documentos Is Nothing Then
             For Each m_IDDOC In m_NC.Documentos

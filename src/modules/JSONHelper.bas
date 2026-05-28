@@ -302,7 +302,7 @@ End Function
 ' Implementación propia simple de objeto a JSON
 Private Function ObjetoAJSONPropio( _
                                         p_Objeto As Variant, _
-                                        Optional ByRef p_Error As String _
+                                        ByRef p_Error As String _
                                     ) As String
     
     Dim json As String
@@ -324,7 +324,7 @@ Private Function ObjetoAJSONPropio( _
             json = json & """" & EscaparTextoJSON(CStr(key)) & """:"
             json = json & ValorAJSON(dict(key), p_Error)
             
-            If p_Error <> "" Then Err.Raise 1000
+            If p_Error <> "" Then Exit Function
             i = i + 1
         Next key
     End If
@@ -334,17 +334,13 @@ Private Function ObjetoAJSONPropio( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en ObjetoAJSONPropio: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en ObjetoAJSONPropio: " & Err.Description
 End Function
 
 ' Implementación propia simple de valor a JSON
 Private Function ValorAJSON( _
                                 p_Valor As Variant, _
-                                Optional ByRef p_Error As String _
+                                ByRef p_Error As String _
                             ) As String
     
     On Error GoTo errores
@@ -383,7 +379,7 @@ End Function
 ' Implementación propia simple de collection a JSON
 Private Function CollectionAJSONPropio( _
                                             p_col As Variant, _
-                                            Optional ByRef p_Error As String _
+                                            ByRef p_Error As String _
                                         ) As String
     
     Dim json As String
@@ -399,7 +395,7 @@ Private Function CollectionAJSONPropio( _
         If i > 0 Then json = json & ","
         json = json & ValorAJSON(item, p_Error)
         
-        If p_Error <> "" Then Err.Raise 1000
+        If p_Error <> "" Then Exit Function
         i = i + 1
     Next item
     
@@ -408,17 +404,13 @@ Private Function CollectionAJSONPropio( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en CollectionAJSONPropio: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en CollectionAJSONPropio: " & Err.Description
 End Function
 
 ' Implementación propia simple de JSON a objeto
 Private Function JSONAObjetoPropio( _
     p_JSON As String, _
-    Optional ByRef p_Error As String _
+    ByRef p_Error As String _
 ) As Object
     
     Dim obj As Scripting.Dictionary
@@ -473,10 +465,10 @@ Public Function NCProyectoAJSON( _
     obj("CodigoNoConformidad") = p_NC.CodigoNoConformidad
     obj("EsNoConformidad") = p_NC.EsNoConformidad
     obj("Expediente") = p_NC.Expediente
-    obj("Proyecto") = p_NC.Proyecto
+    obj("Proyecto") = p_NC.PROYECTO
     obj("Vehiculo") = p_NC.VEHICULO
     obj("Descripcion") = p_NC.Descripcion
-    obj("Causa") = p_NC.Causa
+    obj("Causa") = p_NC.CAUSA
     obj("CausaYAnalisRaiz") = p_NC.CausaYAnalisRaiz
     obj("EntidadResponsable") = p_NC.EntidadResponsable
     obj("ResponsableTelefonica") = p_NC.ResponsableTelefonica
@@ -538,7 +530,7 @@ Public Function ACsAJSONArray( _
     For Each id In p_ACs.Keys
         Set AC = p_ACs(id)
         arr.Add ACAJSON(AC, p_Error)
-        If p_Error <> "" Then Err.Raise 1000
+        If p_Error <> "" Then Exit Function
     Next id
     
     ACsAJSONArray = ObjetoAJSON(arr, p_Error)
@@ -546,18 +538,14 @@ Public Function ACsAJSONArray( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en ACsAJSONArray: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en ACsAJSONArray: " & Err.Description
     ACsAJSONArray = "[]"
 End Function
 
 ' Convierte un objeto ACProyecto a JSON
 Private Function ACAJSON( _
     p_AC As ACProyecto, _
-    Optional ByRef p_Error As String _
+    ByRef p_Error As String _
 ) As String
     
     Dim obj As Scripting.Dictionary
@@ -609,7 +597,7 @@ Public Function ARsAJSONObject( _
             For Each idAR In AC.ARs.Keys
                 Set AR = AC.ARs(idAR)
                 arrARs.Add ARAJSON(AR, p_Error)
-                If p_Error <> "" Then Err.Raise 1000
+                If p_Error <> "" Then Exit Function
             Next idAR
             
             objRaiz(CStr(AC.IdAccionCorrectiva)) = arrARs
@@ -621,18 +609,14 @@ Public Function ARsAJSONObject( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en ARsAJSONObject: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en ARsAJSONObject: " & Err.Description
     ARsAJSONObject = "{}"
 End Function
 
 ' Convierte un objeto ARProyecto a JSON
 Private Function ARAJSON( _
     p_AR As ARProyecto, _
-    Optional ByRef p_Error As String _
+    ByRef p_Error As String _
 ) As String
     
     Dim obj As Scripting.Dictionary
@@ -675,7 +659,7 @@ Public Function ReplanificacionesAJSONArray( _
     For Each id In p_Replanificaciones.Keys
         Set replanif = p_Replanificaciones(id)
         arr.Add ReplanificacionAJSON(replanif, p_Error)
-        If p_Error <> "" Then Err.Raise 1000
+        If p_Error <> "" Then Exit Function
     Next id
     
     ReplanificacionesAJSONArray = ObjetoAJSON(arr, p_Error)
@@ -683,18 +667,14 @@ Public Function ReplanificacionesAJSONArray( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en ReplanificacionesAJSONArray: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en ReplanificacionesAJSONArray: " & Err.Description
     ReplanificacionesAJSONArray = "[]"
 End Function
 
 ' Convierte un objeto ReplanificacionesProyecto a JSON
 Private Function ReplanificacionAJSON( _
     p_Replanif As ReplanificacionesProyecto, _
-    Optional ByRef p_Error As String _
+    ByRef p_Error As String _
 ) As String
     
     Dim obj As Scripting.Dictionary
@@ -733,7 +713,7 @@ Public Function RiesgosAJSONArray( _
     For Each id In p_Riesgos.Keys
         Set riesgo = p_Riesgos(id)
         arr.Add RiesgoAJSON(riesgo, p_Error)
-        If p_Error <> "" Then Err.Raise 1000
+        If p_Error <> "" Then Exit Function
     Next id
     
     RiesgosAJSONArray = ObjetoAJSON(arr, p_Error)
@@ -741,18 +721,14 @@ Public Function RiesgosAJSONArray( _
     Exit Function
     
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "Error en RiesgosAJSONArray: " & Err.Description
-    ElseIf p_Error = "" Then
-        p_Error = Err.Description
-    End If
+    p_Error = "Error en RiesgosAJSONArray: " & Err.Description
     RiesgosAJSONArray = "[]"
 End Function
 
 ' Convierte un objeto Riesgo a JSON
 Private Function RiesgoAJSON( _
     p_Riesgo As riesgo, _
-    Optional ByRef p_Error As String _
+    ByRef p_Error As String _
 ) As String
     
     Dim obj As Scripting.Dictionary

@@ -15,10 +15,10 @@ Public Juridica As String
 Public CodigoNoConformidad As String
 Public EsNoConformidad As Boolean
 Public Expediente As String
-Public Proyecto As String
+Public PROYECTO As String
 Public VEHICULO As String
 Public Descripcion As String
-Public Causa As String
+Public CAUSA As String
 Public CausaYAnalisRaiz As String
 Public EntidadResponsable As String
 Public ResponsableTelefonica As String 'usuariored
@@ -33,7 +33,6 @@ Public MotivoBorrado As String
 Public RequiereControlEficacia As String
 Public MotivoNoRequiereControlEficacia As String
 Public ControlEficacia As String
-Public MotivoNoRequiereControlEficacia As String
 Public FechaControlEficacia As String
 Public FechaPrevistaControlEficacia As String
 Public ResultadoControlEficacia As String
@@ -960,28 +959,6 @@ errores:
 
 End Property
 
-' Issue #19: Indica si el detalle CE (descripción + fecha prevista) está completo
-Public Property Get ControlEficaciaDetalleCompleto() As EnumSino
-    On Error GoTo errores
-    Me.Error = ""
-    m_Error = ""
-    If Me.RequiereControlEficacia <> "Sí" Then
-        ControlEficaciaDetalleCompleto = EnumSino.No
-        Exit Property
-    End If
-    If Me.ControlEficacia <> "" And IsDate(Me.FechaPrevistaControlEficacia) Then
-        ControlEficaciaDetalleCompleto = EnumSino.Sí
-    Else
-        ControlEficaciaDetalleCompleto = EnumSino.No
-    End If
-    Exit Property
-errores:
-    If Err.Number <> 1000 Then
-        m_Error = "El método NCProyecto.ControlEficaciaDetalleCompleto ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Me.Error = m_Error
-End Property
-
 Public Property Get ConControlDeEficaciaSinRellenar() As EnumSino
 
     On Error GoTo errores
@@ -1266,22 +1243,22 @@ Public Property Get ProyectoCalculado() As String
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
-    If Me.Proyecto = "" Then
+    If Me.PROYECTO = "" Then
         Exit Property
     End If
     If Me.Expediente = "" Then
-        m_sProyectoCalculado = Me.Proyecto
+        m_sProyectoCalculado = Me.PROYECTO
         ProyectoCalculado = m_sProyectoCalculado
         Exit Property
     End If
-    If InStr(1, Me.Proyecto, ".") = 0 Then
-        m_sProyectoCalculado = Me.Expediente & "." & Me.Proyecto
+    If InStr(1, Me.PROYECTO, ".") = 0 Then
+        m_sProyectoCalculado = Me.Expediente & "." & Me.PROYECTO
     Else
-        dato = Split(Me.Proyecto, ".")
+        dato = Split(Me.PROYECTO, ".")
         If Me.Expediente <> dato(0) Then
             m_sProyectoCalculado = Me.Expediente & "." & dato(1)
         Else
-            m_sProyectoCalculado = Me.Proyecto
+            m_sProyectoCalculado = Me.PROYECTO
         End If
     End If
     ProyectoCalculado = m_sProyectoCalculado
@@ -1738,7 +1715,6 @@ Public Property Get ColCampos() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
-        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1793,7 +1769,6 @@ Public Property Get ColCamposParaCopiarDeVinculada() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
-        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1840,7 +1815,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "PROYECTO" Then
-        getPropiedad = Me.Proyecto
+        getPropiedad = Me.PROYECTO
         Exit Function
     End If
     If m_NombrePropiedad = "VEHICULO" Then
@@ -1852,7 +1827,7 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
         Exit Function
     End If
     If m_NombrePropiedad = "CAUSA" Then
-        getPropiedad = Me.Causa
+        getPropiedad = Me.CAUSA
         Exit Function
     End If
     If m_NombrePropiedad = "CausaYAnalisRaiz" Then
@@ -1905,10 +1880,6 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         getPropiedad = Me.RequiereControlEficacia
-        Exit Function
-    End If
-    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
-        getPropiedad = Me.MotivoNoRequiereControlEficacia
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then
@@ -2023,7 +1994,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "PROYECTO" Then
-        Me.Proyecto = m_ValorPropiedad
+        Me.PROYECTO = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "VEHICULO" Then
@@ -2035,7 +2006,7 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
         Exit Function
     End If
     If m_NombrePropiedad = "CAUSA" Then
-        Me.Causa = m_ValorPropiedad
+        Me.CAUSA = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "CausaYAnalisRaiz" Then
@@ -2085,10 +2056,6 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         Me.RequiereControlEficacia = m_ValorPropiedad
-        Exit Function
-    End If
-    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
-        Me.MotivoNoRequiereControlEficacia = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then
@@ -2172,6 +2139,7 @@ errores:
         p_Error = "El método NCProyecto.SetPropiedad ha devuelto el error:" & vbNewLine & Err.Description
     End If
 End Function
+
 
 
 

@@ -17,7 +17,7 @@ Private Sub ComandoActualizar_Click()
     
     m_Error = ""
 
-    PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Modo:="AUDITORIA", p_Error:=m_Error
+    PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error
     If m_Error <> "" Then
         Err.Raise 1000
     End If
