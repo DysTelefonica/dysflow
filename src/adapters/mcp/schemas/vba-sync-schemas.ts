@@ -1,0 +1,234 @@
+// Schemas for the 21 VBA sync tools (VBA_SYNC_TOOL_NAMES).
+
+import type { VbaSyncToolName } from "../mcp-tool-registry.js";
+import {
+  ACCESS_OVERRIDE,
+  CTX_PROPS,
+  type JsonObjectSchema,
+  SCHEMA_PROPS,
+  STRICT_CTX,
+} from "./dysflow-schemas.js";
+
+export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = {
+  list_access_operations: { type: "object", additionalProperties: false, properties: {} },
+  cleanup_access_operation: {
+    type: "object",
+    required: ["operationId"],
+    additionalProperties: false,
+    properties: {
+      operationId: SCHEMA_PROPS.operationId,
+      accessPath: SCHEMA_PROPS.accessPath,
+      force: SCHEMA_PROPS.force,
+    },
+  },
+  run_vba: {
+    type: "object",
+    required: ["procedureName"],
+    additionalProperties: false,
+    properties: { procedureName: SCHEMA_PROPS.procedureName, argsJson: SCHEMA_PROPS.argsJson },
+  },
+  export_modules: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      filter: SCHEMA_PROPS.filter,
+      destinationRoot: SCHEMA_PROPS.destinationRoot,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  export_all: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      filter: SCHEMA_PROPS.filter,
+      diff: SCHEMA_PROPS.diff,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  import_modules: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      importMode: SCHEMA_PROPS.importMode,
+      dryRun: SCHEMA_PROPS.dryRun,
+      compile: SCHEMA_PROPS.compile,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  import_all: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      importMode: SCHEMA_PROPS.importMode,
+      dryRun: SCHEMA_PROPS.dryRun,
+      compile: SCHEMA_PROPS.compile,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  list_objects: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      filter: SCHEMA_PROPS.filter,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  exists: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      name: SCHEMA_PROPS.name,
+      moduleName: SCHEMA_PROPS.moduleName,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  test_vba: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      proceduresJson: SCHEMA_PROPS.proceduresJson,
+      filter: SCHEMA_PROPS.filter,
+      testsPath: SCHEMA_PROPS.testsPath,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  compile_vba: {
+    type: "object",
+    additionalProperties: false,
+    properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, timeoutMs: SCHEMA_PROPS.timeoutMs },
+  },
+  verify_code: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      diff: SCHEMA_PROPS.diff,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  verify_binary: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      diff: SCHEMA_PROPS.diff,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  reconcile_binary: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      diff: SCHEMA_PROPS.diff,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  delete_module: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      moduleName: SCHEMA_PROPS.moduleName,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  generate_erd: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      erdPath: SCHEMA_PROPS.erdPath,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  fix_encoding: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      location: SCHEMA_PROPS.location,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  validate_form_spec: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      specPath: SCHEMA_PROPS.specPath,
+      spec: SCHEMA_PROPS.spec,
+    },
+  },
+  generate_form: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      specPath: SCHEMA_PROPS.specPath,
+      spec: SCHEMA_PROPS.spec,
+      kind: SCHEMA_PROPS.kind,
+      name: SCHEMA_PROPS.name,
+      replace: SCHEMA_PROPS.replace,
+      dryRun: SCHEMA_PROPS.dryRun,
+    },
+  },
+  catalog_add_control: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      catalogPath: SCHEMA_PROPS.catalogPath,
+      controlName: SCHEMA_PROPS.controlName,
+      controlType: SCHEMA_PROPS.controlType,
+      type: SCHEMA_PROPS.type,
+      spec: SCHEMA_PROPS.spec,
+      specPath: SCHEMA_PROPS.specPath,
+    },
+  },
+  harvest_form_catalog: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      catalogPath: SCHEMA_PROPS.catalogPath,
+      filter: SCHEMA_PROPS.filter,
+    },
+  },
+};

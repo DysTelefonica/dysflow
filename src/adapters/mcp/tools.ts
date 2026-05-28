@@ -1,8 +1,8 @@
 import type {
   AccessQueryRequest,
   AccessVbaRequest,
-  VbaSyncPort,
   OperationResult,
+  VbaSyncPort,
 } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
@@ -16,11 +16,7 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { isRecord, stringValue } from "../../core/utils/index.js";
-import { getToolDefinition } from "./tool-parity-registry.js";
-import {
-  DYSFLOW_MCP_TOOL_NAMES,
-  type DysflowMcpToolName,
-} from "./mcp-tool-registry.js";
+import { DYSFLOW_MCP_TOOL_NAMES, type DysflowMcpToolName } from "./mcp-tool-registry.js";
 import {
   CLEANUP_SCHEMA,
   DOCTOR_SCHEMA,
@@ -30,6 +26,7 @@ import {
   QUERY_EXECUTE_SCHEMA,
   VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
+import { getToolDefinition } from "./tool-parity-registry.js";
 import type { McpToolContext } from "./types.js";
 import { validateInput } from "./validator.js";
 
@@ -244,13 +241,7 @@ export function createDysflowMcpTools(
     },
   ];
 
-  return registerMcpTools(
-    currentTools,
-    services,
-    writesEnabled,
-    writeAccessResolver,
-    env,
-  );
+  return registerMcpTools(currentTools, services, writesEnabled, writeAccessResolver, env);
 }
 
 function registerMcpTools(
@@ -448,54 +439,54 @@ type McpToolRoute =
 
 export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
   // VBA sync (21)
-  list_access_operations:   { kind: "vba-sync" },
+  list_access_operations: { kind: "vba-sync" },
   cleanup_access_operation: { kind: "vba-sync" },
-  export_modules:           { kind: "vba-sync" },
-  export_all:               { kind: "vba-sync" },
-  import_modules:           { kind: "vba-sync" },
-  import_all:               { kind: "vba-sync" },
-  list_objects:             { kind: "vba-sync" },
-  exists:                   { kind: "vba-sync" },
-  run_vba:                  { kind: "vba-sync" },
-  test_vba:                 { kind: "vba-sync" },
-  compile_vba:              { kind: "vba-sync" },
-  verify_code:              { kind: "vba-sync" },
-  verify_binary:            { kind: "vba-sync" },
-  reconcile_binary:         { kind: "vba-sync" },
-  delete_module:            { kind: "vba-sync" },
-  generate_erd:             { kind: "vba-sync" },
-  fix_encoding:             { kind: "vba-sync" },
-  validate_form_spec:       { kind: "vba-sync" },
-  generate_form:            { kind: "vba-sync" },
-  catalog_add_control:      { kind: "vba-sync" },
-  harvest_form_catalog:     { kind: "vba-sync" },
+  export_modules: { kind: "vba-sync" },
+  export_all: { kind: "vba-sync" },
+  import_modules: { kind: "vba-sync" },
+  import_all: { kind: "vba-sync" },
+  list_objects: { kind: "vba-sync" },
+  exists: { kind: "vba-sync" },
+  run_vba: { kind: "vba-sync" },
+  test_vba: { kind: "vba-sync" },
+  compile_vba: { kind: "vba-sync" },
+  verify_code: { kind: "vba-sync" },
+  verify_binary: { kind: "vba-sync" },
+  reconcile_binary: { kind: "vba-sync" },
+  delete_module: { kind: "vba-sync" },
+  generate_erd: { kind: "vba-sync" },
+  fix_encoding: { kind: "vba-sync" },
+  validate_form_spec: { kind: "vba-sync" },
+  generate_form: { kind: "vba-sync" },
+  catalog_add_control: { kind: "vba-sync" },
+  harvest_form_catalog: { kind: "vba-sync" },
   // query maintenance (9)
-  list_links:               { kind: "query-maintenance", queryMode: "read" },
-  export_queries:           { kind: "query-maintenance", queryMode: "read" },
-  link_tables:              { kind: "query-maintenance", queryMode: "write" },
-  relink_tables:            { kind: "query-maintenance", queryMode: "write" },
-  localize_backend_links:   { kind: "query-maintenance", queryMode: "write" },
-  unlink_table:             { kind: "query-maintenance", queryMode: "write" },
-  import_queries:           { kind: "query-maintenance", queryMode: "write" },
-  compact_repair:           { kind: "query-maintenance", queryMode: "write" },
-  relink_directory:         { kind: "query-maintenance", queryMode: "write" },
+  list_links: { kind: "query-maintenance", queryMode: "read" },
+  export_queries: { kind: "query-maintenance", queryMode: "read" },
+  link_tables: { kind: "query-maintenance", queryMode: "write" },
+  relink_tables: { kind: "query-maintenance", queryMode: "write" },
+  localize_backend_links: { kind: "query-maintenance", queryMode: "write" },
+  unlink_table: { kind: "query-maintenance", queryMode: "write" },
+  import_queries: { kind: "query-maintenance", queryMode: "write" },
+  compact_repair: { kind: "query-maintenance", queryMode: "write" },
+  relink_directory: { kind: "query-maintenance", queryMode: "write" },
   // query read (9)
-  query_sql:                { kind: "query-read" },
-  list_tables:              { kind: "query-read" },
-  list_linked_tables:       { kind: "query-read" },
-  get_schema:               { kind: "query-read" },
-  count_rows:               { kind: "query-read" },
-  distinct_values:          { kind: "query-read" },
-  compare_backends:         { kind: "query-read" },
-  list_access_files:        { kind: "query-read" },
-  get_relationships:        { kind: "query-read" },
+  query_sql: { kind: "query-read" },
+  list_tables: { kind: "query-read" },
+  list_linked_tables: { kind: "query-read" },
+  get_schema: { kind: "query-read" },
+  count_rows: { kind: "query-read" },
+  distinct_values: { kind: "query-read" },
+  compare_backends: { kind: "query-read" },
+  list_access_files: { kind: "query-read" },
+  get_relationships: { kind: "query-read" },
   // write fixture (6)
-  exec_sql:                 { kind: "query-write-fixture" },
-  run_script:               { kind: "query-write-fixture" },
-  create_table:             { kind: "query-write-fixture" },
-  drop_table:               { kind: "query-write-fixture" },
-  seed_fixture:             { kind: "query-write-fixture" },
-  teardown_fixture:         { kind: "query-write-fixture" },
+  exec_sql: { kind: "query-write-fixture" },
+  run_script: { kind: "query-write-fixture" },
+  create_table: { kind: "query-write-fixture" },
+  drop_table: { kind: "query-write-fixture" },
+  seed_fixture: { kind: "query-write-fixture" },
+  teardown_fixture: { kind: "query-write-fixture" },
 };
 
 function mcpSchemaFor(name: keyof typeof MCP_TOOL_SCHEMAS): JsonObjectSchema {
@@ -530,7 +521,11 @@ function createDispatchTool(
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
       const isDryRun = resolveIsDryRun(input);
-      if (isWriteGated && !isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
+      if (
+        isWriteGated &&
+        !isDryRun &&
+        !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))
+      ) {
         return writesDisabled();
       }
       switch (route.kind) {
@@ -542,7 +537,12 @@ function createDispatchTool(
           }
           return {
             isError: true,
-            content: [{ type: "text", text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the VBA sync service to be configured.` }],
+            content: [
+              {
+                type: "text",
+                text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the VBA sync service to be configured.`,
+              },
+            ],
           };
         case "query-maintenance":
           return translateCoreResultToMcpContent(
@@ -578,7 +578,6 @@ function resolveIsDryRun(input: unknown): boolean {
   return true;
 }
 
-
 type McpArgsJsonParseResult = { ok: true; value: unknown[] } | { ok: false; message: string };
 
 function parseMcpArgsJson(argsJson: string | undefined): McpArgsJsonParseResult {
@@ -611,10 +610,7 @@ function toQueryRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRe
   };
 }
 
-function toWriteFixtureRequest(
-  name: DysflowMcpToolName,
-  input: unknown,
-): AccessQueryRequest {
+function toWriteFixtureRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
   const tableName = stringValue(params.tableName) ?? stringValue(params.table);
   return {
@@ -744,4 +740,3 @@ export function sanitizeMcpErrorMessage(message: string): string {
   result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
   return result;
 }
-

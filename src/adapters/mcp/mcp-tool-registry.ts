@@ -49,10 +49,8 @@ export const QUERY_TOOL_NAMES = [
   "relink_directory",
 ] as const;
 
-export const DYSFLOW_MCP_TOOL_NAMES = [
-  ...VBA_SYNC_TOOL_NAMES,
-  ...QUERY_TOOL_NAMES,
-] as const;
+export const DYSFLOW_MCP_TOOL_NAMES = [...VBA_SYNC_TOOL_NAMES, ...QUERY_TOOL_NAMES] as const;
 
 export type DysflowMcpToolName = (typeof DYSFLOW_MCP_TOOL_NAMES)[number];
-
+export type VbaSyncToolName = (typeof VBA_SYNC_TOOL_NAMES)[number];
+export type QueryToolName = (typeof QUERY_TOOL_NAMES)[number];

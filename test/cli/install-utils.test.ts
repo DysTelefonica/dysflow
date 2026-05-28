@@ -100,14 +100,17 @@ describe("uninstall.ts static import isolation", () => {
       const content = fs.readFileSync(current, "utf8");
 
       const regex = /(?:import|export)\s+.*?\s+from\s+['"](.*?)['"]/g;
-      let match;
       const imports: string[] = [];
-      while ((match = regex.exec(content)) !== null) {
+      let match = regex.exec(content);
+      while (match !== null) {
         imports.push(match[1]);
+        match = regex.exec(content);
       }
       const simpleImportRegex = /import\s+['"](.*?)['"]/g;
-      while ((match = simpleImportRegex.exec(content)) !== null) {
-        imports.push(match[1]);
+      let simpleMatch = simpleImportRegex.exec(content);
+      while (simpleMatch !== null) {
+        imports.push(simpleMatch[1]);
+        simpleMatch = simpleImportRegex.exec(content);
       }
 
       if (current === uninstallPath) {

@@ -17,7 +17,6 @@ export type ParityToolDefinition = {
   queryMode?: QueryMode;
 };
 
-
 const maintenanceQueryModes: Partial<Record<DysflowMcpToolName, QueryMode>> = {
   list_links: "read",
   export_queries: "read",
@@ -96,8 +95,8 @@ function classifyToolName(name: DysflowMcpToolName): ParitySlice {
   return (VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name) ? "vba-sync" : "query";
 }
 
-export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] =
-  DYSFLOW_MCP_TOOL_NAMES.map((name) => {
+export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP_TOOL_NAMES.map(
+  (name) => {
     const slice = classifyToolName(name);
     const status = implementedToolNames.has(name) ? "implemented" : "pending";
     return {
@@ -107,8 +106,8 @@ export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] =
       description: buildDescription(name, slice, status),
       queryMode: maintenanceQueryModes[name],
     };
-  });
-
+  },
+);
 
 export function getToolDefinition(name: DysflowMcpToolName): ParityToolDefinition {
   const entry = TOOL_PARITY_REGISTRY.find((tool) => tool.name === name);
@@ -118,8 +117,6 @@ export function getToolDefinition(name: DysflowMcpToolName): ParityToolDefinitio
   return entry;
 }
 
-export function getToolDefinitionsBySlice(
-  slice: ParitySlice,
-): readonly DysflowMcpToolName[] {
+export function getToolDefinitionsBySlice(slice: ParitySlice): readonly DysflowMcpToolName[] {
   return TOOL_PARITY_REGISTRY.filter((tool) => tool.slice === slice).map((tool) => tool.name);
 }

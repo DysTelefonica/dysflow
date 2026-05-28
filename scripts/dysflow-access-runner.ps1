@@ -1060,16 +1060,13 @@ function Resolve-LinkChain {
       }
     }
     try {
-      return Resolve-LinkChain `
-        -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable `
-        -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex `
-        -Visited $Visited -Depth ($Depth + 1) -MaxDepth $MaxDepth
+      return Resolve-LinkChain -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex -Visited $Visited -Depth ($Depth + 1) -MaxDepth $MaxDepth
     } finally {
       try { $nextDb.Close() } catch { Write-Debug "Diagnostics: $_" }
       try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch { Write-Debug "Diagnostics: $_" }
     }
   } catch {
-    Write-Warning "Resolve-LinkChain: could not open or traverse '$localPath' for table '$TableName' — $_"
+    Write-Warning "Resolve-LinkChain: could not open or traverse '$localPath' for table '$TableName' - $_"
     return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
   }
 }
@@ -1160,8 +1157,7 @@ function Invoke-RelinkDirectory {
             if (-not $dbMatch.Success) { continue }
 
             $backendPath = $dbMatch.Groups[1].Value.Trim()
-            $classResult = Get-LinkClassification `
-              -BackendPath $backendPath -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex
+            $classResult = Get-LinkClassification -BackendPath $backendPath -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex
 
             $linkEntry = [ordered]@{
               database            = $file.FullName
@@ -1220,10 +1216,7 @@ function Invoke-RelinkDirectory {
             try {
               foreach ($plan in $remapPlan) {
                 $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
-                $chain = Resolve-LinkChain `
-                  -DbEngine $dbEngine -StartDb $dbWrite -TableName $plan.tdName `
-                  -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex `
-                  -Visited ([ref]$visited) -Depth 0 -MaxDepth 5
+                $chain = Resolve-LinkChain -DbEngine $dbEngine -StartDb $dbWrite -TableName $plan.tdName -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex -Visited ([ref]$visited) -Depth 0 -MaxDepth 5
 
                 if ($chain.cycleDetected) {
                   $plan.linkEntry.classification = "cycle"
