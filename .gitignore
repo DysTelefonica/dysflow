@@ -28,6 +28,7 @@ E2E_testing/forms/*.form.json
 .pi-lens/
 
 # Local developer state & reports
+.engram/
 .antigravitycli/
 .dysflow/project.json
 E2E_testing/.mcp.json
