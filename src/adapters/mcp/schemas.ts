@@ -749,6 +749,8 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   },
   link_tables: {
     type: "object",
+    description:
+      "Links tables from backendPath into the frontend Access database. Note: when backendPassword is set, Access stores the credential inside the linked table Connect string in the .accdb file.",
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
@@ -759,6 +761,8 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   },
   relink_tables: {
     type: "object",
+    description:
+      "Relinks existing linked tables to a new or updated backend path. Note: when backendPassword is set, Access stores the credential inside the linked table Connect string in the .accdb file.",
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,

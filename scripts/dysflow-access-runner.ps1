@@ -1410,6 +1410,15 @@ try {
     throw "Access database not found: $AccessDbPath"
   }
 
+  # compact_repair uses pure DAO (DBEngine.CompactDatabase) and does not need MSACCESS open.
+  # Early-dispatch it here to avoid the frontend lock and startup-disable overhead.
+  if ($action -eq 'compact_repair') {
+    $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
+    Write-DysflowProgress -Percent 90 -Message "Finalizing"
+    $result | ConvertTo-Json -Compress -Depth 20
+    exit 0
+  }
+
   $sentinelPath = "${AccessDbPath}.dysflow-restore.json"
 
   if (-not $isDirectTargetQuery) {
