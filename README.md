@@ -14,9 +14,9 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Current version: v0.9.18
+## Current version: v0.9.19
 
-**48 MCP tools · 646 tests · Windows / Node 20+**
+**48 MCP tools · 666 tests · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -126,7 +126,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.18"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.19"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```

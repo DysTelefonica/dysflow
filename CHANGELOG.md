@@ -2,6 +2,21 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.19] - 2026-05-28
+
+### Added
+
+- **Configurable Bearer token authorization in the HTTP adapter**: Added optional `httpToken` (and `httpTokenEnv` for custom env resolution) to project config. When configured, HTTP requests are validated using the `Authorization: Bearer <token>` header, returning a structured 401 `HTTP_UNAUTHORIZED` error envelope on invalid/missing tokens. `/health` route remains public. Exposes the `--token <token>` option in `dysflow serve`.
+- **SHA-256 verification on update**: The `dysflow update` command now downloads and validates the release artifact against `SHA256SUMS` to prevent MITM/poisoned package injection.
+- **MCP protocol version documentation**: Extracted the hardcoded MCP version to `PROTOCOL_VERSION` constant and documented the future MCP SDK migration path.
+
+### Changed
+
+- **Refactored `vba-sync-adapter.ts`**: Split the large God Object (888 lines) into smaller, domain-scoped sub-adapters: operations, modules, execution, and forms sub-adapters. Decoupled sub-adapters from config loading by passing configuration properties at instantiation.
+- **Refactored `schemas.ts`**: Split the large schema repository (862 lines) into domain schema files (`vba-sync-schemas.ts`, `query-schemas.ts`, `dysflow-schemas.ts`, and a barrel index) to reduce recompilation times.
+- **Biome lint rule escalation**: Escalated rules `noExplicitAny` and `noNonNullAssertion` from warning to error level. Refactored all codebase violations to use explicit types/runtime guards.
+- **Vitest branch coverage**: Raised minimum branch coverage threshold from 72% to 82% and expanded unit/integration tests to cover PowerShell timeout, timeout aborts, and download failure recovery paths.
+
 ## [0.9.18] - 2026-05-28
 
 ### Changed
