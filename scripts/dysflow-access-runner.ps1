@@ -1410,10 +1410,30 @@ try {
     throw "Access database not found: $AccessDbPath"
   }
 
+  $sentinelPath = "${AccessDbPath}.dysflow-restore.json"
+
   if (-not $isDirectTargetQuery) {
+    # If a previous run was hard-killed, restore startup features before proceeding.
+    if (Test-Path -LiteralPath $sentinelPath) {
+      try {
+        $pendingRestore = Get-Content -LiteralPath $sentinelPath -Raw | ConvertFrom-Json
+        Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $pendingRestore
+      } catch {
+        Write-Warning "Dysflow: pending startup-restore from previous hard-kill failed: $_"
+      }
+      Remove-Item -LiteralPath $sentinelPath -Force -ErrorAction SilentlyContinue
+    }
+
     $startupInfo = Disable-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword
     if ($null -eq $startupInfo) {
       throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm. Se aborta la apertura para evitar ejecucion no desatendida."
+    }
+
+    # Write sentinel so the NEXT run can restore features if this run is hard-killed.
+    try {
+      $startupInfo | ConvertTo-Json -Compress | Set-Content -LiteralPath $sentinelPath -Encoding UTF8 -Force
+    } catch {
+      Write-Warning "Dysflow: could not write startup-restore sentinel: $_"
     }
   }
 
@@ -1702,6 +1722,7 @@ try {
   }
   if ($null -ne $startupInfo) {
     try { Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
+    Remove-Item -LiteralPath $sentinelPath -Force -ErrorAction SilentlyContinue
   }
   # See comment above: force GC to release Access COM RCW wrappers after script exit.
   [System.GC]::Collect()
