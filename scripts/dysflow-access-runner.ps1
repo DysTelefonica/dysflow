@@ -62,6 +62,9 @@ function Invoke-WithDaoDatabase {
     if ($null -ne $db) { try { $db.Close() } catch { Write-Debug "Diagnostics: $_" } }
     if ($null -ne $db) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" } }
     if ($null -ne $dbEngine) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" } }
+    # Force GC to release COM RCW wrappers that FinalReleaseComObject may not fully clear.
+    # Without this, the DAO engine DLL can remain loaded between calls, preventing clean re-open.
+    # Known workaround for Access COM interop in PowerShell — adds ~100-500ms per call.
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
   }
@@ -1700,6 +1703,7 @@ try {
   if ($null -ne $startupInfo) {
     try { Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
   }
+  # See comment above: force GC to release Access COM RCW wrappers after script exit.
   [System.GC]::Collect()
   [System.GC]::WaitForPendingFinalizers()
 }
