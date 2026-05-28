@@ -180,3 +180,62 @@ The UNC-path branch of `sanitizeErrorMessage` MUST use a linear regex free of ne
 - WHEN any test in `release-matrix-gate.test.ts` executes
 - THEN no `console.log` calls SHALL execute unconditionally in test bodies
 
+### Requirement: Bounded tool-call response semantics
+
+The MCP stdio adapter MUST complete every `tools/call` request with a JSON-RPC response frame after MCP startup has succeeded, even when the invoked core service fails or times out. The adapter MUST NOT leave the client pending without a terminal response.
+
+#### Scenario: Successful call after startup
+
+- **Given** `initialize` and `tools/list` already succeeded
+- **When** a `tools/call` handler returns a successful tool result
+- **Then** the adapter MUST emit exactly one terminal JSON-RPC response for that request id
+- **And** the response payload MUST contain the tool result.
+
+#### Scenario: Core timeout maps to terminal tool response
+
+- **Given** `initialize` and `tools/list` already succeeded
+- **And** the handler result maps to a bounded runner timeout or failure
+- **When** the adapter finalizes the request
+- **Then** it MUST emit exactly one terminal JSON-RPC response for that request id
+- **And** the response MUST contain structured failure details safe for clients
+- **And** the request MUST NOT remain pending.
+
+#### Scenario: E2E project context preserves request completion
+
+- **Given** config resolves from an `E2E_testing`-style `.dysflow/project.json`
+- **When** a `tools/call` for `dysflow_doctor` or `list_tables` reaches a bounded runner failure
+- **Then** the adapter SHALL return a terminal response
+- **And** it MUST NOT require startup/config changes from the OpenCode startup fix.
+
+### Requirement: Legacy MCP Write Target Mapping
+
+Legacy MCP write tools MUST preserve explicit write target inputs when translating MCP requests to core runner contracts. `exec_sql`, `run_script`, `create_table`, `drop_table`, `seed_fixture`, and `teardown_fixture` MUST forward `backendPath` and `databasePath` as write-target candidates without replacing them with the frontend Access path. If no explicit write target is supplied, the adapter MUST preserve current frontend-compatible defaults.
+
+#### Scenario: Legacy tool forwards explicit backend target
+
+- GIVEN a legacy MCP request includes `backendPath` or `databasePath`
+- WHEN the adapter maps the request to a core write operation
+- THEN the mapped request MUST include the explicit write target unchanged
+- AND it MUST NOT substitute `accessPath` as the write database
+
+#### Scenario: Legacy tool without backend target remains compatible
+
+- GIVEN a legacy MCP write request omits `backendPath` and `databasePath`
+- WHEN the adapter maps the request
+- THEN the mapped request MUST preserve the existing frontend/current-database behavior
+- AND no new backend override SHALL be inferred
+
+#### Scenario: No Conformidades Issue 18 table classification
+
+- GIVEN No Conformidades Issue #18 requires cache/config table creation
+- WHEN legacy MCP tools are used to manage those tables
+- THEN `TbCacheIndicadoresProyectoHeader`, `TbCacheIndicadoresProyectoDetalle`, and `TbConfiguracion` MUST be classified as backend/global targets
+- AND `TbConfiguracionBackends` MUST remain a frontend/local table
+
+#### Scenario: Unsafe secret or cleanup input is rejected safely
+
+- GIVEN a legacy MCP request attempts to provide a raw password or requests process-wide cleanup
+- WHEN the adapter maps or reports the request
+- THEN it MUST NOT pass raw secrets except through configured env/config resolution
+- AND diagnostics MUST remain sanitized and operation-owned cleanup MUST be required
+
