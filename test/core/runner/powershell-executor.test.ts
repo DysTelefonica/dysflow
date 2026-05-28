@@ -170,6 +170,90 @@ describe("spawnPowerShellProcess — bounded timeout settlement", () => {
   });
 });
 
+describe("spawnPowerShellProcess — tree-kill on Windows", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("spawns taskkill /T /F /PID when child has a pid on timeout", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation((cmd: string) => {
+      if (cmd === "taskkill") {
+        return { pid: undefined, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn() };
+      }
+      return { pid: 9999, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill };
+    });
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+    expect(taskkillCall).toBeDefined();
+    expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "9999"]);
+    expect(kill).not.toHaveBeenCalled();
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("spawns taskkill /T /F /PID when child has a pid on abort", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation((cmd: string) => {
+      if (cmd === "taskkill") {
+        return { pid: undefined, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn() };
+      }
+      return { pid: 8888, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill };
+    });
+    const controller = new AbortController();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 5_000,
+      signal: controller.signal,
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+    await Promise.resolve();
+
+    const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+    expect(taskkillCall).toBeDefined();
+    expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "8888"]);
+    expect(kill).not.toHaveBeenCalled();
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("falls back to child.kill() when child has no pid", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+    expect(taskkillCall).toBeUndefined();
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true });
+  });
+});
+
 describe("POWERSHELL_SYSTEM_ENV_KEYS", () => {
   it("is a non-empty readonly string array containing required Windows system keys", () => {
     expect(Array.isArray(POWERSHELL_SYSTEM_ENV_KEYS)).toBe(true);

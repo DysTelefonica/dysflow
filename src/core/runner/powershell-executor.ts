@@ -21,6 +21,17 @@ export type PowerShellProcessOptions = {
 
 export const POWERSHELL_EXE = "powershell.exe";
 
+function killProcessTree(pid: number | undefined, fallback: () => void): void {
+  if (pid !== undefined) {
+    spawn("taskkill", ["/T", "/F", "/PID", String(pid)], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    fallback();
+  }
+}
+
 export const POWERSHELL_SYSTEM_ENV_KEYS = [
   "SystemRoot",
   "windir",
@@ -78,7 +89,7 @@ export function spawnPowerShellProcess(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      killProcessTree(child.pid, () => child.kill());
       finish(null);
     }, options.timeoutMs);
 
@@ -86,7 +97,7 @@ export function spawnPowerShellProcess(
       "abort",
       () => {
         timedOut = true;
-        child.kill();
+        killProcessTree(child.pid, () => child.kill());
         finish(null);
       },
       { once: true },
