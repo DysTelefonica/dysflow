@@ -313,11 +313,15 @@ describe("AccessPowerShellRunner", () => {
     expect(script).toContain(
       "Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );
-    expect(script).toContain("Get-TableNames -Database $readDb.Database");
-    expect(script).toContain("Get-TableSchema -Database $readDb.Database");
-    expect(script).toContain("Get-Relationships -Database $readDb.Database");
     expect(script).toContain("if ($readDb.Owned)");
-    expect(script).not.toContain("Get-TableNames -Database $db\n      Write-DysflowProgress");
+    // Shared read-action helpers are extracted into named functions
+    expect(script).toContain("function Invoke-ListTablesAction");
+    expect(script).toContain("function Invoke-GetSchemaAction");
+    expect(script).toContain("function Invoke-GetRelationshipsAction");
+    expect(script).toContain("Invoke-ListTablesAction -Database $readDb.Database");
+    expect(script).toContain("Invoke-GetSchemaAction -Database $readDb.Database");
+    expect(script).toContain("Invoke-GetRelationshipsAction -Database $readDb.Database");
+    // No direct inline calls to helpers bypassing the shared functions
     expect(script).not.toContain("Get-TableSchema -Database $db");
     expect(script).not.toContain("Get-Relationships -Database $db");
   });
@@ -328,7 +332,9 @@ describe("AccessPowerShellRunner", () => {
     expect(script).toContain(
       "$readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );
-    expect(script).toContain("$rs = $readDb.Database.OpenRecordset([string]$payload.sql)");
+    // SQL read is now dispatched via the shared Invoke-QuerySqlReadAction helper
+    expect(script).toContain("function Invoke-QuerySqlReadAction");
+    expect(script).toContain("Invoke-QuerySqlReadAction -Database $readDb.Database");
     expect(script).toContain(
       "$writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );

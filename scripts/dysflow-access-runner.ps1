@@ -350,6 +350,58 @@ function Remove-PasswordFromConnectString {
   return ($Connect -replace '(?i);PWD=[^;]*', '')
 }
 
+# Shared read-action helpers — called from both early dispatch and main block.
+# Each takes a resolved $Database object and returns an ordered result dict.
+
+function Invoke-QuerySqlReadAction {
+  param($Database, $Sql)
+  $rs = $Database.OpenRecordset([string]$Sql)
+  try {
+    return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
+  } finally {
+    if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+  }
+}
+
+function Invoke-ListTablesAction {
+  param($Database)
+  return [ordered]@{ tables = @(Get-TableNames -Database $Database) }
+}
+
+function Invoke-GetSchemaAction {
+  param($Database, $TableName)
+  if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for get_schema." }
+  return [ordered]@{ schema = @(Get-TableSchema -Database $Database -TableName ([string]$TableName)) }
+}
+
+function Invoke-CountRowsAction {
+  param($Database, $TableName)
+  if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for count_rows." }
+  $rs = $Database.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$TableName)]")
+  try {
+    return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
+  } finally {
+    if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+  }
+}
+
+function Invoke-DistinctValuesAction {
+  param($Database, $TableName, $ColumnName)
+  if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for distinct_values." }
+  if ([string]::IsNullOrWhiteSpace($ColumnName)) { throw "columnName is required for distinct_values." }
+  $rs = $Database.OpenRecordset("SELECT DISTINCT [$([string]$ColumnName)] AS [Value] FROM [$([string]$TableName)]")
+  try {
+    return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
+  } finally {
+    if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+  }
+}
+
+function Invoke-GetRelationshipsAction {
+  param($Database)
+  return [ordered]@{ relationships = @(Get-Relationships -Database $Database) }
+}
+
 function Get-LinkInfo {
   param($Database)
   $links = New-Object System.Collections.ArrayList
@@ -1323,65 +1375,56 @@ if ($Operation -eq 'query') {
   if ($isDirectTargetRead) {
     $directDbEngine = $null
     $directDb = $null
-    $directRs = $null
     try {
       $directDbEngine = New-DaoDbEngine
       $directDb = Open-DatabaseWithBackendPassword -DbEngine $directDbEngine -DatabasePath $earlyTargetPath -ReadOnly $true
       Write-DysflowProgress -Percent 40 -Message "Executing operation"
 
       if ([string]::IsNullOrWhiteSpace($earlyAction) -or $earlyAction -eq 'query_sql') {
-        $directRs = $directDb.OpenRecordset([string]$earlyPayload.sql)
-        $rows = @(Convert-RecordsetRows $directRs)
+        $result = Invoke-QuerySqlReadAction -Database $directDb -Sql ([string]$earlyPayload.sql)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
+        $result | ConvertTo-Json -Compress -Depth 20
         exit 0
       }
 
       if ($earlyAction -eq 'list_tables') {
-        $tables = @(Get-TableNames -Database $directDb)
+        $result = Invoke-ListTablesAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
         exit 0
       }
 
       if ($earlyAction -eq 'get_schema') {
-        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for get_schema." }
-        $schema = @(Get-TableSchema -Database $directDb -TableName ([string]$earlyPayload.tableName))
+        $result = Invoke-GetSchemaAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
+        $result | ConvertTo-Json -Compress -Depth 20
         exit 0
       }
 
       if ($earlyAction -eq 'count_rows') {
-        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for count_rows." }
-        $directRs = $directDb.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$earlyPayload.tableName)]")
-        $rows = @(Convert-RecordsetRows $directRs)
+        $result = Invoke-CountRowsAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
         exit 0
       }
 
       if ($earlyAction -eq 'distinct_values') {
-        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.tableName)) { throw "tableName is required for distinct_values." }
-        if ([string]::IsNullOrWhiteSpace([string]$earlyPayload.columnName)) { throw "columnName is required for distinct_values." }
-        $directRs = $directDb.OpenRecordset("SELECT DISTINCT [$([string]$earlyPayload.columnName)] AS [Value] FROM [$([string]$earlyPayload.tableName)]")
-        $rows = @(Convert-RecordsetRows $directRs)
+        $result = Invoke-DistinctValuesAction -Database $directDb -TableName ([string]$earlyPayload.tableName) -ColumnName ([string]$earlyPayload.columnName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
         exit 0
       }
 
       if ($earlyAction -eq 'get_relationships') {
-        $relationships = @(Get-Relationships -Database $directDb)
+        $result = Invoke-GetRelationshipsAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
+        $result | ConvertTo-Json -Compress -Depth 20
         exit 0
       }
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
       exit 1
     } finally {
-      if ($null -ne $directRs) { try { $directRs.Close() } catch { Write-Debug "Diagnostics: $_" } }
       if ($null -ne $directDb) {
         try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
         try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
@@ -1508,14 +1551,11 @@ try {
     if ([string]::IsNullOrWhiteSpace($action) -or $action -eq 'query_sql') {
       if ($payload.mode -eq 'read') {
         $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
-        $rs = $null
         try {
-          $rs = $readDb.Database.OpenRecordset([string]$payload.sql)
-          $rows = @(Convert-RecordsetRows $rs)
+          $result = Invoke-QuerySqlReadAction -Database $readDb.Database -Sql ([string]$payload.sql)
           Write-DysflowProgress -Percent 90 -Message "Finalizing"
-          [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 20
+          $result | ConvertTo-Json -Compress -Depth 20
         } finally {
-          if ($null -ne $rs) { $rs.Close() }
           if ($readDb.Owned) {
             try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
             try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
@@ -1541,9 +1581,9 @@ try {
     if ($action -eq 'list_tables') {
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
       try {
-        $tables = @(Get-TableNames -Database $readDb.Database)
+        $result = Invoke-ListTablesAction -Database $readDb.Database
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
       } finally {
         if ($readDb.Owned) { $readDb.Database.Close() }
       }
@@ -1558,12 +1598,11 @@ try {
     }
 
     if ($action -eq 'get_schema') {
-      if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for get_schema." }
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
       try {
-        $schema = @(Get-TableSchema -Database $readDb.Database -TableName ([string]$payload.tableName))
+        $result = Invoke-GetSchemaAction -Database $readDb.Database -TableName ([string]$payload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ schema = $schema } | ConvertTo-Json -Compress -Depth 20
+        $result | ConvertTo-Json -Compress -Depth 20
       } finally {
         if ($readDb.Owned) { $readDb.Database.Close() }
       }
@@ -1571,16 +1610,12 @@ try {
     }
 
     if ($action -eq 'count_rows') {
-      if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for count_rows." }
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
-      $rs = $null
       try {
-        $rs = $readDb.Database.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$payload.tableName)]")
-        $rows = @(Convert-RecordsetRows $rs)
+        $result = Invoke-CountRowsAction -Database $readDb.Database -TableName ([string]$payload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
       } finally {
-        if ($null -ne $rs) { $rs.Close() }
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
@@ -1590,17 +1625,12 @@ try {
     }
 
     if ($action -eq 'distinct_values') {
-      if ([string]::IsNullOrWhiteSpace([string]$payload.tableName)) { throw "tableName is required for distinct_values." }
-      if ([string]::IsNullOrWhiteSpace([string]$payload.columnName)) { throw "columnName is required for distinct_values." }
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
-      $rs = $null
       try {
-        $rs = $readDb.Database.OpenRecordset("SELECT DISTINCT [$([string]$payload.columnName)] AS [Value] FROM [$([string]$payload.tableName)]")
-        $rows = @(Convert-RecordsetRows $rs)
+        $result = Invoke-DistinctValuesAction -Database $readDb.Database -TableName ([string]$payload.tableName) -ColumnName ([string]$payload.columnName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ rows = $rows } | ConvertTo-Json -Compress -Depth 10
+        $result | ConvertTo-Json -Compress -Depth 10
       } finally {
-        if ($null -ne $rs) { $rs.Close() }
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
@@ -1626,9 +1656,9 @@ try {
     if ($action -eq 'get_relationships') {
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
       try {
-        $relationships = @(Get-Relationships -Database $readDb.Database)
+        $result = Invoke-GetRelationshipsAction -Database $readDb.Database
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ relationships = $relationships } | ConvertTo-Json -Compress -Depth 20
+        $result | ConvertTo-Json -Compress -Depth 20
       } finally {
         if ($readDb.Owned) { $readDb.Database.Close() }
       }
