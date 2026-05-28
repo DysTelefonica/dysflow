@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,8 @@ import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
   AccessPowerShellRunner,
+  CROSS_PROCESS_LOCK_STALE_MS,
+  getCrossProcessLockPath,
   type PowerShellExecutor,
   resolveDefaultRunnerScriptPath,
   sanitizePowerShellOutput,
@@ -774,5 +776,38 @@ describe("sanitizePowerShellOutput", () => {
     expect(
       sanitizePowerShellOutput("token abc password=hunter2; pwd: hunter2", ["abc", "hunter2"]),
     ).toBe("token [REDACTED] password=[REDACTED]; pwd: [REDACTED]");
+  });
+});
+
+describe("Cross-process lock for .accdb", () => {
+  it("CROSS_PROCESS_LOCK_STALE_MS is a positive integer of at most 60s", () => {
+    expect(Number.isInteger(CROSS_PROCESS_LOCK_STALE_MS)).toBe(true);
+    expect(CROSS_PROCESS_LOCK_STALE_MS).toBeGreaterThan(0);
+    expect(CROSS_PROCESS_LOCK_STALE_MS).toBeLessThanOrEqual(60_000);
+  });
+
+  it("run() returns RUNNER_LOCK_TIMEOUT when cross-process lock cannot be acquired", async () => {
+    const dbPath = join(tmpdir(), `dysflow-lock-test-${Date.now()}.accdb`);
+    const lockPath = getCrossProcessLockPath(dbPath);
+    mkdirSync(lockPath, { recursive: true });
+    try {
+      const executor: PowerShellExecutor = async () => ({
+        exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false,
+      });
+      const runner = new AccessPowerShellRunner({
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run.ps1",
+        lockAcquireTimeoutMs: 100,
+      });
+      const result = await runner.run(
+        { kind: "diagnostics", request: {} },
+        { ...config, accessDbPath: dbPath },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.ok === false && result.error.code).toBe("RUNNER_LOCK_TIMEOUT");
+    } finally {
+      rmSync(lockPath, { recursive: true, force: true });
+    }
   });
 });

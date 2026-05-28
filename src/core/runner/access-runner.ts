@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import {
@@ -28,6 +32,8 @@ import { isRecord, sanitizeSecrets } from "../utils/index.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
+
+export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
 
 export const RUNNER_INVALID_OUTPUT = "RUNNER_INVALID_OUTPUT";
 
@@ -106,6 +112,7 @@ export type AccessPowerShellRunnerOptions = {
   preflightCleanup?: AccessOperationPreflightCleanup;
   operationIdFactory?: () => string;
   clock?: () => string;
+  lockAcquireTimeoutMs?: number;
 };
 
 const defaultRegistry = new InMemoryAccessOperationRegistry();
@@ -122,6 +129,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   private readonly preflightCleanup: AccessOperationPreflightCleanup;
   private readonly operationIdFactory: () => string;
   private readonly clock: () => string;
+  private readonly lockAcquireTimeoutMs: number;
 
   constructor(options: AccessPowerShellRunnerOptions = {}) {
     this.executor = options.executor ?? spawnPowerShell;
@@ -138,6 +146,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       });
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
+    this.lockAcquireTimeoutMs = options.lockAcquireTimeoutMs ?? 30_000;
   }
 
   async run<TData = unknown>(
@@ -154,7 +163,11 @@ export class AccessPowerShellRunner implements AccessRunner {
       );
     }
 
-    return await runWithAccessExecutionLock(config.accessDbPath, async () => {
+    try {
+      return await runWithAccessExecutionLock(
+        config.accessDbPath,
+        this.lockAcquireTimeoutMs,
+        async () => {
       let finalOperation = operation;
       if (
         operation.kind === "query" &&
@@ -269,7 +282,15 @@ export class AccessPowerShellRunner implements AccessRunner {
           { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
         );
       }
-    });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("RUNNER_LOCK_TIMEOUT:")) {
+        return failureResult(
+          createDysflowError("RUNNER_LOCK_TIMEOUT", error.message.slice("RUNNER_LOCK_TIMEOUT: ".length)),
+        );
+      }
+      throw error;
+    }
   }
 
   private async runPreflightCleanup(config: DysflowConfig) {
@@ -316,8 +337,41 @@ export class AccessPowerShellRunner implements AccessRunner {
   }
 }
 
+export function getCrossProcessLockPath(accessPath: string): string {
+  const hash = createHash("md5").update(accessPath.toLowerCase()).digest("hex");
+  return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
+}
+
+async function acquireCrossProcessAccessLock(
+  lockPath: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      await mkdir(lockPath, { recursive: false });
+      await writeFile(join(lockPath, "owner"), `${process.pid}\n`, "utf8").catch(() => {});
+      return;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      const info = await stat(lockPath).catch(() => null);
+      if (info !== null && Date.now() - info.mtimeMs > CROSS_PROCESS_LOCK_STALE_MS) {
+        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw new Error(`RUNNER_LOCK_TIMEOUT: Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`);
+}
+
+async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {
+  await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+}
+
 async function runWithAccessExecutionLock<T>(
   accessPath: string,
+  lockAcquireTimeoutMs: number,
   work: () => Promise<T>,
 ): Promise<T> {
   const key = accessPath.toLowerCase();
@@ -332,11 +386,15 @@ async function runWithAccessExecutionLock<T>(
   accessExecutionLocks.set(key, current);
 
   await previous;
+  const lockPath = getCrossProcessLockPath(accessPath);
+  await mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
+  await acquireCrossProcessAccessLock(lockPath, lockAcquireTimeoutMs);
   try {
     return await work();
   } finally {
     releaseCurrent();
     if (accessExecutionLocks.get(key) === current) accessExecutionLocks.delete(key);
+    await releaseCrossProcessAccessLock(lockPath);
   }
 }
 
