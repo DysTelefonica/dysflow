@@ -2,6 +2,16 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.18] - 2026-05-28
+
+### Changed
+
+- Removed all "legacy" naming from the MCP adapter layer: renamed `legacy-tool-inventory.ts` → `mcp-tool-registry.ts`, `legacy-parity-registry.ts` → `tool-parity-registry.ts`, `vba-sync-legacy-adapter.ts` → `vba-sync-adapter.ts`, and all associated `LEGACY_*` constants and symbols throughout `src/` and `test/`.
+- All 48 MCP tools are now treated as first-class API surface. No compatibility tier distinction.
+- Deleted dead `vba-sync-legacy-service.ts` shim (zero imports).
+- Cleaned repository root: moved dev utility scripts to `scripts/dev/`, moved audit document to `docs/`, gitignored local state directories, removed stray NVIDIA folder from `E2E_testing/`.
+- Updated README, architecture docs, E2E docs, and OpenSpec specs to remove all legacy references.
+
 ## [0.9.11] - 2026-05-27
 
 ### Changed
