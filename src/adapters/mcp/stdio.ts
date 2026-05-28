@@ -298,9 +298,13 @@ export async function startMcpStdioAdapter(
   const writesEnabled = options?.writesEnabled ?? false;
 
   const startupConfig = configResult.ok ? configResult.data : undefined;
-  for (const tool of createDysflowMcpTools(services, writesEnabled, async (input) => {
-    return await resolveMcpWriteAccessForInput(input, startupConfig);
-  })) {
+  for (const tool of createDysflowMcpTools(
+    services,
+    writesEnabled,
+    async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
+    process.env,
+    startupConfig?.allowedProcedures,
+  )) {
     activeRuntime.registerTool(tool);
   }
 

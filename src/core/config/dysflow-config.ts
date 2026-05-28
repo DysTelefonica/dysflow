@@ -25,6 +25,7 @@ export type DysflowProjectConfig = {
   id?: string;
   name?: string;
   allowWrites?: boolean;
+  allowedProcedures?: string[];
   accessPath?: string;
   backendPath?: string;
   destinationRoot?: string;
@@ -39,6 +40,7 @@ export type DysflowProjectConfig = {
 export type DysflowConfig = {
   configSource: DysflowConfigSource;
   allowWrites: boolean;
+  allowedProcedures?: readonly string[];
   accessDbPath: string;
   backendPath?: string;
   destinationRoot?: string;
@@ -260,6 +262,7 @@ function buildProjectConfig(
   return successResult({
     configSource,
     allowWrites: raw.allowWrites === true,
+    allowedProcedures: Array.isArray(raw.allowedProcedures) ? raw.allowedProcedures : undefined,
     accessDbPath,
     backendPath,
     destinationRoot,

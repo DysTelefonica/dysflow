@@ -158,6 +158,7 @@ export function createDysflowMcpTools(
   writesEnabled = false,
   writeAccessResolver?: McpWriteAccessResolver,
   env: Record<string, string | undefined> = process.env,
+  allowedProcedures?: readonly string[],
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -168,6 +169,15 @@ export function createDysflowMcpTools(
         const validation = validateInput(input, VBA_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
         const request = input as AccessVbaRequest;
+        if (
+          allowedProcedures !== undefined &&
+          allowedProcedures.length > 0 &&
+          !allowedProcedures.includes(request.procedureName)
+        ) {
+          return invalidInput(
+            `Procedure '${request.procedureName}' is not in the configured allowedProcedures list.`,
+          );
+        }
         return translateCoreResultToMcpContent(
           await services.vbaService.execute(request, context?.sendProgress),
         );
