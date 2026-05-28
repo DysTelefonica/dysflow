@@ -475,64 +475,65 @@ git commit -m "docs: add dysflow http api script examples"
 
 ---
 
-## Phase 9: Remove "legacy" naming — promote all MCP tools to first-class
+## Phase 9: Delete all legacy MCP tools — keep only the 5 official `dysflow_*` tools
 
-**Objective:** Eliminate all `legacy`-prefixed names from the codebase. The 43 MCP tools (previously called "legacy compatibility aliases") are active, maintained, and the sole MCP surface for most operations. They must be named accordingly.
+**Decision:** Delete all 45 legacy MCP tools and their entire infrastructure. No backwards compatibility. No technical debt. The official API surface is exactly 5 tools.
 
 **Context for a fresh AI picking this up:**
 
-- There are 48 MCP tools total: 5 `dysflow_*` modern tools + 43 tools with the original names (`query_sql`, `list_tables`, `export_modules`, etc.).
-- The 43 tools were called "legacy" because they predate the `dysflow_*` naming. They are NOT dead code — 33 of them are the ONLY way to access their functionality via MCP.
-- One genuinely dead file exists: `src/core/services/vba-sync-legacy-service.ts` — zero imports, safe to delete.
-- All other `legacy-*` files are live and need renaming, not deletion.
+The MCP server currently exposes 48 tools: 5 official `dysflow_*` tools + 45 legacy tools. The legacy tools predate the `dysflow_*` naming and are being removed entirely. The 40 operations not covered by `dysflow_*` tools are intentionally dropped — they can be re-added later as proper `dysflow_*` actions if needed.
 
-**Files to rename:**
+**Coverage analysis (already done):**
 
-| Current | Target |
-|---------|--------|
-| `src/adapters/mcp/legacy-tool-inventory.ts` | `src/adapters/mcp/mcp-tool-registry.ts` |
-| `src/adapters/mcp/legacy-parity-registry.ts` | `src/adapters/mcp/tool-parity-registry.ts` |
-| `src/adapters/vba-sync/vba-sync-legacy-adapter.ts` | `src/adapters/vba-sync/vba-sync-adapter.ts` |
-| `test/adapters/mcp/legacy-tool-schemas-parity.test.ts` | `test/adapters/mcp/tool-schemas-parity.test.ts` |
-| `test/core/contracts/legacy-vba-sync-port.test.ts` | `test/core/contracts/vba-sync-port.test.ts` |
-| `test/adapters/mcp/legacy-parity.test.ts` | `test/adapters/mcp/tool-parity.test.ts` |
-| `test/adapters/vba-sync/vba-sync-legacy-adapter.test.ts` | `test/adapters/vba-sync/vba-sync-adapter.test.ts` |
-| `test/adapters/mcp/legacy-parity-registry.test.ts` | `test/adapters/mcp/tool-parity-registry.test.ts` |
+Only 5 of the 45 legacy tools map to `dysflow_*` equivalents:
+- `query_sql` → `dysflow_query_execute` (mode: "read")
+- `exec_sql` → `dysflow_query_execute` (mode: "write")
+- `run_vba` → `dysflow_vba_execute`
+- `list_access_operations` → `dysflow_access_operations_list`
+- `cleanup_access_operation` → `dysflow_access_cleanup`
 
-**Variables/exports to rename (in `tools.ts` and imported files):**
+The remaining 40 legacy tools (all VBA-sync structural ops, all query `action`-discriminant ops) have no `dysflow_*` equivalent and are simply removed.
 
-| Current | Target |
-|---------|--------|
-| `LEGACY_VBA_SYNC_TOOL_NAMES` | `VBA_SYNC_TOOL_NAMES` |
-| `LEGACY_QUERY_TOOL_NAMES` | `QUERY_TOOL_NAMES` |
-| `LEGACY_QUERY_MAINTENANCE_TOOL_NAMES` | `QUERY_MAINTENANCE_TOOL_NAMES` |
-| `LEGACY_WRITE_FIXTURE_TOOL_NAMES` | `WRITE_FIXTURE_TOOL_NAMES` |
-| `LEGACY_TOOL_ROUTES` | `MCP_TOOL_ROUTES` |
-| `appendLegacyCompatibilityTools` | `registerMcpTools` |
-| `createLegacyDispatchTool` | `createDispatchTool` |
-| `getLegacyParityToolDefinition` | `getToolDefinition` |
-| `LegacyVbaSyncPort` | `VbaSyncPort` |
-| `VbaSyncLegacyAdapter` | `VbaSyncAdapter` |
+**Files to DELETE entirely:**
+
+- `src/core/services/vba-sync-legacy-service.ts` — dead shim, zero imports
+- `src/adapters/mcp/legacy-tool-inventory.ts`
+- `src/adapters/mcp/legacy-parity-registry.ts`
+- `src/adapters/vba-sync/vba-sync-legacy-adapter.ts`
+- `test/adapters/mcp/legacy-tool-schemas-parity.test.ts`
+- `test/core/contracts/legacy-vba-sync-port.test.ts`
+- `test/adapters/mcp/legacy-parity.test.ts`
+- `test/adapters/vba-sync/vba-sync-legacy-adapter.test.ts`
+- `test/adapters/mcp/legacy-parity-registry.test.ts`
+
+**Files to MODIFY:**
+
+- `src/adapters/mcp/tools.ts` — remove `appendLegacyCompatibilityTools`, `createLegacyDispatchTool`, all `LEGACY_*` arrays, all legacy imports. `createDysflowMcpTools` must NOT call `appendLegacyCompatibilityTools`. Result: only 5 `dysflow_*` tools registered.
+- `src/adapters/mcp/schemas.ts` — remove `LEGACY_TOOL_SCHEMAS` map and all legacy schema definitions. Keep only `dysflow_*` schemas.
+- `src/adapters/mcp/stdio.ts` — remove `VbaSyncLegacyAdapter` import, instantiation, and all usage. The `legacyToolService` variable is gone.
+- After deletion, run `pnpm build` and follow the TypeScript errors to find any remaining dead code in core services (`src/core/services/`) that was only reachable via legacy paths. Delete that dead code too.
 
 **Tasks:**
 
-- [ ] Delete `src/core/services/vba-sync-legacy-service.ts` (zero imports confirmed — safe to delete)
-- [ ] Read all files that import from `legacy-tool-inventory.ts`, `legacy-parity-registry.ts`, `vba-sync-legacy-adapter.ts` — map every import path and symbol name
-- [ ] Rename the 3 source files (create new, update all importers, delete old)
-- [ ] Rename the 5 test files (same process)
-- [ ] Rename all `LEGACY_*` variables and exported symbols throughout
-- [ ] Run `pnpm build` — must pass with zero errors
-- [ ] Run `pnpm run test -- --run` — all 646+ tests must pass
+- [ ] Delete the 9 files listed above
+- [ ] Modify `src/adapters/mcp/tools.ts` — remove all legacy infrastructure
+- [ ] Modify `src/adapters/mcp/schemas.ts` — remove all legacy schemas
+- [ ] Modify `src/adapters/mcp/stdio.ts` — remove VbaSyncLegacyAdapter wiring
+- [ ] Run `pnpm build` — fix all TypeScript errors by deleting (not patching) dead code
+- [ ] Run `pnpm run test -- --run` — delete any tests for removed functionality; remaining tests must pass
+- [ ] Verify: `createDysflowMcpTools()` returns exactly 5 tools
+- [ ] Verify: zero occurrences of `legacy` (case-insensitive) in `src/` and `test/`
 - [ ] Commit:
 
 ```bash
-git commit -m "refactor(mcp): promote all MCP tools to first-class — remove legacy naming"
+git commit -m "refactor(mcp): delete all legacy tools — official API is 5 dysflow_* tools only"
 ```
 
 **Acceptance criteria:**
-- Zero occurrences of the word `legacy` in `src/` or `test/` (case-insensitive)
-- All 48 MCP tools still registered and functional
-- Full test suite green
+- `pnpm build` passes
+- `pnpm run test -- --run` passes (all remaining tests green)
+- MCP server exposes exactly 5 tools: `dysflow_vba_execute`, `dysflow_query_execute`, `dysflow_doctor`, `dysflow_access_operations_list`, `dysflow_access_cleanup`
+- Zero occurrences of `legacy` in `src/` or `test/`
 
 ---
 
