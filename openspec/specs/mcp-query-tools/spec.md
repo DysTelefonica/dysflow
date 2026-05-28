@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Defines backend/database target behavior for modern and legacy MCP generic SQL tools.
+Defines backend/database target behavior for MCP generic SQL tools.
 
 ## Requirements
 
 ### Requirement: Generic SQL tools honor explicit database targets
 
-Generic MCP SQL tools MUST execute against the caller-requested database target when a target is supplied. Legacy and modern query tools MUST preserve equivalent target behavior for equivalent inputs.
+Generic MCP SQL tools MUST execute against the caller-requested database target when a target is supplied. All query tools MUST preserve equivalent target behavior for equivalent inputs.
 
 #### Scenario: Modern read query uses an explicit backend target
 
@@ -17,11 +17,11 @@ Generic MCP SQL tools MUST execute against the caller-requested database target 
 - THEN the SQL MUST execute against that backend target
 - AND the result MUST NOT fail because the frontend lacks the table
 
-#### Scenario: Legacy read query keeps target parity
+#### Scenario: Named alias read query keeps target parity
 
 - GIVEN the same SQL and explicit backend target are sent through `dysflow_query_sql`
-- WHEN the legacy tool delegates the request
-- THEN it MUST execute against the same target as the modern read query path
+- WHEN the tool delegates the request
+- THEN it MUST execute against the same target as the primary read query path
 
 #### Scenario: Missing target preserves default behavior
 

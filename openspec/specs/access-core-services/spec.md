@@ -22,18 +22,18 @@ The system MUST execute Access-related work only through a bounded runner interf
 - THEN it MUST return a timeout error
 
 #### Scenario: Seam refactor preserves behavior
-- GIVEN characterization coverage exists for a legacy sync path
+- GIVEN characterization coverage exists for a sync path
 - WHEN a seam refactor is applied
 - THEN observable runner calls and protocol-neutral results MUST remain equivalent
 
 #### Scenario: Untested path blocks refactor
-- GIVEN a legacy sync path lacks characterization coverage
+- GIVEN a sync path lacks characterization coverage
 - WHEN decomposition is proposed
 - THEN implementation MUST add coverage before changing the path
 
-### Requirement: Legacy Service Characterization
+### Requirement: VBA Sync Adapter Characterization
 
-The system MUST characterize `VbaSyncLegacyService` behavior before introducing seams or decomposition.
+The system MUST characterize `VbaSyncAdapter` behavior before introducing seams or decomposition.
 
 ### Requirement: Progress Callback Forwarding
 
@@ -68,8 +68,8 @@ When the caller does not supply `onProgress`, the service MUST call the runner w
 - WHEN they import
 - THEN the symbol MUST be resolvable from `vba-form-service.ts`
 
-#### Scenario: Not duplicated in legacy service
-- GIVEN `vba-sync-legacy-service.ts`
+#### Scenario: Not duplicated in vba-sync-adapter
+- GIVEN `vba-sync-adapter.ts`
 - WHEN it needs a form operation
 - THEN it MUST import from `vba-form-service.ts`, not reimplement it
 
@@ -82,14 +82,14 @@ When the caller does not supply `onProgress`, the service MUST call the runner w
 - WHEN they import
 - THEN the symbol MUST be resolvable from `vba-source-comparison.ts`
 
-### Requirement: VBA Sync Legacy Service Public API Preserved
+### Requirement: VBA Sync Adapter Public API Preserved
 
-`VbaSyncLegacyService` MUST retain its existing public API. Callers MUST require no import path or signature changes after the split.
+`VbaSyncAdapter` MUST retain its existing public API. Callers MUST require no import path or signature changes after the split.
 (Previously: the service contained all form and comparison logic inline; now it delegates.)
 
 #### Scenario: Public API unchanged
-- GIVEN existing call sites for `VbaSyncLegacyService`
-- WHEN PR3 lands
+- GIVEN existing call sites for `VbaSyncAdapter`
+- WHEN the split lands
 - THEN all call sites MUST compile and pass tests without modification
 
 #### Scenario: Delegation to sub-modules

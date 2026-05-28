@@ -190,7 +190,7 @@ Resultado esperado:
 
 ## Prueba 7b — No Conformidades Issue #18: DDL en backend explícito
 
-Para crear tablas globales/cache de No Conformidades, las herramientas MCP legacy de escritura deben recibir un target explícito de backend. Usar `backendPath` para el backend del proyecto o `databasePath`/`sourcePath` cuando la operación deba apuntar a una base concreta. Si no se pasa target, la escritura conserva el comportamiento local del front.
+Para crear tablas globales/cache de No Conformidades, las herramientas MCP de escritura deben recibir un target explícito de backend. Usar `backendPath` para el backend del proyecto o `databasePath`/`sourcePath` cuando la operación deba apuntar a una base concreta. Si no se pasa target, la escritura conserva el comportamiento local del front.
 
 ```json
 {"jsonrpc":"2.0","id":35,"method":"tools/call","params":{"name":"create_table","arguments":{"projectId":"00-no-conformidades-staging-clean","backendPath":"<repo>\\NoConformidades_Datos.accdb","tableName":"ZZZ_DYSFLOW_BACKEND_TARGET_MANUAL","fields":"Id COUNTER CONSTRAINT PrimaryKey PRIMARY KEY, Marker TEXT(64)","dryRun":true}}}

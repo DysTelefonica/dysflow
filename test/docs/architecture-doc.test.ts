@@ -8,6 +8,6 @@ describe("core and adapters architecture doc", () => {
     expect(content).toContain("adapters depend inward on `src/core/**`");
     expect(content).toContain("`src/core/**` MUST NOT import MCP or HTTP adapters");
     expect(content).toContain("`C:\\Proyectos\\workflow\\skills\\dysflow`");
-    expect(content).toContain("stdio MCP implementation remains untouched");
+    expect(content).toContain("Compatibility reference");
   });
 });

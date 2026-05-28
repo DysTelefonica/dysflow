@@ -26,8 +26,8 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 - **Core-safe MCP/CLI runtime** with controlled Access automation lifecycle.
 - **Operation-owned cleanup** with strict ownership validation before any process termination.
 - **JSON-RPC MCP protocol hardening** with explicit protocol version (`MCP_PROTOCOL_VERSION = 2024-11-05`) and null-id request behavior.
-- **Deterministic legacy write safety** (`dryRun`/`apply`) and timeout cancellation path in the legacy write stack.
-- **Legacy compatibility surface** preserved for legacy Dysflow MCP tools while routing through new core services.
+- **Deterministic write safety** (`dryRun`/`apply`) and timeout cancellation path in the write stack.
+- **Full MCP tool surface** of 48 tools routing through core services.
 - **Public docs and maintenance playbooks** for protocol drift and MCP e2e/HTTP usage.
 
 #### Known boundaries in v0.1.0
@@ -42,7 +42,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A replacement path for legacy Dysflow MCP behavior with a compatibility layer for older tool names.
+- A platform with 48 MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -114,7 +114,7 @@ Refusal examples include:
 
 - Read tools are default/explicit `mode: "read"`.
 - Write-like operations pass through guarded request paths.
-- `dryRun`-style safety is preserved in legacy compatibility paths where applicable.
+- `dryRun`-style safety is preserved across all write-capable tools.
 
 ---
 
@@ -258,7 +258,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
    dysflow_access_operations_list { "projectId": "my-access-project" }
    ```
 
-   Legacy-compatible alias:
+   Alias:
 
    ```text
    list_access_operations { "projectId": "my-access-project" }
@@ -273,7 +273,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
    }
    ```
 
-   Legacy-compatible alias:
+   Alias:
 
    ```text
    cleanup_access_operation {
@@ -304,7 +304,7 @@ The runtime installation directory is only for executable code (`DYSFLOW_HOME`).
 
 Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state. Only secrets may come from environment variables.
 
-Secrets can also be supplied through a local `.secrets.json` for legacy VBA manager workflows. Keep that file outside git, restrict its ACL to the current user, and prefer environment variables (`DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`) for automated runs so passwords do not appear in command-line process listings.
+Secrets can also be supplied through a local `.secrets.json` for VBA manager workflows. Keep that file outside git, restrict its ACL to the current user, and prefer environment variables (`DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`) for automated runs so passwords do not appear in command-line process listings.
 
 ### Local project setup
 
@@ -361,7 +361,7 @@ Call-level path/root fields are still supported as explicit one-off overrides, a
 | `DYSFLOW_HOME`                                   | Runtime root override (e.g., `C:\Users\\<user>\\AppData\\Local\\dysflow`) |
 | `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD` | Access DB password fallback                                      |
 | `DYSFLOW_BACKEND_PASSWORD`                       | Backend DB password fallback                                     |
-| `ACCESS_VBA_PASSWORD`                            | Legacy fallback password env                                     |
+| `ACCESS_VBA_PASSWORD`                            | Alternative Access password env (alias for VBA runner scripts)   |
 
 Runtime directory resolution order:
 
@@ -481,9 +481,7 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 
 ---
 
-### Legacy Parity & Compatibility Tools
-
-These legacy aliases preserve backward compatibility with older client implementations:
+### MCP Tools
 
 #### 1. VBA Lifecycle & Testing
 * **`export_modules`**: Export VBA source code modules to disk.
@@ -717,7 +715,7 @@ Useful references:
 
 - `src/core/**` remains protocol-agnostic and returns normalized `OperationResult`.
 - Adapters translate protocol-specific formats at boundaries only.
-- Legacy parity additions are additive by default; implemented and pending tool surface is tracked in `src/adapters/mcp/legacy-parity-registry.ts`.
+- Tool parity is tracked in `src/adapters/mcp/tool-parity-registry.ts`; the tool registry lives in `src/adapters/mcp/mcp-tool-registry.ts`.
 - The MCP standard adapter is intentionally small and controlled; protocol drift is tracked as a first-class maintenance item.
 
 ---
@@ -735,7 +733,7 @@ Useful references:
 
 - **Clear safety contracts** before destructive operations
 - **Structured error semantics** with explicit codes
-- **Deterministic compatibility layer** for legacy tools
+- **Deterministic compatibility layer** for named MCP tool aliases
 - **TDD-first changes** with strict `pnpm test` / `pnpm build` verification
 
 ---

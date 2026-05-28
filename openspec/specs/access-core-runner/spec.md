@@ -103,9 +103,9 @@ The Access core runner MUST terminate runner execution within configured `timeou
 - **Then** the runner SHALL produce a terminal success or structured failure within configured bounds
 - **And** it MUST NOT rely on indefinite waits.
 
-### Requirement: Explicit Legacy Write Database Target
+### Requirement: Explicit Write Database Target
 
-Legacy write and DDL operations MUST execute against an explicit write database target when supplied. The frontend MAY remain the Access automation context, but the write database MUST be selected from `backendPath` or `databasePath` before executing SQL, scripts, DDL, fixtures, or teardown. When no explicit write target is supplied, existing frontend/current-database behavior MUST remain compatible.
+Write and DDL operations MUST execute against an explicit write database target when supplied. The frontend MAY remain the Access automation context, but the write database MUST be selected from `backendPath` or `databasePath` before executing SQL, scripts, DDL, fixtures, or teardown. When no explicit write target is supplied, existing frontend/current-database behavior MUST remain compatible.
 
 #### Scenario: Explicit backend target receives DDL
 
@@ -116,7 +116,7 @@ Legacy write and DDL operations MUST execute against an explicit write database 
 
 #### Scenario: No explicit write target preserves compatibility
 
-- GIVEN a legacy write or DDL request without `backendPath` or `databasePath`
+- GIVEN a write or DDL request without `backendPath` or `databasePath`
 - WHEN the runner executes the request
 - THEN it MUST use the existing frontend/current database target behavior
 - AND dry-run and allow/deny guard behavior MUST remain unchanged
