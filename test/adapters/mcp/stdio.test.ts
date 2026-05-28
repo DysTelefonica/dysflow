@@ -82,6 +82,13 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
   });
 
+  it("configures legacy VBA sync through project cwd instead of runtime-default paths", () => {
+    expect(stdioSource).toContain("cwd: config.projectRoot ?? process.cwd()");
+    expect(stdioSource).toContain("env: process.env");
+    expect(stdioSource).not.toContain("accessPath: config.accessDbPath");
+    expect(stdioSource).not.toContain("destinationRoot: config.destinationRoot");
+  });
+
   it("allows project-scoped writes from projectRoot config even when explicit paths are present", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-write-access-"));
     const project = join(root, "project");
@@ -396,6 +403,55 @@ describe("JsonLineMcpStdioRuntime", () => {
     ]);
   });
 
+  it("rejects registered import dry-run after global registry deprecation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-startup-"));
+    const startup = join(root, "startup");
+    const project = join(root, "project");
+    const registryPath = join(root, "projects.json");
+    mkdirSync(startup, { recursive: true });
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    mkdirSync(join(project, "src", "modules"), { recursive: true });
+    writeFileSync(join(project, "front.accdb"), "", "utf8");
+    writeFileSync(join(project, "src", "modules", "Entorno.bas"), "", "utf8");
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "registered-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      registryPath,
+      JSON.stringify({
+        projects: {
+          "registered-project": { configPath: join(project, ".dysflow", "project.json") },
+        },
+      }),
+      "utf8",
+    );
+
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      { cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
+    );
+    const result = await services.legacyToolService?.execute("import_all", {
+      contextId: "registered-project",
+      dryRun: true,
+      importMode: "Code",
+    });
+
+    expect(result?.ok).toBe(false);
+    if (result === undefined || result.ok) throw new Error("expected registry deprecation failure");
+    expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+    expect(result.error.message).toContain("deprecated");
+  });
+
   it("rejects registered read query by projectId after global registry deprecation", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-read-startup-"));
     const startup = join(root, "startup");
@@ -443,6 +499,70 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(result.ok).toBe(false);
     expect(query.requests).toEqual([]);
   }, 15_000);
+
+  it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      { cwd: "C:/missing", env: {} },
+    );
+
+    const result = await services.legacyToolService?.execute("import_all", {
+      dryRun: false,
+      projectId: "registered-project",
+    });
+
+    expect(result?.ok).toBe(false);
+    if (result === undefined || result.ok) throw new Error("expected startup failure");
+    expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+  });
+
+  it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const runtime = new JsonLineMcpStdioRuntime({ input, output });
+    const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+    for (const tool of createDysflowMcpTools({
+      vbaService: vba,
+      queryService: new FakeQueryService(),
+      diagnosticsService: new FakeDiagnosticsService(),
+    })) {
+      runtime.registerTool(tool);
+    }
+
+    const started = runtime.start();
+    writeMessage(input, {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: {
+        name: "run_vba",
+        arguments: { procedureName: "Broken", argsJson: "[1," },
+      },
+    });
+    input.end();
+    await started;
+    output.end();
+
+    await expect(collectOutput(output)).resolves.toEqual([
+      expect.objectContaining({
+        id: 7,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: "MCP_INPUT_INVALID: argsJson must be valid JSON.",
+            },
+          ],
+          isError: true,
+        },
+      }),
+    ]);
+    expect(vba.requests).toEqual([]);
+  });
 
   it("returns JSON-RPC errors for unsupported methods", async () => {
     const input = new PassThrough();

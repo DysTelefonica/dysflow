@@ -1,0 +1,57 @@
+export const LEGACY_VBA_SYNC_TOOL_NAMES = [
+  "list_access_operations",
+  "cleanup_access_operation",
+  "export_modules",
+  "export_all",
+  "import_modules",
+  "import_all",
+  "list_objects",
+  "exists",
+  "run_vba",
+  "test_vba",
+  "compile_vba",
+  "verify_code",
+  "verify_binary",
+  "reconcile_binary",
+  "delete_module",
+  "generate_erd",
+  "fix_encoding",
+  "validate_form_spec",
+  "generate_form",
+  "catalog_add_control",
+  "harvest_form_catalog",
+] as const;
+
+export const LEGACY_QUERY_TOOL_NAMES = [
+  "query_sql",
+  "list_tables",
+  "list_linked_tables",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "compare_backends",
+  "list_access_files",
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+  "list_links",
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "export_queries",
+  "import_queries",
+  "get_relationships",
+  "compact_repair",
+  "relink_directory",
+] as const;
+
+export const LEGACY_DYSFLOW_MCP_TOOL_NAMES = [
+  ...LEGACY_VBA_SYNC_TOOL_NAMES,
+  ...LEGACY_QUERY_TOOL_NAMES,
+] as const;
+
+export type LegacyDysflowMcpToolName = (typeof LEGACY_DYSFLOW_MCP_TOOL_NAMES)[number];

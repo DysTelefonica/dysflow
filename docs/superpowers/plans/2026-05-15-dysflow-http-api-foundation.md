@@ -515,15 +515,15 @@ The remaining 40 legacy tools (all VBA-sync structural ops, all query `action`-d
 
 **Tasks:**
 
-- [x] Delete the 9 files listed above
-- [x] Modify `src/adapters/mcp/tools.ts` — remove all legacy infrastructure
-- [x] Modify `src/adapters/mcp/schemas.ts` — remove all legacy schemas
-- [x] Modify `src/adapters/mcp/stdio.ts` — remove VbaSyncLegacyAdapter wiring
-- [x] Run `pnpm build` — fix all TypeScript errors by deleting (not patching) dead code
-- [x] Run `pnpm run test -- --run` — delete any tests for removed functionality; remaining tests must pass
-- [x] Verify: `createDysflowMcpTools()` returns exactly 5 tools
-- [x] Verify: zero occurrences of `legacy` (case-insensitive) in `src/` and `test/`
-- [x] Commit:
+- [ ] Delete the 9 files listed above
+- [ ] Modify `src/adapters/mcp/tools.ts` — remove all legacy infrastructure
+- [ ] Modify `src/adapters/mcp/schemas.ts` — remove all legacy schemas
+- [ ] Modify `src/adapters/mcp/stdio.ts` — remove VbaSyncLegacyAdapter wiring
+- [ ] Run `pnpm build` — fix all TypeScript errors by deleting (not patching) dead code
+- [ ] Run `pnpm run test -- --run` — delete any tests for removed functionality; remaining tests must pass
+- [ ] Verify: `createDysflowMcpTools()` returns exactly 5 tools
+- [ ] Verify: zero occurrences of `legacy` (case-insensitive) in `src/` and `test/`
+- [ ] Commit:
 
 ```bash
 git commit -m "refactor(mcp): delete all legacy tools — official API is 5 dysflow_* tools only"
@@ -533,8 +533,6 @@ git commit -m "refactor(mcp): delete all legacy tools — official API is 5 dysf
 - `pnpm build` passes
 - `pnpm run test -- --run` passes (all remaining tests green)
 - MCP server exposes exactly 5 tools: `dysflow_vba_execute`, `dysflow_query_execute`, `dysflow_doctor`, `dysflow_access_operations_list`, `dysflow_access_cleanup`
-
-**Completed:** 2026-05-28 — 13 test files deleted (9 directly + 4 pure-legacy test files), 9 source files deleted, 5 files modified (`tools.ts`, `schemas.ts`, `stdio.ts`, `contracts/index.ts`, and 3 test files surgically trimmed). MCP now exposes exactly 5 tools. Also removed dead `LegacyVbaSyncPort` type from `src/core/contracts/index.ts` as cascade dead code. Final test count: 42 test files, 536 tests passing.
 - Zero occurrences of `legacy` in `src/` or `test/`
 
 ---
