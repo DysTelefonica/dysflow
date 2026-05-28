@@ -90,7 +90,8 @@ describe("uninstall.ts static import isolation", () => {
     const queue: string[] = [uninstallPath];
 
     while (queue.length > 0) {
-      const current = queue.shift()!;
+      const current = queue.shift();
+      if (current === undefined) break;
       if (visited.has(current)) continue;
       visited.add(current);
 

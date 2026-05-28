@@ -27,13 +27,13 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noExplicitAny": "warn",
+        "noExplicitAny": "error",
         "noImplicitAnyLet": "warn",
         "noAssignInExpressions": "warn",
         "noTemplateCurlyInString": "warn"
       },
       "style": {
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "error"
       }
     }
   },

@@ -553,19 +553,15 @@ describe("dysflow configuration", () => {
       const input = { accessDbPath: "C:/my.accdb", env: {} };
       const repoConfig = { found: "none" as const };
       let called = false;
-      const loadFromPath = () => {
+      const loadFromPath = (_: string) => {
         called = true;
-        return {
-          ok: false,
-          error: { code: "TEST", message: "should not be called" },
-          diagnostics: [],
-          durationMs: 0,
-        } as any;
+        return null as unknown as ReturnType<typeof loadDysflowConfig>;
       };
 
       const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
       expect(called).toBe(false);
       expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected ok result");
       expect(result.data.accessDbPath).toBe("C:/my.accdb");
     });
 
@@ -576,14 +572,15 @@ describe("dysflow configuration", () => {
         paths: ["path/a", "path/b"] as [string, string],
       };
       let called = false;
-      const loadFromPath = () => {
+      const loadFromPath = (_: string) => {
         called = true;
-        return {} as any;
+        return null as unknown as ReturnType<typeof loadDysflowConfig>;
       };
 
       const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
       expect(called).toBe(false);
       expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure result");
       expect(result.error.code).toBe("CONFIG_AMBIGUOUS_PROJECT_FILE");
     });
 
@@ -591,7 +588,10 @@ describe("dysflow configuration", () => {
       const input = { env: {} };
       const repoConfig = { found: "standard" as const, path: "path/to/project.json" };
       let calledWithPath: string | null = null;
-      const expectedResult = { ok: true, data: { accessDbPath: "mock" } } as any;
+      const expectedResult = {
+        ok: true,
+        data: { accessDbPath: "mock" },
+      } as unknown as ReturnType<typeof loadDysflowConfig>;
       const loadFromPath = (p: string) => {
         calledWithPath = p;
         return expectedResult;
@@ -606,14 +606,15 @@ describe("dysflow configuration", () => {
       const input = { projectId: "old-project", env: {} };
       const repoConfig = { found: "none" as const };
       let called = false;
-      const loadFromPath = () => {
+      const loadFromPath = (_: string) => {
         called = true;
-        return {} as any;
+        return null as unknown as ReturnType<typeof loadDysflowConfig>;
       };
 
       const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
       expect(called).toBe(false);
       expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure result");
       expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
     });
 
@@ -621,14 +622,15 @@ describe("dysflow configuration", () => {
       const input = { env: {} };
       const repoConfig = { found: "none" as const };
       let called = false;
-      const loadFromPath = () => {
+      const loadFromPath = (_: string) => {
         called = true;
-        return {} as any;
+        return null as unknown as ReturnType<typeof loadDysflowConfig>;
       };
 
       const result = loadDysflowConfigShared(input, repoConfig, loadFromPath);
       expect(called).toBe(false);
       expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure result");
       expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
     });
   });

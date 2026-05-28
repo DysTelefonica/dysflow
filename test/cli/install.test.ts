@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const mockCreateInterface = vi.fn();
 vi.mock("node:readline/promises", () => ({
-  createInterface: (...args: any[]) => mockCreateInterface(...args),
+  createInterface: (...args: unknown[]) => mockCreateInterface(...args),
 }));
 
 import {
@@ -876,9 +876,10 @@ describe("runtime marker — persistent runtime dir across Windows users", () =>
   it("missing/unreadable marker falls back to LOCALAPPDATA\\dysflow", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-marker-fallback-"));
     const markerPath = join(root, "nonexistent", ".dysflow-marker");
+    const localAppData = join(root, "AppData", "Local");
     const env = {
       [RUNTIME_MARKER_PATH_ENV]: markerPath,
-      LOCALAPPDATA: join(root, "AppData", "Local"),
+      LOCALAPPDATA: localAppData,
       USERPROFILE: root,
       SystemDrive: "C:",
       ProgramData: join(root, "ProgramData"),
@@ -886,7 +887,7 @@ describe("runtime marker — persistent runtime dir across Windows users", () =>
     // markerPath does NOT exist — so resolveRuntimeDir should fall back to LOCALAPPDATA\dysflow
     // We test this indirectly: install without --runtime-dir should land in LOCALAPPDATA\dysflow
     const pkgRoot = await createPackageRoot(root, "0.0.1-test", "CLI_INDEX");
-    const expectedFallback = join(env.LOCALAPPDATA!, "dysflow");
+    const expectedFallback = join(localAppData, "dysflow");
     await mkdir(join(expectedFallback, "app", "dist", "cli"), { recursive: true });
     await writeFile(
       join(expectedFallback, "app", "package.json"),
@@ -1207,7 +1208,7 @@ describe("handleInstallCommand interactive agent selection", () => {
     mockCreateInterface.mockReturnValue({
       question: mockQuestion,
       close: mockClose,
-    } as any);
+    });
 
     const root = await mkdtemp(join(tmpdir(), "dysflow-install-interactive-"));
     const runtimeDir = join(root, "runtime");
