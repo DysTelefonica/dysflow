@@ -6,12 +6,13 @@ import {
 import type { CliCommandContext, CliResult } from "./types.js";
 
 export const SERVE_USAGE =
-  "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]";
+  "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes] [--token <token>]";
 
 type ServeOptions = {
   host: string;
   port: number;
   writesEnabled: boolean;
+  httpToken?: string;
 };
 
 /**
@@ -74,6 +75,16 @@ function parseServeOptions(
         return { ok: false, message: "--port must be an integer between 0 and 65535." };
       }
       options.port = port;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--token") {
+      const token = args[index + 1];
+      if (token === undefined || token.startsWith("--")) {
+        return { ok: false, message: "Missing value for --token." };
+      }
+      options.httpToken = token;
       index += 1;
       continue;
     }

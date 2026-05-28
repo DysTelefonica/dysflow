@@ -35,6 +35,8 @@ export type DysflowProjectConfig = {
   backendPasswordEnv?: string;
   frontendPasswordEnv?: string;
   passwordEnv?: string;
+  httpToken?: string;
+  httpTokenEnv?: string;
 };
 
 export type DysflowConfig = {
@@ -53,11 +55,17 @@ export type DysflowConfig = {
   accessPasswordEnv?: string;
   backendPasswordEnv?: string;
   configPath?: string;
+  httpToken?: string;
+  httpTokenEnv?: string;
 };
 
-export type RedactedDysflowConfig = Omit<DysflowConfig, "accessPassword" | "backendPassword"> & {
+export type RedactedDysflowConfig = Omit<
+  DysflowConfig,
+  "accessPassword" | "backendPassword" | "httpToken"
+> & {
   accessPassword?: typeof REDACTED_SECRET;
   backendPassword?: typeof REDACTED_SECRET;
+  httpToken?: typeof REDACTED_SECRET;
 };
 
 export type DysflowConfigInput = {
@@ -74,6 +82,8 @@ export type DysflowConfigInput = {
   timeoutMs?: number;
   cwd?: string;
   env?: Record<string, string | undefined>;
+  httpToken?: string;
+  httpTokenEnv?: string;
 };
 
 export function loadDysflowConfigShared<
@@ -167,12 +177,14 @@ export function redactDysflowConfig(config: DysflowConfig): RedactedDysflowConfi
     accessPasswordEnv: config.accessPasswordEnv,
     backendPasswordEnv: config.backendPasswordEnv,
     configPath: config.configPath,
+    httpTokenEnv: config.httpTokenEnv,
   };
 
   return {
     ...base,
     ...(config.accessPassword === undefined ? {} : { accessPassword: REDACTED_SECRET }),
     ...(config.backendPassword === undefined ? {} : { backendPassword: REDACTED_SECRET }),
+    ...(config.httpToken === undefined ? {} : { httpToken: REDACTED_SECRET }),
   };
 }
 
@@ -201,6 +213,8 @@ function buildExplicitConfig(
       input.backendPassword,
       env.DYSFLOW_BACKEND_PASSWORD ?? env[ALT_ACCESS_PASSWORD_ENV],
     ),
+    httpToken: resolvePassword(input.httpToken, env.DYSFLOW_HTTP_TOKEN),
+    httpTokenEnv: undefined,
   });
 }
 
@@ -259,6 +273,15 @@ function buildProjectConfig(
     ),
   );
 
+  const httpTokenEnv = resolveHttpTokenEnv(raw);
+  const httpToken = resolvePassword(
+    input.httpToken,
+    pickFirstDefined(
+      httpTokenEnv === undefined ? undefined : env[httpTokenEnv],
+      env.DYSFLOW_HTTP_TOKEN,
+    ),
+  );
+
   return successResult({
     configSource,
     allowWrites: raw.allowWrites === true,
@@ -275,6 +298,8 @@ function buildProjectConfig(
     accessPasswordEnv,
     backendPasswordEnv,
     configPath: resolvedPath,
+    httpToken,
+    httpTokenEnv,
   });
 }
 
@@ -483,6 +508,10 @@ function resolvePasswordEnv(config: DysflowProjectConfig): string | undefined {
 
 function resolveBackendPasswordEnv(config: DysflowProjectConfig): string | undefined {
   return stringValue(config.backendPasswordEnv);
+}
+
+function resolveHttpTokenEnv(config: DysflowProjectConfig): string | undefined {
+  return stringValue(config.httpTokenEnv);
 }
 
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {

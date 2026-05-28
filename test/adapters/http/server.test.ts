@@ -540,4 +540,57 @@ describe("Dysflow HTTP adapter", () => {
     expect(response.body.ok).toBe(false);
     expect(response.body.error.code).toBe("SERVICE_UNAVAILABLE");
   });
+
+  describe("HTTP Bearer Authentication", () => {
+    it("allows `/health` path without token", async () => {
+      const server = await startTestServer({ httpToken: "my-secret-token" });
+      const { response, body } = await readJson<Record<string, unknown>>(`${server.url}/health`);
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+    });
+
+    it("rejects `/query/read` with 401 when Authorization header is missing", async () => {
+      const server = await startTestServer({ httpToken: "my-secret-token" });
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+      });
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_UNAUTHORIZED");
+    });
+
+    it("rejects `/query/read` with 401 when token is invalid", async () => {
+      const server = await startTestServer({ httpToken: "my-secret-token" });
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer wrong-token",
+        },
+        body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+      });
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_UNAUTHORIZED");
+    });
+
+    it("accepts `/query/read` with 200 when valid token is provided", async () => {
+      const server = await startTestServer({ httpToken: "my-secret-token" });
+      const { response, body } = await readJson<Record<string, unknown>>(
+        `${server.url}/query/read`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            Authorization: "Bearer my-secret-token",
+          },
+          body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+    });
+  });
 });

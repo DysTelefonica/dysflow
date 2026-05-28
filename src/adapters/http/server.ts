@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -52,6 +53,7 @@ export type StartDysflowHttpServerOptions = {
   services?: DysflowHttpServices;
   env?: Record<string, string | undefined>;
   cwd?: string;
+  httpToken?: string;
 };
 
 export type StartedDysflowHttpServer = {
@@ -72,8 +74,17 @@ export async function startDysflowHttpServer(
   const writesEnabled = options.writesEnabled ?? false;
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
   const services = options.services ?? (await createHttpServices(options.env, options.cwd));
+
+  let httpToken = options.httpToken;
+  if (httpToken === undefined) {
+    const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
+    if (configResult.ok) {
+      httpToken = configResult.data.httpToken;
+    }
+  }
+
   const server = createServer((request, response) => {
-    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes });
+    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes, httpToken });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -92,7 +103,12 @@ export async function startDysflowHttpServer(
 async function routeRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  context: { services: DysflowHttpServices; writesEnabled: boolean; maxBodyBytes: number },
+  context: {
+    services: DysflowHttpServices;
+    writesEnabled: boolean;
+    maxBodyBytes: number;
+    httpToken?: string;
+  },
 ): Promise<void> {
   const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
     sendOperationResult(response, body, bodyReadFailureStatus(body));
@@ -103,6 +119,19 @@ async function routeRequest(
   if (method === "GET" && path === "/health") {
     sendJson(response, 200, { ok: true, service: "dysflow", writesEnabled: context.writesEnabled });
     return;
+  }
+
+  if (context.httpToken !== undefined && context.httpToken.length > 0) {
+    const authHeader = request.headers.authorization;
+    if (authHeader === undefined || !authHeader.startsWith("Bearer ")) {
+      sendUnauthorized(response);
+      return;
+    }
+    const token = authHeader.substring(7);
+    if (token !== context.httpToken) {
+      sendUnauthorized(response);
+      return;
+    }
   }
 
   if (method === "GET" && path === "/access/operations") {
@@ -320,6 +349,19 @@ function sendWritesDisabled(response: ServerResponse): void {
       ),
     ),
     403,
+  );
+}
+
+function sendUnauthorized(response: ServerResponse): void {
+  sendOperationResult(
+    response,
+    failureResult(
+      createDysflowError(
+        "HTTP_UNAUTHORIZED",
+        "Authentication required. Provide a valid Bearer token in the Authorization header.",
+      ),
+    ),
+    401,
   );
 }
 

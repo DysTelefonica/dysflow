@@ -89,6 +89,20 @@ describe("handleServeCommand — parse errors", () => {
     expect(result.stderr).toContain("Unsupported serve option: --unknown");
     expect(result.stderr).toContain(SERVE_USAGE);
   });
+
+  it("rejects --token with no value", async () => {
+    const result = await handleServeCommand(["--token"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Missing value for --token.");
+  });
+
+  it("rejects --token when next token starts with --", async () => {
+    const result = await handleServeCommand(["--token", "--host"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Missing value for --token.");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +167,18 @@ describe("handleServeCommand — successful option handling", () => {
     expect(calls).toEqual([
       expect.objectContaining({ env: { DYSFLOW_ACCESS_PASSWORD: "secret" } }),
     ]);
+  });
+
+  it("passes --token to adapter options", async () => {
+    const calls: unknown[] = [];
+    await handleServeCommand(["--token", "my-secret-token"], {
+      startHttpAdapter: async (options) => {
+        calls.push(options);
+        return { url: "http://127.0.0.1:0", host: "127.0.0.1", port: 0, writesEnabled: false };
+      },
+    });
+
+    expect(calls).toEqual([expect.objectContaining({ httpToken: "my-secret-token" })]);
   });
 });
 

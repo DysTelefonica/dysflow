@@ -634,4 +634,59 @@ describe("dysflow configuration", () => {
       expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
     });
   });
+
+  describe("httpToken bearer authentication config", () => {
+    it("resolves httpToken from explicit input and redacts it", () => {
+      const result = loadDysflowConfig({
+        accessDbPath: "C:/data/app.accdb",
+        httpToken: "explicit-token-123",
+        env: {},
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.data.httpToken).toBe("explicit-token-123");
+
+      const redacted = redactDysflowConfig(result.data);
+      expect(redacted.httpToken).toBe("[REDACTED]");
+    });
+
+    it("resolves httpToken from standard environment variable DYSFLOW_HTTP_TOKEN", () => {
+      const result = loadDysflowConfig({
+        accessDbPath: "C:/data/app.accdb",
+        env: {
+          DYSFLOW_HTTP_TOKEN: "env-token-456",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.data.httpToken).toBe("env-token-456");
+    });
+
+    it("resolves httpToken from custom environment variable override", () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "app.accdb",
+          httpTokenEnv: "CUSTOM_TOKEN_VAR",
+        });
+        writeFileSync(join(root, "app.accdb"), "", "utf8");
+
+        const result = loadDysflowConfig({
+          cwd: root,
+          env: {
+            CUSTOM_TOKEN_VAR: "custom-token-789",
+          },
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success");
+        expect(result.data.httpToken).toBe("custom-token-789");
+        expect(result.data.httpTokenEnv).toBe("CUSTOM_TOKEN_VAR");
+      } finally {
+        cleanup();
+      }
+    });
+  });
 });

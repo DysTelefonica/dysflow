@@ -405,7 +405,8 @@ describe("dysflow command modules", () => {
 
     await expect(handleServeCommand(["--help"])).resolves.toEqual({
       exitCode: 0,
-      stdout: "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes]",
+      stdout:
+        "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes] [--token <token>]",
       stderr: "",
     });
   });
