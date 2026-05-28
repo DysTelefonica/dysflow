@@ -9,6 +9,8 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
+export const PROCESS_INSPECTOR_TIMEOUT_MS = 5_000;
+
 // DMTF CIM datetime format: YYYYMMDDHHmmss.ffffff+ooo
 // e.g. "20260518123456.000000+000" → "2026-05-18T12:34:56.000Z"
 const DMTF_PATTERN = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d{6})([+-]\d{3})$/;
@@ -46,7 +48,7 @@ export class WindowsMsAccessProcessInspector implements ProcessInspector {
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
-      { windowsHide: true },
+      { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
     if (stdout.trim().length === 0) return undefined;
     let parsed: { ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string };
@@ -77,7 +79,7 @@ export class WindowsProcessKiller implements ProcessKiller {
     await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", `Stop-Process -Id ${pid} -Force`],
-      { windowsHide: true },
+      { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
   }
 }
@@ -90,7 +92,7 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
-      { windowsHide: true },
+      { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
     if (stdout.trim().length === 0) return [];
     let parsed: Array<{

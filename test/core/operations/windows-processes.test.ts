@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parseCimDateTimeToIso,
+  PROCESS_INSPECTOR_TIMEOUT_MS,
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../../../src/core/operations/windows-processes";
@@ -44,6 +45,14 @@ describe("WindowsProcessKiller", () => {
     const killer = new WindowsProcessKiller();
 
     await expect(killer.kill(pid)).rejects.toThrow("Process id must be a positive safe integer.");
+  });
+});
+
+describe("PROCESS_INSPECTOR_TIMEOUT_MS", () => {
+  it("is a positive integer of at most 10 seconds", () => {
+    expect(Number.isInteger(PROCESS_INSPECTOR_TIMEOUT_MS)).toBe(true);
+    expect(PROCESS_INSPECTOR_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(PROCESS_INSPECTOR_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
 });
 
