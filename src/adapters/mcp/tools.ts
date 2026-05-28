@@ -19,7 +19,6 @@ import { isRecord, stringValue } from "../../core/utils/index.js";
 import { getLegacyParityToolDefinition } from "./legacy-parity-registry.js";
 import {
   LEGACY_DYSFLOW_MCP_TOOL_NAMES,
-  LEGACY_VBA_SYNC_TOOL_NAMES,
   type LegacyDysflowMcpToolName,
 } from "./legacy-tool-inventory.js";
 import {
@@ -441,6 +440,64 @@ export const HIDDEN_STUB_TOOL_NAMES = new Set<LegacyDysflowMcpToolName>([
   "reconcile_binary",
 ]);
 
+type LegacyToolRoute =
+  | { kind: "vba-sync" }
+  | { kind: "query-read" }
+  | { kind: "query-maintenance"; queryMode: "read" | "write" }
+  | { kind: "query-write-fixture" };
+
+export const LEGACY_TOOL_ROUTES: Record<LegacyDysflowMcpToolName, LegacyToolRoute> = {
+  // VBA sync (21)
+  list_access_operations:   { kind: "vba-sync" },
+  cleanup_access_operation: { kind: "vba-sync" },
+  export_modules:           { kind: "vba-sync" },
+  export_all:               { kind: "vba-sync" },
+  import_modules:           { kind: "vba-sync" },
+  import_all:               { kind: "vba-sync" },
+  list_objects:             { kind: "vba-sync" },
+  exists:                   { kind: "vba-sync" },
+  run_vba:                  { kind: "vba-sync" },
+  test_vba:                 { kind: "vba-sync" },
+  compile_vba:              { kind: "vba-sync" },
+  verify_code:              { kind: "vba-sync" },
+  verify_binary:            { kind: "vba-sync" },
+  reconcile_binary:         { kind: "vba-sync" },
+  delete_module:            { kind: "vba-sync" },
+  generate_erd:             { kind: "vba-sync" },
+  fix_encoding:             { kind: "vba-sync" },
+  validate_form_spec:       { kind: "vba-sync" },
+  generate_form:            { kind: "vba-sync" },
+  catalog_add_control:      { kind: "vba-sync" },
+  harvest_form_catalog:     { kind: "vba-sync" },
+  // query maintenance (9)
+  list_links:               { kind: "query-maintenance", queryMode: "read" },
+  export_queries:           { kind: "query-maintenance", queryMode: "read" },
+  link_tables:              { kind: "query-maintenance", queryMode: "write" },
+  relink_tables:            { kind: "query-maintenance", queryMode: "write" },
+  localize_backend_links:   { kind: "query-maintenance", queryMode: "write" },
+  unlink_table:             { kind: "query-maintenance", queryMode: "write" },
+  import_queries:           { kind: "query-maintenance", queryMode: "write" },
+  compact_repair:           { kind: "query-maintenance", queryMode: "write" },
+  relink_directory:         { kind: "query-maintenance", queryMode: "write" },
+  // query read (9)
+  query_sql:                { kind: "query-read" },
+  list_tables:              { kind: "query-read" },
+  list_linked_tables:       { kind: "query-read" },
+  get_schema:               { kind: "query-read" },
+  count_rows:               { kind: "query-read" },
+  distinct_values:          { kind: "query-read" },
+  compare_backends:         { kind: "query-read" },
+  list_access_files:        { kind: "query-read" },
+  get_relationships:        { kind: "query-read" },
+  // write fixture (6)
+  exec_sql:                 { kind: "query-write-fixture" },
+  run_script:               { kind: "query-write-fixture" },
+  create_table:             { kind: "query-write-fixture" },
+  drop_table:               { kind: "query-write-fixture" },
+  seed_fixture:             { kind: "query-write-fixture" },
+  teardown_fixture:         { kind: "query-write-fixture" },
+};
+
 function legacySchemaFor(name: keyof typeof LEGACY_TOOL_SCHEMAS): JsonObjectSchema {
   const schema = LEGACY_TOOL_SCHEMAS[name];
   if (schema === undefined) {
@@ -459,6 +516,11 @@ function createLegacyDispatchTool(
   const definition = getLegacyParityToolDefinition(name);
   // LEGACY_TOOL_SCHEMAS is the sole source of truth for all legacy tool schemas (#200).
   const schema = legacySchemaFor(name);
+  const route = LEGACY_TOOL_ROUTES[name];
+  const isWriteGated =
+    route.kind === "query-write-fixture" ||
+    (route.kind === "query-maintenance" && route.queryMode === "write");
+
   return {
     name,
     description: definition.description,
@@ -468,54 +530,33 @@ function createLegacyDispatchTool(
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
       const isDryRun = resolveIsDryRun(input);
-      if (
-        !isDryRun &&
-        (isWriteFixtureSliceTool(name) ||
-          getLegacyParityToolDefinition(name).queryMode === "write") &&
-        !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))
-      ) {
+      if (isWriteGated && !isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
         return writesDisabled();
       }
-      if (isVbaSyncSliceTool(name) && services.legacyToolService !== undefined) {
-        return translateCoreResultToMcpContent(
-          await services.legacyToolService.execute(name, input),
-        );
+      switch (route.kind) {
+        case "vba-sync":
+          if (services.legacyToolService !== undefined) {
+            return translateCoreResultToMcpContent(
+              await services.legacyToolService.execute(name, input),
+            );
+          }
+          return {
+            isError: true,
+            content: [{ type: "text", text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the legacy VBA sync service to be configured.` }],
+          };
+        case "query-maintenance":
+          return translateCoreResultToMcpContent(
+            await services.queryService.execute(toLegacyMaintenanceRequest(name, input, env)),
+          );
+        case "query-read":
+          return translateCoreResultToMcpContent(
+            await services.queryService.execute(toLegacyQueryRequest(name, input)),
+          );
+        case "query-write-fixture":
+          return translateCoreResultToMcpContent(
+            await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)),
+          );
       }
-      if (isVbaSyncSliceTool(name)) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `MCP_SERVICE_UNAVAILABLE: ${name} requires the legacy VBA sync service to be configured.`,
-            },
-          ],
-        };
-      }
-      if (isQueryMaintenanceSliceTool(name)) {
-        return translateCoreResultToMcpContent(
-          await services.queryService.execute(toLegacyMaintenanceRequest(name, input, env)),
-        );
-      }
-      if (isQuerySliceTool(name)) {
-        return translateCoreResultToMcpContent(
-          await services.queryService.execute(toLegacyQueryRequest(name, input)),
-        );
-      }
-      if (isWriteFixtureSliceTool(name)) {
-        return translateCoreResultToMcpContent(
-          await services.queryService.execute(toLegacyWriteFixtureRequest(name, input)),
-        );
-      }
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text",
-            text: `LEGACY_TOOL_NOT_IMPLEMENTED: ${name} is tracked for legacy parity but not ported in this slice.`,
-          },
-        ],
-      };
     },
   };
 }
@@ -537,21 +578,6 @@ function resolveIsDryRun(input: unknown): boolean {
   return true;
 }
 
-function isVbaSyncSliceTool(name: LegacyDysflowMcpToolName): boolean {
-  return (LEGACY_VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name);
-}
-
-function isQuerySliceTool(name: LegacyDysflowMcpToolName): boolean {
-  return (LEGACY_QUERY_SLICE_TOOL_NAMES as readonly string[]).includes(name);
-}
-
-function isQueryMaintenanceSliceTool(name: LegacyDysflowMcpToolName): boolean {
-  return getLegacyParityToolDefinition(name).queryMode !== undefined;
-}
-
-function isWriteFixtureSliceTool(name: LegacyDysflowMcpToolName): boolean {
-  return (LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES as readonly string[]).includes(name);
-}
 
 type LegacyArgsJsonParseResult = { ok: true; value: unknown[] } | { ok: false; message: string };
 
@@ -719,31 +745,3 @@ export function sanitizeMcpErrorMessage(message: string): string {
   return result;
 }
 
-const LEGACY_QUERY_SLICE_TOOL_NAMES = [
-  "query_sql",
-  "list_tables",
-  "list_linked_tables",
-  "get_schema",
-  "count_rows",
-  "distinct_values",
-  "compare_backends",
-  "list_access_files",
-  "get_relationships",
-  "list_links",
-  "export_queries",
-  "link_tables",
-  "relink_tables",
-  "localize_backend_links",
-  "unlink_table",
-  "import_queries",
-  "compact_repair",
-] as const;
-
-const LEGACY_WRITE_FIXTURE_SLICE_TOOL_NAMES = [
-  "exec_sql",
-  "run_script",
-  "create_table",
-  "drop_table",
-  "seed_fixture",
-  "teardown_fixture",
-] as const;

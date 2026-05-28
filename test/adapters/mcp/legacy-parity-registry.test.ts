@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LEGACY_PARITY_REGISTRY } from "../../../src/adapters/mcp/legacy-parity-registry";
 import { LEGACY_DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/legacy-tool-inventory";
-import { HIDDEN_STUB_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
+import { HIDDEN_STUB_TOOL_NAMES, LEGACY_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 
 /**
  * Contract test: every tool that has a real handler route in tools.ts
@@ -27,6 +27,20 @@ describe("legacy-parity-registry implementedToolNames contract", () => {
       mismatches,
       `These tools have real handler routes in tools.ts but are marked "pending" in the registry: ${mismatches.join(", ")}`,
     ).toEqual([]);
+  });
+
+  it("LEGACY_TOOL_ROUTES covers every tool with an explicit non-stub route", () => {
+    for (const name of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
+      const route = LEGACY_TOOL_ROUTES[name];
+      expect(route, `${name} must have an explicit route`).toBeDefined();
+      if (!HIDDEN_STUB_TOOL_NAMES.has(name)) {
+        expect(
+          (route as { kind: string }).kind,
+          `${name} must not be stub in LEGACY_TOOL_ROUTES`,
+        ).not.toBe("stub");
+      }
+    }
+    expect(Object.keys(LEGACY_TOOL_ROUTES).length).toBe(LEGACY_DYSFLOW_MCP_TOOL_NAMES.length);
   });
 
   it("keeps hidden stub tools as pending in the registry", () => {
