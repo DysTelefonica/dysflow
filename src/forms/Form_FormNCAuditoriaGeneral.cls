@@ -1,8 +1,7 @@
 Option Compare Database
 Option Explicit
-
 Private m_Error As String
-
+Private WithEvents m_FormMotivos As Form_FormMotivosNoRequiereControlEficacia
 
 Public Sub ComandoActualizar_Click()
     On Error GoTo errores
@@ -357,17 +356,21 @@ Public Function EstablecerDatos( _
             ' Botón ComandoVerNoRequiere según RequiereControlEficacia
             If .RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
-If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
+                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = False
                 Else
-                    Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                    Me.ImagenMotivosNoCE.Visible = True
                 End If
             Else
                 Me.ComandoVerNoRequiere.Enabled = False
+                Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
         
         If .FechaApertura <> "" Then
@@ -402,6 +405,17 @@ errores:
         p_Error = "El método EstablecerDatos ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
+
+Private Sub m_FormMotivos_MotivoRegistrado(m_Motivo As String)
+     m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia = m_Motivo
+    If m_Motivo <> "" Then
+        Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = True
+    Else
+        Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+        Me.ImagenMotivosNoCE.Visible = False
+    End If
+End Sub
 
 Private Sub Tipo_BeforeUpdate(Cancel As Integer)
     On Error Resume Next
@@ -466,6 +480,7 @@ Private Sub RequiereControlEficacia_AfterUpdate()
         If Nz(Me.RequiereControlEficacia, "") = "Sí" Then
             Me.ComandoControlEficaciaDatos.Enabled = True
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
             ' Warn if motivos will be lost
             If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
                 pregunta = MsgBox("Ya existen motivos de No Requiere Control de Eficacia." & vbNewLine & _
@@ -480,13 +495,16 @@ Private Sub RequiereControlEficacia_AfterUpdate()
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = True
             If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = False
             Else
-                Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
+                Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                Me.ImagenMotivosNoCE.Visible = True
             End If
         Else
             Me.ComandoControlEficaciaDatos.Enabled = False
             Me.ComandoVerNoRequiere.Enabled = False
+            Me.ImagenMotivosNoCE.Visible = False
         End If
     End If
 End Sub
@@ -524,28 +542,31 @@ Private Sub ComandoVerNoRequiere_Click()
     Dim m_Motivo As String
     
     On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
     
+    
+    
+    
+    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", OpenArgs:=m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia
     ' Open the popup form as modal dialog
-    DoCmd.OpenForm "FormMotivosNoRequiereControlEficacia", WindowMode:=acDialog
+    
     
     ' After dialog closes, read the value from the popup form's control
     If FormularioAbierto("FormMotivosNoRequiereControlEficacia") Then
-        m_Motivo = Nz(Forms("FormMotivosNoRequiereControlEficacia").MotivoNoRequiereControlEficacia, "")
-        If m_Motivo <> "" Then
-            m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia = m_Motivo
-        End If
-        DoCmd.Close acForm, "FormMotivosNoRequiereControlEficacia", acSaveNo
+        Set m_FormMotivos = Forms("FormMotivosNoRequiereControlEficacia")
+        
     End If
     
-    ' Update button caption
-    If Nz(m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia, "") <> "" Then
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Ver Motivos No CE"
-    Else
-        Me.ComandoVerNoRequiere.Caption = ChrW(&H237E) & "   Meter Motivos No CE"
-    End If
+   
     
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
     Exit Sub
 errores:
+    DoCmd.Hourglass False
     If Err.Number <> 1000 Then
         m_Error = "Al ComandoVerNoRequiere_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
         CorreoAlAdministrador m_Error
@@ -563,7 +584,10 @@ Public Function HaHabidoCambios(Optional ByRef p_Error As String) As Boolean
         HaHabidoCambios = True
         Exit Function
     End If
-    
+    If m_ObjNCAuditoriaActiva.MotivoNoRequiereControlEficacia <> Form_FormNCAuditoria.m_NCAlInicio.MotivoNoRequiereControlEficacia Then
+        HaHabidoCambios = True
+        Exit Function
+    End If
     
     With Me
         If Nz(.Tipo, "") <> Form_FormNCAuditoria.m_NCAlInicio.Tipo Then
