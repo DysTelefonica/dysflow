@@ -58,7 +58,7 @@ export class AccessOperationCleanupService {
       );
     }
 
-    if (record.accessPath.toLowerCase() !== request.accessPath.toLowerCase()) {
+    if (normalizePathForMatching(record.accessPath) !== normalizePathForMatching(request.accessPath)) {
       return failureResult(
         createDysflowError(
           "CLEANUP_ACCESS_PATH_MISMATCH",
@@ -133,7 +133,7 @@ export class AccessOperationCleanupService {
     const commandLine = process.commandLine ?? record.commandLine ?? "";
     if (
       commandLine.length > 0 &&
-      !commandLine.toLowerCase().includes(record.accessPath.toLowerCase())
+      !normalizePathForMatching(commandLine).includes(normalizePathForMatching(record.accessPath))
     ) {
       return failureResult(
         createDysflowError(
