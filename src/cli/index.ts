@@ -84,7 +84,19 @@ function getEntrypointUrl(): string | undefined {
   }
 }
 
+export function setupProcessHandlers(): void {
+  process.on("unhandledRejection", (reason) => {
+    process.stderr.write(`[dysflow] Unhandled rejection: ${String(reason)}\n`);
+    process.exit(1);
+  });
+  process.on("uncaughtException", (error: Error) => {
+    process.stderr.write(`[dysflow] Uncaught exception: ${error.message}\n`);
+    process.exit(1);
+  });
+}
+
 const entrypoint = getEntrypointUrl();
 if (entrypoint === import.meta.url) {
+  setupProcessHandlers();
   void main();
 }
