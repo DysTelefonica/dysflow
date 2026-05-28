@@ -1,6 +1,8 @@
 # Dysflow HTTP API Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status (2026-05-28): ALL PHASES COMPLETE.** v0.9.17 released. 48 MCP tools. 646 tests passing. Zero pending tasks.
+
+> **For agentic workers:** All tasks are complete (`- [x]`). This document is now a historical record of the implementation plan.
 
 **Goal:** Convert Dysflow into a product with a reusable internal execution core that can later expose Access/VBA operations through an HTTP API for production scripts.
 
@@ -83,11 +85,11 @@ dysflow serve
 
 ### Task 1.1: Define the package entrypoint
 
-- [ ] Write a failing test that runs `dysflow --help` and asserts the command list includes `mcp`, `setup`, `doctor`, `tui`, and `serve`.
-- [ ] Implement the minimal CLI dispatcher.
-- [ ] Keep `serve` visible but not operational yet. Expected behavior: exits with a clear message saying HTTP adapter is not implemented in this phase.
-- [ ] Run CLI tests.
-- [ ] Commit:
+- [x] Write a failing test that runs `dysflow --help` and asserts the command list includes `mcp`, `setup`, `doctor`, `tui`, and `serve`.
+- [x] Implement the minimal CLI dispatcher.
+- [x] Keep `serve` visible but not operational yet. Expected behavior: exits with a clear message saying HTTP adapter is not implemented in this phase.
+- [x] Run CLI tests.
+- [x] Commit:
 
 ```bash
 git add package.json tsconfig.json src/cli test/cli
@@ -96,9 +98,9 @@ git commit -m "feat: add dysflow cli skeleton"
 
 ### Task 1.2: Preserve product vision in docs
 
-- [ ] Update `README.md` with the command surface.
-- [ ] Explicitly document that `dysflow serve` is planned as the final adapter phase.
-- [ ] Commit:
+- [x] Update `README.md` with the command surface.
+- [x] Explicitly document that `dysflow serve` is planned as the final adapter phase.
+- [x] Commit:
 
 ```bash
 git add README.md
@@ -119,14 +121,14 @@ git commit -m "docs: document dysflow command surface"
 
 ### Task 2.1: Resolve Access paths and timeouts
 
-- [ ] Write failing tests for config precedence:
+- [x] Write failing tests for config precedence:
   - explicit options beat environment variables;
   - `ACCESS_DB_PATH` can feed frontend path;
   - invalid timeout values fail loudly;
   - password is never printed in plain diagnostic output.
-- [ ] Implement `resolveDysflowConfig()`.
-- [ ] Run core config tests.
-- [ ] Commit:
+- [x] Implement `resolveDysflowConfig()`.
+- [x] Run core config tests.
+- [x] Commit:
 
 ```bash
 git add src/core/config test/core/dysflow-config.test.ts
@@ -135,9 +137,9 @@ git commit -m "feat: add dysflow configuration core"
 
 ### Task 2.2: Generate client setup config from core config
 
-- [ ] Move current Codex MCP TOML generation behavior from the old workflow skill into the new product shape.
-- [ ] Test that `startup_timeout_sec` and `tool_timeout_sec` are written under `[mcp_servers.dysflow]`, not under env.
-- [ ] Commit:
+- [x] Move current Codex MCP TOML generation behavior from the old workflow skill into the new product shape.
+- [x] Test that `startup_timeout_sec` and `tool_timeout_sec` are written under `[mcp_servers.dysflow]`, not under env.
+- [x] Commit:
 
 ```bash
 git add src/cli/commands/setup.ts test/cli
@@ -157,7 +159,7 @@ git commit -m "feat: generate codex mcp setup config"
 
 ### Task 3.1: Define operation result shape
 
-- [ ] Write tests for a standard result envelope:
+- [x] Write tests for a standard result envelope:
 
 ```ts
 type DysflowResult<T> =
@@ -165,8 +167,8 @@ type DysflowResult<T> =
   | { ok: false; error: { code: string; message: string; details?: unknown }; warnings: string[] };
 ```
 
-- [ ] Implement the shared result helpers.
-- [ ] Commit:
+- [x] Implement the shared result helpers.
+- [x] Commit:
 
 ```bash
 git add src/core/contracts test/core/tool-contracts.test.ts
@@ -175,7 +177,7 @@ git commit -m "feat: add dysflow core result contracts"
 
 ### Task 3.2: Define Access/VBA operation contracts
 
-- [ ] Define request/response types for the operations migrated from existing skills:
+- [x] Define request/response types for the operations migrated from existing skills:
   - export VBA modules;
   - import VBA modules;
   - run VBA tests;
@@ -183,8 +185,8 @@ git commit -m "feat: add dysflow core result contracts"
   - list tables;
   - inspect schema;
   - run diagnostics.
-- [ ] Keep contracts protocol-neutral. No MCP-specific content blocks. No HTTP status codes.
-- [ ] Commit:
+- [x] Keep contracts protocol-neutral. No MCP-specific content blocks. No HTTP status codes.
+- [x] Commit:
 
 ```bash
 git add src/core/contracts test/core/tool-contracts.test.ts
@@ -208,10 +210,10 @@ git commit -m "feat: define access operation contracts"
 
 ### Task 4.1: Add PowerShell runner boundary
 
-- [ ] Write tests for command construction without executing production Access files.
-- [ ] Implement a runner interface that can be mocked in tests.
-- [ ] Ensure paths are passed safely and never interpolated into unsafe shell strings.
-- [ ] Commit:
+- [x] Write tests for command construction without executing production Access files.
+- [x] Implement a runner interface that can be mocked in tests.
+- [x] Ensure paths are passed safely and never interpolated into unsafe shell strings.
+- [x] Commit:
 
 ```bash
 git add src/core/runtime test/core
@@ -220,10 +222,10 @@ git commit -m "feat: add powershell runtime boundary"
 
 ### Task 4.2: Wrap VBA operations
 
-- [ ] Write failing tests for service methods using a fake runner.
-- [ ] Implement `AccessVbaService` as a protocol-neutral class.
-- [ ] Do not expose MCP or HTTP concepts here.
-- [ ] Commit:
+- [x] Write failing tests for service methods using a fake runner.
+- [x] Implement `AccessVbaService` as a protocol-neutral class.
+- [x] Do not expose MCP or HTTP concepts here.
+- [x] Commit:
 
 ```bash
 git add src/core/services/access-vba-service.ts test/core/access-vba-service.test.ts
@@ -232,10 +234,10 @@ git commit -m "feat: wrap access vba operations"
 
 ### Task 4.3: Wrap query operations
 
-- [ ] Write failing tests for SQL execution, table listing, and schema inspection using a fake runner.
-- [ ] Implement `AccessQueryService`.
-- [ ] Add guardrails for write operations: dry-run, allow-list, deny-list, and linked-table protections.
-- [ ] Commit:
+- [x] Write failing tests for SQL execution, table listing, and schema inspection using a fake runner.
+- [x] Implement `AccessQueryService`.
+- [x] Add guardrails for write operations: dry-run, allow-list, deny-list, and linked-table protections.
+- [x] Commit:
 
 ```bash
 git add src/core/services/access-query-service.ts test/core/access-query-service.test.ts
@@ -244,15 +246,15 @@ git commit -m "feat: wrap access query operations"
 
 ### Task 4.4: Wrap diagnostics
 
-- [ ] Write tests for diagnostics result categories:
+- [x] Write tests for diagnostics result categories:
   - Access available;
   - frontend path exists;
   - backend path exists;
   - bitness is detectable;
   - lock files are reported;
   - MCP config is inspectable.
-- [ ] Implement `DiagnosticsService`.
-- [ ] Commit:
+- [x] Implement `DiagnosticsService`.
+- [x] Commit:
 
 ```bash
 git add src/core/services/diagnostics-service.ts test/core/diagnostics-service.test.ts
@@ -272,11 +274,11 @@ git commit -m "feat: add dysflow diagnostics service"
 
 ### Task 5.1: Register MCP tools from core services
 
-- [ ] Write tests that assert expected MCP tool names are registered.
-- [ ] Map MCP tool inputs to core contracts.
-- [ ] Map core results to MCP content responses.
-- [ ] Preserve compatibility with the currently working Dysflow MCP tool names where possible.
-- [ ] Commit:
+- [x] Write tests that assert expected MCP tool names are registered.
+- [x] Map MCP tool inputs to core contracts.
+- [x] Map core results to MCP content responses.
+- [x] Preserve compatibility with the currently working Dysflow MCP tool names where possible.
+- [x] Commit:
 
 ```bash
 git add src/adapters/mcp src/cli/commands/mcp.ts test/adapters/mcp
@@ -285,9 +287,9 @@ git commit -m "feat: add dysflow mcp adapter"
 
 ### Task 5.2: Smoke-test MCP startup
 
-- [ ] Run `dysflow mcp` in a controlled smoke test.
-- [ ] Verify stdout is reserved for MCP protocol and logs go to stderr.
-- [ ] Commit:
+- [x] Run `dysflow mcp` in a controlled smoke test.
+- [x] Verify stdout is reserved for MCP protocol and logs go to stderr.
+- [x] Commit:
 
 ```bash
 git add test/adapters/mcp
@@ -309,11 +311,11 @@ git commit -m "test: add mcp startup smoke test"
 
 ### Task 6.1: Implement `dysflow doctor`
 
-- [ ] Write tests for readable diagnostics output.
-- [ ] Use `DiagnosticsService` internally.
-- [ ] Redact secrets.
-- [ ] Return non-zero only for blocking errors.
-- [ ] Commit:
+- [x] Write tests for readable diagnostics output.
+- [x] Use `DiagnosticsService` internally.
+- [x] Redact secrets.
+- [x] Return non-zero only for blocking errors.
+- [x] Commit:
 
 ```bash
 git add src/cli/commands/doctor.ts test/cli/doctor.test.ts
@@ -322,9 +324,9 @@ git commit -m "feat: implement dysflow doctor"
 
 ### Task 6.2: Implement `dysflow setup`
 
-- [ ] Write tests for Codex config generation.
-- [ ] Add future placeholders in docs for OpenCode and Claude Code, but do not implement unsupported clients yet.
-- [ ] Commit:
+- [x] Write tests for Codex config generation.
+- [x] Add future placeholders in docs for OpenCode and Claude Code, but do not implement unsupported clients yet.
+- [x] Commit:
 
 ```bash
 git add src/cli/commands/setup.ts test/cli/setup.test.ts
@@ -333,9 +335,9 @@ git commit -m "feat: implement dysflow setup"
 
 ### Task 6.3: Document architecture before HTTP
 
-- [ ] Create `docs/architecture/dysflow-core-and-adapters.md`.
-- [ ] Include the dependency rule: adapters depend on core; core depends on no adapter.
-- [ ] Commit:
+- [x] Create `docs/architecture/dysflow-core-and-adapters.md`.
+- [x] Include the dependency rule: adapters depend on core; core depends on no adapter.
+- [x] Commit:
 
 ```bash
 git add docs/architecture/dysflow-core-and-adapters.md
@@ -354,9 +356,9 @@ git commit -m "docs: describe dysflow core adapter architecture"
 
 ### Task 7.1: Add honest TUI behavior
 
-- [ ] If no TUI is ready, return a clear message and exit code `0` only when invoked with `--help`.
-- [ ] If implementing minimal TUI, use only core services; do not call MCP or HTTP.
-- [ ] Commit:
+- [x] If no TUI is ready, return a clear message and exit code `0` only when invoked with `--help`.
+- [x] If implementing minimal TUI, use only core services; do not call MCP or HTTP.
+- [x] Commit:
 
 ```bash
 git add src/cli/commands/tui.ts test/cli/tui.test.ts
@@ -380,11 +382,11 @@ git commit -m "feat: add dysflow tui command behavior"
 
 ### Task 8.1: Define HTTP API policy
 
-- [ ] Document that HTTP is opt-in and local-first by default.
-- [ ] Default bind address must be `127.0.0.1`, not `0.0.0.0`.
-- [ ] Require explicit configuration before exposing write operations.
-- [ ] Define authentication/token policy before allowing non-local binds.
-- [ ] Commit:
+- [x] Document that HTTP is opt-in and local-first by default.
+- [x] Default bind address must be `127.0.0.1`, not `0.0.0.0`.
+- [x] Require explicit configuration before exposing write operations.
+- [x] Define authentication/token policy before allowing non-local binds.
+- [x] Commit:
 
 ```bash
 git add docs/api/http-api.md
@@ -393,15 +395,15 @@ git commit -m "docs: define dysflow http api policy"
 
 ### Task 8.2: Define public HTTP contracts
 
-- [ ] Write tests for JSON request/response schemas.
-- [ ] Map HTTP responses to core result envelope:
+- [x] Write tests for JSON request/response schemas.
+- [x] Map HTTP responses to core result envelope:
   - `200` for successful operations;
   - `400` for validation errors;
   - `401` for missing/invalid token when auth is enabled;
   - `403` for forbidden write operation;
   - `500` only for unexpected server failures.
-- [ ] Keep schema names stable because external scripts will depend on them.
-- [ ] Commit:
+- [x] Keep schema names stable because external scripts will depend on them.
+- [x] Commit:
 
 ```bash
 git add src/adapters/http/http-contracts.ts test/adapters/http/http-contracts.test.ts
@@ -410,10 +412,10 @@ git commit -m "feat: define dysflow http api contracts"
 
 ### Task 8.3: Implement health and diagnostics routes
 
-- [ ] Add `GET /health` returning service name, status, and version.
-- [ ] Add `GET /diagnostics` mapped to `DiagnosticsService`.
-- [ ] Test both routes without touching production Access files.
-- [ ] Commit:
+- [x] Add `GET /health` returning service name, status, and version.
+- [x] Add `GET /diagnostics` mapped to `DiagnosticsService`.
+- [x] Test both routes without touching production Access files.
+- [x] Commit:
 
 ```bash
 git add src/adapters/http src/cli/commands/serve.ts test/adapters/http
@@ -422,11 +424,11 @@ git commit -m "feat: add dysflow http health diagnostics routes"
 
 ### Task 8.4: Implement read-only Access routes
 
-- [ ] Add route for listing tables.
-- [ ] Add route for inspecting schema.
-- [ ] Add route for read-only SQL execution.
-- [ ] Enforce read-only mode by default.
-- [ ] Commit:
+- [x] Add route for listing tables.
+- [x] Add route for inspecting schema.
+- [x] Add route for read-only SQL execution.
+- [x] Enforce read-only mode by default.
+- [x] Commit:
 
 ```bash
 git add src/adapters/http test/adapters/http
@@ -435,11 +437,11 @@ git commit -m "feat: add dysflow http read only access routes"
 
 ### Task 8.5: Implement controlled write routes
 
-- [ ] Add write routes only after allow-list and deny-list behavior is tested.
-- [ ] Require explicit config flag for write operations.
-- [ ] Return `403` when writes are disabled.
-- [ ] Log operation metadata, but never log passwords or full sensitive SQL payloads.
-- [ ] Commit:
+- [x] Add write routes only after allow-list and deny-list behavior is tested.
+- [x] Require explicit config flag for write operations.
+- [x] Return `403` when writes are disabled.
+- [x] Log operation metadata, but never log passwords or full sensitive SQL payloads.
+- [x] Commit:
 
 ```bash
 git add src/adapters/http test/adapters/http
@@ -448,10 +450,10 @@ git commit -m "feat: add guarded dysflow http write routes"
 
 ### Task 8.6: Document script consumption examples
 
-- [ ] Add PowerShell example using `Invoke-RestMethod`.
-- [ ] Add Node.js example using `fetch`.
-- [ ] Include examples for health, diagnostics, read query, and guarded write call.
-- [ ] Commit:
+- [x] Add PowerShell example using `Invoke-RestMethod`.
+- [x] Add Node.js example using `fetch`.
+- [x] Include examples for health, diagnostics, read query, and guarded write call.
+- [x] Commit:
 
 ```bash
 git add docs/api/http-api.md
@@ -462,16 +464,16 @@ git commit -m "docs: add dysflow http api script examples"
 
 ## Release Readiness Checklist
 
-- [ ] `pnpm install` works from a clean clone.
-- [ ] `pnpm test` passes.
-- [ ] `pnpm build` passes.
-- [ ] `pnpm dlx @dystelefonica/dysflow setup` target flow is documented.
-- [ ] `dysflow mcp` starts without stdout pollution.
-- [ ] `dysflow doctor` redacts secrets.
-- [ ] `dysflow serve` binds to `127.0.0.1` by default.
-- [ ] HTTP write operations are disabled by default.
-- [ ] HTTP API docs include stable examples for production scripts.
-- [ ] Existing workflow MCP remains untouched until the product adapter is proven.
+- [x] `pnpm install` works from a clean clone.
+- [x] `pnpm test` passes.
+- [x] `pnpm build` passes.
+- [x] `pnpm dlx @dystelefonica/dysflow setup` target flow is documented.
+- [x] `dysflow mcp` starts without stdout pollution.
+- [x] `dysflow doctor` redacts secrets.
+- [x] `dysflow serve` binds to `127.0.0.1` by default.
+- [x] HTTP write operations are disabled by default.
+- [x] HTTP API docs include stable examples for production scripts.
+- [x] Existing workflow MCP remains untouched until the product adapter is proven.
 
 ---
 
