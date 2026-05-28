@@ -16,8 +16,8 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
-const LEGACY_PROJECT_CONFIG_PATH = "dysflow.project.json";
-const DEFAULT_LEGACY_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
+const OLD_PROJECT_CONFIG_PATH = "dysflow.project.json";
+const ALT_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
 export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-default";
 
@@ -82,7 +82,7 @@ export function loadDysflowConfigShared<
   input: DysflowConfigInput,
   repoConfig:
     | { found: "none" }
-    | { found: "legacy" | "standard"; path: string }
+    | { found: "compat" | "standard"; path: string }
     | { found: "ambiguous"; paths: [string, string] },
   loadFromPath: (path: string) => T,
 ): T {
@@ -105,7 +105,7 @@ export function loadDysflowConfigShared<
       ),
     ) as T;
   }
-  if (repoConfig.found === "standard" || repoConfig.found === "legacy") {
+  if (repoConfig.found === "standard" || repoConfig.found === "compat") {
     return loadFromPath(repoConfig.path);
   }
   if (requestedProjectId !== undefined) {
@@ -195,11 +195,11 @@ function buildExplicitConfig(
     processTimeoutMs: timeoutMs,
     accessPassword: resolvePassword(
       input.accessPassword,
-      env.DYSFLOW_ACCESS_PASSWORD ?? env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+      env.DYSFLOW_ACCESS_PASSWORD ?? env[ALT_ACCESS_PASSWORD_ENV],
     ),
     backendPassword: resolvePassword(
       input.backendPassword,
-      env.DYSFLOW_BACKEND_PASSWORD ?? env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+      env.DYSFLOW_BACKEND_PASSWORD ?? env[ALT_ACCESS_PASSWORD_ENV],
     ),
   });
 }
@@ -247,7 +247,7 @@ function buildProjectConfig(
       accessPasswordEnv === undefined ? undefined : env[accessPasswordEnv],
       env.DYSFLOW_ACCESS_PASSWORD,
       env.DYSFLOW_ACCESS_PWD,
-      env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+      env[ALT_ACCESS_PASSWORD_ENV],
     ),
   );
   const backendPassword = resolvePassword(
@@ -255,7 +255,7 @@ function buildProjectConfig(
     pickFirstDefined(
       backendPasswordEnv === undefined ? undefined : env[backendPasswordEnv],
       env.DYSFLOW_BACKEND_PASSWORD,
-      env[DEFAULT_LEGACY_ACCESS_PASSWORD_ENV],
+      env[ALT_ACCESS_PASSWORD_ENV],
     ),
   );
 
@@ -405,22 +405,22 @@ async function findRepoProjectConfigPathAsync(
   cwd: string,
 ): Promise<
   | { found: "none" }
-  | { found: "legacy" | "standard"; path: string }
+  | { found: "compat" | "standard"; path: string }
   | { found: "ambiguous"; paths: [string, string] }
 > {
   const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-  const legacy = resolve(cwd, LEGACY_PROJECT_CONFIG_PATH);
+  const compat = resolve(cwd, OLD_PROJECT_CONFIG_PATH);
   const standardExists = await pathExists(standard);
-  const legacyExists = await pathExists(legacy);
+  const compatExists = await pathExists(compat);
 
-  if (standardExists && legacyExists) {
-    return { found: "ambiguous", paths: [standard, legacy] };
+  if (standardExists && compatExists) {
+    return { found: "ambiguous", paths: [standard, compat] };
   }
   if (standardExists) {
     return { found: "standard", path: standard };
   }
-  if (legacyExists) {
-    return { found: "legacy", path: legacy };
+  if (compatExists) {
+    return { found: "compat", path: compat };
   }
   return { found: "none" };
 }
@@ -438,21 +438,21 @@ function findRepoProjectConfigPath(
   cwd: string,
 ):
   | { found: "none" }
-  | { found: "legacy" | "standard"; path: string }
+  | { found: "compat" | "standard"; path: string }
   | { found: "ambiguous"; paths: [string, string] } {
   const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-  const legacy = resolve(cwd, LEGACY_PROJECT_CONFIG_PATH);
+  const compat = resolve(cwd, OLD_PROJECT_CONFIG_PATH);
   const standardExists = existsSync(standard);
-  const legacyExists = existsSync(legacy);
+  const compatExists = existsSync(compat);
 
-  if (standardExists && legacyExists) {
-    return { found: "ambiguous", paths: [standard, legacy] };
+  if (standardExists && compatExists) {
+    return { found: "ambiguous", paths: [standard, compat] };
   }
   if (standardExists) {
     return { found: "standard", path: standard };
   }
-  if (legacyExists) {
-    return { found: "legacy", path: legacy };
+  if (compatExists) {
+    return { found: "compat", path: compat };
   }
   return { found: "none" };
 }

@@ -107,7 +107,7 @@ describe("stringValue", () => {
 // truthy
 // ---------------------------------------------------------------------------
 describe("truthy", () => {
-  it("accepts the strict truthy values used by legacy VBA sync params", () => {
+  it("accepts the strict truthy values used by VBA sync params", () => {
     expect(truthy(true)).toBe(true);
     expect(truthy("true")).toBe(true);
     expect(truthy(1)).toBe(true);

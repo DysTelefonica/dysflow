@@ -77,7 +77,7 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
     });
   });
 
-  describe("write guard in createLegacyDispatchTool (relink_directory via dispatch) — apply:true now triggers correctly", () => {
+  describe("write guard in createDispatchTool (relink_directory via dispatch) — apply:true now triggers correctly", () => {
     it("relink_directory with {apply:true} triggers write guard when writesEnabled=false", async () => {
       const handler = getToolHandler("relink_directory");
       const result = await handler({ apply: true });

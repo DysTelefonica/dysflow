@@ -7,8 +7,8 @@ import {
   resolveDefaultVbaManagerScriptPath,
   spawnVbaManager,
   type VbaManagerExecutor,
-  VbaSyncLegacyService,
-} from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter";
+  VbaSyncAdapter,
+} from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
 import { buildImportPlanResult, parseArgsJson } from "../../../src/core/services/vba-import-plan";
 
@@ -18,7 +18,7 @@ vi.mock("node:child_process", () => ({
   spawn: spawnMock,
 }));
 
-describe("VbaSyncLegacyService", () => {
+describe("VbaSyncAdapter", () => {
   it("characterizes import plan result shaping for explicit overrides", () => {
     const result = buildImportPlanResult({
       toolName: "import_all",
@@ -108,7 +108,7 @@ describe("VbaSyncLegacyService", () => {
         timedOut: false,
       };
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor,
       scriptPath: "C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -140,7 +140,7 @@ describe("VbaSyncLegacyService", () => {
           DYSFLOW_ACCESS_PASSWORD: "secret",
           ACCESS_VBA_PASSWORD: "secret",
         },
-        // The effective PS timeout is capped by LEGACY_PROCESS_WALL_CLOCK_BUDGET_MS (25 s)
+        // The effective PS timeout is capped by PROCESS_WALL_CLOCK_BUDGET_MS (25 s)
         // and reduced by the actual preflight elapsed time, so it is slightly below 25 000 ms.
         timeoutMs: expect.any(Number),
         cwd: process.cwd(),
@@ -152,7 +152,7 @@ describe("VbaSyncLegacyService", () => {
     expect(capturedRequest.timeoutMs).toBeGreaterThan(20_000);
   });
 
-  it("runs preflight cleanup with the resolved target before invoking the legacy manager", async () => {
+  it("runs preflight cleanup with the resolved target before invoking the manager", async () => {
     const calls: string[] = [];
     const preflight: AccessOperationPreflightCleanup = {
       cleanup: vi.fn(async (request) => {
@@ -174,7 +174,7 @@ describe("VbaSyncLegacyService", () => {
         timedOut: false,
       };
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor,
       preflightCleanup: preflight,
       accessPath: "C:/db/front.accdb",
@@ -192,13 +192,13 @@ describe("VbaSyncLegacyService", () => {
     expect(preflight.cleanup).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps legacy operation running when preflight cleanup throws and surfaces a warning", async () => {
+  it("keeps operation running when preflight cleanup throws and surfaces a warning", async () => {
     const preflight: AccessOperationPreflightCleanup = {
       cleanup: vi.fn(async () => {
         throw new Error("registry unavailable");
       }),
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       preflightCleanup: preflight,
       accessPath: "C:/db/front.accdb",
       destinationRoot: "C:/repo",
@@ -273,7 +273,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: staging,
       env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath },
       executor: async (request) => {
@@ -316,7 +316,7 @@ describe("VbaSyncLegacyService", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: staging,
       env: {
         DYSFLOW_PROJECT_REGISTRY_PATH: join(root, "missing-projects.json"),
@@ -342,7 +342,7 @@ describe("VbaSyncLegacyService", () => {
     await mkdir(join(develop, "src", "modules"), { recursive: true });
     await writeFile(join(develop, "front.accdb"), "", "utf8");
     await writeFile(join(develop, "src", "modules", "Variables Globales.bas"), "", "utf8");
-    const service = new VbaSyncLegacyService({ cwd: staging, env: {} });
+    const service = new VbaSyncAdapter({ cwd: staging, env: {} });
 
     const result = await service.execute("import_all", {
       projectId: "staging",
@@ -364,7 +364,7 @@ describe("VbaSyncLegacyService", () => {
   it("reports runtime fallback source when no repo config is loaded", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-fallback-source-"));
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: root,
       accessPath: join(root, "front.accdb"),
       destinationRoot: root,
@@ -387,7 +387,7 @@ describe("VbaSyncLegacyService", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-import-modules-"));
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: root,
       accessPath: join(root, "front.accdb"),
       destinationRoot: root,
@@ -424,7 +424,7 @@ describe("VbaSyncLegacyService", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({ cwd: root, env: {} });
 
     const result = await service.execute("import_all", { dryRun: true });
 
@@ -440,7 +440,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("fails fast when no accessPath or project config can be resolved", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-strict-missing-"));
-    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({ cwd: root, env: {} });
 
     const result = await service.execute("import_all", {
       dryRun: true,
@@ -481,7 +481,7 @@ describe("VbaSyncLegacyService", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: root,
       env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath },
     });
@@ -516,7 +516,7 @@ describe("VbaSyncLegacyService", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncLegacyService({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({ cwd: root, env: {} });
 
     const result = await service.execute("import_all", {
       dryRun: true,
@@ -544,7 +544,7 @@ describe("VbaSyncLegacyService", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: root,
       env: {},
       executor: async () => ({
@@ -581,7 +581,7 @@ describe("VbaSyncLegacyService", () => {
         capturedSignal = request.signal;
         return new Promise(() => {});
       };
-      const service = new VbaSyncLegacyService({
+      const service = new VbaSyncAdapter({
         executor,
         processTimeoutMs: 50,
         scriptPath: "scripts/dysflow-vba-manager.ps1",
@@ -604,7 +604,7 @@ describe("VbaSyncLegacyService", () => {
   });
 
   it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 1,
         stdout: "",
@@ -646,7 +646,7 @@ describe("VbaSyncLegacyService", () => {
       capturedTimeouts.push(request.timeoutMs);
       return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       cwd: root,
@@ -684,7 +684,7 @@ describe("VbaSyncLegacyService", () => {
       capturedTimeout = request.timeoutMs;
       return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       cwd: root,
@@ -704,7 +704,7 @@ describe("VbaSyncLegacyService", () => {
       capturedTimeout = request.timeoutMs;
       return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
     };
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -776,9 +776,9 @@ describe("VbaSyncLegacyService", () => {
     expect(capturedCwd).toBe("C:/repo");
   });
 
-  it("maps legacy list/exists tools with JSON output enabled", async () => {
+  it("maps list/exists tools with JSON output enabled", async () => {
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -819,7 +819,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("maps compile_vba to the repo-owned compile action with JSON output", async () => {
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -875,7 +875,7 @@ describe("VbaSyncLegacyService", () => {
     );
 
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: root,
       env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
       accessPassword: "secret",
@@ -911,7 +911,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("maps direct test_vba calls to a Run-Tests procedures JSON payload", async () => {
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -952,7 +952,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("uses explicit test_vba proceduresJson without resolving a manifest (#211)", async () => {
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1011,7 +1011,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1060,7 +1060,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1110,7 +1110,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1154,7 +1154,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1189,7 +1189,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("returns VBA_NO_TESTS_SELECTED without calling PowerShell when proceduresJson is empty (#211)", async () => {
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1220,7 +1220,7 @@ describe("VbaSyncLegacyService", () => {
       "utf8",
     );
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1259,7 +1259,7 @@ describe("VbaSyncLegacyService", () => {
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
     await writeFile(join(sourceRoot, "modules", "Module2.bas"), "disk", "utf8");
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         expect(request.destinationRoot).not.toBe(sourceRoot);
@@ -1314,7 +1314,7 @@ describe("VbaSyncLegacyService", () => {
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
     await writeFile(join(sourceRoot, "modules", "Other.bas"), "disk only", "utf8");
     const calls: unknown[] = [];
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         calls.push(request);
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
@@ -1353,7 +1353,7 @@ describe("VbaSyncLegacyService", () => {
     const sourceRoot = join(root, "src");
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "disk", "utf8");
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async (request) => {
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
         await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "binary", "utf8");
@@ -1381,7 +1381,7 @@ describe("VbaSyncLegacyService", () => {
   });
 
   it("redacts passwords from runner failures", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 1,
         stdout: "",
@@ -1412,7 +1412,7 @@ describe("VbaSyncLegacyService", () => {
 
   it("returns VBA_INVALID_TEST_PLAN when the test plan file is missing", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-missing-"));
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout: "[]",
@@ -1439,7 +1439,7 @@ describe("VbaSyncLegacyService", () => {
   it("returns VBA_INVALID_TEST_PLAN when the test plan file contains malformed JSON", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-malformed-"));
     await writeFile(join(root, "tests.vba.json"), "{ not valid json }", "utf8");
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout: "[]",
@@ -1466,7 +1466,7 @@ describe("VbaSyncLegacyService", () => {
   it("returns VBA_INVALID_TEST_PLAN when the test plan has an invalid structure (not an array)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-badstruct-"));
     await writeFile(join(root, "tests.vba.json"), JSON.stringify("not-an-array"), "utf8");
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout: "[]",
@@ -1491,7 +1491,7 @@ describe("VbaSyncLegacyService", () => {
   });
 
   it("succeeds with a valid inline procedureName (regression guard)", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout: '[{"ok":true,"procedure":"Test_Run"}]',
@@ -1537,7 +1537,7 @@ describe("VbaSyncLegacyService", () => {
 
   // #192 integration: test_vba with invalid argsJson returns VBA_INVALID_TEST_PLAN (not a thrown error)
   it("returns VBA_INVALID_TEST_PLAN when argsJson contains invalid JSON (#192)", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout: "[]",
@@ -1562,7 +1562,7 @@ describe("VbaSyncLegacyService", () => {
   });
 
   it("returns VBA_TESTS_FAILED when any test result has ok: false (#273)", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 0,
         stdout:
@@ -1585,7 +1585,7 @@ describe("VbaSyncLegacyService", () => {
   });
 
   it("returns FORM_SPEC_INVALID when catalog_add_control is called without controlName (#275)", async () => {
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -1613,7 +1613,7 @@ describe("VbaSyncLegacyService", () => {
       // catalogPath = root/forms/catalog.json → mkdir(root/forms) → ENOTDIR
       const catalogPath = join(root, "forms", "catalog.json");
 
-      const service = new VbaSyncLegacyService({
+      const service = new VbaSyncAdapter({
         scriptPath: "scripts/dysflow-vba-manager.ps1",
         accessPath: "C:/db/front.accdb",
         env: {},
@@ -1639,14 +1639,14 @@ describe("VbaSyncLegacyService", () => {
 
   describe("delegation to form service and comparison modules", () => {
     it("re-exports VbaFormService, comparison helpers, and related types for backward compatibility", async () => {
-      const adapterModule = await import("../../../src/adapters/vba-sync/vba-sync-legacy-adapter");
+      const adapterModule = await import("../../../src/adapters/vba-sync/vba-sync-adapter");
       expect(adapterModule.VbaFormService).toBeDefined();
       expect(adapterModule.compareSourceAgainstBinary).toBeDefined();
       expect(adapterModule.planReconcileBinary).toBeDefined();
     });
 
     it("delegates form-related operations to VbaFormService methods", async () => {
-      const service = new VbaSyncLegacyService({
+      const service = new VbaSyncAdapter({
         accessPath: "C:/db/front.accdb",
         env: {},
       });

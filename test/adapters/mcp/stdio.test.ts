@@ -82,7 +82,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(stdioSource).toContain("isMcpStdioRuntime(configOrRuntime)");
   });
 
-  it("configures legacy VBA sync through project cwd instead of runtime-default paths", () => {
+  it("configures VBA sync through project cwd instead of runtime-default paths", () => {
     expect(stdioSource).toContain("cwd: config.projectRoot ?? process.cwd()");
     expect(stdioSource).toContain("env: process.env");
     expect(stdioSource).not.toContain("accessPath: config.accessDbPath");
@@ -440,7 +440,7 @@ describe("JsonLineMcpStdioRuntime", () => {
       },
       { cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
     );
-    const result = await services.legacyToolService?.execute("import_all", {
+    const result = await services.vbaSyncToolService?.execute("import_all", {
       contextId: "registered-project",
       dryRun: true,
       importMode: "Code",
@@ -500,7 +500,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(query.requests).toEqual([]);
   }, 15_000);
 
-  it("keeps non-dry-run legacy tools unavailable after startup config failure", async () => {
+  it("keeps non-dry-run VBA sync tools unavailable after startup config failure", async () => {
     const services = createUnavailableServices(
       {
         code: "CONFIG_MISSING_ACCESS_PATH",
@@ -510,7 +510,7 @@ describe("JsonLineMcpStdioRuntime", () => {
       { cwd: "C:/missing", env: {} },
     );
 
-    const result = await services.legacyToolService?.execute("import_all", {
+    const result = await services.vbaSyncToolService?.execute("import_all", {
       dryRun: false,
       projectId: "registered-project",
     });
@@ -520,7 +520,7 @@ describe("JsonLineMcpStdioRuntime", () => {
     expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
   });
 
-  it("returns malformed legacy argsJson as a tool result instead of a JSON-RPC internal error", async () => {
+  it("returns malformed argsJson as a tool result instead of a JSON-RPC internal error", async () => {
     const input = new PassThrough();
     const output = new PassThrough();
     const runtime = new JsonLineMcpStdioRuntime({ input, output });

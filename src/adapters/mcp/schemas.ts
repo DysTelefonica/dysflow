@@ -300,7 +300,7 @@ export const SCHEMA_PROPS = {
 
 /** Shared context props used by most tools (single source of truth). */
 export const CTX_PROPS = { projectId: SCHEMA_PROPS.projectId, contextId: SCHEMA_PROPS.contextId };
-/** Access path overrides used by most legacy tools. */
+/** Access path overrides used by most MCP tools. */
 export const ACCESS_OVERRIDE = {
   accessPath: SCHEMA_PROPS.accessPath,
   backendPath: SCHEMA_PROPS.backendPath,
@@ -326,7 +326,7 @@ export const STRICT_CTX = {
   expectedDestinationRoot: SCHEMA_PROPS.expectedDestinationRoot,
 };
 
-export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
+export const MCP_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
   // ---- alias tools (explicit per-tool schemas) ----
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
   cleanup_access_operation: {
@@ -859,3 +859,4 @@ export const LEGACY_TOOL_SCHEMAS: Record<string, JsonObjectSchema> = {
     },
   },
 };
+

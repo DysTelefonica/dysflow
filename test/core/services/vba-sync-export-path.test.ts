@@ -3,15 +3,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   type VbaManagerExecutionRequest,
-  VbaSyncLegacyService,
-} from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter.js";
+  VbaSyncAdapter,
+} from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
 
 const noOpPreflightCleanup = {
   cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
 };
 
 // Issue #185: export_modules must respect exportPath parameter
-describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", () => {
+describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => {
   it("passes exportPath to the VBA manager executor when provided", async () => {
     const capturedRequests: VbaManagerExecutionRequest[] = [];
     const fakeExecutor = async (request: VbaManagerExecutionRequest) => {
@@ -19,7 +19,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
       return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
     };
 
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",
@@ -43,7 +43,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
     };
 
     const configDestinationRoot = "C:\\MyProject\\src";
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",
@@ -64,7 +64,7 @@ describe("VbaSyncLegacyService export_modules exportPath routing (issue #185)", 
       return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
     };
 
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       executor: fakeExecutor,
       scriptPath: "fake.ps1",
       accessPath: "C:\\MyProject\\front.accdb",

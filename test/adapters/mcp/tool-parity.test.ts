@@ -3,16 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  getLegacyParityToolDefinition,
-  LEGACY_PARITY_REGISTRY,
-} from "../../../src/adapters/mcp/legacy-parity-registry";
+  getToolDefinition,
+  TOOL_PARITY_REGISTRY,
+} from "../../../src/adapters/mcp/tool-parity-registry";
 import {
-  LEGACY_DYSFLOW_MCP_TOOL_NAMES,
-  LEGACY_QUERY_TOOL_NAMES,
-  LEGACY_VBA_SYNC_TOOL_NAMES,
-} from "../../../src/adapters/mcp/legacy-tool-inventory";
+  DYSFLOW_MCP_TOOL_NAMES,
+  QUERY_TOOL_NAMES,
+  VBA_SYNC_TOOL_NAMES,
+} from "../../../src/adapters/mcp/mcp-tool-registry";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
-import { VbaSyncLegacyService } from "../../../src/adapters/vba-sync/vba-sync-legacy-adapter";
+import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
@@ -40,25 +40,25 @@ class FakeDiagnosticsService {
   }
 }
 
-describe("legacy Dysflow MCP parity inventory", () => {
-  it("declares the complete 45-tool legacy inventory", () => {
-    expect(LEGACY_VBA_SYNC_TOOL_NAMES).toHaveLength(21);
-    expect(LEGACY_QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toHaveLength(45);
-    expect(new Set(LEGACY_DYSFLOW_MCP_TOOL_NAMES).size).toBe(45);
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("compact_repair");
-    expect(LEGACY_DYSFLOW_MCP_TOOL_NAMES).toContain("validate_form_spec");
+describe("Dysflow MCP tool parity inventory", () => {
+  it("declares the complete 45-tool inventory", () => {
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(21);
+    expect(QUERY_TOOL_NAMES).toHaveLength(24);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(45);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(45);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("compact_repair");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("validate_form_spec");
   });
 
-  it("exports a typed parity registry that classifies every legacy tool", () => {
-    expect(LEGACY_PARITY_REGISTRY).toHaveLength(45);
-    expect(new Set(LEGACY_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(45);
+  it("exports a typed parity registry that classifies every tool", () => {
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(45);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(45);
 
-    const implemented = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
-    const pending = LEGACY_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
+    const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
+    const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
 
     expect(implemented.map((entry) => entry.name)).toEqual(
       expect.arrayContaining([
@@ -76,14 +76,14 @@ describe("legacy Dysflow MCP parity inventory", () => {
     expect(pending.map((entry) => entry.name)).toEqual(
       expect.arrayContaining(["verify_binary", "reconcile_binary"]),
     );
-    expect(getLegacyParityToolDefinition("query_sql")).toMatchObject({
+    expect(getToolDefinition("query_sql")).toMatchObject({
       name: "query_sql",
       slice: "query",
       status: "implemented",
     });
   });
 
-  it("exposes legacy-compatible names for already implemented Dysflow operations", async () => {
+  it("exposes tool names for already implemented Dysflow operations", async () => {
     const vba = new FakeVbaService();
     const query = new FakeQueryService();
     const tools = createDysflowMcpTools({
@@ -126,14 +126,14 @@ describe("legacy Dysflow MCP parity inventory", () => {
       content: [
         {
           type: "text",
-          text: "MCP_SERVICE_UNAVAILABLE: export_modules requires the legacy VBA sync service to be configured.",
+          text: "MCP_SERVICE_UNAVAILABLE: export_modules requires the VBA sync service to be configured.",
         },
       ],
     });
   });
 
-  it("dispatches VBA sync legacy tools to the configured product service", async () => {
-    const legacyCalls: unknown[] = [];
+  it("dispatches VBA sync tools to the configured product service", async () => {
+    const vbaSyncCalls: unknown[] = [];
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools(
       {
@@ -145,9 +145,9 @@ describe("legacy Dysflow MCP parity inventory", () => {
           },
         },
         diagnosticsService: new FakeDiagnosticsService(),
-        legacyToolService: {
+        vbaSyncToolService: {
           execute: async (toolName, input) => {
-            legacyCalls.push({ toolName, input });
+            vbaSyncCalls.push({ toolName, input });
             return successResult({ ok: true, toolName });
           },
         },
@@ -202,7 +202,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_binary" }) }],
     });
 
-    expect(legacyCalls).toEqual([
+    expect(vbaSyncCalls).toEqual([
       {
         toolName: "export_modules",
         input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" },
@@ -239,7 +239,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
     ]);
   });
 
-  it("preserves explicit legacy write targets instead of substituting the frontend", async () => {
+  it("preserves explicit write targets instead of substituting the frontend", async () => {
     const queryCalls: unknown[] = [];
     const tools = createDysflowMcpTools(
       {
@@ -341,10 +341,10 @@ describe("legacy Dysflow MCP parity inventory", () => {
   });
 
   it("declares maintenance query access modes in the parity registry", () => {
-    expect(getLegacyParityToolDefinition("list_links")).toMatchObject({ queryMode: "read" });
-    expect(getLegacyParityToolDefinition("export_queries")).toMatchObject({ queryMode: "read" });
-    expect(getLegacyParityToolDefinition("link_tables")).toMatchObject({ queryMode: "write" });
-    expect(getLegacyParityToolDefinition("compact_repair")).toMatchObject({ queryMode: "write" });
+    expect(getToolDefinition("list_links")).toMatchObject({ queryMode: "read" });
+    expect(getToolDefinition("export_queries")).toMatchObject({ queryMode: "read" });
+    expect(getToolDefinition("link_tables")).toMatchObject({ queryMode: "write" });
+    expect(getToolDefinition("compact_repair")).toMatchObject({ queryMode: "write" });
   });
 
   it("dispatches maintenance query tools to the configured query service", async () => {
@@ -359,7 +359,7 @@ describe("legacy Dysflow MCP parity inventory", () => {
           },
         },
         diagnosticsService: new FakeDiagnosticsService(),
-        legacyToolService: {
+        vbaSyncToolService: {
           execute: async () => successResult({ ok: true }),
         },
       },
@@ -433,9 +433,9 @@ describe("legacy Dysflow MCP parity inventory", () => {
     ]);
   });
 
-  it("supports the basic form tooling workflow through the legacy VBA sync service", async () => {
+  it("supports the basic form tooling workflow through the VBA sync service", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "dysflow-form-slice-"));
-    const service = new VbaSyncLegacyService({
+    const service = new VbaSyncAdapter({
       cwd: tempRoot,
       executor: async () => {
         throw new Error("executor should not be called for local form tooling");

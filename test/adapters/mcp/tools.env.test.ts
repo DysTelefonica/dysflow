@@ -30,7 +30,7 @@ function makeServices() {
   };
 }
 
-describe("Environment injection in MCP adapter (toLegacyMaintenanceRequest)", () => {
+describe("Environment injection in MCP adapter (toMaintenanceRequest)", () => {
   it("resolves passwordEnv from injected env, not process.env", async () => {
     const { services, captured } = makeServices();
     const injectedEnv: Record<string, string | undefined> = { MY_DB_PASS: "injected-password" };

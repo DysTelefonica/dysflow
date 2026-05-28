@@ -603,7 +603,7 @@ describe("dysflow configuration", () => {
     });
 
     it("returns deprecated error when project is requested but not found", () => {
-      const input = { projectId: "legacy-project", env: {} };
+      const input = { projectId: "old-project", env: {} };
       const repoConfig = { found: "none" as const };
       let called = false;
       const loadFromPath = () => {

@@ -107,11 +107,11 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       writeProjectConfig(ws.root, {
         id: "env-pwd-project",
         accessPath: "data.accdb",
-        passwordEnv: "LEGACY_PWD",
+        passwordEnv: "CUSTOM_PWD",
       });
       writeFileSync(join(ws.root, "data.accdb"), "", "utf8");
 
-      const env = { LEGACY_PWD: "legacy-pass" };
+      const env = { CUSTOM_PWD: "custom-pass" };
       const input = { cwd: ws.root, env };
 
       const syncResult = loadDysflowConfig(input);
@@ -121,7 +121,7 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       expect(syncResult.ok).toBe(true);
       if (!syncResult.ok) throw new Error("expected success");
       // passwordEnv maps to accessPassword only, NOT backendPassword
-      expect(syncResult.data.accessPassword).toBe("legacy-pass");
+      expect(syncResult.data.accessPassword).toBe("custom-pass");
       expect(syncResult.data.backendPassword).toBeUndefined();
     } finally {
       ws.cleanup();

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
-  LEGACY_TOOL_SCHEMAS,
+  MCP_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
   rejectWriteSqlInReadMode,
   translateCoreResultToMcpContent,
@@ -262,7 +262,7 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
-  it("forwards explicit database targets on legacy read-only query_sql", async () => {
+  it("forwards explicit database targets on read-only query_sql", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -505,7 +505,7 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests).toEqual([]);
   });
 
-  it("handles legacy run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {
+  it("handles run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const tools = createDysflowMcpTools({
       vbaService: vba,
@@ -579,22 +579,22 @@ describe("MCP tool registration over core services", () => {
       }
     });
 
-    it("visible VBA sync tools report service unavailability instead of legacy not-implemented when no legacy service is configured", async () => {
+    it("visible VBA sync tools report service unavailability instead of not-implemented when no service is configured", async () => {
       const tools = createDysflowMcpTools(makeServices());
       for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
-        expect(result?.isError, `${toolName} should fail safely without the legacy service`).toBe(
+        expect(result?.isError, `${toolName} should fail safely without the VBA sync service`).toBe(
           true,
         );
         expect(result?.content[0]?.text).toContain("MCP_SERVICE_UNAVAILABLE");
-        expect(result?.content[0]?.text).not.toContain("LEGACY_TOOL_NOT_IMPLEMENTED");
+        expect(result?.content[0]?.text).not.toContain("TOOL_NOT_IMPLEMENTED");
       }
     });
 
-    it("verify/reconcile tools dispatch to the legacy service instead of the not-implemented fallback", async () => {
+    it("verify/reconcile tools dispatch to the VBA sync service instead of the not-implemented fallback", async () => {
       const tools = createDysflowMcpTools({
         ...makeServices(),
-        legacyToolService: {
+        vbaSyncToolService: {
           execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
         },
       });
@@ -620,27 +620,27 @@ describe("MCP tool registration over core services", () => {
       };
     }
 
-    it("every registered legacy tool has an entry in LEGACY_TOOL_SCHEMAS", () => {
+    it("every registered MCP tool has an entry in MCP_TOOL_SCHEMAS", () => {
       const tools = createDysflowMcpTools(makeServices());
-      // Legacy tools are those outside the modern 'dysflow_' namespace (they use legacySchemaForTool)
-      const legacyTools = tools.filter((t) => !t.name.startsWith("dysflow_"));
-      for (const tool of legacyTools) {
+      // Non-modern tools are those outside the 'dysflow_' namespace
+      const nonModernTools = tools.filter((t) => !t.name.startsWith("dysflow_"));
+      for (const tool of nonModernTools) {
         expect(
-          LEGACY_TOOL_SCHEMAS,
-          `${tool.name} must have an entry in LEGACY_TOOL_SCHEMAS`,
+          MCP_TOOL_SCHEMAS,
+          `${tool.name} must have an entry in MCP_TOOL_SCHEMAS`,
         ).toHaveProperty(tool.name);
       }
     });
 
     it("list_tables schema does not include rows property", () => {
-      const schema = LEGACY_TOOL_SCHEMAS.list_tables;
+      const schema = MCP_TOOL_SCHEMAS.list_tables;
       expect(schema).toBeDefined();
       expect(schema?.properties).not.toHaveProperty("rows");
     });
 
     it("read/schema tools accept explicit backend and database target aliases", async () => {
       for (const toolName of ["get_schema", "get_relationships"] as const) {
-        const schema = LEGACY_TOOL_SCHEMAS[toolName];
+        const schema = MCP_TOOL_SCHEMAS[toolName];
         expect(schema?.properties, `${toolName} should accept backendPath`).toHaveProperty(
           "backendPath",
         );
@@ -695,19 +695,19 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("seed_fixture schema does not include query property", () => {
-      const schema = LEGACY_TOOL_SCHEMAS.seed_fixture;
+      const schema = MCP_TOOL_SCHEMAS.seed_fixture;
       expect(schema).toBeDefined();
       expect(schema?.properties).not.toHaveProperty("query");
     });
 
-    it("exists schema accepts both public name and legacy moduleName aliases", () => {
-      const schema = LEGACY_TOOL_SCHEMAS.exists;
+    it("exists schema accepts both public name and moduleName aliases", () => {
+      const schema = MCP_TOOL_SCHEMAS.exists;
       expect(schema).toBeDefined();
       expect(schema?.properties).toHaveProperty("name");
       expect(schema?.properties).toHaveProperty("moduleName");
     });
 
-    it("legacy VBA runner schemas expose per-call timeoutMs overrides", async () => {
+    it("VBA runner schemas expose per-call timeoutMs overrides", async () => {
       const timeoutTools = [
         "export_modules",
         "export_all",
@@ -726,14 +726,14 @@ describe("MCP tool registration over core services", () => {
       ];
       for (const toolName of timeoutTools) {
         expect(
-          LEGACY_TOOL_SCHEMAS[toolName]?.properties,
+          MCP_TOOL_SCHEMAS[toolName]?.properties,
           `${toolName} should accept timeoutMs`,
         ).toHaveProperty("timeoutMs");
       }
 
       const tools = createDysflowMcpTools({
         ...makeServices(),
-        legacyToolService: {
+        vbaSyncToolService: {
           execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
         },
       });
@@ -1032,7 +1032,7 @@ describe("MCP tool registration over core services", () => {
       expect(query.capturedOnProgress[0]).toBe(sendProgress);
     });
 
-    it("legacy handler called with a context does not throw", async () => {
+    it("MCP tool handler called with a context does not throw", async () => {
       const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
       const tools = createDysflowMcpTools({
         vbaService: vba,
@@ -1040,12 +1040,12 @@ describe("MCP tool registration over core services", () => {
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       });
 
-      const context = { progressToken: "tok-legacy", sendProgress: () => {} };
-      const legacyTool = tools.find((t) => t.name === "run_vba");
+      const context = { progressToken: "tok-mcp", sendProgress: () => {} };
+      const mcpTool = tools.find((t) => t.name === "run_vba");
 
-      // Legacy handlers don't use context — calling with it must not throw
+      // MCP tool handlers don't use context — calling with it must not throw
       await expect(
-        legacyTool?.handler({ procedureName: "LegacyProc" }, context),
+        mcpTool?.handler({ procedureName: "TestProc" }, context),
       ).resolves.toMatchObject({ isError: false });
     });
   });

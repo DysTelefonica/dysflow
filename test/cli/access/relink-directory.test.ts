@@ -106,13 +106,13 @@ describe("parseRelinkDirectoryArgs", () => {
       "--map",
       "OldName.accdb=NewName.accdb",
       "--map",
-      "Legacy.mdb=Current.accdb",
+      "OldFormat.mdb=Current.accdb",
     ]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.maps).toEqual([
       { from: "OldName.accdb", to: "NewName.accdb" },
-      { from: "Legacy.mdb", to: "Current.accdb" },
+      { from: "OldFormat.mdb", to: "Current.accdb" },
     ]);
   });
 

@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { LEGACY_PARITY_REGISTRY } from "../../../src/adapters/mcp/legacy-parity-registry";
-import { LEGACY_DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/legacy-tool-inventory";
-import { HIDDEN_STUB_TOOL_NAMES, LEGACY_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
+import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
+import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
+import { HIDDEN_STUB_TOOL_NAMES, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 
 /**
  * Contract test: every tool that has a real handler route in tools.ts
  * must have status "implemented" in the parity registry.
  *
  * "Real handler route" means the tool is NOT a hidden stub
- * (i.e., NOT in HIDDEN_STUB_TOOL_NAMES — those always return LEGACY_TOOL_NOT_IMPLEMENTED).
+ * (i.e., NOT in HIDDEN_STUB_TOOL_NAMES — those always return TOOL_NOT_IMPLEMENTED).
  */
-describe("legacy-parity-registry implementedToolNames contract", () => {
+describe("tool-parity-registry implementedToolNames contract", () => {
   it("marks every non-stub tool as implemented in the registry", () => {
-    const registryByName = new Map(LEGACY_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
+    const registryByName = new Map(TOOL_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
 
     const mismatches: string[] = [];
-    for (const name of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
+    for (const name of DYSFLOW_MCP_TOOL_NAMES) {
       if (HIDDEN_STUB_TOOL_NAMES.has(name)) continue; // stubs legitimately return NOT_IMPLEMENTED
       const entry = registryByName.get(name);
       if (entry?.status !== "implemented") {
@@ -29,22 +29,22 @@ describe("legacy-parity-registry implementedToolNames contract", () => {
     ).toEqual([]);
   });
 
-  it("LEGACY_TOOL_ROUTES covers every tool with an explicit non-stub route", () => {
-    for (const name of LEGACY_DYSFLOW_MCP_TOOL_NAMES) {
-      const route = LEGACY_TOOL_ROUTES[name];
+  it("MCP_TOOL_ROUTES covers every tool with an explicit non-stub route", () => {
+    for (const name of DYSFLOW_MCP_TOOL_NAMES) {
+      const route = MCP_TOOL_ROUTES[name];
       expect(route, `${name} must have an explicit route`).toBeDefined();
       if (!HIDDEN_STUB_TOOL_NAMES.has(name)) {
         expect(
           (route as { kind: string }).kind,
-          `${name} must not be stub in LEGACY_TOOL_ROUTES`,
+          `${name} must not be stub in MCP_TOOL_ROUTES`,
         ).not.toBe("stub");
       }
     }
-    expect(Object.keys(LEGACY_TOOL_ROUTES).length).toBe(LEGACY_DYSFLOW_MCP_TOOL_NAMES.length);
+    expect(Object.keys(MCP_TOOL_ROUTES).length).toBe(DYSFLOW_MCP_TOOL_NAMES.length);
   });
 
   it("keeps hidden stub tools as pending in the registry", () => {
-    const registryByName = new Map(LEGACY_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
+    const registryByName = new Map(TOOL_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
 
     for (const name of HIDDEN_STUB_TOOL_NAMES) {
       const entry = registryByName.get(name);

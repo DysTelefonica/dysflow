@@ -19,7 +19,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
-import { VbaSyncLegacyService } from "../vba-sync/vba-sync-legacy-adapter.js";
+import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
@@ -337,7 +337,7 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),
     }),
-    legacyToolService: new VbaSyncLegacyService({
+    vbaSyncToolService: new VbaSyncAdapter({
       processTimeoutMs: config.processTimeoutMs,
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,
@@ -388,7 +388,7 @@ export function createUnavailableServices(
         });
       },
     },
-    legacyToolService: createUnavailableLegacyToolService(error, options),
+    vbaSyncToolService: createUnavailableVbaSyncToolService(error, options),
   };
 }
 
@@ -437,11 +437,11 @@ function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-function createUnavailableLegacyToolService(
+function createUnavailableVbaSyncToolService(
   error: DysflowError,
   options: { cwd?: string; env?: Record<string, string | undefined> },
-): NonNullable<DysflowMcpServices["legacyToolService"]> {
-  const fallback = new VbaSyncLegacyService({
+): NonNullable<DysflowMcpServices["vbaSyncToolService"]> {
+  const fallback = new VbaSyncAdapter({
     cwd: options.cwd ?? process.cwd(),
     env: options.env ?? process.env,
   });

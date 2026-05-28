@@ -75,17 +75,17 @@ describe("MCP/core architecture boundary", () => {
     ]);
   });
 
-  it("keeps legacy VBA sync dispatch behind the injected legacy service", async () => {
-    const legacyRequests: unknown[] = [];
+  it("keeps VBA sync dispatch behind the injected VBA sync service", async () => {
+    const vbaSyncRequests: unknown[] = [];
     const tools = createDysflowMcpTools({
       vbaService: { execute: async () => successResult({ returnValue: "unused" }) },
       queryService: { execute: async () => successResult({ rows: [] }) },
       diagnosticsService: { run: async () => successResult({ checks: [] }) },
-      legacyToolService: {
+      vbaSyncToolService: {
         execute: async (toolName, input) => {
-          legacyRequests.push({ toolName, input });
+          vbaSyncRequests.push({ toolName, input });
           return failureResult({
-            code: "LEGACY_TOOL_NOT_IMPLEMENTED",
+            code: "TOOL_NOT_IMPLEMENTED",
             message: "not implemented",
             retryable: false,
           });
@@ -94,10 +94,10 @@ describe("MCP/core architecture boundary", () => {
     });
 
     await expect(tools.find((tool) => tool.name === "export_all")?.handler({})).resolves.toEqual({
-      content: [{ type: "text", text: "LEGACY_TOOL_NOT_IMPLEMENTED: not implemented" }],
+      content: [{ type: "text", text: "TOOL_NOT_IMPLEMENTED: not implemented" }],
       isError: true,
     });
 
-    expect(legacyRequests).toEqual([{ toolName: "export_all", input: {} }]);
+    expect(vbaSyncRequests).toEqual([{ toolName: "export_all", input: {} }]);
   });
 });

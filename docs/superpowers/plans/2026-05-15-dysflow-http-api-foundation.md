@@ -521,18 +521,20 @@ The MCP server exposes 48 tools. Historically they were split into "5 dysflow_* 
 
 **Tasks:**
 
-- [ ] Delete `src/core/services/vba-sync-legacy-service.ts`
-- [ ] Rename the 8 source/test files (create at new path, update all import paths, delete old file)
-- [ ] Rename all `LEGACY_*` / `Legacy*` symbols throughout `src/` and `test/`
-- [ ] Run `pnpm build` — must pass with zero errors
-- [ ] Run `pnpm run test -- --run` — all 646 tests must still pass
-- [ ] Verify: MCP still exposes exactly 48 tools
-- [ ] Verify: zero occurrences of `legacy` (case-insensitive) in `src/` and `test/`
-- [ ] Commit:
+- [x] Delete `src/core/services/vba-sync-legacy-service.ts`
+- [x] Rename the 8 source/test files (create at new path, update all import paths, delete old file)
+- [x] Rename all `LEGACY_*` / `Legacy*` symbols throughout `src/` and `test/`
+- [x] Run `pnpm build` — must pass with zero errors
+- [x] Run `pnpm run test -- --run` — all 646 tests must still pass
+- [x] Verify: MCP still exposes exactly 48 tools
+- [x] Verify: zero occurrences of `legacy` (case-insensitive) in `src/` and `test/`
+- [x] Commit:
 
 ```bash
 git commit -m "refactor(mcp): remove legacy naming — all 48 MCP tools are first-class"
 ```
+
+**Completed:** 2026-05-28 — 3 source files renamed, 5 test files renamed, 1 dead file deleted, all symbols renamed. 646 tests passing. MCP exposes 48 tools.
 
 **Acceptance criteria:**
 - `pnpm build` passes
