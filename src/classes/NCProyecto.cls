@@ -135,6 +135,7 @@ Public Property Get Riesgos() As Scripting.Dictionary
         ' cuando Me.IDNoConformidad es una cadena vacía ("") en el Alta.
         If Val(Me.IDNoConformidad) > 0 Then
             ' MODO EDICIÓN: Carga de BD
+            CacheTrustDiagnostics.RecordFallback "NCProyecto.Riesgos"
             Set m_Riesgos = RiesgoRepositorio.GetRiesgosAsociados(CLng(Me.IDNoConformidad), m_Error)
         Else
             ' MODO ALTA: Inicializamos diccionario vacío una sola vez
@@ -146,15 +147,7 @@ Public Property Get Riesgos() As Scripting.Dictionary
 End Property
 Public Property Set Riesgos(p_Valor As Scripting.Dictionary)
     ' Permite invalidar con Nothing tras cambios en el servicio
-    If Not p_Valor Is Nothing Then
-        If p_Valor.count = 0 Then
-            Set m_Riesgos = Nothing
-        Else
-            Set m_Riesgos = p_Valor
-        End If
-    Else
-        Set m_Riesgos = p_Valor
-    End If
+    Set m_Riesgos = p_Valor
     
 End Property
 Public Property Get CodRiesgosAsociados() As String
@@ -167,6 +160,7 @@ Public Property Get CodRiesgosAsociados() As String
         Exit Property
     End If
     
+    CacheTrustDiagnostics.RecordFallback "NCProyecto.CodRiesgosAsociados"
     m_sCodRiesgosAsociados = constructor.getCodRiesgosAsociados(p_IDNC:=Me.IDNoConformidad, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000
@@ -194,6 +188,7 @@ Public Property Get ACsSinAR() As Scripting.Dictionary
 '        Exit Property
 '    End If
     
+    CacheTrustDiagnostics.RecordFallback "NCProyecto.ACsSinAR"
     Set m_objACsSinAR = constructor.getACsProyectosSinAR(p_IDNC:=Me.IDNoConformidad, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000
@@ -486,7 +481,7 @@ Public Property Get EstadoCalculado() As EnumEstadoNC
             EstadoCalculado = m_eESTADOCalculado
             Exit Property
         End If
-        Set .ACs = Nothing
+        ' HOTFIX-20260527: Do not clear cached ACs before evaluating state.
         If .ACs Is Nothing Then
             m_eESTADOCalculado = EnumEstadoNC.REGISTRADA
             EstadoCalculado = m_eESTADOCalculado
@@ -604,6 +599,11 @@ Public Function EstadoGrabar( _
     
     If p_Estado = "" Then
         p_Estado = Me.EstadoCalculadoTexto
+    End If
+    If Nz(Me.Estado, "") = Nz(p_Estado, "") Then
+        ' HOTFIX-20260526: No regrabar el mismo estado para no invalidar caché en aperturas de solo lectura.
+        EstadoGrabar = p_Estado
+        Exit Function
     End If
     Me.Estado = p_Estado
     
@@ -1425,6 +1425,7 @@ Public Property Get ACs() As Scripting.Dictionary
         Set ACs = m_objACs
         Exit Property
     End If
+    CacheTrustDiagnostics.RecordFallback "NCProyecto.ACs"
     Set m_objACs = constructor.getACsProyecto(p_IDNC:=Me.IDNoConformidad, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000
@@ -1514,6 +1515,21 @@ Public Function FECHACIERREGrabar( _
         m_sFECHACIERRECalculada = ""
         p_Fecha = Me.FECHACIERRECalculada
     End If
+    If p_Fecha = "" Then
+        If Nz(Me.FECHACIERRE, "") = "" Then
+            ' HOTFIX-20260526: Evitar UPDATE/InvalidarCache cuando la fecha persistida ya coincide.
+            FECHACIERREGrabar = p_Fecha
+            Exit Function
+        End If
+    Else
+        If IsDate(Me.FECHACIERRE) Then
+            If CDate(Me.FECHACIERRE) = CDate(p_Fecha) Then
+                ' HOTFIX-20260526: Evitar UPDATE/InvalidarCache cuando la fecha persistida ya coincide.
+                FECHACIERREGrabar = p_Fecha
+                Exit Function
+            End If
+        End If
+    End If
     
     Me.FECHACIERRE = p_Fecha
     If p_Fecha = "" Then
@@ -1548,6 +1564,21 @@ Public Function FPREVCIERREGrabar( _
     If Not IsDate(p_Fecha) Then
         m_sFPREVCIERRECalculada = ""
         p_Fecha = Me.FPREVCIERRECalculada
+    End If
+    If p_Fecha = "" Then
+        If Nz(Me.FPREVCIERRE, "") = "" Then
+            ' HOTFIX-20260526: Evitar UPDATE/InvalidarCache cuando la fecha persistida ya coincide.
+            FPREVCIERREGrabar = p_Fecha
+            Exit Function
+        End If
+    Else
+        If IsDate(Me.FPREVCIERRE) Then
+            If CDate(Me.FPREVCIERRE) = CDate(p_Fecha) Then
+                ' HOTFIX-20260526: Evitar UPDATE/InvalidarCache cuando la fecha persistida ya coincide.
+                FPREVCIERREGrabar = p_Fecha
+                Exit Function
+            End If
+        End If
     End If
     Me.FPREVCIERRE = p_Fecha
     If p_Fecha = "" Then
@@ -1715,6 +1746,7 @@ Public Property Get ColCampos() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
+        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1769,6 +1801,7 @@ Public Property Get ColCamposParaCopiarDeVinculada() As Collection
         .Add "ACR"
         .Add "MotivoBorrado"
         .Add "RequiereControlEficacia"
+        .Add "MotivoNoRequiereControlEficacia"
         .Add "ControlEficacia"
         .Add "FechaControlEficacia"
         .Add "FechaPrevistaControlEficacia"
@@ -1880,6 +1913,10 @@ Public Function getPropiedad(m_NombrePropiedad As Variant, Optional ByRef p_Erro
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         getPropiedad = Me.RequiereControlEficacia
+        Exit Function
+    End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        getPropiedad = Me.MotivoNoRequiereControlEficacia
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then
@@ -2056,6 +2093,10 @@ Public Function SetPropiedad(m_NombrePropiedad As Variant, m_ValorPropiedad As V
     End If
     If m_NombrePropiedad = "RequiereControlEficacia" Then
         Me.RequiereControlEficacia = m_ValorPropiedad
+        Exit Function
+    End If
+    If m_NombrePropiedad = "MotivoNoRequiereControlEficacia" Then
+        Me.MotivoNoRequiereControlEficacia = m_ValorPropiedad
         Exit Function
     End If
     If m_NombrePropiedad = "ControlEficacia" Then

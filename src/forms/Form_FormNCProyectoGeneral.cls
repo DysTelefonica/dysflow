@@ -533,6 +533,7 @@ Public Function EstablecerDatos( _
     Dim m_FPREVCIERRE As String
     Dim m_FechaCierre As String
     Dim m_DatosGeneralesOK As EnumSino
+    Dim m_EstadoCalculado As EnumEstadoNC
     On Error GoTo errores
     EstablecerCombos
     If m_ObjNCProyectoActiva Is Nothing Then
@@ -611,10 +612,15 @@ Public Function EstablecerDatos( _
             m_RequiereControlEficacia = .NCProyectoAsociada.RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .NCProyectoAsociada.FechaPrevistaControlEficacia
             m_VEHICULO = .NCProyectoAsociada.VEHICULO
-            m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRE
+            m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRECalculada
             m_FechaCierre = .NCProyectoAsociada.FECHACIERRECalculada
-            .NCProyectoAsociada.EstadoGrabar
-            m_EstadoTitulo = .NCProyectoAsociada.EstadoTitulo
+            ' HOTFIX-20260526: Evitar escrituras e invalidación de caché durante la carga solo lectura.
+            m_EstadoCalculado = .NCProyectoAsociada.EstadoCalculado
+            If m_ObjEntorno.ColEstadosNCTitulo.Exists(CStr(m_EstadoCalculado)) Then
+                m_EstadoTitulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_EstadoCalculado))
+            Else
+                m_EstadoTitulo = .NCProyectoAsociada.EstadoTitulo
+            End If
             If .NCProyectoAsociada.DatosGeneralesOK = EnumSino.No Then
                 Me.Estado.ForeColor = COLOR_BORDE_CAMPO_NORELLENO
             Else
@@ -633,12 +639,15 @@ Public Function EstablecerDatos( _
             m_RequiereControlEficacia = .RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .FechaPrevistaControlEficacia
             m_VEHICULO = .VEHICULO
-            .FPREVCIERREGrabar
-            m_FPREVCIERRE = .FPREVCIERRE
-            .FECHACIERREGrabar
-            m_FechaCierre = .FECHACIERRE
-            .EstadoGrabar
-            m_EstadoTitulo = .EstadoTitulo
+            ' HOTFIX-20260526: La carga del formulario debe calcular para mostrar, no persistir.
+            m_FPREVCIERRE = .FPREVCIERRECalculada
+            m_FechaCierre = .FECHACIERRECalculada
+            m_EstadoCalculado = .EstadoCalculado
+            If m_ObjEntorno.ColEstadosNCTitulo.Exists(CStr(m_EstadoCalculado)) Then
+                m_EstadoTitulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_EstadoCalculado))
+            Else
+                m_EstadoTitulo = .EstadoTitulo
+            End If
             If EsTecnico <> EnumSino.Sí Then
             
             
@@ -655,10 +664,7 @@ Public Function EstablecerDatos( _
             m_DatosGeneralesOK = .DatosGeneralesOK
         End If
         If Not .NCProyectoAsociada Is Nothing Then
-            m_EstadoTitulo = "Vinculado a " & .NCProyectoAsociada.CodigoNoConformidad & " " & .EstadoTitulo
-        Else
-            m_EstadoTitulo = .EstadoTitulo
-           
+            m_EstadoTitulo = "Vinculado a " & .NCProyectoAsociada.CodigoNoConformidad & " " & m_EstadoTitulo
         End If
         
         If m_EstadoTitulo <> "" Then
@@ -715,8 +721,8 @@ Public Function EstablecerDatos( _
         If m_VEHICULO = "" Then
             Me.VEHICULO = m_VEHICULO
         End If
-        If .FPREVCIERRE <> "" Then
-            Me.FPREVCIERRE = .FPREVCIERRE
+        If m_FPREVCIERRE <> "" Then
+            Me.FPREVCIERRE = m_FPREVCIERRE
         End If
         If m_FechaCierre <> "" Then
             Me.FECHACIERRE = m_FechaCierre

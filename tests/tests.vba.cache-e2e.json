@@ -11,6 +11,24 @@
       "procedure": "Test_E2E_Cache_Invalidate_NoStaleListado_Atomic",
       "expect": { "ok": true },
       "tags": ["e2e", "atomic", "cache", "staging", "write-controlled"]
+    },
+    {
+      "name": "Cache trust loaded-empty ARs no DAO fallback",
+      "procedure": "Test_CacheTrust_LoadedEmptyARs_NoFallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
+    },
+    {
+      "name": "Cache trust loaded-empty riesgos no DAO fallback",
+      "procedure": "Test_CacheTrust_LoadedEmptyRiesgos_NoFallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
+    },
+    {
+      "name": "Cache trust AR parent link no DAO fallback",
+      "procedure": "Test_CacheTrust_ARParentLink_NoFallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
     }
   ]
 }

@@ -158,8 +158,7 @@ Public Property Get EstadoCalculado() As EnumEstadoAC
 
     Me.Error = ""
     m_Error = ""
-    Set Me.ARs = Nothing
-    If Me.ARs Is Nothing Then
+    If Me.ARs Is Nothing Or Me.ARs.Count = 0 Then
         m_eESTADOCalculado = EnumEstadoAC.SINACCIONES
         EstadoCalculado = m_eESTADOCalculado
         Exit Property
@@ -699,6 +698,7 @@ Public Property Get ARs() As Scripting.Dictionary
         Set ARs = m_objARs
         Exit Property
     End If
+    CacheTrustDiagnostics.RecordFallback "ACProyecto.ARs"
     Set m_objARs = constructor.getARsProyecto(p_IDAC:=Me.IdAccionCorrectiva, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000

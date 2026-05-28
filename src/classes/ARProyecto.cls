@@ -285,6 +285,7 @@ Public Property Get AC() As ACProyecto
     If Me.IdAccionCorrectiva = "" Then
         Exit Property
     End If
+    CacheTrustDiagnostics.RecordFallback "ARProyecto.AC"
     Set m_ObjAC = constructor.getACProyecto(p_IDAC:=Me.IdAccionCorrectiva, p_Error:=m_Error)
     If m_Error <> "" Then
         Err.Raise 1000
