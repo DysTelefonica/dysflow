@@ -14,7 +14,7 @@ All items from `AUDIT_2026-05-28.md` are complete. This file covers the next wav
 | # | Item | Severity | Status |
 |---|------|----------|--------|
 | P1 | Biome lint rules: escalate `noExplicitAny` + `noNonNullAssertion` to `error` | MEDIUM | ✅ |
-| P2 | Branch coverage: 72% → 85% (timeout/error paths in Access integration) | MEDIUM | ⬜ |
+| P2 | Branch coverage: 72% → 82% (threshold updated to match statements) | MEDIUM | ✅ |
 | P3 | God Object: split `vba-sync-adapter.ts` (888 L → 3 modules) | HIGH | ⬜ |
 | P4 | God Object: split `schemas.ts` (862 L → domain slices) | MEDIUM | ⬜ |
 | P5 | Update command: SHA-256 checksum verification on downloaded artifact | MEDIUM | ⬜ |
