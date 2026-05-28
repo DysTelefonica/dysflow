@@ -19,7 +19,6 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
-import { VbaSyncLegacyService } from "../vba-sync/vba-sync-legacy-adapter.js";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
@@ -337,12 +336,6 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),
     }),
-    legacyToolService: new VbaSyncLegacyService({
-      processTimeoutMs: config.processTimeoutMs,
-      cwd: config.projectRoot ?? process.cwd(),
-      env: process.env,
-      accessPassword: config.accessPassword,
-    }),
   };
 }
 
@@ -388,7 +381,6 @@ export function createUnavailableServices(
         });
       },
     },
-    legacyToolService: createUnavailableLegacyToolService(error, options),
   };
 }
 
@@ -435,26 +427,6 @@ function pathsMatch(left: string, right: string): boolean {
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-function createUnavailableLegacyToolService(
-  error: DysflowError,
-  options: { cwd?: string; env?: Record<string, string | undefined> },
-): NonNullable<DysflowMcpServices["legacyToolService"]> {
-  const fallback = new VbaSyncLegacyService({
-    cwd: options.cwd ?? process.cwd(),
-    env: options.env ?? process.env,
-  });
-  return {
-    execute: async (toolName, input) => {
-      const params = isRecord(input) ? input : {};
-      const isSafeImportDryRun =
-        (toolName === "import_all" || toolName === "import_modules") &&
-        (params.dryRun === true || params.dryRun === "true");
-      if (isSafeImportDryRun) return fallback.execute(toolName, input);
-      return failureResult(error);
-    },
-  };
 }
 
 // re-exported from core — do not add new imports from adapters here

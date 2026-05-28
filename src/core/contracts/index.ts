@@ -36,18 +36,6 @@ export type OperationResult<T> =
       operation?: AccessOperationMetadata;
     };
 
-/**
- * Seam that allows the MCP adapter to dispatch legacy VBA sync tool calls
- * through an injected implementation without importing the adapter module.
- *
- * The port uses `string` for `toolName` (not `LegacyDysflowMcpToolName`) so
- * that core does not import adapter-layer type definitions.
- * Concrete implementations (e.g. VbaSyncLegacyAdapter) live in src/adapters/.
- */
-export type LegacyVbaSyncPort = {
-  execute(toolName: string, input: unknown): Promise<OperationResult<unknown>>;
-};
-
 export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;
