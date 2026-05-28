@@ -475,6 +475,67 @@ git commit -m "docs: add dysflow http api script examples"
 
 ---
 
+## Phase 9: Remove "legacy" naming — promote all MCP tools to first-class
+
+**Objective:** Eliminate all `legacy`-prefixed names from the codebase. The 43 MCP tools (previously called "legacy compatibility aliases") are active, maintained, and the sole MCP surface for most operations. They must be named accordingly.
+
+**Context for a fresh AI picking this up:**
+
+- There are 48 MCP tools total: 5 `dysflow_*` modern tools + 43 tools with the original names (`query_sql`, `list_tables`, `export_modules`, etc.).
+- The 43 tools were called "legacy" because they predate the `dysflow_*` naming. They are NOT dead code — 33 of them are the ONLY way to access their functionality via MCP.
+- One genuinely dead file exists: `src/core/services/vba-sync-legacy-service.ts` — zero imports, safe to delete.
+- All other `legacy-*` files are live and need renaming, not deletion.
+
+**Files to rename:**
+
+| Current | Target |
+|---------|--------|
+| `src/adapters/mcp/legacy-tool-inventory.ts` | `src/adapters/mcp/mcp-tool-registry.ts` |
+| `src/adapters/mcp/legacy-parity-registry.ts` | `src/adapters/mcp/tool-parity-registry.ts` |
+| `src/adapters/vba-sync/vba-sync-legacy-adapter.ts` | `src/adapters/vba-sync/vba-sync-adapter.ts` |
+| `test/adapters/mcp/legacy-tool-schemas-parity.test.ts` | `test/adapters/mcp/tool-schemas-parity.test.ts` |
+| `test/core/contracts/legacy-vba-sync-port.test.ts` | `test/core/contracts/vba-sync-port.test.ts` |
+| `test/adapters/mcp/legacy-parity.test.ts` | `test/adapters/mcp/tool-parity.test.ts` |
+| `test/adapters/vba-sync/vba-sync-legacy-adapter.test.ts` | `test/adapters/vba-sync/vba-sync-adapter.test.ts` |
+| `test/adapters/mcp/legacy-parity-registry.test.ts` | `test/adapters/mcp/tool-parity-registry.test.ts` |
+
+**Variables/exports to rename (in `tools.ts` and imported files):**
+
+| Current | Target |
+|---------|--------|
+| `LEGACY_VBA_SYNC_TOOL_NAMES` | `VBA_SYNC_TOOL_NAMES` |
+| `LEGACY_QUERY_TOOL_NAMES` | `QUERY_TOOL_NAMES` |
+| `LEGACY_QUERY_MAINTENANCE_TOOL_NAMES` | `QUERY_MAINTENANCE_TOOL_NAMES` |
+| `LEGACY_WRITE_FIXTURE_TOOL_NAMES` | `WRITE_FIXTURE_TOOL_NAMES` |
+| `LEGACY_TOOL_ROUTES` | `MCP_TOOL_ROUTES` |
+| `appendLegacyCompatibilityTools` | `registerMcpTools` |
+| `createLegacyDispatchTool` | `createDispatchTool` |
+| `getLegacyParityToolDefinition` | `getToolDefinition` |
+| `LegacyVbaSyncPort` | `VbaSyncPort` |
+| `VbaSyncLegacyAdapter` | `VbaSyncAdapter` |
+
+**Tasks:**
+
+- [ ] Delete `src/core/services/vba-sync-legacy-service.ts` (zero imports confirmed — safe to delete)
+- [ ] Read all files that import from `legacy-tool-inventory.ts`, `legacy-parity-registry.ts`, `vba-sync-legacy-adapter.ts` — map every import path and symbol name
+- [ ] Rename the 3 source files (create new, update all importers, delete old)
+- [ ] Rename the 5 test files (same process)
+- [ ] Rename all `LEGACY_*` variables and exported symbols throughout
+- [ ] Run `pnpm build` — must pass with zero errors
+- [ ] Run `pnpm run test -- --run` — all 646+ tests must pass
+- [ ] Commit:
+
+```bash
+git commit -m "refactor(mcp): promote all MCP tools to first-class — remove legacy naming"
+```
+
+**Acceptance criteria:**
+- Zero occurrences of the word `legacy` in `src/` or `test/` (case-insensitive)
+- All 48 MCP tools still registered and functional
+- Full test suite green
+
+---
+
 ## Self-Review
 
 **Spec coverage:** The plan covers the user's future HTTP API goal, keeps HTTP as the final phase, protects production Access usage, and preserves MCP/productization work before HTTP.
