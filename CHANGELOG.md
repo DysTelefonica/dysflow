@@ -6,11 +6,15 @@ All notable changes to Dysflow will be documented in this file.
 
 ### Changed
 
-- Removed all "legacy" naming from the MCP adapter layer: renamed `legacy-tool-inventory.ts` → `mcp-tool-registry.ts`, `legacy-parity-registry.ts` → `tool-parity-registry.ts`, `vba-sync-legacy-adapter.ts` → `vba-sync-adapter.ts`, and all associated `LEGACY_*` constants and symbols throughout `src/` and `test/`.
-- All 48 MCP tools are now treated as first-class API surface. No compatibility tier distinction.
-- Deleted dead `vba-sync-legacy-service.ts` shim (zero imports).
-- Cleaned repository root: moved dev utility scripts to `scripts/dev/`, moved audit document to `docs/`, gitignored local state directories, removed stray NVIDIA folder from `E2E_testing/`.
-- Updated README, architecture docs, E2E docs, and OpenSpec specs to remove all legacy references.
+- **All 48 MCP tools are now first-class API.** The internal "legacy compatibility tier" distinction is gone. Tools like `query_sql`, `list_tables`, `export_modules`, `link_tables`, and the other named Access/VBA tools are official API alongside `dysflow_*` — not a compatibility surface.
+- Renamed internal adapter files and symbols to reflect this: `legacy-tool-inventory.ts` → `mcp-tool-registry.ts`, `legacy-parity-registry.ts` → `tool-parity-registry.ts`, `vba-sync-legacy-adapter.ts` → `vba-sync-adapter.ts`. No behaviour change.
+- Deleted `vba-sync-legacy-service.ts` — a re-export shim that had been dead (zero imports) since the service layer was restructured.
+
+### Repository
+
+- Moved one-off dev scripts to `scripts/dev/` and removed them from the root. Root now contains only project-level files.
+- Moved audit document to `docs/`. Gitignored local AI tool state directories (`.engram/`, `.dysflow/runtime/`, `.antigravitycli/`).
+- Updated all documentation (README, architecture doc, E2E guide, OpenSpec specs) to remove outdated compatibility-layer language.
 
 ## [0.9.11] - 2026-05-27
 

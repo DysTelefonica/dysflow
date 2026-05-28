@@ -14,27 +14,13 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Release milestone
+## Current version: v0.9.18
 
-### Dysflow v0.1.0 — Initial Release: MCP Safety Baseline
+**48 MCP tools · 646 tests · Windows / Node 20+**
 
-**Release date:** 2026-05-16  
-**Type:** Initial production release (first stable milestone)
+All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
-#### Highlights
-
-- **Core-safe MCP/CLI runtime** with controlled Access automation lifecycle.
-- **Operation-owned cleanup** with strict ownership validation before any process termination.
-- **JSON-RPC MCP protocol hardening** with explicit protocol version (`MCP_PROTOCOL_VERSION = 2024-11-05`) and null-id request behavior.
-- **Deterministic write safety** (`dryRun`/`apply`) and timeout cancellation path in the write stack.
-- **Full MCP tool surface** of 48 tools routing through core services.
-- **Public docs and maintenance playbooks** for protocol drift and MCP e2e/HTTP usage.
-
-#### Known boundaries in v0.1.0
-
-- HTTP support is implemented for local use-cases with writes disabled by default.
-- `dysflow tui` delegates to `dysflow install` for interactive MCP setup.
-- Windows PowerShell 5.1 and local Access automation are required.
+See [CHANGELOG](./CHANGELOG.md) for full history.
 
 ## What Dysflow is (and is not)
 
@@ -140,7 +126,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.7"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.18"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
