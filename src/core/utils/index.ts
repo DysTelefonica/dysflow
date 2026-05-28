@@ -26,6 +26,12 @@ export function sanitizeSecrets(value: string, secrets: readonly string[]): stri
   return result;
 }
 
+const DAO_CONNECT_PWD_PATTERN = /;PWD=[^;]*/gi;
+
+export function sanitizeConnectStrings(value: string): string {
+  return value.replace(DAO_CONNECT_PWD_PATTERN, "");
+}
+
 export function readJsonFileSync<T>(path: string): T {
   const raw = readFileSync(path, "utf8");
   try {

@@ -342,13 +342,18 @@ function Get-Relationships {
   return $relationships
 }
 
+function Remove-PasswordFromConnectString {
+  param([string]$Connect)
+  return ($Connect -replace '(?i);PWD=[^;]*', '')
+}
+
 function Get-LinkInfo {
   param($Database)
   $links = New-Object System.Collections.ArrayList
   foreach ($table in $Database.TableDefs) {
     $name = [string]$table.Name
     if ($name.StartsWith("MSys")) { continue }
-    $connect = [string]$table.Connect
+    $connect = Remove-PasswordFromConnectString -Connect ([string]$table.Connect)
     if ([string]::IsNullOrWhiteSpace($connect)) { continue }
     $backendPath = $null
     if ($connect -match '(?i)(?:^|;)DATABASE=([^;]+)') {

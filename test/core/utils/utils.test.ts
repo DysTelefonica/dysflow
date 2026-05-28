@@ -7,6 +7,7 @@ import {
   REDACTED_SECRET,
   readJsonFileAsync,
   readJsonFileSync,
+  sanitizeConnectStrings,
   sanitizeSecrets,
   stringValue,
   truthy,
@@ -159,6 +160,44 @@ describe("sanitizeSecrets", () => {
   it("handles an array containing only empty strings safely", () => {
     const result = sanitizeSecrets("Bearer tok123", ["", ""]);
     expect(result).toBe("Bearer tok123");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeConnectStrings
+// ---------------------------------------------------------------------------
+describe("sanitizeConnectStrings", () => {
+  it("strips ;PWD=value from a DAO connect string", () => {
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret")).toBe(";DATABASE=C:\\db.accdb");
+  });
+
+  it("strips ;PWD= when followed by another segment", () => {
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret;OPTION=32")).toBe(";DATABASE=C:\\db.accdb;OPTION=32");
+  });
+
+  it("is case-insensitive", () => {
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;pwd=secret")).toBe(";DATABASE=C:\\db.accdb");
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;Pwd=Secret")).toBe(";DATABASE=C:\\db.accdb");
+  });
+
+  it("strips all PWD occurrences in the string", () => {
+    expect(sanitizeConnectStrings(";PWD=a;DATABASE=x;PWD=b")).toBe(";DATABASE=x");
+  });
+
+  it("leaves strings without PWD unchanged", () => {
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb")).toBe(";DATABASE=C:\\db.accdb");
+  });
+
+  it("returns empty string unchanged", () => {
+    expect(sanitizeConnectStrings("")).toBe("");
+  });
+
+  it("strips PWD from a DAO connect string embedded in a PowerShell error (;-bounded format)", () => {
+    const psError = "Could not open ;DATABASE=C:\\db.accdb;PWD=mysecret;OPTION=32 — check path";
+    const sanitized = sanitizeConnectStrings(psError);
+    expect(sanitized).toBe("Could not open ;DATABASE=C:\\db.accdb;OPTION=32 — check path");
+    expect(sanitized).not.toContain("mysecret");
+    expect(sanitized).not.toContain(";PWD=");
   });
 });
 
