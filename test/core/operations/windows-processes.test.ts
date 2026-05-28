@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  parseCimDateTimeToIso,
   PROCESS_INSPECTOR_TIMEOUT_MS,
+  parseCimDateTimeToIso,
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../../../src/core/operations/windows-processes";

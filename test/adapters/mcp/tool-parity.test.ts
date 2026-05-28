@@ -3,14 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  getToolDefinition,
-  TOOL_PARITY_REGISTRY,
-} from "../../../src/adapters/mcp/tool-parity-registry";
-import {
   DYSFLOW_MCP_TOOL_NAMES,
   QUERY_TOOL_NAMES,
   VBA_SYNC_TOOL_NAMES,
 } from "../../../src/adapters/mcp/mcp-tool-registry";
+import {
+  getToolDefinition,
+  TOOL_PARITY_REGISTRY,
+} from "../../../src/adapters/mcp/tool-parity-registry";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index";

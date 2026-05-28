@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
 import {
   DYSFLOW_MCP_TOOL_NAMES,
   type DysflowMcpToolName,
 } from "../../../src/adapters/mcp/mcp-tool-registry";
+import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
 import { createDysflowMcpTools, HIDDEN_STUB_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 

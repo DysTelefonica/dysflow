@@ -348,7 +348,10 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "" }),
-    ).resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining("procedureName") }] });
+    ).resolves.toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringContaining("procedureName") }],
+    });
     await expect(
       tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "   " }),
     ).resolves.toMatchObject({ isError: true });
@@ -365,7 +368,10 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools.find((t) => t.name === "dysflow_query_execute")?.handler({ sql: "", mode: "read" }),
-    ).resolves.toMatchObject({ isError: true, content: [{ text: expect.stringContaining("sql") }] });
+    ).resolves.toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringContaining("sql") }],
+    });
     await expect(
       tools.find((t) => t.name === "query_sql")?.handler({ sql: "" }),
     ).resolves.toMatchObject({ isError: true });
@@ -1044,9 +1050,9 @@ describe("MCP tool registration over core services", () => {
       const mcpTool = tools.find((t) => t.name === "run_vba");
 
       // MCP tool handlers don't use context — calling with it must not throw
-      await expect(
-        mcpTool?.handler({ procedureName: "TestProc" }, context),
-      ).resolves.toMatchObject({ isError: false });
+      await expect(mcpTool?.handler({ procedureName: "TestProc" }, context)).resolves.toMatchObject(
+        { isError: false },
+      );
     });
   });
 

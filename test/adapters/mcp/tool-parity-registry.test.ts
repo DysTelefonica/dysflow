@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
+import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
 import { HIDDEN_STUB_TOOL_NAMES, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 
 /**

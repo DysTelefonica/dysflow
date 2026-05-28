@@ -168,125 +168,132 @@ export class AccessPowerShellRunner implements AccessRunner {
         config.accessDbPath,
         this.lockAcquireTimeoutMs,
         async () => {
-      let finalOperation = operation;
-      if (
-        operation.kind === "query" &&
-        !operation.request.backendPath &&
-        !operation.request.databasePath &&
-        config.backendPath
-      ) {
-        finalOperation = {
-          ...operation,
-          request: {
-            ...operation.request,
-            backendPath: config.backendPath,
-          },
-        };
-      }
+          let finalOperation = operation;
+          if (
+            operation.kind === "query" &&
+            !operation.request.backendPath &&
+            !operation.request.databasePath &&
+            config.backendPath
+          ) {
+            finalOperation = {
+              ...operation,
+              request: {
+                ...operation.request,
+                backendPath: config.backendPath,
+              },
+            };
+          }
 
-      const preflightResult = await this.runPreflightCleanup(config);
-      const operationId = this.operationIdFactory();
-      let record = await this.operationRegistry.create({
-        operationId,
-        action: finalOperation.kind,
-        accessPath: config.accessDbPath,
-        projectRootAbs: config.projectRoot ?? process.cwd(),
-        destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
-        accessPid: null,
-        processStartTime: null,
-        status: "starting",
-        metadata: finalOperation.request as Record<string, unknown>,
-        updatedAt: this.clock(),
-      });
+          const preflightResult = await this.runPreflightCleanup(config);
+          const operationId = this.operationIdFactory();
+          let record = await this.operationRegistry.create({
+            operationId,
+            action: finalOperation.kind,
+            accessPath: config.accessDbPath,
+            projectRootAbs: config.projectRoot ?? process.cwd(),
+            destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
+            accessPid: null,
+            processStartTime: null,
+            status: "starting",
+            metadata: finalOperation.request as Record<string, unknown>,
+            updatedAt: this.clock(),
+          });
 
-      const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
-      const execution = await this.executor(
-        POWERSHELL_EXE,
-        buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
-        {
-          timeoutMs: config.timeoutMs,
-          operationId,
-          accessPath: config.accessDbPath,
-          env: buildPowerShellEnvironment(config, finalOperation),
-          onProgress: options.onProgress,
-          onAccessProcessCaptured: async (process) => {
-            try {
-              record =
-                (await this.operationRegistry.update(operationId, {
-                  accessPid: process.pid,
-                  processStartTime: process.processStartTime,
-                  commandLine: process.commandLine,
-                  status: "running",
-                  updatedAt: this.clock(),
-                })) ?? record;
-            } catch (error) {
-              captureDiagnostics.push(
-                createDiagnostic(
-                  "error",
-                  "access.pid",
-                  `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`,
-                ),
-              );
-            }
-          },
+          const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
+          const execution = await this.executor(
+            POWERSHELL_EXE,
+            buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
+            {
+              timeoutMs: config.timeoutMs,
+              operationId,
+              accessPath: config.accessDbPath,
+              env: buildPowerShellEnvironment(config, finalOperation),
+              onProgress: options.onProgress,
+              onAccessProcessCaptured: async (process) => {
+                try {
+                  record =
+                    (await this.operationRegistry.update(operationId, {
+                      accessPid: process.pid,
+                      processStartTime: process.processStartTime,
+                      commandLine: process.commandLine,
+                      status: "running",
+                      updatedAt: this.clock(),
+                    })) ?? record;
+                } catch (error) {
+                  captureDiagnostics.push(
+                    createDiagnostic(
+                      "error",
+                      "access.pid",
+                      `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`,
+                    ),
+                  );
+                }
+              },
+            },
+          );
+          let dynamicBackendPassword = config.backendPassword;
+          if (
+            finalOperation.kind === "query" &&
+            finalOperation.request.backendPassword !== undefined
+          ) {
+            dynamicBackendPassword = finalOperation.request.backendPassword;
+          }
+          const secrets = [config.accessPassword, dynamicBackendPassword].filter(
+            (secret): secret is string => Boolean(secret),
+          );
+          const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
+          record = await this.updateOperationFromExecution(record, execution);
+          const operationMetadata = toOperationMetadata(record);
+
+          if (execution.timedOut) {
+            return failureResult(
+              createDysflowError(
+                "RUNNER_TIMEOUT",
+                `Access operation timed out after ${config.timeoutMs}ms.`,
+                { retryable: true },
+              ),
+              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+            );
+          }
+
+          if (execution.exitCode !== 0) {
+            const safeOutput = sanitizeSecrets(
+              execution.stderr || execution.stdout || "No runner output.",
+              secrets,
+            );
+            return failureResult(
+              createDysflowError(
+                "RUNNER_FAILED",
+                `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+              ),
+              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+            );
+          }
+
+          try {
+            return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
+              diagnostics,
+              durationMs: execution.durationMs,
+              operation: operationMetadata,
+            });
+          } catch {
+            return failureResult(
+              createDysflowError(
+                "RUNNER_INVALID_JSON",
+                "PowerShell runner produced invalid JSON output.",
+              ),
+              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+            );
+          }
         },
       );
-      let dynamicBackendPassword = config.backendPassword;
-      if (finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined) {
-        dynamicBackendPassword = finalOperation.request.backendPassword;
-      }
-      const secrets = [config.accessPassword, dynamicBackendPassword].filter(
-        (secret): secret is string => Boolean(secret),
-      );
-      const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
-      record = await this.updateOperationFromExecution(record, execution);
-      const operationMetadata = toOperationMetadata(record);
-
-      if (execution.timedOut) {
-        return failureResult(
-          createDysflowError(
-            "RUNNER_TIMEOUT",
-            `Access operation timed out after ${config.timeoutMs}ms.`,
-            { retryable: true },
-          ),
-          { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
-        );
-      }
-
-      if (execution.exitCode !== 0) {
-        const safeOutput = sanitizeSecrets(
-          execution.stderr || execution.stdout || "No runner output.",
-          secrets,
-        );
-        return failureResult(
-          createDysflowError(
-            "RUNNER_FAILED",
-            `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
-          ),
-          { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
-        );
-      }
-
-      try {
-        return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
-          diagnostics,
-          durationMs: execution.durationMs,
-          operation: operationMetadata,
-        });
-      } catch {
-        return failureResult(
-          createDysflowError(
-            "RUNNER_INVALID_JSON",
-            "PowerShell runner produced invalid JSON output.",
-          ),
-          { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
-        );
-      }
-      });
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("RUNNER_LOCK_TIMEOUT:")) {
         return failureResult(
-          createDysflowError("RUNNER_LOCK_TIMEOUT", error.message.slice("RUNNER_LOCK_TIMEOUT: ".length)),
+          createDysflowError(
+            "RUNNER_LOCK_TIMEOUT",
+            error.message.slice("RUNNER_LOCK_TIMEOUT: ".length),
+          ),
         );
       }
       throw error;
@@ -342,10 +349,7 @@ export function getCrossProcessLockPath(accessPath: string): string {
   return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
-async function acquireCrossProcessAccessLock(
-  lockPath: string,
-  timeoutMs: number,
-): Promise<void> {
+async function acquireCrossProcessAccessLock(lockPath: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -362,7 +366,9 @@ async function acquireCrossProcessAccessLock(
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
-  throw new Error(`RUNNER_LOCK_TIMEOUT: Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`);
+  throw new Error(
+    `RUNNER_LOCK_TIMEOUT: Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`,
+  );
 }
 
 async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {

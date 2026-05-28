@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import type {
   OsProcessInfo,
   ProcessInspector,
   ProcessKiller,
 } from "../../../src/core/operations/access-operation-cleanup.js";
+import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
   InMemoryAccessOperationRegistry,
@@ -38,7 +38,14 @@ function fakeInspector(info: Partial<OsProcessInfo> = {}): ProcessInspector {
 
 function fakeKiller(): { killer: ProcessKiller; killed: number[] } {
   const killed: number[] = [];
-  return { killer: { kill: async (pid) => { killed.push(pid); } }, killed };
+  return {
+    killer: {
+      kill: async (pid) => {
+        killed.push(pid);
+      },
+    },
+    killed,
+  };
 }
 
 async function makeService(
@@ -48,7 +55,11 @@ async function makeService(
 ) {
   const registry = new InMemoryAccessOperationRegistry();
   await registry.create(record);
-  return new AccessOperationCleanupService({ registry, processInspector: inspector, processKiller: killer });
+  return new AccessOperationCleanupService({
+    registry,
+    processInspector: inspector,
+    processKiller: killer,
+  });
 }
 
 describe("AccessOperationCleanupService — path normalization", () => {

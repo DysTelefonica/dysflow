@@ -168,16 +168,24 @@ describe("sanitizeSecrets", () => {
 // ---------------------------------------------------------------------------
 describe("sanitizeConnectStrings", () => {
   it("strips ;PWD=value from a DAO connect string", () => {
-    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret")).toBe(";DATABASE=C:\\db.accdb");
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret")).toBe(
+      ";DATABASE=C:\\db.accdb",
+    );
   });
 
   it("strips ;PWD= when followed by another segment", () => {
-    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret;OPTION=32")).toBe(";DATABASE=C:\\db.accdb;OPTION=32");
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;PWD=secret;OPTION=32")).toBe(
+      ";DATABASE=C:\\db.accdb;OPTION=32",
+    );
   });
 
   it("is case-insensitive", () => {
-    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;pwd=secret")).toBe(";DATABASE=C:\\db.accdb");
-    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;Pwd=Secret")).toBe(";DATABASE=C:\\db.accdb");
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;pwd=secret")).toBe(
+      ";DATABASE=C:\\db.accdb",
+    );
+    expect(sanitizeConnectStrings(";DATABASE=C:\\db.accdb;Pwd=Secret")).toBe(
+      ";DATABASE=C:\\db.accdb",
+    );
   });
 
   it("strips all PWD occurrences in the string", () => {

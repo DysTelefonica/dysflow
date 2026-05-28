@@ -1,0 +1,225 @@
+import { readdir, stat } from "node:fs/promises";
+import { extname, parse, resolve } from "node:path";
+import {
+  createDysflowError,
+  failureResult,
+  type OperationResult,
+  successResult,
+} from "../../core/contracts/index.js";
+import {
+  buildImportPlanResult,
+  type ImportPlanResult,
+} from "../../core/services/vba-import-plan.js";
+import {
+  compareSourceAgainstBinary,
+  planReconcileBinary,
+} from "../../core/services/vba-source-comparison.js";
+import { stringValue, truthy } from "../../core/utils/index.js";
+
+type DirectMapping = {
+  action: string;
+  json?: boolean;
+  moduleNames(input: Record<string, unknown>): readonly string[];
+  extra(input: Record<string, unknown>): Record<string, string | boolean | number | undefined>;
+};
+
+function mapping(
+  action: string,
+  json = false,
+  moduleNames: (input: Record<string, unknown>) => readonly string[] = () => [],
+  extra: (
+    input: Record<string, unknown>,
+  ) => Record<string, string | boolean | number | undefined> = () => ({}),
+): DirectMapping {
+  return { action, json, moduleNames, extra };
+}
+
+const MODULE_MAPPINGS: Record<string, DirectMapping> = {
+  export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
+  export_all: mapping("Export", false, (input) => {
+    const filter = stringValue(input.filter);
+    return filter === undefined ? [] : [filter];
+  }),
+  import_modules: mapping(
+    "Import",
+    false,
+    (input) => stringArray(input.moduleNames),
+    (input) => ({ importMode: stringValue(input.importMode) }),
+  ),
+  import_all: mapping("Import"),
+  list_objects: mapping("List-Objects", true),
+  exists: mapping("Exists", true, (input) => {
+    const moduleName = stringValue(input.moduleName) || stringValue(input.name);
+    return moduleName ? [moduleName] : [];
+  }),
+  fix_encoding: mapping(
+    "Fix-Encoding",
+    false,
+    (input) => stringArray(input.moduleNames),
+    (input) => ({ location: stringValue(input.location) }),
+  ),
+  delete_module: mapping("Delete", true, (input) => {
+    const moduleNames = stringArray(input.moduleNames);
+    const moduleName = stringValue(input.moduleName);
+    return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
+  }),
+};
+
+import type { DysflowConfig } from "../../core/config/dysflow-config.js";
+import type { AccessOperationPreflightCleanupResult } from "../../core/operations/access-operation-preflight.js";
+import type { VbaExecutionTarget } from "../../core/services/vba-source-comparison.js";
+import type { VbaManagerExecutionRequest, VbaManagerExecutionResult } from "./vba-sync-adapter.js";
+
+export type VbaModulesExecutionTarget = VbaExecutionTarget &
+  Pick<
+    DysflowConfig,
+    "accessDbPath" | "backendPath" | "projectRoot" | "projectId" | "configSource"
+  >;
+
+export interface VbaModulesOrchestrator {
+  scriptPath: string;
+  accessPassword?: string;
+  cwd: string;
+  resolveExecutionTarget(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<VbaModulesExecutionTarget>>;
+  validateStrictContext(
+    params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
+  ): OperationResult<undefined>;
+  runPreflightCleanup(
+    target: VbaModulesExecutionTarget,
+  ): Promise<AccessOperationPreflightCleanupResult>;
+  executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult>;
+  executeMappedTool(
+    toolName: string,
+    params: Record<string, unknown>,
+    mapping: DirectMapping,
+  ): Promise<OperationResult<unknown>>;
+}
+
+export class VbaModulesAdapter {
+  constructor(private readonly orchestrator: VbaModulesOrchestrator) {}
+
+  static handles(toolName: string): boolean {
+    return (
+      toolName === "export_modules" ||
+      toolName === "export_all" ||
+      toolName === "import_modules" ||
+      toolName === "import_all" ||
+      toolName === "list_objects" ||
+      toolName === "exists" ||
+      toolName === "verify_code" ||
+      toolName === "verify_binary" ||
+      toolName === "reconcile_binary" ||
+      toolName === "delete_module" ||
+      toolName === "fix_encoding"
+    );
+  }
+
+  async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    if (toolName === "verify_code" || toolName === "verify_binary") {
+      return compareSourceAgainstBinary(toolName, params, this.getComparisonContext());
+    }
+    if (toolName === "reconcile_binary") {
+      return planReconcileBinary(params, this.getComparisonContext());
+    }
+
+    if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {
+      return this.planImport(toolName, params);
+    }
+
+    const mapping = MODULE_MAPPINGS[toolName];
+    if (mapping === undefined) {
+      return failureResult(
+        createDysflowError(
+          "TOOL_NOT_IMPLEMENTED",
+          `Tool ${toolName} not supported by VbaModulesAdapter.`,
+        ),
+      );
+    }
+
+    // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
+    // the caller-specified directory instead of the project's default src/ folder (issue #185).
+    const exportPath = stringValue(params.exportPath);
+    const effectiveParams =
+      (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
+        ? { ...params, destinationRoot: exportPath }
+        : params;
+
+    return this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+  }
+
+  private getComparisonContext() {
+    return {
+      scriptPath: this.orchestrator.scriptPath,
+      accessPassword: this.orchestrator.accessPassword,
+      resolveExecutionTarget: this.orchestrator.resolveExecutionTarget.bind(this.orchestrator),
+      validateStrictContext: this.orchestrator.validateStrictContext.bind(this.orchestrator),
+      runPreflightCleanup: this.orchestrator.runPreflightCleanup.bind(this.orchestrator),
+      executeWithTimeout: this.orchestrator.executeWithTimeout.bind(this.orchestrator),
+    };
+  }
+
+  private async planImport(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<ImportPlanResult>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.orchestrator.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    const requestedModules = stringArray(params.moduleNames);
+    const modulesPlanned =
+      toolName === "import_modules"
+        ? requestedModules
+        : await discoverImportModules(target.data.destinationRoot);
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    await stat(target.data.destinationRoot).catch(() =>
+      errors.push(`destinationRoot not found: ${target.data.destinationRoot}`),
+    );
+    if (target.data.accessPath !== undefined) {
+      await stat(target.data.accessPath).catch(() =>
+        errors.push(`accessPath not found: ${target.data.accessPath}`),
+      );
+    }
+
+    return successResult(
+      buildImportPlanResult({
+        toolName,
+        params,
+        target: target.data,
+        modulesPlanned,
+        warnings,
+        errors,
+      }),
+    );
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+async function discoverImportModules(destinationRoot: string): Promise<string[]> {
+  const modules: string[] = [];
+  for (const folder of [
+    destinationRoot,
+    resolve(destinationRoot, "modules"),
+    resolve(destinationRoot, "classes"),
+    resolve(destinationRoot, "forms"),
+  ]) {
+    const entries = await readdir(folder).catch(() => []);
+    for (const entry of entries) {
+      const extension = extname(entry).toLowerCase();
+      if (![".bas", ".cls", ".frm"].includes(extension)) continue;
+      modules.push(parse(entry).name);
+    }
+  }
+  return Array.from(new Set(modules)).sort();
+}

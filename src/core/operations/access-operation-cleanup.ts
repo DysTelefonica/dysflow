@@ -58,7 +58,9 @@ export class AccessOperationCleanupService {
       );
     }
 
-    if (normalizePathForMatching(record.accessPath) !== normalizePathForMatching(request.accessPath)) {
+    if (
+      normalizePathForMatching(record.accessPath) !== normalizePathForMatching(request.accessPath)
+    ) {
       return failureResult(
         createDysflowError(
           "CLEANUP_ACCESS_PATH_MISMATCH",

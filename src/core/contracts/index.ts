@@ -48,7 +48,6 @@ export type VbaSyncPort = {
   execute(toolName: string, input: unknown): Promise<OperationResult<unknown>>;
 };
 
-
 export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;

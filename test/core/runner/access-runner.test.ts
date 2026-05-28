@@ -798,7 +798,11 @@ describe("Cross-process lock for .accdb", () => {
     mkdirSync(lockPath, { recursive: true });
     try {
       const executor: PowerShellExecutor = async () => ({
-        exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false,
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
       });
       const runner = new AccessPowerShellRunner({
         executor,
