@@ -1014,6 +1014,7 @@ function Resolve-LinkChain {
       try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch { Write-Debug "Diagnostics: $_" }
     }
   } catch {
+    Write-Warning "Resolve-LinkChain: could not open or traverse '$localPath' for table '$TableName' — $_"
     return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
   }
 }
