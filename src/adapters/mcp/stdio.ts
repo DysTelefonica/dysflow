@@ -36,7 +36,7 @@ const SERVER_VERSION = readPackageVersionNear(import.meta.url);
  * When MCP protocol support changes, update this constant and the protocol maintenance tests together.
  */
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
-const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024;
 
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;

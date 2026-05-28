@@ -59,9 +59,21 @@ export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistry
 
 const DEFAULT_MAX_RECORDS = 1000;
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
-const DEFAULT_STALE_LOCK_MS = 120_000;
+export const DEFAULT_STALE_LOCK_MS = 300_000;
 const LOCK_RETRY_INTERVAL_MS = 10;
 const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
+
+export function evictOldestRecordsFromMap(
+  records: Map<string, AccessOperationRecord>,
+  maxRecords: number,
+): void {
+  const overCount = records.size - maxRecords;
+  if (overCount <= 0) return;
+  const toEvict = [...records.values()]
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0))
+    .slice(0, overCount);
+  for (const r of toEvict) records.delete(r.operationId);
+}
 
 type RegistryMutationLock = {
   ownerToken: string;
@@ -277,12 +289,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private evictOldestRecords(records: Map<string, AccessOperationRecord>): void {
-    const overCount = records.size - this.maxRecords;
-    if (overCount <= 0) return;
-    const toEvict = [...records.values()]
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0))
-      .slice(0, overCount);
-    for (const r of toEvict) records.delete(r.operationId);
+    evictOldestRecordsFromMap(records, this.maxRecords);
   }
 }
 
@@ -332,12 +339,7 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
   }
 
   private evictOldestRecords(): void {
-    const overCount = this.records.size - this.maxRecords;
-    if (overCount <= 0) return;
-    const toEvict = [...this.records.values()]
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0))
-      .slice(0, overCount);
-    for (const r of toEvict) this.records.delete(r.operationId);
+    evictOldestRecordsFromMap(this.records, this.maxRecords);
   }
 }
 

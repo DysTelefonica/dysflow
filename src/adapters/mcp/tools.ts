@@ -112,16 +112,6 @@ export function rejectWriteSqlInReadMode(sql: string): string | undefined {
   return `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
 }
 
-async function _handleValidatedLegacyQuery<TData>(
-  input: unknown,
-  schema: JsonObjectSchema,
-  execute: () => Promise<OperationResult<TData>>,
-): Promise<McpToolResult> {
-  const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
-  return translateCoreResultToMcpContent(await execute());
-}
-
 async function handleValidatedLegacyWrite<TData>(
   input: unknown,
   schema: JsonObjectSchema,

@@ -6,6 +6,7 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
   createUnavailableServices,
+  DEFAULT_MAX_REQUEST_BYTES,
   JsonLineMcpStdioRuntime,
   MCP_PROTOCOL_VERSION,
   resolveMcpWriteAccessForInput,
@@ -954,5 +955,12 @@ describe("JsonLineMcpStdioRuntime", () => {
 
     const result = await services.vbaService.execute({ accessPath: "fake.accdb" } as never);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("DEFAULT_MAX_REQUEST_BYTES", () => {
+  it("is at most 1 MiB to prevent memory amplification on slow consumers", () => {
+    expect(DEFAULT_MAX_REQUEST_BYTES).toBeLessThanOrEqual(1 * 1024 * 1024);
+    expect(DEFAULT_MAX_REQUEST_BYTES).toBeGreaterThan(0);
   });
 });

@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
 import {
+  DEFAULT_STALE_LOCK_MS,
+  evictOldestRecordsFromMap,
   FileAccessOperationRegistry,
   InMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
@@ -18,6 +20,32 @@ const base = {
   destinationRootAbs: "C:/repo/app/out",
   metadata: { procedureName: "Refresh" },
 };
+
+describe("Registry constants and shared helpers", () => {
+  it("DEFAULT_STALE_LOCK_MS is at least 300s to reduce false lock-theft risk", () => {
+    expect(DEFAULT_STALE_LOCK_MS).toBeGreaterThanOrEqual(300_000);
+  });
+
+  it("evictOldestRecordsFromMap removes the oldest entries beyond maxRecords", () => {
+    const records = new Map([
+      ["a", { operationId: "a", updatedAt: "2026-01-01T00:00:00Z" } as never],
+      ["b", { operationId: "b", updatedAt: "2026-01-02T00:00:00Z" } as never],
+      ["c", { operationId: "c", updatedAt: "2026-01-03T00:00:00Z" } as never],
+    ]);
+    evictOldestRecordsFromMap(records, 2);
+    expect(records.has("a")).toBe(false);
+    expect(records.has("b")).toBe(true);
+    expect(records.has("c")).toBe(true);
+  });
+
+  it("evictOldestRecordsFromMap is a no-op when under maxRecords", () => {
+    const records = new Map([
+      ["a", { operationId: "a", updatedAt: "2026-01-01T00:00:00Z" } as never],
+    ]);
+    evictOldestRecordsFromMap(records, 10);
+    expect(records.size).toBe(1);
+  });
+});
 
 describe("Access operation registry and cleanup safety", () => {
   it("keeps AccessOperationAction as a strict union instead of widening to string", () => {

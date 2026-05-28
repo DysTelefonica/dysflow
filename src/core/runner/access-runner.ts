@@ -24,7 +24,7 @@ import {
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../operations/windows-processes.js";
-import { sanitizeSecrets } from "../utils/index.js";
+import { isRecord, sanitizeSecrets } from "../utils/index.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
@@ -411,7 +411,11 @@ function collectDiagnostics(
 function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TData {
   const safeStdout = sanitizeSecrets(stdout, secrets);
   if (safeStdout.trim().length === 0) return {} as TData;
-  return JSON.parse(safeStdout) as TData;
+  const parsed: unknown = JSON.parse(safeStdout);
+  if (!isRecord(parsed)) {
+    throw new SyntaxError(`Runner output is not a JSON object (got ${typeof parsed})`);
+  }
+  return parsed as TData;
 }
 
 export function resolveDefaultRunnerScriptPath(

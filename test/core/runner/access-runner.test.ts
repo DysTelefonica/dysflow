@@ -712,6 +712,33 @@ describe("AccessPowerShellRunner", () => {
     });
   });
 
+  it("maps valid JSON that is not a record object to a typed runner failure", async () => {
+    for (const nonObject of ["null", "42", '"string"', "[1,2,3]", "true"]) {
+      const executor: PowerShellExecutor = async () => ({
+        exitCode: 0,
+        stdout: nonObject,
+        stderr: "",
+        durationMs: 10,
+        timedOut: false,
+      });
+      const runner = new AccessPowerShellRunner({
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run.ps1",
+      });
+
+      const result = await runner.run(
+        { kind: "diagnostics", request: { includeEnvironment: true } },
+        config,
+      );
+
+      expect(result, `expected failure for stdout: ${nonObject}`).toMatchObject({
+        ok: false,
+        error: { code: "RUNNER_INVALID_JSON" },
+      });
+    }
+  });
+
   it("maps malformed successful PowerShell JSON to a typed runner failure", async () => {
     const executor: PowerShellExecutor = async () => ({
       exitCode: 0,
