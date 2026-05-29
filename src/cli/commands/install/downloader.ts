@@ -127,11 +127,33 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         const archiveResponse = await fetch(archiveUrl, {
           headers: createGitHubReleaseRequestHeaders(environment),
         });
+
+        if (archiveResponse.status === 404) {
+          // Archive not available for this release — fall back to git clone
+          try {
+            await runCommand(
+              "git",
+              ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
+              tempRoot,
+            );
+            const commitSha = await tryResolveGitCommitSha(packageRoot);
+            await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
+            await runCommand("pnpm", ["build"], packageRoot);
+            return { packageRoot, commitSha, cleanup };
+          } catch (cloneError) {
+            await cleanup();
+            throw new Error(
+              `Release archive not available and git clone failed: ${cloneError instanceof Error ? cloneError.message : String(cloneError)}`,
+            );
+          }
+        }
+
         if (!archiveResponse.ok) {
           throw new Error(
             `Failed to download release archive from ${archiveUrl}: HTTP ${archiveResponse.status}`,
           );
         }
+
         const archiveBuffer = Buffer.from(await archiveResponse.arrayBuffer());
 
         // 2. Verification
@@ -181,28 +203,8 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         const commitSha = await tryResolveGitCommitSha(packageRoot);
         return { packageRoot, commitSha, cleanup };
       } catch (error) {
-        // Fallback to git clone if archive was not found
-        if (error instanceof Error && error.message.includes("Checksum mismatch")) {
-          await cleanup();
-          throw error;
-        }
-
-        try {
-          await runCommand(
-            "git",
-            ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
-            tempRoot,
-          );
-          const commitSha = await tryResolveGitCommitSha(packageRoot);
-          await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
-          await runCommand("pnpm", ["build"], packageRoot);
-          return { packageRoot, commitSha, cleanup };
-        } catch (cloneError) {
-          await cleanup();
-          throw new Error(
-            `Failed to prepare package: Archive error: ${error instanceof Error ? error.message : String(error)}. Clone error: ${cloneError instanceof Error ? cloneError.message : String(cloneError)}`,
-          );
-        }
+        await cleanup();
+        throw error;
       }
     },
   };

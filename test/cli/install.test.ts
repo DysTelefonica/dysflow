@@ -1365,4 +1365,163 @@ describe("checksum verification during update", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("throws immediately on HTTP 500 archive response — does NOT fall back to git clone", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+
+    try {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("HTTP 500");
+
+      // fetch must have been called exactly once — no git clone attempt
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const cloneCalls = execFileMock.mock.calls.filter(
+        (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
+      );
+      expect(cloneCalls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws immediately on HTTP 403 archive response — does NOT fall back to git clone", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+
+    try {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("HTTP 403");
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const cloneCalls = execFileMock.mock.calls.filter(
+        (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
+      );
+      expect(cloneCalls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws immediately on network-style fetch rejection — does NOT fall back to git clone", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+
+    try {
+      mockFetch.mockRejectedValueOnce(new TypeError("fetch failed: network timeout"));
+
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("network timeout");
+
+      const cloneCalls = execFileMock.mock.calls.filter(
+        (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
+      );
+      expect(cloneCalls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("throws immediately on checksum mismatch — does NOT fall back to git clone", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+
+    try {
+      const archiveBytes = Buffer.from("FAKE_TAR_GZ_BINARY_CONTENT");
+      const badHash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${badHash}  dysflow-v1.2.3.tar.gz\n`,
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("Checksum mismatch");
+
+      // After a checksum mismatch the only subprocess call allowed is tar (for extraction)
+      // that never happened. No git clone must have been attempted.
+      const cloneCalls = execFileMock.mock.calls.filter(
+        (call) =>
+          Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
+      );
+      expect(cloneCalls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("falls back to git clone on HTTP 404 archive response", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+
+    try {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+
+      execFileMock.mockImplementation((_file, _args, options, callback) => {
+        const cb = typeof options === "function" ? options : callback;
+        if (cb) {
+          queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
+        }
+      });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      // This will fail at the pnpm build step in test (no real repo), but the important
+      // thing is that it DOES attempt git clone (execFileMock called with git clone args)
+      // and does NOT throw the HTTP-error message
+      try {
+        await provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" });
+      } catch {
+        // may throw from pnpm build failure in test env — that's fine
+      }
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.arrayContaining(["clone", "--depth", "1", "--branch", "v1.2.3"]),
+        expect.anything(),
+        expect.anything(),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      execFileMock.mockImplementation((_file, _args, options, callback) => {
+        const cb = typeof options === "function" ? options : callback;
+        if (cb) {
+          queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
+        }
+      });
+    }
+  });
 });
