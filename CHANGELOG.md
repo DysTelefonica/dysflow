@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [1.0.2] - 2026-05-29
+
+### Fixed
+
+- **Runtime install: `npm install --prefer-offline` caused `ETARGET` error**: The `--prefer-offline` flag made npm try to resolve the full lockfile including dev dependencies, failing on `@vitest/utils@4.1.7` which is not published separately. Removed the flag — npm now resolves production dependencies fresh from the registry.
+
 ## [1.0.1] - 2026-05-29
 
 ### Fixed
