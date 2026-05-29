@@ -402,6 +402,22 @@ function Invoke-GetRelationshipsAction {
   return [ordered]@{ relationships = @(Get-Relationships -Database $Database) }
 }
 
+function Invoke-ListLinkedTablesAction {
+  param($Database)
+  return [ordered]@{ tables = @(Get-TableNames -Database $Database -LinkedOnly) }
+}
+
+function Invoke-CompareBackendsAction {
+  param($Database, $BackendPath)
+  if ([string]::IsNullOrWhiteSpace($BackendPath)) { throw "backendPath is required for compare_backends." }
+  return Compare-BackendTables -CurrentDb $Database -BackendPath ([string]$BackendPath)
+}
+
+function Invoke-ListAccessFilesAction {
+  param($RootPath)
+  return [ordered]@{ files = @(Get-AccessFiles -RootPath ([string]$RootPath)) }
+}
+
 function Get-LinkInfo {
   param($Database)
   $links = New-Object System.Collections.ArrayList
@@ -1360,9 +1376,22 @@ if ($Operation -eq 'query') {
   $earlyTargetPath = [string]$earlyPayload.databasePath
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.sourcePath }
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.backendPath }
+  # list_access_files needs no DB — handle before DAO open.
+  if ($earlyAction -eq 'list_access_files') {
+    try {
+      $result = Invoke-ListAccessFilesAction -RootPath ([string]$earlyPayload.rootPath)
+      Write-DysflowProgress -Percent 90 -Message "Finalizing"
+      $result | ConvertTo-Json -Compress -Depth 10
+      exit 0
+    } catch {
+      [Console]::Error.WriteLine($_.Exception.Message)
+      exit 1
+    }
+  }
+
   $isDirectTargetRead = -not [string]::IsNullOrWhiteSpace($earlyTargetPath) -and $earlyPayload.mode -eq 'read' -and (
     [string]::IsNullOrWhiteSpace($earlyAction) -or
-    $earlyAction -in @('query_sql', 'list_tables', 'get_schema', 'count_rows', 'distinct_values', 'get_relationships')
+    $earlyAction -in @('query_sql', 'list_tables', 'get_schema', 'count_rows', 'distinct_values', 'get_relationships', 'list_linked_tables', 'compare_backends')
   )
 
   if ($isDirectTargetRead) {
@@ -1410,6 +1439,20 @@ if ($Operation -eq 'query') {
 
       if ($earlyAction -eq 'get_relationships') {
         $result = Invoke-GetRelationshipsAction -Database $directDb
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        $result | ConvertTo-Json -Compress -Depth 20
+        exit 0
+      }
+
+      if ($earlyAction -eq 'list_linked_tables') {
+        $result = Invoke-ListLinkedTablesAction -Database $directDb
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        $result | ConvertTo-Json -Compress -Depth 10
+        exit 0
+      }
+
+      if ($earlyAction -eq 'compare_backends') {
+        $result = Invoke-CompareBackendsAction -Database $directDb -BackendPath ([string]$earlyPayload.backendPath)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
         exit 0
