@@ -285,22 +285,23 @@ that communicate in-memory without stdin/stdout.
 
 ### Phase 6 — Verification and release
 
-- [ ] **6.1** Manual smoke test:
+- [x] **6.1** Manual smoke test:
   - `pnpm build`
   - `node dist/cli/index.js mcp` — start MCP in a terminal
   - Send a raw `tools/list` JSON-RPC request via stdin manually and confirm tools are listed
   - (Optional) Confirm with OpenCode if available
+  - Note: `initialize + tools/list verified via dist/cli/index.js mcp`
 
-- [ ] **6.2** Update `CHANGELOG.md` with a `[1.0.0]` entry:
+- [x] **6.2** Update `CHANGELOG.md` with a `[1.0.0]` entry:
   - Mention SDK migration, removal of hand-rolled JSON-RPC runtime
   - List no breaking API changes (tool interface, `project.json`, CLI unchanged)
 
-- [ ] **6.3** Update `README.md`:
+- [x] **6.3** Update `README.md`:
   - Bump version to `v1.0.0`
   - Update test count
   - Remove the "hand-rolled JSON-RPC" reference from MCP protocol section
 
-- [ ] **6.4** Update `docs/IMPROVEMENTS_PLAN.md`:
+- [x] **6.4** Update `docs/IMPROVEMENTS_PLAN.md`:
   - Mark Q7 as ✅
   - Update version targets
 

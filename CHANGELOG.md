@@ -2,6 +2,21 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [1.0.0] - 2026-05-29
+
+### Changed
+
+- **MCP SDK migration**: Replaced the hand-rolled JSON-RPC 2.0 stdio adapter (`stdio.ts`, ~320 lines)
+  with `@modelcontextprotocol/sdk` v1.29.0. All protocol mechanics (framing, routing, spec
+  compliance) are now handled by the SDK. Custom behaviors (exception absorption into
+  `isError: true`, path sanitization in error text, hidden tools, 1 MiB size guard, progress
+  notifications) are preserved via focused wrapper modules.
+- **New modules**: `stdio-wrappers.ts` (errorAbsorber, sanitizer, hiddenToolRegistry),
+  `stdio-size-guard.ts` (SizeLimitTransform).
+- **Test harness**: migrated from `PassThrough` stream injection to `InMemoryTransport` client/server
+  pairs for SDK-layer tests.
+- No breaking changes to tool interfaces, `project.json` schema, or CLI.
+
 ## [0.10.0] - 2026-05-29
 
 ### Security

@@ -14,9 +14,9 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Current version: v0.10.0
+## Current version: v1.0.0
 
-**48 MCP tools · 682 tests · Windows / Node 20+**
+**48 MCP tools · 717 tests · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -136,7 +136,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.10.0"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.0.0"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -724,7 +724,6 @@ Useful references:
 
 ## Current roadmap
 
-- MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` (Q7)
 - Split `install-utils.ts` into focused utility files (Q5)
 - Broader E2E coverage for multi-project project-context flows
 - Richer MCP input schemas for complex domains
