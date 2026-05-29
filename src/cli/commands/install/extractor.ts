@@ -1,5 +1,6 @@
 import { cp, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { runCommand } from "./command-runner.js";
 import { fileExists } from "./file-utils.js";
 import { getSystemMarkerPath, RUNTIME_MARKER_VERSION } from "./runtime-dir.js";
 import { writeRuntimeLaunchers } from "./path-configurator.js";
@@ -71,6 +72,13 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
     await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
       force: true,
     });
+    // Install production dependencies so runtime deps (e.g. @modelcontextprotocol/sdk)
+    // are available without requiring the full source node_modules to be copied.
+    await runCommand(
+      "npm",
+      ["install", "--omit=dev", "--ignore-scripts", "--prefer-offline"],
+      runtimePaths.appDir,
+    );
   }
 }
 
