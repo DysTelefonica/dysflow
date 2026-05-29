@@ -487,8 +487,69 @@ Rationale:
 
 | Item | Suggested release |
 |------|------------------|
-| P1, P7 | v0.9.19 (small, safe) |
-| P2, P4 | v0.9.20 |
-| P3 | v0.9.21 (one extraction per patch, e.g. v0.9.21–v0.9.25) |
-| P5 | v0.10.0 (requires release workflow change) |
-| P6, P8 | v0.10.1 |
+| P1, P7 | v0.9.19 ✅ released |
+| P2, P3, P4, P5, P6 | v0.9.19 ✅ released (all shipped together) |
+| P8 | v0.9.20 — committed, pending release |
+
+---
+
+## Next action: release v0.9.20
+
+> **Status as of 2026-05-29**: P8 is committed (`9469d74`) but not yet released.
+> The only pending action to close this plan is cutting v0.9.20.
+
+### Step-by-step release process
+
+1. **Bump version in `package.json`**
+   - Change `"version": "0.9.19"` → `"version": "0.9.20"`
+
+2. **Update `CHANGELOG.md`** — add a new entry at the top (after the `# Changelog` heading):
+   ```markdown
+   ## [0.9.20] - 2026-05-29
+
+   ### Changed
+
+   - **Refactored `install.ts` into focused sub-modules**: Split the 936-line
+     install command into six focused modules under `src/cli/commands/install/`:
+     `downloader.ts` (GitHub fetch + SHA-256), `extractor.ts` (file copy + install report),
+     `mcp-configurator.ts` (agent config writers), `path-configurator.ts` (cmd/ps1 launchers),
+     `package-root.ts` (package root resolution), and `updater.ts` (update flow + arg parsers).
+     `install.ts` is now a 144-line entry point with full re-exports for backward compatibility.
+   ```
+
+3. **Run final verification**
+   ```powershell
+   pnpm build
+   pnpm run test -- --run
+   ```
+   Both must be green before committing.
+
+4. **Commit the release**
+   ```
+   git add package.json CHANGELOG.md
+   git commit -m "chore: release v0.9.20"
+   ```
+
+5. **Tag** (only if the project uses tags — check with `git tag --list` to see the pattern)
+   ```
+   git tag v0.9.20
+   ```
+
+### What NOT to do during release
+- Do NOT install to `%LOCALAPPDATA%\dysflow` (production runtime) — that is a manual user action.
+- Do NOT modify `C:\Users\adm1\.config\opencode\opencode.json`.
+- Do NOT push unless the user explicitly asks.
+
+---
+
+## Post-release: known future work
+
+These items were identified during the v0.9.19 audit but deferred. They are NOT part of this plan — they need a new planning cycle.
+
+| Item | Description | Priority |
+|------|-------------|----------|
+| MCP SDK migration | Replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk`. P7 documented this as Option B — correct long-term play. | MEDIUM |
+| `install-utils.ts` cleanup | 227-line satellite still has mixed concerns. Low urgency after P8 split. | LOW |
+| E2E coverage for install sub-modules | `test/cli/install.test.ts` tests `install.ts` top-down. New sub-modules are indirectly covered but have no direct unit tests. | LOW |
+
+To start a new planning cycle, run `/sdd-new <change-name>` or ask for a new SWOT audit.

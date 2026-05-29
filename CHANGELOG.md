@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.9.20] - 2026-05-29
+
+### Changed
+
+- **Refactored `install.ts` into focused sub-modules**: Split the 936-line install command into six focused modules under `src/cli/commands/install/`: `downloader.ts` (GitHub fetch + SHA-256), `extractor.ts` (file copy + install report), `mcp-configurator.ts` (agent config writers), `path-configurator.ts` (cmd/ps1 launchers), `package-root.ts` (package root resolution), and `updater.ts` (update flow + arg parsers). `install.ts` is now a 144-line entry point with full re-exports for backward compatibility.
+
 ## [0.9.19] - 2026-05-28
 
 ### Added
