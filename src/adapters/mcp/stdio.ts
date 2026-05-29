@@ -340,8 +340,15 @@ export async function startMcpStdioAdapter(
  *
  * SizeLimitTransform guards stdin: oversized lines emit a -32700 error frame and are
  * dropped; normal lines pass through for JSON-RPC parsing by StdioServerTransport.
+ *
+ * @param tools - The tools to register.
+ * @param transport - Optional transport override. When provided, the SizeLimitTransform
+ *   and StdioServerTransport are skipped. Used in tests with InMemoryTransport.
  */
-async function startWithSdkServer(tools: DysflowMcpTool[]): Promise<void> {
+export async function startWithSdkServer(
+  tools: DysflowMcpTool[],
+  transport?: import("@modelcontextprotocol/sdk/shared/transport.js").Transport,
+): Promise<void> {
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const hiddenRegistry = buildHiddenToolRegistry(tools);
 
@@ -398,11 +405,16 @@ async function startWithSdkServer(tools: DysflowMcpTool[]): Promise<void> {
     return { ...result, content: [...result.content] };
   });
 
+  if (transport !== undefined) {
+    await server.connect(transport);
+    return;
+  }
+
   const sizeGuard = new SizeLimitTransform(DEFAULT_MAX_REQUEST_BYTES, process.stdout);
   process.stdin.pipe(sizeGuard);
 
-  const transport = new StdioServerTransport(sizeGuard, process.stdout);
-  await server.connect(transport);
+  const stdioTransport = new StdioServerTransport(sizeGuard, process.stdout);
+  await server.connect(stdioTransport);
 }
 
 export async function resolveMcpWriteAccessForInput(

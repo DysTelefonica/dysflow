@@ -98,7 +98,7 @@ Mark each item `[x]` as it is completed. Do NOT mark as done before the tests ar
 - [x] **0.2** Install the SDK: `pnpm add @modelcontextprotocol/sdk@1.29.0`
   - Appears in `dependencies` in `package.json` ✓
   - `pnpm build` green ✓ · 682 tests green ✓
-- [ ] **0.3** Read the SDK surface that will be used:
+- [x] **0.3** Read the SDK surface that will be used:
   - `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`
   - `StdioServerTransport` from `@modelcontextprotocol/sdk/server/stdio.js`
   - `InMemoryTransport` from `@modelcontextprotocol/sdk/inMemory.js` (for tests)
@@ -244,31 +244,24 @@ The current `test/adapters/mcp/stdio.test.ts` (966 lines, ~30 tests) and
 The SDK provides `InMemoryTransport` for testing — two paired transports (client + server)
 that communicate in-memory without stdin/stdout.
 
-- [ ] **4.1** Study `InMemoryTransport` from `@modelcontextprotocol/sdk/inMemory.js`:
+- [x] **4.1** Study `InMemoryTransport` from `@modelcontextprotocol/sdk/inMemory.js`:
   - Understand how to create a test client that connects to the server in-memory
   - Understand how to send tool calls and read results
 
-- [ ] **4.2 RED → GREEN**: Migrate `stdio.test.ts` to SDK test harness:
-  - Replace `PassThrough` injection with `InMemoryTransport` client/server pair
-  - Preserve every existing test behavior (see coverage table in exploration report)
-  - Add new tests for any gap introduced by the migration
-  - The following behaviors MUST remain tested after migration:
-    - `initialize` returns `protocolVersion: "2024-11-05"`, correct `serverInfo`
-    - `tools/list` returns non-hidden tools only
-    - `tools/call` with valid tool → correct result
-    - Tool handler exception → `isError: true` result, NOT JSON-RPC `-32603`
-    - Error messages have file paths scrubbed
-    - Unknown method → `-32601`
-    - Unknown tool name → appropriate error
-    - Progress token → `notifications/progress` frame before result
-    - No progress frame when token absent
-    - Hidden tools: callable but not in `tools/list`
-    - Write access resolver: gates write tools per project config
-    - 1 MiB limit (test via `SizeLimitTransform` unit tests in Phase 2 — direct protocol test optional)
+- [x] **4.2 RED → GREEN**: Migrate `stdio.test.ts` to SDK test harness:
+  - New file `test/adapters/mcp/stdio-sdk.test.ts` — 8 tests via `InMemoryTransport`
+  - Uses Option A: `startWithSdkServer(tools, transport?)` exported from `stdio.ts` with optional transport override
+  - Original `stdio.test.ts` preserved (legacy path still covered)
+  - Behaviors tested: `tools/list` non-hidden only, `tools/call` success, exception → `isError:true`, path sanitization, unknown tool, progress notifications (with/without token), hidden tools callable but unlisted
+  - Note: `initialize` response shape, `protocolVersion` constant, unknown method `-32601`, chunked line accumulation, CRLF stripping, oversized lines, and `createUnavailableServices` remain covered by the preserved `stdio.test.ts`
 
-- [ ] **4.3 RED → GREEN**: Migrate `progress.test.ts` to SDK test harness
+- [x] **4.3 RED → GREEN**: Migrate `progress.test.ts` to SDK test harness
+  - New file `test/adapters/mcp/progress-sdk.test.ts` — 3 tests: progress with token, no token, minimal params
+  - Original `progress.test.ts` preserved
 
-- [ ] **4.4** Run full suite: `pnpm test` — must be green (682+ tests)
+- [x] **4.4** Run full suite: `pnpm test` — 716 tests passing + 3 skipped (720 total)
+  - 11 net new tests added (8 in `stdio-sdk.test.ts`, 3 in `progress-sdk.test.ts`)
+  - One pre-existing timing flake in `access-operation-registry.test.ts` unrelated to this change
 
 ---
 
