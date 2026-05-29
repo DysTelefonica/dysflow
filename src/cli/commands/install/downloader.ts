@@ -1,0 +1,209 @@
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { runCommand, runCommandOutput } from "../install-utils.js";
+
+const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
+const GITHUB_LATEST_RELEASE_API =
+  "https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
+
+export type ReleaseInfo = {
+  version: string;
+  tagName?: string;
+};
+
+export type PreparedReleasePackage = {
+  packageRoot: string;
+  commitSha?: string;
+  cleanup?: () => Promise<void>;
+};
+
+export type ReleaseUpdateProvider = {
+  resolveLatestRelease(): Promise<ReleaseInfo>;
+  preparePackage(
+    release: ReleaseInfo,
+    options?: { skipChecksum?: boolean; env?: NodeJS.ProcessEnv },
+  ): Promise<PreparedReleasePackage>;
+};
+
+type GitHubLatestReleaseResponse = {
+  tag_name?: unknown;
+  name?: unknown;
+};
+
+function normalizeReleaseVersion(value: string): string {
+  return value.startsWith("v") ? value.slice(1) : value;
+}
+
+export function validateReleaseTagName(tagName: string): string {
+  if (!/^v\d+\.\d+\.\d+$/.test(tagName)) {
+    throw new Error(`Invalid Dysflow release tag: ${tagName}`);
+  }
+  return tagName;
+}
+
+export function createGitHubReleaseRequestHeaders(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const token = env.GH_TOKEN ?? env.GITHUB_TOKEN;
+  return {
+    Accept: "application/vnd.github+json",
+    ...(token !== undefined && token.length > 0 ? { Authorization: `Bearer ${token}` } : {}),
+    "User-Agent": "dysflow-updater",
+  };
+}
+
+async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
+  const tagName = await runCommandOutput(
+    "gh",
+    ["release", "view", "--repo", "DysTelefonica/dysflow", "--json", "tagName", "--jq", ".tagName"],
+    process.cwd(),
+  );
+  if (tagName.length === 0) {
+    throw new Error("gh release view did not return a tagName.");
+  }
+  validateReleaseTagName(tagName);
+  return {
+    tagName,
+    version: normalizeReleaseVersion(tagName),
+  };
+}
+
+async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> {
+  try {
+    const sha = await runCommandOutput("git", ["rev-parse", "HEAD"], cwd);
+    return /^[0-9a-f]{40}$/i.test(sha) ? sha : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
+  return {
+    async resolveLatestRelease(): Promise<ReleaseInfo> {
+      const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+        headers: createGitHubReleaseRequestHeaders(),
+      });
+      if (!response.ok) {
+        try {
+          return await resolveLatestReleaseWithGh();
+        } catch {
+          throw new Error(`GitHub latest release lookup failed with HTTP ${response.status}.`);
+        }
+      }
+
+      const body = (await response.json()) as GitHubLatestReleaseResponse;
+      if (typeof body.tag_name !== "string" || body.tag_name.length === 0) {
+        throw new Error("GitHub latest release response did not include tag_name.");
+      }
+      validateReleaseTagName(body.tag_name);
+
+      return {
+        tagName: body.tag_name,
+        version: normalizeReleaseVersion(body.tag_name),
+      };
+    },
+
+    async preparePackage(
+      release: ReleaseInfo,
+      options?: { skipChecksum?: boolean; env?: NodeJS.ProcessEnv },
+    ): Promise<PreparedReleasePackage> {
+      const tagName = validateReleaseTagName(release.tagName ?? `v${release.version}`);
+      const tempRoot = await mkdtemp(path.join(tmpdir(), "dysflow-update-"));
+      const packageRoot = path.join(tempRoot, "source");
+      const cleanup = async (): Promise<void> => {
+        await rm(tempRoot, { recursive: true, force: true });
+      };
+
+      const environment = options?.env ?? process.env;
+
+      try {
+        const archiveName = `dysflow-${tagName}.tar.gz`;
+        const archiveUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/${archiveName}`;
+        const checksumsUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/SHA256SUMS`;
+
+        // 1. Download archive
+        const archiveResponse = await fetch(archiveUrl, {
+          headers: createGitHubReleaseRequestHeaders(environment),
+        });
+        if (!archiveResponse.ok) {
+          throw new Error(
+            `Failed to download release archive from ${archiveUrl}: HTTP ${archiveResponse.status}`,
+          );
+        }
+        const archiveBuffer = Buffer.from(await archiveResponse.arrayBuffer());
+
+        // 2. Verification
+        if (!options?.skipChecksum) {
+          const checksumsResponse = await fetch(checksumsUrl, {
+            headers: createGitHubReleaseRequestHeaders(environment),
+          });
+          if (!checksumsResponse.ok) {
+            throw new Error(
+              `Failed to download checksums file from ${checksumsUrl}: HTTP ${checksumsResponse.status}. ` +
+                "Use --skip-checksum if you want to bypass verification.",
+            );
+          }
+          const checksumsText = await checksumsResponse.text();
+          const lines = checksumsText.split(/\r?\n/);
+          let expectedHash: string | undefined;
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2 && parts[1].replace(/^\*/, "") === archiveName) {
+              expectedHash = parts[0];
+              break;
+            }
+          }
+
+          if (expectedHash === undefined) {
+            throw new Error(`Expected hash for ${archiveName} not found in SHA256SUMS.`);
+          }
+
+          const actualHash = createHash("sha256").update(archiveBuffer).digest("hex");
+          if (actualHash !== expectedHash) {
+            throw new Error(
+              `Checksum mismatch for downloaded artifact.\n` +
+                `Expected: ${expectedHash}\n` +
+                `Got:      ${actualHash}`,
+            );
+          }
+        }
+
+        // 3. Write archive to temp folder
+        const archivePath = path.join(tempRoot, archiveName);
+        await writeFile(archivePath, archiveBuffer);
+
+        // 4. Extract archive
+        await mkdir(packageRoot, { recursive: true });
+        await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot);
+
+        const commitSha = await tryResolveGitCommitSha(packageRoot);
+        return { packageRoot, commitSha, cleanup };
+      } catch (error) {
+        // Fallback to git clone if archive was not found
+        if (error instanceof Error && error.message.includes("Checksum mismatch")) {
+          await cleanup();
+          throw error;
+        }
+
+        try {
+          await runCommand(
+            "git",
+            ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
+            tempRoot,
+          );
+          const commitSha = await tryResolveGitCommitSha(packageRoot);
+          await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
+          await runCommand("pnpm", ["build"], packageRoot);
+          return { packageRoot, commitSha, cleanup };
+        } catch (cloneError) {
+          await cleanup();
+          throw new Error(
+            `Failed to prepare package: Archive error: ${error instanceof Error ? error.message : String(error)}. Clone error: ${cloneError instanceof Error ? cloneError.message : String(cloneError)}`,
+          );
+        }
+      }
+    },
+  };
+}
