@@ -14,9 +14,9 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Current version: v0.9.19
+## Current version: v0.9.23
 
-**48 MCP tools · 666 tests · Windows / Node 20+**
+**48 MCP tools · 682 tests · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -102,6 +102,16 @@ Refusal examples include:
 - Write-like operations pass through guarded request paths.
 - `dryRun`-style safety is preserved across all write-capable tools.
 
+### 4) VBA procedure allowlist
+
+Set `allowedProcedures` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
+
+- MCP `dysflow_vba_execute`
+- MCP `run_vba`
+- HTTP `POST /vba/execute`
+
+A call to a procedure not in the list is rejected before any COM automation is started. An empty list or absent field means all procedures are allowed (default).
+
 ---
 
 ## Requirements
@@ -126,7 +136,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.19"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.23"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -371,7 +381,9 @@ Runtime directory resolution order:
   "allowWrites": false,
   "timeoutMs": 120000,
   "passwordEnv": "PROJECTABC_ACCESS_PASSWORD",
-  "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD"
+  "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD",
+  "allowedProcedures": ["Refresh", "ExportReport", "RunMigration"],
+  "httpToken": "your-secret-token"
 }
 ```
 
@@ -434,7 +446,7 @@ Many MCP tools share common context and override parameters:
 ### Core MCP Tools
 
 #### `dysflow_vba_execute`
-Execute a public VBA procedure via COM automation.
+Execute a public VBA procedure via COM automation. Enforces `allowedProcedures` when configured.
 * **Parameters**:
   - `procedureName` (string, **required**): Public VBA procedure name to execute.
   - `moduleName` (string, optional): Target module containing the procedure.
@@ -575,6 +587,10 @@ Defaults:
 - port: `17321`
 - writes: disabled by default
 
+**Bearer token auth**: set `httpToken` in `.dysflow/project.json` to require `Authorization: Bearer <token>` on every request. Requests without a valid token return `401`. When `httpToken` is absent, all requests pass through (default).
+
+**Procedure allowlist**: `allowedProcedures` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
+
 See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 
 ---
@@ -708,10 +724,10 @@ Useful references:
 
 ## Current roadmap
 
-- Installer/update hardening
-- richer MCP input schemas for complex domains
-- expanded Access/VBA domain tooling
-- broader E2E coverage for multi-project project-context flows
+- MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` (Q7)
+- Split `install-utils.ts` into focused utility files (Q5)
+- Broader E2E coverage for multi-project project-context flows
+- Richer MCP input schemas for complex domains
 
 ---
 

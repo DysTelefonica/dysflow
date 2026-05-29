@@ -565,11 +565,13 @@ Full audit: `docs/AUDIT_2026-05-29.md`.
 | Q5 | Split `install-utils.ts` into focused utility files | LOW | ⬜ |
 | Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ✅ |
 | Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | ⬜ |
+| Q8 | Fix `allowedProcedures` enforcement bypass in `run_vba` alias and HTTP `/vba/execute` | HIGH | ✅ |
+| Q9 | Update `docs/api/http-api.md`: document Bearer token + `allowedProcedures` behavior | MEDIUM | ✅ |
 
 ### Suggested execution order
 
 ```
-Q1 → Q3 → Q2 → Q6 → Q4 → Q5 → Q7
+Q1 → Q3 → Q2 → Q6 → Q4 → Q8 → Q9 → Q5 → Q7
 ```
 
 Rationale:
@@ -578,6 +580,8 @@ Rationale:
 - **Q2**: extract shared types; reduces copy-paste before Q6 touches the same files.
 - **Q6**: type-variance fix; clean up after Q2 removes the structural duplication.
 - **Q4**: PS script change; requires E2E verification — do after TS layer is stable.
+- **Q8**: HIGH security fix — close the `allowedProcedures` bypass before releasing.
+- **Q9**: document what Q8 enforces — keep docs in sync with implementation.
 - **Q5**: low urgency cosmetic split.
 - **Q7**: largest change; do last when everything else is settled.
 
@@ -585,10 +589,11 @@ Rationale:
 
 | Item | Suggested release |
 |------|------------------|
-| Q1, Q3 | v0.9.21 |
-| Q2, Q6 | v0.9.22 |
-| Q4 | v0.9.23 |
-| Q5 | v0.9.24 |
+| Q1, Q3 | v0.9.21 ✅ released |
+| Q2, Q6 | v0.9.22 ✅ released |
+| Q4 | v0.9.23 ✅ released |
+| Q8, Q9 | v0.9.24 |
+| Q5 | v0.9.25 |
 | Q7 | v0.10.0 |
 
 ---
@@ -652,3 +657,56 @@ and `cleanupService` are already available as `DysflowMcpServices` fields. Pass 
 - When neither service is injected, a lazy default is created (same pattern as `createDefaultPreflightCleanup`)
 - All 666+ existing tests pass
 - New unit tests added for both handlers (RED → GREEN)
+
+---
+
+## Q8 — Fix `allowedProcedures` enforcement bypass ✅
+
+### Problem
+
+Two VBA execution entry points bypassed `allowedProcedures` entirely:
+
+1. **MCP `run_vba` alias** (`src/adapters/mcp/tools.ts:303–322`): called `vbaService.execute()` directly with no check. The `allowedProcedures` variable was captured in the outer closure but never referenced inside `registerMcpTools()`.
+2. **HTTP `POST /vba/execute`** (`src/adapters/http/server.ts:228–243`): only gated on `writesEnabled`. `StartDysflowHttpServerOptions` had no `allowedProcedures` field; the value from `loadDysflowConfigAsync()` was never extracted or passed to the route context.
+
+Effect: any caller using `run_vba` instead of `dysflow_vba_execute` bypassed the allowlist entirely. On HTTP, any write-enabled deployment had unrestricted VBA execution regardless of config.
+
+### Files changed
+
+- `src/adapters/mcp/tools.ts` — `registerMcpTools()` now accepts and forwards `allowedProcedures`; the `run_vba` handler uses the same guard as `dysflow_vba_execute`
+- `src/adapters/http/server.ts` — `StartDysflowHttpServerOptions` gained `allowedProcedures?: readonly string[]`; server reads it from loaded config; `/vba/execute` blocks with 403 + `HTTP_PROCEDURE_NOT_ALLOWED`
+- `test/adapters/mcp/tools.test.ts` — 4 new tests for `run_vba` allowlist (blocked / allowed / empty / undefined)
+- `test/adapters/http/server.test.ts` — 3 new tests for `/vba/execute` allowlist
+
+### Commits
+
+```
+2f03127 test(mcp): add allowedProcedures enforcement tests for run_vba
+55f7a59 fix(mcp): enforce allowedProcedures in run_vba alias handler
+19a9ce4 test(http): add allowedProcedures enforcement tests for /vba/execute
+396bb5b fix(http): enforce allowedProcedures in POST /vba/execute route
+```
+
+---
+
+## Q9 — Update `docs/api/http-api.md` ✅
+
+### Problem
+
+`docs/api/http-api.md` does not document:
+1. The Bearer token (`Authorization: Bearer <token>`) implemented in P6 / `serve.ts`
+2. The new `allowedProcedures` enforcement on `POST /vba/execute` (Q8) — including the 403 `HTTP_PROCEDURE_NOT_ALLOWED` response
+
+### Files to change
+
+- `docs/api/http-api.md` — add Auth section + document 403 for `/vba/execute`
+
+### What to add
+
+1. **Authentication section** — explain the optional `httpToken` field in `.dysflow/project.json`, the `Authorization: Bearer <token>` header, and the 401 response when missing/wrong.
+2. **`POST /vba/execute` — 403 response** — document that when `allowedProcedures` is configured and the requested procedure is not in the list, the server returns 403 with body `{ "error": "HTTP_PROCEDURE_NOT_ALLOWED", ... }`.
+3. **`allowedProcedures` config field** — brief note on where it is configured and which endpoints it affects (MCP `dysflow_vba_execute`, MCP `run_vba`, HTTP `/vba/execute`).
+
+### Acceptance criterion
+
+- A developer reading `http-api.md` can set up Bearer token auth and understand the 401/403 responses without reading source code.

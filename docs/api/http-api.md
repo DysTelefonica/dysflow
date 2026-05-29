@@ -10,6 +10,37 @@ Writes are disabled by default. Start with `--enable-writes` only for scripts th
 dysflow serve --host 127.0.0.1 --port 17321
 ```
 
+## Authentication
+
+By default the server has no authentication. To require a Bearer token, set `httpToken` in `.dysflow/project.json`:
+
+```json
+{
+  "httpToken": "your-secret-token"
+}
+```
+
+When configured, every request must include the header:
+
+```
+Authorization: Bearer your-secret-token
+```
+
+Missing or incorrect token — response `401`:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "HTTP_UNAUTHORIZED",
+    "message": "Unauthorized",
+    "retryable": false
+  }
+}
+```
+
+When `httpToken` is absent, all requests pass through without authentication (backwards-compatible default).
+
 ## Routes
 
 ### GET /health
@@ -84,6 +115,23 @@ Request:
 
 This is treated as a write route and is blocked unless the server was started with `--enable-writes`.
 
+When `allowedProcedures` is configured in `.dysflow/project.json`, procedures not in the list are rejected — response `403`:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "HTTP_PROCEDURE_NOT_ALLOWED",
+    "message": "Procedure 'Refresh' is not in the configured allowedProcedures list.",
+    "retryable": false
+  },
+  "diagnostics": [],
+  "durationMs": 0
+}
+```
+
+`allowedProcedures` applies to all VBA execution entry points: MCP `dysflow_vba_execute`, MCP `run_vba`, and this HTTP route. An empty list (`[]`) or absent field means all procedures are allowed.
+
 
 ### GET /access/operations
 
@@ -105,11 +153,16 @@ Cleanup is safety-gated. Dysflow refuses to kill Access unless the operation exi
 
 ```powershell
 $base = "http://127.0.0.1:17321"
-Invoke-RestMethod -Method Get -Uri "$base/health"
+$headers = @{ Authorization = "Bearer your-secret-token" }
+
+Invoke-RestMethod -Method Get -Uri "$base/health" -Headers $headers
 Invoke-RestMethod -Method Post -Uri "$base/query/read" `
   -ContentType "application/json" `
+  -Headers $headers `
   -Body (@{ sql = "SELECT id, name FROM People" } | ConvertTo-Json)
 ```
+
+Omit `-Headers $headers` if `httpToken` is not configured.
 
 To enable write routes explicitly:
 
@@ -121,13 +174,17 @@ dysflow serve --enable-writes
 
 ```js
 const base = "http://127.0.0.1:17321";
+const headers = {
+  "content-type": "application/json",
+  authorization: "Bearer your-secret-token", // omit if httpToken is not configured
+};
 
-const health = await fetch(`${base}/health`).then((response) => response.json());
+const health = await fetch(`${base}/health`, { headers }).then((r) => r.json());
 const rows = await fetch(`${base}/query/read`, {
   method: "POST",
-  headers: { "content-type": "application/json" },
+  headers,
   body: JSON.stringify({ sql: "SELECT id, name FROM People" }),
-}).then((response) => response.json());
+}).then((r) => r.json());
 
 console.log({ health, rows });
 ```
