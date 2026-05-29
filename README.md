@@ -14,7 +14,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Current version: v0.9.23
+## Current version: v0.10.0
 
 **48 MCP tools · 682 tests · Windows / Node 20+**
 
@@ -136,7 +136,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.9.23"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v0.10.0"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```

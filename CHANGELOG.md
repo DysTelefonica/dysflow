@@ -2,6 +2,31 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [0.10.0] - 2026-05-29
+
+### Security
+
+- **Closed `allowedProcedures` enforcement bypass**: The MCP `run_vba` alias and the HTTP `POST /vba/execute` route were bypassing the `allowedProcedures` allowlist entirely. Both entry points now apply the same guard as `dysflow_vba_execute`: a procedure not in the configured allowlist is rejected before any COM automation is started. HTTP returns `403 HTTP_PROCEDURE_NOT_ALLOWED`. Four new MCP tests and three new HTTP tests cover blocked, allowed, empty, and unconfigured scenarios.
+
+- **Fixed checksum fallback scope**: `dysflow update` was falling back to git clone on any error during artifact download (including HTTP 500, 403, and checksum mismatches). The fallback now only triggers on HTTP 404. All other errors throw immediately, preventing silent installs of potentially corrupted artifacts.
+
+### Fixed
+
+- **`VbaOperationsAdapter.execute()` was a stub**: `list_access_operations` and `cleanup_access_operation` returned `TOOL_NOT_IMPLEMENTED` when routed through the adapter directly. Tools only worked because legacy alias handlers intercepted them first. Real logic now delegates to `operationRegistry` and `cleanupService` respectively.
+
+### Changed
+
+- **`failureResult` returns `OperationResult<never>`**: Changed from the generic `OperationResult<T>` to `OperationResult<never>`, eliminating three `as unknown as` double-casts in `vba-source-comparison.ts`. The `ok: false` branch never uses `T`, so `never` is the structurally correct type.
+
+- **Extracted shared VBA sync types**: `DirectMapping` (type), `mapping()` (factory), and `stringArray()` (helper) were copy-pasted verbatim across four adapter files. Moved to `src/adapters/vba-sync/vba-sync-types.ts` and removed all duplicates.
+
+- **Early dispatch in `dysflow-access-runner.ps1`**: `list_linked_tables`, `compare_backends`, and `list_access_files` now use direct DAO dispatch and no longer force `MSACCESS.Application` to open for read-only metadata operations.
+
+### Documentation
+
+- **`docs/api/http-api.md`**: Added Authentication section documenting Bearer token (`httpToken`), `401 HTTP_UNAUTHORIZED` response, and the new `403 HTTP_PROCEDURE_NOT_ALLOWED` on `/vba/execute`. Updated PowerShell and Node.js script examples to include the `Authorization` header.
+- **README**: Updated version, test count (682), Safety model section for `allowedProcedures`, HTTP section for Bearer auth and `allowedProcedures`, and `project.json` example with both new fields.
+
 ## [0.9.20] - 2026-05-29
 
 ### Changed
