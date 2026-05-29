@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [1.0.1] - 2026-05-29
+
+### Fixed
+
+- **Runtime install: missing production dependencies**: `dysflow install` and `dysflow update` only copied `dist/` and `package.json` to the runtime directory but never ran `npm install`. With v1.0.0 introducing `@modelcontextprotocol/sdk` as the first true runtime dependency, the MCP server crashed with `ERR_MODULE_NOT_FOUND` on startup. The installer now runs `npm install --omit=dev --ignore-scripts` in the runtime app directory after copying `package.json`, ensuring all production dependencies are available. `--ignore-scripts` prevents the `prepare`/`prepack` build hooks from running in the production environment.
+
 ## [1.0.0] - 2026-05-29
 
 ### Changed
