@@ -241,7 +241,7 @@ export function createDysflowMcpTools(
     },
   ];
 
-  return registerMcpTools(currentTools, services, writesEnabled, writeAccessResolver, env);
+  return registerMcpTools(currentTools, services, writesEnabled, writeAccessResolver, env, allowedProcedures);
 }
 
 function registerMcpTools(
@@ -250,6 +250,7 @@ function registerMcpTools(
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
   env: Record<string, string | undefined>,
+  allowedProcedures?: readonly string[],
 ): DysflowMcpTool[] {
   const tools = [...currentTools];
   const names = new Set(tools.map((tool) => tool.name));
@@ -309,6 +310,15 @@ function registerMcpTools(
       const validation = validateInput(input, runVbaSchema);
       if (validation !== undefined) return invalidInput(validation);
       const request = input as { procedureName: string; argsJson?: string };
+      if (
+        allowedProcedures !== undefined &&
+        allowedProcedures.length > 0 &&
+        !allowedProcedures.includes(request.procedureName)
+      ) {
+        return invalidInput(
+          `Procedure '${request.procedureName}' is not in the configured allowedProcedures list.`,
+        );
+      }
       const parsedArgs = parseMcpArgsJson(request.argsJson);
       if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
       return translateCoreResultToMcpContent(
