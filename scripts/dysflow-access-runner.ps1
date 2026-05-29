@@ -760,7 +760,6 @@ function Compare-BackendTables {
   } finally {
     try { $backendDb.Close() } catch { Write-Debug "Diagnostics: $_" }
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($backendDb) } catch { Write-Debug "Diagnostics: $_" }
-    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
   }
 }
 
@@ -1375,6 +1374,7 @@ if ($Operation -eq 'query') {
   $earlyAction = [string]$earlyPayload.action
   $earlyTargetPath = [string]$earlyPayload.databasePath
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($earlyTargetPath) -and -not [string]::IsNullOrWhiteSpace($AccessDbPath)) { $earlyTargetPath = $AccessDbPath }
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.backendPath }
   # list_access_files needs no DB — handle before DAO open.
   if ($earlyAction -eq 'list_access_files') {
@@ -1477,6 +1477,7 @@ try {
   $action = [string]$payload.action
   $targetPath = [string]$payload.databasePath
   if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath) -and -not [string]::IsNullOrWhiteSpace($AccessDbPath)) { $targetPath = $AccessDbPath }
   if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.backendPath }
   $dryRun = $true
   if ($null -ne $payload.dryRun) { $dryRun = [bool]$payload.dryRun }
