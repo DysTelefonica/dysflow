@@ -561,15 +561,14 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 
 ### MCP protocol and maintenance
 
-Initialize response uses a named protocol constant:
+The MCP stdio adapter uses `@modelcontextprotocol/sdk` v1.29.0. Protocol version negotiation, framing, and spec compliance are handled by the SDK. The server announces `protocolVersion: "2024-11-05"` during `initialize`.
 
-- `MCP_PROTOCOL_VERSION` (`2024-11-05`)
-- See `docs/testing/mcp-protocol-maintenance.md` for update procedure and JSON-RPC guards.
+Custom behaviors layered on top of the SDK (preserved from the previous hand-rolled adapter):
 
-Important behavior now explicitly covered in tests:
-
-- `id: null` is treated as a valid request id and receives a response.
-- notifications (no `id`) are intentionally ignored.
+- Tool handler exceptions are absorbed into `{ isError: true }` results — they never propagate as JSON-RPC `-32603` internal errors.
+- Error messages have Windows/UNC/POSIX paths scrubbed before reaching the client.
+- Hidden tools are callable via `tools/call` but invisible in `tools/list`.
+- A 1 MiB per-line size guard (`SizeLimitTransform`) sits between `process.stdin` and the SDK transport.
 
 ---
 
@@ -718,7 +717,7 @@ Useful references:
 - `src/core/**` remains protocol-agnostic and returns normalized `OperationResult`.
 - Adapters translate protocol-specific formats at boundaries only.
 - Tool parity is tracked in `src/adapters/mcp/tool-parity-registry.ts`; the tool registry lives in `src/adapters/mcp/mcp-tool-registry.ts`.
-- The MCP standard adapter is intentionally small and controlled; protocol drift is tracked as a first-class maintenance item.
+- The MCP adapter uses `@modelcontextprotocol/sdk` — protocol mechanics are SDK-managed. Custom behaviors (error absorption, path sanitization, hidden tools, size guard) live in `stdio-wrappers.ts` and `stdio-size-guard.ts`.
 
 ---
 

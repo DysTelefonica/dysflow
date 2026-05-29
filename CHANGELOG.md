@@ -15,6 +15,7 @@ All notable changes to Dysflow will be documented in this file.
   `stdio-size-guard.ts` (SizeLimitTransform).
 - **Test harness**: migrated from `PassThrough` stream injection to `InMemoryTransport` client/server
   pairs for SDK-layer tests.
+- **`SizeLimitTransform` newline fix**: the size guard was stripping the trailing `\n` before pushing lines downstream. The SDK transport uses newline delimiters to frame messages, so stripping caused it to buffer silently and never process requests. Lines are now forwarded with `\n` restored.
 - No breaking changes to tool interfaces, `project.json` schema, or CLI.
 
 ## [0.10.0] - 2026-05-29
