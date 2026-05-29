@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { Readable, Writable } from "node:stream";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -29,13 +28,7 @@ import {
   wrapWithErrorAbsorber,
   wrapWithSanitizer,
 } from "./stdio-wrappers.js";
-import {
-  createDysflowMcpTools,
-  type DysflowMcpServices,
-  type DysflowMcpTool,
-  type McpToolResult,
-  sanitizeMcpErrorMessage,
-} from "./tools.js";
+import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool } from "./tools.js";
 import type { McpToolContext } from "./types.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
@@ -46,258 +39,10 @@ const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
 export { DEFAULT_MAX_REQUEST_BYTES };
 
-export type McpStdioRuntime = {
-  registerTool(tool: DysflowMcpTool): void;
-  start(): Promise<void>;
-};
-
-type JsonRpcRequest = {
-  jsonrpc?: "2.0";
-  id?: string | number | null;
-  method?: string;
-  params?: unknown;
-};
-
-type JsonLineMcpStdioRuntimeOptions = {
-  input?: Readable;
-  output?: Writable;
-  maxRequestBytes?: number;
-};
-
-export class JsonLineMcpStdioRuntime implements McpStdioRuntime {
-  private readonly tools = new Map<string, DysflowMcpTool>();
-  private readonly input: Readable;
-  private readonly output: Writable;
-  private readonly maxRequestBytes: number;
-
-  constructor(options: JsonLineMcpStdioRuntimeOptions = {}) {
-    this.input = options.input ?? process.stdin;
-    this.output = options.output ?? process.stdout;
-    this.maxRequestBytes = Math.max(
-      1,
-      Math.floor(options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES),
-    );
-  }
-
-  registerTool(tool: DysflowMcpTool): void {
-    this.tools.set(tool.name, tool);
-  }
-
-  async start(): Promise<void> {
-    let buffer = "";
-    let pendingBytes = 0;
-    let droppingOversizedLine = false;
-
-    for await (const chunk of this.input) {
-      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      const chunkLength = text.length;
-      let cursor = 0;
-      while (cursor < chunkLength) {
-        const nextNewline = text.indexOf("\n", cursor);
-        if (nextNewline === -1) {
-          if (!droppingOversizedLine) {
-            const tail = text.slice(cursor);
-            buffer += tail;
-            pendingBytes += Buffer.byteLength(tail, "utf8");
-            if (pendingBytes > this.maxRequestBytes) {
-              this.writeResponse(null, {
-                code: -32700,
-                message: `Request line exceeds ${this.maxRequestBytes} bytes.`,
-              });
-              droppingOversizedLine = true;
-              buffer = "";
-              pendingBytes = 0;
-            }
-          }
-          break;
-        }
-
-        if (!droppingOversizedLine) {
-          const chunkLine = text.slice(cursor, nextNewline);
-          buffer += chunkLine;
-          pendingBytes += Buffer.byteLength(chunkLine, "utf8");
-          if (buffer.trim().length === 0) {
-            buffer = "";
-            pendingBytes = 0;
-          } else if (pendingBytes > this.maxRequestBytes) {
-            this.writeResponse(null, {
-              code: -32700,
-              message: `Request line exceeds ${this.maxRequestBytes} bytes.`,
-            });
-            droppingOversizedLine = true;
-            buffer = "";
-            pendingBytes = 0;
-          } else {
-            const line = buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
-            await this.handleLine(line);
-            buffer = "";
-            pendingBytes = 0;
-          }
-        }
-
-        if (droppingOversizedLine) {
-          droppingOversizedLine = false;
-        }
-        cursor = nextNewline + 1;
-      }
-    }
-
-    if (!droppingOversizedLine && buffer.trim().length > 0) {
-      if (pendingBytes > this.maxRequestBytes) {
-        this.writeResponse(null, {
-          code: -32700,
-          message: `Request line exceeds ${this.maxRequestBytes} bytes.`,
-        });
-      } else {
-        const line = buffer.endsWith("\r") ? buffer.slice(0, -1) : buffer;
-        await this.handleLine(line);
-      }
-    }
-  }
-
-  private async handleLine(line: string): Promise<void> {
-    let request: JsonRpcRequest;
-    try {
-      request = JSON.parse(line) as JsonRpcRequest;
-    } catch {
-      this.writeResponse(null, { code: -32700, message: "Parse error" });
-      return;
-    }
-
-    if (request.id === undefined) {
-      return;
-    }
-
-    try {
-      const result = await this.dispatch(request);
-      this.writeResponse(request.id, undefined, result);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "MCP request failed.";
-      const code = error instanceof JsonRpcMethodNotFound ? error.code : -32603;
-      this.writeResponse(request.id, { code, message });
-    }
-  }
-
-  private async dispatch(request: JsonRpcRequest): Promise<unknown> {
-    if (request.method === "initialize") {
-      return {
-        protocolVersion: MCP_PROTOCOL_VERSION,
-        capabilities: { tools: {} },
-        serverInfo: { name: "dysflow", version: SERVER_VERSION },
-      };
-    }
-
-    if (request.method === "tools/list") {
-      return {
-        tools: [...this.tools.values()]
-          .filter((tool) => !tool.hidden)
-          .map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            inputSchema: tool.inputSchema ?? {
-              type: "object",
-              additionalProperties: false,
-              properties: {},
-            },
-          })),
-      };
-    }
-
-    if (request.method === "tools/call") {
-      return this.callTool(request.params);
-    }
-
-    throw new JsonRpcMethodNotFound(request.method ?? "<missing>");
-  }
-
-  private async callTool(params: unknown): Promise<McpToolResult> {
-    const call = isRecord(params) ? params : {};
-    const name = typeof call.name === "string" ? call.name : "";
-    const tool = this.tools.get(name);
-    if (tool === undefined) {
-      throw new JsonRpcMethodNotFound(`tool ${name}`);
-    }
-
-    const meta = isRecord(call._meta) ? call._meta : undefined;
-    const progressToken =
-      meta !== undefined &&
-      (typeof meta.progressToken === "string" || typeof meta.progressToken === "number")
-        ? meta.progressToken
-        : undefined;
-
-    const sendProgress: McpToolContext["sendProgress"] | undefined =
-      progressToken !== undefined
-        ? (progress, total, message) => {
-            this.writeNotification("notifications/progress", {
-              progressToken,
-              progress,
-              ...(total !== undefined ? { total } : {}),
-              ...(message !== undefined ? { message } : {}),
-            });
-          }
-        : undefined;
-
-    const context: McpToolContext = {
-      progressToken,
-      sendProgress: sendProgress as McpToolContext["sendProgress"],
-    };
-
-    try {
-      return await tool.handler(call.arguments, context);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Tool call failed.";
-      return {
-        content: [{ type: "text", text: `MCP_TOOL_ERROR: ${sanitizeMcpErrorMessage(message)}` }],
-        isError: true,
-      };
-    }
-  }
-
-  private writeNotification(method: string, params: unknown): void {
-    this.output.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
-  }
-
-  private writeResponse(
-    id: string | number | null,
-    error?: { code: number; message: string },
-    result?: unknown,
-  ): void {
-    const payload =
-      error === undefined ? { jsonrpc: "2.0", id, result } : { jsonrpc: "2.0", id, error };
-    this.output.write(`${JSON.stringify(payload)}\n`);
-  }
-}
-
-class JsonRpcMethodNotFound extends Error {
-  public readonly code = -32601;
-  constructor(method: string) {
-    super(`Method not found: ${method}`);
-  }
-}
-
-export async function startMcpStdioAdapter(runtime?: McpStdioRuntime): Promise<void>;
-export async function startMcpStdioAdapter(
-  config?: DysflowConfig,
-  runtime?: McpStdioRuntime,
-): Promise<void>;
 export async function startMcpStdioAdapter(
   config?: DysflowConfig,
   options?: { writesEnabled?: boolean },
-  runtime?: McpStdioRuntime,
-): Promise<void>;
-export async function startMcpStdioAdapter(
-  configOrRuntime?: DysflowConfig | McpStdioRuntime,
-  optionsOrRuntime?: { writesEnabled?: boolean } | McpStdioRuntime,
-  runtime?: McpStdioRuntime,
 ): Promise<void> {
-  const suppliedRuntime = isMcpStdioRuntime(configOrRuntime)
-    ? configOrRuntime
-    : isMcpStdioRuntime(optionsOrRuntime)
-      ? optionsOrRuntime
-      : runtime;
-  const options = isMcpStdioRuntime(optionsOrRuntime) ? undefined : optionsOrRuntime;
-  const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
-
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   const services = configResult.ok
@@ -313,15 +58,6 @@ export async function startMcpStdioAdapter(
     process.env,
     startupConfig?.allowedProcedures,
   );
-
-  // When a legacy runtime is supplied, use it for backward compatibility.
-  if (suppliedRuntime !== undefined) {
-    for (const tool of tools) {
-      suppliedRuntime.registerTool(tool);
-    }
-    await suppliedRuntime.start();
-    return;
-  }
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
   await startWithSdkServer(tools);
@@ -567,10 +303,4 @@ function createProjectOperationRegistry(
   config: Pick<DysflowConfig, "projectRoot">,
 ): FileAccessOperationRegistry {
   return new FileAccessOperationRegistry({ filePath: resolveRegistryPath(config) });
-}
-
-function isMcpStdioRuntime(value: unknown): value is McpStdioRuntime {
-  return (
-    isRecord(value) && typeof value.registerTool === "function" && typeof value.start === "function"
-  );
 }
