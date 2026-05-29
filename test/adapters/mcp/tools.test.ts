@@ -1114,6 +1114,64 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
+  describe("allowedProcedures — procedureName allowlist for run_vba alias", () => {
+    function makeTools(allowedProcedures: readonly string[]) {
+      return createDysflowMcpTools(
+        {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        false,
+        undefined,
+        {},
+        allowedProcedures,
+      );
+    }
+
+    it("blocks a procedure not in the allowlist", async () => {
+      const tools = makeTools(["Refresh", "Sync"]);
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "DeleteAll" });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]).toMatchObject({
+        text: expect.stringContaining("DeleteAll"),
+      });
+      expect(result?.content[0]).toMatchObject({
+        text: expect.stringContaining("allowedProcedures"),
+      });
+    });
+
+    it("allows a procedure that is in the allowlist", async () => {
+      const tools = makeTools(["Refresh", "Sync"]);
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "Refresh" });
+      expect(result?.isError).toBe(false);
+    });
+
+    it("allows any procedure when allowlist is empty (unconfigured)", async () => {
+      const tools = makeTools([]);
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "DeleteAll" });
+      expect(result?.isError).toBe(false);
+    });
+
+    it("allows any procedure when allowedProcedures is not passed", async () => {
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "AnyProcedure" });
+      expect(result?.isError).toBe(false);
+    });
+  });
+
   describe("read-only SQL guard — rejectWriteSqlInReadMode", () => {
     it("returns undefined for SELECT queries", () => {
       expect(rejectWriteSqlInReadMode("SELECT * FROM People")).toBeUndefined();
