@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runCommand, runCommandOutput } from "../install-utils.js";
+import { runCommand, runCommandOutput } from "./command-runner.js";
 
 const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
 const GITHUB_LATEST_RELEASE_API =

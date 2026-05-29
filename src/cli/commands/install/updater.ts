@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { compareVersions } from "../../../core/utils/version.js";
-import { type AgentName, ALL_AGENTS, getSystemMarkerPath, resolveRuntimeDir } from "../install-utils.js";
+import { type AgentName, ALL_AGENTS } from "./agent-config.js";
+import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 import type { CliResult } from "../types.js";
 import {
   type PreparedReleasePackage,

@@ -1,13 +1,7 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  type AgentConfigPaths,
-  type AgentName,
-  ensureObject,
-  fileExists,
-  readJson,
-  writeJson,
-} from "../install-utils.js";
+import { ensureObject, fileExists, readJson, writeJson } from "./file-utils.js";
+import type { AgentConfigPaths, AgentName } from "./agent-config.js";
 
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {
   if (agent === "codex") {

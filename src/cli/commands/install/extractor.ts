@@ -1,6 +1,7 @@
 import { cp, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileExists, getSystemMarkerPath, RUNTIME_MARKER_VERSION } from "../install-utils.js";
+import { fileExists } from "./file-utils.js";
+import { getSystemMarkerPath, RUNTIME_MARKER_VERSION } from "./runtime-dir.js";
 import { writeRuntimeLaunchers } from "./path-configurator.js";
 
 export type RuntimePaths = {
