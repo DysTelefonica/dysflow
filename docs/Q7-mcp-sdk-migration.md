@@ -94,10 +94,10 @@ Mark each item `[x]` as it is completed. Do NOT mark as done before the tests ar
 
 ### Phase 0 — Preparation
 
-- [ ] **0.1** Create feature branch: `git checkout -b feat/mcp-sdk-migration`
-- [ ] **0.2** Install the SDK: `pnpm add @modelcontextprotocol/sdk`
-  - Verify it appears in `dependencies` (not devDependencies) in `package.json`
-  - Run `pnpm build` — must stay green
+- [x] **0.1** Create feature branch: `git checkout -b feat/mcp-sdk-migration`
+- [x] **0.2** Install the SDK: `pnpm add @modelcontextprotocol/sdk@1.29.0`
+  - Appears in `dependencies` in `package.json` ✓
+  - `pnpm build` green ✓ · 682 tests green ✓
 - [ ] **0.3** Read the SDK surface that will be used:
   - `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`
   - `StdioServerTransport` from `@modelcontextprotocol/sdk/server/stdio.js`
@@ -119,11 +119,11 @@ instead of propagating as a JSON-RPC `-32603` internal error.
 
 This is the current behavior in `callTool()` lines 236–244 of `stdio.ts`.
 
-- [ ] **1.1a RED**: Write test in `test/adapters/mcp/stdio-wrappers.test.ts`:
+- [x] **1.1a RED**: Write test in `test/adapters/mcp/stdio-wrappers.test.ts`:
   - Wrapping a handler that throws returns `isError: true` with the error message in content
   - Wrapping a handler that returns normally passes the result through unchanged
   - Run `pnpm test` — confirm new tests FAIL
-- [ ] **1.1b GREEN**: Implement `wrapWithErrorAbsorber(handler)` in `stdio-wrappers.ts`
+- [x] **1.1b GREEN**: Implement `wrapWithErrorAbsorber(handler)` in `stdio-wrappers.ts`
   - Run `pnpm test` — confirm tests pass
 
 #### 1.2 — Path-sanitizing wrapper
@@ -131,11 +131,11 @@ This is the current behavior in `callTool()` lines 236–244 of `stdio.ts`.
 **What**: Applies `sanitizeMcpErrorMessage()` to all error text in `isError: true` results.
 Strips Windows paths, UNC paths, and POSIX paths from error messages before they reach the client.
 
-- [ ] **1.2a RED**: Add tests in `stdio-wrappers.test.ts`:
+- [x] **1.2a RED**: Add tests in `stdio-wrappers.test.ts`:
   - An `isError: true` result with a Windows path in the text has the path scrubbed
   - An `isError: false` result is passed through unchanged
   - Run `pnpm test` — confirm new tests FAIL
-- [ ] **1.2b GREEN**: Implement `wrapWithSanitizer(handler)` in `stdio-wrappers.ts`
+- [x] **1.2b GREEN**: Implement `wrapWithSanitizer(handler)` in `stdio-wrappers.ts`
   - Run `pnpm test` — confirm tests pass
 
 #### 1.3 — Hidden tool registry
@@ -146,11 +146,11 @@ The SDK's `server.tool()` registration makes tools visible — hidden tools must
 be registered with `server.tool()`. Instead, they are stored in this secondary map
 and the `tools/call` handler checks it as a fallback when the SDK finds no match.
 
-- [ ] **1.3a RED**: Add tests in `stdio-wrappers.test.ts`:
+- [x] **1.3a RED**: Add tests in `stdio-wrappers.test.ts`:
   - `buildHiddenToolRegistry(tools)` returns only tools with `hidden: true`
   - Non-hidden tools are not included
   - Run `pnpm test` — confirm new tests FAIL
-- [ ] **1.3b GREEN**: Implement `buildHiddenToolRegistry(tools)` in `stdio-wrappers.ts`
+- [x] **1.3b GREEN**: Implement `buildHiddenToolRegistry(tools)` in `stdio-wrappers.ts`
   - Run `pnpm test` — confirm tests pass
 
 ---
@@ -166,15 +166,15 @@ JSON-RPC `-32700` error emitted to stdout) and processing must continue from the
 
 The transform sits between raw `process.stdin` and the SDK's `StdioServerTransport`.
 
-- [ ] **2.1 RED**: Write tests in `test/adapters/mcp/stdio-size-guard.test.ts`:
+- [x] **2.1 RED**: Write tests in `test/adapters/mcp/stdio-size-guard.test.ts`:
   - A line under 1 MiB passes through unchanged
   - A line exactly at the limit passes through
   - A line over the limit is dropped; processing continues with the next line
   - CRLF is stripped before output
   - Stream end with no trailing newline flushes the buffer
   - Run `pnpm test` — confirm new tests FAIL
-- [ ] **2.2 GREEN**: Implement `SizeLimitTransform` in `stdio-size-guard.ts`
-  - Run `pnpm test` — confirm tests pass
+- [x] **2.2 GREEN**: Implement `SizeLimitTransform` in `stdio-size-guard.ts`
+  - Run `pnpm test` — confirm tests pass · 11 tests green ✓
 
 ---
 
