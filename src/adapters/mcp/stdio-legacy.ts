@@ -1,12 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
@@ -34,12 +28,6 @@ import {
   sanitizeMcpErrorMessage,
 } from "./tools.js";
 import type { McpToolContext } from "./types.js";
-import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
-import {
-  buildHiddenToolRegistry,
-  wrapWithErrorAbsorber,
-  wrapWithSanitizer,
-} from "./stdio-wrappers.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 
@@ -47,7 +35,7 @@ const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 // Check https://spec.modelcontextprotocol.io for newer versions.
 // To upgrade: update PROTOCOL_VERSION (re-exported as MCP_PROTOCOL_VERSION) and verify tool schema compatibility.
 export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
-export { DEFAULT_MAX_REQUEST_BYTES };
+export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024;
 
 export type McpStdioRuntime = {
   registerTool(tool: DysflowMcpTool): void;
@@ -300,109 +288,26 @@ export async function startMcpStdioAdapter(
       : runtime;
   const options = isMcpStdioRuntime(optionsOrRuntime) ? undefined : optionsOrRuntime;
   const config = isMcpStdioRuntime(configOrRuntime) ? undefined : configOrRuntime;
-
+  const activeRuntime = suppliedRuntime ?? new JsonLineMcpStdioRuntime();
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   const services = configResult.ok
     ? createConfiguredServices(configResult.data)
     : createUnavailableServices(configResult.error);
   const writesEnabled = options?.writesEnabled ?? false;
-  const startupConfig = configResult.ok ? configResult.data : undefined;
 
-  const tools = createDysflowMcpTools(
+  const startupConfig = configResult.ok ? configResult.data : undefined;
+  for (const tool of createDysflowMcpTools(
     services,
     writesEnabled,
     async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
     process.env,
     startupConfig?.allowedProcedures,
-  );
-
-  // When a legacy runtime is supplied, use it for backward compatibility.
-  if (suppliedRuntime !== undefined) {
-    for (const tool of tools) {
-      suppliedRuntime.registerTool(tool);
-    }
-    await suppliedRuntime.start();
-    return;
+  )) {
+    activeRuntime.registerTool(tool);
   }
 
-  // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
-  await startWithSdkServer(tools);
-}
-
-/**
- * Starts an McpServer backed by the official SDK transport.
- *
- * Hidden tools are registered via server.tool() so the SDK's tools/call handler
- * dispatches them normally. We override tools/list via server.server.setRequestHandler
- * to strip hidden tools from the advertised list — keeping them callable but invisible
- * to clients that enumerate tools.
- *
- * SizeLimitTransform guards stdin: oversized lines emit a -32700 error frame and are
- * dropped; normal lines pass through for JSON-RPC parsing by StdioServerTransport.
- */
-async function startWithSdkServer(tools: DysflowMcpTool[]): Promise<void> {
-  const toolMap = new Map(tools.map((t) => [t.name, t]));
-  const hiddenRegistry = buildHiddenToolRegistry(tools);
-
-  const server = new McpServer({ name: "dysflow", version: SERVER_VERSION });
-
-  // Register capabilities and handlers directly on the underlying Server to avoid
-  // overload ambiguity from passing raw JSON Schema objects to server.tool().
-  server.server.registerCapabilities({ tools: {} });
-
-  server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: tools
-      .filter((t) => !hiddenRegistry.has(t.name))
-      .map((t) => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema ?? {
-          type: "object" as const,
-          additionalProperties: false,
-          properties: {},
-        },
-      })),
-  }));
-
-  server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { name, arguments: args, _meta } = request.params;
-    const tool = toolMap.get(name);
-    if (tool === undefined) {
-      return {
-        content: [{ type: "text" as const, text: `MCP_TOOL_ERROR: Tool not found: ${name}` }],
-        isError: true,
-      };
-    }
-
-    const progressToken = _meta?.progressToken;
-    const sendProgress: McpToolContext["sendProgress"] =
-      progressToken !== undefined
-        ? (progress, total, message) => {
-            void extra.sendNotification({
-              method: "notifications/progress",
-              params: {
-                progressToken,
-                progress,
-                ...(total !== undefined ? { total } : {}),
-                ...(message !== undefined ? { message } : {}),
-              },
-            });
-          }
-        : undefined;
-
-    const context: McpToolContext = { progressToken, sendProgress };
-    const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
-    const result = await wrappedHandler(args, context);
-    // Spread readonly content[] into mutable array as required by the SDK's CallToolResult type.
-    return { ...result, content: [...result.content] };
-  });
-
-  const sizeGuard = new SizeLimitTransform(DEFAULT_MAX_REQUEST_BYTES, process.stdout);
-  process.stdin.pipe(sizeGuard);
-
-  const transport = new StdioServerTransport(sizeGuard, process.stdout);
-  await server.connect(transport);
+  await activeRuntime.start();
 }
 
 export async function resolveMcpWriteAccessForInput(
