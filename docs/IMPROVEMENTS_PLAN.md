@@ -562,7 +562,7 @@ Full audit: `docs/AUDIT_2026-05-29.md`.
 | Q2 | Extract shared `DirectMapping` / `mapping()` / `stringArray()` to `vba-sync-types.ts` | MEDIUM | ✅ |
 | Q3 | Fix checksum fallback: only fall back to git clone on HTTP 404, not all errors | MEDIUM | ✅ |
 | Q4 | Add early dispatch to `dysflow-access-runner.ps1` for `list_linked_tables`, `compare_backends`, `list_access_files` | MEDIUM | ✅ |
-| Q5 | Split `install-utils.ts` into focused utility files | LOW | ⬜ |
+| Q5 | Split `install-utils.ts` into focused utility files | LOW | ✅ |
 | Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ✅ |
 | Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | ✅ |
 | Q8 | Fix `allowedProcedures` enforcement bypass in `run_vba` alias and HTTP `/vba/execute` | HIGH | ✅ |
@@ -593,8 +593,8 @@ Rationale:
 | Q2, Q6 | v0.9.22 ✅ released |
 | Q4 | v0.9.23 ✅ released |
 | Q8, Q9 | v0.10.0 ✅ released |
-| Q5 | v0.10.x |
-| Q7 | v1.0.0 (branch: feat/mcp-sdk-migration) |
+| Q5 | v1.0.x |
+| Q7 | v1.0.0 ✅ released |
 
 ---
 
