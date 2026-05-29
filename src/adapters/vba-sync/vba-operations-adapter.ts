@@ -1,6 +1,7 @@
 import {
   createDysflowError,
   failureResult,
+  successResult,
   type OperationResult,
 } from "../../core/contracts/index.js";
 import {
@@ -8,24 +9,37 @@ import {
   type AccessOperationPreflightCleanupResult,
   AccessOperationPreflightCleanupService,
 } from "../../core/operations/access-operation-preflight.js";
+import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
   FileAccessOperationRegistry,
   resolveProjectOperationRegistryPath,
+  type AccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 
-const TOOL_NOT_IMPLEMENTED_MESSAGE =
-  "This tool is tracked for parity but is not implemented by this service yet.";
+export type VbaOperationsCleanupService = {
+  cleanup(request: {
+    operationId: string;
+    accessPath: string;
+    force?: boolean;
+  }): Promise<OperationResult<AccessCleanupResult>>;
+};
 
 export interface VbaOperationsAdapterOptions {
+  operationRegistry?: AccessOperationRegistry;
+  cleanupService?: VbaOperationsCleanupService;
   preflightCleanup?: AccessOperationPreflightCleanup;
   cwd?: string;
 }
 
 export class VbaOperationsAdapter {
+  private readonly operationRegistry?: AccessOperationRegistry;
+  private readonly cleanupService?: VbaOperationsCleanupService;
   private readonly preflightCleanup?: AccessOperationPreflightCleanup;
   private readonly cwd: string;
 
   constructor(options: VbaOperationsAdapterOptions = {}) {
+    this.operationRegistry = options.operationRegistry;
+    this.cleanupService = options.cleanupService;
     this.preflightCleanup = options.preflightCleanup;
     this.cwd = options.cwd ?? process.cwd();
   }
@@ -34,8 +48,44 @@ export class VbaOperationsAdapter {
     return toolName === "list_access_operations" || toolName === "cleanup_access_operation";
   }
 
-  async execute(_toolName: string, _input: unknown): Promise<OperationResult<unknown>> {
-    return failureResult(createDysflowError("TOOL_NOT_IMPLEMENTED", TOOL_NOT_IMPLEMENTED_MESSAGE));
+  async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
+    if (toolName === "list_access_operations") {
+      const registry =
+        this.operationRegistry ??
+        new FileAccessOperationRegistry({
+          filePath: resolveProjectOperationRegistryPath({ projectRoot: this.cwd }),
+        });
+      const records = await registry.listRecent({ limit: 50 });
+      return successResult(records);
+    }
+
+    if (toolName === "cleanup_access_operation") {
+      if (this.cleanupService === undefined) {
+        return failureResult(
+          createDysflowError(
+            "CLEANUP_NOT_CONFIGURED",
+            "Access cleanup service is not configured.",
+          ),
+        );
+      }
+      const { operationId, accessPath, force } = input as {
+        operationId: string;
+        accessPath?: string;
+        force?: boolean;
+      };
+      return this.cleanupService.cleanup({
+        operationId,
+        accessPath: accessPath ?? "",
+        force,
+      });
+    }
+
+    return failureResult(
+      createDysflowError(
+        "TOOL_NOT_IMPLEMENTED",
+        "This tool is tracked for parity but is not implemented by this service yet.",
+      ),
+    );
   }
 
   async runPreflightCleanup(target: {

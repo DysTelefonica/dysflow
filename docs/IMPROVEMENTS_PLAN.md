@@ -542,14 +542,113 @@ Rationale:
 
 ---
 
-## Post-release: known future work
+---
 
-These items were identified during the v0.9.19 audit but deferred. They are NOT part of this plan — they need a new planning cycle.
+## Wave 2 — Post v0.9.20 improvements
 
-| Item | Description | Priority |
-|------|-------------|----------|
-| MCP SDK migration | Replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk`. P7 documented this as Option B — correct long-term play. | MEDIUM |
-| `install-utils.ts` cleanup | 227-line satellite still has mixed concerns. Low urgency after P8 split. | LOW |
-| E2E coverage for install sub-modules | `test/cli/install.test.ts` tests `install.ts` top-down. New sub-modules are indirectly covered but have no direct unit tests. | LOW |
+Generated after full SWOT + technical debt analysis on 2026-05-29.
+Full audit: `docs/AUDIT_2026-05-29.md`.
 
-To start a new planning cycle, run `/sdd-new <change-name>` or ask for a new SWOT audit.
+> **For any AI continuing this work**: read each section fully before touching any file.
+> Never modify the production runtime at `%LOCALAPPDATA%\dysflow` or `C:\Users\adm1\.config\opencode\opencode.json`.
+> Run tests after every change: `pnpm run test -- --run`.
+> All test installs go to: `C:\Proyectos\dysflow\test-runtime`
+
+### Master Checklist
+
+| # | Item | Severity | Status |
+|---|------|----------|--------|
+| Q1 | Fix `VbaOperationsAdapter.execute()` stub — implement real `list_access_operations` + `cleanup_access_operation` | HIGH | ✅ |
+| Q2 | Extract shared `DirectMapping` / `mapping()` / `stringArray()` to `vba-sync-types.ts` | MEDIUM | ⬜ |
+| Q3 | Fix checksum fallback: only fall back to git clone on HTTP 404, not all errors | MEDIUM | ⬜ |
+| Q4 | Add early dispatch to `dysflow-access-runner.ps1` for `list_linked_tables`, `compare_backends`, `list_access_files` | MEDIUM | ⬜ |
+| Q5 | Split `install-utils.ts` into focused utility files | LOW | ⬜ |
+| Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ⬜ |
+| Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | ⬜ |
+
+### Suggested execution order
+
+```
+Q1 → Q3 → Q2 → Q6 → Q4 → Q5 → Q7
+```
+
+Rationale:
+- **Q1 first**: HIGH severity bug — two tools silently fail when called outside the legacy alias path.
+- **Q3**: security gap in the checksum fallback; low effort.
+- **Q2**: extract shared types; reduces copy-paste before Q6 touches the same files.
+- **Q6**: type-variance fix; clean up after Q2 removes the structural duplication.
+- **Q4**: PS script change; requires E2E verification — do after TS layer is stable.
+- **Q5**: low urgency cosmetic split.
+- **Q7**: largest change; do last when everything else is settled.
+
+### Version targets
+
+| Item | Suggested release |
+|------|------------------|
+| Q1, Q3 | v0.9.21 |
+| Q2, Q6 | v0.9.22 |
+| Q4 | v0.9.23 |
+| Q5 | v0.9.24 |
+| Q7 | v0.10.0 |
+
+---
+
+## Q1 — Fix `VbaOperationsAdapter.execute()` stub
+
+### Problem
+
+`src/adapters/vba-sync/vba-operations-adapter.ts:37–39`: `execute()` unconditionally returns
+`TOOL_NOT_IMPLEMENTED` for both `list_access_operations` and `cleanup_access_operation`.
+
+These tools currently work ONLY because legacy alias handlers in `src/adapters/mcp/tools.ts:264–301`
+are registered before the main loop (line 416), so `names.has(tool.name)` is already true and
+the routing to `VbaOperationsAdapter` is bypassed. Any re-ordering of that registration,
+or a direct call to `vbaSyncToolService.execute("list_access_operations", ...)`, silently fails.
+
+### Files to change
+
+- `src/adapters/vba-sync/vba-operations-adapter.ts` — add `operationRegistry` + `cleanupService` to options; implement `execute()`
+- `src/adapters/vba-sync/vba-sync-adapter.ts` — pass `operationRegistry` + `cleanupService` to `VbaOperationsAdapter` constructor
+- `test/adapters/vba-sync/vba-operations-adapter.test.ts` — add tests for the two real handlers (TDD: RED first)
+
+### What the real implementation must do
+
+**`list_access_operations`**:
+```typescript
+const registry = this.operationRegistry ?? this.createDefaultRegistry();
+const records = await registry.listRecent({ limit: 50 });
+return successResult(records);
+```
+
+**`cleanup_access_operation`**:
+```typescript
+if (this.cleanupService === undefined) {
+  return failureResult(createDysflowError("CLEANUP_NOT_CONFIGURED", "..."));
+}
+const request = input as { operationId: string; accessPath?: string; force?: boolean };
+return this.cleanupService.cleanup({
+  operationId: request.operationId,
+  accessPath: request.accessPath ?? "",
+  force: request.force,
+});
+```
+
+### Where to find the types
+
+- `operationRegistry` type: `FileAccessOperationRegistry` from `../../core/operations/access-operation-registry.js`
+- `cleanupService` type: look at `DysflowMcpServices.cleanupService` in `src/adapters/mcp/tools.ts` for the interface
+- `AccessOperationRecord` type: imported from `../../core/contracts/index.js` or `access-operation-registry.js`
+
+### How `VbaSyncAdapterOptions` gets these services
+
+`VbaSyncAdapter` is instantiated in `src/adapters/mcp/mcp-services.ts` (or similar) where `operationRegistry`
+and `cleanupService` are already available as `DysflowMcpServices` fields. Pass them through `VbaSyncAdapterOptions`
+→ `VbaOperationsAdapterOptions`.
+
+### Acceptance criteria
+
+- `VbaOperationsAdapter.execute("list_access_operations", {})` returns real records (not `TOOL_NOT_IMPLEMENTED`)
+- `VbaOperationsAdapter.execute("cleanup_access_operation", { operationId: "x", accessPath: "y" })` delegates to `cleanupService`
+- When neither service is injected, a lazy default is created (same pattern as `createDefaultPreflightCleanup`)
+- All 666+ existing tests pass
+- New unit tests added for both handlers (RED → GREEN)

@@ -12,6 +12,8 @@ import {
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
 } from "../../core/operations/access-operation-preflight.js";
+import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
 import type { VbaFormService } from "../../core/services/vba-form-service.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
@@ -86,6 +88,8 @@ export type VbaManagerExecutor = (
 
 export type VbaSyncAdapterOptions = {
   executor?: VbaManagerExecutor;
+  operationRegistry?: AccessOperationRegistry;
+  cleanupService?: VbaOperationsCleanupService;
   preflightCleanup?: AccessOperationPreflightCleanup;
   scriptPath?: string;
   env?: Record<string, string | undefined>;
@@ -147,6 +151,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
 
     // Sub-adapters instantiation delegating orchestrator context
     this.operationsAdapter = new VbaOperationsAdapter({
+      operationRegistry: options.operationRegistry,
+      cleanupService: options.cleanupService,
       preflightCleanup: options.preflightCleanup,
       cwd: this.cwd,
     });

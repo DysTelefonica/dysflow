@@ -32,12 +32,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
       }),
     });
 
-    // Test routing to Operations adapter (unimplemented)
+    // Test routing to Operations adapter (now implemented — returns records)
     const opResult = await service.execute("list_access_operations", {});
-    expect(opResult.ok).toBe(false);
-    if (!opResult.ok) {
-      expect(opResult.error.code).toBe("TOOL_NOT_IMPLEMENTED");
-    }
+    expect(opResult.ok).toBe(true);
 
     // Test routing to Execution adapter
     const execResult = await service.execute("compile_vba", {});
