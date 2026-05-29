@@ -76,7 +76,7 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
     // are available without requiring the full source node_modules to be copied.
     await runCommand(
       "npm",
-      ["install", "--omit=dev", "--ignore-scripts", "--prefer-offline"],
+      ["install", "--omit=dev", "--ignore-scripts"],
       runtimePaths.appDir,
     );
   }
