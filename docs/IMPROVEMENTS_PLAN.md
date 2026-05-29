@@ -563,7 +563,7 @@ Full audit: `docs/AUDIT_2026-05-29.md`.
 | Q3 | Fix checksum fallback: only fall back to git clone on HTTP 404, not all errors | MEDIUM | ✅ |
 | Q4 | Add early dispatch to `dysflow-access-runner.ps1` for `list_linked_tables`, `compare_backends`, `list_access_files` | MEDIUM | ⬜ |
 | Q5 | Split `install-utils.ts` into focused utility files | LOW | ⬜ |
-| Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ⬜ |
+| Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ✅ |
 | Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | ⬜ |
 
 ### Suggested execution order

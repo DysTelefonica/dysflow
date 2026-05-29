@@ -43,7 +43,7 @@ export function ensureResultShape<TData>(
 ): OperationResult<TData> {
   if (!result.ok) return result;
   if (isValid(result.data)) return result;
-  return failureResult<TData>(
+  return failureResult(
     createDysflowError(
       RUNNER_INVALID_OUTPUT,
       "PowerShell runner produced output with an unexpected shape.",

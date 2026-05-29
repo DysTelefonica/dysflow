@@ -199,14 +199,14 @@ export function successResult<T>(
  * Creates a failed operation result without throwing, preserving diagnostics,
  * timing, and optional Access operation metadata for adapter translation.
  */
-export function failureResult<T = never>(
+export function failureResult(
   error: DysflowError,
   options: {
     diagnostics?: Diagnostic[];
     durationMs?: number;
     operation?: AccessOperationMetadata;
   } = {},
-): OperationResult<T> {
+): OperationResult<never> {
   return {
     ok: false,
     error,

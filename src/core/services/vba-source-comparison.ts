@@ -98,9 +98,9 @@ export async function compareSourceAgainstBinary(
   ctx: VbaComparisonContext,
 ): Promise<OperationResult<VbaVerifyResult>> {
   const target = await ctx.resolveExecutionTarget(params);
-  if (!target.ok) return target as unknown as OperationResult<VbaVerifyResult>;
+  if (!target.ok) return target;
   const strict = ctx.validateStrictContext(params, target.data);
-  if (!strict.ok) return strict as unknown as OperationResult<VbaVerifyResult>;
+  if (!strict.ok) return strict;
 
   const sourceRoot = target.data.destinationRoot;
   const tempExportRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-verify-"));
@@ -171,7 +171,7 @@ export async function planReconcileBinary(
   ctx: VbaComparisonContext,
 ): Promise<OperationResult<VbaReconcilePlanResult>> {
   const comparison = await compareSourceAgainstBinary("verify_code", params, ctx);
-  if (!comparison.ok) return comparison as unknown as OperationResult<VbaReconcilePlanResult>;
+  if (!comparison.ok) return comparison;
   return successResult(
     {
       operation: "reconcile_binary",
