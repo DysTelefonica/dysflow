@@ -54,6 +54,7 @@ export type StartDysflowHttpServerOptions = {
   env?: Record<string, string | undefined>;
   cwd?: string;
   httpToken?: string;
+  allowedProcedures?: readonly string[];
 };
 
 export type StartedDysflowHttpServer = {
@@ -76,15 +77,17 @@ export async function startDysflowHttpServer(
   const services = options.services ?? (await createHttpServices(options.env, options.cwd));
 
   let httpToken = options.httpToken;
-  if (httpToken === undefined) {
+  let allowedProcedures = options.allowedProcedures;
+  if (httpToken === undefined || allowedProcedures === undefined) {
     const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
     if (configResult.ok) {
-      httpToken = configResult.data.httpToken;
+      if (httpToken === undefined) httpToken = configResult.data.httpToken;
+      if (allowedProcedures === undefined) allowedProcedures = configResult.data.allowedProcedures;
     }
   }
 
   const server = createServer((request, response) => {
-    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes, httpToken });
+    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes, httpToken, allowedProcedures });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -108,6 +111,7 @@ async function routeRequest(
     writesEnabled: boolean;
     maxBodyBytes: number;
     httpToken?: string;
+    allowedProcedures?: readonly string[];
   },
 ): Promise<void> {
   const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
@@ -235,9 +239,27 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
+    const vbaRequest = toVbaRequest(body.data);
+    if (
+      context.allowedProcedures !== undefined &&
+      context.allowedProcedures.length > 0 &&
+      !context.allowedProcedures.includes(vbaRequest.procedureName)
+    ) {
+      sendOperationResult(
+        response,
+        failureResult(
+          createDysflowError(
+            "HTTP_PROCEDURE_NOT_ALLOWED",
+            `Procedure '${vbaRequest.procedureName}' is not in the configured allowedProcedures list.`,
+          ),
+        ),
+        403,
+      );
+      return;
+    }
     sendOperationResult(
       response,
-      await context.services.vbaService.execute(toVbaRequest(body.data)),
+      await context.services.vbaService.execute(vbaRequest),
     );
     return;
   }
