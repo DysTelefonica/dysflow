@@ -55,11 +55,11 @@ async function collect(
 // ---------------------------------------------------------------------------
 
 describe("SizeLimitTransform", () => {
-  it("passes a normal line under the limit through (without the trailing newline)", async () => {
+  it("passes a normal line under the limit through (with trailing newline for downstream transport)", async () => {
     const line = "hello world";
     const { output } = await collect([`${line}\n`]);
 
-    expect(output).toBe(line);
+    expect(output).toBe(line + "\n");
   });
 
   it("passes a line exactly at the byte limit through (boundary: > maxBytes is dropped, === maxBytes passes)", async () => {
@@ -67,7 +67,7 @@ describe("SizeLimitTransform", () => {
     const line = "a".repeat(maxBytes); // exactly 10 bytes
     const { output } = await collect([`${line}\n`], maxBytes);
 
-    expect(output).toBe(line);
+    expect(output).toBe(line + "\n");
   });
 
   it("drops a line over the limit and writes a -32700 error frame to errorOutput", async () => {
@@ -94,7 +94,7 @@ describe("SizeLimitTransform", () => {
     const normalLine = "hello";
     const { output, errors } = await collect([`${oversizedLine}\n${normalLine}\n`], maxBytes);
 
-    expect(output).toBe(normalLine);
+    expect(output).toBe(normalLine + "\n");
     expect(errors).toContain("-32700");
   });
 
@@ -102,7 +102,7 @@ describe("SizeLimitTransform", () => {
     const line = "hello";
     const { output } = await collect([`${line}\r\n`]);
 
-    expect(output).toBe(line);
+    expect(output).toBe(line + "\n");
   });
 
   it("strips a trailing \\r before applying the byte limit check (CRLF line at limit)", async () => {
@@ -110,27 +110,27 @@ describe("SizeLimitTransform", () => {
     const line = "hello"; // 5 bytes, exactly at limit — should pass
     const { output } = await collect([`${line}\r\n`], maxBytes);
 
-    expect(output).toBe(line);
+    expect(output).toBe(line + "\n");
   });
 
   it("handles multiple lines delivered in a single chunk", async () => {
     const { output } = await collect(["foo\nbar\n"]);
 
-    // Both lines should appear concatenated (no separator since \n is stripped)
-    expect(output).toBe("foobar");
+    // Each line is re-emitted with its newline so the downstream transport can delimit messages.
+    expect(output).toBe("foo\nbar\n");
   });
 
   it("accumulates a line split across two chunks and passes it through as one unit", async () => {
     const { output } = await collect(["hel", "lo\n"]);
 
-    expect(output).toBe("hello");
+    expect(output).toBe("hello\n");
   });
 
   it("flushes a partial buffer (no trailing newline) under the limit when the stream ends", async () => {
     const line = "no-newline";
     const { output } = await collect([line]); // no \n
 
-    expect(output).toBe(line);
+    expect(output).toBe(line + "\n");
   });
 
   it("drops a partial buffer over the limit on stream end and emits a -32700 error", async () => {
@@ -146,9 +146,8 @@ describe("SizeLimitTransform", () => {
   it("passes a blank/whitespace-only line through unchanged", async () => {
     const { output } = await collect(["   \n"]);
 
-    // Blank lines pass through — the downstream SDK decides what to do with them.
-    // The output should be the whitespace string without the \n.
-    expect(output).toBe("   ");
+    // Blank lines pass through with \n — the downstream SDK decides what to do with them.
+    expect(output).toBe("   \n");
   });
 
   it("DEFAULT_MAX_REQUEST_BYTES is exactly 1 MiB (1_048_576 bytes)", () => {

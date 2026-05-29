@@ -68,7 +68,7 @@ export class SizeLimitTransform extends Transform {
         if (lineBytes > this.maxBytes) {
           this.emitSizeError();
         } else {
-          this.push(line);
+          this.push(line + "\n");
         }
 
         this.buffer = "";
@@ -93,7 +93,7 @@ export class SizeLimitTransform extends Transform {
       if (lineBytes > this.maxBytes) {
         this.emitSizeError();
       } else {
-        this.push(line);
+        this.push(line + "\n");
       }
     }
     this.buffer = "";
