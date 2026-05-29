@@ -541,6 +541,60 @@ describe("Dysflow HTTP adapter", () => {
     expect(response.body.error.code).toBe("SERVICE_UNAVAILABLE");
   });
 
+  describe("allowedProcedures — procedureName allowlist for POST /vba/execute", () => {
+    it("returns 403 when allowedProcedures is configured and procedure is not in the list", async () => {
+      const services = createFakeServices();
+      const server = await startTestServer({
+        services,
+        writesEnabled: true,
+        allowedProcedures: ["Refresh", "Sync"],
+      });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ moduleName: "Automation", procedureName: "DeleteAll" }),
+      });
+
+      expect(response.status).toBe(403);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_PROCEDURE_NOT_ALLOWED");
+      expect(services.calls.vba).toEqual([]);
+    });
+
+    it("allows the call when allowedProcedures is configured and procedure is in the list", async () => {
+      const services = createFakeServices();
+      const server = await startTestServer({
+        services,
+        writesEnabled: true,
+        allowedProcedures: ["Refresh", "Sync"],
+      });
+
+      const { response } = await readJson(`${server.url}/vba/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ moduleName: "Automation", procedureName: "Refresh" }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(services.calls.vba).toHaveLength(1);
+    });
+
+    it("allows any procedure when allowedProcedures is not configured", async () => {
+      const services = createFakeServices();
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response } = await readJson(`${server.url}/vba/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ moduleName: "Automation", procedureName: "DeleteAll" }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(services.calls.vba).toHaveLength(1);
+    });
+  });
+
   describe("HTTP Bearer Authentication", () => {
     it("allows `/health` path without token", async () => {
       const server = await startTestServer({ httpToken: "my-secret-token" });
