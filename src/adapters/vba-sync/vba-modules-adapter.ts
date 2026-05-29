@@ -15,24 +15,7 @@ import {
   planReconcileBinary,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
-
-type DirectMapping = {
-  action: string;
-  json?: boolean;
-  moduleNames(input: Record<string, unknown>): readonly string[];
-  extra(input: Record<string, unknown>): Record<string, string | boolean | number | undefined>;
-};
-
-function mapping(
-  action: string,
-  json = false,
-  moduleNames: (input: Record<string, unknown>) => readonly string[] = () => [],
-  extra: (
-    input: Record<string, unknown>,
-  ) => Record<string, string | boolean | number | undefined> = () => ({}),
-): DirectMapping {
-  return { action, json, moduleNames, extra };
-}
+import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const MODULE_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
@@ -200,10 +183,6 @@ export class VbaModulesAdapter {
       }),
     );
   }
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {

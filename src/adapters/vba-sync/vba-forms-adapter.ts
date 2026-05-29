@@ -6,24 +6,7 @@ import {
 import { VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
-
-type DirectMapping = {
-  action: string;
-  json?: boolean;
-  moduleNames(input: Record<string, unknown>): readonly string[];
-  extra(input: Record<string, unknown>): Record<string, string | boolean | number | undefined>;
-};
-
-function mapping(
-  action: string,
-  json = false,
-  moduleNames: (input: Record<string, unknown>) => readonly string[] = () => [],
-  extra: (
-    input: Record<string, unknown>,
-  ) => Record<string, string | boolean | number | undefined> = () => ({}),
-): DirectMapping {
-  return { action, json, moduleNames, extra };
-}
+import { type DirectMapping, mapping } from "./vba-sync-types.js";
 
 const FORMS_MAPPINGS: Record<string, DirectMapping> = {
   generate_erd: mapping(

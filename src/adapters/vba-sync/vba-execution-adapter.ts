@@ -7,24 +7,7 @@ import {
 } from "../../core/contracts/index.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
 import { isRecord, readJsonFileAsync, stringValue, truthy } from "../../core/utils/index.js";
-
-type DirectMapping = {
-  action: string;
-  json?: boolean;
-  moduleNames(input: Record<string, unknown>): readonly string[];
-  extra(input: Record<string, unknown>): Record<string, string | boolean | number | undefined>;
-};
-
-function mapping(
-  action: string,
-  json = false,
-  moduleNames: (input: Record<string, unknown>) => readonly string[] = () => [],
-  extra: (
-    input: Record<string, unknown>,
-  ) => Record<string, string | boolean | number | undefined> = () => ({}),
-): DirectMapping {
-  return { action, json, moduleNames, extra };
-}
+import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const EXECUTION_MAPPINGS: Record<string, DirectMapping> = {
   compile_vba: mapping("Compile", true),
@@ -159,10 +142,6 @@ export class VbaExecutionAdapter {
       );
     }
   }
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {

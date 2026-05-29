@@ -21,6 +21,7 @@ import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
 import { VbaModulesAdapter } from "./vba-modules-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
+import type { DirectMapping } from "./vba-sync-types.js";
 
 export type VbaSourceComparisonFile = {
   moduleName: string;
@@ -98,13 +99,6 @@ export type VbaSyncAdapterOptions = {
   destinationRoot?: string;
   accessPassword?: string;
   processTimeoutMs?: number;
-};
-
-type DirectMapping = {
-  action: string;
-  json?: boolean;
-  moduleNames(input: Record<string, unknown>): readonly string[];
-  extra(input: Record<string, unknown>): Record<string, string | boolean | number | undefined>;
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
