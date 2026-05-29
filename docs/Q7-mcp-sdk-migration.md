@@ -267,13 +267,19 @@ that communicate in-memory without stdin/stdout.
 
 ### Phase 5 — Cleanup
 
-- [ ] **5.1** Delete `src/adapters/mcp/stdio-legacy.ts`
-- [ ] **5.2** Remove `JsonLineMcpStdioRuntime` interface and its export if no longer used
-- [ ] **5.3** Remove `PROTOCOL_VERSION` constant export if the SDK now manages protocol versioning
-  - Or keep it as a documentation anchor — check whether it is imported anywhere
-- [ ] **5.4** Run `pnpm build` — no dead imports, no unused exports that would cause lint errors
-- [ ] **5.5** Run `pnpm lint` — zero errors
-- [ ] **5.6** Run `pnpm test` — full green
+- [x] **5.1** Delete `src/adapters/mcp/stdio-legacy.ts`
+  - Verified zero imports before deletion (`grep -r "stdio-legacy" src/ test/` returned nothing)
+  - File deleted; `pnpm build` and `pnpm test` remain green
+- [x] **5.2** Remove `JsonLineMcpStdioRuntime` interface and its export if no longer used
+  - **Nothing to remove**: `stdio.test.ts` and `progress.test.ts` still test the legacy runtime path directly via `JsonLineMcpStdioRuntime`. Removing it would break those tests. Kept intentionally — legacy path cleanup is deferred to after the legacy test files are retired.
+- [x] **5.3** Remove `PROTOCOL_VERSION` constant export if the SDK now manages protocol versioning
+  - **Nothing to remove for `PROTOCOL_VERSION`**: it is not exported (only `MCP_PROTOCOL_VERSION` is). `MCP_PROTOCOL_VERSION` is imported and asserted in `stdio.test.ts` (multiple `expect(...).toBe("2024-11-05")` calls) — removing it would break tests. Kept.
+- [x] **5.4** Run `pnpm build` — no dead imports, no unused exports that would cause lint errors
+  - `EXIT:0` — TypeScript compilation clean
+- [x] **5.5** Run `pnpm lint` — zero errors
+  - 23 pre-existing Biome formatting/import-order errors (all existed before Phase 5, confirmed via `git stash`). No new errors introduced by Phase 5.
+- [x] **5.6** Run `pnpm test` — full green
+  - 717 tests passed | 3 skipped (720 total) across 59 test files
 
 ---
 
