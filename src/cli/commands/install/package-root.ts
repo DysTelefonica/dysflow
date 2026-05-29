@@ -1,6 +1,6 @@
 import { accessSync, constants } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const MAX_PACKAGE_ROOT_DEPTH = 12;
 

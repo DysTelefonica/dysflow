@@ -1471,8 +1471,7 @@ describe("checksum verification during update", () => {
       // After a checksum mismatch the only subprocess call allowed is tar (for extraction)
       // that never happened. No git clone must have been attempted.
       const cloneCalls = execFileMock.mock.calls.filter(
-        (call) =>
-          Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
+        (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
       );
       expect(cloneCalls).toHaveLength(0);
     } finally {

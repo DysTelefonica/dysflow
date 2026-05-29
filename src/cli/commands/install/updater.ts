@@ -1,13 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { compareVersions } from "../../../core/utils/version.js";
-import { type AgentName, ALL_AGENTS } from "./agent-config.js";
-import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 import type { CliResult } from "../types.js";
+import { type AgentName, ALL_AGENTS } from "./agent-config.js";
 import {
+  createGitHubReleaseUpdateProvider,
   type PreparedReleasePackage,
   type ReleaseInfo,
   type ReleaseUpdateProvider,
-  createGitHubReleaseUpdateProvider,
 } from "./downloader.js";
 import {
   createInstallReport,
@@ -16,6 +15,7 @@ import {
   writeRuntimeMarker,
 } from "./extractor.js";
 import { resolvePackageRoot } from "./package-root.js";
+import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 
 export const INSTALL_USAGE =
   "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--no-tui]";

@@ -59,7 +59,7 @@ describe("SizeLimitTransform", () => {
     const line = "hello world";
     const { output } = await collect([`${line}\n`]);
 
-    expect(output).toBe(line + "\n");
+    expect(output).toBe(`${line}\n`);
   });
 
   it("passes a line exactly at the byte limit through (boundary: > maxBytes is dropped, === maxBytes passes)", async () => {
@@ -67,7 +67,7 @@ describe("SizeLimitTransform", () => {
     const line = "a".repeat(maxBytes); // exactly 10 bytes
     const { output } = await collect([`${line}\n`], maxBytes);
 
-    expect(output).toBe(line + "\n");
+    expect(output).toBe(`${line}\n`);
   });
 
   it("drops a line over the limit and writes a -32700 error frame to errorOutput", async () => {
@@ -94,7 +94,7 @@ describe("SizeLimitTransform", () => {
     const normalLine = "hello";
     const { output, errors } = await collect([`${oversizedLine}\n${normalLine}\n`], maxBytes);
 
-    expect(output).toBe(normalLine + "\n");
+    expect(output).toBe(`${normalLine}\n`);
     expect(errors).toContain("-32700");
   });
 
@@ -102,7 +102,7 @@ describe("SizeLimitTransform", () => {
     const line = "hello";
     const { output } = await collect([`${line}\r\n`]);
 
-    expect(output).toBe(line + "\n");
+    expect(output).toBe(`${line}\n`);
   });
 
   it("strips a trailing \\r before applying the byte limit check (CRLF line at limit)", async () => {
@@ -110,7 +110,7 @@ describe("SizeLimitTransform", () => {
     const line = "hello"; // 5 bytes, exactly at limit — should pass
     const { output } = await collect([`${line}\r\n`], maxBytes);
 
-    expect(output).toBe(line + "\n");
+    expect(output).toBe(`${line}\n`);
   });
 
   it("handles multiple lines delivered in a single chunk", async () => {
@@ -130,7 +130,7 @@ describe("SizeLimitTransform", () => {
     const line = "no-newline";
     const { output } = await collect([line]); // no \n
 
-    expect(output).toBe(line + "\n");
+    expect(output).toBe(`${line}\n`);
   });
 
   it("drops a partial buffer over the limit on stream end and emits a -32700 error", async () => {

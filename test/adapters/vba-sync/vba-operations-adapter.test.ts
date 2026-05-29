@@ -25,7 +25,14 @@ function makeRegistry(records = [makeRecord()]): AccessOperationRegistry {
   };
 }
 
-function makeCleanupService(result = { ok: true as const, data: { operationId: "op-1", accessPid: 1234, status: "cleaned" as const }, diagnostics: [], durationMs: 0 }) {
+function makeCleanupService(
+  result = {
+    ok: true as const,
+    data: { operationId: "op-1", accessPid: 1234, status: "cleaned" as const },
+    diagnostics: [],
+    durationMs: 0,
+  },
+) {
   return { cleanup: vi.fn().mockResolvedValue(result) };
 }
 
@@ -62,7 +69,12 @@ describe("VbaOperationsAdapter", () => {
 
   describe("cleanup_access_operation", () => {
     it("delegates to the injected cleanup service", async () => {
-      const cleanupResult = { ok: true as const, data: { operationId: "op-1", accessPid: 1234, status: "cleaned" as const }, diagnostics: [], durationMs: 0 };
+      const cleanupResult = {
+        ok: true as const,
+        data: { operationId: "op-1", accessPid: 1234, status: "cleaned" as const },
+        diagnostics: [],
+        durationMs: 0,
+      };
       const cleanupService = makeCleanupService(cleanupResult);
       const adapter = new VbaOperationsAdapter({ cleanupService });
 

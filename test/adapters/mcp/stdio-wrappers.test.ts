@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { DysflowMcpTool } from "../../../src/adapters/mcp/tools";
 import {
   buildHiddenToolRegistry,
   wrapWithErrorAbsorber,
   wrapWithSanitizer,
 } from "../../../src/adapters/mcp/stdio-wrappers";
+import type { DysflowMcpTool } from "../../../src/adapters/mcp/tools";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,7 +55,10 @@ describe("wrapWithErrorAbsorber", () => {
   });
 
   it("passes through a successful result unchanged", async () => {
-    const successResult = { content: [{ type: "text" as const, text: "all good" }], isError: false };
+    const successResult = {
+      content: [{ type: "text" as const, text: "all good" }],
+      isError: false,
+    };
     const handler = wrapWithErrorAbsorber(async () => successResult);
 
     const result = await handler(undefined, undefined);

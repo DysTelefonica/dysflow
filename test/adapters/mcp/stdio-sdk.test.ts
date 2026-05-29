@@ -207,19 +207,15 @@ describe("SDK path — progress notifications", () => {
     try {
       const progressEvents: Array<{ progress: number; total?: number; message?: string }> = [];
 
-      const result = await client.callTool(
-        { name: "progress_tool", arguments: {} },
-        undefined,
-        {
-          onprogress: (notification) => {
-            progressEvents.push({
-              progress: notification.progress,
-              total: notification.total,
-              message: notification.message,
-            });
-          },
+      const result = await client.callTool({ name: "progress_tool", arguments: {} }, undefined, {
+        onprogress: (notification) => {
+          progressEvents.push({
+            progress: notification.progress,
+            total: notification.total,
+            message: notification.message,
+          });
         },
-      );
+      });
 
       expect(result.isError).toBeFalsy();
       expect(result.content).toEqual([{ type: "text", text: "done" }]);

@@ -87,7 +87,13 @@ export async function startDysflowHttpServer(
   }
 
   const server = createServer((request, response) => {
-    void routeRequest(request, response, { services, writesEnabled, maxBodyBytes, httpToken, allowedProcedures });
+    void routeRequest(request, response, {
+      services,
+      writesEnabled,
+      maxBodyBytes,
+      httpToken,
+      allowedProcedures,
+    });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -257,10 +263,7 @@ async function routeRequest(
       );
       return;
     }
-    sendOperationResult(
-      response,
-      await context.services.vbaService.execute(vbaRequest),
-    );
+    sendOperationResult(response, await context.services.vbaService.execute(vbaRequest));
     return;
   }
 

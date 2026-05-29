@@ -136,19 +136,15 @@ describe("SDK path — progress notifications (progress-sdk)", () => {
         message?: string;
       }> = [];
 
-      await client.callTool(
-        { name: "dysflow.progress.minimal", arguments: {} },
-        undefined,
-        {
-          onprogress: (notification) => {
-            progressEvents.push({
-              progress: notification.progress,
-              total: notification.total,
-              message: notification.message,
-            });
-          },
+      await client.callTool({ name: "dysflow.progress.minimal", arguments: {} }, undefined, {
+        onprogress: (notification) => {
+          progressEvents.push({
+            progress: notification.progress,
+            total: notification.total,
+            message: notification.message,
+          });
         },
-      );
+      });
 
       expect(progressEvents).toHaveLength(1);
       expect(progressEvents[0]?.progress).toBe(50);

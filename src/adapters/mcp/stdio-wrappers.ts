@@ -31,18 +31,14 @@ export function wrapWithErrorAbsorber(
  *
  * Non-error results pass through unchanged.
  */
-export function wrapWithSanitizer(
-  handler: DysflowMcpTool["handler"],
-): DysflowMcpTool["handler"] {
+export function wrapWithSanitizer(handler: DysflowMcpTool["handler"]): DysflowMcpTool["handler"] {
   return async (input, context) => {
     const result = await handler(input, context);
     if (!result.isError) return result;
     return {
       ...result,
       content: result.content.map((item) =>
-        item.type === "text"
-          ? { ...item, text: sanitizeMcpErrorMessage(item.text) }
-          : item,
+        item.type === "text" ? { ...item, text: sanitizeMcpErrorMessage(item.text) } : item,
       ),
     };
   };

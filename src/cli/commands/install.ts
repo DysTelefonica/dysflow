@@ -1,5 +1,9 @@
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
+import { createInstallReport, installRuntime, resolveRuntimePaths } from "./install/extractor.js";
+import { configureAgent } from "./install/mcp-configurator.js";
+import { resolvePackageRoot } from "./install/package-root.js";
+import { INSTALL_USAGE, parseInstallArgs } from "./install/updater.js";
 import {
   type AgentConfigPaths,
   type AgentName,
@@ -11,20 +15,34 @@ import {
   resolveAgentConfigPaths,
   resolveRuntimeDir,
 } from "./install-utils.js";
-import { configureAgent } from "./install/mcp-configurator.js";
-import { resolvePackageRoot } from "./install/package-root.js";
-import { INSTALL_USAGE, parseInstallArgs } from "./install/updater.js";
-import { createInstallReport, installRuntime, resolveRuntimePaths } from "./install/extractor.js";
 import type { CliResult } from "./types.js";
 
-export type { AgentConfigPaths, AgentName };
-export { ALL_AGENTS, MAX_SUBPROCESS_BUFFER_BYTES, removeDysflowMcpConfig, resolveAgentConfigPaths };
+export type {
+  PreparedReleasePackage,
+  ReleaseInfo,
+  ReleaseUpdateProvider,
+} from "./install/downloader.js";
+export {
+  createGitHubReleaseRequestHeaders,
+  createGitHubReleaseUpdateProvider,
+  validateReleaseTagName,
+} from "./install/downloader.js";
 
 export { MAX_PACKAGE_ROOT_DEPTH } from "./install/package-root.js";
-export { resolvePackageRoot };
-export type { PreparedReleasePackage, ReleaseInfo, ReleaseUpdateProvider } from "./install/downloader.js";
-export { createGitHubReleaseRequestHeaders, createGitHubReleaseUpdateProvider, validateReleaseTagName } from "./install/downloader.js";
-export { handleUpdateCommand, parseAgentList, parseInstallArgs, parseUpdateArgs } from "./install/updater.js";
+export {
+  handleUpdateCommand,
+  parseAgentList,
+  parseInstallArgs,
+  parseUpdateArgs,
+} from "./install/updater.js";
+export type { AgentConfigPaths, AgentName };
+export {
+  ALL_AGENTS,
+  MAX_SUBPROCESS_BUFFER_BYTES,
+  removeDysflowMcpConfig,
+  resolveAgentConfigPaths,
+  resolvePackageRoot,
+};
 
 function commandPathForConfig(runtimeDir: string): string {
   return path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");

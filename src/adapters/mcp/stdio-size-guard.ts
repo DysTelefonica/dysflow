@@ -1,5 +1,5 @@
-import { Transform } from "node:stream";
 import type { TransformCallback, TransformOptions, Writable } from "node:stream";
+import { Transform } from "node:stream";
 
 export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024; // 1 MiB
 
@@ -31,7 +31,11 @@ export class SizeLimitTransform extends Transform {
     this.errorOutput = errorOutput;
   }
 
-  override _transform(chunk: Buffer | string, _encoding: string, callback: TransformCallback): void {
+  override _transform(
+    chunk: Buffer | string,
+    _encoding: string,
+    callback: TransformCallback,
+  ): void {
     const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
     const chunkLength = text.length;
     let cursor = 0;
@@ -68,7 +72,7 @@ export class SizeLimitTransform extends Transform {
         if (lineBytes > this.maxBytes) {
           this.emitSizeError();
         } else {
-          this.push(line + "\n");
+          this.push(`${line}\n`);
         }
 
         this.buffer = "";
@@ -93,7 +97,7 @@ export class SizeLimitTransform extends Transform {
       if (lineBytes > this.maxBytes) {
         this.emitSizeError();
       } else {
-        this.push(line + "\n");
+        this.push(`${line}\n`);
       }
     }
     this.buffer = "";

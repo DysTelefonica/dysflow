@@ -13,13 +13,13 @@ import {
   diagnosticsFromPreflightCleanup,
 } from "../../core/operations/access-operation-preflight.js";
 import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
-import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
 import type { VbaFormService } from "../../core/services/vba-form-service.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
 import { VbaModulesAdapter } from "./vba-modules-adapter.js";
+import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
 

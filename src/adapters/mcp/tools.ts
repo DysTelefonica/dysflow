@@ -241,7 +241,14 @@ export function createDysflowMcpTools(
     },
   ];
 
-  return registerMcpTools(currentTools, services, writesEnabled, writeAccessResolver, env, allowedProcedures);
+  return registerMcpTools(
+    currentTools,
+    services,
+    writesEnabled,
+    writeAccessResolver,
+    env,
+    allowedProcedures,
+  );
 }
 
 function registerMcpTools(

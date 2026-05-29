@@ -3,10 +3,7 @@ import { resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
@@ -26,6 +23,12 @@ import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
+import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
+import {
+  buildHiddenToolRegistry,
+  wrapWithErrorAbsorber,
+  wrapWithSanitizer,
+} from "./stdio-wrappers.js";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
@@ -34,12 +37,6 @@ import {
   sanitizeMcpErrorMessage,
 } from "./tools.js";
 import type { McpToolContext } from "./types.js";
-import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
-import {
-  buildHiddenToolRegistry,
-  wrapWithErrorAbsorber,
-  wrapWithSanitizer,
-} from "./stdio-wrappers.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 

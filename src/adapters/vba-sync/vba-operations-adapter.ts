@@ -1,19 +1,19 @@
 import {
   createDysflowError,
   failureResult,
-  successResult,
   type OperationResult,
+  successResult,
 } from "../../core/contracts/index.js";
+import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationPreflightCleanup,
   type AccessOperationPreflightCleanupResult,
   AccessOperationPreflightCleanupService,
 } from "../../core/operations/access-operation-preflight.js";
-import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
+  type AccessOperationRegistry,
   FileAccessOperationRegistry,
   resolveProjectOperationRegistryPath,
-  type AccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 
 export type VbaOperationsCleanupService = {
@@ -62,10 +62,7 @@ export class VbaOperationsAdapter {
     if (toolName === "cleanup_access_operation") {
       if (this.cleanupService === undefined) {
         return failureResult(
-          createDysflowError(
-            "CLEANUP_NOT_CONFIGURED",
-            "Access cleanup service is not configured.",
-          ),
+          createDysflowError("CLEANUP_NOT_CONFIGURED", "Access cleanup service is not configured."),
         );
       }
       const { operationId, accessPath, force } = input as {
