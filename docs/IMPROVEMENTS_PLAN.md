@@ -564,7 +564,7 @@ Full audit: `docs/AUDIT_2026-05-29.md`.
 | Q4 | Add early dispatch to `dysflow-access-runner.ps1` for `list_linked_tables`, `compare_backends`, `list_access_files` | MEDIUM | ✅ |
 | Q5 | Split `install-utils.ts` into focused utility files | LOW | ⬜ |
 | Q6 | Fix `OperationResult` variance: make `failureResult` return `OperationResult<never>` | LOW | ✅ |
-| Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | ⬜ |
+| Q7 | MCP SDK migration: replace hand-rolled `stdio.ts` with `@modelcontextprotocol/sdk` | MEDIUM | 🔄 Phases 0–5 ✅, Phase 6 pending |
 | Q8 | Fix `allowedProcedures` enforcement bypass in `run_vba` alias and HTTP `/vba/execute` | HIGH | ✅ |
 | Q9 | Update `docs/api/http-api.md`: document Bearer token + `allowedProcedures` behavior | MEDIUM | ✅ |
 
@@ -592,9 +592,9 @@ Rationale:
 | Q1, Q3 | v0.9.21 ✅ released |
 | Q2, Q6 | v0.9.22 ✅ released |
 | Q4 | v0.9.23 ✅ released |
-| Q8, Q9 | v0.9.24 |
-| Q5 | v0.9.25 |
-| Q7 | v0.10.0 |
+| Q8, Q9 | v0.10.0 ✅ released |
+| Q5 | v0.10.x |
+| Q7 | v1.0.0 (branch: feat/mcp-sdk-migration) |
 
 ---
 
