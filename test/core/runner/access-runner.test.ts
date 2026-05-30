@@ -820,4 +820,64 @@ describe("Cross-process lock for .accdb", () => {
       rmSync(lockPath, { recursive: true, force: true });
     }
   });
+  it("verifies scripts/dysflow-access-runner.ps1 conforms to return-based exits and force-kill design", async () => {
+    const { readFileSync } = await import("node:fs");
+    const scriptContent = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
+
+
+    // 1. Initialized script-scoped variables
+    expect(scriptContent).toContain("$script:exitCode =");
+    expect(scriptContent).toContain("$script:accessPid =");
+
+    // 2. Stop-Process force kill fallback in finally block
+    expect(scriptContent).toContain("Stop-Process");
+    expect(scriptContent).toContain("$script:accessPid");
+
+    // 3. No early exits inside try block, only return or exit $script:exitCode at the bottom
+    const lines = scriptContent.split(/\r?\n/);
+    let exitCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      // Ignore comments and matches that are not the single final exit statement
+      if (trimmed.startsWith("exit ") && !trimmed.includes("$script:exitCode")) {
+        exitCount++;
+      }
+    }
+    expect(exitCount).toBe(0);
+  });
+
+  it("runs a real diagnostics check and verifies no lingering MSACCESS.EXE process", async () => {
+    if (process.platform !== "win32") {
+      return;
+    }
+    const dbPath = join(process.cwd(), "E2E_testing/NoConformidades.accdb");
+    const runner = new AccessPowerShellRunner();
+    const result = await runner.run(
+      { kind: "diagnostics", request: {} },
+      {
+        ...config,
+        accessDbPath: dbPath,
+        accessPassword: process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? "",
+        timeoutMs: 30_000,
+        processTimeoutMs: 30_000,
+      },
+    );
+    expect(result.ok).toBe(true);
+    const pid = result.operation?.accessPid;
+    expect(pid).toBeTypeOf("number");
+    if (pid) {
+      let isRunning = true;
+      try {
+        process.kill(pid, 0);
+      } catch (e: any) {
+        if (e.code === "ESRCH") {
+          isRunning = false;
+        }
+      }
+      expect(isRunning).toBe(false);
+    }
+  }, 30_000);
 });
+
+
+

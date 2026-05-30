@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +44,17 @@ const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: 
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
 const rows = [];
 const existingModuleName = "Funciones Generales";
+
+// Baseline PIDs: Access processes already running before the suite starts.
+// Per-call zombie checks exclude these so pre-existing instances don't cause false failures.
+const suiteBaselinePids = new Set();
+try {
+  const baselineOut = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
+  for (const line of baselineOut.trim().split(/\r?\n/).filter(Boolean)) {
+    const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
+    if (!isNaN(pid)) suiteBaselinePids.add(pid);
+  }
+} catch {}
 
 function toolText(message) {
   return message?.result?.content?.map((item) => item.text ?? "").join("\n") ?? message?.error?.message ?? "";
@@ -127,6 +138,20 @@ async function record(area, tool, args = {}, options = {}) {
   const pass = result.timedOut ? false : expectedError ? result.isError : !result.isError;
   rows.push({ area, tool, pass, expected: options.expected ?? "success", ms, summary: normalize(result.text || result.stderr || JSON.stringify(result.exit)) });
   console.log(`${pass ? "PASS" : "FAIL"}\t${tool}\t${ms}ms\t${rows.at(-1).summary}`);
+
+  const zombie = await waitForNoZombies(5000, 200);
+  const zombiePass = !zombie.found;
+  const zombieTool = `${tool}:zombie-check`;
+  rows.push({
+    area,
+    tool: zombieTool,
+    pass: zombiePass,
+    expected: "no MSACCESS.EXE",
+    ms: zombie.elapsed,
+    summary: zombie.found ? `Zombie MSACCESS.EXE lingered after ${tool}` : "clean",
+  });
+  console.log(`${zombiePass ? "PASS" : "FAIL"}\t${zombieTool}\t${zombie.elapsed}ms\t${rows.at(-1).summary}`);
+
   return result;
 }
 
@@ -190,6 +215,44 @@ await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: join(tempRo
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
+
+function checkAccessProcesses() {
+  try {
+    const stdout = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
+    const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
+    return lines.some((line) => {
+      const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
+      return !isNaN(pid) && !suiteBaselinePids.has(pid);
+    });
+  } catch (err) {
+    console.error("Failed to check processes:", err);
+    return false;
+  }
+}
+
+async function waitForNoZombies(timeoutMs = 30000, pollMs = 200) {
+  const start = Date.now();
+  while (true) {
+    const found = checkAccessProcesses();
+    if (!found) return { found: false, elapsed: Date.now() - start };
+    if (Date.now() - start >= timeoutMs) return { found: true, elapsed: Date.now() - start };
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+const hasLingeringAccess = checkAccessProcesses();
+rows.push({
+  area: "zombies",
+  tool: "lingering-access-check",
+  pass: !hasLingeringAccess,
+  expected: "no MSACCESS.EXE processes running",
+  ms: 0,
+  summary: hasLingeringAccess ? "Lingering MSACCESS.EXE processes detected!" : "No lingering MSACCESS.EXE processes found.",
+});
+
+if (hasLingeringAccess) {
+  console.error("Assertion failed: Lingering MSACCESS.EXE processes detected at the end of the E2E execution!");
+}
 
 const passed = rows.filter((row) => row.pass).length;
 const failed = rows.filter((row) => !row.pass);

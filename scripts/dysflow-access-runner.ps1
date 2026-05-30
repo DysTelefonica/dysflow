@@ -10,6 +10,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Script-scoped variables for tracking exit code and child process PID.
+# Return-based script exits ensure the finally block is always executed.
+$script:exitCode = 0
+$script:accessPid = $null
+
+
+
 if ([string]::IsNullOrEmpty($AccessPassword)) {
   $AccessPassword = $env:DYSFLOW_ACCESS_PASSWORD
 }
@@ -238,6 +245,7 @@ function Write-AccessProcessMarker {
     }
   }
   if ($null -ne $candidate) {
+    $script:accessPid = [int]$candidate.ProcessId
     $payload = [ordered]@{
       pid = [int]$candidate.ProcessId
       processStartTime = ConvertTo-IsoStartTime $candidate.CreationDate
@@ -245,6 +253,7 @@ function Write-AccessProcessMarker {
     }
     [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
   }
+
 }
 
 function Write-DysflowProgress {
@@ -360,6 +369,7 @@ function Invoke-QuerySqlReadAction {
     return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
   } finally {
     if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $rs) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($rs) } catch { Write-Debug "Diagnostics: $_" } }
   }
 }
 
@@ -382,6 +392,7 @@ function Invoke-CountRowsAction {
     return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
   } finally {
     if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $rs) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($rs) } catch { Write-Debug "Diagnostics: $_" } }
   }
 }
 
@@ -394,6 +405,7 @@ function Invoke-DistinctValuesAction {
     return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
   } finally {
     if ($null -ne $rs) { try { $rs.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $rs) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($rs) } catch { Write-Debug "Diagnostics: $_" } }
   }
 }
 
@@ -1364,10 +1376,10 @@ if ($Operation -eq 'query') {
     try {
       $result = Invoke-RelinkDirectory -Payload $earlyPayload
       $result | ConvertTo-Json -Depth 20 -Compress
-      exit 0
+      $script:exitCode = 0; return
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
-      exit 1
+      $script:exitCode = 1; return
     }
   }
 
@@ -1382,10 +1394,10 @@ if ($Operation -eq 'query') {
       $result = Invoke-ListAccessFilesAction -RootPath ([string]$earlyPayload.rootPath)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 10
-      exit 0
+      $script:exitCode = 0; return
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
-      exit 1
+      $script:exitCode = 1; return
     }
   }
 
@@ -1406,60 +1418,60 @@ if ($Operation -eq 'query') {
         $result = Invoke-QuerySqlReadAction -Database $directDb -Sql ([string]$earlyPayload.sql)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'list_tables') {
         $result = Invoke-ListTablesAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 10
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'get_schema') {
         $result = Invoke-GetSchemaAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'count_rows') {
         $result = Invoke-CountRowsAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 10
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'distinct_values') {
         $result = Invoke-DistinctValuesAction -Database $directDb -TableName ([string]$earlyPayload.tableName) -ColumnName ([string]$earlyPayload.columnName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 10
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'get_relationships') {
         $result = Invoke-GetRelationshipsAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'list_linked_tables') {
         $result = Invoke-ListLinkedTablesAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 10
-        exit 0
+        $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'compare_backends') {
         $result = Invoke-CompareBackendsAction -Database $directDb -BackendPath ([string]$earlyPayload.backendPath)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
-        exit 0
+        $script:exitCode = 0; return
       }
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
-      exit 1
+      $script:exitCode = 1; return
     } finally {
       if ($null -ne $directDb) {
         try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1469,6 +1481,7 @@ if ($Operation -eq 'query') {
     }
   }
 }
+
 
 $access = $null
 try {
@@ -1496,7 +1509,7 @@ try {
     $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
     $result | ConvertTo-Json -Compress -Depth 20
-    exit 0
+    $script:exitCode = 0; return
   }
 
   $sentinelPath = "${AccessDbPath}.dysflow-restore.json"
@@ -1553,7 +1566,7 @@ try {
       [ordered]@{ name = 'access-open'; ok = $true; message = 'opened' }
     )
     [ordered]@{ checks = $checks } | ConvertTo-Json -Compress -Depth 10
-    exit 0
+    $script:exitCode = 0; return
   }
 
   if ($Operation -eq 'vba') {
@@ -1564,7 +1577,7 @@ try {
     $returnValue = $access.Run.Invoke($runArgs)
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
     [ordered]@{ returnValue = $returnValue } | ConvertTo-Json -Compress -Depth 10
-    exit 0
+    $script:exitCode = 0; return
   }
 
   if ($Operation -eq 'query') {
@@ -1580,7 +1593,7 @@ try {
         try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
         try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     $db = $access.CurrentDb()
@@ -1598,7 +1611,7 @@ try {
             try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
           }
         }
-        exit 0
+        $script:exitCode = 0; return
       }
 
       $writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
@@ -1612,8 +1625,9 @@ try {
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($writeDb.Database) } catch { Write-Debug "Diagnostics: $_" }
         }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
+
 
     if ($action -eq 'list_tables') {
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
@@ -1622,16 +1636,19 @@ try {
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 10
       } finally {
-        if ($readDb.Owned) { $readDb.Database.Close() }
+        if ($readDb.Owned) {
+          try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'list_linked_tables') {
       $tables = @(Get-TableNames -Database $db -LinkedOnly)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'get_schema') {
@@ -1641,9 +1658,12 @@ try {
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
       } finally {
-        if ($readDb.Owned) { $readDb.Database.Close() }
+        if ($readDb.Owned) {
+          try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'count_rows') {
@@ -1658,7 +1678,7 @@ try {
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
         }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'distinct_values') {
@@ -1673,21 +1693,21 @@ try {
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
         }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'compare_backends') {
       $result = Compare-BackendTables -CurrentDb $db -BackendPath ([string]$payload.backendPath)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'list_access_files') {
       $files = @(Get-AccessFiles -RootPath ([string]$payload.rootPath))
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       [ordered]@{ files = $files } | ConvertTo-Json -Compress -Depth 10
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'get_relationships') {
@@ -1697,16 +1717,19 @@ try {
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         $result | ConvertTo-Json -Compress -Depth 20
       } finally {
-        if ($readDb.Owned) { $readDb.Database.Close() }
+        if ($readDb.Owned) {
+          try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($readDb.Database) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'list_links') {
       $links = @(Get-LinkInfo -Database $db)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       [ordered]@{ links = $links } | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'link_tables') {
@@ -1715,54 +1738,54 @@ try {
         $backendPath = [string]$payload.backendPath
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         [ordered]@{ dryRun = $true; backendPath = $backendPath; linkedTables = @() } | ConvertTo-Json -Compress -Depth 20
-        exit 0
+        $script:exitCode = 0; return
       }
       $result = Update-LinkTables -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'relink_tables') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'localize_backend_links') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'unlink_table') {
       $result = Remove-LinkTable -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'export_queries') {
       $result = Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'import_queries') {
       $result = Import-QueryDefinitions -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -eq 'compact_repair') {
       $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       $result | ConvertTo-Json -Compress -Depth 20
-      exit 0
+      $script:exitCode = 0; return
     }
 
     if ($action -in @('exec_sql', 'run_script', 'create_table', 'drop_table', 'seed_fixture', 'teardown_fixture')) {
@@ -1777,7 +1800,7 @@ try {
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($writeDb.Database) } catch { Write-Debug "Diagnostics: $_" }
         }
       }
-      exit 0
+      $script:exitCode = 0; return
     }
 
     throw "Unsupported query action: $action"
@@ -1786,8 +1809,15 @@ try {
   throw "Unsupported operation: $Operation"
 } catch {
   [Console]::Error.WriteLine($_.Exception.Message)
-  exit 1
+  $script:exitCode = 1; return
 } finally {
+  # Clean up and release database and application COM objects to prevent lingering background processes.
+  # Calling FinalReleaseComObject on secondary objects ($db) before the main application ($access) is required.
+  if ($null -ne $db) {
+    try { $db.Close() } catch { Write-Debug "Diagnostics: $_" }
+
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" }
+  }
   if ($null -ne $access) {
     if ($null -ne $originalAutomationSecurity) {
       try { $access.AutomationSecurity = $originalAutomationSecurity } catch { Write-Debug "Diagnostics: $_" }
@@ -1796,6 +1826,46 @@ try {
     try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch { Write-Debug "Diagnostics: $_" }
   }
+  # Resolve the PID to terminate. The marker captures it via WMI which can lag behind
+  # process creation; if it was missed (or New-Object reused an existing COM instance),
+  # fall back to matching the specific database path in the process command line. This
+  # only ever matches the instance dysflow opened for THIS database — never other Access
+  # instances the user may have open with a different database.
+  $pidToKill = $script:accessPid
+  if ($null -eq $pidToKill -and $null -ne $access -and -not [string]::IsNullOrEmpty($AccessDbPath)) {
+    $dbKey = $AccessDbPath.ToLowerInvariant()
+    foreach ($proc in @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)) {
+      if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($dbKey)) {
+        $pidToKill = [int]$proc.ProcessId
+        break
+      }
+    }
+  }
+  if ($null -ne $pidToKill) {
+    # Force-kill and wait deterministically until the process is actually gone, instead of
+    # a fixed sleep — Access can linger in the process table during COM/handle teardown.
+    Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+    $waited = 0
+    while ($waited -lt 20000) {
+      $alive = $null
+      try { $alive = Get-Process -Id $pidToKill -ErrorAction SilentlyContinue } catch { $alive = $null }
+      if (-not $alive) { break }
+      Start-Sleep -Milliseconds 100
+      $waited += 100
+      Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+    }
+    # Last resort: if process is still alive after the polite wait, use taskkill which sends
+    # WM_CLOSE + after timeout kills the process tree. Only targets the specific PID we own.
+    if ($null -ne $pidToKill) {
+      $stillAlive = $null
+      try { $stillAlive = Get-Process -Id $pidToKill -ErrorAction SilentlyContinue } catch { $stillAlive = $null }
+      if ($stillAlive) {
+        try {
+          Start-Process -FilePath "taskkill" -ArgumentList "/F", "/PID", $pidToKill -NoNewWindow -Wait:$false -ErrorAction SilentlyContinue
+        } catch { Write-Debug "Diagnostics: $_" }
+      }
+    }
+  }
   if ($null -ne $startupInfo) {
     try { Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
     Remove-Item -LiteralPath $sentinelPath -Force -ErrorAction SilentlyContinue
@@ -1803,4 +1873,9 @@ try {
   # See comment above: force GC to release Access COM RCW wrappers after script exit.
   [System.GC]::Collect()
   [System.GC]::WaitForPendingFinalizers()
+  exit $script:exitCode
 }
+
+exit $script:exitCode
+
+

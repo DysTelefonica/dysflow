@@ -1291,6 +1291,45 @@ function Get-AccessLockFilePath {
     return $null
 }
 
+# Find the MSACCESS.EXE PID that has the given database open, identified by the database
+# path appearing in the process command line. Returns $null if no such process exists.
+# This only ever matches the instance opened for THIS AccessPath — never other Access
+# instances the user may have open with a different database.
+function Find-AccessPidByDatabase {
+    [CmdletBinding()]
+    Param([Parameter(Mandatory = $true)][string]$AccessPath)
+    $dbKey = $AccessPath.ToLowerInvariant()
+    foreach ($proc in @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)) {
+        if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($dbKey)) {
+            return [int]$proc.ProcessId
+        }
+    }
+    return $null
+}
+
+# Force-terminate a specific PID and wait deterministically until it is actually gone,
+# instead of relying on a fixed sleep. Access can stay in the process table briefly after
+# CloseCurrentDatabase/Quit while it releases COM and file handles.
+function Stop-AccessPidAndWait {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][int]$AccessPid,
+        [int]$TimeoutMs = 20000
+    )
+    try { Stop-Process -Id $AccessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
+    $elapsed = 0
+    while ($elapsed -lt $TimeoutMs) {
+        $alive = $null
+        try { $alive = Get-Process -Id $AccessPid -ErrorAction SilentlyContinue } catch { $alive = $null }
+        if (-not $alive) { return $true }
+        Start-Sleep -Milliseconds 100
+        $elapsed += 100
+        # Re-issue the kill in case the first signal was dropped during COM teardown.
+        try { Stop-Process -Id $AccessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
+    }
+    return $false
+}
+
 function Close-AccessDatabase {
     [CmdletBinding()]
     Param(
@@ -1305,6 +1344,13 @@ function Close-AccessDatabase {
     $startupInfo = $Session.StartupInfo
     $accessPid = $Session.ProcessId
 
+    # If the PID was not captured at open time (e.g. New-Object reused an existing COM
+    # instance and the pre/post process diff saw no new process), resolve it now by the
+    # database path while the process is still alive and matchable.
+    if (-not $accessPid) {
+        $accessPid = Find-AccessPidByDatabase -AccessPath $AccessPath
+    }
+
     if ($access) {
         try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
         try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
@@ -1317,10 +1363,19 @@ function Close-AccessDatabase {
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 
-    # Kill Access BEFORE DAO restore operations so the file lock is guaranteed released
+    # Kill Access BEFORE DAO restore operations so the file lock is guaranteed released.
+    # Re-resolve the PID after Quit in case it only became matchable now.
+    if (-not $accessPid) {
+        $accessPid = Find-AccessPidByDatabase -AccessPath $AccessPath
+    }
     if ($accessPid) {
-        try { Stop-Process -Id $accessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
-        Start-Sleep -Milliseconds 300
+        $terminated = Stop-AccessPidAndWait -AccessPid $accessPid -TimeoutMs 5000
+        if (-not $terminated) {
+            Write-Status -Message ("WARN: no se pudo confirmar la terminacion del PID {0} para '{1}'. Intentando taskkill." -f $accessPid, $AccessPath) -Color DarkYellow
+            try {
+              Start-Process -FilePath "taskkill" -ArgumentList "/F", "/PID", $accessPid -NoNewWindow -Wait:$false -ErrorAction SilentlyContinue
+            } catch { Write-Debug "Diagnostics: $_" }
+        }
     } else {
         Write-Status -Message ("WARN: se cierra '{0}' sin PID de Access resuelto. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
         try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }

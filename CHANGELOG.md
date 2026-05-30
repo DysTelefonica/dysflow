@@ -2,6 +2,32 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [fix-msaccess-zombies] - 2026-05-30
+
+### Fixed
+
+- **Lingering `MSACCESS.EXE` processes after dysflow operations**: Operations that use COM automation (`Access.Application`) were leaving orphaned Access processes running after script completion, causing database lockups and resource leaks. Root causes addressed:
+
+  - **COM cleanup ordering**: Secondary DAO objects (`$db`, `$directDb`) are now released with `FinalReleaseComObject` before the primary `$access` application object.
+  - **Deterministic process termination**: The `finally` block in `dysflow-access-runner.ps1` now waits up to 20 seconds (polling every 100ms) for the Access process to actually exit, instead of relying on fixed sleep durations.
+  - **Targeted fallback kill**: If `Stop-Process` does not terminate the process within the wait window, `taskkill /F /PID` is invoked as a last resort — targeting only the PID that dysflow itself launched, never affecting other Access instances.
+  - **PID capture reliability**: Added a targeted fallback that resolves the process PID by matching the database path in the process command line (covers cases where WMI/CIM timing race causes the initial capture to miss the PID, or where `New-Object Access.Application` reuses an existing COM singleton).
+  - **VBA manager parity**: `dysflow-vba-manager.ps1` now has the same deterministic wait-and-fallback kill logic in `Close-AccessDatabase` (`Stop-AccessPidAndWait` with 20s timeout, `taskkill` fallback on failure).
+
+- **`$accessPid` was `$null` after COM reuse**: When `New-Object Access.Application` returns an existing Access process (COM singleton reuse), the pre/post WMI process diff shows 0 new processes, leaving `$script:accessPid` as `$null` and causing the `finally` block to skip termination entirely. Fixed by re-resolving the PID by database path in command line at cleanup time.
+
+- **E2E zombie verification was insufficient**: The E2E suite (`mcp-e2e.mjs`) only checked for zombies after the full test run, making it impossible to identify which specific operation leaked. Added per-call zombie checks with a 30-second wait that poll for process exit after each MCP tool invocation. Pre-existing Access processes are excluded via baseline PID snapshot at suite start.
+
+### Added
+
+- **`test/core/runner/access-runner.test.ts`**: 24 unit/integration tests covering PID capture, `finally` block execution guarantees, lock acquisition, and real Access process lifecycle cleanup.
+- **`E2E_testing/mcp-e2e.mjs`**: Per-call zombie check after every MCP tool invocation (`<tool>:zombie-check` entries in the test report), with `waitForNoZombies()` polling and baseline PID filtering.
+
+### Changed
+
+- **`scripts/dysflow-access-runner.ps1`**: Refactored kill logic in `finally` block to use a `$pidToKill` variable with command-line fallback resolution, deterministic polling wait (up to 20s), and `taskkill` escalation. Removed early `exit` calls in favor of `$script:exitCode; return` so the `finally` block always runs.
+- **`scripts/dysflow-vba-manager.ps1`**: Added `Find-AccessPidByDatabase` and `Stop-AccessPidAndWait` helper functions. `Close-AccessDatabase` now re-resolves PID by database path if not captured at open time, waits up to 20s for termination, and escalates to `taskkill` if the process survives.
+
 ## [1.1.0] - 2026-05-30
 
 ### Fixed
