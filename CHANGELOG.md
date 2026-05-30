@@ -2,9 +2,13 @@
 
 All notable changes to Dysflow will be documented in this file.
 
-## [v1.2.0] - 2026-05-30
+## [v1.2.1] - 2026-05-30
 
 ### Fixed
+
+- **`dysflow update` hung with no timeout**: All network operations (`fetch` to GitHub API, SHA256SUMS download) and subprocess calls (`gh`, `git clone`, `pnpm install`, `pnpm build`, `tar`, `npm install`) now have explicit timeouts. Operations that exceed 30-120s now fail with a clear error instead of hanging indefinitely.
+
+- **`dysflow update` crashed on npm 11.7.0**: `npm install --omit=dev` triggered a null-pointer crash in npm's peer-dependency resolver (`Cannot read properties of null (reading 'matches')`). Replaced with `--ignore-scripts --legacy-peer-deps` which avoids the problematic code path.
 
 - **Lingering `MSACCESS.EXE` processes after dysflow operations**: Operations that use COM automation (`Access.Application`) were leaving orphaned Access processes running after script completion, causing database lockups and resource leaks. Root causes addressed:
 
