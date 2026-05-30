@@ -2,7 +2,7 @@
 
 All notable changes to Dysflow will be documented in this file.
 
-## [fix-msaccess-zombies] - 2026-05-30
+## [v1.2.0] - 2026-05-30
 
 ### Fixed
 
