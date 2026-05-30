@@ -75,8 +75,8 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
     // Install production dependencies so runtime deps (e.g. @modelcontextprotocol/sdk)
     // are available without requiring the full source node_modules to be copied.
     await runCommand(
-      "npm",
-      ["install", "--ignore-scripts", "--legacy-peer-deps"],
+      "pnpm",
+      ["install", "--ignore-scripts", "--prod"],
       runtimePaths.appDir,
       { timeoutMs: 120_000 },
     );
