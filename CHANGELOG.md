@@ -2,9 +2,11 @@
 
 All notable changes to Dysflow will be documented in this file.
 
-## [v1.2.1] - 2026-05-30
+## [v1.2.2] - 2026-05-30
 
 ### Fixed
+
+- **`dysflow update` / `dysflow install` crashed on npm 11.7.0**: Replaced `npm install` with `pnpm install --prod --ignore-scripts` for runtime dependency installation. npm 11.7.0 crashes with `--omit=dev` and `--legacy-peer-deps` due to a null-pointer in the peer-dependency resolver.
 
 - **`dysflow update` hung with no timeout**: All network operations (`fetch` to GitHub API, SHA256SUMS download) and subprocess calls (`gh`, `git clone`, `pnpm install`, `pnpm build`, `tar`, `npm install`) now have explicit timeouts. Operations that exceed 30-120s now fail with a clear error instead of hanging indefinitely.
 
