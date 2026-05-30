@@ -2,6 +2,18 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [1.1.0] - 2026-05-30
+
+### Fixed
+
+- **MCP `compare_backends` tool failure**: Resolved a critical RCW COM exception (`InvalidComObjectException`) that occurred because the helper script closed the shared `DAO.DBEngine` instance singleton, separating the active database RCW wrapper from its COM peer. Also added a fallback in `dysflow-access-runner.ps1` to resolve the target database to `$AccessDbPath` when inputs do not specify it, allowing the early dispatch path to correctly locate the frontend and backend without duplicating connections.
+
+### Changed
+
+- **Complete MCP SDK migration**: Removed the legacy, hand-rolled `JsonLineMcpStdioRuntime` implementation, `McpStdioRuntime` interface, and associated type signatures from `stdio.ts` (shrinking it to 317 lines).
+- **Test cleanup**: Deleted deprecated `progress.test.ts` and pruned `stdio.test.ts` to keep only the isolated auxiliary and service configuration validation suites.
+- **Lint auto-fix tooling**: Added `lint:fix` script in `package.json` and auto-corrected 24 formatting, import block organization, and template literal occurrences via Biome.
+
 ## [1.0.2] - 2026-05-29
 
 ### Fixed
