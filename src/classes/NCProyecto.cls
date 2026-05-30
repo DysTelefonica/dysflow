@@ -148,7 +148,7 @@ End Property
 Public Property Set Riesgos(p_Valor As Scripting.Dictionary)
     ' Permite invalidar con Nothing tras cambios en el servicio
     Set m_Riesgos = p_Valor
-    
+
 End Property
 Public Property Get CodRiesgosAsociados() As String
     
@@ -592,34 +592,175 @@ Public Function EstadoGrabar( _
     
     
     
-    Dim m_SQL As String
+    Dim db As DAO.Database
+    Dim wks As DAO.Workspace
+    Dim qdf As DAO.QueryDef
+    Dim cacheError As String
+    Dim estadoAnterior As String
+    Dim transactionStarted As Boolean
     
     
     On Error GoTo errores
+
+    estadoAnterior = Nz(Me.Estado, "")
     
     If p_Estado = "" Then
         p_Estado = Me.EstadoCalculadoTexto
     End If
+
+    Set db = getdb()
+
     If Nz(Me.Estado, "") = Nz(p_Estado, "") Then
-        ' HOTFIX-20260526: No regrabar el mismo estado para no invalidar caché en aperturas de solo lectura.
-        EstadoGrabar = p_Estado
-        Exit Function
+        If EstadoGrabarYaPersistidoYCacheado(db, CLng(Me.IDNoConformidad), p_Estado) Then
+            EstadoGrabar = p_Estado
+            Set db = Nothing
+            Exit Function
+        End If
     End If
+
     Me.Estado = p_Estado
     
     
-    m_SQL = "UPDATE TbNoConformidades " & _
-            "SET Estado = '" & Me.Estado & "' " & _
-            "WHERE IDNoConformidad=" & Me.IDNoConformidad & ";"
-    getdb().Execute m_SQL
+    Set wks = DBEngine.Workspaces(0)
+    wks.BeginTrans
+    transactionStarted = True
+
+    Set qdf = db.CreateQueryDef("")
+    qdf.SQL = "PARAMETERS pEstado TEXT(100), pIDNC LONG; " & _
+              "UPDATE TbNoConformidades SET Estado = [pEstado] WHERE IDNoConformidad = [pIDNC];"
+    qdf.Parameters("pEstado").Value = Me.Estado
+    qdf.Parameters("pIDNC").Value = CLng(Me.IDNoConformidad)
+    qdf.Execute dbFailOnError
+    qdf.Close
+    Set qdf = Nothing
+
+    If Not RegenerarRegistro(CStr(Me.IDNoConformidad), cacheError) Then
+        p_Error = "El método EstadoGrabar no pudo regenerar caché; se revierte Estado: " & cacheError
+        Err.Raise 1000
+    End If
+
+    wks.CommitTrans
+    transactionStarted = False
+
+    EstadoGrabar = p_Estado
+    Set wks = Nothing
+    Set db = Nothing
    
    
    
     Exit Function
 errores:
+    On Error Resume Next
+    If Not qdf Is Nothing Then qdf.Close
+    Set qdf = Nothing
+    If transactionStarted Then wks.Rollback
+    Me.Estado = estadoAnterior
+    Set wks = Nothing
+    Set db = Nothing
     If Err.Number <> 1000 Then
         p_Error = "El método EstadoGrabar ha devuelto el error: " & vbNewLine & Err.Description
     End If
+End Function
+
+Private Function EstadoGrabarYaPersistidoYCacheado(ByVal p_Db As DAO.Database, ByVal p_IDNC As Long, ByVal p_Estado As String) As Boolean
+    Dim qdf As DAO.QueryDef
+    Dim rs As DAO.Recordset
+    Dim persistedEstado As String
+    Dim listValidRows As Long
+    Dim listTargetRows As Long
+    Dim detailValidRows As Long
+    Dim detailTargetRows As Long
+    Dim datosNC As String
+
+    On Error GoTo EH
+
+    EstadoGrabarYaPersistidoYCacheado = False
+
+    Set qdf = p_Db.CreateQueryDef("")
+    qdf.SQL = "PARAMETERS pIDNC LONG; " & _
+              "SELECT Estado FROM TbNoConformidades WHERE IDNoConformidad = [pIDNC];"
+    qdf.Parameters("pIDNC").Value = p_IDNC
+    Set rs = qdf.OpenRecordset(dbOpenSnapshot)
+
+    If rs.EOF Then GoTo Cleanup
+    persistedEstado = Nz(rs.Fields("Estado").Value, "")
+    If Nz(persistedEstado, "") <> Nz(p_Estado, "") Then GoTo Cleanup
+
+    rs.Close
+    Set rs = Nothing
+    qdf.Close
+    Set qdf = Nothing
+
+    Set qdf = p_Db.CreateQueryDef("")
+    qdf.SQL = "PARAMETERS pIDNC LONG; " & _
+              "SELECT Estado FROM TbCacheListadoNC WHERE IDNoConformidad = [pIDNC] AND CacheValida = True;"
+    qdf.Parameters("pIDNC").Value = p_IDNC
+    Set rs = qdf.OpenRecordset(dbOpenSnapshot)
+
+    Do While Not rs.EOF
+        listValidRows = listValidRows + 1
+        If Nz(rs.Fields("Estado").Value, "") = Nz(p_Estado, "") Then listTargetRows = listTargetRows + 1
+        rs.MoveNext
+    Loop
+
+    If Not (listValidRows = 1 And listTargetRows = 1) Then GoTo Cleanup
+
+    rs.Close
+    Set rs = Nothing
+    qdf.Close
+    Set qdf = Nothing
+
+    Set qdf = p_Db.CreateQueryDef("")
+    qdf.SQL = "PARAMETERS pIDNC LONG; " & _
+              "SELECT DatosNC FROM TbCacheNCProyecto WHERE IDNoConformidad = [pIDNC] AND CacheValida = True;"
+    qdf.Parameters("pIDNC").Value = p_IDNC
+    Set rs = qdf.OpenRecordset(dbOpenSnapshot)
+
+    Do While Not rs.EOF
+        detailValidRows = detailValidRows + 1
+        datosNC = Nz(rs.Fields("DatosNC").Value, "")
+        If DatosNCContieneEstado(datosNC, p_Estado) Then detailTargetRows = detailTargetRows + 1
+        rs.MoveNext
+    Loop
+
+    EstadoGrabarYaPersistidoYCacheado = (detailValidRows = 1 And detailTargetRows = 1)
+
+Cleanup:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    If Not qdf Is Nothing Then qdf.Close
+    Set qdf = Nothing
+    Exit Function
+
+EH:
+    EstadoGrabarYaPersistidoYCacheado = False
+    Resume Cleanup
+End Function
+
+Private Function DatosNCContieneEstado(ByVal p_DatosNC As String, ByVal p_Estado As String) As Boolean
+    Dim expectedUpper As String
+    Dim expectedMixed As String
+    Dim trimmedDatos As String
+
+    trimmedDatos = Trim$(Nz(p_DatosNC, ""))
+    If Len(trimmedDatos) = 0 Then Exit Function
+    If Left$(trimmedDatos, 1) <> "{" Or Right$(trimmedDatos, 1) <> "}" Then Exit Function
+
+    expectedUpper = """ESTADO"":" & JsonStringLiteral(p_Estado)
+    expectedMixed = """Estado"":" & JsonStringLiteral(p_Estado)
+
+    DatosNCContieneEstado = (InStr(1, trimmedDatos, expectedUpper, vbTextCompare) > 0 Or _
+                             InStr(1, trimmedDatos, expectedMixed, vbTextCompare) > 0)
+End Function
+
+Private Function JsonStringLiteral(ByVal p_Value As String) As String
+    Dim escapedValue As String
+
+    escapedValue = Nz(p_Value, "")
+    escapedValue = Replace(escapedValue, "\", "\\")
+    escapedValue = Replace(escapedValue, Chr$(34), "\" & Chr$(34))
+    JsonStringLiteral = Chr$(34) & escapedValue & Chr$(34)
 End Function
 
 

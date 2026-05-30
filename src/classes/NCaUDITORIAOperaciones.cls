@@ -15,9 +15,10 @@ Private m_Error As String
 Public Error As String
 
 
-Private Function MotivoDatosUnicosNoOK( _
+Public Function MotivoDatosUnicosNoOK( _
                                         Optional ByRef p_ObjNCAlInicio As NCAuditoria, _
-                                        Optional ByRef p_Error As String _
+                                        Optional ByRef p_Error As String, _
+                                        Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                         ) As String
     
     On Error GoTo errores
@@ -76,16 +77,18 @@ Private Function MotivoDatosUnicosNoOK( _
             Exit Function
             
         End If
-        If .RequiereControlEficacia = "Sí" Then
-            If Not IsDate(.FechaPrevistaControlEficacia) Then
-                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
-                Exit Function
+        If p_MenosCef <> EnumSino.Sí Then
+            If .RequiereControlEficacia = "Sí" Then
+                If Not IsDate(.FechaPrevistaControlEficacia) Then
+                    MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
+                    Exit Function
+                End If
+                If .ControlEficacia = "" Then
+                    MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
+                    Exit Function
+                End If
+
             End If
-            If .ControlEficacia = "" Then
-                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
-                Exit Function
-            End If
-            
         End If
         If IsDate(.FPREVCIERRE) Then
             If CDate(.FPREVCIERRE) < CDate(.FechaApertura) Then
@@ -106,7 +109,8 @@ End Function
 
 Public Function RegistrarDatosUnicos( _
                                     Optional ByRef p_ObjNCAlInicio As NCAuditoria, _
-                                    Optional ByRef p_Error As String _
+                                    Optional ByRef p_Error As String, _
+                                    Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                     ) As String
                                         
     Dim rcdDatos As DAO.Recordset
@@ -120,7 +124,7 @@ Public Function RegistrarDatosUnicos( _
     
     Me.Error = ""
     p_Error = ""
-    m_MotivoDatosUnicosNoOK = MotivoDatosUnicosNoOK(p_ObjNCAlInicio, p_Error)
+    m_MotivoDatosUnicosNoOK = MotivoDatosUnicosNoOK(p_ObjNCAlInicio, p_Error, p_MenosCef)
     If p_Error <> "" Then
         Err.Raise 1000
     End If

@@ -141,3 +141,22 @@ Regla dura para cualquier test que toque datos, tablas, configuración, caché p
 
 - `access-vba-sync`, `access-query`, `access-form-creation`, `jira-confluence-sdd`, `access-vba-tdd`
 - Los skills se resuelven desde las instalaciones globales/locales del entorno; no mantener copias vendorizadas en `.agents/skills/` dentro del repo salvo decisión explícita.
+
+---
+
+## Reglas VBA — Cosas que no hacer
+
+1. **No evaluar propiedad de objeto en la misma línea que se pregunta si es Nothing:**
+   ```vba
+   ' INCORRECTO — error de compilación en VBA
+   Debug.Print IIf(obj Is Nothing, "Nothing", obj.Property)
+   
+   ' CORRECTO — separar en dos líneas
+   If obj Is Nothing Then
+       Debug.Print "Nothing"
+   Else
+       Debug.Print obj.Property
+   End If
+   ```
+2. **No concatenar valores de campos sin verificar tipo:** campos Short Text con espacios pueden no ser numéricos aunque parezcan serlo.
+3. **Parámetros con nombre siempre para ByRef opcional:** usar `parametro:=valor` para evitar ambigüedad posicional en VBA.

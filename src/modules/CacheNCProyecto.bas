@@ -1625,7 +1625,6 @@ Public Function GetListadoFiltradoSQL( _
     Dim SQL As String
     Dim col As Collection
     Dim vm As NCProyectoListItemVM
-    Dim filtros As String
     
     On Error GoTo errores
     
@@ -1638,64 +1637,69 @@ Public Function GetListadoFiltradoSQL( _
         Exit Function
     End If
     
-    ' Construir WHERE dinámico
-    SQL = "SELECT n.IDNoConformidad, n.CodigoNoConformidad, n.IDExpediente, " & _
-          "n.Descripcion, n.Estado, n.FechaApertura, n.FECHACIERRE, " & _
-          "n.Proyecto, n.Vehiculo, n.ResponsableTelefonica, n.ResponsableCalidad, " & _
-          "n.Cerrada, n.RequiereACR, n.ACR, n.RequiereControlEficacia, " & _
-          "e.Nemotecnico, e.CodExp " & _
-          "FROM TbNoConformidades n " & _
-          "LEFT JOIN TbExpedientes e ON n.IDExpediente = e.IDExpediente " & _
-          "WHERE 1=1 "
+    ' Spec-003/005: el listado se filtra contra la caché backend compartida.
+    ' Los alias mantienen compatible NCProyectoListItemVM.CargarDesdeRecordset.
+    SQL = "SELECT IDNoConformidad, CodigoNoConformidad, IDExpediente, " & _
+          "Descripcion, Nemotecnico AS Expediente, Estado, " & _
+          "FechaApertura, FechaCierre, '' AS Proyecto, '' AS Vehiculo, " & _
+          "ResponsableTelefonica, RESPONSABLECALIDAD, Cerrada, " & _
+          "0 AS RequiereACR, ACR, RequiereControlEficacia, Nemotecnico, CodExp " & _
+          "FROM " & NOMBRE_TABLA_LISTADO & " WHERE CacheValida=True "
     
     If p_Codigo <> "" Then
-        SQL = SQL & "AND n.CodigoNoConformidad LIKE '%" & Replace(p_Codigo, "'", "''") & "%' "
+        SQL = SQL & "AND CodigoNoConformidad LIKE '*" & Replace(p_Codigo, "'", "''") & "*' "
     End If
     
     If p_IDExpediente > 0 Then
-        SQL = SQL & "AND n.IDExpediente = " & p_IDExpediente & " "
+        SQL = SQL & "AND IDExpediente = " & p_IDExpediente & " "
     End If
     
     If p_IDTipo > 0 Then
-        SQL = SQL & "AND n.IDTipo = " & p_IDTipo & " "
+        SQL = SQL & "AND IDTipo = " & p_IDTipo & " "
     End If
     
     If p_Estado <> "" Then
-        SQL = SQL & "AND n.Estado = '" & Replace(p_Estado, "'", "''") & "' "
+        SQL = SQL & "AND Estado = '" & Replace(p_Estado, "'", "''") & "' "
     End If
     
     If p_Descripcion <> "" Then
-        SQL = SQL & "AND n.Descripcion LIKE '%" & Replace(p_Descripcion, "'", "''") & "%' "
+        SQL = SQL & "AND Descripcion LIKE '*" & Replace(p_Descripcion, "'", "''") & "*' "
     End If
     
     If p_Notas <> "" Then
-        SQL = SQL & "AND n.Notas LIKE '%" & Replace(p_Notas, "'", "''") & "%' "
+        SQL = SQL & "AND Notas LIKE '*" & Replace(p_Notas, "'", "''") & "*' "
     End If
     
     If p_RequiereCE <> "" Then
-        SQL = SQL & "AND n.RequiereCE = '" & Replace(p_RequiereCE, "'", "''") & "' "
+        SQL = SQL & "AND RequiereControlEficacia = '" & Replace(p_RequiereCE, "'", "''") & "' "
     End If
     
-    If p_ControlEficacia <> "" Then
-        SQL = SQL & "AND n.RequiereControlEficacia = '" & Replace(p_ControlEficacia, "'", "''") & "' "
+    If p_ControlEficacia = "Sí" Then
+        SQL = SQL & "AND ControlEficacia IS NOT NULL AND ControlEficacia <> '' "
+    ElseIf p_ControlEficacia = "No" Then
+        SQL = SQL & "AND (ControlEficacia IS NULL OR ControlEficacia = '') "
     End If
     
     If p_ResponsableCalidad <> "" Then
-        SQL = SQL & "AND n.ResponsableCalidad LIKE '%" & Replace(p_ResponsableCalidad, "'", "''") & "%' "
+        SQL = SQL & "AND RESPONSABLECALIDAD LIKE '*" & Replace(p_ResponsableCalidad, "'", "''") & "*' "
     End If
     
     If p_ResponsableTelefonica <> "" Then
-        SQL = SQL & "AND n.ResponsableTelefonica LIKE '%" & Replace(p_ResponsableTelefonica, "'", "''") & "%' "
+        SQL = SQL & "AND ResponsableTelefonica LIKE '*" & Replace(p_ResponsableTelefonica, "'", "''") & "*' "
     End If
     
     ' Filtro de registros cerrados
-    If p_RegistrosCerrados = "0" Then
-        SQL = SQL & "AND n.Cerrada = 0 "
-    ElseIf p_RegistrosCerrados = "1" Then
-        SQL = SQL & "AND n.Cerrada = 1 "
+    If p_RegistrosCerrados = "No" Or p_RegistrosCerrados = "0" Then
+        SQL = SQL & "AND FechaCierre IS NULL "
+    ElseIf p_RegistrosCerrados = "Sí" Or p_RegistrosCerrados = "1" Then
+        SQL = SQL & "AND FechaCierre IS NOT NULL "
+    End If
+
+    If p_Google <> "" Then
+        SQL = SQL & "AND (Descripcion LIKE '*" & Replace(p_Google, "'", "''") & "*' OR Notas LIKE '*" & Replace(p_Google, "'", "''") & "*') "
     End If
     
-    SQL = SQL & "ORDER BY n.FechaApertura DESC"
+    SQL = SQL & "ORDER BY FechaApertura DESC"
     
     Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
     

@@ -76,7 +76,7 @@ Private Sub ComandoGrabar_Click()
     If m_Error <> "" Then
         Err.Raise 100
     End If
-    If m_ObjNCAuditoriaActiva.DatosGeneralesOK = EnumSino.No Then
+    If m_ObjNCAuditoriaActiva.DatosGeneralesOK(EnumSino.Sí) = EnumSino.No Then
         m_Error = "Antes de rellenar este apartado ha de tener todos los datos obligatorios principales rellenos"
         Err.Raise 1000
     End If

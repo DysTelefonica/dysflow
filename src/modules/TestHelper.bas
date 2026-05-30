@@ -89,8 +89,8 @@ Private Function ResolveBackendSandbox(ByRef p_BackendPath As String, ByRef p_Ba
         GoTo Cleanup
     End If
 
-    p_BackendPath = Trim$(Nz(rsConfig.Fields("BackendSandbox").Value, ""))
-    p_BackendPassword = Nz(rsConfig.Fields("PasswordBackend").Value, "")
+    p_BackendPath = Trim$(Nz(rsConfig.Fields("BackendSandbox").value, ""))
+    p_BackendPassword = Nz(rsConfig.Fields("PasswordBackend").value, "")
     If p_BackendPassword = "" Then p_BackendPassword = Environ$("ACCESS_VBA_PASSWORD")
 
     If p_BackendPath = "" Then
@@ -238,6 +238,32 @@ End Function
 
 Public Function SqlText(ByVal p_Value As String) As String
     SqlText = "'" & Replace(p_Value, "'", "''") & "'"
+End Function
+
+Public Function CreateExpedienteFake(ByVal p_IDExpediente As String) As Expediente
+    Dim exp As Expediente
+    Dim m_Error As String
+    Set exp = New Expediente
+    exp.SetPropiedad "IDExpediente", p_IDExpediente, m_Error
+    If m_Error <> "" Then Err.Raise 1000, "CreateExpedienteFake", m_Error
+    Set CreateExpedienteFake = exp
+End Function
+
+Public Function CreateAuditoriaFake(Optional ByVal p_IDAuditoria As String = "TEST-AUD-001") As Auditoria
+    Dim aud As Auditoria
+    Dim m_Error As String
+    Set aud = New Auditoria
+    aud.SetPropiedad "IDAuditoria", p_IDAuditoria, m_Error
+    If m_Error <> "" Then Err.Raise 1000, "CreateAuditoriaFake", m_Error
+    Set CreateAuditoriaFake = aud
+End Function
+
+Public Function SetAuditoriaObj(ByRef p_NCAuditoria As NCAuditoria, ByRef p_Auditoria As Auditoria) As Boolean
+    On Error Resume Next
+    ' Direct assignment to the private field via the class interface
+    p_NCAuditoria.SetPropiedad "m_ObjAuditoria", p_Auditoria, ""
+    SetAuditoriaObj = (Err.Number = 0)
+    If Err.Number <> 0 Then Err.Clear
 End Function
 
 Private Function CollectionToArray(ByRef p_Items As Collection) As Variant

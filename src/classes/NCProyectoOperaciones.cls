@@ -10,16 +10,17 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 
-Public nc As NCProyecto
+Public nc As ncProyecto
 Private m_Error As String
 Public Error As String
 
 
-Private Function MotivoAltaDatosUnicosNoOK( _
-                                        Optional ByRef p_ObjNCAlInicio As NCProyecto, _
-                                        Optional ByRef p_Error As String _
+Public Function MotivoAltaDatosUnicosNoOK( _
+                                        Optional ByRef p_ObjNCAlInicio As ncProyecto, _
+                                        Optional ByRef p_Error As String, _
+                                        Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                         ) As String
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim blnComprobar As Boolean
     On Error GoTo errores
     If Me.nc Is Nothing Then
@@ -108,16 +109,18 @@ Private Function MotivoAltaDatosUnicosNoOK( _
             MotivoAltaDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
             Exit Function
         End If
-        If .RequiereControlEficacia = "Sí" Then
-            If Not IsDate(.FechaPrevistaControlEficacia) Then
-                MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
-                Exit Function
+        If p_MenosCef <> EnumSino.Sí Then
+            If .RequiereControlEficacia = "Sí" Then
+                If Not IsDate(.FechaPrevistaControlEficacia) Then
+                    MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
+                    Exit Function
+                End If
+                If .ControlEficacia = "" Then
+                    MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
+                    Exit Function
+                End If
+
             End If
-            If .ControlEficacia = "" Then
-                MotivoAltaDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
-                Exit Function
-            End If
-            
         End If
         
         
@@ -137,7 +140,7 @@ End Function
 Private Function MotivoEdicionDatosUnicosNoOK( _
                                                 Optional ByRef p_Error As String _
                                                 ) As String
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim blnComprobar As Boolean
     On Error GoTo errores
     If Me.nc Is Nothing Then
@@ -197,11 +200,12 @@ errores:
      End If
                                 
 End Function
-Private Function MotivoDatosUnicosNoOK( _
-                                        Optional ByRef p_ObjNCAlInicio As NCProyecto, _
-                                        Optional ByRef p_Error As String _
+Public Function MotivoDatosUnicosNoOK( _
+                                        Optional ByRef p_ObjNCAlInicio As ncProyecto, _
+                                        Optional ByRef p_Error As String, _
+                                        Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                         ) As String
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim blnComprobar As Boolean
     On Error GoTo errores
     If Me.nc Is Nothing Then
@@ -287,16 +291,18 @@ Private Function MotivoDatosUnicosNoOK( _
             MotivoDatosUnicosNoOK = "Se ha de indicar si requiere control de eficacia"
             Exit Function
         End If
-        If .RequiereControlEficacia = "Sí" Then
-            If Not IsDate(.FechaPrevistaControlEficacia) Then
-                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
-                Exit Function
+        If p_MenosCef <> EnumSino.Sí Then
+            If .RequiereControlEficacia = "Sí" Then
+                If Not IsDate(.FechaPrevistaControlEficacia) Then
+                    MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar la fecha prevista del mismo"
+                    Exit Function
+                End If
+                If .ControlEficacia = "" Then
+                    MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
+                    Exit Function
+                End If
+
             End If
-            If .ControlEficacia = "" Then
-                MotivoDatosUnicosNoOK = "Si requiere el control de eficacia se ha de indicar el mismo"
-                Exit Function
-            End If
-            
         End If
         If Not IsDate(.FechaApertura) Then
             MotivoDatosUnicosNoOK = "No se conoce la fecha de apertura"
@@ -322,8 +328,9 @@ errores:
                                 
 End Function
 Public Function RegistrarDatosUnicos( _
-                                    Optional ByRef p_ObjNCAlInicio As NCProyecto, _
-                                    Optional ByRef p_Error As String _
+                                    Optional ByRef p_ObjNCAlInicio As ncProyecto, _
+                                    Optional ByRef p_Error As String, _
+                                    Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                     ) As String
                                         
     Dim rcdDatos As DAO.Recordset
@@ -337,7 +344,7 @@ Public Function RegistrarDatosUnicos( _
     
     Me.Error = ""
     p_Error = ""
-    m_MotivoDatosUnicosNoOK = MotivoDatosUnicosNoOK(p_ObjNCAlInicio, p_Error)
+    m_MotivoDatosUnicosNoOK = MotivoDatosUnicosNoOK(p_ObjNCAlInicio, p_Error, p_MenosCef)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -430,19 +437,13 @@ Public Function RegistrarDatosUnicos( _
 '                rcdDatos.Fields("FPREVCIERRE") = Me.NC.FPREVCIERRE
 '            End If
             
-            Me.nc.Estado = Me.nc.EstadoCalculadoTexto
-            m_EstadoAlFinal = Me.nc.Estado
-            rcdDatos.Fields("Estado") = Me.nc.Estado
+            m_EstadoAlFinal = Me.nc.EstadoCalculadoTexto
         rcdDatos.Update
-        ' Actualizar Caché
-        If AplicarCache Then
-        
-        
-            CacheNCProyecto.ActualizarCacheNC Me.nc, "*", p_Error
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
+        Me.nc.EstadoGrabar m_EstadoAlFinal, p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
         End If
+        ' EstadoGrabar regenera cache de listado/detalle; no invalidar detalle justo despues del alta.
         RegistrarLogProyecto "Alta de NC", , Me.nc, , p_Error
         
         
@@ -536,11 +537,14 @@ Public Function RegistrarDatosUnicos( _
             End If
             rcdDatos.Fields("FECHAAPERTURA") = Me.nc.FechaApertura
            ' rcdDatos.Fields("FPREVCIERRE") = Me.NC.FPREVCIERRE
-            Me.nc.Estado = Me.nc.EstadoCalculadoTexto
-            m_EstadoAlFinal = Me.nc.Estado
-            rcdDatos.Fields("Estado") = Me.nc.Estado
-            
+            m_EstadoAlFinal = Me.nc.EstadoCalculadoTexto
+
         rcdDatos.Update
+        Me.nc.Estado = m_EstadoAlInicio
+        Me.nc.EstadoGrabar m_EstadoAlFinal, p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
         
         
         
@@ -592,12 +596,14 @@ errores:
     End If
 End Function
 Public Function RegistrarAltaDatosUnicosConVinculoNC( _
-                                                    Optional ByRef p_Error As String _
+                                                    Optional ByRef p_Error As String, _
+                                                    Optional ByVal p_MenosCef As EnumSino = EnumSino.No _
                                                     ) As String
-                                        
+
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
     Dim m_MotivoAltaDatosUnicosNoOK As String
+    Dim m_EstadoAlFinal As String
    
     
     
@@ -609,7 +615,7 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
         p_Error = "Solo se puede vincular a otra NC de proyecto en el alta"
         Err.Raise 1000
     End If
-    m_MotivoAltaDatosUnicosNoOK = MotivoAltaDatosUnicosNoOK(, p_Error)
+    m_MotivoAltaDatosUnicosNoOK = MotivoAltaDatosUnicosNoOK(, p_Error, p_MenosCef)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -686,13 +692,16 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
             rcdDatos.Fields("FECHACIERRE") = Me.nc.FECHACIERRE
         End If
         If Me.nc.NCProyectoAsociada Is Nothing Then
-            Me.nc.Estado = Me.nc.EstadoCalculadoTexto
+            m_EstadoAlFinal = Me.nc.EstadoCalculadoTexto
         Else
-            Me.nc.Estado = Me.nc.NCProyectoAsociada.EstadoCalculadoTexto
+            m_EstadoAlFinal = Me.nc.NCProyectoAsociada.EstadoCalculadoTexto
         End If
-        rcdDatos.Fields("Estado") = Me.nc.Estado
         
     rcdDatos.Update
+    Me.nc.EstadoGrabar m_EstadoAlFinal, p_Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     SincronizarNCProyectoVinculada Me.nc, p_Error
     If p_Error <> "" Then
         Err.Raise 1000
@@ -716,7 +725,7 @@ errores:
 End Function
 
 Public Function RegistrarCambiosDatosUnicosConVinculoNC( _
-                                                        ByRef p_ObjNCAlInicio As NCProyecto, _
+                                                        ByRef p_ObjNCAlInicio As ncProyecto, _
                                                         Optional ByRef p_Error As String _
                                                         ) As String
                                             
@@ -1083,15 +1092,14 @@ Public Function RegistrarControlEficacia( _
             rcdDatos.Fields("RequiereControlEficacia") = .RequiereControlEficacia
             rcdDatos.Fields("FechaPrevistaControlEficacia") = .FechaPrevistaControlEficacia
             rcdDatos.Fields("ControlEficacia") = .ControlEficacia
-            .Estado = .EstadoCalculadoTexto
-            rcdDatos.Fields("Estado") = .Estado
             
         rcdDatos.Update
         rcdDatos.Close
         Set rcdDatos = Nothing
-        ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "Registro de Control de Eficacia", p_Error
-        ' -------------------------
+        SincronizarEstadoCacheListado "Registro de Control de Eficacia", p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
         RegistrarLogProyecto "Registrar Control de Eficacia", , Me.nc, , p_Error
         If p_Error <> "" Then
             Err.Raise 1000
@@ -1153,15 +1161,14 @@ Public Function EliminarControlEficacia( _
             rcdDatos.Fields("FechaControlEficacia") = Null
             rcdDatos.Fields("ResultadoControlEficacia") = Null
             rcdDatos.Fields("ConformeControlEficacia") = Null
-            .Estado = .EstadoCalculadoTexto
-            rcdDatos.Fields("Estado") = .Estado
-            m_EstadoAlFinal = .Estado
         rcdDatos.Update
         rcdDatos.Close
         Set rcdDatos = Nothing
-         ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "Eliminación de Control de Eficacia", p_Error
-        ' -------------------------
+        SincronizarEstadoCacheListado "Eliminación de Control de Eficacia", p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        m_EstadoAlFinal = .Estado
         RegistrarLogProyecto "Registrar Eliminar Control de Eficacia", , Me.nc, , p_Error
         If p_Error <> "" Then
             Err.Raise 1000
@@ -1256,15 +1263,14 @@ Public Function RegistrarResultadoControlEficacia( _
             rcdDatos.Fields("FechaControlEficacia") = .FechaControlEficacia
             rcdDatos.Fields("ResultadoControlEficacia") = .ResultadoControlEficacia
             rcdDatos.Fields("ConformeControlEficacia") = .ConformeControlEficacia
-            .Estado = .EstadoCalculadoTexto
-            rcdDatos.Fields("Estado") = .Estado
             
         rcdDatos.Update
         rcdDatos.Close
         Set rcdDatos = Nothing
-        ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "Resultado de Control de Eficacia", p_Error
-        ' -------------------------
+        SincronizarEstadoCacheListado "Resultado de Control de Eficacia", p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
         RegistrarLogProyecto "Registrar Resultado de Control de Eficacia", , Me.nc, , p_Error
         If p_Error <> "" Then
             Err.Raise 1000
@@ -1313,15 +1319,14 @@ Public Function EliminarResultadoControlEficacia( _
             rcdDatos.Fields("FechaControlEficacia") = Null
             rcdDatos.Fields("ResultadoControlEficacia") = Null
             rcdDatos.Fields("ConformeControlEficacia") = Null
-            .Estado = .EstadoCalculadoTexto
-            rcdDatos.Fields("Estado") = .Estado
             
         rcdDatos.Update
         rcdDatos.Close
         Set rcdDatos = Nothing
-        ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "Eliminación de resultado de Control de Eficacia", p_Error
-        ' -------------------------
+        SincronizarEstadoCacheListado "Eliminación de resultado de Control de Eficacia", p_Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
         RegistrarLogProyecto "Registrar Eliminación de Resultado de Control de Eficacia", , Me.nc, , p_Error
         If p_Error <> "" Then
             Err.Raise 1000
@@ -1339,6 +1344,39 @@ errores:
         p_Error = "El método NCProyectoOperaciones.EliminarResultadoControlEficacia ha devuelto el error: " & Err.Description
     End If
 End Function
+
+Private Sub SincronizarEstadoCacheListado( _
+                                        ByVal p_Motivo As String, _
+                                        Optional ByRef p_Error As String _
+                                        )
+    Dim estadoFinal As String
+    Dim estadoPersistido As String
+    Dim cacheError As String
+
+    On Error GoTo errores
+
+    p_Error = ""
+    estadoPersistido = Me.nc.Estado
+    estadoFinal = Me.nc.EstadoCalculadoTexto
+    Me.nc.Estado = estadoPersistido
+
+    If Nz(estadoPersistido, "") <> Nz(estadoFinal, "") Then
+        Me.nc.EstadoGrabar estadoFinal, p_Error
+        If p_Error <> "" Then Err.Raise 1000
+        Exit Sub
+    End If
+
+    If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.nc.IDNoConformidad), cacheError) Then
+        p_Error = "No se pudo regenerar caché de listado tras " & p_Motivo & ": " & cacheError
+        Err.Raise 1000
+    End If
+    Exit Sub
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método NCProyectoOperaciones.SincronizarEstadoCacheListado ha devuelto el error: " & Err.Description
+    End If
+End Sub
 Public Function RegistrarNota( _
                                 Optional ByRef p_Error As String _
                                 ) As String
@@ -1438,7 +1476,7 @@ Public Function BorrarTodoLoNecesarioEnVinculados( _
             .Edit
                 For Each m_Campo In Me.nc.ColCamposVarianEnVinculacionNC
                     Me.nc.SetPropiedad m_Campo, ""
-                    .Fields(m_Campo).Value = Null
+                    .Fields(m_Campo).value = Null
                 Next
             .Update
         End If
@@ -1553,4 +1591,6 @@ errores:
     p_Error = "Error en NCProyectoOperaciones.ActualizarRiesgosNC: " & Err.Description
     Err.Raise 1000, , p_Error
 End Sub
+
+
 

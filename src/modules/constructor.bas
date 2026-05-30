@@ -4800,11 +4800,12 @@ Public Function getAuditoria( _
                                 Optional ByRef p_Error As String _
                                 ) As Auditoria
 
+    Dim qdf As DAO.QueryDef
     Dim rcdDatos As DAO.Recordset
-    Dim m_SQL As String
     Dim m_Campo As Variant
-        
-    
+    Dim m_ID As Long
+
+
     On Error GoTo errores
     If p_ID = "" Then
         Exit Function
@@ -4812,40 +4813,51 @@ Public Function getAuditoria( _
     If p_db Is Nothing Then
         Set p_db = getdb()
     End If
-    m_SQL = "SELECT * FROM " & _
-            "TbAuditorias " & _
-            "WHERE IDAuditoria=" & p_ID & ";"
-   
-    Set rcdDatos = p_db.OpenRecordset(m_SQL)
+
+    m_ID = CLng(p_ID)
+    Set qdf = p_db.CreateQueryDef("", "SELECT * FROM TbAuditorias WHERE IDAuditoria=[pID]")
+    qdf.Parameters("pID").Value = m_ID
+    Set rcdDatos = qdf.OpenRecordset()
+
     With rcdDatos
         If .EOF Then
             rcdDatos.Close
             Set rcdDatos = Nothing
+            qdf.Close
+            Set qdf = Nothing
             Exit Function
         End If
-       Set getAuditoria = New Auditoria
+        Set getAuditoria = New Auditoria
         For Each m_Campo In getAuditoria.ColCampos
             getAuditoria.SetPropiedad m_Campo, Nz(.Fields(m_Campo).Value, ""), p_Error
             If p_Error <> "" Then
+                .Close
+                rcdDatos.Close
+                Set rcdDatos = Nothing
+                qdf.Close
+                Set qdf = Nothing
                 Err.Raise 1000
             End If
         Next
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
-    
+    qdf.Close
+    Set qdf = Nothing
+
     Exit Function
-    
+
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método getAuditoria ha devuelto el error: " & Err.Description
-    End If
+    On Error Resume Next
+    If Not rcdDatos Is Nothing Then rcdDatos.Close: Set rcdDatos = Nothing
+    If Not qdf Is Nothing Then qdf.Close: Set qdf = Nothing
+    p_Error = "El método getAuditoria ha devuelto el error: " & Err.Description
 End Function
 
 Public Function getAuditorias( _
                                 Optional p_db As DAO.Database, _
-                                    Optional ByRef p_Error As String _
-                                    ) As Scripting.Dictionary
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
 
     
     Dim rcdDatos As DAO.Recordset

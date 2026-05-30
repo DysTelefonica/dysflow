@@ -3258,8 +3258,11 @@ Public Function ActualizarDatosNCProyecto( _
         End If
     End With
     ' --- INTEGRACIÓN CACHÉ ---
-    ' Al actualizar datos de la NC, invalidamos su caché para forzar la regeneración
-    CacheNCProyecto.InvalidarCache p_NC.IDNoConformidad, "Actualización de datos calculados (ActualizarDatosNCProyecto)", p_Error
+    ' ActualizarDatosCalculados puede cambiar campos calculados antes de EstadoGrabar;
+    ' dejamos detalle y listado regenerados y válidos, no solo marcados como stale.
+    If Not CacheNCProyecto.RegenerarRegistro(CStr(p_NC.IDNoConformidad), p_Error) Then
+        Err.Raise 1000
+    End If
     ' -------------------------
     Set m_ObjNCProyectoActiva = p_NC
     Exit Function
@@ -3396,6 +3399,11 @@ Public Function SincronizarNCProyectoVinculada( _
     Dim m_ACOp As ACProyectoOperaciones
     Dim m_AROp As ARProyectoOperaciones
     Dim m_Campo As Variant
+    Dim m_EstadoVinculado As String
+    Dim m_EstadoDestinoPersistido As String
+    Dim m_TieneEstadoVinculado As Boolean
+    Dim m_NumeroError As Long
+    Dim m_DescripcionError As String
     On Error GoTo errores
     
     p_Error = ""
@@ -3419,6 +3427,7 @@ Public Function SincronizarNCProyectoVinculada( _
     Set rcdDatos = getdb().OpenRecordset(m_SQL)
     With rcdDatos
         If Not .EOF Then
+            m_EstadoDestinoPersistido = Nz(.Fields("ESTADO").Value, "")
             .Edit
                 For Each m_Campo In m_NCVinculada.ColCamposParaCopiarDeVinculada
                     m_Valor = m_NCVinculada.getPropiedad(m_Campo, p_Error)
@@ -3428,6 +3437,11 @@ Public Function SincronizarNCProyectoVinculada( _
                     p_NCDestino.SetPropiedad m_Campo, m_Valor, p_Error
                     If p_Error <> "" Then
                         Err.Raise 1000
+                    End If
+                    If StrComp(CStr(m_Campo), "ESTADO", vbTextCompare) = 0 Then
+                        m_EstadoVinculado = m_Valor
+                        m_TieneEstadoVinculado = True
+                        GoTo siguiente
                     End If
                     If m_Valor = "Verdadero" Or m_Valor = "True" Or m_Valor = "Falso" Or m_Valor = "False" Then
                         .Fields(m_Campo).Value = CBool(m_Valor)
@@ -3446,6 +3460,15 @@ siguiente:
     End With
     rcdDatos.Close
     Set rcdDatos = Nothing
+    If m_TieneEstadoVinculado Then
+        If Trim$(m_EstadoVinculado) <> "" Then
+            p_NCDestino.Estado = m_EstadoDestinoPersistido
+            p_NCDestino.EstadoGrabar m_EstadoVinculado, p_Error
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        End If
+    End If
     'ahora borramos todo lo que pudiera tener de otras cosas p_NCDestino
     m_SQL = "DELETE * " & _
             "FROM TbNCAccionCorrectivas " & _
@@ -3506,8 +3529,15 @@ siguiente:
     
     Exit Function
 errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método SincronizarNCProyectoVinculada ha devuelto el error: " & vbNewLine & Err.Description
+    m_NumeroError = Err.Number
+    m_DescripcionError = Err.Description
+    On Error Resume Next
+    If Not rcdDatos Is Nothing Then
+        rcdDatos.Close
+        Set rcdDatos = Nothing
+    End If
+    If m_NumeroError <> 1000 Then
+        p_Error = "El método SincronizarNCProyectoVinculada ha devuelto el error: " & vbNewLine & m_DescripcionError
     End If
 End Function
 Public Function getURLCarpetaAnexoAuditoria( _
