@@ -120,8 +120,8 @@
       "expect": { "ok": true },
       "tags": ["atomic", "cache-sync", "issue-18"]
     },
-    {
-      "name": "Issue19 CE alta si sin detalle no bloquea",
+{
+      "name": "Issue19 CE alta si sin detalle no bloquea (bypass)",
       "procedure": "Test_Issue19_CE_Alta_Si_SinDetalle_NoBloquea",
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "object"]
@@ -162,11 +162,41 @@
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "object"]
     },
-    {
+{
       "name": "Issue19 paridad UI dominio",
       "procedure": "Test_Issue19_Paridad_UI_Dominio",
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "object"]
+    },
+    {
+      "name": "Issue19 CE MotivoAlta bypass p_MenosCef=Sí",
+      "procedure": "Test_Issue19_CE_Alta_MotivoAlta_Bypass_Si",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Issue19 CE MotivoAlta bypass no aplica si RequereCE blank",
+      "procedure": "Test_Issue19_CE_Alta_MotivoAlta_Bypass_BlankRequereCE",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Issue19 CE edición MotivoDatosUnicos bypass NCProyecto",
+      "procedure": "Test_Issue19_CE_Edicion_MotivoDatosUnicos_Bypass",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Issue19 CE edición MotivoDatosUnicos bypass NCAuditoria",
+      "procedure": "Test_Issue19_CE_Auditoria_MotivoDatosUnicos_Bypass",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Issue19 CE EficaciaOK sin cambios",
+      "procedure": "Test_Issue19_CE_EficaciaOK_SinCambios",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
     }
   ]
 }

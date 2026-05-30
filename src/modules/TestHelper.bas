@@ -15,10 +15,11 @@ Public Function BeginTestSession(ByRef logs As Collection, Optional ByRef p_Erro
     BeginTestSession = False
     If logs Is Nothing Then Set logs = NewLogs()
 
+    ' Recuperación automática de estado stale (test anterior crasheó sin EndTestSession)
     If m_TestingMode Then
-        p_Error = "BeginTestSession: ya existe una sesión de test activa"
-        AddLog logs, p_Error
-        Exit Function
+        AddLog logs, "WARN: m_TestingMode=True stale - recuperando sesión previa"
+        Call ResetTestSession(p_Error)
+        p_Error = ""
     End If
 
     p_Error = ""
@@ -46,8 +47,7 @@ Public Function BeginTestSession(ByRef logs As Collection, Optional ByRef p_Erro
 EH:
     p_Error = "BeginTestSession: " & Err.Description
     AddLog logs, p_Error
-    m_TestingMode = False
-    m_BackendSandboxURL = ""
+    Call ResetTestSession(p_Error)
 End Function
 
 Public Sub EndTestSession(ByRef logs As Collection)
