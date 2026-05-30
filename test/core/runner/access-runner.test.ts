@@ -824,7 +824,6 @@ describe("Cross-process lock for .accdb", () => {
     const { readFileSync } = await import("node:fs");
     const scriptContent = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
 
-
     // 1. Initialized script-scoped variables
     expect(scriptContent).toContain("$script:exitCode =");
     expect(scriptContent).toContain("$script:accessPid =");
@@ -857,7 +856,8 @@ describe("Cross-process lock for .accdb", () => {
       {
         ...config,
         accessDbPath: dbPath,
-        accessPassword: process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? "",
+        accessPassword:
+          process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? "",
         timeoutMs: 30_000,
         processTimeoutMs: 30_000,
       },
@@ -869,8 +869,8 @@ describe("Cross-process lock for .accdb", () => {
       let isRunning = true;
       try {
         process.kill(pid, 0);
-      } catch (e: any) {
-        if (e.code === "ESRCH") {
+      } catch (e: unknown) {
+        if ((e as NodeJS.ErrnoException).code === "ESRCH") {
           isRunning = false;
         }
       }
@@ -878,6 +878,3 @@ describe("Cross-process lock for .accdb", () => {
     }
   }, 30_000);
 });
-
-
-
