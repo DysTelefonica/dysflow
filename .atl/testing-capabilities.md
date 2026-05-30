@@ -1,8 +1,8 @@
 ## Testing Capabilities
 
 **Strict TDD Mode**: enabled
-**Detected**: 2026-05-15
-**Updated**: 2026-05-15 after Dysflow HTTP API Foundation implementation
+**Detected**: 2026-05-30
+**Updated**: 2026-05-30 after active workspace scanning
 **Project**: dysflow
 
 ### Test Runner
@@ -16,24 +16,24 @@
 | Layer | Available | Tool |
 | --- | --- | --- |
 | Unit | yes | Vitest |
-| Integration | yes | Vitest + in-process adapters/fetch |
-| E2E | no | — |
+| Integration | yes | Vitest |
+| E2E | yes | Vitest + node E2E + Pester |
 
 ### Coverage
 
-- Available: no
-- Command: `—`
+- Available: yes
+- Command: `pnpm coverage`
 
 ### Quality Tools
 
 | Tool | Available | Command |
 | --- | --- | --- |
-| Linter | no | — |
+| Linter | yes | `pnpm lint` |
 | Type checker | yes | `pnpm build` |
-| Formatter | no | — |
+| Formatter | yes | `pnpm format:check` |
 
 ### Strict TDD Resolution
 
 - Source: user/project instruction marker says Strict TDD Mode is enabled.
 - Effective value: `strict_tdd: true`.
-- Runner caveat: resolved. The project now has `pnpm test` and `pnpm build`; future `sdd-apply` phases must use them.
+- Runner caveat: resolved. The project has `pnpm test`, `pnpm build`, `pnpm lint`, `pnpm format:check`, and `pnpm coverage` available.

@@ -15,30 +15,30 @@ testing:
   test_command: "pnpm test"
   runner: "pnpm"
   framework: "Vitest"
-  detected: "2026-05-15"
+  detected: "2026-05-30"
   layers:
     unit:
       available: true
       tool: "Vitest"
     integration:
       available: true
-      tool: "Vitest + in-process adapters/fetch"
+      tool: "Vitest"
     e2e:
-      available: false
-      tool: ""
+      available: true
+      tool: "Vitest + node E2E + Pester"
   coverage:
-    available: false
-    command: ""
+    available: true
+    command: "pnpm coverage"
   quality:
     linter:
-      available: false
-      command: ""
+      available: true
+      command: "pnpm lint"
     type_checker:
       available: true
       command: "pnpm build"
     formatter:
-      available: false
-      command: ""
+      available: true
+      command: "pnpm format:check"
 
 rules:
   proposal:

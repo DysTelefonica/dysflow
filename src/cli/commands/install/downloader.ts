@@ -8,6 +8,8 @@ const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
 const GITHUB_LATEST_RELEASE_API =
   "https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 export type ReleaseInfo = {
   version: string;
   tagName?: string;
@@ -59,6 +61,7 @@ async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
     "gh",
     ["release", "view", "--repo", "DysTelefonica/dysflow", "--json", "tagName", "--jq", ".tagName"],
     process.cwd(),
+    { timeoutMs: 30_000 },
   );
   if (tagName.length === 0) {
     throw new Error("gh release view did not return a tagName.");
@@ -82,9 +85,17 @@ async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> 
 export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
   return {
     async resolveLatestRelease(): Promise<ReleaseInfo> {
-      const response = await fetch(GITHUB_LATEST_RELEASE_API, {
-        headers: createGitHubReleaseRequestHeaders(),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch(GITHUB_LATEST_RELEASE_API, {
+          headers: createGitHubReleaseRequestHeaders(),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!response.ok) {
         try {
           return await resolveLatestReleaseWithGh();
@@ -124,9 +135,17 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         const checksumsUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/SHA256SUMS`;
 
         // 1. Download archive
-        const archiveResponse = await fetch(archiveUrl, {
-          headers: createGitHubReleaseRequestHeaders(environment),
-        });
+        const archiveController = new AbortController();
+        const archiveTimeout = setTimeout(() => archiveController.abort(), FETCH_TIMEOUT_MS);
+        let archiveResponse: Response;
+        try {
+          archiveResponse = await fetch(archiveUrl, {
+            headers: createGitHubReleaseRequestHeaders(environment),
+            signal: archiveController.signal,
+          });
+        } finally {
+          clearTimeout(archiveTimeout);
+        }
 
         if (archiveResponse.status === 404) {
           // Archive not available for this release — fall back to git clone
@@ -135,10 +154,13 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
               "git",
               ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
               tempRoot,
+              { timeoutMs: 120_000 },
             );
             const commitSha = await tryResolveGitCommitSha(packageRoot);
-            await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot);
-            await runCommand("pnpm", ["build"], packageRoot);
+            await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot, {
+              timeoutMs: 120_000,
+            });
+            await runCommand("pnpm", ["build"], packageRoot, { timeoutMs: 120_000 });
             return { packageRoot, commitSha, cleanup };
           } catch (cloneError) {
             await cleanup();
@@ -158,9 +180,17 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 
         // 2. Verification
         if (!options?.skipChecksum) {
-          const checksumsResponse = await fetch(checksumsUrl, {
-            headers: createGitHubReleaseRequestHeaders(environment),
-          });
+          const checksumController = new AbortController();
+          const checksumTimeout = setTimeout(() => checksumController.abort(), FETCH_TIMEOUT_MS);
+          let checksumsResponse: Response;
+          try {
+            checksumsResponse = await fetch(checksumsUrl, {
+              headers: createGitHubReleaseRequestHeaders(environment),
+              signal: checksumController.signal,
+            });
+          } finally {
+            clearTimeout(checksumTimeout);
+          }
           if (!checksumsResponse.ok) {
             throw new Error(
               `Failed to download checksums file from ${checksumsUrl}: HTTP ${checksumsResponse.status}. ` +
@@ -198,7 +228,9 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
 
         // 4. Extract archive
         await mkdir(packageRoot, { recursive: true });
-        await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot);
+        await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot, {
+          timeoutMs: 60_000,
+        });
 
         const commitSha = await tryResolveGitCommitSha(packageRoot);
         return { packageRoot, commitSha, cleanup };
