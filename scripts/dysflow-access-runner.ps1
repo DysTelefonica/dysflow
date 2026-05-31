@@ -219,6 +219,26 @@ function ConvertTo-IsoStartTime {
   return ([datetime]::Parse($text)).ToUniversalTime().ToString('o')
 }
 
+function Get-ProcessIdFromHwnd {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Mandatory = $true)][IntPtr]$Hwnd
+  )
+  if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
+    Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class NativeMethods {
+  [DllImport("user32.dll")]
+  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+}
+"@
+  }
+  [uint32]$pid = 0
+  [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
+  return [int]$pid
+}
+
 function Get-MsAccessProcesses {
   @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue |
     Select-Object ProcessId, CreationDate, CommandLine)
@@ -1546,7 +1566,18 @@ try {
     $originalAutomationSecurity = $access.AutomationSecurity
     $access.AutomationSecurity = $MSO_AUTOMATION_SECURITY_LOW
   } catch { Write-Debug "Diagnostics: $_" }
-  Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+  # Primary PID capture: use the window handle returned by Access itself — deterministic,
+  # no ambiguity even when multiple Access instances are running simultaneously.
+  try {
+    $hwnd = [IntPtr]$access.hWndAccessApp
+    if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
+      $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
+    }
+  } catch { Write-Debug "Diagnostics: $_" }
+  # Fallback: WMI pre/post diff (heuristic — only used when hWnd returned 0).
+  if (-not $script:accessPid) {
+    Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+  }
 
   if (-not $isDirectTargetQuery) {
     if ([string]::IsNullOrEmpty($AccessPassword)) {
@@ -1554,7 +1585,19 @@ try {
     } else {
       $access.OpenCurrentDatabase($AccessDbPath, $false, $AccessPassword)
     }
-    Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+    # Retry hWnd after OpenCurrentDatabase in case the window was not ready immediately.
+    try {
+      if (-not $script:accessPid) {
+        $hwnd2 = [IntPtr]$access.hWndAccessApp
+        if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
+          $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
+        }
+      }
+    } catch { Write-Debug "Diagnostics: $_" }
+    # Fallback: WMI diff (only when hWnd still returned 0).
+    if (-not $script:accessPid) {
+      Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
+    }
     try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
   }
 

@@ -1213,7 +1213,7 @@ function Open-AccessDatabase {
         $access.UserControl = $false
         $access.AutomationSecurity = 1
         try {
-            $hwnd = [IntPtr]$access.hWndAccessApp()
+            $hwnd = [IntPtr]$access.hWndAccessApp
             if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
                 $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
             }
@@ -1221,22 +1221,27 @@ function Open-AccessDatabase {
 
         $access.OpenCurrentDatabase($AccessPath, $false, $Password)
         try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
+        # Retry hWnd after OpenCurrentDatabase in case the window was not ready immediately.
         try {
             if (-not $accessPid) {
-                $hwnd2 = [IntPtr]$access.hWndAccessApp()
+                $hwnd2 = [IntPtr]$access.hWndAccessApp
                 if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
                     $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
                 }
             }
         } catch { Write-Debug "Diagnostics: $_" }
 
+        # Fallback: pre/post process diff — only used when hWndAccessApp returned 0.
+        # Never overwrite a PID already captured via the deterministic hWnd path.
         try {
-            $post = @(Get-Process MSACCESS -ErrorAction SilentlyContinue | Select-Object -Property Id, StartTime)
-            $new = @($post | Where-Object { $_.Id -notin $prePids })
-            if ($new.Count -eq 1) {
-                $accessPid = [int]$new[0].Id
-            } elseif ($new.Count -gt 1 -and -not $accessPid) {
-                Write-Status -Message ("WARN: se detectaron varias instancias nuevas de MSACCESS y no se pudo identificar con certeza cuál pertenece a '{0}'. Se evita fijar un PID ambiguo." -f $AccessPath) -Color DarkYellow
+            if (-not $accessPid) {
+                $post = @(Get-Process MSACCESS -ErrorAction SilentlyContinue | Select-Object -Property Id, StartTime)
+                $new = @($post | Where-Object { $_.Id -notin $prePids })
+                if ($new.Count -eq 1) {
+                    $accessPid = [int]$new[0].Id
+                } elseif ($new.Count -gt 1) {
+                    Write-Status -Message ("WARN: se detectaron varias instancias nuevas de MSACCESS y no se pudo identificar con certeza cuál pertenece a '{0}'. Se evita fijar un PID ambiguo." -f $AccessPath) -Color DarkYellow
+                }
             }
         } catch { Write-Debug "Diagnostics: $_" }
 

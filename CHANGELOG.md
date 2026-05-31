@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.6] - 2026-05-31
+
+### Fixed
+
+- **MSACCESS.EXE zombies leaked by every Access.Application operation (migration regression).** Operations that open the Access COM Application — link_tables, relink_tables, localize_backend_links, relink_directory, create_table, export_modules/export_all, compile_vba, test_vba, verify_code, delete_module, fix_encoding, harvest_form_catalog, run_vba — left a lingering MSACCESS.EXE process. Under a heavy run (e.g. a VBA test battery) these accumulated, locked the database, and caused subsequent `compile_vba`/`import` to hang. Root cause: the migrated PowerShell scripts had lost the deterministic process-ID capture the pre-migration skill used. `dysflow-access-runner.ps1` had no `hWndAccessApp` capture at all; `dysflow-vba-manager.ps1` captured it but then overwrote it unconditionally with an ambiguous process-diff that failed when multiple instances existed (emitting "se detectaron varias instancias … no se pudo identificar"). Restored the deterministic capture in both scripts: immediately after creating `Access.Application`, the exact owning PID is read via `$access.hWndAccessApp` → Win32 `GetWindowThreadProcessId`; the process-diff/command-line heuristic is now only a last-resort fallback. Validated by the real MCP E2E against the live runtime: **104/104 pass, 0 zombie-check failures** (was 88/104 with 16 zombie failures).
+
 ## [v1.2.5] - 2026-05-31
 
 ### Added
