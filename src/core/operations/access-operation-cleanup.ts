@@ -106,12 +106,16 @@ export class AccessOperationCleanupService {
 
     const process = await this.options.processInspector.getProcess(record.accessPid);
     if (process === undefined) {
-      return failureResult(
-        createDysflowError(
-          "CLEANUP_PROCESS_NOT_FOUND",
-          `Process ${record.accessPid} no longer exists.`,
-        ),
-      );
+      // PID is verifiably gone — goal is already met, no need to kill.
+      await this.options.registry.update(record.operationId, {
+        status: "cleaned",
+        updatedAt: new Date().toISOString(),
+      });
+      return successResult({
+        operationId: record.operationId,
+        accessPid: record.accessPid,
+        status: "cleaned",
+      });
     }
 
     if (process.name.toUpperCase() !== "MSACCESS.EXE") {

@@ -129,3 +129,94 @@ describe("AccessOperationCleanupService — path normalization", () => {
     expect(killed).toContain(999);
   });
 });
+
+describe("AccessOperationCleanupService — dead-PID cleanup", () => {
+  it("returns success cleaned when status is running, force:true, and process is gone (no kill)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.status).toBe("cleaned");
+      expect(result.data.operationId).toBe("op-1");
+    }
+    expect(killed).toEqual([]);
+    const updated = await registry.get("op-1");
+    // InMemoryRegistry purges cleaned records, so it resolves to undefined
+    expect(updated).toBeUndefined();
+  });
+
+  it("returns success cleaned when status is timed_out and process PID is gone (no kill)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "timed_out",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.status).toBe("cleaned");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  it("still calls processKiller.kill when process is alive, name matches, and startTime matches", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "timed_out",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:00.000Z",
+      }),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(killed).toContain(999);
+  });
+});

@@ -79,6 +79,12 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
 
     for (const record of records) {
       if (!this.matchesScope(record, request)) continue;
+
+      if (record.status === "running" && record.accessPid !== null) {
+        await this.reconcileRunningRecord(record, result);
+        continue;
+      }
+
       if (!ELIGIBLE_STATUSES.has(record.status)) continue;
 
       await this.cleanupRecord(record, result, handledPids);
@@ -163,6 +169,43 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     }
 
     await this.markCleaned(record, result);
+  }
+
+  private async reconcileRunningRecord(
+    record: AccessOperationRecord,
+    result: AccessOperationPreflightCleanupResult,
+  ): Promise<void> {
+    // record.accessPid is guaranteed non-null by the call site.
+    const pid = record.accessPid as number;
+
+    let process: OsProcessInfo | undefined;
+    try {
+      process = await withTimeout(
+        this.options.processInspector.getProcess(pid),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
+    } catch (error) {
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to inspect process ${pid}: ${formatError(error)}`,
+      });
+      return;
+    }
+
+    const pidIsGone =
+      process === undefined ||
+      process.name.toUpperCase() !== "MSACCESS.EXE" ||
+      process.startTime !== record.processStartTime;
+
+    if (pidIsGone) {
+      // Original process is verifiably gone (PID not found, reused, or different name).
+      // Mark cleaned without killing anything.
+      await this.markCleaned(record, result);
+      return;
+    }
+
+    // Process is alive, correct name, correct startTime — a legitimately running operation.
+    // Leave it completely untouched.
   }
 
   private async scanAndCleanOrphans(

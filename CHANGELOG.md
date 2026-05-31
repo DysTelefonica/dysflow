@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.4] - 2026-05-31
+
+### Fixed
+
+- **Stale "running" operations with a dead PID could never be cleaned and blocked new operations.** `dysflow_access_cleanup` returned `CLEANUP_PROCESS_NOT_FOUND` (even with `force: true`) when the recorded Access PID no longer existed, and pre-flight cleanup skipped `running` records entirely (`running` was not in its eligible set). A registry entry left `running` after a manually-killed or crashed Access process — common after a heavy VBA test battery — therefore stuck forever and blocked subsequent `compile_vba` / `test_vba`. Now, when the recorded PID is verifiably gone, gated cleanup retires the entry as `cleaned` (there is nothing to kill), and pre-flight reconciles dead-PID `running` entries — while never terminating a genuinely-live matching Access process (alive + `MSACCESS.EXE` + matching start time is left untouched).
+
 ## [v1.2.3] - 2026-05-31
 
 ### Fixed

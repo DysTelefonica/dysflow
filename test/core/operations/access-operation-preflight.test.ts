@@ -148,9 +148,9 @@ describe("AccessOperationPreflightCleanupService", () => {
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });
 
-  it("ignores statuses that are not eligible for preflight cleanup", async () => {
+  it("ignores statuses that are not eligible for preflight cleanup (e.g. starting)", async () => {
     const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({ ...baseRecord, status: "running" });
+    await registry.create({ ...baseRecord, status: "starting" });
     const service = new AccessOperationPreflightCleanupService({
       registry,
       processInspector: {
@@ -173,7 +173,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       orphanedKilled: [],
       errors: [],
     });
-    await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "running" });
+    await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "starting" });
   });
 
   it("ignores records outside the current projectRoot scope", async () => {
@@ -668,6 +668,65 @@ describe("AccessOperationPreflightCleanupService", () => {
 
       expect(result.orphanedKilled).toEqual([5555]);
       expect(killed).toEqual([5555]);
+    });
+  });
+
+  describe("dead-PID reconciliation for running records", () => {
+    it("marks a running record cleaned when its PID is gone (not in killed)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({ ...baseRecord, status: "running" });
+      const killed: number[] = [];
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.cleaned).toContain("op-stale");
+      expect(result.killed).not.toContain(1234);
+      expect(killed).toEqual([]);
+    });
+
+    it("leaves a running record untouched when its process is alive, MSACCESS.EXE, and startTime matches", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({ ...baseRecord, status: "running" });
+      const killed: number[] = [];
+      const liveProcess: OsProcessInfo = {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => liveProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.cleaned).not.toContain("op-stale");
+      expect(result.killed).not.toContain(1234);
+      expect(killed).toEqual([]);
+      await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "running" });
     });
   });
 });
