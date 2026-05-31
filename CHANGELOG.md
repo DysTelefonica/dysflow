@@ -2,6 +2,17 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.3] - 2026-05-31
+
+### Fixed
+
+- **Version string stuck at 1.1.0**: `package.json` was never bumped past 1.1.0 despite the v1.2.0–v1.2.2 releases, so `dysflow update` version comparison and the MCP `serverInfo.version` reported a stale 1.1.0 even when the v1.2.2 code (including the MSACCESS zombie-cleanup fix) was installed. Bumped to 1.2.3 so update detection and diagnostics report the real version.
+- **CRLF formatting errors**: `src/cli/commands/install/extractor.ts` and `test/core/runner/access-runner.test.ts` had CRLF line endings that failed `biome check`. Reformatted to restore a green lint gate.
+
+### Added
+
+- **`dysflow doctor` OpenCode MCP wiring check**: doctor now detects when the resolved OpenCode `dysflow` MCP `command` points to an entrypoint that does not exist (for example a stale project-local `opencode.json` override left by a previous architecture) and warns with the offending path and which config file it came from — turning a silent "MCP won't connect" failure into an actionable diagnostic. Checks both the global and project-local OpenCode config; project-local wins, mirroring OpenCode's merge order.
+
 ## [v1.2.2] - 2026-05-30
 
 ### Fixed

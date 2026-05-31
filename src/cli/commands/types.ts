@@ -3,6 +3,7 @@ import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryService } from "../../core/services/query-service.js";
 import type { AgentName } from "./install-utils.js";
+import type { McpWiringCheck } from "./opencode-mcp-wiring.js";
 import type { StartHttpAdapter } from "./serve.js";
 
 export type CliResult = {
@@ -25,6 +26,8 @@ export type CliCommandContext = {
       includeEnvironment?: boolean;
     }): Promise<OperationResult<AccessDiagnosticsResult>>;
   };
+  /** Injectable for testing doctor's OpenCode MCP wiring check. */
+  checkMcpWiring?: () => Promise<McpWiringCheck | null>;
   accessQueryService?: Pick<AccessQueryService, "execute">;
   startHttpAdapter?: StartHttpAdapter;
   runTui?: (args: readonly string[], context?: CliCommandContext) => Promise<CliResult> | CliResult;

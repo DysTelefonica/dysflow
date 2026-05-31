@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
@@ -5,6 +8,9 @@ import {
   type AccessDiagnosticsResult,
   AccessDiagnosticsService,
 } from "../../core/services/diagnostics-service.js";
+import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
+import { ensureObject } from "./install/file-utils.js";
+import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 export async function handleDoctorCommand(
@@ -16,7 +22,9 @@ export async function handleDoctorCommand(
       context.diagnosticsService ?? (await createDiagnosticsService(context));
     const result = await diagnosticsService.run({ includeEnvironment: true });
 
-    return formatDiagnosticsResult(result);
+    const wiringCheck = await runWiringCheck(context);
+
+    return formatDiagnosticsResult(result, wiringCheck);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to run Dysflow diagnostics.";
     return { exitCode: 1, stdout: "", stderr: message };
@@ -37,13 +45,52 @@ async function createDiagnosticsService(
   });
 }
 
-function formatDiagnosticsResult(result: OperationResult<AccessDiagnosticsResult>): CliResult {
+async function runWiringCheck(context: CliCommandContext): Promise<McpWiringCheck | null> {
+  if (context.checkMcpWiring) {
+    return context.checkMcpWiring();
+  }
+
+  const env = context.env ?? (process.env as Record<string, string | undefined>);
+  const cwd = context.cwd ?? process.cwd();
+  const home = getHome(env);
+  const agentPaths = resolveAgentConfigPaths(home);
+
+  return checkOpencodeWiring({
+    globalConfigPath: agentPaths.opencode,
+    projectConfigPath: path.join(cwd, "opencode.json"),
+    readJsonFile: async (filePath) => {
+      try {
+        const raw = await readFile(filePath, "utf8");
+        const parsed = JSON.parse(raw) as unknown;
+        return ensureObject(parsed);
+      } catch {
+        return {};
+      }
+    },
+    existsSync,
+  });
+}
+
+function formatDiagnosticsResult(
+  result: OperationResult<AccessDiagnosticsResult>,
+  wiringCheck: McpWiringCheck | null,
+): CliResult {
   if (!result.ok) {
     return { exitCode: 1, stdout: "", stderr: `${result.error.code}: ${result.error.message}` };
   }
 
-  const stdout = result.data.checks
-    .map((check) => `${check.ok ? "✓" : "✗"} ${check.name}: ${check.message}`)
-    .join("\n");
-  return { exitCode: result.data.checks.every((check) => check.ok) ? 0 : 1, stdout, stderr: "" };
+  const lines = result.data.checks.map(
+    (check) => `${check.ok ? "✓" : "✗"} ${check.name}: ${check.message}`,
+  );
+
+  if (wiringCheck !== null) {
+    // Warn-only: render with ⚠ but do NOT include in exit code calculation.
+    const symbol = wiringCheck.ok ? "✓" : "⚠";
+    lines.push(`${symbol} ${wiringCheck.name}: ${wiringCheck.message}`);
+  }
+
+  const stdout = lines.join("\n");
+  // Exit code is driven by core diagnostics checks only — the wiring check is warn-only.
+  const exitCode = result.data.checks.every((check) => check.ok) ? 0 : 1;
+  return { exitCode, stdout, stderr: "" };
 }
