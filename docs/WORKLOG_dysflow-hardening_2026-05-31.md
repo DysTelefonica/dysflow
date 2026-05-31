@@ -4,9 +4,29 @@
 > Keep "Current state" accurate. This is the index for the whole effort; per-topic detail
 > lives in the linked docs.
 
-**Current state:** v1.2.4 RELEASED (commit `c516aca`, tag `v1.2.4`, GitHub release name==tag,
-assets tar.gz + SHA256SUMS). Waiting on USER to `dysflow update` + restart OpenCode in CONDOR
-and retry the battery to validate the dead-PID cleanup fix end-to-end.
+**Current state:** ALL FIXES SHIPPED through **v1.2.7**. MSACCESS-zombie regression fixed +
+E2E-validated (MCP E2E **104/104, 0 zombies**, v1.2.6). CI E2E gate now GREEN (v1.2.7 fixed a
+test-drift assertion in scripts-access-runner.test.ts): integration vitest 16/16, Pester 98/0/4-skip.
+KNOWN: `test/e2e/access-fixture.e2e.test.ts` fails LOCALLY only (3 tests) — fixture/password mismatch
+(test hardcodes backend `"backend-secret"` + no frontend pwd; real E2E_testing fixtures use `dpddpd`).
+It SKIPS in CI (fixtures gitignored), so it is NOT a release/CI blocker. Needs a fixture/password
+decision to run green locally. Left for USER: end-to-end CONDOR battery after `dysflow update`.
+
+### DONE (this session)
+- [x] **MCP-connection incident** — stale project-local `opencode.json` in NoConformidades repos pointed the dysflow MCP at a dead `skills/dysflow/mcp.js`; repointed both to the canonical `dysflow.cmd mcp`. See `INCIDENT_mcp-connection_2026-05-30.md`.
+- [x] **v1.2.3** — version string fix (`package.json` was stuck at 1.1.0 despite v1.2.x tags) + `dysflow doctor` dead-entrypoint MCP check + 2 CRLF lint fixes.
+- [x] **v1.2.4** — dead-PID `running` ops no longer block: gated cleanup retires a gone PID instead of `CLEANUP_PROCESS_NOT_FOUND`; preflight reconciles dead-PID `running` entries.
+- [x] **v1.2.5** — `dysflow doctor` flags project-local↔global MCP `command` drift.
+- [x] **v1.2.6** — restored deterministic Access PID capture (`hWndAccessApp`→`GetWindowThreadProcessId`) in BOTH `dysflow-access-runner.ps1` (had none) and `dysflow-vba-manager.ps1` (was overwriting the good PID). Fixes the zombie leak. **E2E 104/104, 0 zombie-check failures** (was 88/16).
+- [x] **Regression audit** (verified by orchestrator) — no other "zombie-class" migration regression; audit's other findings were parity/false-positives.
+- [x] Temp validation artifacts cleaned (`.e2e-fix-rt`, e2e logs).
+
+### PENDING
+- [ ] **USER (final verdict)**: `dysflow update` → restart OpenCode in CONDOR → re-run the 97-test battery. Expect no zombies / no hang.
+- [ ] OPTIONAL, low urgency: align `AllowBypassKey` handling into `dysflow-access-runner.ps1` (defense-in-depth; it currently relies on `Disable-StartupFeatures` only — functional, E2E-clean).
+- [ ] CI **"Windows PowerShell/Access smoke" job is RED** — pre-existing PS test/script drift (assertion on a script string that changed), unrelated to this session. ubuntu "Quality gates" job is GREEN. Ties to the "all E2E green" goal — needs its own fix.
+- [ ] **Coverage uplift** — branches at 78.1%, gate lowered to 77 (debt). New tests written in worktree branch `coverage-uplift-2026-05` (mcp/access/http, 14 passing), NOT merged. Goal: restore gate to 82. See `COVERAGE_uplift_2026-05-30.md`.
+- [ ] **Cleanup**: remove temp worktree `C:/Proyectos/dysflow-cov-tmp` once the coverage work lands or is abandoned.
 
 Related docs: `INCIDENT_mcp-connection_2026-05-30.md`, `AUDIT_2026-05-30.md`,
 `COVERAGE_uplift_2026-05-30.md`.
@@ -22,7 +42,7 @@ Related docs: `INCIDENT_mcp-connection_2026-05-30.md`, `AUDIT_2026-05-30.md`,
   - Fixed 2 CRLF lint errors (`extractor.ts`, `access-runner.test.ts`).
   - Commit `b27d727`, tag `v1.2.3`, Release workflow SUCCESS.
 
-## v1.2.4 — IN PROGRESS — cleanup of dead-PID "running" entries
+## v1.2.4 — DONE (released) — cleanup of dead-PID "running" entries
 
 ### The bug (confirmed by reading v1.2.3 source)
 A registry entry with `status: "running"` whose PID is already dead gets STUCK and blocks new ops:
@@ -138,9 +158,14 @@ Current state of the migrated scripts (the regression):
   these). Produce a prioritized list with file:line.
 - [x] **PORTED**: `Get-ProcessIdFromHwnd` + `hWndAccessApp` primary capture added to dysflow-access-runner.ps1 (had none) and made primary in dysflow-vba-manager.ps1 (fixed a bug where the WMI diff unconditionally overwrote the good hWnd PID). Surgical; no functional change.
 - [x] **ACCEPTANCE GATE MET**: re-ran the E2E against the fixed scripts via a temp runtime (`.e2e-fix-rt`, DYSFLOW_HOME→edited scripts). **104/104 pass, 0 zombie-check failures** (was 88/16). All 16 former leaks now clean in ~200ms; the "varias instancias" WARN is gone.
-- [~] Release v1.2.6, user `dysflow update`, re-run CONDOR battery.
+- [x] Released v1.2.6 (commit cd83612, tag v1.2.6, GitHub release name==tag, assets tar.gz + SHA256SUMS).
+- [~] USER: `dysflow update` → restart OpenCode in CONDOR → re-run battery (final end-to-end validation).
 - [ ] Cleanup: remove `.e2e-fix-rt`, `E2E_testing/e2e-run.log`, `E2E_testing/e2e-fix-run.log` (temp validation artifacts); E2E left probe tables/exports in the E2E_testing fixture (not committed).
-- [ ] STILL OPEN (user request): audit OLD skill vs current for OTHER migration regressions.
+- [x] AUDIT DONE (user request) — and orchestrator-verified, severities corrected:
+  - HIGH-2 (Disable-StartupFeatures silent) → NOT a regression: null-check at L1550 throws CRITICAL on DAO failure; OLD had the same inner catches. Dismissed.
+  - LOW-1 (UTF-8 BOM on exports) → NOT a regression: OLD's actual export (VBAManager.ps1:675,693) was ALSO no-BOM; only its generic helper (L392) used BOM. Behavior identical. Dismissed.
+  - HIGH-1 (AllowBypassKey absent in access-runner: 0 refs vs vba-manager 13) → REAL divergence but NOT a bug: access-runner uses Disable-StartupFeatures (25 refs) as a functional equivalent to block unattended startup code; the E2E ran all 104 access-runner ops fine without it. OPTIONAL defense-in-depth alignment, low urgency.
+  - VERDICT: no other "zombie-class" regression. The migration's only impactful loss was the PID capture (fixed in v1.2.6).
 
 NOTE: deep work in monolithic PS (3245 + 1881 lines). The dev sandbox shell CAN run the E2E (Access
 spawns sequentially, ~4 min) but hangs on heavy PARALLEL spawning (vitest fork-pool / pnpm install).

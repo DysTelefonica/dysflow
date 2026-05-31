@@ -91,7 +91,10 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).toContain(
       "$readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );
-    expect(script).toContain("$rs = $readDb.Database.OpenRecordset([string]$payload.sql)");
+    expect(script).toContain(
+      "Invoke-QuerySqlReadAction -Database $readDb.Database -Sql ([string]$payload.sql)",
+    );
+    expect(script).toContain("$rs = $Database.OpenRecordset([string]$Sql)");
     expect(script).toContain(
       "$writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );
