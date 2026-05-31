@@ -4,9 +4,9 @@
 > Keep "Current state" accurate. This is the index for the whole effort; per-topic detail
 > lives in the linked docs.
 
-**Current state:** v1.2.4 fix IMPLEMENTED + verified locally (30 targeted tests green, build 0,
-biome clean). About to commit/tag/push v1.2.4. After release publishes: TELL THE USER to run
-`dysflow update` to validate the CONDOR stale-entry fix.
+**Current state:** v1.2.4 RELEASED (commit `c516aca`, tag `v1.2.4`, GitHub release name==tag,
+assets tar.gz + SHA256SUMS). Waiting on USER to `dysflow update` + restart OpenCode in CONDOR
+and retry the battery to validate the dead-PID cleanup fix end-to-end.
 
 Related docs: `INCIDENT_mcp-connection_2026-05-30.md`, `AUDIT_2026-05-30.md`,
 `COVERAGE_uplift_2026-05-30.md`.
@@ -46,14 +46,32 @@ Real-world hit: CONDOR `.dysflow/runtime/operations.json` had entry `dysflow-6a1
 - [x] Implement preflight change (`access-operation-preflight.ts`): new `reconcileRunningRecord()` marks-cleaned-when-gone, never kills a live match.
 - [x] Verify: 30 targeted tests green (`--pool=threads`), `pnpm build` exit 0, `biome check` clean.
 - [x] Bump `package.json` → 1.2.4 + CHANGELOG entry.
-- [~] Commit (conventional, NO co-author), tag `v1.2.4`, push main + tag.
-- [ ] Confirm Release workflow success and GitHub release `title == name == v1.2.4`.
-- [ ] **TELL THE USER to run `dysflow update`, then restart OpenCode in CONDOR and retry the battery.**
+- [x] Commit `c516aca` (conventional, no co-author), tag `v1.2.4`, pushed main + tag.
+- [x] Release workflow SUCCESS; GitHub release `name == tagName == v1.2.4`, assets `dysflow-v1.2.4.tar.gz` + `SHA256SUMS`.
+- [~] **USER ACTION**: run `dysflow update`, restart OpenCode in CONDOR, retry the battery — pending user validation.
 
 ## CONDOR operational guidance (for the other AI)
 - Real op registry is `.dysflow/runtime/operations.json` — NOT the legacy `.access-vba-skill/session.json` (that path is dead in current dysflow; editing it does nothing).
 - STOP manually `taskkill`-ing MSACCESS — that is what desyncs the registry. Let v1.2.x clean its own processes.
 - After v1.2.4 + `dysflow update` + OpenCode restart, dead-PID "running" entries should auto-reconcile on preflight; and `dysflow_access_cleanup ... force:true` will retire them.
+
+## v1.2.5 — IN PROGRESS — doctor detects local↔global MCP command drift
+
+**Why**: project-local `opencode.json` files redefine the dysflow MCP `command`; when the global
+config / runtime evolves, the locals drift and (because local wins) silently break that repo.
+The v1.2.3 check only catches a DEAD entrypoint, not a live-but-divergent local override.
+
+**Design** (extend `src/cli/commands/opencode-mcp-wiring.ts`, read-only, warn-only):
+- Severity order, one finding: (1) effective entrypoint missing → existing dead-path warning; else
+  (2) project-local defines a dysflow `command` that DIFFERS from the global `command` (or global
+  has none) → NEW drift warning naming both config files; else (3) no warning.
+- Principle being enforced: the MCP `command` belongs ONCE in the global config; per-repo config
+  should carry at most project-specific `env`, never redefine the command.
+
+- [x] (TDD) tests: local differs from global → drift warning; identical → null; local-only command → warning; dead path still wins. (16 tests green)
+- [x] Implement in `opencode-mcp-wiring.ts` (Priority 2 drift check + commandsAreEqual); doctor rendering unchanged.
+- [x] Verify: 16 targeted tests green, build 0, biome clean.
+- [~] Bump → 1.2.5 + CHANGELOG; commit/tag/push; confirm release name==tag; tell user to update.
 
 ## Known issues / parked
 - [ ] **CI "Windows PowerShell/Access smoke" job RED (pre-existing)**: integration test asserts PS script contains `$rs = $readDb.Database.OpenRecordset(...)` which is no longer present — test/script drift, unrelated to this session. The "Quality gates" job (lint/test/build/coverage on ubuntu) is GREEN. Ties to the user's "all E2E green" requirement — needs a separate fix.

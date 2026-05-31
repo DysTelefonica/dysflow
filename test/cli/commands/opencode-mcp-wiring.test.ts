@@ -252,3 +252,127 @@ describe("checkOpencodeWiring — warn-only semantics", () => {
     expect(result?.warnOnly).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Drift detection — project-local command diverges from global
+// ---------------------------------------------------------------------------
+
+describe("checkOpencodeWiring — drift detection", () => {
+  it("emits a drift warning when project-local command differs from global (both entrypoints exist)", async () => {
+    const result = await checkOpencodeWiring(
+      makeOptions({
+        globalConfigPath: "/home/user/.config/opencode/opencode.json",
+        projectConfigPath: "/project/opencode.json",
+        readJsonFile: async (filePath) => {
+          if (filePath === "/home/user/.config/opencode/opencode.json") {
+            return {
+              mcp: {
+                dysflow: { command: ["node", "/runtime/dist/cli/index.js", "mcp"] },
+              },
+            };
+          }
+          if (filePath === "/project/opencode.json") {
+            return {
+              mcp: {
+                dysflow: { command: ["node", "/old/path/index.js", "mcp"] },
+              },
+            };
+          }
+          return {};
+        },
+        // Both entrypoints exist so dead-path does NOT fire.
+        existsSync: () => true,
+      }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.ok).toBe(false);
+    expect(result?.warnOnly).toBe(true);
+    expect(result?.name).toBe("opencode-mcp-wiring");
+    // Must mention both config file paths.
+    expect(result?.message).toContain("/home/user/.config/opencode/opencode.json");
+    expect(result?.message).toContain("/project/opencode.json");
+    // Must show the global (expected) command.
+    expect(result?.message).toContain("/runtime/dist/cli/index.js");
+    // Must show the local (found) command.
+    expect(result?.message).toContain("/old/path/index.js");
+  });
+
+  it("returns null when project-local command is identical to global (aligned — no warning)", async () => {
+    const sharedCommand = ["node", "/runtime/dist/cli/index.js", "mcp"];
+    const result = await checkOpencodeWiring(
+      makeOptions({
+        globalConfigPath: "/home/user/.config/opencode/opencode.json",
+        projectConfigPath: "/project/opencode.json",
+        readJsonFile: async () => ({
+          mcp: { dysflow: { command: sharedCommand } },
+        }),
+        existsSync: () => true,
+      }),
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("emits a drift warning when project-local defines a dysflow command but global has none", async () => {
+    const result = await checkOpencodeWiring(
+      makeOptions({
+        globalConfigPath: "/home/user/.config/opencode/opencode.json",
+        projectConfigPath: "/project/opencode.json",
+        readJsonFile: async (filePath) => {
+          if (filePath === "/project/opencode.json") {
+            return {
+              mcp: {
+                dysflow: { command: ["node", "/local/only/index.js", "mcp"] },
+              },
+            };
+          }
+          // Global has no dysflow block.
+          return {};
+        },
+        existsSync: () => true,
+      }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.ok).toBe(false);
+    expect(result?.warnOnly).toBe(true);
+    expect(result?.message).toContain("/project/opencode.json");
+    expect(result?.message).toContain("/local/only/index.js");
+  });
+
+  it("dead entrypoint takes precedence over drift (missing effective entrypoint → dead-path warning, not drift)", async () => {
+    const result = await checkOpencodeWiring(
+      makeOptions({
+        globalConfigPath: "/home/user/.config/opencode/opencode.json",
+        projectConfigPath: "/project/opencode.json",
+        readJsonFile: async (filePath) => {
+          if (filePath === "/home/user/.config/opencode/opencode.json") {
+            return {
+              mcp: {
+                dysflow: { command: ["node", "/runtime/dist/cli/index.js", "mcp"] },
+              },
+            };
+          }
+          if (filePath === "/project/opencode.json") {
+            return {
+              mcp: {
+                dysflow: { command: ["node", "/dead/local/index.js", "mcp"] },
+              },
+            };
+          }
+          return {};
+        },
+        // Effective entrypoint (project-local) does NOT exist → dead-path fires.
+        existsSync: () => false,
+      }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.ok).toBe(false);
+    // The message must reference the dead entrypoint — this is the existing dead-path warning.
+    expect(result?.message).toContain("/dead/local/index.js");
+    // Must NOT be a drift message (drift message references global command too).
+    expect(result?.message).not.toContain("/runtime/dist/cli/index.js");
+  });
+});

@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.5] - 2026-05-31
+
+### Added
+
+- **`dysflow doctor` now flags project-local OpenCode MCP config drift.** Beyond detecting a dysflow MCP `command` that points at a non-existent entrypoint (v1.2.3), doctor now warns when a project-local `opencode.json` redefines the dysflow MCP `command` and it is out of alignment with the global OpenCode config — the authoritative source of how the MCP should be invoked. The warning names both config files and shows the global (expected) vs local (found) command, so a stale per-repo override that would silently break the MCP in that repo becomes visible. Per-repo config should carry at most project-specific `env`, never redefine the command. Read-only; doctor never modifies config.
+
 ## [v1.2.4] - 2026-05-31
 
 ### Fixed

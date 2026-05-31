@@ -82,12 +82,26 @@ function extractDysflowCommand(raw: Record<string, unknown>): string[] | null {
 }
 
 /**
+ * Returns true when two string arrays are identical (same length, same elements
+ * in the same order).
+ */
+function commandsAreEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((val, idx) => val === b[idx]);
+}
+
+/**
  * Checks whether the effective OpenCode `dysflow` MCP `command` points to a
- * file that actually exists.
+ * file that actually exists, and whether the project-local command is in drift
+ * relative to the global config.
+ *
+ * Priority (highest first):
+ * 1. Dead entrypoint — effective command points to a missing file.
+ * 2. Drift — project-local command exists and differs from the global command.
+ * 3. Healthy — null returned.
  *
  * Returns `null` when the dysflow block is absent (silent pass) or when the
- * entrypoint exists (healthy).  Returns a `McpWiringCheck` with `ok: false`
- * and `warnOnly: true` when a dead entrypoint is detected.
+ * wiring is healthy.  Returns a `McpWiringCheck` with `ok: false` and
+ * `warnOnly: true` for any detected problem.
  */
 export async function checkOpencodeWiring(
   options: OpencodeMcpWiringOptions,
@@ -117,14 +131,37 @@ export async function checkOpencodeWiring(
     return null;
   }
 
-  if (existsSync(entrypoint)) {
-    return null;
+  // Priority 1: dead entrypoint (highest severity — checked before drift).
+  if (!existsSync(entrypoint)) {
+    return {
+      name: "opencode-mcp-wiring",
+      ok: false,
+      message: `OpenCode dysflow MCP command points to a missing file: "${entrypoint}" (from ${sourceFile})`,
+      warnOnly: true,
+    };
   }
 
-  return {
-    name: "opencode-mcp-wiring",
-    ok: false,
-    message: `OpenCode dysflow MCP command points to a missing file: "${entrypoint}" (from ${sourceFile})`,
-    warnOnly: true,
-  };
+  // Priority 2: drift — project-local overrides the global command with a
+  // different value (or the global has no dysflow command at all).
+  if (projectCommand !== null) {
+    const isDrift = globalCommand === null || !commandsAreEqual(projectCommand, globalCommand);
+
+    if (isDrift) {
+      const globalDesc = globalCommand === null ? "(not set)" : JSON.stringify(globalCommand);
+      const localDesc = JSON.stringify(projectCommand);
+      return {
+        name: "opencode-mcp-wiring",
+        ok: false,
+        message:
+          `OpenCode dysflow MCP command in project-local config is out of alignment with the global config. ` +
+          `Global config (${globalConfigPath}) expected: ${globalDesc}. ` +
+          `Project-local config (${projectConfigPath}) found: ${localDesc}. ` +
+          `Align the local command to the global, or remove the command override and keep only project-specific env.`,
+        warnOnly: true,
+      };
+    }
+  }
+
+  // Priority 3: healthy.
+  return null;
 }
