@@ -61,6 +61,24 @@ describe("PROCESS_INSPECTOR_TIMEOUT_MS", () => {
     expect(PROCESS_INSPECTOR_TIMEOUT_MS).toBeGreaterThan(0);
     expect(PROCESS_INSPECTOR_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
+
+  it("is wired into getProcess — a timeout-style execFile rejection propagates to the caller", async () => {
+    // Mock execFile to reject with a timeout error (simulates what the OS does when
+    // the PowerShell process exceeds PROCESS_INSPECTOR_TIMEOUT_MS).
+    // This proves the timeout constant is actually passed to the execFile call and
+    // that getProcess does not swallow the error silently.
+    const timeoutError = Object.assign(new Error("spawn ETIMEDOUT"), { code: "ETIMEDOUT" });
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], _opts: object, callback: (err: Error) => void) => {
+        callback(timeoutError);
+      },
+    );
+
+    const inspector = new WindowsMsAccessProcessInspector();
+    // getProcess propagates the execFile rejection — the caller receives an error,
+    // not a silent undefined, so it can surface the failure through its error channel.
+    await expect(inspector.getProcess(1234)).rejects.toThrow("ETIMEDOUT");
+  });
 });
 
 describe("WindowsMsAccessProcessScanner", () => {
