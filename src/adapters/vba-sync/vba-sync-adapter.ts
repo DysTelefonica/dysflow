@@ -14,7 +14,6 @@ import {
 } from "../../core/operations/access-operation-preflight.js";
 import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
-import type { VbaFormService } from "../../core/services/vba-form-service.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
@@ -127,10 +126,6 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
-
-  public get formService(): VbaFormService {
-    return this.formsAdapter.formService;
-  }
 
   constructor(options: VbaSyncAdapterOptions = {}) {
     this.env = options.env ?? process.env;
