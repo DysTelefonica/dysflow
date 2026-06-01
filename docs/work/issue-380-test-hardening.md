@@ -5,7 +5,7 @@
 > you work. Do not delete history — append.
 
 - **Issue:** https://github.com/DysTelefonica/dysflow/issues/380
-- **Status:** IN PROGRESS — P6 starting
+- **Status:** P6 COMPLETE (PR open, fresh-review APPROVED) — P7 BLOCKED on user infra decision (self-hosted Access runner)
 - **Last updated:** 2026-06-01
 - **Working branch:** `test/380-p6-p7` (create from `main` if it doesn't exist)
 - **Prereq shipped:** v1.2.9 (the WMI-hang/zombie fix) and v1.2.10 (P1/P3/P4/P5 behavioral tests) are already released. This doc covers only the remaining **P6** and **P7**.
@@ -131,7 +131,7 @@ content guards (sole guard for those) and the process-lifecycle block (~L824: `$
 - [x] Add behavioral Pester for `Invoke-QuerySqlReadAction` + `Invoke-ListTablesAction` (stub `$Database`/`Get-TableNames`/`Convert-RecordsetRows`) — prove the wrapper dispatches correctly.
 - [x] Delete the now-redundant text assertions in `access-runner.test.ts` (routing blocks only).
 - [x] Verify: `pnpm test`, `pnpm test:ps1`, integration tests, `pnpm lint` green (pre-existing CRLF format failures on 4 unmodified files — pre-existing, not introduced here; `access-runner.test.ts` now passes biome).
-- [ ] Fresh review → fix nits → PR (#380).
+- [x] Fresh review → APPROVE (no CRITICAL/WARNING; deletions dropped no real guarantee; negative guards retained). → PR (#380).
 
 ### P6 kept assertions and why
 
@@ -169,3 +169,5 @@ Dropped (now proven behaviorally by Pester):
   - Ran biome format on `access-runner.test.ts` (fixed pre-existing CRLF issue on that file).
   - Test counts: TS unit 827 passed / 3 skipped; Pester 135 passed / 4 skipped; integration 13 passed.
   - 4 pre-existing biome format failures on unmodified files (`access-operation-cleanup.test.ts`, `windows-processes.test.ts`, `scripts-access-runner.test.ts`, `scripts-vba-manager.test.ts`) — NOT introduced by this change.
+- **2026-06-01** — Verified the local biome "format" failures are a **working-tree CRLF artifact only**: `git ls-files --eol` shows the changed files committed as `i/lf` (working tree `w/crlf`), and `git status` shows those 4 files UNMODIFIED. The committed blobs are LF — exactly what Linux CI lints — so CI lint passes (Linux is authoritative). Do NOT run `pnpm lint:fix` and commit just to silence local CRLF; it would churn line endings. Fresh adversarial review of the P6 diff: **APPROVE** (no CRITICAL/WARNING; confirmed no deleted assertion dropped a real guarantee — the `not.toContain` negative guards were retained in the change-detector block; new Pester tests load the real bodies via AST, mocks are real stubs that assert called/not-called, no trivially-passing tests). Two non-blocking SUGGESTIONs noted for a future pass: (a) the top-of-file pure-helper bootstrap still hand-copies `Resolve-SandboxedPath`/`Format-SqlLiteral`/`Split-SqlStatements`/`Invoke-SeedFixtureDryRun` (convert to AST extraction for consistency); (b) trivial doc/test label mismatch. Opening the P6 PR next.
+- **NEXT (P7) — needs the user:** confirm whether a self-hosted Windows runner with MS Access exists/can be provisioned. If yes → implement the P7 tasks above. If no → P7 is not feasible as CI; document `mcp-e2e.mjs` as the manual pre-release gate and close #380 P7 as won't-do-in-CI.
