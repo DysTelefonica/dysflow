@@ -21,15 +21,33 @@ export type PowerShellProcessOptions = {
 
 export const POWERSHELL_EXE = "powershell.exe";
 
-function killProcessTree(pid: number | undefined, fallback: () => void): void {
-  if (pid !== undefined) {
-    spawn("taskkill", ["/T", "/F", "/PID", String(pid)], {
-      stdio: "ignore",
-      windowsHide: true,
+/** Maximum time to wait for taskkill to exit before giving up and settling anyway. */
+const KILL_TREE_BOUND_MS = 3_000;
+
+/**
+ * Spawns `taskkill /T /F /PID <pid>` and awaits its close event within a
+ * bounded timeout so the caller knows the kill attempt has completed.
+ *
+ * The function is non-throwing: a stuck or failing taskkill will resolve after
+ * KILL_TREE_BOUND_MS so it can never hang the executor forever.
+ */
+async function killProcessTree(pid: number): Promise<void> {
+  const taskkill = spawn("taskkill", ["/T", "/F", "/PID", String(pid)], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  await new Promise<void>((resolve) => {
+    const guard = setTimeout(resolve, KILL_TREE_BOUND_MS);
+    taskkill.on("close", () => {
+      clearTimeout(guard);
+      resolve();
     });
-  } else {
-    fallback();
-  }
+    // Also resolve on error so a missing taskkill binary doesn't hang forever
+    taskkill.on("error", () => {
+      clearTimeout(guard);
+      resolve();
+    });
+  });
 }
 
 export const POWERSHELL_SYSTEM_ENV_KEYS = [
@@ -89,16 +107,28 @@ export function spawnPowerShellProcess(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      killProcessTree(child.pid, () => child.kill());
-      finish(null);
+      if (child.pid !== undefined) {
+        void killProcessTree(child.pid).then(() => {
+          finish(null);
+        });
+      } else {
+        child.kill();
+        finish(null);
+      }
     }, options.timeoutMs);
 
     options.signal?.addEventListener(
       "abort",
       () => {
         timedOut = true;
-        killProcessTree(child.pid, () => child.kill());
-        finish(null);
+        if (child.pid !== undefined) {
+          void killProcessTree(child.pid).then(() => {
+            finish(null);
+          });
+        } else {
+          child.kill();
+          finish(null);
+        }
       },
       { once: true },
     );
