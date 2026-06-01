@@ -6,8 +6,11 @@ const script = readFileSync("scripts/dysflow-vba-manager.ps1", "utf8");
 describe("dysflow-vba-manager.ps1", () => {
   it("Goal B: defines a bounded WMI helper function", () => {
     expect(script).toContain("function Get-MsAccessProcessesBounded");
-    // Must use Start-Job + Wait-Job for the WMI call
-    expect(script).toContain("Start-Job -ScriptBlock { Get-CimInstance Win32_Process");
+    // After the injectable-seam refactor the job is started via Start-Job -ScriptBlock $WmiScriptBlock;
+    // the literal CIM query is the default value of the $WmiScriptBlock param.
+    expect(script).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
+    // The default WmiScriptBlock param must still query MSACCESS.EXE
+    expect(script).toContain("Get-CimInstance Win32_Process");
     expect(script).toContain("Wait-Job");
   });
 
@@ -59,14 +62,19 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(bareLines).toHaveLength(0);
   });
 
-  it("Goal B: no bare Get-CimInstance Win32_Process outside Start-Job scriptblocks in the entire script", () => {
+  it("Goal B: no bare Get-CimInstance Win32_Process outside scriptblocks in the entire script", () => {
+    // Lines containing the CIM call that are acceptable:
+    //   - commented lines (trimStart starts with #)
+    //   - Start-Job lines (legacy exclusion — not present after injectable-seam refactor)
+    //   - scriptblock default param assignments (contain $WmiScriptBlock =)
     const linesWithBareCim = script
       .split("\n")
       .filter(
         (line) =>
           line.includes("Get-CimInstance Win32_Process") &&
           !line.trimStart().startsWith("#") &&
-          !line.includes("Start-Job"),
+          !line.includes("Start-Job") &&
+          !line.includes("$WmiScriptBlock"),
       );
     expect(linesWithBareCim).toHaveLength(0);
   });

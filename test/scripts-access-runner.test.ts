@@ -106,20 +106,27 @@ describe("dysflow-access-runner.ps1", () => {
   it("Goal B: defines a bounded WMI helper and uses it instead of bare Get-CimInstance in cleanup/fallback paths", () => {
     // The bounded helper function must be defined
     expect(script).toContain("function Get-MsAccessProcessesBounded");
-    // It must use Start-Job + Wait-Job inside a scriptblock
-    expect(script).toContain("Start-Job -ScriptBlock { Get-CimInstance Win32_Process");
+    // It must use Start-Job + Wait-Job — after the injectable-seam refactor the job is started
+    // via Start-Job -ScriptBlock $WmiScriptBlock; the literal CIM query is the param default.
+    expect(script).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
+    // The default WmiScriptBlock param must still query MSACCESS.EXE
+    expect(script).toContain("Get-CimInstance Win32_Process");
     expect(script).toContain("Wait-Job");
     // Get-MsAccessProcesses (WMI-fallback snapshot) must delegate to the bounded helper
     expect(script).toContain("Get-MsAccessProcessesBounded");
-    // finally-block fallback DB lookup must go through the bounded helper too
-    // (no bare Get-CimInstance Win32_Process outside a Start-Job scriptblock)
+    // No bare Get-CimInstance Win32_Process outside a scriptblock.
+    // Lines containing the CIM call that are acceptable:
+    //   - commented lines (trimStart starts with #)
+    //   - Start-Job lines (legacy — not present after seam but kept as exclusion)
+    //   - scriptblock default param assignments (contain $WmiScriptBlock =)
     const linesWithBareCim = script
       .split("\n")
       .filter(
         (line) =>
           line.includes("Get-CimInstance Win32_Process") &&
           !line.trimStart().startsWith("#") &&
-          !line.includes("Start-Job"),
+          !line.includes("Start-Job") &&
+          !line.includes("$WmiScriptBlock"),
       );
     expect(linesWithBareCim).toHaveLength(0);
     // hWnd primary path and Get-ProcessIdFromHwnd must still be present
