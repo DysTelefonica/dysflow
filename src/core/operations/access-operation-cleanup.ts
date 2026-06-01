@@ -11,7 +11,8 @@ import type { AccessOperationRegistry } from "./access-operation-registry.js";
 export type OsProcessInfo = {
   pid: number;
   name: string;
-  startTime: string;
+  /** ISO 8601 string; may be undefined when the OS query returned partial data (e.g. Get-Process fallback). */
+  startTime?: string;
   commandLine?: string;
 };
 
