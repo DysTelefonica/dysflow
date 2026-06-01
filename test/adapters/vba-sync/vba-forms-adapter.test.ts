@@ -43,7 +43,7 @@ describe("VbaFormsAdapter", () => {
     );
   });
 
-  it("delegates validation and control cataloging to form service", async () => {
+  it("routes validate_form_spec through the form service and returns its result", async () => {
     const orchestrator: VbaFormsOrchestrator = {
       executor: vi.fn(),
       env: {},
@@ -54,14 +54,9 @@ describe("VbaFormsAdapter", () => {
     };
     const adapter = new VbaFormsAdapter(orchestrator);
 
-    const validateSpy = vi
-      .spyOn(adapter.formService, "validateFormSpec")
-      .mockResolvedValue(successResult({ valid: true }));
     const result = await adapter.execute("validate_form_spec", { spec: { name: "TestForm" } });
 
-    expect(validateSpy).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ ok: true, data: { valid: true } });
-    validateSpy.mockRestore();
   });
 
   it("returns FORM_SPEC_INVALID when catalog_add_control is called without controlName", async () => {

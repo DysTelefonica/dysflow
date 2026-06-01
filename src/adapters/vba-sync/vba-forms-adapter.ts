@@ -37,7 +37,7 @@ export interface VbaFormsOrchestrator {
 }
 
 export class VbaFormsAdapter {
-  public readonly formService: VbaFormService;
+  private readonly formService: VbaFormService;
 
   constructor(private readonly orchestrator: VbaFormsOrchestrator) {
     this.formService = new VbaFormService({
