@@ -1,6 +1,6 @@
 Version =21
 VersionRequired =20
-Checksum =-1492632322
+Checksum =-553519416
 Begin Form
     RecordSelectors = NotDefault
     MaxButton = NotDefault
@@ -24,10 +24,10 @@ Begin Form
     Width =11735
     DatasheetFontHeight =10
     ItemSuffix =105
-    Left =465
-    Top =3840
-    Right =12195
-    Bottom =11220
+    Left =4005
+    Top =4140
+    Right =15735
+    Bottom =11520
     DatasheetGridlinesColor =12632256
     RecSrcDt = Begin
         0x0c269c69ef3ee340
@@ -41,16 +41,17 @@ Begin Form
     End
     Caption ="Usuario conectado: Administrador (64 bits) 2024-046"
     OnOpen ="[Event Procedure]"
+    OnTimer ="[Event Procedure]"
     DatasheetFontName ="Arial"
     PrtMip = Begin
         0x6801000068010000680100006801000000000000201c0000e010000001000000 ,
         0x010000006801000000000000a10700000100000001000000
     End
     PrtDevMode = Begin
-        0x0000000000000000f665612cfc7f000000001ed9a701000000001ed9a7010000 ,
+        0x002d1137cd0000001009ad941d02000008c4e258fd7f00009681d058fd7f0000 ,
         0x010403069c00501453ef8001010009009a0b3408640001000f00b00402000100 ,
-        0xb0040300010041340040000000000000010000000000000000001ed9a7010000 ,
-        0x0104000000000000000000000000000000000000010000000000000001000000 ,
+        0xb0040300010041340019b48bf67f000002000000cd00000000702337cd000000 ,
+        0x502d1137cd000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
         0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
         0x0000000000000000050000000000050001000000000000000000000000000000 ,
@@ -219,19 +220,19 @@ Begin Form
     PrtDevNames = Begin
         0x08001f0036000100000000000000000000000000000000000000000000000000 ,
         0x00000000000000000000000000000000000000000000504f525450524f4d5054 ,
-        0x3a000000000000000000
+        0x3a0000000000
     End
     AllowDatasheetView =0
     FilterOnLoad =0
     AllowLayoutView =0
     DatasheetGridlinesColor12 =12632256
     PrtDevModeW = Begin
-        0x00000fd9a70100000200000000000000d1e3b0278353000000000000a7010000 ,
-        0xd8000000000000000e176a10fc7f00000000000000000000a6eeafeba7010000 ,
+        0x0000ffff00000000861eb28bf67f00000000000000000000d8451237cd000000 ,
+        0x0100000000000000010000000000000000000000000000003362c08bf67f0000 ,
         0x01040306dc00501453ef8001010009009a0b3408640001000f00b00402000100 ,
-        0xb00403000100410034000000000000000a0c0000000000006bb8612cfc7f0000 ,
-        0x07000000c600000000000000fc7f00005479af9f1b0000000104030100000000 ,
-        0xa6eeafeba7010000000000000000000000000000010000000000000001000000 ,
+        0xb004030001004100340000000000000009000000000000009801000000000000 ,
+        0x20261237cd0000001812fd46fc7f0000010000000000000034e8ae8bf67f0000 ,
+        0x0000000000000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
         0x2200c80024032c113f5d7b7e0000000000000000000000000000000000000000 ,
         0x0000000000000000050000000000050001000000000000000000000000000000 ,
@@ -402,7 +403,7 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000050004f0052005400500052004f004d00500054003a00000000000000 ,
-        0x000000000000000000000000
+        0x00000000
     End
     NoSaveCTIWhenDisabled =1
     Begin
@@ -2110,7 +2111,7 @@ Begin Form
                     TextAlign =1
                     Left =810
                     Top =165
-                    Width =2415
+                    Width =1605
                     Height =285
                     FontSize =9
                     FontWeight =700
@@ -2126,7 +2127,7 @@ Begin Form
                     GridlineColor =10921638
                     LayoutCachedLeft =810
                     LayoutCachedTop =165
-                    LayoutCachedWidth =3225
+                    LayoutCachedWidth =2415
                     LayoutCachedHeight =450
                     BackThemeColorIndex =4
                     BackTint =8.0
@@ -3559,6 +3560,7 @@ Begin Form
                     FontWeight =700
                     BackColor =8210719
                     ForeColor =16777215
+                    Visible =0
                     Name ="lblEstado"
                     Caption ="Obteniendo variables de Entorno...URLVideoAyudaNCProyectoParaTecnico"
                     FontName ="Calibri"
@@ -3632,27 +3634,37 @@ Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
 Private m_Error As String
+Private m_CargaInicialIndicadoresPendiente As Boolean
+Private m_CargandoIndicadores As Boolean
+Private m_IndicadoresReiniciando As EnumSino
+Private m_IndicadoresModo As String
 
 
 Private Sub ComandoActualizar_Click()
-    On Error GoTo errores
-    VBA.DoEvents
-    DoCmd.Hourglass True
-    VBA.DoEvents
-    
+     On Error GoTo errores
     m_Error = ""
+    If m_CargandoIndicadores Then Exit Sub
+
+    m_IndicadoresReiniciando = EnumSino.Sí
+    m_IndicadoresModo = "PROYECTO"
+    m_CargaInicialIndicadoresPendiente = True
+    Me.TimerInterval = 100
     Me.lblSeguimientos.Caption = "Seguimiento #/#"
-    
-    PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
-    VBA.DoEvents
-    DoCmd.Hourglass False
-    VBA.DoEvents
+    Me.Repaint
     Exit Sub
 errores:
+    If m_CargandoIndicadores Then
+        AvanceCerrar
+        m_CargandoIndicadores = False
+    End If
+    If m_CargaInicialIndicadoresPendiente Then
+        m_CargaInicialIndicadoresPendiente = False
+        Me.TimerInterval = 0
+    End If
+    Me.lblEstado.Visible = False
     DoCmd.Hourglass False
+    m_IndicadoresReiniciando = EnumSino.No
+    m_IndicadoresModo = ""
     If Err.Number <> 1000 Then
         m_Error = "Al ComandoConfiguracion_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
         CorreoAlAdministrador m_Error
@@ -3915,7 +3927,7 @@ Private Sub Form_Open(Cancel As Integer)
     
    
     Me.ComandoConfiguracion.Enabled = False
-    Avance "Obteniendo Variables de estado"
+    Me.lblSeguimientos.Caption = "Seguimiento: preparando panel..."
    
     If Application.TempVars("EnPruebas") = "Sí" Then
         m_Titulo = "PARTE DE PROYECTOS VERSIÓN DE PRUEBAS"
@@ -3934,11 +3946,11 @@ Private Sub Form_Open(Cancel As Integer)
     Me.lblTitulo1.Caption = m_Titulo
     Me.lblVersion.Caption = "Versión: " & m_ObjEntorno.VersionAplicacion
     Me.Caption = m_ObjEntorno.TituloUsuarioConectado
-    Avance "Obteniendo las tareas"
-    PintarIndicadores p_Reiniciando:=EnumSino.No, p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
+    ' HOTFIX-20260519: diferir carga pesada de indicadores para que el formulario pinte primero.
+    m_CargaInicialIndicadoresPendiente = True
+    m_IndicadoresReiniciando = EnumSino.No
+    m_IndicadoresModo = "PROYECTO"
+    Me.TimerInterval = 100
     
    
    'RegistroApertura
@@ -3948,7 +3960,6 @@ Private Sub Form_Open(Cancel As Integer)
     
     Me.ComandoConfiguracion.Enabled = True
     
-    AvanceCerrar
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
@@ -3965,6 +3976,72 @@ errores:
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
     'DoCmd.Quit acQuitSaveNone
+End Sub
+
+Private Sub Form_Timer()
+     On Error GoTo errores
+     If Not m_CargaInicialIndicadoresPendiente Then Exit Sub
+     If m_CargandoIndicadores Then Exit Sub
+
+     Dim l_Modo As String
+     Dim l_Reiniciando As EnumSino
+
+     Me.TimerInterval = 0
+     m_CargandoIndicadores = True
+     m_CargaInicialIndicadoresPendiente = False
+     DoCmd.Hourglass True
+     m_Error = ""
+
+     l_Modo = m_IndicadoresModo
+     If Trim$(l_Modo) = "" Then
+         l_Modo = "PROYECTO"
+     End If
+     l_Reiniciando = m_IndicadoresReiniciando
+     If l_Reiniciando <> EnumSino.Sí Then
+         l_Reiniciando = EnumSino.No
+     End If
+
+     Me.lblSeguimientos.Caption = "Seguimiento: obteniendo tareas..."
+    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "INICIO")
+    Me.lblEstado.Visible = True
+    Avance Me.lblEstado.Caption
+    Me.Repaint
+    VBA.DoEvents
+
+    PintarIndicadores p_Reiniciando:=l_Reiniciando, p_Modo:=l_Modo, p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+
+    Me.lblEstado.Caption = Indicadores_MensajeAvance(l_Modo, "APLICAR")
+    Avance Me.lblEstado.Caption
+    Me.Repaint
+    VBA.DoEvents
+    AvanceCerrar
+    Me.lblEstado.Visible = False
+
+     DoCmd.Hourglass False
+     m_CargandoIndicadores = False
+     m_IndicadoresReiniciando = EnumSino.No
+     m_IndicadoresModo = ""
+     Exit Sub
+
+errores:
+    AvanceCerrar
+    Me.lblEstado.Visible = False
+    Me.TimerInterval = 0
+    m_CargandoIndicadores = False
+    m_IndicadoresReiniciando = EnumSino.No
+    m_IndicadoresModo = ""
+    DoCmd.Hourglass False
+    Me.lblSeguimientos.Caption = "Seguimiento: error al cargar"
+    If Err.Number <> 1000 Then
+        m_Error = "Al Form_Timer se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+        pregunta = MsgBox(m_Error, vbCritical, "Error")
+    Else
+        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
+    End If
 End Sub
 
 Private Sub cmdSalir_Click()

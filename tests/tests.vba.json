@@ -97,6 +97,18 @@
       "tags": ["atomic", "indicator-characterization", "issue-16"]
     },
     {
+      "name": "Indicadores formulario proyecto carga diferida",
+      "procedure": "Test_Indicadores_FormularioProyecto_CargaDiferida_Contract",
+      "expect": { "ok": true },
+      "tags": ["form-contract", "indicator-deferred-load", "regression", "issue-16"]
+    },
+    {
+      "name": "Indicadores formulario auditoria carga diferida",
+      "procedure": "Test_Indicadores_FormularioAuditoria_CargaDiferida_Contract",
+      "expect": { "ok": true },
+      "tags": ["form-contract", "indicator-deferred-load", "regression", "issue-16"]
+    },
+    {
       "name": "Cache proyecto delegacion y reset",
       "procedure": "Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic",
       "expect": { "ok": true },
@@ -119,6 +131,36 @@
       "procedure": "Test_Cache_ConsistenciaConEntorno_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "cache-sync", "issue-18"]
+    },
+    {
+      "name": "Issue36 indicadores proyecto sin cabecera inicializa sin error",
+      "procedure": "Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-materialized-cache", "regression", "issue-36"]
+    },
+    {
+      "name": "Issue37 indicadores auditoria sin cabecera inicializa sin error",
+      "procedure": "Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-materialized-cache", "regression", "issue-37"]
+    },
+    {
+      "name": "Issue38 seguimiento proyecto actualizar fuerza modo proyecto",
+      "procedure": "Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract",
+      "expect": { "ok": true },
+      "tags": ["form-contract", "indicator-refresh", "regression", "issue-38"]
+    },
+    {
+      "name": "Issue38 seguimiento auditoria actualizar fuerza modo auditoria",
+      "procedure": "Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract",
+      "expect": { "ok": true },
+      "tags": ["form-contract", "indicator-refresh", "regression", "issue-38"]
+    },
+    {
+      "name": "Issue38 reset limpia colecciones CE auditoria",
+      "procedure": "Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract",
+      "expect": { "ok": true },
+      "tags": ["contract", "indicator-refresh", "regression", "issue-38"]
     },
 {
       "name": "Issue19 CE alta si sin detalle no bloquea (bypass)",
@@ -191,6 +233,48 @@
       "procedure": "Test_Issue19_CE_Auditoria_MotivoDatosUnicos_Bypass",
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: usuario anterior reescrito",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_UsuarioAnteriorSeReescribe_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: con y sin barra final",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_ConYSinBarraFinal_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica rutas actuales",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaRutasActuales_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica ruta no local",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaRutaNoLocal_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: no modifica UNC",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_NoModificaUNC_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "Sanitizer de ruta de usuario Windows: entrada vacía",
+      "procedure": "Test_BackendConfigPaths_SanitizarRutaUsuarioWindowsLocal_EntradaVacia_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
+    },
+    {
+      "name": "LeeConfiguracionLocal ancla rutas locales al USERPROFILE",
+      "procedure": "Test_BackendConfigPaths_LeeConfiguracionLocal_AnchoraRutasLocalesEnUserProfile_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "issue-20", "path-sanitizer", "safe"]
     },
     {
       "name": "Cache listado Notas sincroniza tras RegistrarNota",

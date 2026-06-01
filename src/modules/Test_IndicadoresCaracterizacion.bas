@@ -1164,6 +1164,7 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
     Dim sessionStarted As Boolean
     Dim db As DAO.Database
     Dim previousUser As usuario
+    Dim previousEntorno As Entorno
     Dim headerBefore As Long
     Dim headerOKAfter As Long
     Dim rowsAfter As Long
@@ -1192,6 +1193,11 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
     If assertError <> "" Then GoTo finalizar
 
     Set previousUser = m_ObjUsuarioConectado
+    Set previousEntorno = m_ObjEntorno
+    If m_ObjEntorno Is Nothing Then
+        Set m_ObjEntorno = New Entorno
+        TestHelper.AddLog logs, "Arrange Issue36: Entorno inicializado para PintarIndicadores"
+    End If
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
     pError = ""
     Call PintarIndicadores(p_Reiniciando:=EnumSino.Sí, p_Modo:="PROYECTO", p_Error:=pError)
@@ -1207,6 +1213,7 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
 
 finalizar:
     Set m_ObjUsuarioConectado = previousUser
+    Set m_ObjEntorno = previousEntorno
     If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
     Call CacheMaterializado_Cleanup(logs, assertError)
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
@@ -1220,6 +1227,7 @@ errores:
     errMsg = Err.Description
     On Error Resume Next
     Set m_ObjUsuarioConectado = previousUser
+    Set m_ObjEntorno = previousEntorno
     If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
     If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
@@ -1236,6 +1244,7 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
     Dim sessionStarted As Boolean
     Dim db As DAO.Database
     Dim previousUser As usuario
+    Dim previousEntorno As Entorno
     Dim headerBefore As Long
     Dim headerOKAfter As Long
     Dim rowsAfter As Long
@@ -1266,6 +1275,11 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
     If assertError <> "" Then GoTo finalizar
 
     Set previousUser = m_ObjUsuarioConectado
+    Set previousEntorno = m_ObjEntorno
+    If m_ObjEntorno Is Nothing Then
+        Set m_ObjEntorno = New Entorno
+        TestHelper.AddLog logs, "Arrange Issue37: Entorno inicializado para PintarIndicadores"
+    End If
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
     pError = ""
     Call PintarIndicadores(p_Reiniciando:=EnumSino.Sí, p_Modo:="AUDITORIA", p_Error:=pError)
@@ -1283,6 +1297,7 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
 
 finalizar:
     Set m_ObjUsuarioConectado = previousUser
+    Set m_ObjEntorno = previousEntorno
     If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
     Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
     Call CacheMaterializado_Cleanup(logs, assertError)
@@ -1297,6 +1312,7 @@ errores:
     errMsg = Err.Description
     On Error Resume Next
     Set m_ObjUsuarioConectado = previousUser
+    Set m_ObjEntorno = previousEntorno
     If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
     If sessionStarted Then Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
     If sessionStarted Then Call CacheMaterializado_Cleanup(logs, assertError)
@@ -2109,4 +2125,216 @@ errores:
     Call CacheTest_ResetTeardown(logs, assertError)
     On Error GoTo 0
     Test_Cache_ConsistenciaConEntorno_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Indicadores_FormularioProyecto_CargaDiferida_Contract() As String
+    Test_Indicadores_FormularioProyecto_CargaDiferida_Contract = AssertIndicadoresFormularioCargaDiferida( _
+        "Form_Form0BDOpcionesParteProyectos", _
+        "PROYECTO")
+End Function
+
+Public Function Test_Indicadores_FormularioAuditoria_CargaDiferida_Contract() As String
+    Test_Indicadores_FormularioAuditoria_CargaDiferida_Contract = AssertIndicadoresFormularioCargaDiferida( _
+        "Form_Form0BDOpcionesAuditorias", _
+        "AUDITORIA")
+End Function
+
+Public Function Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract() As String
+    Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract = AssertIssue38SeguimientoActualizarModo( _
+        "Form_FormNCProyectoSeguimiento", _
+        "PROYECTO")
+End Function
+
+Public Function Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract() As String
+    Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract = AssertIssue38SeguimientoActualizarModo( _
+        "Form_FormNCAuditoriaSeguimiento", _
+        "AUDITORIA")
+End Function
+
+Public Function Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim moduleText As String
+    Dim modulePath As String
+    Dim resetBody As String
+
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    modulePath = CurrentProject.Path & "\src\modules\Funciones Generales.bas"
+    moduleText = ReadTextFileForIndicatorContract(modulePath)
+    resetBody = ExtractFunctionBody(moduleText, "Public Function ResetearColTareas")
+
+    TestHelper.AddLog logs, "Arrange: leído módulo " & modulePath
+    Call TestHelper.AssertTrue(resetBody <> "", "Debe existir ResetearColTareas", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, resetBody, "Set .ColSegsNCAuditoriaPteCE = Nothing", vbTextCompare) > 0, "Reset debe limpiar Auditoria PteCE", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, resetBody, "Set .ColSegsNCAuditoriaCECaducada = Nothing", vbTextCompare) > 0, "Reset debe limpiar Auditoria CE caducada", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, resetBody, "Set .ColSegsNCAuditoriaCENoConforme = Nothing", vbTextCompare) > 0, "Reset debe limpiar Auditoria CE no conforme", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract = TestHelper.BuildJsonOk(logs, "issue38_reset_auditoria_ce_ok")
+    End If
+    Exit Function
+
+errores:
+    Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Private Function AssertIndicadoresFormularioCargaDiferida( _
+    ByVal p_FormName As String, _
+    ByVal p_ModoEsperado As String _
+) As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim clsText As String
+    Dim formText As String
+    Dim clsPath As String
+    Dim formPath As String
+    Dim openBody As String
+
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    clsPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".cls"
+    formPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".form.txt"
+
+    clsText = ReadTextFileForIndicatorContract(clsPath)
+    formText = ReadTextFileForIndicatorContract(formPath)
+
+    TestHelper.AddLog logs, "Arrange: leído code-behind " & clsPath
+    TestHelper.AddLog logs, "Arrange: leído form definition " & formPath
+
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private m_CargaInicialIndicadoresPendiente As Boolean", vbTextCompare) > 0, "El formulario debe conservar flag de carga diferida", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private m_CargandoIndicadores As Boolean", vbTextCompare) > 0, "El formulario debe evitar cargas concurrentes", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private Sub Form_Timer()", vbTextCompare) > 0, "El formulario debe cargar indicadores desde Form_Timer", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, "OnTimer =""[Event Procedure]""", vbTextCompare) > 0, "El .form.txt debe mantener binding OnTimer", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, "Name =""lblEstado""", vbTextCompare) > 0, "El .form.txt debe mantener lblEstado para progreso", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "PintarIndicadores p_Reiniciando:=l_Reiniciando, p_Modo:=l_Modo", vbTextCompare) > 0, "PintarIndicadores debe ejecutarse con modo diferido desde timer", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "m_IndicadoresModo = """ & p_ModoEsperado & """", vbTextCompare) > 0, "El formulario debe programar modo " & p_ModoEsperado, logs, assertError)
+
+    openBody = ExtractIndicatorFormOpenBody(clsText)
+    Call TestHelper.AssertTrue(InStr(1, openBody, "PintarIndicadores", vbTextCompare) = 0, "La apertura del formulario no debe ejecutar PintarIndicadores directamente", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, openBody, "Me.TimerInterval = 100", vbTextCompare) > 0, "La apertura debe programar el timer para diferir la carga", logs, assertError)
+
+    If assertError <> "" Then
+        AssertIndicadoresFormularioCargaDiferida = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        AssertIndicadoresFormularioCargaDiferida = TestHelper.BuildJsonOk(logs, "deferred_indicator_load_" & LCase$(p_ModoEsperado))
+    End If
+    Exit Function
+
+errores:
+    AssertIndicadoresFormularioCargaDiferida = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Private Function AssertIssue38SeguimientoActualizarModo( _
+    ByVal p_FormName As String, _
+    ByVal p_ModoEsperado As String _
+) As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim clsText As String
+    Dim formText As String
+    Dim clsPath As String
+    Dim formPath As String
+    Dim clickBody As String
+
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    clsPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".cls"
+    formPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".form.txt"
+
+    clsText = ReadTextFileForIndicatorContract(clsPath)
+    formText = ReadTextFileForIndicatorContract(formPath)
+    clickBody = ExtractSubBody(clsText, "Private Sub ComandoActualizar_Click")
+
+    TestHelper.AddLog logs, "Arrange: leído seguimiento " & clsPath
+    TestHelper.AddLog logs, "Arrange: leído definición " & formPath
+    Call TestHelper.AssertTrue(clickBody <> "", "Debe existir ComandoActualizar_Click", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores", vbTextCompare) > 0, "ComandoActualizar debe llamar PintarIndicadores", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clickBody, "p_Modo:=", vbTextCompare) > 0, "ComandoActualizar debe pasar p_Modo explícito", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clickBody, p_ModoEsperado, vbTextCompare) > 0, "ComandoActualizar debe forzar modo " & p_ModoEsperado, logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error", vbTextCompare) = 0, "ComandoActualizar no debe usar modo AMBOS implícito", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, "PintarIndicadores", vbTextCompare) > 0, "El .form.txt debe conservar llamada a PintarIndicadores", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, "p_Modo:=", vbTextCompare) > 0, "El .form.txt debe conservar p_Modo explícito", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, p_ModoEsperado, vbTextCompare) > 0, "El .form.txt debe conservar modo " & p_ModoEsperado, logs, assertError)
+
+    If assertError <> "" Then
+        AssertIssue38SeguimientoActualizarModo = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        AssertIssue38SeguimientoActualizarModo = TestHelper.BuildJsonOk(logs, "issue38_refresh_" & LCase$(p_ModoEsperado))
+    End If
+    Exit Function
+
+errores:
+    AssertIssue38SeguimientoActualizarModo = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
+Private Function ReadTextFileForIndicatorContract(ByVal p_Path As String) As String
+    Dim fileNumber As Integer
+
+    If Dir$(p_Path) = "" Then
+        Err.Raise 1000, "ReadTextFileForIndicatorContract", "No existe el archivo requerido: " & p_Path
+    End If
+
+    fileNumber = FreeFile
+    Open p_Path For Binary Access Read As #fileNumber
+    ReadTextFileForIndicatorContract = Space$(LOF(fileNumber))
+    Get #fileNumber, , ReadTextFileForIndicatorContract
+    Close #fileNumber
+End Function
+
+Private Function ExtractIndicatorFormOpenBody(ByVal p_ClsText As String) As String
+    Dim startPos As Long
+    Dim endPos As Long
+
+    startPos = InStr(1, p_ClsText, "Private Sub Form_Open", vbTextCompare)
+    If startPos = 0 Then startPos = InStr(1, p_ClsText, "Private Sub Form_Load", vbTextCompare)
+    If startPos = 0 Then Exit Function
+
+    endPos = InStr(startPos + 1, p_ClsText, "End Sub", vbTextCompare)
+    If endPos = 0 Then
+        ExtractIndicatorFormOpenBody = Mid$(p_ClsText, startPos)
+    Else
+        ExtractIndicatorFormOpenBody = Mid$(p_ClsText, startPos, endPos - startPos)
+    End If
+End Function
+
+Private Function ExtractSubBody( _
+    ByVal p_Text As String, _
+    ByVal p_SubSignature As String _
+) As String
+    Dim startPos As Long
+    Dim endPos As Long
+
+    startPos = InStr(1, p_Text, p_SubSignature, vbTextCompare)
+    If startPos = 0 Then Exit Function
+
+    endPos = InStr(startPos + 1, p_Text, "End Sub", vbTextCompare)
+    If endPos = 0 Then
+        ExtractSubBody = Mid$(p_Text, startPos)
+    Else
+        ExtractSubBody = Mid$(p_Text, startPos, endPos - startPos)
+    End If
+End Function
+
+Private Function ExtractFunctionBody( _
+    ByVal p_Text As String, _
+    ByVal p_FunctionSignature As String _
+) As String
+    Dim startPos As Long
+    Dim endPos As Long
+
+    startPos = InStr(1, p_Text, p_FunctionSignature, vbTextCompare)
+    If startPos = 0 Then Exit Function
+
+    endPos = InStr(startPos + 1, p_Text, "End Function", vbTextCompare)
+    If endPos = 0 Then
+        ExtractFunctionBody = Mid$(p_Text, startPos)
+    Else
+        ExtractFunctionBody = Mid$(p_Text, startPos, endPos - startPos)
+    End If
 End Function

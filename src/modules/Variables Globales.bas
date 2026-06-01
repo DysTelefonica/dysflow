@@ -272,6 +272,10 @@ Public Function LeeConfiguracionLocal( _
     m_BackendPathActivo = SelectBackendPathFromActiveProfile(m_BackendActivo, m_BackendProduccion, m_BackendSandbox, m_NombreCampoBackendActivo)
     m_RutaAplicacionActiva = SelectAppPathFromActiveProfile(m_BackendActivo, m_RutaProd, m_RutaLocal, m_NombreCampoRutaActiva)
 
+    m_RutaProd = SanitizarRutaUsuarioWindowsLocal(m_RutaProd)
+    m_RutaLocal = SanitizarRutaUsuarioWindowsLocal(m_RutaLocal)
+    m_RutaAplicacionActiva = SanitizarRutaUsuarioWindowsLocal(m_RutaAplicacionActiva)
+
     m_RutaProd = NormalizeFolderPath(m_RutaProd)
     m_RutaLocal = NormalizeFolderPath(m_RutaLocal)
     m_RutaAplicacionActiva = NormalizeFolderPath(m_RutaAplicacionActiva)
@@ -387,6 +391,53 @@ salida:
 errores:
     p_Error = "ResolveCacheHabilitadaFromConfig ha devuelto el error: " & Err.Description
     Resume salida
+End Function
+
+Public Function SanitizarRutaUsuarioWindowsLocal( _
+    ByVal p_Ruta As String, _
+    Optional ByVal p_UserProfile As String = "" _
+) As String
+    Dim m_Ruta As String
+    Dim m_UserProfile As String
+    Dim m_LowerRuta As String
+    Dim m_UserNameEnd As Long
+
+    m_Ruta = Trim$(Nz(p_Ruta, ""))
+    If m_Ruta = "" Then Exit Function
+
+    m_Ruta = Replace$(m_Ruta, "/", "\")
+    If Left$(m_Ruta, 2) = "\\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    m_LowerRuta = LCase$(m_Ruta)
+    If Left$(m_LowerRuta, 9) <> "c:\users\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    m_UserNameEnd = InStr(10, m_Ruta, "\")
+    If m_UserNameEnd = 0 Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    m_UserProfile = Trim$(Nz(p_UserProfile, ""))
+    If m_UserProfile = "" Then m_UserProfile = Trim$(Nz(Environ$("USERPROFILE"), ""))
+    If m_UserProfile = "" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    m_UserProfile = Replace$(m_UserProfile, "/", "\")
+    If Right$(m_UserProfile, 1) = "\" Then m_UserProfile = Left$(m_UserProfile, Len(m_UserProfile) - 1)
+    If LCase$(Left$(m_UserProfile, 9)) <> "c:\users\" Then
+        SanitizarRutaUsuarioWindowsLocal = m_Ruta
+        Exit Function
+    End If
+
+    SanitizarRutaUsuarioWindowsLocal = m_UserProfile & Mid$(m_Ruta, m_UserNameEnd)
 End Function
 
 Private Function NormalizeFolderPath(ByVal p_Path As String) As String

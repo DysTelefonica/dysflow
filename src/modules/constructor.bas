@@ -4281,7 +4281,7 @@ Public Function getSegsNCAuditoriaAccionesSinTareas( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "LEFT JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4348,7 +4348,7 @@ Public Function getSegsNCAuditoriaPteCE( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4416,7 +4416,7 @@ Public Function getSegsNCAuditoriaCECaducada( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _
@@ -4485,7 +4485,7 @@ Public Function getSegsNCAuditoriaCENoConforme( _
             "TbNoConformidadesAuditoria.Numero, TbNoConformidadesAuditoria.DESCRIPCION,TbNoConformidadesAuditoria.FECHACIERRE, " & _
             "TbNoConformidadesAuditoria.RESPONSABLEIMPLANTACION as responsable, TbNoConformidadesAuditoria.ESTADO " & _
             "FROM ((TbAuditorias INNER JOIN TbNoConformidadesAuditoria " & _
-            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.ID) " & _
+            "ON TbAuditorias.IDAuditoria = TbNoConformidadesAuditoria.IDAuditoria) " & _
             "INNER JOIN TbNCAuditoriaAccionCorrectivas " & _
             "ON TbNoConformidadesAuditoria.ID = TbNCAuditoriaAccionCorrectivas.ID) " & _
             "INNER JOIN TbNCAuditoriaAccionesRealizadas " & _

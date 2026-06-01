@@ -879,6 +879,8 @@ Public Function ResetearColTareas( _
         Set .ColSegsNCAuditoriaRegistradas = Nothing
         Set .ColSegsNCAuditoriaAccionesSinTareas = Nothing
         Set .ColSegsNCAuditoriaPteCE = Nothing
+        Set .ColSegsNCAuditoriaCECaducada = Nothing
+        Set .ColSegsNCAuditoriaCENoConforme = Nothing
         Set .ColSegsNCAuditoriaTotales = Nothing
     End With
     Exit Function
