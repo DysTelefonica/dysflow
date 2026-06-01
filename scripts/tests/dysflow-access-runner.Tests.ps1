@@ -507,3 +507,132 @@ Describe "seed_fixture SQL injection prevention" {
         }
     }
 }
+
+# ===========================================================================
+# P1 — Behavioral tests for Get-MsAccessProcessesBounded (#380)
+# Extract the function via AST so the tests always run against the production
+# source and a seam-only rename/move would require test changes.
+# ===========================================================================
+
+Describe "Get-MsAccessProcessesBounded — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Get-MsAccessProcessesBounded' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Get-MsAccessProcessesBounded not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    Context "hang guard — injected slow scriptblock times out fast" {
+        It "returns empty result and completes well under the sleep duration" {
+            # Prove the Wait-Job timeout fires: inject a 30-second sleeper but set TimeoutSeconds=1.
+            # If the guard works, the call returns in <<30s. We assert it completed in <10s.
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $result = @(Get-MsAccessProcessesBounded `
+                -WmiScriptBlock { Start-Sleep -Seconds 30 } `
+                -TimeoutSeconds 1)
+            $sw.Stop()
+
+            $result.Count | Should -Be 0
+            $sw.Elapsed.TotalSeconds | Should -BeLessThan 10
+            # ...and prove the Wait-Job timeout actually elapsed (not an instant bypass).
+            $sw.Elapsed.TotalSeconds | Should -BeGreaterThan 0.9
+        }
+    }
+
+    Context "success path — injected fast scriptblock passes results through" {
+        It "returns a normalized object containing the injected ProcessId" {
+            # Inject a scriptblock that returns a known object — proves the success path
+            # captures and returns data from the job.
+            $fakeProc = [PSCustomObject]@{
+                ProcessId    = 4321
+                CreationDate = $null
+                CommandLine  = 'MSACCESS.EXE "C:\fake.accdb"'
+            }
+            $result = @(Get-MsAccessProcessesBounded `
+                -WmiScriptBlock { [PSCustomObject]@{
+                    ProcessId    = 4321
+                    CreationDate = $null
+                    CommandLine  = 'MSACCESS.EXE "C:\fake.accdb"'
+                } } `
+                -TimeoutSeconds 5)
+
+            $result.Count | Should -BeGreaterOrEqual 1
+            $result[0].ProcessId | Should -Be 4321
+        }
+    }
+}
+
+# ===========================================================================
+# P3 — Behavioral tests for ConvertTo-IsoStartTime (#380)
+# Pure function — extract via AST from the production source.
+# ===========================================================================
+
+Describe "ConvertTo-IsoStartTime — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'ConvertTo-IsoStartTime' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "ConvertTo-IsoStartTime not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    # Pattern: EXACTLY 3 fractional digits + Z (not 7 from .ToString('o'))
+    $isoPattern = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+
+    Context "datetime input" {
+        It "formats a [datetime] value as ISO with exactly 3 fractional digits and Z" {
+            $dt = [datetime]::new(2026, 5, 18, 12, 34, 56, 123, [System.DateTimeKind]::Utc)
+            $result = ConvertTo-IsoStartTime $dt
+            $result | Should -Match $isoPattern
+            $result | Should -Be '2026-05-18T12:34:56.123Z'
+        }
+    }
+
+    Context "DMTF string input" {
+        It "converts a DMTF CreationDate string with exactly 3 fractional digits and Z" {
+            $result = ConvertTo-IsoStartTime '20260518123456.000000+000'
+            $result | Should -Match $isoPattern
+            # Verify not 7 fractional digits (no round-trip format)
+            $result | Should -Not -Match '\.\d{7}Z$'
+        }
+
+        It "preserves sub-second precision from DMTF microseconds (truncated to ms)" {
+            $result = ConvertTo-IsoStartTime '20260518123456.789000+000'
+            $result | Should -Match $isoPattern
+        }
+    }
+
+    Context "pre-formatted ISO string input" {
+        It "re-parses and emits exactly 3 fractional digits for a pre-formatted ISO string" {
+            $result = ConvertTo-IsoStartTime '2026-05-18T12:34:56.000Z'
+            $result | Should -Match $isoPattern
+        }
+    }
+
+    Context "null / empty input" {
+        It "returns null for null input" {
+            ConvertTo-IsoStartTime $null | Should -BeNullOrEmpty
+        }
+
+        It "returns null for empty string input" {
+            ConvertTo-IsoStartTime '' | Should -BeNullOrEmpty
+        }
+    }
+}

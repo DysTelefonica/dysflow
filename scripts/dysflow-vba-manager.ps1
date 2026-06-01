@@ -1277,8 +1277,11 @@ function Open-AccessDatabase {
 # indefinitely. Returns whatever processes were retrieved; returns an empty array on timeout.
 function Get-MsAccessProcessesBounded {
     [CmdletBinding()]
-    Param([int]$TimeoutSeconds = 4)
-    $job = Start-Job -ScriptBlock { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
+    Param(
+        [int]$TimeoutSeconds = 4,
+        [scriptblock]$WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
+    )
+    $job = Start-Job -ScriptBlock $WmiScriptBlock
     $procs = @()
     if (Wait-Job $job -Timeout $TimeoutSeconds) {
         $procs = @(Receive-Job $job -ErrorAction SilentlyContinue)

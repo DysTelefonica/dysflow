@@ -380,3 +380,66 @@ Describe "dysflow-vba-manager.ps1 — COM cleanup integration (requires Access)"
         }
     }
 }
+
+# ===========================================================================
+# P1 — Behavioral tests for Get-MsAccessProcessesBounded (#380)
+# Extract the function via AST so the tests always run against the production
+# source; any implementation change that breaks the contract turns these red.
+# ===========================================================================
+
+Describe "Get-MsAccessProcessesBounded (vba-manager) — behavioral (issue #380)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Get-MsAccessProcessesBounded' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Get-MsAccessProcessesBounded not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub for Write-Status used by the timeout branch inside vba-manager's version.
+        # The real function lives in the full script and writes coloured console output.
+        # Here we swallow it so tests run without COM/Access dependencies.
+        function Write-Status { param([string]$Message, $Color) }
+    }
+
+    Context "hang guard — injected slow scriptblock times out fast" {
+        It "returns empty result and completes well under the sleep duration" {
+            # Prove the Wait-Job timeout fires: inject a 30-second sleeper but set TimeoutSeconds=1.
+            # If the guard works, the call returns in <<30s. We assert it completed in <10s.
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $result = @(Get-MsAccessProcessesBounded `
+                -WmiScriptBlock { Start-Sleep -Seconds 30 } `
+                -TimeoutSeconds 1)
+            $sw.Stop()
+
+            $result.Count | Should -Be 0
+            $sw.Elapsed.TotalSeconds | Should -BeLessThan 10
+            # ...and prove the Wait-Job timeout actually elapsed (not an instant bypass).
+            $sw.Elapsed.TotalSeconds | Should -BeGreaterThan 0.9
+        }
+    }
+
+    Context "success path — injected fast scriptblock passes results through" {
+        It "returns a normalized object containing the injected ProcessId" {
+            # Inject a scriptblock that returns a known object — proves the success path
+            # captures and returns data from the job.
+            $result = @(Get-MsAccessProcessesBounded `
+                -WmiScriptBlock { [PSCustomObject]@{
+                    ProcessId    = 4321
+                    CreationDate = $null
+                    CommandLine  = 'MSACCESS.EXE "C:\fake.accdb"'
+                } } `
+                -TimeoutSeconds 5)
+
+            $result.Count | Should -BeGreaterOrEqual 1
+            $result[0].ProcessId | Should -Be 4321
+        }
+    }
+}
