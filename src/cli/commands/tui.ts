@@ -15,13 +15,14 @@ export async function handleTuiCommand(
   context: CliCommandContext = {},
 ): Promise<CliResult> {
   if (context.tuiSelectedAgents !== undefined) {
-    return applyIntegrationSelection(context.tuiSelectedAgents, {
-      env: context.env ?? process.env,
-    });
+    return (
+      context.tuiApplyIntegrationSelection ??
+      ((agents) => applyIntegrationSelection(agents, { env: context.env ?? process.env }))
+    )(context.tuiSelectedAgents);
   }
 
   if (args.length > 0) {
-    return handleInstallCommand(args, {
+    return (context.tuiHandleInstall ?? ((a, opts) => handleInstallCommand(a, opts)))(args, {
       env: context.env ?? process.env,
     });
   }

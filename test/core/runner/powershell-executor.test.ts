@@ -36,6 +36,9 @@ afterEach(() => {
   mockSpawn.mockReset();
 });
 
+const spawnOptions = (): { env?: Record<string, unknown> } =>
+  (mockSpawn.mock.calls.at(0)?.[2] as { env?: Record<string, unknown> }) ?? {};
+
 describe("spawnPowerShellProcess — child env construction", () => {
   it("does NOT forward non-allowlisted host secrets to the child process", async () => {
     await spawnPowerShellProcess({
@@ -43,9 +46,8 @@ describe("spawnPowerShellProcess — child env construction", () => {
       timeoutMs: 5_000,
     });
 
-    const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
-    expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env?.SECRET_TOKEN).toBeUndefined();
+    expect(spawnOptions().env).toBeDefined();
+    expect(spawnOptions().env?.SECRET_TOKEN).toBeUndefined();
   });
 
   it("forwards allowlisted system vars that are present in process.env", async () => {
@@ -54,9 +56,8 @@ describe("spawnPowerShellProcess — child env construction", () => {
       timeoutMs: 5_000,
     });
 
-    const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
-    expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env?.SystemRoot).toBe("C:\\Windows");
+    expect(spawnOptions().env).toBeDefined();
+    expect(spawnOptions().env?.SystemRoot).toBe("C:\\Windows");
   });
 
   it("forwards caller-supplied options.env overrides to the child process", async () => {
@@ -66,9 +67,8 @@ describe("spawnPowerShellProcess — child env construction", () => {
       env: { DYSFLOW_ACCESS_PASSWORD: "secret-pass" },
     });
 
-    const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, unknown> };
-    expect(capturedOptions.env).toBeDefined();
-    expect(capturedOptions.env?.DYSFLOW_ACCESS_PASSWORD).toBe("secret-pass");
+    expect(spawnOptions().env).toBeDefined();
+    expect(spawnOptions().env?.DYSFLOW_ACCESS_PASSWORD).toBe("secret-pass");
   });
 
   it("does not inject undefined string values for allowlisted keys absent from process.env", async () => {
@@ -81,7 +81,7 @@ describe("spawnPowerShellProcess — child env construction", () => {
         timeoutMs: 5_000,
       });
 
-      const capturedOptions = mockSpawn.mock.calls[0]?.[2] as { env?: Record<string, string> };
+      const capturedOptions = spawnOptions() as { env?: Record<string, string> };
       expect(capturedOptions.env).toBeDefined();
       // Either the key is absent, or if present its value must not be the string "undefined"
       const val = capturedOptions.env?.COMPUTERNAME;

@@ -35,6 +35,10 @@ export type CliCommandContext = {
   latestVersion?: string;
   tuiSelectedAgents?: readonly AgentName[];
   tuiApplyIntegrationSelection?: (agents: readonly AgentName[]) => Promise<CliResult> | CliResult;
+  tuiHandleInstall?: (
+    args: readonly string[],
+    options: { env?: Record<string, string | undefined> },
+  ) => Promise<CliResult> | CliResult;
   tuiInteractive?: boolean;
   readTuiKey?: () => Promise<TuiKey>;
   writeTuiFrame?: (frame: string) => void;

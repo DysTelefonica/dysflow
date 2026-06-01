@@ -394,18 +394,11 @@ describe("VbaSyncAdapter Orchestrator", () => {
         env: {},
       });
 
-      const formServiceSpy = vi.spyOn(service.formService, "validateFormSpec");
-      formServiceSpy.mockResolvedValue({
-        ok: true,
-        data: { spyCalled: true },
-        diagnostics: [],
-        durationMs: 0,
-      });
-
       const result = await service.execute("validate_form_spec", { spec: { name: "SpyForm" } });
-      expect(formServiceSpy).toHaveBeenCalledTimes(1);
-      expect(result).toMatchObject({ ok: true, data: { spyCalled: true } });
-      formServiceSpy.mockRestore();
+      expect(result).toMatchObject({
+        ok: true,
+        data: { valid: true, name: "SpyForm", kind: "Form", controlCount: 0 },
+      });
     });
   });
 });

@@ -1,27 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { handleTuiCommand } from "../../../src/cli/commands/tui";
-
-vi.mock("../../../src/cli/commands/install", () => ({
-  applyIntegrationSelection: vi
-    .fn()
-    .mockResolvedValue({ exitCode: 0, stdout: "MOCKED_APPLY", stderr: "" }),
-  handleInstallCommand: vi
-    .fn()
-    .mockResolvedValue({ exitCode: 0, stdout: "MOCKED_INSTALL", stderr: "" }),
-  ALL_AGENTS: ["codex", "opencode", "claude", "pi"],
-}));
 
 describe("handleTuiCommand", () => {
   it("applies integration selection when tuiSelectedAgents context is provided", async () => {
     const result = await handleTuiCommand([], {
       tuiSelectedAgents: ["opencode"],
+      tuiApplyIntegrationSelection: async () => ({ exitCode: 0, stdout: "FAKE_APPLY", stderr: "" }),
     });
-    expect(result.stdout).toBe("MOCKED_APPLY");
+    expect(result.stdout).toBe("FAKE_APPLY");
   });
 
   it("delegates to handleInstallCommand when arguments are provided", async () => {
-    const result = await handleTuiCommand(["--runtime-dir", "/tmp"]);
-    expect(result.stdout).toBe("MOCKED_INSTALL");
+    const result = await handleTuiCommand(["--runtime-dir", "/tmp"], {
+      tuiHandleInstall: async () => ({ exitCode: 0, stdout: "FAKE_INSTALL", stderr: "" }),
+    });
+    expect(result.stdout).toBe("FAKE_INSTALL");
   });
 
   it("renders dashboard and exits directly when interactive is false", async () => {
@@ -65,8 +58,9 @@ describe("handleTuiCommand", () => {
       tuiInteractive: true,
       readTuiKey: async () => keys.shift() ?? "enter",
       writeTuiFrame: (frame) => frames.push(frame),
+      tuiApplyIntegrationSelection: async () => ({ exitCode: 0, stdout: "FAKE_APPLY", stderr: "" }),
     });
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("MOCKED_APPLY");
+    expect(result.stdout).toBe("FAKE_APPLY");
   });
 });

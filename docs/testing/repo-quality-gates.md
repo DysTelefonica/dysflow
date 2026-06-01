@@ -12,6 +12,10 @@ Owner: repo-engineering-hardening
 
 ## Coverage thresholds
 
+> Coverage is a **regression floor and a diagnostic, not a target.** See
+> [`testing-philosophy.md`](./testing-philosophy.md) for what a good test is. Never add an
+> implementation-coupled test just to raise a number.
+
 Thresholds are set at measured baseline minus 2 percentage points (ADR-6).
 Current floors (set on PR2 of product-quality-fixes):
 
