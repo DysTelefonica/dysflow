@@ -74,7 +74,7 @@ describe("dysflow-vba-manager.ps1", () => {
           line.includes("Get-CimInstance Win32_Process") &&
           !line.trimStart().startsWith("#") &&
           !line.includes("Start-Job") &&
-          !line.includes("$WmiScriptBlock"),
+          !line.includes("$WmiScriptBlock ="),
       );
     expect(linesWithBareCim).toHaveLength(0);
   });

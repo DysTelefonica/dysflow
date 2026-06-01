@@ -242,7 +242,7 @@ public static class NativeMethods {
 function Get-MsAccessProcessesBounded {
   param(
     [int] $TimeoutSeconds = 4,
-    [scriptblock] $WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue | Select-Object ProcessId, CreationDate, CommandLine }
+    [scriptblock] $WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
   )
   # Run the WMI query inside a background job so a hung WMI provider (e.g. a zombie Access
   # process stuck on a unreachable UNC share) cannot block the caller indefinitely.

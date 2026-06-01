@@ -421,6 +421,8 @@ Describe "Get-MsAccessProcessesBounded (vba-manager) — behavioral (issue #380)
 
             $result.Count | Should -Be 0
             $sw.Elapsed.TotalSeconds | Should -BeLessThan 10
+            # ...and prove the Wait-Job timeout actually elapsed (not an instant bypass).
+            $sw.Elapsed.TotalSeconds | Should -BeGreaterThan 0.9
         }
     }
 
