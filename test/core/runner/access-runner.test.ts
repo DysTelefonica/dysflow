@@ -288,56 +288,37 @@ describe("AccessPowerShellRunner", () => {
     expect(payload).not.toHaveProperty("backendPath");
   });
 
-  it("dispatches write actions through a selected database helper instead of CurrentDb directly", () => {
+  // Routing behavior (dryRun, path precedence, Owned, ReadOnly) is proven by
+  // behavioral Pester tests in scripts/tests/dysflow-access-runner.Tests.ps1
+  // (Resolve-WriteActionDatabase, Resolve-ReadActionDatabase,
+  //  Invoke-QuerySqlReadAction, Invoke-ListTablesAction — issue #380 P6).
+  // The assertions below guard only the main-loop WIRING that Pester does not
+  // yet reach — i.e. that the routers and action helpers are called from the
+  // top-level dispatch block rather than bypassed.  They are change-detectors:
+  // fragile on rename but cheap to fix, and the only automated guard for wiring.
+  it("main loop wires routers and action helpers correctly (structural change-detector)", () => {
     const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
 
-    expect(script).toContain("$isDirectTargetQuery = $Operation -eq 'query'");
-    expect(script).toContain(
-      "Open-DatabaseWithBackendPassword -DbEngine $access.DBEngine -DatabasePath $targetPath",
-    );
-    expect(script).toContain("function Resolve-WriteActionDatabase");
+    // Write path: main loop calls the write router and passes its result to Invoke-WriteAction
     expect(script).toContain("Resolve-WriteActionDatabase -DbEngine");
     expect(script).toContain("Invoke-WriteAction -Database $writeDb.Database");
     expect(script).not.toContain(
       "Invoke-WriteAction -Database $db -Action $action -Payload $payload",
     );
-  });
 
-  it("dispatches read schema actions through a read-only selected database helper", () => {
-    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
-
-    expect(script).toContain("function Resolve-ReadActionDatabase");
-    expect(script).toContain(
-      "Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $targetPath -ReadOnly $true",
-    );
+    // Read path: main loop calls the read router and its result feeds the action helpers
     expect(script).toContain(
       "Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
     );
-    expect(script).toContain("if ($readDb.Owned)");
-    // Shared read-action helpers are extracted into named functions
-    expect(script).toContain("function Invoke-ListTablesAction");
-    expect(script).toContain("function Invoke-GetSchemaAction");
-    expect(script).toContain("function Invoke-GetRelationshipsAction");
     expect(script).toContain("Invoke-ListTablesAction -Database $readDb.Database");
     expect(script).toContain("Invoke-GetSchemaAction -Database $readDb.Database");
     expect(script).toContain("Invoke-GetRelationshipsAction -Database $readDb.Database");
-    // No direct inline calls to helpers bypassing the shared functions
+    // No direct inline calls bypassing the shared functions (regression guards)
     expect(script).not.toContain("Get-TableSchema -Database $db");
     expect(script).not.toContain("Get-Relationships -Database $db");
-  });
 
-  it("dispatches generic SQL reads and writes through selected database helpers", () => {
-    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
-
-    expect(script).toContain(
-      "$readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
-    );
-    // SQL read is now dispatched via the shared Invoke-QuerySqlReadAction helper
-    expect(script).toContain("function Invoke-QuerySqlReadAction");
+    // SQL dispatch: query read uses Invoke-QuerySqlReadAction; SQL write uses Execute
     expect(script).toContain("Invoke-QuerySqlReadAction -Database $readDb.Database");
-    expect(script).toContain(
-      "$writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
-    );
     expect(script).toContain("$writeDb.Database.Execute([string]$payload.sql, 128)");
     expect(script).not.toContain("$rs = $db.OpenRecordset([string]$payload.sql)");
     expect(script).not.toContain("$db.Execute([string]$payload.sql, 128)");
