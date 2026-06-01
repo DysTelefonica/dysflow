@@ -210,13 +210,13 @@ function Resolve-ReadActionDatabase {
 function ConvertTo-IsoStartTime {
   param($CreationDate)
   if ($null -eq $CreationDate) { return $null }
-  if ($CreationDate -is [datetime]) { return $CreationDate.ToUniversalTime().ToString('o') }
+  if ($CreationDate -is [datetime]) { return $CreationDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ") }
   $text = [string]$CreationDate
   if ([string]::IsNullOrWhiteSpace($text)) { return $null }
   if ($text -match '^\d{14}\.') {
-    return ([System.Management.ManagementDateTimeConverter]::ToDateTime($text)).ToUniversalTime().ToString('o')
+    return ([System.Management.ManagementDateTimeConverter]::ToDateTime($text)).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
   }
-  return ([datetime]::Parse($text)).ToUniversalTime().ToString('o')
+  return ([datetime]::Parse($text)).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
 }
 
 function Get-ProcessIdFromHwnd {
@@ -239,9 +239,25 @@ public static class NativeMethods {
   return [int]$pid
 }
 
+function Get-MsAccessProcessesBounded {
+  param([int] $TimeoutSeconds = 4)
+  # Run the WMI query inside a background job so a hung WMI provider (e.g. a zombie Access
+  # process stuck on a unreachable UNC share) cannot block the caller indefinitely.
+  $job = Start-Job -ScriptBlock { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
+  $procs = @()
+  if (Wait-Job $job -Timeout $TimeoutSeconds) {
+    $procs = @(Receive-Job $job -ErrorAction SilentlyContinue |
+      Select-Object ProcessId, CreationDate, CommandLine)
+  } else {
+    Stop-Job $job -ErrorAction SilentlyContinue
+    Write-Debug "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Timeout tras ${TimeoutSeconds}s."
+  }
+  Remove-Job $job -Force -ErrorAction SilentlyContinue
+  return $procs
+}
+
 function Get-MsAccessProcesses {
-  @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue |
-    Select-Object ProcessId, CreationDate, CommandLine)
+  Get-MsAccessProcessesBounded
 }
 
 function Write-AccessProcessMarker {
@@ -274,6 +290,26 @@ function Write-AccessProcessMarker {
     [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
   }
 
+}
+
+function Write-AccessProcessMarkerFromPid {
+  # Emit the DYSFLOW_ACCESS_PROCESS marker when the PID was captured via hWnd (primary path),
+  # WITHOUT any WMI call. hWnd capture exists precisely to avoid WMI/CIM, which is the thing
+  # that hangs and leaves MSACCESS zombies. CommandLine is left null here; the WMI-fallback
+  # Write-AccessProcessMarker path supplies it when hWnd capture is unavailable.
+  param([int] $AccessPid)
+  if (-not $AccessPid) { return }
+  $startTime = $null
+  try {
+    $p = Get-Process -Id $AccessPid -ErrorAction SilentlyContinue
+    if ($p) { $startTime = ConvertTo-IsoStartTime $p.StartTime }
+  } catch { Write-Debug "Diagnostics: $_" }
+  $payload = [ordered]@{
+    pid = $AccessPid
+    processStartTime = $startTime
+    commandLine = $null
+  }
+  [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
 }
 
 function Write-DysflowProgress {
@@ -1572,6 +1608,7 @@ try {
     $hwnd = [IntPtr]$access.hWndAccessApp
     if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
       $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
+      if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
     }
   } catch { Write-Debug "Diagnostics: $_" }
   # Fallback: WMI pre/post diff (heuristic — only used when hWnd returned 0).
@@ -1591,6 +1628,7 @@ try {
         $hwnd2 = [IntPtr]$access.hWndAccessApp
         if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
           $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
+          if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
         }
       }
     } catch { Write-Debug "Diagnostics: $_" }
@@ -1877,7 +1915,7 @@ try {
   $pidToKill = $script:accessPid
   if ($null -eq $pidToKill -and $null -ne $access -and -not [string]::IsNullOrEmpty($AccessDbPath)) {
     $dbKey = $AccessDbPath.ToLowerInvariant()
-    foreach ($proc in @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)) {
+    foreach ($proc in @(Get-MsAccessProcessesBounded)) {
       if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($dbKey)) {
         $pidToKill = [int]$proc.ProcessId
         break

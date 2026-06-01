@@ -728,5 +728,107 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(killed).toEqual([]);
       await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "running" });
     });
+
+    it("leaves a running record untouched when startTime differs only in sub-second precision (same process)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({ ...baseRecord, status: "running" });
+      const killed: number[] = [];
+      // Inspector returns 7-digit PS format; registry stored 3-digit TS format
+      const liveProcess: OsProcessInfo = {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:00.0000000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => liveProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.cleaned).not.toContain("op-stale");
+      expect(result.killed).not.toContain(1234);
+      expect(killed).toEqual([]);
+      await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "running" });
+    });
+  });
+
+  describe("tolerant start-time comparison for stale records", () => {
+    it("kills the registered pid when inspected startTime differs only in fractional digits", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create(baseRecord); // processStartTime: "2026-05-15T10:00:00.000Z"
+      const killed: number[] = [];
+      const liveProcess: OsProcessInfo = {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        // 7-digit PS format — same second, different sub-second precision
+        startTime: "2026-05-15T10:00:00.0000000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => liveProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toContain(1234);
+      expect(result.errors).toEqual([]);
+      expect(killed).toEqual([1234]);
+    });
+
+    it("refuses to kill when startTime differs by a full second (genuine PID reuse)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create(baseRecord); // processStartTime: "2026-05-15T10:00:00.000Z"
+      const killed: number[] = [];
+      const reusedPidProcess: OsProcessInfo = {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:01.000Z", // 1 second later → different process
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => reusedPidProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).not.toContain(1234);
+      expect(killed).toEqual([]);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining("processStartTime differs"),
+        }),
+      );
+    });
   });
 });

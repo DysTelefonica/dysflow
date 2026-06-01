@@ -42,31 +42,67 @@ export function parseCimDateTimeToIso(value: string | null | undefined): string 
   return `${year}-${month}-${day}T${hour}:${minute}:${second}.${msStr}${isoOffset}`;
 }
 
+/** PS-side CIM job timeout in seconds (shorter than the Node-level execFile timeout). */
+const CIM_JOB_TIMEOUT_SEC = 4;
+
+/**
+ * Builds a PS 5.1-compatible script that:
+ * 1. Runs the CIM query in a background job to bound WMI hangs.
+ * 2. Falls back to Get-Process (Id + StartTime only, no CommandLine) when the job
+ *    times out or fails.
+ * 3. Emits a single-line JSON (possibly an array) via ConvertTo-Json -Compress.
+ *
+ * The filter expression is injected by the caller (already-quoted PS literal).
+ */
+function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string): string {
+  return (
+    `$job = Start-Job { Get-CimInstance Win32_Process -Filter "${filter}" | ` +
+    `Select-Object ProcessId,Name,CreationDate,CommandLine }; ` +
+    `$r = $null; ` +
+    `if (Wait-Job $job -Timeout ${CIM_JOB_TIMEOUT_SEC}) { $r = Receive-Job $job }; ` +
+    `Stop-Job $job; Remove-Job $job; ` +
+    `if ($r -eq $null) { ` +
+    `$r = Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue | ` +
+    `Select-Object @{n='ProcessId';e={$_.Id}},` +
+    `@{n='Name';e={$_.Name}},` +
+    `@{n='CreationDate';e={if ($_.StartTime) { $_.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }}},` +
+    `@{n='CommandLine';e={$null}} ` +
+    `}; ` +
+    `if ($r -ne $null) { $r | ConvertTo-Json -Compress } else { '' }`
+  );
+}
+
 export class WindowsMsAccessProcessInspector implements ProcessInspector {
   async getProcess(pid: number): Promise<OsProcessInfo | undefined> {
-    const script = `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object ProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress`;
+    const script = buildCimWithFallbackScript(`ProcessId=${pid}`, `MSACCESS`);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
       { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
     if (stdout.trim().length === 0) return undefined;
-    let parsed: { ProcessId: number; Name: string; CreationDate?: string; CommandLine?: string };
+    let parsed: {
+      ProcessId: number;
+      Name: string;
+      CreationDate?: string | null;
+      CommandLine?: string | null;
+    };
     try {
       parsed = JSON.parse(stdout) as {
         ProcessId: number;
         Name: string;
-        CreationDate?: string;
-        CommandLine?: string;
+        CreationDate?: string | null;
+        CommandLine?: string | null;
       };
     } catch {
       return undefined;
     }
+    const startTime = parsed.CreationDate ? parseCimDateTimeToIso(parsed.CreationDate) : undefined;
     return {
       pid: parsed.ProcessId,
       name: parsed.Name,
-      startTime: parseCimDateTimeToIso(parsed.CreationDate),
-      commandLine: parsed.CommandLine,
+      startTime: startTime || undefined,
+      commandLine: parsed.CommandLine ?? undefined,
     };
   }
 }
@@ -88,7 +124,7 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
   async listProcesses(): Promise<OsProcessInfo[]> {
     if (process.platform !== "win32") return [];
 
-    const script = `Get-CimInstance Win32_Process -Filter "Name='MSACCESS.EXE'" | Select-Object ProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress`;
+    const script = buildCimWithFallbackScript(`Name='MSACCESS.EXE'`, `MSACCESS`);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
@@ -98,15 +134,15 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
     let parsed: Array<{
       ProcessId: number;
       Name: string;
-      CreationDate?: string;
-      CommandLine?: string;
+      CreationDate?: string | null;
+      CommandLine?: string | null;
     }>;
     try {
       parsed = JSON.parse(stdout) as Array<{
         ProcessId: number;
         Name: string;
-        CreationDate?: string;
-        CommandLine?: string;
+        CreationDate?: string | null;
+        CommandLine?: string | null;
       }>;
     } catch {
       return [];
@@ -114,11 +150,14 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
     if (!Array.isArray(parsed)) {
       parsed = [parsed];
     }
-    return parsed.map((p) => ({
-      pid: p.ProcessId,
-      name: p.Name,
-      startTime: parseCimDateTimeToIso(p.CreationDate),
-      commandLine: p.CommandLine,
-    }));
+    return parsed.map((p) => {
+      const startTime = p.CreationDate ? parseCimDateTimeToIso(p.CreationDate) : undefined;
+      return {
+        pid: p.ProcessId,
+        name: p.Name,
+        startTime: startTime || undefined,
+        commandLine: p.CommandLine ?? undefined,
+      };
+    });
   }
 }

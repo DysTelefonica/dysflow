@@ -178,9 +178,17 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
   it("spawns taskkill /T /F /PID when child has a pid on timeout", async () => {
     vi.useFakeTimers();
     const kill = vi.fn();
+    let taskkillCloseCallback: ((code: number) => void) | undefined;
     mockSpawn.mockImplementation((cmd: string) => {
       if (cmd === "taskkill") {
-        return { pid: undefined, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn() };
+        return {
+          pid: undefined,
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: (event: string, cb: (code: number) => void) => {
+            if (event === "close") taskkillCloseCallback = cb;
+          },
+        };
       }
       return { pid: 9999, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill };
     });
@@ -197,15 +205,29 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     expect(taskkillCall).toBeDefined();
     expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "9999"]);
     expect(kill).not.toHaveBeenCalled();
+
+    // Fire taskkill close so the awaited kill resolves
+    taskkillCloseCallback?.(0);
+    await Promise.resolve();
+    await Promise.resolve();
+
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
   });
 
   it("spawns taskkill /T /F /PID when child has a pid on abort", async () => {
     vi.useFakeTimers();
     const kill = vi.fn();
+    let taskkillCloseCallback: ((code: number) => void) | undefined;
     mockSpawn.mockImplementation((cmd: string) => {
       if (cmd === "taskkill") {
-        return { pid: undefined, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn() };
+        return {
+          pid: undefined,
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: (event: string, cb: (code: number) => void) => {
+            if (event === "close") taskkillCloseCallback = cb;
+          },
+        };
       }
       return { pid: 8888, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill };
     });
@@ -225,6 +247,12 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     expect(taskkillCall).toBeDefined();
     expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "8888"]);
     expect(kill).not.toHaveBeenCalled();
+
+    // Fire taskkill close so the awaited kill resolves
+    taskkillCloseCallback?.(0);
+    await Promise.resolve();
+    await Promise.resolve();
+
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
   });
 
@@ -250,6 +278,190 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     expect(kill).toHaveBeenCalledTimes(1);
     const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
     expect(taskkillCall).toBeUndefined();
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true });
+  });
+});
+
+describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("result settles only after taskkill close event fires on timeout (not fire-and-forget)", async () => {
+    vi.useFakeTimers();
+    let taskkillCloseCallback: ((code: number) => void) | undefined;
+    mockSpawn.mockImplementation((cmd: string) => {
+      if (cmd === "taskkill") {
+        return {
+          pid: 77777,
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: (event: string, cb: (code: number) => void) => {
+            if (event === "close") {
+              // Hold the close callback — fire it manually to simulate taskkill completing
+              taskkillCloseCallback = cb;
+            }
+          },
+        };
+      }
+      return {
+        pid: 9999,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+    });
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    // Trigger the timeout
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    // taskkill was spawned but its close event has NOT fired yet
+    expect(taskkillCloseCallback).toBeDefined();
+    // Result must not have settled yet (taskkill still running)
+    expect(settled).toBe(false);
+
+    // Now fire the taskkill close event — result must settle after this
+    taskkillCloseCallback?.(0);
+    // Flush microtask chain: inner Promise resolve → killProcessTree resolves →
+    // .then(finish) → outer Promise resolves → resultPromise.then(settled = true)
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    expect(settled).toBe(true);
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("result settles only after taskkill close event fires on abort", async () => {
+    vi.useFakeTimers();
+    let taskkillCloseCallback: ((code: number) => void) | undefined;
+    mockSpawn.mockImplementation((cmd: string) => {
+      if (cmd === "taskkill") {
+        return {
+          pid: 88888,
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: (event: string, cb: (code: number) => void) => {
+            if (event === "close") {
+              taskkillCloseCallback = cb;
+            }
+          },
+        };
+      }
+      return {
+        pid: 8888,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+    });
+    const controller = new AbortController();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 5_000,
+      signal: controller.signal,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(125);
+    controller.abort();
+    await Promise.resolve();
+
+    // taskkill was spawned but its close event has NOT fired yet
+    expect(taskkillCloseCallback).toBeDefined();
+    expect(settled).toBe(false);
+
+    // Fire taskkill close — flush microtask chain
+    taskkillCloseCallback?.(0);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    expect(settled).toBe(true);
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("settles within kill-bound even if taskkill never closes (stuck taskkill guard)", async () => {
+    vi.useFakeTimers();
+    mockSpawn.mockImplementation((cmd: string) => {
+      if (cmd === "taskkill") {
+        return {
+          pid: 55555,
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          // Never fires close — simulates a stuck taskkill
+          on: vi.fn(),
+        };
+      }
+      return {
+        pid: 9999,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+    });
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    // Timeout fires
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    // Kill bound: should settle within a bounded extra time even if taskkill never closes
+    // The bound is expected to be at most a few seconds; advance fake timers by 5s
+    await vi.advanceTimersByTimeAsync(5_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(settled).toBe(true);
+    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+  });
+
+  it("falls back to child.kill() (no pid path) and settles immediately without awaiting taskkill", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 250,
+    });
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.resolve();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(true);
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true });
   });
 });

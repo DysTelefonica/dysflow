@@ -89,7 +89,7 @@ function Write-DysflowOperationMarker {
         if ($AccessPid) {
             try {
                 $p = Get-Process -Id $AccessPid -ErrorAction Stop
-                $startTime = $p.StartTime.ToUniversalTime().ToString("o")
+                $startTime = $p.StartTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
             } catch { Write-Debug "Diagnostics: $_" }
         }
         $record = [pscustomobject]@{
@@ -1108,17 +1108,9 @@ public class RotManager {
             Write-Status -Message ("Detectado lock activo: {0}" -f $lockPath) -Color Yellow
 
             # Buscar MSACCESS.EXE por CommandLine. Get-CimInstance puede deadlockear si hay
-            # procesos zombie colgados en I/O de red (e.g. UNC inalcanzable); Job con timeout
-            # como guardia: si WMI no responde en 4s, fallback a Get-Process sin WMI.
-            $cimProcs = @()
-            $wmiJob = Start-Job -ScriptBlock { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
-            if (Wait-Job $wmiJob -Timeout 4) {
-                $cimProcs = @(Receive-Job $wmiJob -ErrorAction SilentlyContinue)
-            } else {
-                Stop-Job $wmiJob -ErrorAction SilentlyContinue
-                Write-Status -Message "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Fallback: cerrar todos los MSACCESS." -Color DarkYellow
-            }
-            Remove-Job $wmiJob -Force -ErrorAction SilentlyContinue
+            # procesos zombie colgados en I/O de red (e.g. UNC inalcanzable); usar el helper
+            # acotado que envuelve la llamada en un Job con timeout.
+            $cimProcs = @(Get-MsAccessProcessesBounded)
             $killed = $false
 
             if ($cimProcs.Count -gt 0) {
@@ -1280,6 +1272,24 @@ function Open-AccessDatabase {
     }
 }
 
+# Run a WMI Get-CimInstance for MSACCESS.EXE inside a background job so a hung WMI provider
+# (e.g. a zombie Access process stuck on an unreachable UNC share) cannot block the caller
+# indefinitely. Returns whatever processes were retrieved; returns an empty array on timeout.
+function Get-MsAccessProcessesBounded {
+    [CmdletBinding()]
+    Param([int]$TimeoutSeconds = 4)
+    $job = Start-Job -ScriptBlock { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
+    $procs = @()
+    if (Wait-Job $job -Timeout $TimeoutSeconds) {
+        $procs = @(Receive-Job $job -ErrorAction SilentlyContinue)
+    } else {
+        Stop-Job $job -ErrorAction SilentlyContinue
+        Write-Status -Message "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Timeout tras ${TimeoutSeconds}s." -Color DarkYellow
+    }
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    return $procs
+}
+
 function Get-AccessLockFilePath {
     [CmdletBinding()]
     Param(
@@ -1304,7 +1314,7 @@ function Find-AccessPidByDatabase {
     [CmdletBinding()]
     Param([Parameter(Mandatory = $true)][string]$AccessPath)
     $dbKey = $AccessPath.ToLowerInvariant()
-    foreach ($proc in @(Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue)) {
+    foreach ($proc in @(Get-MsAccessProcessesBounded)) {
         if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($dbKey)) {
             return [int]$proc.ProcessId
         }
