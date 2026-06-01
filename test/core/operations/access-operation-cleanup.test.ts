@@ -339,3 +339,121 @@ describe("AccessOperationCleanupService — tolerant start-time comparison", () 
     expect(result.ok === false && result.error.code).toBe("CLEANUP_PROCESS_START_TIME_MISMATCH");
   });
 });
+
+describe("AccessOperationCleanupService — force-retire null-PID records (Goal D)", () => {
+  const nullPidRecord: AccessOperationRecord = {
+    ...BASE_RECORD,
+    accessPid: null,
+    processStartTime: null,
+    status: "timed_out",
+  };
+
+  function makeNullPidRegistry() {
+    const registry = new InMemoryAccessOperationRegistry();
+    return registry.create(nullPidRecord).then(() => registry);
+  }
+
+  it("retires the registry record when force:true, accessPid:null, and scanner throws", async () => {
+    const registry = await makeNullPidRegistry();
+    const { killer, killed } = fakeKiller();
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: {
+        getProcess: async () => {
+          throw new Error("should not inspect");
+        },
+      },
+      processKiller: killer,
+      processScanner: {
+        listProcesses: async () => {
+          throw new Error("CIM unavailable");
+        },
+      },
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.status).toBe("cleaned");
+      expect(result.data.accessPid).toBeNull();
+    }
+    // Nothing must have been killed
+    expect(killed).toEqual([]);
+    // Registry record must be gone (cleaned/purged)
+    await expect(registry.get("op-1")).resolves.toBeUndefined();
+  });
+
+  it("result carries a warning diagnostic when scanner fails on force-retire", async () => {
+    const registry = await makeNullPidRegistry();
+    const { killer } = fakeKiller();
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: killer,
+      processScanner: {
+        listProcesses: async () => {
+          throw new Error("WMI timeout");
+        },
+      },
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(true);
+    // A warning diagnostic should be present indicating ownership could not be verified
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagnostics.some((d) => d.message.toLowerCase().includes("ownership unknown"))).toBe(
+      true,
+    );
+  });
+
+  it("still refuses when force:false and accessPid is null", async () => {
+    const registry = await makeNullPidRegistry();
+    const { killer } = fakeKiller();
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("CLEANUP_PID_UNKNOWN");
+  });
+
+  it("does not kill any process even if scanner succeeds and finds no match", async () => {
+    const registry = await makeNullPidRegistry();
+    const { killer, killed } = fakeKiller();
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: killer,
+      processScanner: {
+        listProcesses: async () => [],
+      },
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(killed).toEqual([]);
+  });
+});

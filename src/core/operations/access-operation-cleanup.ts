@@ -1,5 +1,7 @@
 import {
+  createDiagnostic,
   createDysflowError,
+  type Diagnostic,
   failureResult,
   type OperationResult,
   successResult,
@@ -165,37 +167,50 @@ export class AccessOperationCleanupService {
     operationId: string,
     accessPath: string,
   ): Promise<OperationResult<AccessCleanupResult>> {
-    if (this.options.processScanner === undefined) {
-      return failureResult(
-        createDysflowError(
-          "CLEANUP_PID_UNKNOWN",
-          "Cleanup refused because the operation has no owned Access PID and processes cannot be scanned.",
-        ),
-      );
-    }
+    const diagnostics: Diagnostic[] = [];
 
-    let processes: OsProcessInfo[];
-    try {
-      processes = await this.options.processScanner.listProcesses();
-    } catch (error) {
-      return failureResult(
-        createDysflowError(
-          "CLEANUP_PROCESS_SCAN_FAILED",
-          `Cleanup refused because process enumeration failed: ${formatError(error)}`,
-        ),
-      );
-    }
-    const matchingProcess = processes.find(
-      (process) =>
-        process.name.toUpperCase() === "MSACCESS.EXE" &&
-        process.commandLine !== undefined &&
-        pathMatchesAccessPath(process.commandLine, accessPath),
-    );
-    if (matchingProcess !== undefined) {
-      return failureResult(
-        createDysflowError(
-          "CLEANUP_UNOWNED_ACCESS_PROCESS",
-          `Cleanup refused because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+    if (this.options.processScanner !== undefined) {
+      let processes: OsProcessInfo[];
+      let scanFailed = false;
+      try {
+        processes = await this.options.processScanner.listProcesses();
+      } catch (error) {
+        // Scanner failure: we cannot confirm ownership but we must not silently kill anything.
+        // Retire the registry record and surface a warning so callers can audit.
+        scanFailed = true;
+        diagnostics.push(
+          createDiagnostic(
+            "warning",
+            "access.cleanup",
+            `Registry retired only; process ownership unknown because enumeration failed: ${formatError(error)}`,
+          ),
+        );
+        processes = [];
+      }
+
+      if (!scanFailed) {
+        const matchingProcess = processes.find(
+          (process) =>
+            process.name.toUpperCase() === "MSACCESS.EXE" &&
+            process.commandLine !== undefined &&
+            pathMatchesAccessPath(process.commandLine, accessPath),
+        );
+        if (matchingProcess !== undefined) {
+          return failureResult(
+            createDysflowError(
+              "CLEANUP_UNOWNED_ACCESS_PROCESS",
+              `Cleanup refused because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+            ),
+          );
+        }
+      }
+    } else {
+      // No scanner at all — retire the registry record but flag that ownership could not be verified.
+      diagnostics.push(
+        createDiagnostic(
+          "warning",
+          "access.cleanup",
+          "Registry retired only; process ownership unknown because no process scanner is configured.",
         ),
       );
     }
@@ -204,7 +219,7 @@ export class AccessOperationCleanupService {
       status: "cleaned",
       updatedAt: new Date().toISOString(),
     });
-    return successResult({ operationId, accessPid: null, status: "cleaned" });
+    return successResult({ operationId, accessPid: null, status: "cleaned" }, { diagnostics });
   }
 }
 
