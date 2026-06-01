@@ -636,3 +636,397 @@ Describe "ConvertTo-IsoStartTime — behavioral (issue #380)" {
         }
     }
 }
+
+# ===========================================================================
+# P6 — Behavioral tests for SQL dispatch/routing functions (#380)
+# Extract each function via AST from the production source, stub I/O
+# dependencies, assert routing *behavior* — not script text.
+# ===========================================================================
+
+Describe "Resolve-WriteActionDatabase — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        # Extract and load Resolve-WriteActionDatabase from the real source
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Resolve-WriteActionDatabase' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Resolve-WriteActionDatabase not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Sentinel CurrentDb — a distinct object the function must pass through unchanged
+        $script:SentinelDb = [PSCustomObject]@{ IsSentinel = $true }
+    }
+
+    Context "dryRun=true — always returns CurrentDb unowned, never calls Open-DatabaseWithBackendPassword" {
+        BeforeEach {
+            # Stub: if called, fail the test
+            $script:OpenCalled = $false
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenCalled = $true
+                throw "Open-DatabaseWithBackendPassword must NOT be called on dryRun=true"
+            }
+        }
+
+        It "dryRun=true with databasePath set → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ dryRun = $true; databasePath = "C:\db.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+
+        It "dryRun=true with no path → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ dryRun = $true; databasePath = $null; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+    }
+
+    Context "dryRun=false, no target path → CurrentDb unowned, no COM call" {
+        BeforeEach {
+            $script:OpenCalled = $false
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenCalled = $true
+                throw "Open-DatabaseWithBackendPassword must NOT be called when no path"
+            }
+        }
+
+        It "no path properties set → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = $null; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+
+        It "all path properties are empty strings → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = ""; sourcePath = ""; backendPath = "" }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+    }
+
+    Context "dryRun=false with databasePath → calls Open-DatabaseWithBackendPassword, Owned=true" {
+        BeforeEach {
+            $script:OpenArgs = $null
+            $script:FakeOpenedDb = [PSCustomObject]@{ Name = "opened-db" }
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenArgs = [ordered]@{ DatabasePath = $DatabasePath; ReadOnly = $ReadOnly }
+                return $script:FakeOpenedDb
+            }
+        }
+
+        It "calls Open-DatabaseWithBackendPassword with the databasePath" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = "C:\explicit.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $script:OpenArgs | Should -Not -BeNullOrEmpty
+            $script:OpenArgs.DatabasePath | Should -Be "C:\explicit.accdb"
+        }
+
+        It "returns Owned=true and the opened database object" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = "C:\explicit.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $true
+            $result.Database | Should -Be $script:FakeOpenedDb
+        }
+
+        It "sets TargetPath to the databasePath value" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = "C:\explicit.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.TargetPath | Should -Be "C:\explicit.accdb"
+        }
+
+        It "does NOT open with ReadOnly (write path)" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = "C:\explicit.accdb"; sourcePath = $null; backendPath = $null }
+            Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.ReadOnly | Should -Be $false
+        }
+    }
+
+    Context "path precedence: databasePath > sourcePath > backendPath" {
+        BeforeEach {
+            $script:OpenArgs = $null
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenArgs = [ordered]@{ DatabasePath = $DatabasePath }
+                return [PSCustomObject]@{ Name = $DatabasePath }
+            }
+        }
+
+        It "uses databasePath when all three are set" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = "C:\db.accdb"; sourcePath = "C:\src.accdb"; backendPath = "C:\bk.accdb" }
+            Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\db.accdb"
+        }
+
+        It "falls back to sourcePath when databasePath is absent" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = $null; sourcePath = "C:\src.accdb"; backendPath = "C:\bk.accdb" }
+            Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\src.accdb"
+        }
+
+        It "falls back to backendPath when databasePath and sourcePath are absent" {
+            $payload = [PSCustomObject]@{ dryRun = $false; databasePath = $null; sourcePath = $null; backendPath = "C:\bk.accdb" }
+            Resolve-WriteActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\bk.accdb"
+        }
+    }
+}
+
+Describe "Resolve-ReadActionDatabase — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Resolve-ReadActionDatabase' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Resolve-ReadActionDatabase not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        $script:SentinelDb = [PSCustomObject]@{ IsSentinel = $true }
+    }
+
+    Context "no target path → CurrentDb unowned, no COM call" {
+        BeforeEach {
+            $script:OpenCalled = $false
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenCalled = $true
+                throw "Open-DatabaseWithBackendPassword must NOT be called when no path"
+            }
+        }
+
+        It "no path properties → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ databasePath = $null; sourcePath = $null; backendPath = $null }
+            $result = Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+
+        It "empty string paths → Owned=$false, Database is CurrentDb" {
+            $payload = [PSCustomObject]@{ databasePath = ""; sourcePath = ""; backendPath = "" }
+            $result = Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $false
+            $result.Database | Should -Be $script:SentinelDb
+            $script:OpenCalled | Should -Be $false
+        }
+    }
+
+    Context "path present → calls Open-DatabaseWithBackendPassword with ReadOnly=true, Owned=true" {
+        BeforeEach {
+            $script:OpenArgs = $null
+            $script:FakeReadDb = [PSCustomObject]@{ Name = "read-db" }
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenArgs = [ordered]@{ DatabasePath = $DatabasePath; ReadOnly = $ReadOnly }
+                return $script:FakeReadDb
+            }
+        }
+
+        It "calls Open-DatabaseWithBackendPassword with the target path" {
+            $payload = [PSCustomObject]@{ databasePath = "C:\read.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $script:OpenArgs | Should -Not -BeNullOrEmpty
+            $script:OpenArgs.DatabasePath | Should -Be "C:\read.accdb"
+        }
+
+        It "opens with ReadOnly=true" {
+            $payload = [PSCustomObject]@{ databasePath = "C:\read.accdb"; sourcePath = $null; backendPath = $null }
+            Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.ReadOnly | Should -Be $true
+        }
+
+        It "returns Owned=true and the opened database object" {
+            $payload = [PSCustomObject]@{ databasePath = "C:\read.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.Owned | Should -Be $true
+            $result.Database | Should -Be $script:FakeReadDb
+        }
+
+        It "sets TargetPath correctly" {
+            $payload = [PSCustomObject]@{ databasePath = "C:\read.accdb"; sourcePath = $null; backendPath = $null }
+            $result = Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload
+            $result.TargetPath | Should -Be "C:\read.accdb"
+        }
+    }
+
+    Context "path precedence: databasePath > sourcePath > backendPath" {
+        BeforeEach {
+            $script:OpenArgs = $null
+            function script:Open-DatabaseWithBackendPassword {
+                param($DbEngine, $DatabasePath, [bool]$ReadOnly = $false)
+                $script:OpenArgs = [ordered]@{ DatabasePath = $DatabasePath }
+                return [PSCustomObject]@{ Name = $DatabasePath }
+            }
+        }
+
+        It "uses databasePath when all three are set" {
+            $payload = [PSCustomObject]@{ databasePath = "C:\db.accdb"; sourcePath = "C:\src.accdb"; backendPath = "C:\bk.accdb" }
+            Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\db.accdb"
+        }
+
+        It "falls back to sourcePath when databasePath is absent" {
+            $payload = [PSCustomObject]@{ databasePath = $null; sourcePath = "C:\src.accdb"; backendPath = "C:\bk.accdb" }
+            Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\src.accdb"
+        }
+
+        It "falls back to backendPath when databasePath and sourcePath are absent" {
+            $payload = [PSCustomObject]@{ databasePath = $null; sourcePath = $null; backendPath = "C:\bk.accdb" }
+            Resolve-ReadActionDatabase -DbEngine ([PSCustomObject]@{}) -CurrentDb $script:SentinelDb -Payload $payload | Out-Null
+            $script:OpenArgs.DatabasePath | Should -Be "C:\bk.accdb"
+        }
+    }
+}
+
+Describe "Invoke-QuerySqlReadAction — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-QuerySqlReadAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-QuerySqlReadAction not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    Context "dispatches SQL to Database.OpenRecordset and returns rows from Convert-RecordsetRows" {
+        BeforeEach {
+            $script:RecordsetOpenedWith = $null
+            $script:FakeRows = @(
+                [ordered]@{ id = 1; name = "Alice" },
+                [ordered]@{ id = 2; name = "Bob" }
+            )
+
+            # Fake recordset: tracks OpenRecordset call and provides Close() for finally block
+            $script:FakeRs = [PSCustomObject]@{ CloseCalled = $false }
+            $script:FakeRs | Add-Member -MemberType ScriptMethod -Name "Close" -Value {
+                $this.CloseCalled = $true
+            }
+
+            # Stub: capture the SQL and return the fake recordset
+            $script:RecordsetOpenedWith = $null
+            $fakeDb = [PSCustomObject]@{}
+            $fakeDb | Add-Member -MemberType ScriptMethod -Name "OpenRecordset" -Value {
+                param($Sql)
+                $script:RecordsetOpenedWith = $Sql
+                return $script:FakeRs
+            }
+            $script:FakeDatabase = $fakeDb
+
+            # Stub Convert-RecordsetRows to return known rows
+            function script:Convert-RecordsetRows {
+                param($Recordset)
+                return $script:FakeRows
+            }
+        }
+
+        It "calls Database.OpenRecordset with the given SQL" {
+            $testSql = "SELECT * FROM Orders"
+            Invoke-QuerySqlReadAction -Database $script:FakeDatabase -Sql $testSql | Out-Null
+            $script:RecordsetOpenedWith | Should -Be $testSql
+        }
+
+        It "returns a result with a rows key" {
+            $result = Invoke-QuerySqlReadAction -Database $script:FakeDatabase -Sql "SELECT 1"
+            $result | Should -Not -BeNullOrEmpty
+            ($result.Keys -contains "rows") | Should -Be $true
+        }
+
+        It "rows match what Convert-RecordsetRows returned" {
+            $result = Invoke-QuerySqlReadAction -Database $script:FakeDatabase -Sql "SELECT 1"
+            $result.rows.Count | Should -Be 2
+            $result.rows[0].id | Should -Be 1
+            $result.rows[1].name | Should -Be "Bob"
+        }
+
+        It "calls rs.Close() in the finally block" {
+            Invoke-QuerySqlReadAction -Database $script:FakeDatabase -Sql "SELECT 1" | Out-Null
+            $script:FakeRs.CloseCalled | Should -Be $true
+        }
+    }
+}
+
+Describe "Invoke-ListTablesAction — behavioral (issue #380)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ListTablesAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ListTablesAction not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    Context "delegates to Get-TableNames and wraps result in tables key" {
+        BeforeEach {
+            $script:GetTableNamesCalledWithDb = $null
+            $script:FakeTableList = @("Orders", "Customers", "Products")
+
+            function script:Get-TableNames {
+                param($Database, [switch]$LinkedOnly)
+                $script:GetTableNamesCalledWithDb = $Database
+                return $script:FakeTableList
+            }
+
+            $script:FakeDatabase = [PSCustomObject]@{ DbId = "sentinel-db" }
+        }
+
+        It "calls Get-TableNames with the provided Database" {
+            Invoke-ListTablesAction -Database $script:FakeDatabase | Out-Null
+            $script:GetTableNamesCalledWithDb | Should -Be $script:FakeDatabase
+        }
+
+        It "returns a result with a tables key" {
+            $result = Invoke-ListTablesAction -Database $script:FakeDatabase
+            $result | Should -Not -BeNullOrEmpty
+            ($result.Keys -contains "tables") | Should -Be $true
+        }
+
+        It "tables matches the list returned by Get-TableNames" {
+            $result = Invoke-ListTablesAction -Database $script:FakeDatabase
+            $result.tables.Count | Should -Be 3
+            $result.tables[0] | Should -Be "Orders"
+            $result.tables[1] | Should -Be "Customers"
+            $result.tables[2] | Should -Be "Products"
+        }
+    }
+}
