@@ -14,13 +14,14 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 
 ---
 
-## Current version: v1.0.0
+## Versioning
 
-**48 MCP tools · 717 tests · Windows / Node 20+**
+The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
+See the [CHANGELOG](./CHANGELOG.md) for the full release history.
+
+**48 MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
-
-See [CHANGELOG](./CHANGELOG.md) for full history.
 
 ## What Dysflow is (and is not)
 
