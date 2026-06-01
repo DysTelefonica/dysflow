@@ -65,7 +65,7 @@ function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string):
     `$r = Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue | ` +
     `Select-Object @{n='ProcessId';e={$_.Id}},` +
     `@{n='Name';e={$_.Name}},` +
-    `@{n='CreationDate';e={if ($_.StartTime) { $_.StartTime.ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }}},` +
+    `@{n='CreationDate';e={if ($_.StartTime) { $_.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }}},` +
     `@{n='CommandLine';e={$null}} ` +
     `}; ` +
     `if ($r -ne $null) { $r | ConvertTo-Json -Compress } else { '' }`

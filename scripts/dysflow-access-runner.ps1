@@ -294,23 +294,20 @@ function Write-AccessProcessMarker {
 
 function Write-AccessProcessMarkerFromPid {
   # Emit the DYSFLOW_ACCESS_PROCESS marker when the PID was captured via hWnd (primary path),
-  # bypassing the WMI snapshot diff used by Write-AccessProcessMarker.
-  param([int] $Pid)
-  if (-not $Pid) { return }
+  # WITHOUT any WMI call. hWnd capture exists precisely to avoid WMI/CIM, which is the thing
+  # that hangs and leaves MSACCESS zombies. CommandLine is left null here; the WMI-fallback
+  # Write-AccessProcessMarker path supplies it when hWnd capture is unavailable.
+  param([int] $AccessPid)
+  if (-not $AccessPid) { return }
   $startTime = $null
   try {
-    $p = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+    $p = Get-Process -Id $AccessPid -ErrorAction SilentlyContinue
     if ($p) { $startTime = ConvertTo-IsoStartTime $p.StartTime }
   } catch { Write-Debug "Diagnostics: $_" }
-  $cmdLine = $null
-  try {
-    $cimProc = Get-MsAccessProcessesBounded | Where-Object { [int]$_.ProcessId -eq $Pid } | Select-Object -First 1
-    if ($cimProc) { $cmdLine = $cimProc.CommandLine }
-  } catch { Write-Debug "Diagnostics: $_" }
   $payload = [ordered]@{
-    pid = $Pid
+    pid = $AccessPid
     processStartTime = $startTime
-    commandLine = $cmdLine
+    commandLine = $null
   }
   [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
 }
@@ -1611,7 +1608,7 @@ try {
     $hwnd = [IntPtr]$access.hWndAccessApp
     if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
       $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
-      if ($script:accessPid) { Write-AccessProcessMarkerFromPid -Pid $script:accessPid }
+      if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
     }
   } catch { Write-Debug "Diagnostics: $_" }
   # Fallback: WMI pre/post diff (heuristic — only used when hWnd returned 0).
@@ -1631,7 +1628,7 @@ try {
         $hwnd2 = [IntPtr]$access.hWndAccessApp
         if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
           $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
-          if ($script:accessPid) { Write-AccessProcessMarkerFromPid -Pid $script:accessPid }
+          if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
         }
       }
     } catch { Write-Debug "Diagnostics: $_" }
