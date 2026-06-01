@@ -328,6 +328,98 @@ describe("VbaExecutionAdapter", () => {
     });
   });
 
+  it("returns TOOL_NOT_IMPLEMENTED for an unsupported tool name", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+    const result = await adapter.execute("unsupported_tool", {});
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "TOOL_NOT_IMPLEMENTED" },
+    });
+  });
+
+  it("short-circuits when compile_vba fails during test_vba with compile:true", async () => {
+    const executeMappedTool = vi.fn().mockImplementation((toolName) => {
+      if (toolName === "compile_vba") {
+        return Promise.resolve({
+          ok: false as const,
+          error: {
+            code: "VBA_MANAGER_FAILED" as const,
+            message: "compile error",
+            retryable: false,
+          },
+          diagnostics: [],
+          durationMs: 5,
+        });
+      }
+      return Promise.resolve(successResult([{ ok: true }]));
+    });
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool,
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      compile: true,
+      procedureName: "Test_Compile",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_FAILED");
+    // Should not have called executeMappedTool for test_vba (stopped after compile failure)
+    expect(executeMappedTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns result unchanged from orchestrator when test data is not an array (non-array result shape)", async () => {
+    // inspectTestResult: when result.ok=true but result.data is not an array, returns result as-is
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ summary: "all passed" })); // not an array
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool,
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_Run" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({ summary: "all passed" });
+    }
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN when proceduresJson contains invalid JSON", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: "{ not valid json }",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN when proceduresJson has non-object entries", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["string-item-not-object"]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+  });
+
   it("returns VBA_TESTS_FAILED when any test result has ok: false", async () => {
     const executeMappedTool = vi.fn().mockResolvedValue(
       successResult([

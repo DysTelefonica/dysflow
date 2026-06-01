@@ -889,6 +889,227 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
   });
 });
 
+describe("Access operation registry additional branches", () => {
+  it("evictOldestRecordsFromMap handles equal updatedAt timestamps (sort tie = 0 branch)", () => {
+    // Two records with identical updatedAt: the comparison returns 0 (equal), exercising the ternary's final arm
+    const records = new Map([
+      ["a", { operationId: "a", updatedAt: "2026-01-01T00:00:00Z" } as never],
+      ["b", { operationId: "b", updatedAt: "2026-01-01T00:00:00Z" } as never],
+      ["c", { operationId: "c", updatedAt: "2026-01-02T00:00:00Z" } as never],
+    ]);
+    evictOldestRecordsFromMap(records, 2);
+    // One of a/b (the tie) is evicted; c (newest) stays
+    expect(records.size).toBe(2);
+    expect(records.has("c")).toBe(true);
+  });
+
+  it("InMemoryRegistry.create does not store records with completed status (purge-at-create)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const result = await registry.create({
+      ...{
+        operationId: "op-purge",
+        action: "run" as const,
+        accessPath: "C:/app.accdb",
+        metadata: {},
+        updatedAt: "2026-01-01T00:00:00Z",
+        accessPid: null,
+        processStartTime: null,
+      },
+      status: "completed",
+    });
+    // create() returns the record even though it isn't stored
+    expect(result.operationId).toBe("op-purge");
+    // but get() should return undefined since it was never added
+    await expect(registry.get("op-purge")).resolves.toBeUndefined();
+  });
+
+  it("InMemoryRegistry.create does not store records with cleaned status", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      ...{
+        operationId: "op-cleaned-create",
+        action: "run" as const,
+        accessPath: "C:/app.accdb",
+        metadata: {},
+        updatedAt: "2026-01-01T00:00:00Z",
+        accessPid: null,
+        processStartTime: null,
+      },
+      status: "cleaned",
+    });
+    await expect(registry.get("op-cleaned-create")).resolves.toBeUndefined();
+  });
+
+  it("InMemoryRegistry.update returns undefined for non-existent operationId", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const result = await registry.update("does-not-exist", { status: "completed" });
+    expect(result).toBeUndefined();
+  });
+
+  it("InMemoryRegistry.update purges record when status transitions to completed", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const base = {
+      action: "run" as const,
+      accessPath: "C:/app.accdb",
+      metadata: {},
+      accessPid: null,
+      processStartTime: null,
+    };
+    await registry.create({
+      ...base,
+      operationId: "op-to-complete",
+      status: "running",
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+    await registry.update("op-to-complete", { status: "completed" });
+    await expect(registry.get("op-to-complete")).resolves.toBeUndefined();
+  });
+
+  it("InMemoryRegistry.update preserves metadata when patch has no metadata", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const base = {
+      action: "run" as const,
+      accessPath: "C:/app.accdb",
+      accessPid: null,
+      processStartTime: null,
+    };
+    await registry.create({
+      ...base,
+      operationId: "op-meta",
+      status: "running",
+      metadata: { key: "value" },
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+    await registry.update("op-meta", { status: "timed_out" });
+    const record = await registry.get("op-meta");
+    expect(record?.metadata).toEqual({ key: "value" });
+  });
+
+  it("FileRegistry.create does not store completed-status record in file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-file-purge-create-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    const base = {
+      action: "run" as const,
+      accessPath: "C:/app.accdb",
+      metadata: {},
+      accessPid: null,
+      processStartTime: null,
+    };
+    try {
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      await registry.create({
+        ...base,
+        operationId: "op-file-complete",
+        status: "completed",
+        updatedAt: "2026-01-01T00:00:00Z",
+      });
+      // Should NOT be findable
+      await expect(registry.get("op-file-complete")).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("FileRegistry.update returns undefined for non-existent operationId", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-file-update-notfound-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const result = await registry.update("does-not-exist", { status: "completed" });
+      expect(result).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("FileRegistry.readRecords handles legacy array format (without records wrapper)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-legacy-format-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    const base = {
+      action: "run" as const,
+      accessPath: "C:/app.accdb",
+      metadata: {},
+      accessPid: null,
+      processStartTime: null,
+    };
+    try {
+      await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
+      // Write legacy array format (no `records` wrapper)
+      await writeFile(
+        registryPath,
+        JSON.stringify([
+          {
+            ...base,
+            operationId: "op-legacy",
+            status: "running",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+        ]),
+        "utf8",
+      );
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const record = await registry.get("op-legacy");
+      expect(record?.operationId).toBe("op-legacy");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("FileRegistry.readRecords handles malformed JSON gracefully", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-malformed-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
+      await writeFile(registryPath, "{ not valid json }", "utf8");
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const records = await registry.listRecent();
+      expect(records).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("FileRegistry.readRecords handles objects without records array (uses empty fallback)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-no-records-key-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
+      await writeFile(registryPath, JSON.stringify({ version: 1 }), "utf8");
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const records = await registry.listRecent();
+      expect(records).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("InMemoryRegistry.listRecent without limit arg defaults to 50", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const base = {
+      action: "run" as const,
+      accessPath: "C:/app.accdb",
+      metadata: {},
+      accessPid: null,
+      processStartTime: null,
+      status: "running" as const,
+    };
+    for (let i = 0; i < 10; i++) {
+      await registry.create({
+        ...base,
+        operationId: `op-${i}`,
+        updatedAt: `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+      });
+    }
+    const result = await registry.listRecent();
+    expect(result).toHaveLength(10);
+  });
+
+  it("InMemoryRegistry.get returns undefined for non-existent operationId", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await expect(registry.get("never-created")).resolves.toBeUndefined();
+  });
+});
+
 describe("PR4 — registry mechanical fixes (#198 #202 #204)", () => {
   it("#202 — readRecordsUnlocked does not exist in the registry source", () => {
     const source = readFileSync("src/core/operations/access-operation-registry.ts", "utf8");

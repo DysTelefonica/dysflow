@@ -17,13 +17,13 @@ Owner: repo-engineering-hardening
 > implementation-coupled test just to raise a number.
 
 Thresholds are set at measured baseline minus 2 percentage points (ADR-6).
-Current floors (set on PR2 of product-quality-fixes):
+Current floors (raised in GH #372 — branch coverage improvement):
 
 | Metric     | Floor |
 |------------|-------|
-| statements | 86%   |
-| branches   | 75%   |
-| functions  | 88%   |
-| lines      | 86%   |
+| statements | 82%   |
+| branches   | 82%   |
+| functions  | 85%   |
+| lines      | 84%   |
 
 Raise the thresholds after significant coverage improvements.

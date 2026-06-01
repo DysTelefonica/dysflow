@@ -380,6 +380,204 @@ describe("VbaSyncAdapter Orchestrator", () => {
     });
   });
 
+  it("returns TOOL_NOT_IMPLEMENTED for a tool not handled by any sub-adapter", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+    });
+    const result = await service.execute("completely_unknown_tool_xyz", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("TOOL_NOT_IMPLEMENTED");
+  });
+
+  it("validateStrictContext returns success when strictContext is not set", () => {
+    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
+    const result = service.validateStrictContext(
+      { accessPath: "C:/db/front.accdb" },
+      { accessPath: "C:/db/front.accdb", destinationRoot: "C:/repo" },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("validateStrictContext returns STRICT_CONTEXT_MISMATCH when expected path provided but target has none", () => {
+    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
+    const result = service.validateStrictContext(
+      {
+        strictContext: true,
+        expectedAccessPath: "C:/db/front.accdb",
+      },
+      {
+        accessPath: undefined, // no accessPath resolved
+        destinationRoot: "C:/repo",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+  });
+
+  it("validateStrictContext returns STRICT_CONTEXT_MISMATCH when resolved path differs from expected", () => {
+    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
+    const result = service.validateStrictContext(
+      {
+        strictContext: true,
+        expectedAccessPath: "C:/db/front.accdb",
+      },
+      {
+        accessPath: "C:/db/different.accdb",
+        destinationRoot: "C:/repo",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+  });
+
+  it("validateStrictContext passes when strictWrite is set and paths match", () => {
+    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
+    const result = service.validateStrictContext(
+      {
+        strictWrite: true,
+        expectedDestinationRoot: "C:/repo",
+      },
+      {
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: "C:/repo",
+      },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("resolveDefaultVbaManagerScriptPath returns default when DYSFLOW_HOME is undefined", () => {
+    expect(resolveDefaultVbaManagerScriptPath({})).toBe("scripts/dysflow-vba-manager.ps1");
+  });
+
+  it("resolveDefaultVbaManagerScriptPath returns default when DYSFLOW_HOME is whitespace", () => {
+    expect(resolveDefaultVbaManagerScriptPath({ DYSFLOW_HOME: "   " })).toBe(
+      "scripts/dysflow-vba-manager.ps1",
+    );
+  });
+
+  it("executeMappedTool returns VBA_MANAGER_EXTRA_NOT_ALLOWED for extra keys not in the allowed set", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+
+    // run_vba with an unknown extra key like "unsupportedKey"
+    // VbaExecutionAdapter maps run_vba via executeMappedTool
+    // We can't easily inject a custom extra key via run_vba, so let's drive through
+    // a direct call to executeMappedTool with a mapping that has an unsupported extra key
+    type ServiceInternals = {
+      executeMappedTool: (
+        toolName: string,
+        params: Record<string, unknown>,
+        mapping: {
+          action: string;
+          json: boolean;
+          moduleNames: (p: unknown) => string[];
+          extra: (p: unknown) => Record<string, unknown>;
+        },
+      ) => Promise<unknown>;
+    };
+    const internals = service as unknown as ServiceInternals;
+    const result = await internals.executeMappedTool(
+      "run_vba",
+      {},
+      {
+        action: "Run",
+        json: true,
+        moduleNames: () => [],
+        extra: () => ({ unsupportedKey: "value" }), // not in VBA_MANAGER_EXTRA_KEYS
+      },
+    );
+    expect((result as { ok: boolean }).ok).toBe(false);
+    if (!(result as { ok: boolean }).ok) {
+      expect((result as { error: { code: string } }).error.code).toBe(
+        "VBA_MANAGER_EXTRA_NOT_ALLOWED",
+      );
+    }
+  });
+
+  it("resolveExecutionTarget uses service-level accessPath when no params override", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/service.accdb",
+      destinationRoot: "C:/repo",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+    const target = await service.resolveExecutionTarget({});
+    expect(target.ok).toBe(true);
+    if (target.ok) {
+      expect(target.data.accessPath).toBe("C:/db/service.accdb");
+    }
+  });
+
+  it("resolveExecutionTarget loads config from disk when accessPath is undefined and repo config exists", async () => {
+    const { mkdir, writeFile, mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = await mkdtemp(join(tmpdir(), "dysflow-adapter-config-"));
+    try {
+      await mkdir(join(root, ".dysflow"), { recursive: true });
+      await writeFile(
+        join(root, ".dysflow", "project.json"),
+        JSON.stringify({
+          id: "myproject",
+          accessPath: "C:/db/project.accdb",
+          destinationRoot: "src",
+        }),
+        "utf8",
+      );
+      const service = new VbaSyncAdapter({
+        cwd: root,
+        env: {},
+        executor: async () => ({
+          exitCode: 0,
+          stdout: "{}",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        }),
+      });
+      const target = await service.resolveExecutionTarget({});
+      expect(target.ok).toBe(true);
+      if (target.ok) {
+        expect(target.data.accessPath).toBeDefined();
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolveExecutionTarget returns config failure when no accessPath and no repo config", async () => {
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = await mkdtemp(join(tmpdir(), "dysflow-adapter-no-config-"));
+    try {
+      const service = new VbaSyncAdapter({
+        cwd: root,
+        env: {},
+      });
+      const target = await service.resolveExecutionTarget({});
+      expect(target.ok).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   describe("delegation to form service and comparison modules", () => {
     it("re-exports VbaFormService, comparison helpers, and related types for backward compatibility", async () => {
       const adapterModule = await import("../../../src/adapters/vba-sync/vba-sync-adapter");

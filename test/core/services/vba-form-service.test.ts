@@ -5,6 +5,322 @@ import { describe, expect, it, vi } from "vitest";
 import { VbaFormService } from "../../../src/core/services/vba-form-service";
 
 describe("VbaFormService", () => {
+  // --- resolveFormSpec branches ---
+
+  it("returns FORM_SPEC_MISSING when neither spec nor specPath is provided", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_MISSING");
+  });
+
+  it("loads spec from specPath when spec object is not provided", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-specpath-"));
+    const specFile = join(root, "form.json");
+    await writeFile(
+      specFile,
+      JSON.stringify({ name: "Form_FromFile", kind: "Form", controls: [] }),
+      "utf8",
+    );
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.validateFormSpec({ specPath: specFile });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { name: string }).name).toBe("Form_FromFile");
+  });
+
+  it("falls back to params.name when spec object has no name field", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: { kind: "Form", controls: [] },
+      name: "Form_ParamName",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { name: string }).name).toBe("Form_ParamName");
+  });
+
+  it("infers kind as Report when name starts with Report_", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: { name: "Report_Sales", controls: [] },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
+  });
+
+  it("falls back to params.kind when spec has no kind and name does not start with Report_", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: { name: "MyForm", controls: [] },
+      kind: "Report",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
+  });
+
+  it("returns FORM_SPEC_INVALID for unsupported form kind", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: { name: "BadForm", kind: "Subform", controls: [] },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_INVALID");
+  });
+
+  it("filters out controls without a name and maps controlType fallback", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: {
+        name: "Form_Controls",
+        kind: "Form",
+        controls: [
+          { name: "ctrl1", controlType: "TextBox" }, // uses controlType fallback
+          { name: "", type: "Button" }, // filtered out (empty name)
+          { type: "Label" }, // filtered out (no name key)
+          { name: "ctrl2", type: "ComboBox" }, // normal
+        ],
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { controls: Array<{ name: string; type: string }> };
+      expect(data.controls).toHaveLength(2);
+      expect(data.controls[0]).toMatchObject({ name: "ctrl1", type: "TextBox" });
+      expect(data.controls[1]).toMatchObject({ name: "ctrl2", type: "ComboBox" });
+    }
+  });
+
+  it("returns type Unknown when control has neither type nor controlType", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.validateFormSpec({
+      spec: {
+        name: "Form_Unknown",
+        kind: "Form",
+        controls: [{ name: "myCtrl" }],
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { controls: Array<{ type: string }> };
+      expect(data.controls[0]?.type).toBe("Unknown");
+    }
+  });
+
+  // --- generateForm branches ---
+
+  it("generates a Report .json file when kind is Report", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-report-"));
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.generateForm({
+      spec: { name: "Report_Sales", kind: "Report", controls: [] },
+      destinationRoot: root,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { outputPath: string };
+      expect(data.outputPath).toContain("Report_Sales.report.json");
+    }
+  });
+
+  it("uses projectRoot as destinationRoot when destinationRoot is absent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-projectroot-"));
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.generateForm({
+      spec: { name: "Form_PR", kind: "Form", controls: [] },
+      projectRoot: root,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { outputPath: string };
+      expect(data.outputPath).toContain("Form_PR.form.json");
+    }
+  });
+
+  it("uses service cwd as destinationRoot when neither destinationRoot nor projectRoot given", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-cwd-"));
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.generateForm({
+      spec: { name: "Form_CWD", kind: "Form", controls: [] },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { outputPath: string };
+      expect(data.outputPath).toContain("Form_CWD.form.json");
+    }
+  });
+
+  it("generateForm returns failure when spec is invalid", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.generateForm({});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_MISSING");
+  });
+
+  // --- catalogAddControl branches ---
+
+  it("returns FORM_SPEC_INVALID when catalogAddControl spec is missing", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.catalogAddControl({
+      controlName: "btn",
+      controlType: "Button",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_MISSING");
+  });
+
+  it("returns FORM_SPEC_INVALID when controlName is missing", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.catalogAddControl({
+      spec: { name: "Form_X", kind: "Form", controls: [] },
+      controlType: "TextBox",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_INVALID");
+  });
+
+  it("returns FORM_SPEC_INVALID when controlType is missing", async () => {
+    const service = new VbaFormService({ cwd: process.cwd(), env: {} });
+    const result = await service.catalogAddControl({
+      spec: { name: "Form_X", kind: "Form", controls: [] },
+      controlName: "ctrl1",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_INVALID");
+  });
+
+  it("uses params.name as controlName fallback and params.type as controlType fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-fallback-"));
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.catalogAddControl({
+      spec: { name: "Form_Fallback", kind: "Form", controls: [] },
+      name: "fallbackCtrl",
+      type: "Label",
+      catalogPath: join(root, "forms", "catalog.json"),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { controlCount: number };
+      expect(data.controlCount).toBe(1);
+    }
+  });
+
+  it("appends to existing catalog entries for the same form", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-append-"));
+    const catalogPath = join(root, "forms", "catalog.json");
+    const service = new VbaFormService({ cwd: root, env: {} });
+
+    // Add first control
+    await service.catalogAddControl({
+      spec: { name: "Form_Multi", kind: "Form", controls: [] },
+      controlName: "ctrl1",
+      controlType: "TextBox",
+      catalogPath,
+    });
+
+    // Add second control
+    const result = await service.catalogAddControl({
+      spec: { name: "Form_Multi", kind: "Form", controls: [] },
+      controlName: "ctrl2",
+      controlType: "ComboBox",
+      catalogPath,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { controlCount: number };
+      expect(data.controlCount).toBe(2);
+    }
+    const cat = JSON.parse(await readFile(catalogPath, "utf8"));
+    expect(cat.forms.Form_Multi).toHaveLength(2);
+  });
+
+  // --- harvestFormCatalog branches ---
+
+  it("skips .json files that are not .form.json or .report.json", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-skip-"));
+    const formsDir = join(root, "forms");
+    await mkdir(formsDir, { recursive: true });
+    await writeFile(join(formsDir, "other.json"), JSON.stringify({ name: "Other" }), "utf8");
+    await writeFile(
+      join(formsDir, "Real.form.json"),
+      JSON.stringify({ name: "Real", kind: "Form", controls: [] }),
+      "utf8",
+    );
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.harvestFormCatalog({ destinationRoot: root });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { total: number };
+      expect(data.total).toBe(1);
+    }
+  });
+
+  it("uses entry filename as name fallback when spec has no name", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-noname-"));
+    const formsDir = join(root, "forms");
+    await mkdir(formsDir, { recursive: true });
+    await writeFile(
+      join(formsDir, "Unnamed.form.json"),
+      JSON.stringify({ kind: "Form", controls: [] }),
+      "utf8",
+    );
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.harvestFormCatalog({ destinationRoot: root });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { forms: Array<{ name: string }> };
+      expect(data.forms[0]?.name).toBe("Unnamed");
+    }
+  });
+
+  it("uses folder kind as fallback when spec has no kind field", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-kindfall-"));
+    const formsDir = join(root, "forms");
+    await mkdir(formsDir, { recursive: true });
+    await writeFile(
+      join(formsDir, "KindFallback.form.json"),
+      JSON.stringify({ name: "KindFallback", controls: [] }),
+      "utf8",
+    );
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.harvestFormCatalog({ destinationRoot: root });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { forms: Array<{ kind: string }> };
+      expect(data.forms[0]?.kind).toBe("Form");
+    }
+  });
+
+  it("uses spec.controls.length=0 when controls is not an array", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-nocontrols-"));
+    const formsDir = join(root, "forms");
+    await mkdir(formsDir, { recursive: true });
+    await writeFile(
+      join(formsDir, "NoControls.form.json"),
+      JSON.stringify({ name: "NoControls", kind: "Form" }),
+      "utf8",
+    );
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.harvestFormCatalog({ destinationRoot: root });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { forms: Array<{ controls: number }> };
+      expect(data.forms[0]?.controls).toBe(0);
+    }
+  });
+
+  it("uses projectRoot as destinationRoot for harvestFormCatalog when destinationRoot absent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-projroot-"));
+    const formsDir = join(root, "forms");
+    await mkdir(formsDir, { recursive: true });
+    const service = new VbaFormService({ cwd: root, env: {} });
+    const result = await service.harvestFormCatalog({ projectRoot: root });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { total: number };
+      expect(data.total).toBe(0);
+    }
+  });
+
   it("can validate a correct form spec", async () => {
     const service = new VbaFormService({
       cwd: process.cwd(),
