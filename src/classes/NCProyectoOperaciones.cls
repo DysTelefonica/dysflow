@@ -573,7 +573,7 @@ Public Function RegistrarDatosUnicos( _
             End If
         End If
     End With
-    If Me.nc.RequiereControlEficacia = "Sí" Then
+    If Me.nc.RequiereControlEficacia = "Sí" And p_MenosCef <> EnumSino.Sí Then
         RegistrarControlEficacia p_Error
         If p_Error <> "" Then
             Err.Raise 1000
@@ -857,6 +857,7 @@ Public Function Eliminar( _
     Dim m_ARProyecto As ARProyecto
     Dim m_ACOp As ACProyectoOperaciones
     Dim m_DocOp As DocumentoProyectoOperaciones
+    Dim cacheError As String
     On Error GoTo errores
     
     With Me.nc
@@ -887,8 +888,13 @@ Public Function Eliminar( _
             If p_Error <> "" Then
                 Err.Raise 1000
             End If
-            ' --- INTEGRACIÓN CACHÉ ---
-            CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "NC marcada como borrada", p_Error
+            ' --- INTEGRACIÓN CACHÉ LISTADO ---
+            ' Soft-delete: regenerar listado para que refleje estado Borrado=True.
+            ' El source row still exists so we can RegenerarRegistro safely.
+            If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.nc.IDNoConformidad), cacheError) Then
+                p_Error = "Eliminar: no se pudo regenerar cache listado (soft delete): " & cacheError
+                Err.Raise 1000
+            End If
             ' -------------------------
             Exit Function
         End If
@@ -954,8 +960,15 @@ Public Function Eliminar( _
             "FROM TbNoConformidades " & _
             "WHERE IDNoConformidad=" & Me.nc.IDNoConformidad & ";"
     getdb().Execute m_SQL
-    ' --- INTEGRACIÓN CACHÉ ---
-    CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "Eliminación física de NC", p_Error
+    ' --- INTEGRACIÓN CACHÉ LISTADO ---
+    ' Eliminación física: el row source en TbCacheListadoNC no debe quedar phantom.
+    ' Usamos InvalidateListItem que hace DELETE + regenera si la NC existiera aún.
+    ' Si la NC ya fue borrada, el DELETE es idempotente y UpsertListado fallará en
+    ' fuente (no existe), pero el row phantom no queda en TbCacheListadoNC.
+    If Not CacheNCProyecto.InvalidateListItem(CLng(Me.nc.IDNoConformidad), cacheError) Then
+        p_Error = "Eliminar: no se pudo invalidar cache listado: " & cacheError
+        Err.Raise 1000
+    End If
     ' -------------------------
     Set Me.nc.ARsSinFinalizar = Nothing
     Set m_ObjLogProyectoActivo = New LogNCProyecto
@@ -991,6 +1004,7 @@ Public Function Habilitar( _
                             ) As String
     Dim rcdDatos As DAO.Recordset
     Dim m_SQL As String
+    Dim cacheError As String
     
     On Error GoTo errores
    
@@ -1016,8 +1030,14 @@ Public Function Habilitar( _
         If p_Error <> "" Then
             Err.Raise 1000
         End If
-        ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache Me.nc.IDNoConformidad, "NC habilitada", p_Error
+        ' --- INTEGRACIÓN CACHÉ LISTADO ---
+        ' Habilitar: la NC vuelve a estar visible, list cache debe reflejarla.
+        ' RegenerarRegistro upserts both detalle (GenerarCacheCompleto) and listado
+        ' (UpsertListado via CacheNCCacheRepositorio).
+        If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.nc.IDNoConformidad), cacheError) Then
+            p_Error = "Habilitar: no se pudo regenerar cache listado: " & cacheError
+            Err.Raise 1000
+        End If
         ' -------------------------
     End With
     Set m_ObjLogProyectoActivo = New LogNCProyecto
@@ -1382,6 +1402,7 @@ Public Function RegistrarNota( _
                                 ) As String
                                         
     Dim m_SQL As String
+    Dim cacheError As String
     
     
     
@@ -1402,6 +1423,14 @@ Public Function RegistrarNota( _
                     "WHERE IDNoConformidad=" & .IDNoConformidad & ";"
         
         getdb().Execute m_SQL
+        
+        ' --- INTEGRACIÓN CACHÉ LISTADO ---
+        ' Notas está materializado en TbCacheListadoNC: regenerar para mantener list cache sincronizado
+        If Not CacheNCProyecto.RegenerarRegistro(CStr(.IDNoConformidad), cacheError) Then
+            p_Error = "RegistrarNota: no se pudo regenerar cache listado: " & cacheError
+            Err.Raise 1000
+        End If
+        ' ----------------------------------
             
         RegistrarLogProyecto "Registrar Notas", , Me.nc, , p_Error
         
@@ -1426,6 +1455,8 @@ Public Function EliminarNota( _
                                         ) As String
                                                 
     Dim m_SQL As String
+    Dim cacheError As String
+    
     
     
     
@@ -1443,7 +1474,14 @@ Public Function EliminarNota( _
                 "Notas=Null " & _
                 "WHERE IDNoConformidad=" & .IDNoConformidad & ";"
         getdb().Execute m_SQL
-         RegistrarLogProyecto "Registrar Eliminar Notas", , Me.nc, , p_Error
+        ' --- INTEGRACIÓN CACHÉ LISTADO ---
+        ' Notas está materializado en TbCacheListadoNC: regenerar para mantener list cache sincronizado
+        If Not CacheNCProyecto.RegenerarRegistro(CStr(.IDNoConformidad), cacheError) Then
+            p_Error = "EliminarNota: no se pudo regenerar cache listado: " & cacheError
+            Err.Raise 1000
+        End If
+        ' ----------------------------------
+        RegistrarLogProyecto "Registrar Eliminar Notas", , Me.nc, , p_Error
     End With
    
     Exit Function

@@ -16,19 +16,31 @@
       "name": "Cache trust loaded-empty ARs no DAO fallback",
       "procedure": "Test_CacheTrust_LoadedEmptyARs_NoFallback_Atomic",
       "expect": { "ok": true },
-      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
+      "tags": ["diagnostic", "internal-instrumentation", "cache", "trust", "no-fallback"]
     },
     {
       "name": "Cache trust loaded-empty riesgos no DAO fallback",
       "procedure": "Test_CacheTrust_LoadedEmptyRiesgos_NoFallback_Atomic",
       "expect": { "ok": true },
-      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
+      "tags": ["diagnostic", "internal-instrumentation", "cache", "trust", "no-fallback"]
     },
     {
       "name": "Cache trust AR parent link no DAO fallback",
       "procedure": "Test_CacheTrust_ARParentLink_NoFallback_Atomic",
       "expect": { "ok": true },
-      "tags": ["object", "atomic", "cache", "trust", "no-fallback"]
+      "tags": ["diagnostic", "internal-instrumentation", "cache", "trust", "no-fallback"]
+    },
+    {
+      "name": "Reconstruir regenera fila stale en cache listado (full-rebuild)",
+      "procedure": "Test_CacheListado_Reconstruir_RegeneraStale_Atomic",
+      "expect": { "ok": true },
+      "tags": ["rebuild-global", "cache-listado", "reconstruir", "stale", "sync", "issue-cache"]
+    },
+    {
+      "name": "Reconstruir upsert NC activa faltante en cache listado (full-rebuild)",
+      "procedure": "Test_CacheListado_Reconstruir_UpsertFaltante_Atomic",
+      "expect": { "ok": true },
+      "tags": ["rebuild-global", "cache-listado", "reconstruir", "upsert", "faltante", "sync", "issue-cache"]
     }
   ]
 }

@@ -431,7 +431,8 @@ Public Property Get EstadoCalculado() As EnumEstadoNC
                             Else
                                 m_eESTADOCalculado = EnumEstadoNC.CERRADAPTECE
                             End If
-                        
+                        Else
+                            m_eESTADOCalculado = EnumEstadoNC.CERRADAPTECE
                         End If
                         
                     Else
@@ -820,11 +821,6 @@ Public Property Get EficaciaOK() As EnumSino
     m_Error = ""
     With Me
         If .RequiereControlEficacia = "" Then
-            m_eEficaciaOK = EnumSino.No
-            EficaciaOK = m_eEficaciaOK
-            Exit Property
-        End If
-        If .FechaPrevistaControlEficacia = "" Then
             m_eEficaciaOK = EnumSino.No
             EficaciaOK = m_eEficaciaOK
             Exit Property

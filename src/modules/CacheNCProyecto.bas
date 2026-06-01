@@ -2193,6 +2193,81 @@ errores:
     SincronizarCache = False
 End Function
 
+' Reconstruye completamente la cache de listado de estados desde la fuente real.
+' Uso desde ventana de inmediato:
+'   Dim e As String: ? CacheNCProyecto.ReconstruirListadoEstados(e): ? e
+' Regenera todos los registros activos, aunque ya existan en TbCacheListadoNC,
+' y elimina sobrantes al final mediante SincronizarCache.
+Public Function ReconstruirListadoEstados(Optional ByRef p_Error As String) As Boolean
+    Dim rsFuente As DAO.Recordset
+    Dim SQL As String
+    Dim idNC As Variant
+    Dim colFuente As New Collection
+    Dim errItem As String
+    Dim erroresCount As Long
+    Dim i As Long
+    Dim usuarios As String
+    Dim inicio As Long
+    Dim duracion As Long
+    
+    On Error GoTo errores
+    
+    p_Error = ""
+    ReconstruirListadoEstados = False
+    erroresCount = 0
+    
+    If Not IsCacheEnabled() Then
+        LogCacheOperacion "0", "ReconstruirListadoEstados", "Cache desactivada - NOOP", "Sistema", True
+        ReconstruirListadoEstados = True
+        Exit Function
+    End If
+    
+    inicio = Timer
+    usuarios = ObtenerUsuarioConectado()
+    
+    SQL = "SELECT IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado, 0) = 0 ORDER BY IDNoConformidad"
+    Set rsFuente = getdb().OpenRecordset(SQL, dbOpenSnapshot)
+    
+    Do While Not rsFuente.EOF
+        colFuente.Add CStr(rsFuente!IDNoConformidad)
+        rsFuente.MoveNext
+    Loop
+    
+    rsFuente.Close
+    Set rsFuente = Nothing
+    
+    For i = 1 To colFuente.count
+        idNC = colFuente(i)
+        errItem = ""
+        If Not RegenerarRegistro(CStr(idNC), errItem) Then
+            erroresCount = erroresCount + 1
+            LogCacheOperacion CStr(idNC), "ReconstruirListadoEstados", "Error: " & errItem, usuarios, False
+        End If
+    Next i
+    
+    If Not SincronizarCache(errItem) Then
+        erroresCount = erroresCount + 1
+        LogCacheOperacion "0", "ReconstruirListadoEstados-Sincronizar", "Error: " & errItem, usuarios, False
+    End If
+    
+    duracion = (Timer - inicio) * 1000
+    If erroresCount = 0 Then
+        LogCacheOperacion "0", "ReconstruirListadoEstados", "Reconstruccion completa. Registros: " & colFuente.count, usuarios, True, duracion
+        ReconstruirListadoEstados = True
+    Else
+        p_Error = erroresCount & " errores durante reconstruccion de listado de estados"
+        LogCacheOperacion "0", "ReconstruirListadoEstados", p_Error, usuarios, False, duracion
+        ReconstruirListadoEstados = False
+    End If
+    
+    Exit Function
+    
+errores:
+    p_Error = "Error en CacheNCProyecto.ReconstruirListadoEstados: " & Err.Description
+    If Not rsFuente Is Nothing Then rsFuente.Close: Set rsFuente = Nothing
+    ReconstruirListadoEstados = False
+End Function
+
 ' Helper: verifica si un ID no existe en la colección
 Private Function NotExisteEnColeccion( _
     ByRef p_col As Collection, _

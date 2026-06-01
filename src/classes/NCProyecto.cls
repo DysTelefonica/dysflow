@@ -526,7 +526,8 @@ Public Property Get EstadoCalculado() As EnumEstadoNC
                             Else
                                 m_eESTADOCalculado = EnumEstadoNC.CERRADAPTECE
                             End If
-                        
+                        Else
+                            m_eESTADOCalculado = EnumEstadoNC.CERRADAPTECE
                         End If
                         
                     Else
@@ -1219,11 +1220,6 @@ Public Property Get EficaciaOK() As EnumSino
             EficaciaOK = m_eEficaciaOK
             Exit Property
         End If
-        If .FechaPrevistaControlEficacia = "" Then
-            m_eEficaciaOK = EnumSino.No
-            EficaciaOK = m_eEficaciaOK
-            Exit Property
-        End If
         If .ControlEficacia = "" Then
             m_eEficaciaOK = EnumSino.No
             EficaciaOK = m_eEficaciaOK
@@ -1380,6 +1376,7 @@ End Property
 
 Public Property Get ProyectoCalculado() As String
     
+    Dim dato As Variant
     
     On Error GoTo errores
     Me.Error = ""
@@ -1649,6 +1646,7 @@ Public Function FECHACIERREGrabar( _
                                     ) As String
     
     Dim m_SQL As String
+    Dim cacheError As String
     
     On Error GoTo errores
     
@@ -1682,7 +1680,12 @@ Public Function FECHACIERREGrabar( _
     End If
     getdb().Execute m_SQL
     ' --- INTEGRACIÓN CACHÉ ---
-    CacheNCProyecto.InvalidarCache Me.IDNoConformidad, "Cambio en Fecha de Cierre", p_Error
+    ' FECHACIERRE está materializado en TbCacheListadoNC: RegenerarRegistro
+    ' mantiene detalle y listado inmediatamente sincronizados (no solo invalidado).
+    If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.IDNoConformidad), cacheError) Then
+        p_Error = "FECHACIERREGrabar: no se pudo regenerar cache listado: " & cacheError
+        Err.Raise 1000
+    End If
     ' -------------------------
     FECHACIERREGrabar = p_Fecha
     Exit Function
@@ -1699,6 +1702,7 @@ Public Function FPREVCIERREGrabar( _
                                     ) As String
     
     Dim m_SQL As String
+    Dim cacheError As String
     
     On Error GoTo errores
     
@@ -1731,7 +1735,12 @@ Public Function FPREVCIERREGrabar( _
     End If
     getdb().Execute m_SQL
      ' --- INTEGRACIÓN CACHÉ ---
-    CacheNCProyecto.InvalidarCache Me.IDNoConformidad, "Cambio en Fecha Prevista de Cierre", p_Error
+    ' FPREVCIERRE está materializado en TbCacheListadoNC: RegenerarRegistro
+    ' mantiene detalle y listado inmediatamente sincronizados (no solo invalidado).
+    If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.IDNoConformidad), cacheError) Then
+        p_Error = "FPREVCIERREGrabar: no se pudo regenerar cache listado: " & cacheError
+        Err.Raise 1000
+    End If
     ' -------------------------
     FPREVCIERREGrabar = p_Fecha
     Exit Function
@@ -1749,6 +1758,7 @@ Public Function CIERREGrabar( _
                                     ) As String
     
     Dim m_SQL As String
+    Dim cacheError As String
     
     On Error GoTo errores
     
@@ -1765,7 +1775,12 @@ Public Function CIERREGrabar( _
     m_SQL = "UPDATE TbNoConformidades set Cerrada='" & Me.Cerrada & "' WHERE IDNoConformidad=" & Me.IDNoConformidad & ";"
     getdb().Execute m_SQL
      ' --- INTEGRACIÓN CACHÉ ---
-    CacheNCProyecto.InvalidarCache Me.IDNoConformidad, "Cambio en Estado de Cierre (Sí/No)", p_Error
+    ' Cerrada (Cerrada field) está materializado en TbCacheListadoNC: RegenerarRegistro
+    ' mantiene detalle y listado inmediatamente sincronizados (no solo invalidado).
+    If Not CacheNCProyecto.RegenerarRegistro(CStr(Me.IDNoConformidad), cacheError) Then
+        p_Error = "CIERREGrabar: no se pudo regenerar cache listado: " & cacheError
+        Err.Raise 1000
+    End If
     ' -------------------------
     CIERREGrabar = Me.Cerrada
     Exit Function

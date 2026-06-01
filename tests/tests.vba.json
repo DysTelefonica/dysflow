@@ -193,6 +193,18 @@
       "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
     },
     {
+      "name": "Cache listado Notas sincroniza tras RegistrarNota",
+      "procedure": "Test_CacheListado_RegistrarNota_Sincroniza_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-listado", "notas", "sync", "issue-cache"]
+    },
+    {
+      "name": "Cache listado Notas limpia tras EliminarNota",
+      "procedure": "Test_CacheListado_EliminarNota_Limpia_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-listado", "notas", "eliminar", "sync", "issue-cache"]
+    },
+    {
       "name": "Issue19 CE EficaciaOK sin cambios",
       "procedure": "Test_Issue19_CE_EficaciaOK_SinCambios",
       "expect": { "ok": true },

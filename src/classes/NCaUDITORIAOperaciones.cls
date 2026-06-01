@@ -263,7 +263,7 @@ Public Function RegistrarDatosUnicos( _
             
         End If
     End If
-    If Me.nc.RequiereControlEficacia = "Sí" Then
+    If Me.nc.RequiereControlEficacia = "Sí" And p_MenosCef <> EnumSino.Sí Then
         RegistrarControlEficacia p_Error
         If p_Error <> "" Then
             Err.Raise 1000
