@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       "test/e2e/**/*.test.ts",
       "test/scripts-access-runner.test.ts",
+      "test/scripts-vba-manager.test.ts",
     ],
     environment: "node",
   },

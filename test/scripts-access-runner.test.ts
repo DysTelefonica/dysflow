@@ -102,4 +102,90 @@ describe("dysflow-access-runner.ps1", () => {
     expect(script).not.toContain("$rs = $db.OpenRecordset([string]$payload.sql)");
     expect(script).not.toContain("$db.Execute([string]$payload.sql, 128)");
   });
+
+  it("Goal B: defines a bounded WMI helper and uses it instead of bare Get-CimInstance in cleanup/fallback paths", () => {
+    // The bounded helper function must be defined
+    expect(script).toContain("function Get-MsAccessProcessesBounded");
+    // It must use Start-Job + Wait-Job inside a scriptblock
+    expect(script).toContain("Start-Job -ScriptBlock { Get-CimInstance Win32_Process");
+    expect(script).toContain("Wait-Job");
+    // Get-MsAccessProcesses (WMI-fallback snapshot) must delegate to the bounded helper
+    expect(script).toContain("Get-MsAccessProcessesBounded");
+    // finally-block fallback DB lookup must go through the bounded helper too
+    // (no bare Get-CimInstance Win32_Process outside a Start-Job scriptblock)
+    const linesWithBareCim = script
+      .split("\n")
+      .filter(
+        (line) =>
+          line.includes("Get-CimInstance Win32_Process") &&
+          !line.trimStart().startsWith("#") &&
+          !line.includes("Start-Job"),
+      );
+    expect(linesWithBareCim).toHaveLength(0);
+    // hWnd primary path and Get-ProcessIdFromHwnd must still be present
+    expect(script).toContain("hWndAccessApp");
+    expect(script).toContain("Get-ProcessIdFromHwnd");
+    // DYSFLOW_ACCESS_PROCESS marker must still be emitted
+    expect(script).toContain("DYSFLOW_ACCESS_PROCESS");
+  });
+
+  it("Goal B: emits DYSFLOW_ACCESS_PROCESS marker from the hWnd primary PID capture path", () => {
+    // The marker should be emitted right after the hWnd primary capture succeeds,
+    // not only inside the WMI fallback Write-AccessProcessMarker function.
+    // We verify this by checking that the marker emission (Console.Error.WriteLine)
+    // appears outside the Write-AccessProcessMarker function body.
+    const lines = script.split("\n");
+    const markerEmitLineIdx = lines.findIndex(
+      (l) => l.includes("DYSFLOW_ACCESS_PROCESS") && l.includes("Console]::Error.WriteLine"),
+    );
+    expect(markerEmitLineIdx).toBeGreaterThan(-1);
+    // Find the function boundary for Write-AccessProcessMarker
+    const funcStart = lines.findIndex((l) =>
+      l.includes("function Write-AccessProcessMarker"),
+    );
+    const funcEnd = (() => {
+      let depth = 0;
+      for (let i = funcStart; i < lines.length; i++) {
+        for (const ch of lines[i]) {
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
+        }
+        if (depth === 0 && i > funcStart) return i;
+      }
+      return lines.length;
+    })();
+    // There must be a marker emission outside (after) Write-AccessProcessMarker
+    const outsideEmissions = lines
+      .map((l, i) => ({ line: l, idx: i }))
+      .filter(
+        ({ line, idx }) =>
+          line.includes("DYSFLOW_ACCESS_PROCESS") &&
+          line.includes("Console]::Error.WriteLine") &&
+          (idx < funcStart || idx > funcEnd),
+      );
+    expect(outsideEmissions.length).toBeGreaterThan(0);
+  });
+
+  it("Goal E: ConvertTo-IsoStartTime uses millisecond ISO format, not round-trip format", () => {
+    // Must use 3-digit ms format with trailing Z
+    expect(script).toContain('"yyyy-MM-ddTHH:mm:ss.fffZ"');
+    // Must NOT use .ToString('o') in ConvertTo-IsoStartTime (round-trip gives 7 fractional digits)
+    // Check by extracting the function body
+    const lines = script.split("\n");
+    const funcStart = lines.findIndex((l) => l.includes("function ConvertTo-IsoStartTime"));
+    const funcEnd = (() => {
+      let depth = 0;
+      for (let i = funcStart; i < lines.length; i++) {
+        for (const ch of lines[i]) {
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
+        }
+        if (depth === 0 && i > funcStart) return i;
+      }
+      return lines.length;
+    })();
+    const funcBody = lines.slice(funcStart, funcEnd + 1).join("\n");
+    expect(funcBody).not.toContain(".ToString('o')");
+    expect(funcBody).toContain('"yyyy-MM-ddTHH:mm:ss.fffZ"');
+  });
 });
