@@ -207,7 +207,7 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     expect(kill).not.toHaveBeenCalled();
 
     // Fire taskkill close so the awaited kill resolves
-    taskkillCloseCallback!(0);
+    taskkillCloseCallback?.(0);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -249,7 +249,7 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     expect(kill).not.toHaveBeenCalled();
 
     // Fire taskkill close so the awaited kill resolves
-    taskkillCloseCallback!(0);
+    taskkillCloseCallback?.(0);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -304,7 +304,13 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
           },
         };
       }
-      return { pid: 9999, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill: vi.fn() };
+      return {
+        pid: 9999,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
     });
 
     const resultPromise = spawnPowerShellProcess({
@@ -326,7 +332,7 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     expect(settled).toBe(false);
 
     // Now fire the taskkill close event — result must settle after this
-    taskkillCloseCallback!(0);
+    taskkillCloseCallback?.(0);
     // Flush microtask chain: inner Promise resolve → killProcessTree resolves →
     // .then(finish) → outer Promise resolves → resultPromise.then(settled = true)
     for (let i = 0; i < 8; i++) await Promise.resolve();
@@ -351,7 +357,13 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
           },
         };
       }
-      return { pid: 8888, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill: vi.fn() };
+      return {
+        pid: 8888,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
     });
     const controller = new AbortController();
 
@@ -374,7 +386,7 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     expect(settled).toBe(false);
 
     // Fire taskkill close — flush microtask chain
-    taskkillCloseCallback!(0);
+    taskkillCloseCallback?.(0);
     for (let i = 0; i < 8; i++) await Promise.resolve();
 
     expect(settled).toBe(true);
@@ -393,7 +405,13 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
           on: vi.fn(),
         };
       }
-      return { pid: 9999, stdout: { on: vi.fn() }, stderr: { on: vi.fn() }, on: vi.fn(), kill: vi.fn() };
+      return {
+        pid: 9999,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
     });
 
     const resultPromise = spawnPowerShellProcess({

@@ -14,9 +14,7 @@ describe("dysflow-vba-manager.ps1", () => {
   it("Goal B: Close-TargetAccessDbIfOpen delegates to the bounded helper", () => {
     // The bounded helper must be called from within the function
     const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) =>
-      l.includes("function Close-TargetAccessDbIfOpen"),
-    );
+    const funcStart = lines.findIndex((l) => l.includes("function Close-TargetAccessDbIfOpen"));
     const funcEnd = (() => {
       let depth = 0;
       for (let i = funcStart; i < lines.length; i++) {
@@ -34,9 +32,7 @@ describe("dysflow-vba-manager.ps1", () => {
 
   it("Goal B: Find-AccessPidByDatabase uses the bounded helper, not bare Get-CimInstance", () => {
     const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) =>
-      l.includes("function Find-AccessPidByDatabase"),
-    );
+    const funcStart = lines.findIndex((l) => l.includes("function Find-AccessPidByDatabase"));
     const funcEnd = (() => {
       let depth = 0;
       for (let i = funcStart; i < lines.length; i++) {
@@ -77,9 +73,7 @@ describe("dysflow-vba-manager.ps1", () => {
 
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
     const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) =>
-      l.includes("function Write-DysflowOperationMarker"),
-    );
+    const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));
     const funcEnd = (() => {
       let depth = 0;
       for (let i = funcStart; i < lines.length; i++) {

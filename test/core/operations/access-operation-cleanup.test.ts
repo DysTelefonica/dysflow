@@ -226,9 +226,7 @@ describe("AccessOperationCleanupService — dead-PID cleanup", () => {
 
 describe("sameProcessStartTime — whole-second tolerance", () => {
   it("returns true when times are identical strings", () => {
-    expect(sameProcessStartTime("2026-05-18T12:34:56.000Z", "2026-05-18T12:34:56.000Z")).toBe(
-      true,
-    );
+    expect(sameProcessStartTime("2026-05-18T12:34:56.000Z", "2026-05-18T12:34:56.000Z")).toBe(true);
   });
 
   it("returns true when only milliseconds differ (3 vs 7 fractional digits, same second)", () => {
@@ -239,9 +237,7 @@ describe("sameProcessStartTime — whole-second tolerance", () => {
   });
 
   it("returns true when fractional digits differ but both within the same second", () => {
-    expect(sameProcessStartTime("2026-05-18T12:34:56.400Z", "2026-05-18T12:34:56.900Z")).toBe(
-      true,
-    );
+    expect(sameProcessStartTime("2026-05-18T12:34:56.400Z", "2026-05-18T12:34:56.900Z")).toBe(true);
   });
 
   it("returns false when times differ by more than a second", () => {
@@ -411,9 +407,9 @@ describe("AccessOperationCleanupService — force-retire null-PID records (Goal 
     expect(result.ok).toBe(true);
     // A warning diagnostic should be present indicating ownership could not be verified
     expect(result.diagnostics.length).toBeGreaterThan(0);
-    expect(result.diagnostics.some((d) => d.message.toLowerCase().includes("ownership unknown"))).toBe(
-      true,
-    );
+    expect(
+      result.diagnostics.some((d) => d.message.toLowerCase().includes("ownership unknown")),
+    ).toBe(true);
   });
 
   it("still refuses when force:false and accessPid is null", async () => {

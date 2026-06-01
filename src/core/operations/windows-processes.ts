@@ -74,17 +74,19 @@ function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string):
 
 export class WindowsMsAccessProcessInspector implements ProcessInspector {
   async getProcess(pid: number): Promise<OsProcessInfo | undefined> {
-    const script = buildCimWithFallbackScript(
-      `ProcessId=${pid}`,
-      `MSACCESS`,
-    );
+    const script = buildCimWithFallbackScript(`ProcessId=${pid}`, `MSACCESS`);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
       { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
     if (stdout.trim().length === 0) return undefined;
-    let parsed: { ProcessId: number; Name: string; CreationDate?: string | null; CommandLine?: string | null };
+    let parsed: {
+      ProcessId: number;
+      Name: string;
+      CreationDate?: string | null;
+      CommandLine?: string | null;
+    };
     try {
       parsed = JSON.parse(stdout) as {
         ProcessId: number;

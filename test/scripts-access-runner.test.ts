@@ -140,9 +140,7 @@ describe("dysflow-access-runner.ps1", () => {
     );
     expect(markerEmitLineIdx).toBeGreaterThan(-1);
     // Find the function boundary for Write-AccessProcessMarker
-    const funcStart = lines.findIndex((l) =>
-      l.includes("function Write-AccessProcessMarker"),
-    );
+    const funcStart = lines.findIndex((l) => l.includes("function Write-AccessProcessMarker"));
     const funcEnd = (() => {
       let depth = 0;
       for (let i = funcStart; i < lines.length; i++) {

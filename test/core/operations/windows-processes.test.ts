@@ -184,7 +184,7 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
 
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(1);
-    expect(result[0]!.pid).toBe(5678);
+    expect(result[0]?.pid).toBe(5678);
   });
 
   it("returns OsProcessInfo with commandLine undefined for each entry missing CommandLine", async () => {
@@ -203,7 +203,7 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
     const result = await scanner.listProcesses();
 
     expect(result.length).toBe(2);
-    expect(result[0]!.commandLine).toBeUndefined();
-    expect(result[1]!.commandLine).toBe('MSACCESS.EXE "C:/data/b.accdb"');
+    expect(result[0]?.commandLine).toBeUndefined();
+    expect(result[1]?.commandLine).toBe('MSACCESS.EXE "C:/data/b.accdb"');
   });
 });
