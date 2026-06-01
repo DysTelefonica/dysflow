@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.10] - 2026-06-01
+
+### Changed
+
+- **Test base hardened to a behavioral safety net for the Access WMI-hang/zombie layer (internal; no product/runtime change vs v1.2.9).** An audit found that the v1.2.9 fix lived in PowerShell but was only ever asserted as *script text* — the actual `Start-Job`/`Wait-Job` timeout + `Get-Process` fallback and the `ConvertTo-IsoStartTime` millisecond format were never executed, so a typo in the PS string could have re-introduced MSACCESS zombies while every TS + Pester test stayed green. Closed that gap: added a minimal injectable seam (`[scriptblock]$WmiScriptBlock`, default = the exact original CIM query, bit-for-bit) to `Get-MsAccessProcessesBounded` in both `dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1`, and new Pester tests that inject a hanging scriptblock to prove the `Wait-Job` timeout actually fires (returns empty, elapses >0.9s and <10s) plus a success-path test; behavioral Pester for `ConvertTo-IsoStartTime` (3-digit-ms, the format whose absence caused the original `CLEANUP_PROCESS_START_TIME_MISMATCH`); and TS tests for the `running_untracked` cleanup hard-refusal and the inspector `execFile` timeout propagation. The v1.2.9 runtime was independently validated by the real MCP E2E against a live Access project: **104 pass / 0 fail, zero lingering MSACCESS.EXE**, including the intentional `run_vba` failure path. CI now also runs the `dysflow-vba-manager.ps1` script guards in the Windows smoke job (they were defined but never executed in CI). `README.md` no longer hardcodes a version/test-count that drifts every release — it points to `dysflow --version` and the CHANGELOG. Closes #380; resolves the CI-coverage gap from #376.
+
 ## [v1.2.9] - 2026-06-01
 
 ### Fixed
