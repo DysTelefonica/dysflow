@@ -2,6 +2,12 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.8] - 2026-06-01
+
+### Changed
+
+- **Testing base hardened to a port-level criterion (internal; no product/runtime change vs v1.2.7).** Established the repository testing criterion — refactor-safety as the north star, test at the ports (real domain logic, mock only I/O adapters), coverage as a regression floor rather than a target — and anchored it in `docs/testing/testing-philosophy.md`, a new root `AGENTS.md` (canonical agent guide, imported by `CLAUDE.md` so it applies to every agent), and a cross-reference from `docs/testing/repo-quality-gates.md`. Removed the implementation-coupled assertions surfaced by an audit (tui install seam injection instead of module `vi.mock`; assert on outputs instead of `vi.spyOn`/`toHaveBeenCalledWith` on internal collaborators in the vba-sync adapters and powershell executor). Encapsulated the leaked `VbaSyncAdapter.formService` getter and `VbaFormsAdapter.formService` field (no production caller depended on them). Branch coverage raised 78.28% → 82.08% (+86 branches) with port-level tests only; the enforced branch threshold floor was raised 77 → 82. Widened the vitest `testTimeout` to 15s to remove load-induced timeout flakes in the access-runner concurrency/lock tests. Closes #372, #373, #374, #375.
+
 ## [v1.2.7] - 2026-05-31
 
 ### Fixed
