@@ -16,6 +16,11 @@ export default defineConfig({
       "test/scripts-access-runner.test.ts",
     ],
     environment: "node",
+    // Headroom for tests that coordinate real async barriers (lock serialization,
+    // filesystem locks). The default 5s is too tight when the worker pool is
+    // saturated under a full parallel run, causing load-induced timeout flakes (GH #375).
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     coverage: {
       provider: "v8",
       reportsDirectory: "coverage",
