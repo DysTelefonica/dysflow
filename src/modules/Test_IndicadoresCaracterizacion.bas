@@ -871,6 +871,8 @@ Private Function CacheMaterializado_RequireProyectoBusinessSchema(ByVal p_Db As 
     Dim schemaError As String
 
     CacheMaterializado_RequireProyectoBusinessSchema = False
+    If Not CacheMaterializado_FieldReady(p_Db, "TbExpedientes", "IDExpediente", dbLong, True, schemaError) Then GoTo blocked
+    If Not CacheMaterializado_FieldReady(p_Db, "TbExpedientes", "Nemotecnico", dbText, False, schemaError) Then GoTo blocked
     If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "IDNoConformidad", dbLong, True, schemaError) Then GoTo blocked
     If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "CodigoNoConformidad", dbText, True, schemaError) Then GoTo blocked
     If Not CacheMaterializado_FieldReady(p_Db, "TbNoConformidades", "EXPEDIENTE", dbText, True, schemaError) Then GoTo blocked
@@ -892,7 +894,7 @@ Private Function CacheMaterializado_RequireProyectoBusinessSchema(ByVal p_Db As 
     If Not CacheMaterializado_FieldReady(p_Db, "TbTiposNCProyectos", "IDTipo", dbLong, True, schemaError) Then GoTo blocked
     If Not CacheMaterializado_FieldReady(p_Db, "TbTiposNCProyectos", "Tipologia", dbText, False, schemaError) Then GoTo blocked
 
-    TestHelper.AddLog p_Logs, "Schema negocio Proyecto OK: NC/AC/AR/usuarios/tipos inspeccionados; TbExpedientes no es dependencia del constructor incremental"
+    TestHelper.AddLog p_Logs, "Schema negocio Proyecto OK: Expedientes/NC/AC/AR/usuarios/tipos inspeccionados"
     CacheMaterializado_RequireProyectoBusinessSchema = True
     Exit Function
 
@@ -906,6 +908,7 @@ Private Sub CacheMaterializado_ProyectoBusinessCleanup(ByVal p_Db As DAO.Databas
     p_Db.Execute "DELETE FROM TbNCAccionesRealizadas WHERE IDAccionRealizada IN (992021)", dbFailOnError
     p_Db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva IN (992011)", dbFailOnError
     p_Db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad IN (992001)", dbFailOnError
+    p_Db.Execute "DELETE FROM TbExpedientes WHERE IDExpediente IN (992001)", dbFailOnError
     p_Db.Execute "DELETE FROM TbTiposNCProyectos WHERE IDTipo=992001", dbFailOnError
     p_Db.Execute "DELETE FROM TbUsuariosAplicaciones WHERE UsuarioRed='TEST_ISSUE18_USER' OR CorreoUsuario='TEST_ISSUE18_USER@local.test'", dbFailOnError
     TestHelper.AddLog p_Logs, "Teardown negocio Proyecto: filas TEST_ISSUE18 eliminadas en orden inverso FK"
@@ -917,8 +920,9 @@ Private Sub CacheMaterializado_SeedProyectoBusinessFixture(ByVal p_Db As DAO.Dat
 
     p_Db.Execute "INSERT INTO TbTiposNCProyectos (IDTipo, Tipologia) VALUES (992001, 'TEST_ISSUE18_TIPO')", dbFailOnError
     p_Db.Execute "INSERT INTO TbUsuariosAplicaciones (CorreoUsuario, UsuarioRed, Nombre, Id, Activado) VALUES ('TEST_ISSUE18_USER@local.test', 'TEST_ISSUE18_USER', 'QA User', 32760, True)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbExpedientes (IDExpediente, Nemotecnico, Titulo) VALUES (992001, 'TEST-ISSUE18-NEMO', 'TEST ISSUE18 EXPEDIENTE')", dbFailOnError
     p_Db.Execute "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, DESCRIPCION, RESPONSABLETELEFONICA, RESPONSABLECALIDAD, IDExpediente, Nemotecnico, Borrado, RequiereControlEficacia, ResultadoControlEficacia, ConformeControlEficacia, FechaControlEficacia, FechaPrevistaControlEficacia, IDTipo, ESTADO) " & _
-                 "VALUES (992001, 'TEST-ISSUE18-NC-992001', 'TEST-ISSUE18-EXP', 'Fixture incremental Proyecto Issue 18', 'TEST_ISSUE18_USER', 'QA User', 992001, 'TEST-ISSUE18-NEMO', False, 'Si', 'No conforme', 'No', Date(), Date()-1, 992001, 'Abierta')", dbFailOnError
+                 "VALUES (992001, 'TEST-ISSUE18-NC-992001', 'TEST-ISSUE18-EXP', 'Fixture incremental Proyecto Issue 18', 'TEST_ISSUE18_USER', 'QA User', 992001, 'TEST-ISSUE18-NEMO', False, 'Sí', 'No conforme', 'No', Date(), Date()-1, 992001, 'Abierta')", dbFailOnError
     p_Db.Execute "INSERT INTO TbNCAccionCorrectivas (IDAccionCorrectiva, IDNoConformidad, NAccion, AccionCorrectiva, FechaAccionCorrectiva, ESTADO, Responsable) VALUES (992011, 992001, 1, 'TEST ISSUE18 AC', Date(), 'Abierta', 'TEST_ISSUE18_USER')", dbFailOnError
     p_Db.Execute "INSERT INTO TbNCAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, FechaAccionRealizada, FechaInicio, FechaFinPrevista, FechaFinReal, ESTADO, Responsable) VALUES (992021, 992011, 1, 'TEST ISSUE18 AR cerrada', Date(), Date()-3, Date()-1, Date(), 'Cerrada', 'TEST_ISSUE18_USER')", dbFailOnError
 

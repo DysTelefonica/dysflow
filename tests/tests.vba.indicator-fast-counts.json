@@ -1,0 +1,69 @@
+{
+  "tests": [
+    {
+      "name": "Indicadores fast counts proyecto paridad mixed dataset",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_ParityMixedDataset_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-fast-counts",
+        "issue-13",
+        "issue-14"
+      ]
+    },
+    {
+      "name": "Indicadores fast counts proyecto no expone auditoria",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_NoAuditoriaKeys_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-fast-counts",
+        "issue-13",
+        "issue-14"
+      ]
+    },
+    {
+      "name": "Indicadores runtime proyecto usa conteos rápidos",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_RuntimeUsaConteos_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-fast-counts",
+        "issue-13",
+        "issue-14"
+      ]
+    },
+    {
+      "name": "Indicadores runtime proyecto no afecta auditoria",
+      "procedure": "Test_Indicadores_ProyectoFastCounts_RuntimeNoAfectaAuditoria_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-fast-counts",
+        "issue-13",
+        "issue-14"
+      ]
+    },
+    {
+      "name": "Indicadores runtime auditoria usa conteos rápidos",
+      "procedure": "Test_Indicadores_AuditoriaFastCounts_RuntimeUsaConteos_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-fast-counts",
+        "issue-12",
+        "issue-18"
+      ]
+    }
+  ]
+}

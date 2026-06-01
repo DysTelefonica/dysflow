@@ -1,0 +1,170 @@
+{
+  "tests": [
+    {
+      "name": "Issue36 indicadores proyecto sin cabecera inicializa sin error",
+      "procedure": "Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinError_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "regression",
+        "issue-36"
+      ]
+    },
+    {
+      "name": "Issue37 indicadores auditoria sin cabecera inicializa sin error",
+      "procedure": "Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinError_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "regression",
+        "issue-37"
+      ]
+    },
+    {
+      "name": "Cache materializado proyecto cuenta desde detalle compartido",
+      "procedure": "Test_CacheIndicadoresMaterializado_CountsDesdeDetalleCompartido_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado proyecto sync limpia snapshot anterior",
+      "procedure": "Test_CacheIndicadoresMaterializado_SyncLimpiaSnapshotAnterior_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado proyecto sin cabecera falla",
+      "procedure": "Test_CacheIndicadoresMaterializado_SinHeaderFalla_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado proyecto estado no OK falla",
+      "procedure": "Test_CacheIndicadoresMaterializado_EstadoNoOKConDetalleFalla_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado proyecto header OK sin detalle falla",
+      "procedure": "Test_CacheIndicadoresMaterializado_HeaderOKSinDetalleFalla_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado auditoria cuenta desde detalle compartido",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_CountsDesdeDetalleCompartido_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado auditoria estado no OK falla",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_EstadoNoOKConDetalleFalla_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado auditoria sincroniza desde negocio",
+      "procedure": "Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-18",
+        "issue-37"
+      ]
+    },
+    {
+      "name": "Cache materializado separa proyecto y auditoria",
+      "procedure": "Test_CacheIndicadoresMaterializado_SeparaProyectoYAuditoria_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado incremental NC acota mutacion",
+      "procedure": "Test_CacheIndicadoresMaterializado_IncrementalNC_AcotaMutacion_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    },
+    {
+      "name": "Cache materializado incremental NC no muta con header invalido",
+      "procedure": "Test_CacheIndicadoresMaterializado_IncrementalNC_HeaderInvalidoNoMuta_Atomic",
+      "expect": {
+        "ok": true
+      },
+      "tags": [
+        "atomic",
+        "indicator-materialized-cache",
+        "issue-14",
+        "issue-18"
+      ]
+    }
+  ]
+}
