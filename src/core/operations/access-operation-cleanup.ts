@@ -127,7 +127,7 @@ export class AccessOperationCleanupService {
       );
     }
 
-    if (process.startTime !== record.processStartTime) {
+    if (!sameProcessStartTime(process.startTime, record.processStartTime)) {
       return failureResult(
         createDysflowError(
           "CLEANUP_PROCESS_START_TIME_MISMATCH",
@@ -206,6 +206,29 @@ export class AccessOperationCleanupService {
     });
     return successResult({ operationId, accessPid: null, status: "cleaned" });
   }
+}
+
+/**
+ * Compares two ISO 8601 process start-time strings at whole-second precision.
+ *
+ * Rationale: WMI/CIM writes CreationDate with microsecond precision (DMTF → 3-digit ms after
+ * truncation) while Get-Process.StartTime emits full .NET DateTime ticks → the TS inspector
+ * rounds to ms, but the registry entry may have been persisted from a different source with
+ * different sub-second precision.  Treating them as equal when they agree at the second level
+ * prevents false CLEANUP_PROCESS_START_TIME_MISMATCH errors for the same physical process.
+ *
+ * Null / empty / non-parseable values → returns false (caller falls through to existing null
+ * handling without crashing).
+ */
+export function sameProcessStartTime(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  const tsA = Date.parse(a);
+  const tsB = Date.parse(b);
+  if (Number.isNaN(tsA) || Number.isNaN(tsB)) return false;
+  return Math.floor(tsA / 1000) === Math.floor(tsB / 1000);
 }
 
 function pathMatchesAccessPath(commandLine: string, accessPath: string): boolean {

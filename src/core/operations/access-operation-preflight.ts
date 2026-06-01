@@ -6,6 +6,7 @@ import type {
   ProcessKiller,
   ProcessScanner,
 } from "./access-operation-cleanup.js";
+import { sameProcessStartTime } from "./access-operation-cleanup.js";
 import type {
   AccessOperationRecord,
   AccessOperationRegistry,
@@ -144,7 +145,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       return;
     }
 
-    if (process.startTime !== record.processStartTime) {
+    if (!sameProcessStartTime(process.startTime, record.processStartTime)) {
       result.errors.push({
         operationId: record.operationId,
         message: `Refused to kill PID ${record.accessPid} because processStartTime differs from the registry.`,
@@ -195,7 +196,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     const pidIsGone =
       process === undefined ||
       process.name.toUpperCase() !== "MSACCESS.EXE" ||
-      process.startTime !== record.processStartTime;
+      !sameProcessStartTime(process.startTime, record.processStartTime);
 
     if (pidIsGone) {
       // Original process is verifiably gone (PID not found, reused, or different name).

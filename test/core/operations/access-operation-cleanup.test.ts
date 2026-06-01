@@ -4,7 +4,10 @@ import type {
   ProcessInspector,
   ProcessKiller,
 } from "../../../src/core/operations/access-operation-cleanup.js";
-import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
+import {
+  AccessOperationCleanupService,
+  sameProcessStartTime,
+} from "../../../src/core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
   InMemoryAccessOperationRegistry,
@@ -218,5 +221,121 @@ describe("AccessOperationCleanupService — dead-PID cleanup", () => {
 
     expect(result.ok).toBe(true);
     expect(killed).toContain(999);
+  });
+});
+
+describe("sameProcessStartTime — whole-second tolerance", () => {
+  it("returns true when times are identical strings", () => {
+    expect(sameProcessStartTime("2026-05-18T12:34:56.000Z", "2026-05-18T12:34:56.000Z")).toBe(
+      true,
+    );
+  });
+
+  it("returns true when only milliseconds differ (3 vs 7 fractional digits, same second)", () => {
+    // PS writes 7 fractional digits; TS inspector writes 3
+    expect(sameProcessStartTime("2026-05-18T12:34:56.0000000Z", "2026-05-18T12:34:56.000Z")).toBe(
+      true,
+    );
+  });
+
+  it("returns true when fractional digits differ but both within the same second", () => {
+    expect(sameProcessStartTime("2026-05-18T12:34:56.400Z", "2026-05-18T12:34:56.900Z")).toBe(
+      true,
+    );
+  });
+
+  it("returns false when times differ by more than a second", () => {
+    expect(sameProcessStartTime("2026-05-18T12:34:56.900Z", "2026-05-18T12:34:57.100Z")).toBe(
+      false,
+    );
+  });
+
+  it("returns false when times differ by a full second (boundary)", () => {
+    expect(sameProcessStartTime("2026-05-18T12:34:56.000Z", "2026-05-18T12:34:57.000Z")).toBe(
+      false,
+    );
+  });
+
+  it("returns true when timezone-offset forms denote the same instant (same second)", () => {
+    // +00:00 and Z are equivalent
+    expect(sameProcessStartTime("2026-05-18T12:34:56.000+00:00", "2026-05-18T12:34:56.000Z")).toBe(
+      true,
+    );
+  });
+
+  it("returns false when one argument is null", () => {
+    expect(sameProcessStartTime(null, "2026-05-18T12:34:56.000Z")).toBe(false);
+  });
+
+  it("returns false when both arguments are null", () => {
+    expect(sameProcessStartTime(null, null)).toBe(false);
+  });
+
+  it("returns false when one argument is an empty string", () => {
+    expect(sameProcessStartTime("", "2026-05-18T12:34:56.000Z")).toBe(false);
+  });
+
+  it("returns false for unparseable strings", () => {
+    expect(sameProcessStartTime("not-a-date", "2026-05-18T12:34:56.000Z")).toBe(false);
+  });
+});
+
+describe("AccessOperationCleanupService — tolerant start-time comparison", () => {
+  it("kills owned process when inspected startTime differs only in fractional digits (no false mismatch)", async () => {
+    // Record has 3-digit precision; inspector returns 7-digit precision (PS format)
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "timed_out",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        name: "MSACCESS.EXE",
+        // 7-digit PS format, same second as stored 3-digit value
+        startTime: "2026-05-28T10:00:00.0000000Z",
+      }),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(killed).toContain(999);
+  });
+
+  it("still refuses when inspected startTime differs by a full second (genuine PID reuse)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "timed_out",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:01.000Z",
+      }),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("CLEANUP_PROCESS_START_TIME_MISMATCH");
   });
 });
