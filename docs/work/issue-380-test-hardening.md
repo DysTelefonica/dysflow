@@ -5,7 +5,7 @@
 > you work. Do not delete history — append.
 
 - **Issue:** https://github.com/DysTelefonica/dysflow/issues/380
-- **Status:** P6 COMPLETE (PR open, fresh-review APPROVED) — P7 BLOCKED on user infra decision (self-hosted Access runner)
+- **Status:** P6 COMPLETE & MERGED (PR #383). P7 = run E2E on this Windows box. **PENDING: a fresh-state (post-reboot) E2E run to get a trustworthy zombie number — see the ⚠️ CRITICAL section.** Also pending: correct the v1.2.10 CHANGELOG E2E claim (it was made on STALE scripts).
 - **Last updated:** 2026-06-01
 - **Working branch:** `test/380-p6-p7` (create from `main` if it doesn't exist)
 - **Prereq shipped:** v1.2.9 (the WMI-hang/zombie fix) and v1.2.10 (P1/P3/P4/P5 behavioral tests) are already released. This doc covers only the remaining **P6** and **P7**.
@@ -170,4 +170,31 @@ Dropped (now proven behaviorally by Pester):
   - Test counts: TS unit 827 passed / 3 skipped; Pester 135 passed / 4 skipped; integration 13 passed.
   - 4 pre-existing biome format failures on unmodified files (`access-operation-cleanup.test.ts`, `windows-processes.test.ts`, `scripts-access-runner.test.ts`, `scripts-vba-manager.test.ts`) — NOT introduced by this change.
 - **2026-06-01** — Verified the local biome "format" failures are a **working-tree CRLF artifact only**: `git ls-files --eol` shows the changed files committed as `i/lf` (working tree `w/crlf`), and `git status` shows those 4 files UNMODIFIED. The committed blobs are LF — exactly what Linux CI lints — so CI lint passes (Linux is authoritative). Do NOT run `pnpm lint:fix` and commit just to silence local CRLF; it would churn line endings. Fresh adversarial review of the P6 diff: **APPROVE** (no CRITICAL/WARNING; confirmed no deleted assertion dropped a real guarantee — the `not.toContain` negative guards were retained in the change-detector block; new Pester tests load the real bodies via AST, mocks are real stubs that assert called/not-called, no trivially-passing tests). Two non-blocking SUGGESTIONs noted for a future pass: (a) the top-of-file pure-helper bootstrap still hand-copies `Resolve-SandboxedPath`/`Format-SqlLiteral`/`Split-SqlStatements`/`Invoke-SeedFixtureDryRun` (convert to AST extraction for consistency); (b) trivial doc/test label mismatch. Opening the P6 PR next.
-- **NEXT (P7) — needs the user:** confirm whether a self-hosted Windows runner with MS Access exists/can be provisioned. If yes → implement the P7 tasks above. If no → P7 is not feasible as CI; document `mcp-e2e.mjs` as the manual pre-release gate and close #380 P7 as won't-do-in-CI.
+- **2026-06-01 (P6 merged)** — P6 PR #383 merged to main (CI green; Quality gates 39s confirmed the CRLF was a local artifact). Behavioral routing coverage in, brittle text assertions out. P6 DONE.
+
+---
+
+## ⚠️ CRITICAL — E2E methodology error found 2026-06-01 (READ BEFORE RUNNING THE E2E)
+
+P7 was reframed: **the user said run `mcp-e2e.mjs` DIRECTLY on this Windows dev box (it has Access)**, not a CI job. While doing that, a serious methodology bug was found in HOW the E2E was being run all session:
+
+- `resolveDefaultRunnerScriptPath(env)` (`src/core/runner/access-runner.ts:485-490`): **when `DYSFLOW_HOME` is set, the PowerShell script path = `$DYSFLOW_HOME/app/scripts/dysflow-access-runner.ps1`.**
+- All session E2E runs used `DYSFLOW_HOME='C:\Proyectos\dysflow\test-runtime'`, whose `app/scripts/` held **STALE scripts (May 31, 80493 bytes)** — NOT today's repo scripts (`scripts/dysflow-access-runner.ps1`, Jun 1, 82374 bytes). So **every E2E run before the fix tested STALE PowerShell**, including the earlier "v1.2.9 validated 104/0". **The v1.2.10 CHANGELOG line "validated by real MCP E2E: 104 pass / 0 fail" is therefore INACCURATE and must be corrected.**
+- **Correct way to run the E2E against current code:** sync `test-runtime/app/scripts/` with the repo (`cp scripts/*.ps1 test-runtime/app/scripts/`) AND keep `test-runtime/app/dist` current (or point `DYSFLOW_E2E_COMMAND` at the repo `dist`). Clean baseline each run: kill stray MSACCESS + `rm -rf test-runtime/.dysflow` (registry). Do NOT point `DYSFLOW_HOME` at an empty dir (the runner fails with `-File [PATH] does not exist`).
+
+### Honest E2E findings (same dist code across runs; machine progressively degrading)
+- run1 (stale scripts, fresh-ish): **104/0**. run2 (stale): 97/7. run3 (stale, quiet): 85/19. clean-home: invalid (`[PATH]`). **current-scripts + clean baseline + fresh registry: 75/29.**
+- ALL failures are `:zombie-check` (a new MSACCESS lingered >5s). **No FUNCTIONAL failures with current scripts** (scripts found, ops succeeded). **No PERMANENT zombies — MSACCESS count returns to 0 after every run.** So this is **slow COM release (>5s)**, NOT the #376 permanent-hang bug.
+- **Cannot separate "today's code regressed cleanup latency" from "the machine's COM/WMI/RPC subsystem degraded over ~5 sustained runs".** A clean baseline of *processes* does NOT reset the deeper COM/WMI state. Sequential runs on a degrading machine are a moving target.
+
+### NEXT SESSION — do this first (the only reliable discriminator)
+1. **REBOOT Windows** (resets COM/WMI/RPC), then run the E2E ONCE with CURRENT scripts (sync them first, clean baseline). 
+   - ~104/0 → fix is good; today's leaks were accumulated machine degradation. Then **fix the v1.2.10 CHANGELOG claim** (soften to "validated functionally; zombie-check clean on a fresh-state run").
+   - still leaking `:zombie-check` → REAL slow-release regression. Open a GH issue; investigate the COM Quit/release timing and the mcp-e2e per-call `node mcp` spawn/kill interaction (killing the per-call MCP server may orphan its Access COM child before a clean Quit). Compare against pre-#376 scripts on equal fresh state.
+2. **Correct the v1.2.10 CHANGELOG** regardless (the 104/0 claim was stale-script-based).
+3. Consider whether the mcp-e2e 5s zombie-check window is realistic, or whether "dies within ~20s" is acceptable (no permanent zombie).
+
+### P7 status
+- [x] Reframed: run on this Windows box (not CI). [x] Confirmed it runs here. 
+- [ ] Get a trustworthy fresh-state number (needs reboot — next session).
+- [ ] Decide: formalize as `pnpm e2e:zombies` manual pre-release gate + document; and/or investigate slow-release if it reproduces fresh.
