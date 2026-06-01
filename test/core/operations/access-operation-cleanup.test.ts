@@ -336,6 +336,51 @@ describe("AccessOperationCleanupService — tolerant start-time comparison", () 
   });
 });
 
+describe("AccessOperationCleanupService — running_untracked refusal", () => {
+  it("returns CLEANUP_PID_UNKNOWN and kills nothing when status is running_untracked (force:false)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running_untracked",
+      accessPid: null,
+      processStartTime: null,
+    };
+    const { killer, killed } = fakeKiller();
+    const svc = await makeService(record, fakeInspector(), killer);
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("CLEANUP_PID_UNKNOWN");
+    expect(killed).toEqual([]);
+  });
+
+  it("returns CLEANUP_PID_UNKNOWN and kills nothing when status is running_untracked (force:true)", async () => {
+    // running_untracked is a hard refusal regardless of force — the operation has no owned PID.
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running_untracked",
+      accessPid: null,
+      processStartTime: null,
+    };
+    const { killer, killed } = fakeKiller();
+    const svc = await makeService(record, fakeInspector(), killer);
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("CLEANUP_PID_UNKNOWN");
+    expect(killed).toEqual([]);
+  });
+});
+
 describe("AccessOperationCleanupService — force-retire null-PID records (Goal D)", () => {
   const nullPidRecord: AccessOperationRecord = {
     ...BASE_RECORD,
