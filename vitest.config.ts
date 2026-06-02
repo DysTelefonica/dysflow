@@ -10,6 +10,7 @@ export default defineConfig({
       "test/quality-gates/**/*.test.ts",
       "test/docs/**/*.test.ts",
       "test/integration/**/*.test.ts",
+      "test/scripts-vba-manager.test.ts",
     ],
     exclude: [
       "test/e2e/**",

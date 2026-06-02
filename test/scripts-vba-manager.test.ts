@@ -79,6 +79,12 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(linesWithBareCim).toHaveLength(0);
   });
 
+  it("S1: Export arm in dispatcher calls Invoke-ExportAction (wiring change-detector)", () => {
+    // Wiring check: the Export if-arm must delegate to the extracted function.
+    // This test is RED until Invoke-ExportAction is extracted and the arm replaced.
+    expect(script).toContain("Invoke-ExportAction");
+  });
+
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
     const lines = script.split("\n");
     const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));

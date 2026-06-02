@@ -443,3 +443,127 @@ Describe "Get-MsAccessProcessesBounded (vba-manager) — behavioral (issue #380)
         }
     }
 }
+
+# ===========================================================================
+# S1 — Behavioral tests for Invoke-ExportAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-ExportAction — behavioral (decompose S1)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ExportAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ExportAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status — swallow console output in tests
+        function script:Write-Status { param([string]$Message, $Color) }
+    }
+
+    Context "filtered export — only matching modules are passed to Export-VbaModule" {
+        BeforeEach {
+            # Track which module names were passed to Export-VbaModule
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:ExportedModules.Add($ModuleName)
+            }
+
+            # Stub Get-ComponentExtension (not called when NormalizedModules is provided)
+            function script:Get-ComponentExtension { param($Component, $ModuleName) return ".bas" }
+
+            # Build a fake VBProject: VBComponents supports .Item(name) and .Count
+            $fakeComponents = [PSCustomObject]@{ Count = 3 }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                return [PSCustomObject]@{ Name = $nameOrIndex }
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+            $fakeVbProject | Add-Member -MemberType NoteProperty -Name "VBComponents" -Value $fakeComponents -Force
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "exports only the modules listed in NormalizedModules (A and C, not B)" {
+            $modules = @("ModuleA", "ModuleC")
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules"
+
+            $script:ExportedModules.Count | Should -Be 2
+            $script:ExportedModules | Should -Contain "ModuleA"
+            $script:ExportedModules | Should -Contain "ModuleC"
+            $script:ExportedModules | Should -Not -Contain "ModuleB"
+        }
+    }
+
+    Context "exception propagation — Export-VbaModule failure aborts the action" {
+        # Behavioral contract: Invoke-ExportAction is a pure refactor of the original
+        # inline Export arm. The original arm had NO per-module try/catch; an exception
+        # from Export-VbaModule propagated directly to the dispatcher's try/finally.
+        # This context asserts the ORIGINAL behavior is preserved: first failure aborts.
+        BeforeEach {
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            $script:CallCount = 0
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:CallCount++
+                if ($ModuleName -eq "FailingModule") {
+                    throw "Simulated export failure for $ModuleName"
+                }
+                $script:ExportedModules.Add($ModuleName)
+            }
+
+            function script:Get-ComponentExtension { param($Component, $ModuleName) return ".bas" }
+
+            $fakeComponents = [PSCustomObject]@{ Count = 2 }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                return [PSCustomObject]@{ Name = $nameOrIndex }
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+            $fakeVbProject | Add-Member -MemberType NoteProperty -Name "VBComponents" -Value $fakeComponents -Force
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "propagates exception from Export-VbaModule — Export aborts at first error" {
+            # Original behavior: no per-module catch; exception surfaces to caller.
+            $modules = @("FailingModule", "GoodModule")
+            { Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules" } | Should -Throw "Simulated export failure for FailingModule"
+        }
+
+        It "does NOT attempt remaining modules after first Export-VbaModule failure" {
+            # Abort-on-first-error: GoodModule must NOT be exported after FailingModule throws.
+            $modules = @("FailingModule", "GoodModule")
+            try {
+                Invoke-ExportAction `
+                    -Session $script:FakeSession `
+                    -NormalizedModules $modules `
+                    -ModulesPath "C:\fake\modules"
+            } catch { }
+
+            $script:CallCount | Should -Be 1
+            $script:ExportedModules | Should -Not -Contain "GoodModule"
+        }
+    }
+}
