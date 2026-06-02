@@ -2918,6 +2918,60 @@ function Invoke-AccessProcedureBatch {
     return , @($list)
 }
 
+function Invoke-ExportAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [Parameter(Mandatory = $true)][string[]]$NormalizedModules,
+        [Parameter(Mandatory = $true)][string]$ModulesPath,
+        [switch]$Json
+    )
+    $vbProject  = $Session.VbProject
+    $components = $vbProject.VBComponents
+
+    $targets = @()
+    if ($NormalizedModules.Count -gt 0) {
+        $targets = $NormalizedModules
+        # Validate every requested module exists in VBProject before exporting any
+        foreach ($requestedName in $targets) {
+            $found = $false
+            try {
+                $null = $vbProject.VBComponents.Item($requestedName)
+                $found = $true
+            } catch {
+                $baseName = $requestedName -replace '^(Form|Report)_', ''
+                foreach ($candidate in @("Form_$baseName", "Report_$baseName")) {
+                    try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch { Write-Debug "Diagnostics: $_" }
+                }
+            }
+            if (-not $found) {
+                throw ("VBA_MODULE_NOT_FOUND: El modulo '{0}' no existe en el proyecto VBA." -f $requestedName)
+            }
+        }
+    } else {
+        for ($i = 1; $i -le $components.Count; $i++) {
+            $c = $components.Item($i)
+            try {
+                $ext = Get-ComponentExtension -Component $c -ModuleName $c.Name
+                if ($ext) { $targets += $c.Name }
+            } finally {
+                try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+            }
+        }
+        $targets = $targets | Sort-Object -Unique
+    }
+
+    $total = $targets.Count
+    $idx = 0
+    foreach ($name in $targets) {
+        $idx++
+        Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
+        # FIX: pasar AccessApplication para que SaveAsText funcione en formularios
+        Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
+    }
+    Write-Status -Message ("OK Export completado ({0})" -f $total) -Color Green
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -2960,50 +3014,7 @@ try {
 
     if ($Action -eq "Export") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $vbProject = $session.VbProject
-        $components = $vbProject.VBComponents
-
-        $targets = @()
-        if ($normalizedModules.Count -gt 0) {
-            $targets = $normalizedModules
-            # Validate every requested module exists in VBProject before exporting any
-            foreach ($requestedName in $targets) {
-                $found = $false
-                try {
-                    $null = $vbProject.VBComponents.Item($requestedName)
-                    $found = $true
-                } catch {
-                    $baseName = $requestedName -replace '^(Form|Report)_', ''
-                    foreach ($candidate in @("Form_$baseName", "Report_$baseName")) {
-                        try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch { Write-Debug "Diagnostics: $_" }
-                    }
-                }
-                if (-not $found) {
-                    throw ("VBA_MODULE_NOT_FOUND: El modulo '{0}' no existe en el proyecto VBA." -f $requestedName)
-                }
-            }
-        } else {
-            for ($i = 1; $i -le $components.Count; $i++) {
-                $c = $components.Item($i)
-                try {
-                    $ext = Get-ComponentExtension -Component $c -ModuleName $c.Name
-                    if ($ext) { $targets += $c.Name }
-                } finally {
-                    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
-                }
-            }
-            $targets = $targets | Sort-Object -Unique
-        }
-
-        $total = $targets.Count
-        $idx = 0
-        foreach ($name in $targets) {
-            $idx++
-            Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
-            # FIX: pasar AccessApplication para que SaveAsText funcione en formularios
-            Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $session.AccessApplication
-        }
-        Write-Status -Message ("OK Export completado ({0})" -f $total) -Color Green
+        Invoke-ExportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -Json:$Json
 
     } elseif ($Action -eq "Import") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
