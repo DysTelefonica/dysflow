@@ -83,9 +83,10 @@ Every `dysflow` invocation that starts Access records an operation with:
 - command line (when available)
 - status lifecycle
 
-### 2) Cleanup is explicit and validated
+### 2) Cleanup is explicit, owned, and validated
 
 `dysflow_access_cleanup`/`cleanup_access_operation` only succeeds when all safety checks pass.
+Cleanup targets **only Dysflow-owned Access processes** with attribution through an operation id, marker file, PID record, and process start time. Matching by process name, database path, or command line alone is diagnostic only; it is not ownership and must report/block instead of terminating Access.
 
 Refusal examples include:
 
@@ -137,7 +138,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.0.0"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.2.11"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
