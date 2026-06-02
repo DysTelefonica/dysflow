@@ -276,22 +276,17 @@ function Write-AccessProcessMarker {
     }
   }
   if ($null -eq $candidate) {
-    foreach ($proc in $after) {
-      if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($AccessDbPath.ToLowerInvariant())) {
-        $candidate = $proc
-        break
-      }
-    }
+    [Console]::Error.WriteLine("WARN: Access PID attribution was unavailable for '$AccessDbPath'; skipped process marker instead of claiming ownership from database path/CommandLine only.")
+    return
   }
-  if ($null -ne $candidate) {
-    $script:accessPid = [int]$candidate.ProcessId
-    $payload = [ordered]@{
-      pid = [int]$candidate.ProcessId
-      processStartTime = ConvertTo-IsoStartTime $candidate.CreationDate
-      commandLine = $candidate.CommandLine
-    }
-    [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
+
+  $script:accessPid = [int]$candidate.ProcessId
+  $payload = [ordered]@{
+    pid = [int]$candidate.ProcessId
+    processStartTime = ConvertTo-IsoStartTime $candidate.CreationDate
+    commandLine = $candidate.CommandLine
   }
+  [Console]::Error.WriteLine('DYSFLOW_ACCESS_PROCESS ' + ($payload | ConvertTo-Json -Compress -Depth 5))
 
 }
 
@@ -1910,20 +1905,13 @@ try {
     try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch { Write-Debug "Diagnostics: $_" }
   }
-  # Resolve the PID to terminate. The marker captures it via WMI which can lag behind
-  # process creation; if it was missed (or New-Object reused an existing COM instance),
-  # fall back to matching the specific database path in the process command line. This
-  # only ever matches the instance dysflow opened for THIS database — never other Access
-  # instances the user may have open with a different database.
+  # Resolve the PID to terminate. Only the PID captured for this runner-owned Access
+  # instance is safe to terminate. If PID attribution was missed (or New-Object reused
+  # an existing COM instance), do not kill by database path or CommandLine alone: that
+  # can target a user's Access process that dysflow does not own.
   $pidToKill = $script:accessPid
-  if ($null -eq $pidToKill -and $null -ne $access -and -not [string]::IsNullOrEmpty($AccessDbPath)) {
-    $dbKey = $AccessDbPath.ToLowerInvariant()
-    foreach ($proc in @(Get-MsAccessProcessesBounded)) {
-      if ($proc.CommandLine -and $proc.CommandLine.ToLowerInvariant().Contains($dbKey)) {
-        $pidToKill = [int]$proc.ProcessId
-        break
-      }
-    }
+  if ($null -eq $pidToKill -and $null -ne $access) {
+    [Console]::Error.WriteLine("WARN: Access PID attribution was unavailable; skipped force cleanup instead of killing by database path/CommandLine only.")
   }
   if ($null -ne $pidToKill) {
     # Force-kill and wait deterministically until the process is actually gone, instead of

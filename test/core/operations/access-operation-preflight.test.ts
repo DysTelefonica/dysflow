@@ -303,7 +303,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       ]);
     });
 
-    it("kills an orphan MSACCESS with commandLine containing the same accessPath", async () => {
+    it("reports and blocks an unattributed orphan MSACCESS with commandLine containing the same accessPath", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       await registry.create(baseRecord);
       const killed: number[] = [];
@@ -333,8 +333,13 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.orphanedKilled).toEqual([9999]);
-      expect(killed).toEqual([9999]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toContainEqual({
+        operationId: "orphan",
+        message:
+          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
+      });
+      expect(killed).toEqual([]);
     });
 
     it("does NOT kill an orphan MSACCESS for a different accessPath", async () => {
@@ -529,7 +534,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(killed).toEqual([]);
     });
 
-    it("kills MSACCESS for same path in different casing (case-insensitive match)", async () => {
+    it("reports and blocks MSACCESS for same path in different casing (case-insensitive match)", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       const killed: number[] = [];
       const service = new AccessOperationPreflightCleanupService({
@@ -558,8 +563,13 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.orphanedKilled).toEqual([9999]);
-      expect(killed).toEqual([9999]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toContainEqual({
+        operationId: "orphan",
+        message:
+          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
+      });
+      expect(killed).toEqual([]);
     });
 
     it("does not kill MSACCESS for path that is a substring match (e.g. .accdb.bak)", async () => {
@@ -595,7 +605,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(killed).toEqual([]);
     });
 
-    it("does not kill MSACCESS when commandLine has path as unquoted token", async () => {
+    it("reports and blocks MSACCESS when commandLine has path as unquoted token", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       const killed: number[] = [];
       const service = new AccessOperationPreflightCleanupService({
@@ -624,8 +634,13 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.orphanedKilled).toEqual([9999]);
-      expect(killed).toEqual([9999]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toContainEqual({
+        operationId: "orphan",
+        message:
+          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
+      });
+      expect(killed).toEqual([]);
     });
   });
 
@@ -636,7 +651,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(source).not.toContain("this.options.processScanner!");
     });
 
-    it("scanAndCleanOrphans accepts an explicit ProcessScanner parameter and still kills orphans", async () => {
+    it("scanAndCleanOrphans accepts an explicit ProcessScanner parameter and reports unattributed orphans", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       const killed: number[] = [];
       const scanner = {
@@ -666,8 +681,13 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.orphanedKilled).toEqual([5555]);
-      expect(killed).toEqual([5555]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(result.errors).toContainEqual({
+        operationId: "orphan",
+        message:
+          "Blocked cleanup because PID 5555 is an unattributed MSACCESS process for the requested accessPath.",
+      });
+      expect(killed).toEqual([]);
     });
   });
 

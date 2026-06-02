@@ -165,18 +165,21 @@ export async function resolveMcpWriteAccessForInput(
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   const operationRegistry = createProjectOperationRegistry(config);
   const runner = new AccessPowerShellRunner({ operationRegistry });
+  const cleanupService = new AccessOperationCleanupService({
+    registry: operationRegistry,
+    processInspector: new WindowsMsAccessProcessInspector(),
+    processKiller: new WindowsProcessKiller(),
+    processScanner: new WindowsMsAccessProcessScanner(),
+  });
   return {
     vbaService: new AccessVbaService({ runner, config }),
     queryService: new AccessQueryService({ runner, config }),
     diagnosticsService: new AccessDiagnosticsService({ runner, config }),
     operationRegistry,
-    cleanupService: new AccessOperationCleanupService({
-      registry: operationRegistry,
-      processInspector: new WindowsMsAccessProcessInspector(),
-      processKiller: new WindowsProcessKiller(),
-      processScanner: new WindowsMsAccessProcessScanner(),
-    }),
+    cleanupService,
     vbaSyncToolService: new VbaSyncAdapter({
+      operationRegistry,
+      cleanupService,
       processTimeoutMs: config.processTimeoutMs,
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,

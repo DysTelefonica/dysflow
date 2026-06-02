@@ -1030,3 +1030,30 @@ Describe "Invoke-ListTablesAction — behavioral (issue #380)" {
         }
     }
 }
+
+Describe "Access runner final cleanup ownership guard" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $script:RunnerSource = Get-Content -LiteralPath $script:RunnerPath -Raw
+        $script:WriteAccessProcessMarkerSource = [regex]::Match(
+            $script:RunnerSource,
+            '(?s)function Write-AccessProcessMarker \{.*?\n\}'
+        ).Value
+    }
+
+    It "keeps force cleanup limited to the runner-owned captured PID" {
+        $script:RunnerSource | Should -Match ([regex]::Escape('$pidToKill = $script:accessPid'))
+        $script:RunnerSource | Should -Not -Match '(?s)\$pidToKill\s*=\s*\$script:accessPid.*\$pidToKill\s*=\s*\[int\]\$proc\.ProcessId'
+        $script:RunnerSource | Should -Not -Match '(?s)\$pidToKill\s*=\s*\$script:accessPid.*CommandLine\.ToLowerInvariant\(\)\.Contains\(\$dbKey\)'
+    }
+
+    It "warns instead of killing when Access PID attribution is missing" {
+        $script:RunnerSource | Should -Match 'Access PID attribution was unavailable; skipped force cleanup'
+    }
+
+    It "does not claim ownership from a path-only CommandLine match in Write-AccessProcessMarker" {
+        $script:WriteAccessProcessMarkerSource | Should -Not -BeNullOrEmpty
+        $script:WriteAccessProcessMarkerSource | Should -Not -Match 'CommandLine\.ToLowerInvariant\(\)\.Contains\(\$AccessDbPath\.ToLowerInvariant\(\)\)'
+        $script:WriteAccessProcessMarkerSource | Should -Match 'skipped process marker instead of claiming ownership from database path/CommandLine only'
+    }
+}

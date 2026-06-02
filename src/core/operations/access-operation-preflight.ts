@@ -238,18 +238,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       if (process.commandLine === undefined) continue;
       if (!pathMatchesAccessPath(process.commandLine, normalizedAccessPath)) continue;
 
-      try {
-        await withTimeout(
-          this.options.processKiller.kill(process.pid),
-          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        );
-        result.orphanedKilled.push(process.pid);
-      } catch (error) {
-        result.errors.push({
-          operationId: "orphan",
-          message: `Failed to kill orphan PID ${process.pid}: ${formatError(error)}`,
-        });
-      }
+      result.errors.push({
+        operationId: "orphan",
+        message: `Blocked cleanup because PID ${process.pid} is an unattributed MSACCESS process for the requested accessPath.`,
+      });
     }
   }
 

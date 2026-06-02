@@ -1107,45 +1107,27 @@ public class RotManager {
         if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {
             Write-Status -Message ("Detectado lock activo: {0}" -f $lockPath) -Color Yellow
 
-            # Buscar MSACCESS.EXE por CommandLine. Get-CimInstance puede deadlockear si hay
-            # procesos zombie colgados en I/O de red (e.g. UNC inalcanzable); usar el helper
-            # acotado que envuelve la llamada en un Job con timeout.
+            # Buscar MSACCESS.EXE por CommandLine solo para diagnosticar bloqueos. Coincidir
+            # por ruta NO demuestra ownership: puede ser otra sesion/agente usando la misma BD.
+            # En ese caso se reporta/bloquea; no se mata ningun proceso no atribuido.
+            # Get-CimInstance puede deadlockear si hay procesos zombie colgados en I/O de red
+            # (e.g. UNC inalcanzable); usar el helper acotado que envuelve la llamada en un Job.
             $cimProcs = @(Get-MsAccessProcessesBounded)
-            $killed = $false
 
             if ($cimProcs.Count -gt 0) {
+                $matchingPids = [System.Collections.Generic.List[int]]::new()
                 foreach ($cim in $cimProcs) {
                     if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
-                        Write-Status -Message ("Cerrando MSACCESS PID {0} (CommandLine contiene: {1})" -f $cim.ProcessId, $resolved) -Color Yellow
-                        try {
-                            Stop-Process -Id $cim.ProcessId -Force -ErrorAction Stop
-                            $killed = $true
-                        } catch {
-                            Write-Status -Message ("No se pudo cerrar MSACCESS PID {0}: {1}" -f $cim.ProcessId, $_.Exception.Message) -Color Red
-                        }
+                        $matchingPids.Add([int]$cim.ProcessId)
                     }
                 }
-                if (-not $killed) {
+                if ($matchingPids.Count -gt 0) {
+                    Write-Status -Message ("MSACCESS no atribuido bloquea '{0}' (PIDs: {1}); no se cerrara ningun proceso sin OperationId/PID propio." -f $resolved, ($matchingPids -join ', ')) -Color DarkYellow
+                } else {
                     Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
                 }
             } else {
-                foreach ($p in @(Get-Process MSACCESS -ErrorAction SilentlyContinue)) {
-                    Write-Status -Message ("Fallback: cerrando MSACCESS PID {0}" -f $p.Id) -Color Yellow
-                    try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; $killed = $true } catch { Write-Debug "Diagnostics: $_" }
-                }
-            }
-
-            if ($killed) {
-                $timeout = 5; $elapsed = 0
-                while ((Test-Path -LiteralPath $lockPath) -and ($elapsed -lt $timeout)) {
-                    Start-Sleep -Milliseconds 500
-                    $elapsed += 0.5
-                }
-                if (Test-Path -LiteralPath $lockPath) {
-                    Write-Status -Message ("ADVERTENCIA: lock sigue presente tras cerrar el proceso: {0}" -f $lockPath) -Color DarkYellow
-                } else {
-                    Write-Status -Message "Lock liberado correctamente." -Color Green
-                }
+                Write-Status -Message "No se pudo enumerar MSACCESS por CommandLine; no se cerrara ningun proceso no atribuido." -Color DarkYellow
             }
         }
     }
@@ -1309,10 +1291,11 @@ function Get-AccessLockFilePath {
     return $null
 }
 
-# Find the MSACCESS.EXE PID that has the given database open, identified by the database
-# path appearing in the process command line. Returns $null if no such process exists.
-# This only ever matches the instance opened for THIS AccessPath — never other Access
-# instances the user may have open with a different database.
+# Diagnostic helper: find an MSACCESS.EXE PID that appears to have the given
+# database open, identified only by the database path in the process command
+# line. A path-only match proves the process is relevant, but it does NOT prove
+# ownership by this dysflow operation. Never use this result as authority to
+# force-kill a process; only a PID captured in Session.ProcessId is owned.
 function Find-AccessPidByDatabase {
     [CmdletBinding()]
     Param([Parameter(Mandatory = $true)][string]$AccessPath)
@@ -1362,12 +1345,7 @@ function Close-AccessDatabase {
     $startupInfo = $Session.StartupInfo
     $accessPid = $Session.ProcessId
 
-    # If the PID was not captured at open time (e.g. New-Object reused an existing COM
-    # instance and the pre/post process diff saw no new process), resolve it now by the
-    # database path while the process is still alive and matchable.
-    if (-not $accessPid) {
-        $accessPid = Find-AccessPidByDatabase -AccessPath $AccessPath
-    }
+    $hasOwnedAccessPid = [bool]$accessPid
 
     if ($access) {
         try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
@@ -1381,21 +1359,22 @@ function Close-AccessDatabase {
     [System.GC]::Collect()
     [System.GC]::WaitForPendingFinalizers()
 
-    # Kill Access BEFORE DAO restore operations so the file lock is guaranteed released.
-    # Re-resolve the PID after Quit in case it only became matchable now.
-    if (-not $accessPid) {
-        $accessPid = Find-AccessPidByDatabase -AccessPath $AccessPath
-    }
-    if ($accessPid) {
-        $terminated = Stop-AccessPidAndWait -AccessPid $accessPid -TimeoutMs 5000
+    # Kill Access BEFORE DAO restore operations only when this operation captured
+    # an owned PID at open time. A PID resolved later by database path is
+    # diagnostic-only and must not be force-killed because path-only is not
+    # ownership.
+    if ($hasOwnedAccessPid) {
+        $terminated = Stop-AccessPidAndWait -AccessPid $accessPid
         if (-not $terminated) {
-            Write-Status -Message ("WARN: no se pudo confirmar la terminacion del PID {0} para '{1}'. Intentando taskkill." -f $accessPid, $AccessPath) -Color DarkYellow
-            try {
-              Start-Process -FilePath "taskkill" -ArgumentList "/F", "/PID", $accessPid -NoNewWindow -Wait:$false -ErrorAction SilentlyContinue
-            } catch { Write-Debug "Diagnostics: $_" }
+            Write-Status -Message ("WARN: no se pudo confirmar la terminacion del PID {0} para '{1}' tras la espera acotada." -f $accessPid, $AccessPath) -Color DarkYellow
         }
     } else {
-        Write-Status -Message ("WARN: se cierra '{0}' sin PID de Access resuelto. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
+        $diagnosticPid = Find-AccessPidByDatabase -AccessPath $AccessPath
+        if ($diagnosticPid) {
+            Write-Status -Message ("WARN: se cierra '{0}' sin PID propio de Access. PID {1} coincide solo por ruta y no se forzara su terminacion." -f $AccessPath, $diagnosticPid) -Color DarkYellow
+        } else {
+            Write-Status -Message ("WARN: se cierra '{0}' sin PID propio de Access. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
+        }
         try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
         Start-Sleep -Milliseconds 300
     }

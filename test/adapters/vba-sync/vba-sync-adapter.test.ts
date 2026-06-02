@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   resolveDefaultVbaManagerScriptPath,
@@ -10,6 +10,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
 import { parseArgsJson } from "../../../src/core/services/vba-import-plan";
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -19,6 +20,70 @@ vi.mock("node:child_process", () => ({
 }));
 
 describe("VbaSyncAdapter Orchestrator", () => {
+  it("delete_module registers a cleanable Access operation and passes marker arguments to the VBA manager", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    let launchedOperationId: string | undefined;
+    let launchedOperationFile: string | undefined;
+    const service = new VbaSyncAdapter({
+      operationRegistry: registry,
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+      executor: async (request) => {
+        launchedOperationId = (request as { operationId?: string }).operationId;
+        launchedOperationFile = (request as { operationFile?: string }).operationFile;
+        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+      },
+    });
+
+    const result = await service.execute("delete_module", { moduleName: "TempModule" });
+
+    expect(result.ok).toBe(true);
+    expect(launchedOperationId).toMatch(/^dysflow-/);
+    expect(launchedOperationFile).toContain(launchedOperationId);
+    await expect(registry.listRecent()).resolves.toEqual([]);
+  });
+
+  it("mapped VBA manager failures keep a failed registry record updated from the operation marker", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    let launchedOperationId = "";
+    const service = new VbaSyncAdapter({
+      operationRegistry: registry,
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+      executor: async (request) => {
+        launchedOperationId = (request as { operationId?: string }).operationId ?? "";
+        const operationFile = (request as { operationFile?: string }).operationFile;
+        if (operationFile === undefined) throw new Error("operationFile was not provided");
+        await mkdir(dirname(operationFile), { recursive: true });
+        await writeFile(
+          operationFile,
+          JSON.stringify({
+            operationId: launchedOperationId,
+            accessPid: 4321,
+            processStartTime: "2026-06-02T10:00:00.000Z",
+            status: "running",
+          }),
+          "utf8",
+        );
+        return { exitCode: 1, stdout: "", stderr: "boom", durationMs: 2, timedOut: false };
+      },
+    });
+
+    const result = await service.execute("delete_module", { moduleName: "TempModule" });
+
+    expect(result.ok).toBe(false);
+    await expect(registry.get(launchedOperationId)).resolves.toMatchObject({
+      operationId: launchedOperationId,
+      accessPath: "C:/db/front.accdb",
+      accessPid: 4321,
+      processStartTime: "2026-06-02T10:00:00.000Z",
+      status: "failed",
+      metadata: { toolName: "delete_module", managerAction: "Delete" },
+    });
+  });
+
   it("characterizes general tool dispatch to sub-adapters", async () => {
     const service = new VbaSyncAdapter({
       accessPath: "C:/db/front.accdb",
@@ -307,6 +372,8 @@ describe("VbaSyncAdapter Orchestrator", () => {
       json: false,
       extra: {},
       password: "super-secret",
+      operationId: "dysflow-test-op",
+      operationFile: "C:/repo/.dysflow/runtime/markers/dysflow-test-op.json",
       env: { DYSFLOW_ACCESS_PASSWORD: "super-secret", ACCESS_VBA_PASSWORD: "super-secret" },
       timeoutMs: 1_000,
       cwd: "C:/repo",
@@ -320,6 +387,10 @@ describe("VbaSyncAdapter Orchestrator", () => {
     ]);
     expect(capturedArgs).not.toContain("-Password");
     expect(capturedArgs).not.toContain("super-secret");
+    expect(capturedArgs).toContain("-OperationId");
+    expect(capturedArgs).toContain("dysflow-test-op");
+    expect(capturedArgs).toContain("-OperationFile");
+    expect(capturedArgs).toContain("C:/repo/.dysflow/runtime/markers/dysflow-test-op.json");
     expect(capturedEnv).toMatchObject({
       DYSFLOW_ACCESS_PASSWORD: "super-secret",
       ACCESS_VBA_PASSWORD: "super-secret",
