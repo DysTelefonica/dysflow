@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import {
   createDysflowError,
@@ -12,7 +13,11 @@ import {
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
 } from "../../core/operations/access-operation-preflight.js";
-import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import {
+  type AccessOperationRecord,
+  type AccessOperationRegistry,
+  createAccessOperationId,
+} from "../../core/operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
@@ -69,6 +74,8 @@ export type VbaManagerExecutionRequest = {
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
   timeoutMs: number;
+  operationId?: string;
+  operationFile?: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
   signal?: AbortSignal;
@@ -80,6 +87,17 @@ export type VbaManagerExecutionResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+};
+
+type TrackedVbaManagerOperation = {
+  operationId: string;
+  operationFile: string;
+  record: AccessOperationRecord;
+};
+
+type VbaManagerOperationMarker = {
+  accessPid?: number;
+  processStartTime?: string;
 };
 
 export type VbaManagerExecutor = (
@@ -123,6 +141,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
   public readonly processTimeoutMs: number;
 
   private readonly operationsAdapter: VbaOperationsAdapter;
+  private readonly operationRegistry?: AccessOperationRegistry;
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
@@ -137,6 +156,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.accessPassword =
       stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
+    this.operationRegistry = options.operationRegistry;
 
     // Sub-adapters instantiation delegating orchestrator context
     this.operationsAdapter = new VbaOperationsAdapter({
@@ -218,7 +238,29 @@ export class VbaSyncAdapter implements VbaSyncPort {
           );
     const timedRequest =
       psTimeoutMs !== effectiveTimeoutMs ? { ...request, timeoutMs: psTimeoutMs } : request;
-    const result = await this.executeWithTimeout(timedRequest);
+    const trackedOperation = await this.startTrackedOperation(
+      toolName,
+      mapping.action,
+      timedRequest,
+      target.data,
+    );
+    const trackedRequest = trackedOperation
+      ? {
+          ...timedRequest,
+          operationId: trackedOperation.operationId,
+          operationFile: trackedOperation.operationFile,
+        }
+      : timedRequest;
+    let result: VbaManagerExecutionResult;
+    try {
+      result = await this.executeWithTimeout(trackedRequest);
+    } catch (error) {
+      await this.finishTrackedOperation(trackedOperation, { status: "failed" });
+      throw error;
+    }
+    await this.finishTrackedOperation(trackedOperation, {
+      status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
+    });
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
       return failureResult(
@@ -262,6 +304,59 @@ export class VbaSyncAdapter implements VbaSyncPort {
     projectRoot?: string;
   }): Promise<AccessOperationPreflightCleanupResult> {
     return this.operationsAdapter.runPreflightCleanup(target);
+  }
+
+  private async startTrackedOperation(
+    toolName: string,
+    managerAction: string,
+    request: VbaManagerExecutionRequest,
+    target: Pick<DysflowConfig, "projectRoot" | "accessDbPath"> & {
+      accessPath?: string;
+      destinationRoot: string;
+    },
+  ): Promise<TrackedVbaManagerOperation | undefined> {
+    if (this.operationRegistry === undefined || target.accessPath === undefined) return undefined;
+
+    const operationId = createAccessOperationId();
+    const operationFile = join(
+      target.projectRoot ?? request.cwd ?? this.cwd,
+      ".dysflow",
+      "runtime",
+      "markers",
+      `${operationId}.json`,
+    );
+    const record = await this.operationRegistry.create({
+      operationId,
+      action: "vba",
+      accessPath: target.accessPath,
+      destinationRootAbs: target.destinationRoot,
+      projectRootAbs: target.projectRoot ?? request.cwd ?? this.cwd,
+      accessPid: null,
+      processStartTime: null,
+      status: "starting",
+      metadata: {
+        toolName,
+        managerAction,
+        moduleNames: [...request.moduleNames],
+      },
+      updatedAt: new Date().toISOString(),
+    });
+    return { operationId, operationFile, record };
+  }
+
+  private async finishTrackedOperation(
+    operation: TrackedVbaManagerOperation | undefined,
+    update: { status: AccessOperationRecord["status"] },
+  ): Promise<void> {
+    if (operation === undefined || this.operationRegistry === undefined) return;
+    const marker = await readVbaManagerOperationMarker(operation.operationFile);
+    await this.operationRegistry.update(operation.operationId, {
+      accessPid: marker.accessPid ?? operation.record.accessPid,
+      processStartTime: marker.processStartTime ?? operation.record.processStartTime,
+      status: update.status,
+      updatedAt: new Date().toISOString(),
+    });
+    await rm(operation.operationFile, { force: true }).catch(() => undefined);
   }
 
   public async resolveExecutionTarget(
@@ -462,6 +557,22 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
   }
 }
 
+async function readVbaManagerOperationMarker(
+  operationFile: string,
+): Promise<VbaManagerOperationMarker> {
+  const raw = await readFile(operationFile, "utf8").catch(() => undefined);
+  if (raw === undefined) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return {};
+    const accessPid = typeof parsed.accessPid === "number" ? parsed.accessPid : undefined;
+    const processStartTime = stringValue(parsed.processStartTime);
+    return { accessPid, processStartTime };
+  } catch {
+    return {};
+  }
+}
+
 export const spawnVbaManager: VbaManagerExecutor = (request) => {
   const args = [
     "-NoProfile",
@@ -479,6 +590,8 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
   if (request.moduleNames.length > 0)
     args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
   if (request.json) args.push("-Json");
+  if (request.operationId !== undefined) args.push("-OperationId", request.operationId);
+  if (request.operationFile !== undefined) args.push("-OperationFile", request.operationFile);
   for (const [key, value] of Object.entries(request.extra)) {
     if (value === undefined) continue;
     const flag = `-${key.charAt(0).toUpperCase()}${key.slice(1)}`;

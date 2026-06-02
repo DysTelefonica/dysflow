@@ -73,6 +73,12 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         It "defines Close-AccessDatabase" {
             $script:FunctionNames | Should -Contain "Close-AccessDatabase"
         }
+
+        It "does not contain a broad Get-Process MSACCESS kill fallback in Close-TargetAccessDbIfOpen" {
+            $source = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
+            $source | Should -Not -Match 'Fallback:\s+cerrando MSACCESS PID'
+            $source | Should -Not -Match 'foreach\s*\(\$p\s+in\s+@\(Get-Process\s+MSACCESS'
+        }
     }
 
 }
@@ -330,6 +336,93 @@ Describe "dysflow-vba-manager.ps1 — COM cleanup integration (requires Access)"
     }
 }
 
+Describe "Close-AccessDatabase — owned Access PID cleanup" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null,
+            [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Close-AccessDatabase' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Close-AccessDatabase not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:StopAccessPidCalls = [System.Collections.Generic.List[object]]::new()
+        $script:StopProcessCalls = [System.Collections.Generic.List[object]]::new()
+        $script:StartProcessCalls = [System.Collections.Generic.List[object]]::new()
+        $script:StopAccessPidResult = $true
+        $script:PathMatchedPid = $null
+
+        function script:Stop-AccessPidAndWait {
+            param([int]$AccessPid, [int]$TimeoutMs = 20000)
+            $script:StopAccessPidCalls.Add([pscustomobject]@{ AccessPid = $AccessPid; TimeoutMs = $TimeoutMs })
+            return $script:StopAccessPidResult
+        }
+
+        function script:Stop-Process {
+            param($Id, [switch]$Force, $ErrorAction)
+            $script:StopProcessCalls.Add([pscustomobject]@{ Id = $Id; Force = $Force.IsPresent })
+        }
+
+        function script:Start-Process {
+            param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, $ErrorAction)
+            $script:StartProcessCalls.Add([pscustomobject]@{ FilePath = $FilePath; ArgumentList = @($ArgumentList); Wait = $Wait.IsPresent })
+        }
+
+        function script:Write-Status { param([string]$Message, $Color) }
+        function script:Find-AccessPidByDatabase { param([string]$AccessPath) return $script:PathMatchedPid }
+        function script:Close-TargetAccessDbIfOpen { param([string]$AccessPath) }
+        function script:Restore-AllowBypassKey { param([string]$AccessPath, [string]$Password, $OriginalState) }
+        function script:Restore-StartupFeatures { param([string]$AccessPath, [string]$Password, $RestoreInfo) }
+        function script:Get-AccessLockFilePath { param([string]$AccessPath) return $null }
+
+        $script:FakeAccess = [pscustomobject]@{}
+        $script:FakeAccess | Add-Member -MemberType ScriptMethod -Name CloseCurrentDatabase -Value { }
+        $script:FakeAccess | Add-Member -MemberType ScriptMethod -Name Quit -Value { }
+        $script:FakeSession = [pscustomobject]@{
+            AccessApplication = $script:FakeAccess
+            OriginalBypass = $null
+            StartupInfo = $null
+            ProcessId = 4242
+            VbProject = $null
+            Vbe = $null
+        }
+    }
+
+    It "uses the bounded 20s owned-PID wait before continuing cleanup" {
+        Close-AccessDatabase -Session $script:FakeSession -AccessPath "C:\data\owned.accdb" -Password ""
+
+        $script:StopAccessPidCalls.Count | Should -Be 1
+        $script:StopAccessPidCalls[0].AccessPid | Should -Be 4242
+        $script:StopAccessPidCalls[0].TimeoutMs | Should -Be 20000
+    }
+
+    It "does not dispatch an asynchronous taskkill when the owned-PID wait cannot confirm exit" {
+        $script:StopAccessPidResult = $false
+
+        Close-AccessDatabase -Session $script:FakeSession -AccessPath "C:\data\owned.accdb" -Password ""
+
+        $script:StartProcessCalls.Count | Should -Be 0
+    }
+
+    It "does not force-kill a path-only matched Access PID when the session has no owned PID" {
+        $script:FakeSession.ProcessId = $null
+        $script:PathMatchedPid = 7777
+
+        Close-AccessDatabase -Session $script:FakeSession -AccessPath "C:\data\owned.accdb" -Password ""
+
+        $script:StopAccessPidCalls.Count | Should -Be 0
+        $script:StopProcessCalls.Count | Should -Be 0
+        $script:StartProcessCalls.Count | Should -Be 0
+    }
+}
+
 # ===========================================================================
 # P1 — Behavioral tests for Get-MsAccessProcessesBounded (#380)
 # Extract the function via AST so the tests always run against the production
@@ -390,6 +483,93 @@ Describe "Get-MsAccessProcessesBounded (vba-manager) — behavioral (issue #380)
             $result.Count | Should -BeGreaterOrEqual 1
             $result[0].ProcessId | Should -Be 4321
         }
+    }
+}
+
+# ===========================================================================
+# Ownership safety — Close-TargetAccessDbIfOpen must never kill by path alone
+# ===========================================================================
+
+Describe "Close-TargetAccessDbIfOpen — ownership-safe blocking behavior" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Close-TargetAccessDbIfOpen' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Close-TargetAccessDbIfOpen not found in $($script:VbaManagerPath)" }
+
+        if (-not ([System.Management.Automation.PSTypeName]"RotManager").Type) {
+            Add-Type -TypeDefinition @"
+public class RotCloseResult {
+    public bool Success;
+    public string Error;
+    public int ClosedCount;
+}
+
+public class RotManager {
+    public static RotCloseResult CloseDatabaseIfOpen(string dbPath) {
+        return new RotCloseResult { Success = true, ClosedCount = 0 };
+    }
+}
+"@
+        }
+
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:StoppedProcessIds = [System.Collections.Generic.List[int]]::new()
+        $script:TempAccessPath = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-close-target-{0}.accdb" -f ([guid]::NewGuid().ToString("N")))
+        $script:TempLockPath = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-close-target-{0}.laccdb" -f ([guid]::NewGuid().ToString("N")))
+        New-Item -ItemType File -Path $script:TempAccessPath -Force | Out-Null
+        New-Item -ItemType File -Path $script:TempLockPath -Force | Out-Null
+
+        function script:Get-AccessLockFilePath { param([string]$AccessPath) return $script:TempLockPath }
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+        function script:Stop-Process { param([int]$Id, [switch]$Force, $ErrorAction) $script:StoppedProcessIds.Add($Id) }
+    }
+
+    AfterEach {
+        Remove-Item -LiteralPath $script:TempAccessPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $script:TempLockPath -Force -ErrorAction SilentlyContinue
+    }
+
+    It "blocks and reports a same-path MSACCESS process without killing it" {
+        function script:Get-MsAccessProcessesBounded {
+            [PSCustomObject]@{
+                ProcessId    = 24680
+                CreationDate = $null
+                CommandLine  = ('MSACCESS.EXE "{0}"' -f (Resolve-Path $script:TempAccessPath).Path)
+            }
+        }
+
+        Close-TargetAccessDbIfOpen -AccessPath $script:TempAccessPath
+
+        $script:StoppedProcessIds.Count | Should -Be 0
+        ($script:StatusMessages -join "`n") | Should -Match 'no atribuido|ownership|no se cerrara'
+    }
+
+    It "reports active MSACCESS PIDs when none is attributable to the target path" {
+        function script:Get-MsAccessProcessesBounded {
+            [PSCustomObject]@{
+                ProcessId    = 13579
+                CreationDate = $null
+                CommandLine  = 'MSACCESS.EXE "C:\other\database.accdb"'
+            }
+        }
+
+        Close-TargetAccessDbIfOpen -AccessPath $script:TempAccessPath
+
+        $script:StoppedProcessIds.Count | Should -Be 0
+        ($script:StatusMessages -join "`n") | Should -Match 'PIDs activos: 13579'
     }
 }
 
