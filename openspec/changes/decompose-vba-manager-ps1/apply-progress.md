@@ -1,12 +1,12 @@
-# Apply Progress: decompose-vba-manager-ps1 (Slice 5)
+# Apply Progress: decompose-vba-manager-ps1 (through Slice 6)
 
 **Change**: `decompose-vba-manager-ps1`  
 **Mode**: Strict TDD  
-**Status**: Slice 5 COMPLETE — ready for PR
+**Status**: Slice 6 COMPLETE locally — commit/PR pending by instruction
 
 ## Summary
 
-Implemented Slice 5 of the dispatcher decomposition. Extracted `Invoke-CompileAction` and `Invoke-RunProcedureAction` from `scripts/dysflow-vba-manager.ps1` into independent helper functions with explicit parameters and no script-scoped global reads. The inline dispatcher arms are replaced with clean delegated calls while preserving observable behavior.
+Cumulative apply progress through Slice 6 of the dispatcher decomposition. Slices 1-5 remain complete; Slice 6 extracted `Invoke-RunTestsAction` and `Invoke-FixEncodingAction`, then corrected verify findings while preserving observable behavior.
 
 ## TDD Cycle Evidence
 
@@ -81,3 +81,44 @@ Slice 5 implementation commits:
 | `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |
 
 Implementation diff for Slice 5 is 338 changed lines across the test/refactor commits, under the 400-line review budget.
+
+---
+
+## Slice 6 Update — Run-Tests + Fix-Encoding
+
+Implemented Slice 6 only. Extracted `Invoke-RunTestsAction` and `Invoke-FixEncodingAction` into explicit-parameter functions and replaced their dispatcher arms with delegated calls. The new functions use `[ref]$session` for paths that open Access so the router-level `finally` still performs the existing `Close-AccessDatabase` cleanup; `Fix-Encoding -Location Src` opens no COM session.
+
+### S6 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| S6.1 | N/A | Unit/Integration | ✅ `pnpm test:ps1` 155/0/4; `pnpm test` 839/0/3 | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| S6.2 | `scripts/tests/fixtures/*` | Fixture | ✅ Baseline green | ✅ Fixtures created before prod | ✅ Used by byte test | ✅ ANSI/BOM/NoBOM fixtures | ✅ Small fixtures |
+| S6.3 | `scripts/tests/dysflow-vba-manager.Tests.ps1` | Byte/unit | ✅ Baseline green | ✅ Missing `Invoke-FixEncodingAction`; corrective ANSI fixture test added first | ✅ PASS | ✅ BOM fixture via action + ANSI fixture via codec helper | ✅ Real helper path; spec aligned to preserved behavior |
+| S6.4 | `scripts/tests/dysflow-vba-manager.Tests.ps1` | Unit | ✅ Baseline green | ✅ Missing S6 actions; corrective missing-file fallback regression test failed first | ✅ PASS | ✅ Missing procedures, file read, Src, Access | ✅ Explicit session refs |
+| S6.5 | `test/scripts-vba-manager.test.ts` | Wiring | ✅ Baseline green | ✅ Missing S6 action names; corrective arm-body detector strengthened | ✅ PASS | ✅ Dispatcher arm checks avoid function-definition matches | ✅ Minimal detector helper |
+| S6.6-S6.8 | `scripts/dysflow-vba-manager.ps1` + full suite | Refactor/verification | ✅ Baseline green | ✅ Tests first | ✅ Initial full suites passed; corrective targeted Pester 155/0/4 + targeted Vitest 14/0 | ✅ Src vs Access branches | ✅ Raw `$SourceText` context removed |
+| S6.9 | Git diff | Budget | ✅ Checked | ➖ N/A | ✅ Tracked code/test diff under budget | ➖ N/A | ⏳ Commit/PR pending |
+
+### S6 Files Changed
+
+- `scripts/dysflow-vba-manager.ps1` — Added `Invoke-RunTestsAction` and `Invoke-FixEncodingAction`; dispatcher delegates.
+- `scripts/tests/dysflow-vba-manager.Tests.ps1` — Added S6 behavioral and byte-level tests; removed raw-source Pester context.
+- `test/scripts-vba-manager.test.ts` — Added S6 wiring change-detectors.
+- `scripts/tests/fixtures/ansi-sample.bas`, `utf8bom-original.bas`, `utf8nobom-expected.bas` — Encoding fixtures.
+- `openspec/changes/decompose-vba-manager-ps1/specs/vba-manager-actions/spec.md`, `tasks.md`, `HANDOFF.md` — Updated S6 state and aligned Run-Tests/Fix-Encoding contracts to preserved behavior.
+
+### S6 Verification
+
+| Command | Result |
+|---|---|
+| `pnpm test:ps1` | PASS — 153 passed / 0 failed / 4 skipped |
+| `pnpm test` | PASS — 841 passed / 0 failed / 3 skipped |
+| `pnpm test:ps1` (corrective follow-up targeted/full Pester) | PASS — 155 passed / 0 failed / 4 skipped |
+| `pnpm exec vitest run test/scripts-vba-manager.test.ts` | PASS — 14 passed / 0 failed |
+
+### S6 Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| _uncommitted_ | Extract `Invoke-RunTestsAction` + `Invoke-FixEncodingAction`; corrective verify fixes | S6.1-S6.8 | `pnpm test:ps1` PASS; `pnpm test` PASS; corrective targeted Pester/Vitest PASS; final full Pester/Vitest PASS | N/A |

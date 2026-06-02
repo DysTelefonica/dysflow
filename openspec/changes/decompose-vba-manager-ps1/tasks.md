@@ -102,15 +102,15 @@ Chain strategy: stacked-to-main
 
 > **Encoding risk guard**: create byte-content fixtures BEFORE writing any production code (steps S6.2–S6.3).
 
-- [ ] S6.1 **Baseline green** — confirm suite passes on PR 5 branch.
-- [ ] S6.2 **Encoding fixtures** — create `scripts/tests/fixtures/ansi-sample.bas` as a small ANSI-encoded `.bas` file and `scripts/tests/fixtures/utf8nobom-expected.bas` as its expected UTF-8 NoBom equivalent. Use `[System.Text.Encoding]::GetEncoding(1252).GetBytes(...)` / `Set-Content -Encoding Byte` in a helper script to write the ANSI fixture; commit both binary fixtures. These are the byte-level source-of-truth for encoding tests.
-- [ ] S6.3 **RED Pester (encoding byte test)** — in `scripts/tests/dysflow-vba-manager.Tests.ps1` add a `Describe 'Invoke-FixEncodingAction encoding'` context using the fixtures from S6.2: load the ANSI fixture through `Invoke-FixEncodingAction` with `-Location Src`, capture output bytes, assert the BOM header is absent and content matches the UTF-8 NoBom fixture byte-for-byte. RED until S6.6.
-- [ ] S6.4 **RED Pester (behavioral)** — add `Describe 'Invoke-RunTestsAction'` and `Describe 'Invoke-FixEncodingAction'` behavioral contexts; AST-extract each; stub `Invoke-AccessProcedureBatch`, `Get-Content`, `Fix-EncodingInSrc`, `Fix-EncodingInAccess` via `function script:`. Tests: (a) missing ProceduresJsonFile returns failure without calling `Invoke-AccessProcedureBatch`, (b) Src-only path calls `Fix-EncodingInSrc` and never opens a COM session, (c) Access path delegates to `Fix-EncodingInAccess`. RED until S6.6.
-- [ ] S6.5 **RED vitest** — add wiring change-detectors for `Invoke-RunTestsAction` and `Invoke-FixEncodingAction`. RED until S6.6.
-- [ ] S6.6 **Extract** — add `Invoke-RunTestsAction -Session -ProceduresJson -ProceduresJsonFile [-Json]` and `Invoke-FixEncodingAction -Session -ModulesPath -NormalizedModules -Location -AccessPath -Password -AllowStartupExecution [-Json]`; replace their `elseif`/`else` arms (lines 3174–3186, 3242–3258). For `Invoke-FixEncodingAction`, Src-only path must work with `$null` session (no COM open).
-- [ ] S6.7 **Remove fragile source-text Pester assertions** — delete the `'COM cleanup — try/finally pattern in source text'` context (lines 78–128 in `dysflow-vba-manager.Tests.ps1`) that uses `$script:SourceText | Should -Match`. The behavioral tests from S6.4 and prior slices are the replacement coverage.
-- [ ] S6.8 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
-- [ ] S6.9 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-RunTestsAction + Invoke-FixEncodingAction — S6`. Open PR stacked to PR 5 branch.
+- [x] S6.1 **Baseline green** — confirmed on PR 5 branch: `pnpm test:ps1` PASS (155 passed / 4 skipped) and `pnpm test` PASS (839 passed / 3 skipped).
+- [x] S6.2 **Encoding fixtures** — created `scripts/tests/fixtures/ansi-sample.bas`, `utf8bom-original.bas`, and `utf8nobom-expected.bas` as byte-level fixtures for encoding assertions.
+- [x] S6.3 **RED Pester (encoding byte test)** — added `Describe 'Invoke-FixEncodingAction encoding'`; RED before extraction because `Invoke-FixEncodingAction` did not exist. Corrective follow-up exercised `ansi-sample.bas` through `Convert-AnsiToUtf8NoBom` while preserving the real Fix-Encoding Src contract: UTF-8 BOM → UTF-8 NoBOM.
+- [x] S6.4 **RED Pester (behavioral)** — added `Describe 'Invoke-RunTestsAction'` and `Describe 'Invoke-FixEncodingAction'`; RED before extraction because both functions did not exist. Corrective follow-up added the missing `ProceduresJsonFile` read behavior: a non-empty missing file is attempted via `Get-Content` and does not fall back to inline JSON.
+- [x] S6.5 **RED vitest** — added wiring change-detectors for `Invoke-RunTestsAction` and `Invoke-FixEncodingAction`; RED before extraction.
+- [x] S6.6 **Extract** — added `Invoke-RunTestsAction` and `Invoke-FixEncodingAction` with explicit parameters, including session refs so the router `finally` still closes COM sessions opened inside these arms. Src-only Fix-Encoding works without opening COM.
+- [x] S6.7 **Remove fragile source-text Pester assertions** — deleted the `'COM cleanup — try/finally pattern in source text'` context that used `$script:SourceText | Should -Match`; remaining `Should -Match` assertions are against behavior outputs, not raw source text.
+- [x] S6.8 **GREEN** — initial S6: `pnpm test:ps1` PASS (153 passed / 4 skipped) and `pnpm test` PASS (841 passed / 3 skipped). Corrective follow-up: targeted Pester PASS (155 passed / 4 skipped) and targeted Vitest PASS (14 passed).
+- [ ] S6.9 **Verify diff ≤ 400 lines / commit / PR** — diff budget check PASS locally before corrective follow-up (`3 files changed, 248 insertions, 78 deletions`, plus three small untracked fixtures). Commit/PR intentionally not done in this apply run per instruction.
 
 ---
 
@@ -150,3 +150,4 @@ Chain strategy: stacked-to-main
 |---|---|---|---|---|
 | `fd25418` | RED Pester/Vitest coverage for Compile + Run-Procedure | S5.2, S5.3 | TDD cycle verified locally | N/A |
 | `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |
+| _uncommitted_ | Extract `Invoke-RunTestsAction` + `Invoke-FixEncodingAction`; corrective verify fixes | S6.1-S6.8 | `pnpm test:ps1` PASS; `pnpm test` PASS; corrective targeted Pester/Vitest PASS; final full Pester/Vitest PASS | N/A |

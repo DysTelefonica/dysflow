@@ -65,7 +65,7 @@ opens the session and passes it in, so no COM activation in tests.
 | `Invoke-ListObjectsAction` | `-Session [-Json]` | JSON or status text | `Get-FrontendInventory` |
 | `Invoke-ExistsAction` | `-Session -ModuleName [-Json]` | JSON or status text | `Get-ExistsInfo` |
 | `Invoke-RunProcedureAction` | `-Session -ProcedureName -ProcedureArgsJson [-Json]` | run result JSON/text | `Convert-ProcedureArgsJson`, `Invoke-AccessProcedure` |
-| `Invoke-RunTestsAction` | `-Session -ProceduresJson -ProceduresJsonFile [-Json]` | batch results JSON | `Invoke-AccessProcedureBatch`, `Get-Content` |
+| `Invoke-RunTestsAction` | `-[ref]Session -ProceduresJson -ProceduresJsonFile -AccessPath -Password -AllowStartupExecution [-Json]` | batch results JSON; opens a session only when needed | `Open-AccessDatabase`, `Invoke-AccessProcedureBatch`, `Get-Content` |
 | `Invoke-CompileAction` | `-Session [-Json]` | compile result JSON/text | `Invoke-CompileVbaProject` |
 | `Invoke-GenerateErdAction` | `-BackendPath -DestinationRoot -ErdPath -Password [-Json]` | writes .md, status text | `Export-DataStructure`, filesystem |
 | `Invoke-FixEncodingAction` | `-Session -ModulesPath -NormalizedModules -Location -AccessPath -Password -AllowStartupExecution [-Json]` | counts + status | `Fix-EncodingInSrc`, `Fix-EncodingInAccess` |

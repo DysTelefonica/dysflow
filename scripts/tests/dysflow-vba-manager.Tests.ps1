@@ -75,57 +75,6 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         }
     }
 
-    Context "COM cleanup — try/finally pattern in source text" {
-        BeforeAll {
-            $script:SourceText = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
-        }
-
-        It "Get-AllowBypassKeyState uses FinalReleaseComObject in finally" {
-            # Verify the function contains both 'finally' and 'FinalReleaseComObject'
-            $script:SourceText | Should -Match "Get-AllowBypassKeyState"
-            $script:SourceText | Should -Match "FinalReleaseComObject"
-        }
-
-        It "Enable-AllowBypassKey contains try/finally block" {
-            $script:SourceText | Should -Match "Enable-AllowBypassKey"
-            # The script must have multiple finally blocks for the COM functions
-            ($script:SourceText | Select-String -Pattern "\} finally \{" -AllMatches).Matches.Count |
-                Should -BeGreaterOrEqual 4
-        }
-
-        It "Disable-StartupFeatures initialises dbEngine inside try block" {
-            # After the fix, $dbEngine = $null must appear before try, and
-            # New-DaoDbEngine must be called inside the try block.
-            # We verify the variable is pre-nulled at function scope and assigned inside try.
-            $script:SourceText | Should -Match '\$dbEngine\s*=\s*\$null'
-            $script:SourceText | Should -Match '\$dbEngine\s*=\s*New-DaoDbEngine'
-        }
-
-        It "Restore-StartupFeatures initialises dbEngine inside try block" {
-            $script:SourceText | Should -Match '\$dbEngine\s*=\s*\$null'
-            $script:SourceText | Should -Match '\$dbEngine\s*=\s*New-DaoDbEngine'
-        }
-
-        It "COM cleanup finally blocks use null guard pattern" {
-            # Verify the null-guard pattern: if ($null -ne $obj) or if ($obj)
-            $script:SourceText | Should -Match 'if \(\$null -ne \$obj\)'
-        }
-
-        It "COM cleanup finally blocks call db.Close before FinalRelease" {
-            # The fixed pattern must Close before releasing
-            $script:SourceText | Should -Match '\$db\.Close\(\)'
-        }
-
-        It "RotManager embedded C# does not contain PowerShell catch bodies" {
-            $rotManagerBlock = [regex]::Match(
-                $script:SourceText,
-                'Add-Type -TypeDefinition @"(?<code>[\s\S]*?public class RotManager[\s\S]*?)"@'
-            ).Groups['code'].Value
-
-            $rotManagerBlock | Should -Not -Match 'Write-Debug'
-            $rotManagerBlock | Should -Match 'catch \{ \}'
-        }
-    }
 }
 
 Describe "dysflow-vba-manager.ps1 — pure helper functions" {
@@ -1128,6 +1077,226 @@ Describe "Invoke-RunProcedureAction — behavioral (decompose S5)" {
             $obj = $res | ConvertFrom-Json
             $obj.ok | Should -Be $true
             $obj.returnValue | Should -Be 15
+        }
+    }
+}
+
+# ===========================================================================
+# S6 — Behavioral tests for Invoke-RunTestsAction & Invoke-FixEncodingAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
+    BeforeAll {
+        $testPathCmd = Get-Command Microsoft.PowerShell.Management\Test-Path -ErrorAction SilentlyContinue
+        if ($testPathCmd) { Set-Item -Path "Function:Test-Path" -Value $testPathCmd.ScriptBlock -ErrorAction SilentlyContinue }
+        $gciCmd = Get-Command Microsoft.PowerShell.Management\Get-ChildItem -ErrorAction SilentlyContinue
+        if ($gciCmd) { Set-Item -Path "Function:Get-ChildItem" -Value $gciCmd.ScriptBlock -ErrorAction SilentlyContinue }
+
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Invoke-RunTestsAction' }, $true) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-RunTestsAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:BatchCalled = $false
+        $script:OpenCalled = $false
+        $script:BatchResult = @()
+
+        function script:Open-AccessDatabase {
+            param($AccessPath, $Password, $AllowStartupExecution)
+            $script:OpenCalled = $true
+            return [pscustomobject]@{ AccessApplication = [pscustomobject]@{ Id = "app" }; VbProject = [pscustomobject]@{ Id = "vbe" } }
+        }
+
+        function script:Invoke-AccessProcedureBatch {
+            param($AccessApplication, $VbProject, [object[]]$Procedures)
+            $script:BatchCalled = $true
+            $script:BatchProcedures = @($Procedures)
+            return , @($script:BatchResult)
+        }
+    }
+
+    It "throws before opening Access or invoking the batch runner when procedures are missing" {
+        $session = $null
+        { Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson "" -ProceduresJsonFile "" -AccessPath "C:\fake.accdb" } |
+            Should -Throw "Run-Tests requiere -ProceduresJson o -ProceduresJsonFile con un array JSON de procedimientos."
+
+        $script:OpenCalled | Should -Be $false
+        $script:BatchCalled | Should -Be $false
+        $session | Should -BeNullOrEmpty
+    }
+
+    It "reads ProceduresJsonFile, opens Access through the session ref, and returns JSON batch results" {
+        $tmpJson = [System.IO.Path]::GetTempFileName()
+        try {
+            '[{"procedure":"Test_Foo"},{"procedure":"Test_Bar"}]' | Set-Content -Path $tmpJson -Encoding UTF8 -NoNewline
+            $script:BatchResult = @(
+                [pscustomobject]@{ ok = $true; procedure = "Test_Foo"; returnValue = 1 },
+                [pscustomobject]@{ ok = $true; procedure = "Test_Bar"; returnValue = 2 }
+            )
+            $session = $null
+
+            $result = Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson "" -ProceduresJsonFile $tmpJson -AccessPath "C:\fake.accdb" -Password "pw" -AllowStartupExecution -Json
+            $json = $result | ConvertFrom-Json
+
+            $script:OpenCalled | Should -Be $true
+            $script:BatchCalled | Should -Be $true
+            $script:BatchProcedures.Count | Should -Be 2
+            $session.AccessApplication.Id | Should -Be "app"
+            $json.Count | Should -Be 2
+            $json[1].procedure | Should -Be "Test_Bar"
+        } finally {
+            if (Test-Path $tmpJson) { Remove-Item -Path $tmpJson -Force }
+        }
+    }
+
+    It "attempts Get-Content for a non-empty missing ProceduresJsonFile instead of falling back to inline JSON" {
+        $session = $null
+        $missingJson = Join-Path ([System.IO.Path]::GetTempPath()) ("missing-procedures-" + [guid]::NewGuid().ToString("N") + ".json")
+        function script:Get-Content {
+            param($Path, [switch]$Raw, $Encoding)
+            throw "missing-procedures file was requested: $Path"
+        }
+
+        try {
+            { Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson '[{"procedure":"Inline_Should_Not_Run"}]' -ProceduresJsonFile $missingJson -AccessPath "C:\fake.accdb" -Json } |
+                Should -Throw "*missing-procedures-*"
+        } finally {
+            $getContentCmd = Get-Command Microsoft.PowerShell.Management\Get-Content -ErrorAction SilentlyContinue
+            if ($getContentCmd) { Set-Item -Path "Function:Get-Content" -Value $getContentCmd.ScriptBlock -ErrorAction SilentlyContinue }
+        }
+
+        $script:OpenCalled | Should -Be $false
+        $script:BatchCalled | Should -Be $false
+        $session | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Invoke-FixEncodingAction — behavioral (decompose S6)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Invoke-FixEncodingAction' }, $true) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-FixEncodingAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:SrcCalls = [System.Collections.Generic.List[object]]::new()
+        $script:AccessCalls = [System.Collections.Generic.List[object]]::new()
+        $script:OpenCalled = $false
+        $script:SrcResult = 0
+        $script:AccessResult = 0
+
+        function script:Fix-EncodingInSrc {
+            param([string]$ModulesPath, [string[]]$ModuleName)
+            $script:SrcCalls.Add([pscustomobject]@{ ModulesPath = $ModulesPath; ModuleName = @($ModuleName) })
+            return $script:SrcResult
+        }
+        function script:Fix-EncodingInAccess {
+            param($VbProject, [string]$ModulesPath, [string[]]$ModuleName, $AccessApplication)
+            $script:AccessCalls.Add([pscustomobject]@{ VbProject = $VbProject; AccessApplication = $AccessApplication; ModulesPath = $ModulesPath; ModuleName = @($ModuleName) })
+            return $script:AccessResult
+        }
+        function script:Open-AccessDatabase {
+            param($AccessPath, $Password, $AllowStartupExecution)
+            $script:OpenCalled = $true
+            return [pscustomobject]@{ AccessApplication = [pscustomobject]@{ Id = "app" }; VbProject = [pscustomobject]@{ Id = "vbe" } }
+        }
+    }
+
+    It "calls Fix-EncodingInSrc for Src location and never opens Access" {
+        $script:SrcResult = 3
+        $session = $null
+
+        Invoke-FixEncodingAction -Session ([ref]$session) -ModulesPath "C:\fake\modules" -NormalizedModules @("Mod1", "Mod2") -Location "Src" -AccessPath "C:\fake.accdb"
+
+        $script:SrcCalls.Count | Should -Be 1
+        $script:SrcCalls[0].ModuleName | Should -Contain "Mod1"
+        $script:AccessCalls.Count | Should -Be 0
+        $script:OpenCalled | Should -Be $false
+        $session | Should -BeNullOrEmpty
+        $script:StatusMessages | Should -Contain "Fix-Encoding (Src): 3"
+    }
+
+    It "opens Access and delegates to Fix-EncodingInAccess for Access location" {
+        $script:AccessResult = 4
+        $session = $null
+
+        Invoke-FixEncodingAction -Session ([ref]$session) -ModulesPath "C:\fake\modules" -NormalizedModules @("ModA") -Location "Access" -AccessPath "C:\fake.accdb" -Password "pw" -AllowStartupExecution
+
+        $script:SrcCalls.Count | Should -Be 0
+        $script:AccessCalls.Count | Should -Be 1
+        $script:AccessCalls[0].VbProject.Id | Should -Be "vbe"
+        $script:AccessCalls[0].AccessApplication.Id | Should -Be "app"
+        $script:OpenCalled | Should -Be $true
+        $session.AccessApplication.Id | Should -Be "app"
+        $script:StatusMessages | Should -Contain "Fix-Encoding (Access): 4"
+    }
+}
+
+Describe "Invoke-FixEncodingAction encoding — byte-level (decompose S6)" {
+    BeforeAll {
+        $testPathCmd = Get-Command Microsoft.PowerShell.Management\Test-Path -ErrorAction SilentlyContinue
+        if ($testPathCmd) { Set-Item -Path "Function:Test-Path" -Value $testPathCmd.ScriptBlock -ErrorAction SilentlyContinue }
+        $gciCmd = Get-Command Microsoft.PowerShell.Management\Get-ChildItem -ErrorAction SilentlyContinue
+        if ($gciCmd) { Set-Item -Path "Function:Get-ChildItem" -Value $gciCmd.ScriptBlock -ErrorAction SilentlyContinue }
+
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $requiredFunctions = @('Invoke-FixEncodingAction', 'Fix-EncodingInSrc', 'Get-FileEncodingInfo', 'Write-Utf8NoBom', 'Convert-AnsiToUtf8NoBom', 'Resolve-ImportFileForModule', 'Get-ComponentExtension', 'Get-ComponentFolder')
+        $allFunctionsText = ($ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -in $requiredFunctions }, $true) | ForEach-Object { $_.Extent.Text }) -join "`n`n"
+        Invoke-Expression $allFunctionsText
+        function script:Write-Status { param([string]$Message, $Color) }
+        $script:FixturesPath = Join-Path $PSScriptRoot "fixtures"
+    }
+
+    It "rewrites a UTF-8 BOM .bas fixture as UTF-8 without BOM through Invoke-FixEncodingAction -Location Src" {
+        $sandbox = Join-Path (Join-Path $PSScriptRoot "..\..\test-runtime") ("s6-encoding-" + [guid]::NewGuid().ToString("N"))
+        [System.IO.Directory]::CreateDirectory($sandbox) | Out-Null
+        try {
+            $target = Join-Path $sandbox "utf8bom-original.bas"
+            Copy-Item -Path (Join-Path $script:FixturesPath "utf8bom-original.bas") -Destination $target
+            $expected = [System.IO.File]::ReadAllBytes((Join-Path $script:FixturesPath "utf8nobom-expected.bas"))
+            $preBytes = [System.IO.File]::ReadAllBytes($target)
+            $preBytes[0] | Should -Be 0xEF
+            $preBytes[1] | Should -Be 0xBB
+            $preBytes[2] | Should -Be 0xBF
+
+            $session = $null
+            Invoke-FixEncodingAction -Session ([ref]$session) -ModulesPath $sandbox -NormalizedModules @("utf8bom-original") -Location "Src"
+            $actual = [System.IO.File]::ReadAllBytes($target)
+
+            $actual.Count | Should -Be $expected.Count
+            $actual[0] | Should -Not -Be 0xEF
+            [System.Convert]::ToBase64String($actual) | Should -Be ([System.Convert]::ToBase64String($expected))
+        } finally {
+            if ([System.IO.Directory]::Exists($sandbox)) { [System.IO.Directory]::Delete($sandbox, $true) }
+        }
+    }
+
+    It "converts the ANSI .bas fixture to UTF-8 without BOM through the byte-level encoding helper" {
+        $sandbox = Join-Path (Join-Path $PSScriptRoot "..\..\test-runtime") ("s6-ansi-encoding-" + [guid]::NewGuid().ToString("N"))
+        [System.IO.Directory]::CreateDirectory($sandbox) | Out-Null
+        try {
+            $source = Join-Path $sandbox "ansi-sample.bas"
+            $target = Join-Path $sandbox "ansi-sample.utf8.bas"
+            Copy-Item -Path (Join-Path $script:FixturesPath "ansi-sample.bas") -Destination $source
+            $expected = [System.IO.File]::ReadAllBytes((Join-Path $script:FixturesPath "utf8nobom-expected.bas"))
+
+            Convert-AnsiToUtf8NoBom -InputPath $source -OutputPath $target
+            $actual = [System.IO.File]::ReadAllBytes($target)
+
+            $actual.Count | Should -Be $expected.Count
+            $actual[0] | Should -Not -Be 0xEF
+            [System.Convert]::ToBase64String($actual) | Should -Be ([System.Convert]::ToBase64String($expected))
+        } finally {
+            if ([System.IO.Directory]::Exists($sandbox)) { [System.IO.Directory]::Delete($sandbox, $true) }
         }
     }
 }
