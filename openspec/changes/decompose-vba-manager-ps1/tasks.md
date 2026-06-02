@@ -61,12 +61,12 @@ Chain strategy: stacked-to-main
 
 **Spec refs:** Generate-ERD Behavior; P6 Test-Pattern Compliance.
 
-- [ ] S3.1 **Baseline green** — confirm suite passes on PR 2 branch.
-- [ ] S3.2 **RED Pester** — add `Describe 'Invoke-GenerateErdAction'`; AST-extract; stub `Export-DataStructure` via `function script:`. Tests: (a) `Open-AccessDatabase` is never called (track with `$script:ComOpened`), (b) `Export-DataStructure` receives resolved backend path. RED until S3.4.
-- [ ] S3.3 **RED vitest** — add wiring change-detector for `Invoke-GenerateErdAction`. RED until S3.4.
-- [ ] S3.4 **Extract** — add `Invoke-GenerateErdAction -BackendPath -DestinationRoot -ErdPath -Password [-Json]` (no COM session param); replace Generate-ERD `elseif` arm (lines 3204–3240) with one-line call.
-- [ ] S3.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
-- [ ] S3.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-GenerateErdAction — S3`. Open PR stacked to PR 2 branch.
+- [x] S3.1 **Baseline green** — confirm suite passes on PR 2 branch.
+- [x] S3.2 **RED Pester** — add `Describe 'Invoke-GenerateErdAction'`; AST-extract; stub `Export-DataStructure` via `function script:`. Tests: (a) `Open-AccessDatabase` is never called (track with `$script:ComOpened`), (b) `Export-DataStructure` receives resolved backend path. RED until S3.4.
+- [x] S3.3 **RED vitest** — add wiring change-detector for `Invoke-GenerateErdAction`. RED until S3.4.
+- [x] S3.4 **Extract** — add `Invoke-GenerateErdAction -BackendPath -DestinationRoot -ErdPath -Password [-Json]` (no COM session param); replace Generate-ERD `elseif` arm (lines 3204–3240) with one-line call.
+- [x] S3.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
+- [x] S3.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-GenerateErdAction — S3`. Open PR stacked to PR 2 branch.
 
 ---
 
