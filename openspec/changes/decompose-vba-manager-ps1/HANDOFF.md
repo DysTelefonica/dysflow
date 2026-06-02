@@ -44,9 +44,9 @@ se reorganiza en funciones. Cada `Invoke-*` extraído debe quedar cubierto por P
 | spec | ✅ HECHO | `specs/vba-manager-actions/spec.md` + engram #10368 | Contrato observable de las 10 acciones |
 | design | ✅ HECHO | `design.md` + engram #10370 | Tabla de firmas Invoke-*; Import devuelve result object (no flag) |
 | tasks | ✅ HECHO | `tasks.md` + engram #10371 | 49 tareas en 7 slices. Forecast: chained=Yes, S7 risk High |
-| apply | ✅ Slice 1 | `apply-progress` #10372 | **Slice 1 (Export)** rama `refactor/decompose-vba-manager-s1-export`, 2 commits, sin push. Behavioral delta CORREGIDO → refactor puro (try/catch removido, spec+Pester alineados, verificado vs main por orquestador) |
-| verify | ✅ Slice 1 PASS | `verify-report.md` #10376 | 0 CRITICAL/0 WARNING. Behavior-preserving confirmado vs main. vitest 3x verde estable |
-| verify | ⏳ pendiente | `verify-report.md` | |
+| apply | ✅ HECHO | `apply-progress` #10372 | Slice 2 (List-Objects + Exists) ✅ completado con TDD |
+| verify | ✅ Slice 2 PASS | `verify-report.md` #10376 | Slice 2 verificado PASS (0 CRITICAL / 0 WARNING) |
+| verify | ⏳ pendiente | `verify-report.md` | Slices 3-7 pendientes |
 | archive | ⏳ pendiente | `archive-report.md` | |
 
 Leyenda: ✅ hecho · 🔄 en curso · ⏳ pendiente · ⚠️ bloqueado
@@ -60,8 +60,8 @@ explícitos; seams I/O COM/DAO → parámetros) + Pester de comportamiento via A
 
 | # | Slice | Funciones a extraer | Líneas disp. | Est. PR | Riesgo | Estado |
 |---|---|---|---|---|---|---|
-| 1 | Export | `Invoke-ExportAction` | 2961-3007 | ~250 | Bajo | ✅ verificado — LISTO PARA PR #1 |
-| 2 | Read-only | `Invoke-ListObjectsAction`, `Invoke-ExistsAction` | 3128-3158 | ~200 | Muy bajo | ⏳ |
+| 1 | Export | `Invoke-ExportAction` | 2961-3007 | ~250 | Bajo | ✅ **MERGEADO a main** (PR #386, issue #385, checks verdes) |
+| 2 | Read-only | `Invoke-ListObjectsAction`, `Invoke-ExistsAction` | 3128-3158 | ~200 | Muy bajo | ✅ **VERIFICADO PASS** (ready for PR) |
 | 3 | ERD | `Invoke-GenerateErdAction` (DAO, sin sesión VBE) | 3204-3240 | ~200 | Bajo | ⏳ |
 | 4 | Delete | `Invoke-DeleteAction` | 3099-3126 | ~200 | Bajo | ⏳ |
 | 5 | Compile/Run | `Invoke-CompileAction`, `Invoke-RunProcedureAction` | 3160-3202 | ~250 | Bajo | ⏳ |
@@ -93,3 +93,12 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
   2 commits, **NO pusheado**. Próximo: crear PR #1 (stacked-to-main, base main) → tras merge, Slice 2 desde main.
 - **Nota entorno**: el `exit code 1` de los comandos Bash es ruido del harness (temp-cwd inexistente), NO fallo real.
   Para leer el exit real de un comando, capturar `$?`/`${PIPESTATUS[0]}` antes del wrapper.
+- **2026-06-02** — Issue #385 creado (type:refactor + status:approved) y **PR #386 abierto** (base main, stacked-to-main).
+  Commit docs con artefactos SDD añadido. Checks CI corriendo. Recordá: cero cambios de comportamiento (ver engram
+  `decision/refactor-de-descomposici-n-vba-manager-preservar-comportamiento`).
+- **2026-06-02** — **PR #386 MERGEADO a main** (`feaffaa`, ambos checks verdes: Quality gates + Windows smoke).
+  Rama borrada, main local sincronizado. **Slice 1 ✅ COMPLETO.** Próximo: Slice 2 (`Invoke-ListObjectsAction` +
+  `Invoke-ExistsAction`) desde main. Este HANDOFF.md quedó como cambio local (no se puede pushear directo a main por
+  branch protection); se incluirá en el commit docs del PR del Slice 2.
+- **2026-06-02** — **Slice 2 (Read-only actions) completado**. Implementadas `Invoke-ListObjectsAction` y `Invoke-ExistsAction` usando TDD estricto. Pruebas Pester con extracción AST y stubs añadidas. Pruebas Vitest con wiring change-detectors añadidas. Total de líneas del diff: 223, bien por debajo del límite de 400. Todo verde localmente. Listo para verificar y enviar PR del Slice 2.
+- **2026-06-02** — **Slice 2 Verificación completada PASS**. 142 pruebas Pester y 835 pruebas Vitest pasadas con éxito. Se generó el informe de verificación y se guardó en engram y openspec. Próximo paso: abrir PR de Slice 2.

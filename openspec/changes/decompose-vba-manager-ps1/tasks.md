@@ -48,12 +48,12 @@ Chain strategy: stacked-to-main
 
 **Spec refs:** List-Objects and Exists Behavior; P6 Test-Pattern Compliance.
 
-- [ ] S2.1 **Baseline green** — confirm `pnpm test:ps1` and `pnpm test` pass on the PR 1 branch.
-- [ ] S2.2 **RED Pester** — add `Describe 'Invoke-ListObjectsAction'` and `Describe 'Invoke-ExistsAction'` contexts; AST-extract each; stub `Get-FrontendInventory` and `Get-ExistsInfo` via `function script:`. Tests: (a) List-Objects JSON vs text routing, (b) Exists module-absent returns correct result without modifying the project. Both RED until S2.4.
-- [ ] S2.3 **RED vitest** — add wiring change-detectors for `Invoke-ListObjectsAction` and `Invoke-ExistsAction` in `test/scripts-vba-manager.test.ts`. RED until S2.4.
-- [ ] S2.4 **Extract** — add `Invoke-ListObjectsAction -Session [-Json]` and `Invoke-ExistsAction -Session -ModuleName [-Json]` to `scripts/dysflow-vba-manager.ps1`; replace their respective `elseif` arms with one-line calls.
-- [ ] S2.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`; all new + existing tests pass.
-- [ ] S2.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-ListObjectsAction + Invoke-ExistsAction — S2`. Open PR stacked to PR 1 branch.
+- [x] S2.1 **Baseline green** — confirm `pnpm test:ps1` and `pnpm test` pass on the PR 1 branch.
+- [x] S2.2 **RED Pester** — add `Describe 'Invoke-ListObjectsAction'` and `Describe 'Invoke-ExistsAction'` contexts; AST-extract each; stub `Get-FrontendInventory` and `Get-ExistsInfo` via `function script:`. Tests: (a) List-Objects JSON vs text routing, (b) Exists module-absent returns correct result without modifying the project. Both RED until S2.4.
+- [x] S2.3 **RED vitest** — add wiring change-detectors for `Invoke-ListObjectsAction` and `Invoke-ExistsAction` in `test/scripts-vba-manager.test.ts`. RED until S2.4.
+- [x] S2.4 **Extract** — add `Invoke-ListObjectsAction -Session [-Json]` and `Invoke-ExistsAction -Session -ModuleName [-Json]` to `scripts/dysflow-vba-manager.ps1`; replace their respective `elseif` arms with one-line calls.
+- [x] S2.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`; all new + existing tests pass.
+- [x] S2.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-ListObjectsAction + Invoke-ExistsAction — S2`. Open PR stacked to PR 1 branch.
 
 ---
 
