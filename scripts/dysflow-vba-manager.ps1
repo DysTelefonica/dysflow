@@ -3062,6 +3062,45 @@ function Invoke-GenerateErdAction {
     Write-Status -Message ("OK ERD generado en: {0}" -f $mdFile) -Color Green
 }
 
+function Invoke-DeleteAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$NormalizedModules,
+        [switch]$Json
+    )
+
+    if ($NormalizedModules.Count -eq 0) {
+        throw "Delete requiere al menos un nombre de módulo/objeto."
+    }
+
+    $vbProject = $Session.VbProject
+    $moduleResults = New-Object System.Collections.Generic.List[object]
+    $idx = 0
+    foreach ($name in $NormalizedModules) {
+        $idx++
+        Write-Status -Message ("[{0}/{1}] Eliminando: {2}" -f $idx, $NormalizedModules.Count, $name) -Color Cyan
+        try {
+            $result = Remove-AccessObjectOrComponent -AccessApplication $Session.AccessApplication -VbProject $vbProject -ModuleName $name
+            $moduleResults.Add($result) | Out-Null
+        } catch {
+            $moduleResults.Add([pscustomobject]@{
+                module = [string]$name
+                status = "error"
+                error  = [string]$_.Exception.Message
+            }) | Out-Null
+        }
+    }
+    Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
+    $failedDeletes = @($moduleResults | Where-Object { $_.status -eq "error" })
+    if ($failedDeletes.Count -gt 0) {
+        throw ("Delete no pudo completar {0}/{1} objeto(s): {2}" -f $failedDeletes.Count, $NormalizedModules.Count, (($failedDeletes | ForEach-Object { "{0}: {1}" -f $_.module, $_.error }) -join "; "))
+    }
+    Write-Status -Message ("OK Delete completado ({0})" -f $NormalizedModules.Count) -Color Green
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -3198,33 +3237,8 @@ try {
         Write-Status -Message ("OK Import completado ({0})" -f $total) -Color Green
 
     } elseif ($Action -eq "Delete") {
-        if ($normalizedModules.Count -eq 0) {
-            throw "Delete requiere al menos un nombre de módulo/objeto."
-        }
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $vbProject = $session.VbProject
-        $moduleResults = New-Object System.Collections.Generic.List[object]
-        $idx = 0
-        foreach ($name in $normalizedModules) {
-            $idx++
-            Write-Status -Message ("[{0}/{1}] Eliminando: {2}" -f $idx, $normalizedModules.Count, $name) -Color Cyan
-            try {
-                $result = Remove-AccessObjectOrComponent -AccessApplication $session.AccessApplication -VbProject $vbProject -ModuleName $name
-                $moduleResults.Add($result) | Out-Null
-            } catch {
-                $moduleResults.Add([pscustomobject]@{
-                    module = [string]$name
-                    status = "error"
-                    error  = [string]$_.Exception.Message
-                }) | Out-Null
-            }
-        }
-        Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
-        $failedDeletes = @($moduleResults | Where-Object { $_.status -eq "error" })
-        if ($failedDeletes.Count -gt 0) {
-            throw ("Delete no pudo completar {0}/{1} objeto(s): {2}" -f $failedDeletes.Count, $normalizedModules.Count, (($failedDeletes | ForEach-Object { "{0}: {1}" -f $_.module, $_.error }) -join "; "))
-        }
-        Write-Status -Message ("OK Delete completado ({0})" -f $normalizedModules.Count) -Color Green
+        Invoke-DeleteAction -Session $session -NormalizedModules $normalizedModules -Json:$Json
 
     } elseif ($Action -eq "List-Objects") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
