@@ -74,12 +74,12 @@ Chain strategy: stacked-to-main
 
 **Spec refs:** Delete Action Behavior; P6 Test-Pattern Compliance.
 
-- [ ] S4.1 **Baseline green** — confirm suite passes on PR 3 branch.
-- [ ] S4.2 **RED Pester** — add `Describe 'Invoke-DeleteAction'`; AST-extract; stub `Remove-AccessObjectOrComponent` via `function script:`. Test: partial delete accumulates errors for failing module while succeeding for others. RED until S4.4.
-- [ ] S4.3 **RED vitest** — add wiring change-detector for `Invoke-DeleteAction`. RED until S4.4.
-- [ ] S4.4 **Extract** — add `Invoke-DeleteAction -Session -NormalizedModules [-Json]`; replace Delete `elseif` arm (lines 3099–3126).
-- [ ] S4.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
-- [ ] S4.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-DeleteAction — S4`. Open PR stacked to PR 3 branch.
+- [x] S4.1 **Baseline green** — confirm suite passes on PR 3 branch.
+- [x] S4.2 **RED Pester** — add `Describe 'Invoke-DeleteAction'`; AST-extract; stub `Remove-AccessObjectOrComponent` via `function script:`. Test: partial delete accumulates errors for failing module while succeeding for others. RED until S4.4.
+- [x] S4.3 **RED vitest** — add wiring change-detector for `Invoke-DeleteAction`. RED until S4.4.
+- [x] S4.4 **Extract** — add `Invoke-DeleteAction -Session -NormalizedModules [-Json]`; replace Delete `elseif` arm (lines 3099–3126).
+- [x] S4.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
+- [x] S4.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-DeleteAction — S4`. Open PR stacked to PR 3 branch.
 
 ---
 
