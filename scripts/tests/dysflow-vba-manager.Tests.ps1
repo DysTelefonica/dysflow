@@ -820,3 +820,111 @@ Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" {
     }
 }
 
+# ===========================================================================
+# S4 — Behavioral tests for Invoke-DeleteAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-DeleteAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-DeleteAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+        # Stub Write-Host
+        function script:Write-Host { param([string]$Object) $script:HostMessages.Add($Object) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:HostMessages = [System.Collections.Generic.List[string]]::new()
+        $script:RemoveCalls = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $script:FailModules = @{}
+
+        # Stub Remove-AccessObjectOrComponent
+        function script:Remove-AccessObjectOrComponent {
+            param($AccessApplication, $VbProject, $ModuleName)
+            $script:RemoveCalls.Add([PSCustomObject]@{ ModuleName = $ModuleName })
+            if ($script:FailModules.ContainsKey($ModuleName)) {
+                throw $script:FailModules[$ModuleName]
+            }
+            return [pscustomobject]@{
+                module = $ModuleName
+                status = "ok"
+                deleted = $ModuleName
+                kind   = "VBComponent"
+            }
+        }
+
+        $script:FakeSession = [PSCustomObject]@{
+            VbProject          = [PSCustomObject]@{ }
+            AccessApplication  = [PSCustomObject]@{ }
+        }
+    }
+
+    Context "validation and happy path" {
+        It "throws exception if normalizedModules is empty" {
+            { Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @() } | Should -Throw "Delete requiere al menos un nombre de módulo/objeto."
+        }
+
+        It "deletes all modules and outputs ##MODULE_RESULTS on success" {
+            Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @("Mod1", "Mod2")
+
+            $script:RemoveCalls.Count | Should -Be 2
+            $script:RemoveCalls[0].ModuleName | Should -Be "Mod1"
+            $script:RemoveCalls[1].ModuleName | Should -Be "Mod2"
+
+            $script:HostMessages.Count | Should -Be 1
+            $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
+            
+            $json = $script:HostMessages[0] -replace "^##MODULE_RESULTS:", ""
+            $results = ConvertFrom-Json $json
+            $results.Count | Should -Be 2
+            $results[0].module | Should -Be "Mod1"
+            $results[0].status | Should -Be "ok"
+            $results[1].module | Should -Be "Mod2"
+            $results[1].status | Should -Be "ok"
+
+            $script:StatusMessages | Should -Contain "OK Delete completado (2)"
+        }
+    }
+
+    Context "partial delete error accumulation" {
+        It "deletes the first module but fails on the second and throws consolidated error" {
+            $script:FailModules["Mod2"] = "failed to remove component"
+
+            $action = { Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @("Mod1", "Mod2") }
+            $action | Should -Throw "Delete no pudo completar 1/2 objeto(s): Mod2: failed to remove component"
+
+            $script:RemoveCalls.Count | Should -Be 2
+            $script:RemoveCalls[0].ModuleName | Should -Be "Mod1"
+            $script:RemoveCalls[1].ModuleName | Should -Be "Mod2"
+
+            $script:HostMessages.Count | Should -Be 1
+            $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
+            
+            $json = $script:HostMessages[0] -replace "^##MODULE_RESULTS:", ""
+            $results = ConvertFrom-Json $json
+            $results.Count | Should -Be 2
+            $results[0].module | Should -Be "Mod1"
+            $results[0].status | Should -Be "ok"
+            $results[1].module | Should -Be "Mod2"
+            $results[1].status | Should -Be "error"
+            $results[1].error | Should -Be "failed to remove component"
+        }
+    }
+}
+
+
