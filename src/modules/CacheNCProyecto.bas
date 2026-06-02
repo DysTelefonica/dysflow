@@ -444,6 +444,10 @@ Public Function ObtenerNCDesdeCache( _
         End If
     End If
 
+' Vinculamos cada AC con su NC padre (evita reentrada DAO en AC.nc getter)
+    ' AC.nc linkage not set here — AC.nc getter falls back to constructor.getNCProyecto
+' when m_ObjNC is Nothing (correct behavior, avoids reentrada if cache is clean)
+    
     ' HOTFIX-20260527: cache hits must keep an explicit AC dictionary, even when empty.
     Set nc.ACs = colACs
     

@@ -150,7 +150,7 @@ Regla dura para cualquier test que toque datos, tablas, configuración, caché p
    ```vba
    ' INCORRECTO — error de compilación en VBA
    Debug.Print IIf(obj Is Nothing, "Nothing", obj.Property)
-   
+
    ' CORRECTO — separar en dos líneas
    If obj Is Nothing Then
        Debug.Print "Nothing"
@@ -158,5 +158,15 @@ Regla dura para cualquier test que toque datos, tablas, configuración, caché p
        Debug.Print obj.Property
    End If
    ```
-2. **No concatenar valores de campos sin verificar tipo:** campos Short Text con espacios pueden no ser numéricos aunque parezcan serlo.
-3. **Parámetros con nombre siempre para ByRef opcional:** usar `parametro:=valor` para evitar ambigüedad posicional en VBA.
+2. **No usar `And`/`Or` para combinar `Nothing` check con acceso a propiedad en la misma línea:**
+   ```vba
+   ' INCORRECTO — si obj es Nothing, al evaluar obj.Prop VBA da error
+   If Not obj Is Nothing And obj.Prop.Count > 0 Then
+
+   ' CORRECTO — chequeos separados, evaluación en cortocircuito
+   If Not obj Is Nothing Then
+       If obj.Prop.Count > 0 Then
+   ```
+   Esto aplica siempre que se encadene `Is Nothing` con acceso a `.Count`, `.Exists`, `.Keys`, `.Items` u otra propiedad de la misma colección.
+3. **No concatenar valores de campos sin verificar tipo:** campos Short Text con espacios pueden no ser numéricos aunque parezcan serlo.
+4. **Parámetros con nombre siempre para ByRef opcional:** usar `parametro:=valor` para evitar ambigüedad posicional en VBA.

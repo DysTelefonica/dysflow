@@ -160,6 +160,22 @@ Public Property Get CodRiesgosAsociados() As String
         Exit Property
     End If
     
+    ' Cache-first: build from in-memory Riesgos when hydrated
+    If Not Me.Riesgos Is Nothing Then
+        If Me.Riesgos.Count > 0 Then
+            Dim cod As String
+            cod = ""
+            Dim rKey As Variant
+            For Each rKey In Me.Riesgos.Keys
+                If cod <> "" Then cod = cod & ","
+                cod = cod & Me.Riesgos(rKey).Codigo
+            Next rKey
+            m_sCodRiesgosAsociados = cod
+            CodRiesgosAsociados = m_sCodRiesgosAsociados
+            Exit Property
+        End If
+    End If
+    
     CacheTrustDiagnostics.RecordFallback "NCProyecto.CodRiesgosAsociados"
     m_sCodRiesgosAsociados = constructor.getCodRiesgosAsociados(p_IDNC:=Me.IDNoConformidad, p_Error:=m_Error)
     If m_Error <> "" Then
@@ -183,10 +199,30 @@ Public Property Get ACsSinAR() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
-'    If Not m_objACsSinAR Is Nothing Then
-'        Set ACsSinAR = m_objACsSinAR
-'        Exit Property
-'    End If
+    
+    ' Cache-first: compute from in-memory ACs if already hydrated from cache
+    If Not Me.ACs Is Nothing Then
+        If Me.ACs.Count > 0 Then
+            Dim acSinAR As Scripting.Dictionary
+            Set acSinAR = New Scripting.Dictionary
+            acSinAR.CompareMode = TextCompare
+            Dim aKey As Variant
+            For Each aKey In Me.ACs.Keys
+                Dim ac As ACProyecto
+                Set ac = Me.ACs(aKey)
+                If Not ac.ARs Is Nothing Then
+                    If ac.ARs.Count = 0 Then
+                        acSinAR.Add CStr(ac.IdAccionCorrectiva), ac
+                    End If
+                Else
+                    acSinAR.Add CStr(ac.IdAccionCorrectiva), ac
+                End If
+            Next aKey
+            Set m_objACsSinAR = acSinAR
+            Set ACsSinAR = m_objACsSinAR
+            Exit Property
+        End If
+    End If
     
     CacheTrustDiagnostics.RecordFallback "NCProyecto.ACsSinAR"
     Set m_objACsSinAR = constructor.getACsProyectosSinAR(p_IDNC:=Me.IDNoConformidad, p_Error:=m_Error)
@@ -198,7 +234,7 @@ Public Property Get ACsSinAR() As Scripting.Dictionary
     Exit Property
 errores:
     If Err.Number <> 1000 Then
-        m_Error = "El método NCProyecto.ACsSinAR ha devuelto el error: " & vbNewLine & Err.Description
+        m_Error = "El método NCProyecto.ACsSinAR ha devuelto el error: " & Err.Description
     End If
     Me.Error = m_Error
 End Property
@@ -448,6 +484,41 @@ Public Property Get TieneAccionesPorReplanificar() As EnumSino
         TieneAccionesPorReplanificar = m_eTieneAccionesPorReplanificar
         Exit Property
     End If
+    
+    ' Cache-first: check ARs in-memory when hydrated from cache
+    If Not Me.ACs Is Nothing Then
+        If Me.ACs.Count > 0 Then
+            Dim hayReplanificar As Boolean
+            hayReplanificar = False
+            Dim acKey2 As Variant
+            For Each acKey2 In Me.ACs.Keys
+                Dim acItem As ACProyecto
+                Set acItem = Me.ACs(acKey2)
+                If Not acItem.ARs Is Nothing Then
+                    If acItem.ARs.Count > 0 Then
+                        Dim arKey As Variant
+                        For Each arKey In acItem.ARs.Keys
+                            Dim arItem As ARProyecto
+                            Set arItem = acItem.ARs(arKey)
+                            If IsEmpty(arItem.FechaFinReal) Or arItem.FechaFinReal = "" Then
+                                If IsDate(arItem.FechaFinPrevista) Then
+                                    If CDate(arItem.FechaFinPrevista) < CDate(Date) Then
+                                        hayReplanificar = True
+                                        Exit For
+                                    End If
+                                End If
+                            End If
+                        Next arKey
+                    End If
+                End If
+                If hayReplanificar Then Exit For
+            Next acKey2
+            m_eTieneAccionesPorReplanificar = IIf(hayReplanificar, EnumSino.Sí, EnumSino.No)
+            TieneAccionesPorReplanificar = m_eTieneAccionesPorReplanificar
+            Exit Property
+        End If
+    End If
+    
     m_eTieneAccionesPorReplanificar = getTieneAccionesNCPorReplanificar( _
                                     p_ID:=Me.IDNoConformidad, _
                                     p_EsDeProyecto:=EnumSino.Sí, _
@@ -1589,11 +1660,41 @@ Public Property Get TodasLasArsFinalizadas() As EnumSino
 
     Me.Error = ""
     m_Error = ""
-'    If m_eTodasLasArsFinalizadas <> Empty Then
-'        TodasLasArsFinalizadas = m_eTodasLasArsFinalizadas
-'        Exit Property
-'    End If
-   
+    
+    ' Cache-first: evaluate from in-memory ACs/ARs when hydrated from cache
+    If Not Me.ACs Is Nothing Then
+        If Me.ACs.Count > 0 Then
+            Dim todasFinalizadas As Boolean
+            todasFinalizadas = True
+            Dim acKey3 As Variant
+            For Each acKey3 In Me.ACs.Keys
+                Dim acForAr As ACProyecto
+                Set acForAr = Me.ACs(acKey3)
+                If acForAr.ARs Is Nothing Then
+                    todasFinalizadas = False
+                    Exit For
+                End If
+                If acForAr.ARs.Count = 0 Then
+                    todasFinalizadas = False
+                    Exit For
+                End If
+                Dim arKey2 As Variant
+                For Each arKey2 In acForAr.ARs.Keys
+                    Dim arForEval As ARProyecto
+                    Set arForEval = acForAr.ARs(arKey2)
+                    If IsEmpty(arForEval.FechaFinReal) Or arForEval.FechaFinReal = "" Then
+                        todasFinalizadas = False
+                        Exit For
+                    End If
+                Next arKey2
+                If Not todasFinalizadas Then Exit For
+            Next acKey3
+            m_eTodasLasArsFinalizadas = IIf(todasFinalizadas, EnumSino.Sí, EnumSino.No)
+            TodasLasArsFinalizadas = m_eTodasLasArsFinalizadas
+            Exit Property
+        End If
+    End If
+    
     m_eTodasLasArsFinalizadas = getTodasLasArsFinalizadas( _
                                     p_ID:=Me.IDNoConformidad, _
                                     p_EsDeProyecto:=EnumSino.Sí, _
@@ -1617,11 +1718,40 @@ Public Property Get TodasLasACsSinFechas() As EnumSino
 
     Me.Error = ""
     m_Error = ""
-'    If m_eTodasLasACsSinFechas <> Empty Then
-'        TodasLasACsSinFechas = m_eTodasLasACsSinFechas
-'        Exit Property
-'    End If
-   
+    
+    ' Cache-first: evaluate from in-memory ACs/ARs when hydrated from cache
+    ' SQL equivalent: EXISTS AR where AR.FechaInicio IS NOT NULL => "No" (some AC has date)
+    ' All ACs without dates: every AC's ARs have FechaInicio null/empty, OR AC has no ARs
+    If Not Me.ACs Is Nothing Then
+        If Me.ACs.Count > 0 Then
+            Dim todasSinFechas As Boolean
+            todasSinFechas = True
+            Dim acKey4 As Variant
+            For Each acKey4 In Me.ACs.Keys
+                Dim acForFecha As ACProyecto
+                Set acForFecha = Me.ACs(acKey4)
+                ' Check if this AC has any AR with FechaInicio set
+                If Not acForFecha.ARs Is Nothing Then
+                    If acForFecha.ARs.Count > 0 Then
+                        Dim arKeyF As Variant
+                        For Each arKeyF In acForFecha.ARs.Keys
+                            Dim arFecha As ARProyecto
+                            Set arFecha = acForFecha.ARs(arKeyF)
+                            If arFecha.FechaInicio <> "" And Not IsEmpty(arFecha.FechaInicio) Then
+                                todasSinFechas = False
+                                Exit For
+                            End If
+                        Next arKeyF
+                    End If
+                End If
+                If Not todasSinFechas Then Exit For
+            Next acKey4
+            m_eTodasLasACsSinFechas = IIf(todasSinFechas, EnumSino.Sí, EnumSino.No)
+            TodasLasACsSinFechas = m_eTodasLasACsSinFechas
+            Exit Property
+        End If
+    End If
+    
     m_eTodasLasACsSinFechas = getTodasLasACsSinFechas( _
                                     p_ID:=Me.IDNoConformidad, _
                                     p_EsDeProyecto:=EnumSino.Sí, _
