@@ -2972,6 +2972,48 @@ function Invoke-ExportAction {
     Write-Status -Message ("OK Export completado ({0})" -f $total) -Color Green
 }
 
+function Invoke-ListObjectsAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [switch]$Json
+    )
+
+    $inventory = Get-FrontendInventory -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject
+    if ($Json) {
+        $inventory | ConvertTo-Json -Depth 6
+    } else {
+        Write-Status -Message ("Forms: {0}" -f ($inventory.forms -join ", ")) -Color Cyan
+        Write-Status -Message ("Reports: {0}" -f ($inventory.reports -join ", ")) -Color Cyan
+        Write-Status -Message ("Modules: {0}" -f ($inventory.modules -join ", ")) -Color Cyan
+        Write-Status -Message ("Classes: {0}" -f ($inventory.classes -join ", ")) -Color Cyan
+        Write-Status -Message ("DocumentModules: {0}" -f ($inventory.documentModules -join ", ")) -Color Cyan
+    }
+}
+
+function Invoke-ExistsAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [Parameter(Mandatory = $true)][string]$ModuleName,
+        [switch]$Json
+    )
+
+    $info = Get-ExistsInfo -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ModuleName $ModuleName
+    if ($Json) {
+        $info | ConvertTo-Json -Depth 6
+    } else {
+        Write-Status -Message ("moduleName: {0}" -f $info.moduleName) -Color Cyan
+        Write-Status -Message ("accessObjectExists: {0}" -f $info.accessObjectExists) -Color Cyan
+        Write-Status -Message ("accessObjectKind: {0}" -f $info.accessObjectKind) -Color Cyan
+        Write-Status -Message ("accessObjectName: {0}" -f $info.accessObjectName) -Color Cyan
+        Write-Status -Message ("vbComponentExists: {0}" -f $info.vbComponentExists) -Color Cyan
+        Write-Status -Message ("vbComponentName: {0}" -f $info.vbComponentName) -Color Cyan
+        Write-Status -Message ("isDocumentModule: {0}" -f $info.isDocumentModule) -Color Cyan
+        Write-Status -Message ("suggestedImportMode: {0}" -f $info.suggestedImportMode) -Color Cyan
+    }
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -3138,35 +3180,14 @@ try {
 
     } elseif ($Action -eq "List-Objects") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $inventory = Get-FrontendInventory -AccessApplication $session.AccessApplication -VbProject $session.VbProject
-        if ($Json) {
-            $inventory | ConvertTo-Json -Depth 6
-        } else {
-            Write-Status -Message ("Forms: {0}" -f ($inventory.forms -join ", ")) -Color Cyan
-            Write-Status -Message ("Reports: {0}" -f ($inventory.reports -join ", ")) -Color Cyan
-            Write-Status -Message ("Modules: {0}" -f ($inventory.modules -join ", ")) -Color Cyan
-            Write-Status -Message ("Classes: {0}" -f ($inventory.classes -join ", ")) -Color Cyan
-            Write-Status -Message ("DocumentModules: {0}" -f ($inventory.documentModules -join ", ")) -Color Cyan
-        }
+        Invoke-ListObjectsAction -Session $session -Json:$Json
 
     } elseif ($Action -eq "Exists") {
         if ($normalizedModules.Count -ne 1) {
             throw "Exists requiere exactamente un nombre de módulo/objeto."
         }
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $info = Get-ExistsInfo -AccessApplication $session.AccessApplication -VbProject $session.VbProject -ModuleName $normalizedModules[0]
-        if ($Json) {
-            $info | ConvertTo-Json -Depth 6
-        } else {
-            Write-Status -Message ("moduleName: {0}" -f $info.moduleName) -Color Cyan
-            Write-Status -Message ("accessObjectExists: {0}" -f $info.accessObjectExists) -Color Cyan
-            Write-Status -Message ("accessObjectKind: {0}" -f $info.accessObjectKind) -Color Cyan
-            Write-Status -Message ("accessObjectName: {0}" -f $info.accessObjectName) -Color Cyan
-            Write-Status -Message ("vbComponentExists: {0}" -f $info.vbComponentExists) -Color Cyan
-            Write-Status -Message ("vbComponentName: {0}" -f $info.vbComponentName) -Color Cyan
-            Write-Status -Message ("isDocumentModule: {0}" -f $info.isDocumentModule) -Color Cyan
-            Write-Status -Message ("suggestedImportMode: {0}" -f $info.suggestedImportMode) -Color Cyan
-        }
+        Invoke-ExistsAction -Session $session -ModuleName $normalizedModules[0] -Json:$Json
 
     } elseif ($Action -eq "Run-Procedure") {
         $procedureArgs = Convert-ProcedureArgsJson -JsonText $ProcedureArgsJson
