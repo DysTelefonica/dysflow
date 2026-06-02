@@ -3145,6 +3145,63 @@ function Invoke-RunProcedureAction {
     }
 }
 
+function Invoke-RunTestsAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][ref]$Session,
+        [string]$ProceduresJson = "",
+        [string]$ProceduresJsonFile = "",
+        [Parameter(Mandatory = $true)][string]$AccessPath,
+        [string]$Password = "",
+        [switch]$AllowStartupExecution,
+        [switch]$Json
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ProceduresJsonFile)) {
+        $ProceduresJson = Get-Content -Path $ProceduresJsonFile -Raw -Encoding UTF8
+    }
+    if ([string]::IsNullOrWhiteSpace($ProceduresJson)) {
+        throw "Run-Tests requiere -ProceduresJson o -ProceduresJsonFile con un array JSON de procedimientos."
+    }
+
+    $procedures = ConvertFrom-Json -InputObject $ProceduresJson
+    $Session.Value = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+    $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
+    if ($Json) {
+        ConvertTo-Json -InputObject @($batchResults) -Depth 6
+    }
+}
+
+function Invoke-FixEncodingAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][ref]$Session,
+        [Parameter(Mandatory = $true)][string]$ModulesPath,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$NormalizedModules,
+        [Parameter(Mandatory = $true)][string]$Location,
+        [string]$AccessPath = "",
+        [string]$Password = "",
+        [switch]$AllowStartupExecution,
+        [switch]$Json
+    )
+
+    $fixedSrc = 0
+    $fixedAccess = 0
+
+    if ($Location -eq "Src" -or $Location -eq "Both") {
+        $fixedSrc = Fix-EncodingInSrc -ModulesPath $ModulesPath -ModuleName $NormalizedModules
+        Write-Status -Message ("Fix-Encoding (Src): {0}" -f $fixedSrc) -Color Yellow
+    }
+
+    if ($Location -eq "Access" -or $Location -eq "Both") {
+        $Session.Value = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        $fixedAccess = Fix-EncodingInAccess -VbProject $Session.Value.VbProject -ModulesPath $ModulesPath -ModuleName $NormalizedModules -AccessApplication $Session.Value.AccessApplication
+        Write-Status -Message ("Fix-Encoding (Access): {0}" -f $fixedAccess) -Color Yellow
+    }
+
+    Write-Status -Message "OK Fix-Encoding completado" -Color Green
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -3300,18 +3357,7 @@ try {
         Invoke-RunProcedureAction -Session $session -ProcedureName $ProcedureName -ProcedureArgsJson $ProcedureArgsJson -Json:$Json
 
     } elseif ($Action -eq "Run-Tests") {
-        if (-not [string]::IsNullOrWhiteSpace($ProceduresJsonFile)) {
-            $ProceduresJson = Get-Content -Path $ProceduresJsonFile -Raw -Encoding UTF8
-        }
-        if ([string]::IsNullOrWhiteSpace($ProceduresJson)) {
-            throw "Run-Tests requiere -ProceduresJson o -ProceduresJsonFile con un array JSON de procedimientos."
-        }
-        $procedures = ConvertFrom-Json -InputObject $ProceduresJson
-        $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $batchResults = Invoke-AccessProcedureBatch -AccessApplication $session.AccessApplication -VbProject $session.VbProject -Procedures $procedures
-        if ($Json) {
-            ConvertTo-Json -InputObject @($batchResults) -Depth 6
-        }
+        Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson $ProceduresJson -ProceduresJsonFile $ProceduresJsonFile -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -Json:$Json
 
     } elseif ($Action -eq "Compile") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
@@ -3321,21 +3367,7 @@ try {
         Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json
 
     } else {
-        $fixedSrc = 0
-        $fixedAccess = 0
-
-        if ($Location -eq "Src" -or $Location -eq "Both") {
-            $fixedSrc = Fix-EncodingInSrc -ModulesPath $ModulesPath -ModuleName $normalizedModules
-            Write-Status -Message ("Fix-Encoding (Src): {0}" -f $fixedSrc) -Color Yellow
-        }
-
-        if ($Location -eq "Access" -or $Location -eq "Both") {
-            $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-            $fixedAccess = Fix-EncodingInAccess -VbProject $session.VbProject -ModulesPath $ModulesPath -ModuleName $normalizedModules -AccessApplication $session.AccessApplication
-            Write-Status -Message ("Fix-Encoding (Access): {0}" -f $fixedAccess) -Color Yellow
-        }
-
-        Write-Status -Message ("OK Fix-Encoding completado") -Color Green
+        Invoke-FixEncodingAction -Session ([ref]$session) -ModulesPath $ModulesPath -NormalizedModules $normalizedModules -Location $Location -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -Json:$Json
     }
 } finally {
     if ($session) {

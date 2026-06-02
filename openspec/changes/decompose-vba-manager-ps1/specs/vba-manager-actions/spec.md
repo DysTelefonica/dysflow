@@ -133,14 +133,18 @@ in the result without throwing.
 ### Requirement: Run-Tests Behavior
 
 `Invoke-RunTestsAction` MUST read the procedures list from `ProceduresJsonFile`, delegate to
-`Invoke-AccessProcedureBatch`, and return the batch result. If the file is missing the action
-MUST return a failure result immediately without invoking the batch runner.
+`Invoke-AccessProcedureBatch`, and return the batch result. If `ProceduresJsonFile` is non-empty
+the action MUST attempt `Get-Content` before considering inline `ProceduresJson`; a missing file
+therefore fails through the existing file-read error path and MUST NOT silently fall back to inline
+JSON or invoke the batch runner.
 
-#### Scenario: Missing procedures file
+#### Scenario: Missing procedures file attempts file read
 
-- GIVEN `ProceduresJsonFile` does not exist
+- GIVEN `ProceduresJsonFile` is non-empty and does not exist
+- AND inline `ProceduresJson` is also provided
 - WHEN `Invoke-RunTestsAction` runs
-- THEN the action returns a failure result
+- THEN the action attempts to read `ProceduresJsonFile`
+- AND the file-read failure propagates
 - AND `Invoke-AccessProcedureBatch` is not called
 
 ---
@@ -162,10 +166,11 @@ destination path.
 
 ### Requirement: Fix-Encoding Behavior
 
-`Invoke-FixEncodingAction` MUST apply encoding conversion to source files when `-Location Src`
-is requested without requiring an open COM session. When `-Location Access` is requested it
-MUST delegate to the Access-side encoding helper. Byte content of converted files MUST be
-UTF-8 without BOM.
+`Invoke-FixEncodingAction` MUST apply the existing source encoding fix when `-Location Src`
+is requested without requiring an open COM session. The preserved source-side behavior is to
+rewrite UTF-8 BOM files as UTF-8 without BOM. ANSI-to-UTF-8 conversion remains covered by the
+existing `Convert-AnsiToUtf8NoBom` helper, not by changing `Invoke-FixEncodingAction` behavior.
+When `-Location Access` is requested it MUST delegate to the Access-side encoding helper.
 
 #### Scenario: Src-only encoding — no COM session
 
@@ -173,11 +178,17 @@ UTF-8 without BOM.
 - WHEN `Invoke-FixEncodingAction` runs
 - THEN `Fix-EncodingInSrc` is called and no COM session is opened
 
-#### Scenario: Converted file is UTF-8 NoBom
+#### Scenario: UTF-8 BOM source file is rewritten as UTF-8 NoBom
 
-- GIVEN a `.bas` fixture file encoded in ANSI
+- GIVEN a `.bas` fixture file encoded as UTF-8 with BOM
 - WHEN `Invoke-FixEncodingAction` processes it with `-Location Src`
 - THEN the output file MUST be UTF-8 without BOM
+
+#### Scenario: ANSI codec helper converts to UTF-8 NoBom
+
+- GIVEN a `.bas` fixture file encoded in Windows-1252 ANSI
+- WHEN `Convert-AnsiToUtf8NoBom` processes it
+- THEN the output file MUST match the UTF-8 NoBom fixture byte-for-byte
 
 ---
 
