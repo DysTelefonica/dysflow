@@ -927,4 +927,210 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
     }
 }
 
+# ===========================================================================
+# S5 — Behavioral tests for Invoke-CompileAction & Invoke-RunProcedureAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-CompileAction — behavioral (decompose S5)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-CompileAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-CompileAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:CompileVbaProjectCalled = $false
+        $script:CompileVbaProjectResult = $null
+
+        # Stub Invoke-CompileVbaProject
+        function script:Invoke-CompileVbaProject {
+            param($AccessApplication)
+            $script:CompileVbaProjectCalled = $true
+            return $script:CompileVbaProjectResult
+        }
+
+        $script:FakeSession = [PSCustomObject]@{
+            VbProject          = [PSCustomObject]@{ }
+            AccessApplication  = [PSCustomObject]@{ }
+        }
+    }
+
+    Context "happy path - success" {
+        It "outputs OK message on successful compilation when -Json is absent" {
+            $script:CompileVbaProjectResult = [PSCustomObject]@{ ok = $true }
+            
+            $res = Invoke-CompileAction -Session $script:FakeSession
+            $res | Should -BeNullOrEmpty
+            $script:CompileVbaProjectCalled | Should -Be $true
+            $script:StatusMessages | Should -Contain "OK compilación VBA completada"
+        }
+
+        It "returns JSON representation when -Json is present" {
+            $script:CompileVbaProjectResult = [PSCustomObject]@{ ok = $true }
+
+            $res = Invoke-CompileAction -Session $script:FakeSession -Json
+            $res | Should -Not -BeNullOrEmpty
+            $obj = $res | ConvertFrom-Json
+            $obj.ok | Should -Be $true
+        }
+    }
+
+    Context "compilation failure" {
+        It "outputs detailed red error messages and does not throw when -Json is absent" {
+            $script:CompileVbaProjectResult = [PSCustomObject]@{
+                ok = $false
+                error = "Syntax error"
+                component = "Module1"
+                line = 12
+                column = 4
+                sourceLine = "Dim x As BadType"
+            }
+
+            $res = Invoke-CompileAction -Session $script:FakeSession
+            $res | Should -BeNullOrEmpty
+            $script:StatusMessages | Should -Contain "ERROR compilación VBA: Syntax error"
+            $script:StatusMessages | Should -Contain "Componente: Module1"
+            $script:StatusMessages | Should -Contain "Línea: 12, Columna: 4"
+            $script:StatusMessages | Should -Contain "Código: Dim x As BadType"
+        }
+
+        It "returns failure details as JSON without throwing when -Json is present" {
+            $script:CompileVbaProjectResult = [PSCustomObject]@{
+                ok = $false
+                error = "Syntax error"
+            }
+
+            $res = Invoke-CompileAction -Session $script:FakeSession -Json
+            $obj = $res | ConvertFrom-Json
+            $obj.ok | Should -Be $false
+            $obj.error | Should -Be "Syntax error"
+        }
+    }
+}
+
+Describe "Invoke-RunProcedureAction — behavioral (decompose S5)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-RunProcedureAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-RunProcedureAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:AccessProcedureCalled = $false
+        $script:AccessProcedureParams = $null
+        $script:AccessProcedureResult = $null
+        $script:MockConvertedArgs = @()
+        $script:ConvertProcedureArgsJsonCalled = $false
+        $script:ConvertProcedureArgsJsonParam = $null
+
+        # Stub Convert-ProcedureArgsJson
+        function script:Convert-ProcedureArgsJson {
+            param($JsonText)
+            $script:ConvertProcedureArgsJsonCalled = $true
+            $script:ConvertProcedureArgsJsonParam = $JsonText
+            return $script:MockConvertedArgs
+        }
+
+        # Stub Invoke-AccessProcedure
+        function script:Invoke-AccessProcedure {
+            param($AccessApplication, $VbProject, $ProcedureName, $ProcedureArgs)
+            $script:AccessProcedureCalled = $true
+            $script:AccessProcedureParams = [PSCustomObject]@{
+                AccessApplication = $AccessApplication
+                VbProject = $VbProject
+                ProcedureName = $ProcedureName
+                ProcedureArgs = $ProcedureArgs
+            }
+            return $script:AccessProcedureResult
+        }
+
+        $script:FakeSession = [PSCustomObject]@{
+            VbProject          = [PSCustomObject]@{ Id = "fake-project" }
+            AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+        }
+    }
+
+    Context "argument conversion and pass-through" {
+        It "delegates to Invoke-AccessProcedure with converted arguments" {
+            $script:MockConvertedArgs = @(5, 10)
+            $script:AccessProcedureResult = [PSCustomObject]@{
+                ok = $true
+                procedure = "AddNumbers"
+                returnValue = 15
+            }
+
+            $res = Invoke-RunProcedureAction -Session $script:FakeSession -ProcedureName "AddNumbers" -ProcedureArgsJson "[5, 10]"
+            $res | Should -BeNullOrEmpty
+            $script:ConvertProcedureArgsJsonCalled | Should -Be $true
+            $script:ConvertProcedureArgsJsonParam | Should -Be "[5, 10]"
+            $script:AccessProcedureCalled | Should -Be $true
+            $script:AccessProcedureParams.ProcedureName | Should -Be "AddNumbers"
+            $script:AccessProcedureParams.ProcedureArgs.Count | Should -Be 2
+            $script:AccessProcedureParams.ProcedureArgs[0] | Should -Be 5
+            $script:AccessProcedureParams.ProcedureArgs[1] | Should -Be 10
+            $script:AccessProcedureParams.VbProject.Id | Should -Be "fake-project"
+            $script:AccessProcedureParams.AccessApplication.Id | Should -Be "fake-app"
+            $script:StatusMessages | Should -Contain "OK AddNumbers ejecutado. ReturnValue: 15"
+        }
+
+        It "surfaces failure output when procedure execution fails and -Json is absent" {
+            $script:MockConvertedArgs = @(5, 10)
+            $script:AccessProcedureResult = [PSCustomObject]@{
+                ok = $false
+                procedure = "AddNumbers"
+                error = "Overflow error"
+            }
+
+            $res = Invoke-RunProcedureAction -Session $script:FakeSession -ProcedureName "AddNumbers" -ProcedureArgsJson "[5, 10]"
+            $res | Should -BeNullOrEmpty
+            $script:StatusMessages | Should -Contain "ERROR AddNumbers: Overflow error"
+        }
+
+        It "returns JSON when -Json is requested" {
+            $script:MockConvertedArgs = @(5, 10)
+            $script:AccessProcedureResult = [PSCustomObject]@{
+                ok = $true
+                procedure = "AddNumbers"
+                returnValue = 15
+            }
+
+            $res = Invoke-RunProcedureAction -Session $script:FakeSession -ProcedureName "AddNumbers" -ProcedureArgsJson "[5, 10]" -Json
+            $res | Should -Not -BeNullOrEmpty
+            $obj = $res | ConvertFrom-Json
+            $obj.ok | Should -Be $true
+            $obj.returnValue | Should -Be 15
+        }
+    }
+}
+
+
 

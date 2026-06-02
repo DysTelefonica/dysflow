@@ -87,12 +87,12 @@ Chain strategy: stacked-to-main
 
 **Spec refs:** Run-Procedure and Compile Behavior; P6 Test-Pattern Compliance.
 
-- [ ] S5.1 **Baseline green** — confirm suite passes on PR 4 branch.
-- [ ] S5.2 **RED Pester** — add `Describe 'Invoke-CompileAction'` and `Describe 'Invoke-RunProcedureAction'`; AST-extract each; stub `Invoke-CompileVbaProject` and `Invoke-AccessProcedure` via `function script:`. Tests: (a) compile error surfaced in result without throwing, (b) Run-Procedure passes procedure name and converted args through to `Invoke-AccessProcedure` and returns its result unchanged. RED until S5.4.
-- [ ] S5.3 **RED vitest** — add wiring change-detectors for `Invoke-CompileAction` and `Invoke-RunProcedureAction`. RED until S5.4.
-- [ ] S5.4 **Extract** — add `Invoke-CompileAction -Session [-Json]` and `Invoke-RunProcedureAction -Session -ProcedureName -ProcedureArgsJson [-Json]`; replace their `elseif` arms (lines 3188–3202, 3160–3172).
-- [ ] S5.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
-- [ ] S5.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-CompileAction + Invoke-RunProcedureAction — S5`. Open PR stacked to PR 4 branch.
+- [x] S5.1 **Baseline green** — confirm suite passes on PR 4 branch.
+- [x] S5.2 **RED Pester** — add `Describe 'Invoke-CompileAction'` and `Describe 'Invoke-RunProcedureAction'`; AST-extract each; stub `Invoke-CompileVbaProject` and `Invoke-AccessProcedure` via `function script:`. Tests: (a) compile error surfaced in result without throwing, (b) Run-Procedure passes procedure name and converted args through to `Invoke-AccessProcedure` and returns its result unchanged. RED until S5.4.
+- [x] S5.3 **RED vitest** — add wiring change-detectors for `Invoke-CompileAction` and `Invoke-RunProcedureAction`. RED until S5.4.
+- [x] S5.4 **Extract** — add `Invoke-CompileAction -Session [-Json]` and `Invoke-RunProcedureAction -Session -ProcedureName -ProcedureArgsJson [-Json]`; replace their `elseif` arms (lines 3188–3202, 3160–3172).
+- [x] S5.5 **GREEN** — run `pnpm test:ps1` and `pnpm test`.
+- [x] S5.6 **Verify diff ≤ 400 lines**. Commit as `refactor(ps1): extract Invoke-CompileAction + Invoke-RunProcedureAction — S5`. PR stacked to PR 4 branch pending.
 
 ---
 
@@ -143,3 +143,10 @@ Chain strategy: stacked-to-main
 - No `script.split("\n")` body navigation in `test/scripts-vba-manager.test.ts` after the final slice.
 - Dispatcher `try/finally` block (Close-AccessDatabase, pre-dispatch Resolve-* setup) stays in the router — do NOT move it into any `Invoke-*` function.
 - RotManager C# class (`Add-Type`, lines 970–1153) is OUT of scope — do NOT touch it.
+
+## Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| `fd25418` | RED Pester/Vitest coverage for Compile + Run-Procedure | S5.2, S5.3 | TDD cycle verified locally | N/A |
+| `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |

@@ -3101,6 +3101,50 @@ function Invoke-DeleteAction {
     Write-Status -Message ("OK Delete completado ({0})" -f $NormalizedModules.Count) -Color Green
 }
 
+function Invoke-CompileAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [switch]$Json
+    )
+
+    $compileResult = Invoke-CompileVbaProject -AccessApplication $Session.AccessApplication
+    if ($Json) {
+        $compileResult | ConvertTo-Json -Depth 6
+    } else {
+        if ($compileResult.ok) {
+            Write-Status -Message "OK compilación VBA completada" -Color Green
+        } else {
+            Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error) -Color Red
+            if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
+            if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
+            if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
+        }
+    }
+}
+
+function Invoke-RunProcedureAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [Parameter(Mandatory = $true)][string]$ProcedureName,
+        [Parameter(Mandatory = $true)][string]$ProcedureArgsJson,
+        [switch]$Json
+    )
+
+    $procedureArgs = Convert-ProcedureArgsJson -JsonText $ProcedureArgsJson
+    $runResult = Invoke-AccessProcedure -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ProcedureName $ProcedureName -ProcedureArgs $procedureArgs
+    if ($Json) {
+        $runResult | ConvertTo-Json -Depth 6
+    } else {
+        if ($runResult.ok) {
+            Write-Status -Message ("OK {0} ejecutado. ReturnValue: {1}" -f $runResult.procedure, $runResult.returnValue) -Color Green
+        } else {
+            Write-Status -Message ("ERROR {0}: {1}" -f $runResult.procedure, $runResult.error) -Color Red
+        }
+    }
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -3252,18 +3296,8 @@ try {
         Invoke-ExistsAction -Session $session -ModuleName $normalizedModules[0] -Json:$Json
 
     } elseif ($Action -eq "Run-Procedure") {
-        $procedureArgs = Convert-ProcedureArgsJson -JsonText $ProcedureArgsJson
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $runResult = Invoke-AccessProcedure -AccessApplication $session.AccessApplication -VbProject $session.VbProject -ProcedureName $ProcedureName -ProcedureArgs $procedureArgs
-        if ($Json) {
-            $runResult | ConvertTo-Json -Depth 6
-        } else {
-            if ($runResult.ok) {
-                Write-Status -Message ("OK {0} ejecutado. ReturnValue: {1}" -f $runResult.procedure, $runResult.returnValue) -Color Green
-            } else {
-                Write-Status -Message ("ERROR {0}: {1}" -f $runResult.procedure, $runResult.error) -Color Red
-            }
-        }
+        Invoke-RunProcedureAction -Session $session -ProcedureName $ProcedureName -ProcedureArgsJson $ProcedureArgsJson -Json:$Json
 
     } elseif ($Action -eq "Run-Tests") {
         if (-not [string]::IsNullOrWhiteSpace($ProceduresJsonFile)) {
@@ -3281,19 +3315,7 @@ try {
 
     } elseif ($Action -eq "Compile") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $compileResult = Invoke-CompileVbaProject -AccessApplication $session.AccessApplication
-        if ($Json) {
-            $compileResult | ConvertTo-Json -Depth 6
-        } else {
-            if ($compileResult.ok) {
-                Write-Status -Message "OK compilación VBA completada" -Color Green
-            } else {
-                Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error) -Color Red
-                if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
-                if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
-                if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
-            }
-        }
+        Invoke-CompileAction -Session $session -Json:$Json
 
     } elseif ($Action -eq "Generate-ERD") {
         Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json

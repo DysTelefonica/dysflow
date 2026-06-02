@@ -44,9 +44,10 @@ se reorganiza en funciones. Cada `Invoke-*` extraído debe quedar cubierto por P
 | spec | ✅ HECHO | `specs/vba-manager-actions/spec.md` + engram #10368 | Contrato observable de las 10 acciones |
 | design | ✅ HECHO | `design.md` + engram #10370 | Tabla de firmas Invoke-*; Import devuelve result object (no flag) |
 | tasks | ✅ HECHO | `tasks.md` + engram #10371 | 49 tareas en 7 slices. Forecast: chained=Yes, S7 risk High |
-| apply | ✅ HECHO | apply-progress #10372 | Slice 4 (Delete) ✅ completado con TDD |
+| apply | ✅ Slice 5 HECHO | apply-progress #10372 | Slice 5 (Compile/Run) ✅ completado con TDD |
 | verify | ✅ Slice 4 PASS | verify-report.md #10376 | Slice 4 verificado PASS (0 CRITICAL / 0 WARNING) |
-| verify | ⏳ pendiente | verify-report.md | Slices 5-7 pendientes |
+| verify | ✅ Slice 5 PASS | verify-report.md | Slice 5 verificado PASS (0 CRITICAL / 0 WARNING) |
+| verify | ⏳ pendiente | verify-report.md | Slices 6-7 pendientes |
 | archive | ⏳ pendiente | `archive-report.md` | |
 
 Leyenda: ✅ hecho · 🔄 en curso · ⏳ pendiente · ⚠️ bloqueado
@@ -64,7 +65,7 @@ explícitos; seams I/O COM/DAO → parámetros) + Pester de comportamiento via A
 | 2 | Read-only | `Invoke-ListObjectsAction`, `Invoke-ExistsAction` | 3128-3158 | ~200 | Muy bajo | ✅ **PR #388 abierta** (stacked-to-main, base: main) |
 | 3 | ERD | `Invoke-GenerateErdAction` (DAO, sin sesión VBE) | 3204-3240 | ~200 | Bajo | ✅ **PR #390 abierta** (stacked a PR #388) |
 | 4 | Delete | `Invoke-DeleteAction` | 3099-3126 | ~200 | Bajo | ✅ **PR #392 abierta** (stacked a PR #390) |
-| 5 | Compile/Run | `Invoke-CompileAction`, `Invoke-RunProcedureAction` | 3160-3202 | ~250 | Bajo | ⏳ |
+| 5 | Compile/Run | `Invoke-CompileAction`, `Invoke-RunProcedureAction` | 3160-3202 | ~250 | Bajo | ✅ **S5 implementado en rama `refactor/decompose-vba-manager-s5-compile-run`** |
 | 6 | Tests/Encoding | `Invoke-RunTestsAction`, `Invoke-FixEncodingAction` | 3174-3258 | ~250 | Bajo-medio | ⏳ |
 | 7 | Import | `Invoke-ImportAction` (retry loop + flag `$importCreatedNewComponents`) | 3008-3097 | ~400 | Medio | ⏳ |
 
@@ -81,6 +82,8 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
 4. Continuá por la primera fase ⏳ respetando dependencias.
 5. En apply: implementá SOLO el siguiente slice autónomo (work-unit commits), PR ≤400, valida con `pnpm test:ps1` + `pnpm test`.
 6. Respetá SIEMPRE la RESTRICCIÓN DURA y el TDD estricto.
+7. Criterio final pedido por usuario: terminar con PRs/issues cerrados, todo pusheado, nueva release publicada con
+   título exactamente igual al tag/name, y E2E real pasando sin dejar zombies de MSACCESS.
 
 ## Bitácora
 
@@ -109,3 +112,11 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
 - **2026-06-02** — **Slice 4 (Delete action) completado**. Implementada `Invoke-DeleteAction` usando TDD estricto. Pruebas Pester con extracción AST, stubbing de COM/Remove action, y aserción de acumulación de errores para borrados parciales añadidas. Pruebas Vitest con wiring change-detectors añadidas. Total de líneas del diff: 178 (152+, 26-), bien por debajo del límite de 400. Todo verde localmente. Listo para verificar.
 - **2026-06-02** — **Slice 4 Verificación completada PASS**. 148 pruebas Pester and 837 pruebas Vitest pasadas con éxito. Se generó el informe de verificación y se guardó en engram y openspec. Próximo paso: abrir PR de Slice 4.
 - **2026-06-02** — **PR #392 creada** (Slice 4) vinculada al issue #391. Commits: 5923f2b (test), 42cf477 (refactor), [docs committed next]. Pushed y PR abierta stacked a `refactor/decompose-vba-manager-s3-generate-erd`.
+- **2026-06-02** — **Slice 5 (Compile + Run-Procedure) completado**. Implementadas `Invoke-CompileAction` e `Invoke-RunProcedureAction` usando TDD estricto. Commits: `fd25418` (RED Pester/Vitest) y `43d22be` (refactor). Verificación local PASS: Pester/Vitest verdes; 0 CRITICAL / 0 WARNING. Pendiente inmediato: push + PR stacked a #392, luego re-aplicar WIP S6/S7 preservado en `stash@{0}`.
+
+## Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| `fd25418` | RED tests for Compile/Run-Procedure extraction | S5.2, S5.3 | Pester/Vitest RED→GREEN cycle completed locally | N/A |
+| `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |
