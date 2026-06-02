@@ -26,6 +26,22 @@ function getFinalElseArmBody(): string {
   return match?.[1] ?? "";
 }
 
+function extractFunctionBody(source: string, name: string): string {
+  const startMatch = source.match(new RegExp(`function\\s+${escapeRegExp(name)}\\b`));
+  expect(startMatch, `function ${name}`).not.toBeNull();
+  if (!startMatch || startMatch.index === undefined) return "";
+
+  const openBrace = source.indexOf("{", startMatch.index);
+  expect(openBrace, `opening brace for ${name}`).toBeGreaterThanOrEqual(0);
+  let depth = 1;
+  for (let i = openBrace + 1; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    if (source[i] === "}") depth--;
+    if (depth === 0) return source.slice(startMatch.index, i + 1);
+  }
+  return source.slice(startMatch.index);
+}
+
 describe("dysflow-vba-manager.ps1", () => {
   it("Goal B: defines a bounded WMI helper function", () => {
     expect(script).toContain("function Get-MsAccessProcessesBounded");
@@ -39,38 +55,12 @@ describe("dysflow-vba-manager.ps1", () => {
 
   it("Goal B: Close-TargetAccessDbIfOpen delegates to the bounded helper", () => {
     // The bounded helper must be called from within the function
-    const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) => l.includes("function Close-TargetAccessDbIfOpen"));
-    const funcEnd = (() => {
-      let depth = 0;
-      for (let i = funcStart; i < lines.length; i++) {
-        for (const ch of lines[i]) {
-          if (ch === "{") depth++;
-          else if (ch === "}") depth--;
-        }
-        if (depth === 0 && i > funcStart) return i;
-      }
-      return lines.length;
-    })();
-    const funcBody = lines.slice(funcStart, funcEnd + 1).join("\n");
+    const funcBody = extractFunctionBody(script, "Close-TargetAccessDbIfOpen");
     expect(funcBody).toContain("Get-MsAccessProcessesBounded");
   });
 
   it("Goal B: Find-AccessPidByDatabase uses the bounded helper, not bare Get-CimInstance", () => {
-    const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) => l.includes("function Find-AccessPidByDatabase"));
-    const funcEnd = (() => {
-      let depth = 0;
-      for (let i = funcStart; i < lines.length; i++) {
-        for (const ch of lines[i]) {
-          if (ch === "{") depth++;
-          else if (ch === "}") depth--;
-        }
-        if (depth === 0 && i > funcStart) return i;
-      }
-      return lines.length;
-    })();
-    const funcBody = lines.slice(funcStart, funcEnd + 1).join("\n");
+    const funcBody = extractFunctionBody(script, "Find-AccessPidByDatabase");
     // Must use bounded helper
     expect(funcBody).toContain("Get-MsAccessProcessesBounded");
     // Must NOT use bare Get-CimInstance directly
@@ -140,26 +130,33 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(getFinalElseArmBody()).toContain("Invoke-FixEncodingAction");
   });
 
+  it("S7: Import arm delegates to Invoke-ImportAction and reads CreatedComponentNames", () => {
+    const importArm = getActionArmBody("Import");
+    expect(importArm).toContain("Invoke-ImportAction");
+    expect(importArm).toContain("CreatedComponentNames");
+    expect(importArm).toContain("Save-VbaProjectModules");
+  });
+
+  it("S7: Import arm saves created components before emitting final OK", () => {
+    const importArm = getActionArmBody("Import");
+    const saveIndex = importArm.indexOf("Save-VbaProjectModules");
+    const okIndex = importArm.indexOf("OK Import completado");
+
+    expect(saveIndex).toBeGreaterThanOrEqual(0);
+    expect(okIndex).toBeGreaterThanOrEqual(0);
+    expect(saveIndex).toBeLessThan(okIndex);
+    expect(extractFunctionBody(script, "Invoke-ImportAction")).not.toContain(
+      "OK Import completado",
+    );
+  });
+
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
-    const lines = script.split("\n");
-    const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));
-    const funcEnd = (() => {
-      let depth = 0;
-      for (let i = funcStart; i < lines.length; i++) {
-        for (const ch of lines[i]) {
-          if (ch === "{") depth++;
-          else if (ch === "}") depth--;
-        }
-        if (depth === 0 && i > funcStart) return i;
-      }
-      return lines.length;
-    })();
-    const funcBody = lines.slice(funcStart, funcEnd + 1).join("\n");
+    const funcBody = extractFunctionBody(script, "Write-DysflowOperationMarker");
     // Must use 3-digit ms format for the startTime (processStartTime)
     expect(funcBody).toContain('"yyyy-MM-ddTHH:mm:ss.fffZ"');
     // The startTime line specifically must NOT use round-trip format — check the assignment line
-    const startTimeLine = lines
-      .slice(funcStart, funcEnd + 1)
+    const startTimeLine = funcBody
+      .split("\n")
       .find((l) => l.includes("$startTime =") && l.includes(".ToString("));
     expect(startTimeLine).toBeDefined();
     expect(startTimeLine).not.toContain('.ToString("o")');

@@ -1301,5 +1301,181 @@ Describe "Invoke-FixEncodingAction encoding — byte-level (decompose S6)" {
     }
 }
 
+Describe "Import encoding fixture — byte-level (decompose S7)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Convert-Utf8ToAnsiTempFile' }, $true) | Select-Object -First 1
+        if (-not $fnAst) { throw "Convert-Utf8ToAnsiTempFile not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+        $script:FixturesPath = Join-Path $PSScriptRoot "fixtures"
+    }
+
+    It "converts the UTF-8 NoBOM import fixture to the expected ANSI bytes" {
+        $sandbox = Join-Path (Join-Path $PSScriptRoot "..\..\test-runtime") ("s7-import-encoding-" + [guid]::NewGuid().ToString("N"))
+        [System.IO.Directory]::CreateDirectory($sandbox) | Out-Null
+        try {
+            $source = Join-Path $script:FixturesPath "utf8nobom-expected.bas"
+            $target = Join-Path $sandbox "utf8nobom-expected.ansi.bas"
+            $expected = [System.IO.File]::ReadAllBytes((Join-Path $script:FixturesPath "ansi-sample.bas"))
+
+            Convert-Utf8ToAnsiTempFile -InputPath $source -TempPath $target
+            $actual = [System.IO.File]::ReadAllBytes($target)
+
+            $actual.Count | Should -Be $expected.Count
+            [System.Convert]::ToBase64String($actual) | Should -Be ([System.Convert]::ToBase64String($expected))
+        } finally {
+            if ([System.IO.Directory]::Exists($sandbox)) { [System.IO.Directory]::Delete($sandbox, $true) }
+        }
+    }
+}
+
+# ===========================================================================
+# S7 — Behavioral tests for Invoke-ImportAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# Critical contract: return object carries CreatedComponentNames (no
+# $script:importCreatedNewComponents flag), retry loop, per-module error
+# accumulation.
+# ===========================================================================
+
+Describe "Invoke-ImportAction — behavioral (decompose S7)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Invoke-ImportAction' }, $true) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ImportAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+        function script:Write-Host { param([string]$Object) $script:HostMessages.Add($Object) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:HostMessages = [System.Collections.Generic.List[string]]::new()
+        $script:ImportCalls = [System.Collections.Generic.List[object]]::new()
+        $script:ResolveCalls = [System.Collections.Generic.List[object]]::new()
+        $script:ImportResult = $null
+        $script:FailOn = @{}
+        $script:BeforeExists = $null
+        $script:AfterExists = $null
+        $script:BeforeExistsByModule = @{}
+        $script:AfterExistsByModule = @{}
+        $script:MockGetChildItems = @()
+
+        function script:Import-VbaModule {
+            param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication, [string]$ImportMode)
+            $script:ImportCalls.Add([pscustomobject]@{
+                VbProject = $VbProject
+                ModuleName = $ModuleName
+                ModulesPath = $ModulesPath
+                AccessApplication = $AccessApplication
+                ImportMode = $ImportMode
+            })
+            if ($script:FailOn.ContainsKey($ModuleName) -and $script:FailOn[$ModuleName].Count -gt 0) {
+                $message = $script:FailOn[$ModuleName][0]
+                $script:FailOn[$ModuleName] = @($script:FailOn[$ModuleName] | Select-Object -Skip 1)
+                throw $message
+            }
+            return $script:ImportResult
+        }
+
+        function script:Resolve-ExistingComponentName {
+            param($VbProject, [string]$ModuleName)
+            $script:ResolveCalls.Add([pscustomobject]@{ VbProject = $VbProject; ModuleName = $ModuleName })
+            $callCount = @($script:ResolveCalls | Where-Object { $_.ModuleName -eq $ModuleName }).Count
+            if ($callCount -eq 1) {
+                if ($script:BeforeExistsByModule.ContainsKey($ModuleName)) { return $script:BeforeExistsByModule[$ModuleName] }
+                return $script:BeforeExists
+            }
+            if ($script:AfterExistsByModule.ContainsKey($ModuleName)) { return $script:AfterExistsByModule[$ModuleName] }
+            return $script:AfterExists
+        }
+
+        function script:Get-ChildItem {
+            param($Path, [switch]$File, [switch]$Recurse, $Include, $ErrorAction)
+            return @($script:MockGetChildItems)
+        }
+
+        $script:FakeVbProject = [pscustomobject]@{ Id = "fake-vbproject" }
+        $script:FakeSession = [pscustomobject]@{
+            VbProject = $script:FakeVbProject
+            AccessApplication = [pscustomobject]@{ Id = "fake-app" }
+        }
+    }
+
+    It "retries a transient module failure and returns total count" {
+        $script:FailOn = @{ Module1 = @("transient") }
+        $script:BeforeExistsByModule = @{ Module1 = $null; Module2 = "Module2" }
+        $script:AfterExistsByModule = @{ Module1 = "Module1"; Module2 = "Module2" }
+        $script:ImportResult = [pscustomobject]@{ CreatedNewComponent = $true; RequiresExplicitSave = $true }
+
+        $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Module1", "Module2") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+
+        @($script:ImportCalls | Where-Object { $_.ModuleName -eq "Module1" }).Count | Should -Be 2
+        @($script:ImportCalls | Where-Object { $_.ModuleName -eq "Module2" }).Count | Should -Be 1
+        $result.Total | Should -Be 2
+    }
+
+    It "throws consolidated all-failure detail and writes per-module ##MODULE_RESULTS" {
+        $script:FailOn = @{
+            Module1 = @("first module error", "first module error", "first module error")
+            Module2 = @("second module error", "second module error", "second module error")
+        }
+
+        $thrown = $null
+        try {
+            Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Module1", "Module2") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+        } catch { $thrown = $_ }
+
+        $thrown | Should -Not -BeNullOrEmpty
+        $thrown.Exception.Message | Should -Match "no pudo completar algunos"
+        $thrown.Exception.Message | Should -Match "Module1: first module error"
+        $thrown.Exception.Message | Should -Match "Module2: second module error"
+        $script:HostMessages.Count | Should -Be 1
+        $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
+        $results = ConvertFrom-Json ($script:HostMessages[0] -replace "^##MODULE_RESULTS:", "")
+        ($results | Where-Object { $_.module -eq "Module1" }).status | Should -Be "error"
+        ($results | Where-Object { $_.module -eq "Module1" }).error | Should -Be "first module error"
+        ($results | Where-Object { $_.module -eq "Module2" }).status | Should -Be "error"
+        ($results | Where-Object { $_.module -eq "Module2" }).error | Should -Be "second module error"
+    }
+
+    It "returns an empty CreatedComponentNames list when no component is created" {
+        $script:BeforeExists = "ExistingMod"
+        $script:AfterExists = "ExistingMod"
+        $script:ImportResult = [pscustomobject]@{ CreatedNewComponent = $false; RequiresExplicitSave = $false }
+
+        $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("ExistingMod") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+
+        $result.CreatedComponentNames.Count | Should -Be 0
+        $result.Total | Should -Be 1
+    }
+
+    It "does not set script-scope importCreatedNewComponents" {
+        $script:BeforeExists = $null
+        $script:AfterExists = "BrandNew"
+        $script:ImportResult = [pscustomobject]@{ CreatedNewComponent = $true; RequiresExplicitSave = $true }
+
+        Get-Variable -Scope Script -Name importCreatedNewComponents -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+
+        $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("BrandNew") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+
+        $result.CreatedComponentNames | Should -Contain "BrandNew"
+        Get-Variable -Scope Script -Name importCreatedNewComponents -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+    }
+
+    It "returns created components without emitting the final OK status" {
+        $script:BeforeExists = $null
+        $script:AfterExists = "BrandNew"
+        $script:ImportResult = [pscustomobject]@{ CreatedNewComponent = $true; RequiresExplicitSave = $true }
+
+        $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("BrandNew") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+
+        $result.CreatedComponentNames | Should -Contain "BrandNew"
+        $script:StatusMessages | Should -Not -Contain "OK Import completado (1)"
+    }
+}
+
 
 

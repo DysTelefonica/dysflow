@@ -1,12 +1,12 @@
-# Apply Progress: decompose-vba-manager-ps1 (through Slice 6)
+# Apply Progress: decompose-vba-manager-ps1 (through Slice 7)
 
 **Change**: `decompose-vba-manager-ps1`  
 **Mode**: Strict TDD  
-**Status**: Slice 6 COMPLETE locally — commit/PR pending by instruction
+**Status**: Slice 7 corrective apply complete locally — formal verify/commit/PR pending by instruction
 
 ## Summary
 
-Cumulative apply progress through Slice 6 of the dispatcher decomposition. Slices 1-5 remain complete; Slice 6 extracted `Invoke-RunTestsAction` and `Invoke-FixEncodingAction`, then corrected verify findings while preserving observable behavior.
+Cumulative apply progress through Slice 7 of the dispatcher decomposition. Slices 1-6 remain complete; Slice 7 extracted `Invoke-ImportAction`, removed hidden `$importCreatedNewComponents` signaling, and preserved retry/module-result behavior with behavior-first Pester and Vitest wiring coverage. Corrective apply after verify FAIL restored the original save-before-final-OK observable behavior for created components.
 
 ## TDD Cycle Evidence
 
@@ -122,3 +122,53 @@ Implemented Slice 6 only. Extracted `Invoke-RunTestsAction` and `Invoke-FixEncod
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | _uncommitted_ | Extract `Invoke-RunTestsAction` + `Invoke-FixEncodingAction`; corrective verify fixes | S6.1-S6.8 | `pnpm test:ps1` PASS; `pnpm test` PASS; corrective targeted Pester/Vitest PASS; final full Pester/Vitest PASS | N/A |
+
+---
+
+## Slice 7 Update — Import
+
+Implemented Slice 7 only after PR #396 was merged to `main`. Extracted `Invoke-ImportAction` into an explicit-parameter function and replaced the Import dispatcher arm with delegated routing. Corrective apply after verify FAIL restored observable order: retry/pending handling and `##MODULE_RESULTS` stay inside the action, but the final `OK Import completado` status is emitted by the router only after `Save-VbaProjectModules` succeeds for newly created components. Hidden script-scope signaling remains removed: the action returns `CreatedComponentNames`, and the router calls `Save-VbaProjectModules` when that returned list is non-empty.
+
+### S7 TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| S7.1 | N/A | Unit/Integration | ✅ `pnpm test:ps1` 155/0/4; `pnpm test` 841/0/3 | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| S7.2 | `scripts/tests/dysflow-vba-manager.Tests.ps1` | Byte/unit | ✅ Baseline green | ✅ Import encoding fixture check added before production extraction | ✅ PASS | ✅ UTF-8 NoBOM → ANSI byte equality | ✅ Reused S6 fixtures |
+| S7.3 | `scripts/tests/dysflow-vba-manager.Tests.ps1` | Unit | ✅ Baseline green | ✅ RED: `Invoke-ImportAction not found` | ✅ PASS | ✅ Retry, all-failure, created signal, no script flag | ✅ Stub seams only at I/O helpers |
+| S7.4 | `test/scripts-vba-manager.test.ts` | Wiring | ✅ Baseline green | ✅ RED: Import arm did not contain `Invoke-ImportAction` | ✅ targeted Vitest PASS 15/0 | ✅ Delegation + `CreatedComponentNames` + save call | ✅ Removed final `script.split("\n")` body navigation |
+| S7.5-S7.7 | `scripts/dysflow-vba-manager.ps1` + tests | Refactor/verification | ✅ Baseline green | ✅ Tests first | ✅ `pnpm test:ps1` 160/0/4; `pnpm test` 842/0/3 | ✅ Retry and signal paths | ✅ Explicit params; no hidden script-scope state |
+| S7 corrective | `scripts/tests/dysflow-vba-manager.Tests.ps1`, `test/scripts-vba-manager.test.ts` | Unit/wiring | ✅ Verify FAIL identified false OK drift | ✅ Pester/Vitest failed with OK-before-save drift | ✅ targeted Pester 161/0/4; targeted Vitest 16/0; full suites PASS | ✅ created-component + save-before-OK path | ✅ OK status moved to router after save |
+| S7.8 | Git diff | Budget | ✅ Checked | ➖ N/A | ✅ Focused diff; size exception applies | ➖ N/A | ⏳ Commit/PR intentionally pending |
+
+### S7 Files Changed
+
+- `scripts/dysflow-vba-manager.ps1` — Added `Invoke-ImportAction`; Import arm delegates, uses returned `CreatedComponentNames`, saves created components before final OK, and removed `$importCreatedNewComponents`.
+- `scripts/tests/dysflow-vba-manager.Tests.ps1` — Added S7 behavior-first Import tests, byte-level Import encoding fixture check, and regression coverage that `Invoke-ImportAction` returns created components without emitting the final OK itself.
+- `test/scripts-vba-manager.test.ts` — Added S7 wiring/order detector (save before final OK) and removed remaining `script.split("\n")` body-navigation helpers.
+- `openspec/changes/decompose-vba-manager-ps1/tasks.md`, `HANDOFF.md`, `apply-progress.md` — Updated S7 completion and trace placeholders.
+
+### S7 Verification
+
+| Command | Result |
+|---|---|
+| `pnpm test:ps1 && pnpm test` (baseline) | PASS — Pester 155 passed / 0 failed / 4 skipped; Vitest 841 passed / 0 failed / 3 skipped |
+| `pnpm test:ps1` (RED) | FAIL as expected — `Invoke-ImportAction not found` |
+| `pnpm vitest run test/scripts-vba-manager.test.ts` (RED) | FAIL as expected — Import arm lacked `Invoke-ImportAction` |
+| `pnpm test:ps1` (GREEN) | PASS — 160 passed / 0 failed / 4 skipped |
+| `pnpm vitest run test/scripts-vba-manager.test.ts` (GREEN) | PASS — 15 passed / 0 failed |
+| `pnpm test` (final) | PASS — 842 passed / 0 failed / 3 skipped |
+| `git diff --check` | PASS — no whitespace errors; LF→CRLF warnings only |
+| `pnpm test:ps1` (corrective RED) | FAIL as expected — false OK regression reproduced (`OK Import completado (1)` emitted by action) |
+| `pnpm vitest run test/scripts-vba-manager.test.ts` (corrective RED) | FAIL as expected — Import arm lacked final OK after save |
+| `pnpm test:ps1` (corrective GREEN) | PASS — 161 passed / 0 failed / 4 skipped |
+| `pnpm vitest run test/scripts-vba-manager.test.ts` (corrective GREEN) | PASS — 16 passed / 0 failed |
+| `pnpm test:ps1` (required final) | PASS — 161 passed / 0 failed / 4 skipped |
+| `pnpm test` (required final) | PASS — 843 passed / 0 failed / 3 skipped |
+| `git diff --check` (required final) | PASS — no whitespace errors; LF→CRLF warnings only |
+
+### S7 Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| _uncommitted_ | Extract `Invoke-ImportAction`; final wiring cleanup; corrective save-before-OK fix | S7.1-S7.8 + corrective verify FAIL fix | Baseline Pester/Vitest PASS; RED Pester/Vitest confirmed; corrective RED reproduced; targeted GREEN `pnpm test:ps1` PASS (161/0/4) and Vitest PASS (16/0); required final `pnpm test:ps1`, `pnpm test`, and `git diff --check` PASS; formal SDD verify still pending | N/A |
