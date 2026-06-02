@@ -19,7 +19,9 @@ function getActionArmBody(action: string): string {
 }
 
 function getFinalElseArmBody(): string {
-  const match = script.match(/\n\s*\} else \{([\s\S]*?Invoke-FixEncodingAction[\s\S]*?)\n\s*\}\s*finally \{/);
+  const match = script.match(
+    /\n\s*\} else \{([\s\S]*?Invoke-FixEncodingAction[\s\S]*?)\n\s*\}\s*finally \{/,
+  );
   expect(match, "dispatcher final else arm before finally").not.toBeNull();
   return match?.[1] ?? "";
 }
