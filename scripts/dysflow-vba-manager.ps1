@@ -3014,6 +3014,54 @@ function Invoke-ExistsAction {
     }
 }
 
+function Invoke-GenerateErdAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $false)][string]$BackendPath,
+        [Parameter(Mandatory = $true)][string]$DestinationRoot,
+        [Parameter(Mandatory = $false)][string]$ErdPath,
+        [Parameter(Mandatory = $false)][string]$Password,
+        [switch]$Json
+    )
+
+    if ([string]::IsNullOrWhiteSpace($BackendPath)) {
+        $candidates = Get-ChildItem -Path (Get-Location) -File -Filter "*_Datos.accdb" -ErrorAction SilentlyContinue
+        if (-not $candidates) {
+            $candidates = Get-ChildItem -Path (Get-Location) -File -Filter "*_Datos.mdb" -ErrorAction SilentlyContinue
+        }
+
+        if ($candidates) {
+            if ($candidates.Count -gt 1) {
+                Write-Status -Message "ADVERTENCIA: Multiples backends encontrados, usando el primero: $($candidates[0].Name)" -Color Yellow
+            }
+            $BackendPath = $candidates[0].FullName
+        } else {
+            throw "No se especifico -BackendPath y no se encontro ningun archivo *_Datos.accdb/.mdb en el directorio actual."
+        }
+    }
+
+    $BackendPath = (Resolve-Path -Path $BackendPath).Path
+    Write-Status -Message ("Backend: {0}" -f $BackendPath) -Color Yellow
+
+    if ([string]::IsNullOrWhiteSpace($ErdPath)) {
+        $parent = Split-Path -Parent $DestinationRoot
+        $ErdPath = Join-Path -Path $parent -ChildPath "ERD"
+    }
+
+    if (-not (Test-Path -Path $ErdPath)) {
+        New-Item -ItemType Directory -Force -Path $ErdPath | Out-Null
+    }
+    $ErdPath = (Resolve-Path -Path $ErdPath).Path
+    Write-Status -Message ("ERD Folder: {0}" -f $ErdPath) -Color Yellow
+
+    $backendName = [System.IO.Path]::GetFileNameWithoutExtension($BackendPath)
+    $mdFile = Join-Path -Path $ErdPath -ChildPath ($backendName + ".md")
+
+    Export-DataStructure -DatabasePath $BackendPath -OutputPath $mdFile -Password $Password
+
+    Write-Status -Message ("OK ERD generado en: {0}" -f $mdFile) -Color Green
+}
+
 $session = $null
 $importCreatedNewComponents = $false
 
@@ -3234,42 +3282,7 @@ try {
         }
 
     } elseif ($Action -eq "Generate-ERD") {
-        if ([string]::IsNullOrWhiteSpace($BackendPath)) {
-            $candidates = Get-ChildItem -Path (Get-Location) -File -Filter "*_Datos.accdb" -ErrorAction SilentlyContinue
-            if (-not $candidates) {
-                $candidates = Get-ChildItem -Path (Get-Location) -File -Filter "*_Datos.mdb" -ErrorAction SilentlyContinue
-            }
-
-            if ($candidates) {
-                if ($candidates.Count -gt 1) {
-                    Write-Status -Message "ADVERTENCIA: Multiples backends encontrados, usando el primero: $($candidates[0].Name)" -Color Yellow
-                }
-                $BackendPath = $candidates[0].FullName
-            } else {
-                throw "No se especifico -BackendPath y no se encontro ningun archivo *_Datos.accdb/.mdb en el directorio actual."
-            }
-        }
-
-        $BackendPath = (Resolve-Path -Path $BackendPath).Path
-        Write-Status -Message ("Backend: {0}" -f $BackendPath) -Color Yellow
-
-        if ([string]::IsNullOrWhiteSpace($ErdPath)) {
-            $parent = Split-Path -Parent $DestinationRoot
-            $ErdPath = Join-Path -Path $parent -ChildPath "ERD"
-        }
-
-        if (-not (Test-Path -Path $ErdPath)) {
-            New-Item -ItemType Directory -Force -Path $ErdPath | Out-Null
-        }
-        $ErdPath = (Resolve-Path -Path $ErdPath).Path
-        Write-Status -Message ("ERD Folder: {0}" -f $ErdPath) -Color Yellow
-
-        $backendName = [System.IO.Path]::GetFileNameWithoutExtension($BackendPath)
-        $mdFile = Join-Path -Path $ErdPath -ChildPath ($backendName + ".md")
-
-        Export-DataStructure -DatabasePath $BackendPath -OutputPath $mdFile -Password $Password
-
-        Write-Status -Message ("OK ERD generado en: {0}" -f $mdFile) -Color Green
+        Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json
 
     } else {
         $fixedSrc = 0

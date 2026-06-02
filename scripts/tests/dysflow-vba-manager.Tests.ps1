@@ -700,3 +700,123 @@ Describe "Invoke-ExistsAction — behavioral (decompose S2)" {
         }
     }
 }
+
+# ===========================================================================
+# S3 — Behavioral tests for Invoke-GenerateErdAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-GenerateErdAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-GenerateErdAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:ComOpened = $false
+        $script:ExportDataStructureCalled = $false
+        $script:ExportDataStructureParams = $null
+        $script:MockGetChildItemFiles = @()
+        $script:MockPathExists = $true
+
+        # Stub Open-AccessDatabase to trace if called
+        function script:Open-AccessDatabase {
+            param($AccessPath, $Password, $AllowStartupExecution)
+            $script:ComOpened = $true
+            return [PSCustomObject]@{
+                VbProject = [PSCustomObject]@{ }
+                AccessApplication = [PSCustomObject]@{ }
+            }
+        }
+
+        # Stub Export-DataStructure
+        function script:Export-DataStructure {
+            param($DatabasePath, $OutputPath, $Password)
+            $script:ExportDataStructureCalled = $true
+            $script:ExportDataStructureParams = [PSCustomObject]@{
+                DatabasePath = $DatabasePath
+                OutputPath = $OutputPath
+                Password = $Password
+            }
+        }
+
+        # Stub Resolve-Path to return the input path as-is to avoid depending on real files
+        function script:Resolve-Path {
+            param($Path)
+            return [PSCustomObject]@{ Path = $Path }
+        }
+
+        # Stub Test-Path
+        function script:Test-Path {
+            param($Path)
+            return $script:MockPathExists
+        }
+
+        # Stub New-Item
+        function script:New-Item {
+            param($ItemType, [switch]$Force, $Path)
+            return $null
+        }
+
+        # Stub Get-ChildItem to return mock candidates
+        function script:Get-ChildItem {
+            param($Path, [switch]$File, $Filter, $ErrorAction)
+            return $script:MockGetChildItemFiles
+        }
+    }
+
+    Context "no COM session opened & parameters passed" {
+        It "does not open an Access database and passes parameters to Export-DataStructure" {
+            Invoke-GenerateErdAction -BackendPath "C:\mock\backend.accdb" -DestinationRoot "C:\mock\dest" -ErdPath "C:\mock\erd" -Password "secret"
+            
+            $script:ComOpened | Should -Be $false
+            $script:ExportDataStructureCalled | Should -Be $true
+            $script:ExportDataStructureParams.DatabasePath | Should -Be "C:\mock\backend.accdb"
+            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd\backend.md"
+            $script:ExportDataStructureParams.Password | Should -Be "secret"
+            $script:StatusMessages | Should -Contain "OK ERD generado en: C:\mock\erd\backend.md"
+        }
+    }
+
+    Context "implicit resolving and triangulation" {
+        It "resolves missing BackendPath using current directory candidates and creates ERD directory if missing" {
+            $script:MockPathExists = $false  # force ERD folder creation
+            $script:MockGetChildItemFiles = @(
+                [PSCustomObject]@{
+                    Name = "TestDB_Datos.accdb"
+                    FullName = "C:\mock\current\TestDB_Datos.accdb"
+                }
+            )
+
+            Invoke-GenerateErdAction -BackendPath $null -DestinationRoot "C:\mock\dest" -ErdPath "C:\mock\erd" -Password $null
+            
+            $script:ComOpened | Should -Be $false
+            $script:ExportDataStructureCalled | Should -Be $true
+            $script:ExportDataStructureParams.DatabasePath | Should -Be "C:\mock\current\TestDB_Datos.accdb"
+            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd\TestDB_Datos.md"
+            $script:ExportDataStructureParams.Password | Should -BeNullOrEmpty
+        }
+
+        It "throws exception if no backend is specified and no candidate exists" {
+            $script:MockGetChildItemFiles = @()
+
+            { Invoke-GenerateErdAction -BackendPath $null -DestinationRoot "C:\mock\dest" -ErdPath "C:\mock\erd" } | Should -Throw
+        }
+    }
+}
+

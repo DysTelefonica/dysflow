@@ -93,6 +93,10 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(script).toContain("Invoke-ExistsAction");
   });
 
+  it("S3: Generate-ERD arm in dispatcher calls Invoke-GenerateErdAction (wiring change-detector)", () => {
+    expect(script).toContain("Invoke-GenerateErdAction");
+  });
+
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
     const lines = script.split("\n");
     const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));

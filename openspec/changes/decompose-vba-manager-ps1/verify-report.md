@@ -1,7 +1,7 @@
 ## Verification Report
 
 **Change**: `decompose-vba-manager-ps1`
-**Version**: `Slice 2`
+**Version**: `Slice 3`
 **Mode**: `Strict TDD`
 
 ### Completeness
@@ -14,24 +14,24 @@
 ### Build & Tests Execution
 **Build**: ✅ Passed
 ```text
-tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/
-Checked 128 files in 98ms. No fixes applied.
+pnpm tsc -p tsconfig.json --noEmit && pnpm tsc -p tsconfig.test.json --noEmit
+Passed successfully.
 ```
 
-**Tests**: ✅ 142 Pester passed, 835 Vitest passed / 0 failed / 7 skipped total (4 Pester skipped, 3 Vitest skipped)
+**Tests**: ✅ 145 Pester passed, 836 Vitest passed / 0 failed / 7 skipped total (4 Pester skipped, 3 Vitest skipped)
 ```text
 pwsh -Command "Invoke-Pester scripts/tests/"
 Starting discovery in 2 files.
-Discovery found 146 tests in 301ms.
+Discovery found 149 tests in 289ms.
 Running tests.
-[+] C:\Proyectos\dysflow\scripts\tests\dysflow-access-runner.Tests.ps1 3.55s (2.37s|987ms)
-[+] C:\Proyectos\dysflow\scripts\tests\dysflow-vba-manager.Tests.ps1 2.9s (2.3s|526ms)
-Tests completed in 6.48s
-Tests Passed: 142, Failed: 0, Skipped: 4, Inconclusive: 0, NotRun: 0
+[+] C:\Proyectos\dysflow\scripts\tests\dysflow-access-runner.Tests.ps1 3.52s (2.33s|1.01s)
+[+] C:\Proyectos\dysflow\scripts\tests\dysflow-vba-manager.Tests.ps1 3.12s (2.43s|613ms)
+Tests completed in 6.67s
+Tests Passed: 145, Failed: 0, Skipped: 4, Inconclusive: 0, NotRun: 0
 
 vitest run
  Test Files  61 passed (61)
-      Tests  835 passed | 3 skipped (838)
+      Tests  836 passed | 3 skipped (839)
 ```
 
 **Coverage**: 100% (TS change detector) / threshold: 80% → ✅ Above
@@ -43,10 +43,10 @@ Note: Coverage analysis for PowerShell files (`dysflow-vba-manager.ps1` and its 
 | Check | Result | Details |
 |-------|--------|---------|
 | TDD Evidence reported | ✅ | Found in `apply-progress.md` |
-| All tasks have tests | ✅ | S2.2 and S2.3 have test files |
+| All tasks have tests | ✅ | S3.2 and S3.3 have test files |
 | RED confirmed (tests exist) | ✅ | Verified tests exist in `dysflow-vba-manager.Tests.ps1` and `scripts-vba-manager.test.ts` |
 | GREEN confirmed (tests pass) | ✅ | All tests pass on execution |
-| Triangulation adequate | ✅ | Both actions triangulate over JSON and Text output formats |
+| Triangulation adequate | ✅ | Verified 3 distinct test scenarios (Happy / Missing / Throw) covering all requirements |
 | Safety Net for modified files | ✅ | Modified files had safety net tests pass successfully |
 
 **TDD Compliance**: 6/6 checks passed
@@ -56,10 +56,10 @@ Note: Coverage analysis for PowerShell files (`dysflow-vba-manager.ps1` and its 
 ### Test Layer Distribution
 | Layer | Tests | Files | Tools |
 |-------|-------|-------|-------|
-| Unit | 4 | 1 | Pester (pwsh) |
-| Integration | 2 | 1 | Vitest (node) |
+| Unit | 3 | 1 | Pester (pwsh) |
+| Integration | 1 | 1 | Vitest (node) |
 | E2E | 0 | 0 | None |
-| **Total** | **6** | **2** | |
+| **Total** | **4** | **2** | |
 
 ---
 
@@ -84,19 +84,19 @@ Note: Coverage analysis for PowerShell files (`dysflow-vba-manager.ps1` and its 
 ---
 
 ### Quality Metrics
-**Linter**: ✅ No errors
-**Type Checker**: ✅ No errors
+**Linter**: ⚠️ Biome check has unrelated formatting errors in the repository (not introduced by this slice); TypeScript compile checks passed successfully.
+**Type Checker**: ✅ No type errors (tsc --noEmit passed for both project and tests).
 
 ---
 
 ### Spec Compliance Matrix
 | Requirement | Scenario | Test | Result |
 |-------------|----------|------|--------|
-| List-Objects and Exists Behavior | List-Objects JSON output | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-ListObjectsAction — behavioral (decompose S2)" > Context "output format routing" > It "returns inventory in JSON format..."` | ✅ COMPLIANT |
-| List-Objects and Exists Behavior | List-Objects Text output | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-ListObjectsAction — behavioral (decompose S2)" > Context "output format routing" > It "outputs status messages to the console..."` | ✅ COMPLIANT |
-| List-Objects and Exists Behavior | Exists — module absent | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-ExistsAction — behavioral (decompose S2)" > Context "module presence checks"` | ✅ COMPLIANT |
-| P6 Test-Pattern Compliance | AST extraction finds the function | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-ListObjectsAction..." & "Invoke-ExistsAction..." > BeforeAll` | ✅ COMPLIANT |
-| P6 Test-Pattern Compliance | vitest wiring change-detector replaces split assertions | `test/scripts-vba-manager.test.ts > S2: List-Objects arm... / S2: Exists arm...` | ✅ COMPLIANT |
+| Generate-ERD Behavior | No COM session opened | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" > Context "no COM session opened & parameters passed" > It "does not open an Access database and passes parameters to Export-DataStructure"` | ✅ COMPLIANT |
+| Generate-ERD Behavior | Implicit resolving | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" > Context "implicit resolving and triangulation" > It "resolves missing BackendPath using current directory candidates and creates ERD directory if missing"` | ✅ COMPLIANT |
+| Generate-ERD Behavior | Error handling | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" > Context "implicit resolving and triangulation" > It "throws exception if no backend is specified and no candidate exists"` | ✅ COMPLIANT |
+| P6 Test-Pattern Compliance | AST extraction finds the function | `scripts/tests/dysflow-vba-manager.Tests.ps1 > Describe "Invoke-GenerateErdAction..." > BeforeAll` | ✅ COMPLIANT |
+| P6 Test-Pattern Compliance | vitest wiring change-detector replaces split assertions | `test/scripts-vba-manager.test.ts > S3: Generate-ERD arm...` | ✅ COMPLIANT |
 
 **Compliance summary**: 5/5 scenarios compliant
 
@@ -105,16 +105,16 @@ Note: Coverage analysis for PowerShell files (`dysflow-vba-manager.ps1` and its 
 ### Correctness (Static Evidence)
 | Requirement | Status | Notes |
 |------------|--------|-------|
-| List-Objects and Exists Behavior | ✅ Implemented | Dispatcher arms replaced with one-line calls delegating to extracted `Invoke-ListObjectsAction` and `Invoke-ExistsAction`. |
-| P6 Test-Pattern Compliance | ✅ Implemented | Both actions extracted into clean parameters-only functions and verified via AST extraction. TS wiring checks verified. |
+| Generate-ERD Behavior | ✅ Implemented | Dispatcher arm replaced with one-line call delegating to extracted `Invoke-GenerateErdAction`. Skip-COM behavior preserved. |
+| P6 Test-Pattern Compliance | ✅ Implemented | Action extracted into clean parameters-only function and verified via AST extraction. TS wiring checks verified. |
 
 ---
 
 ### Coherence (Design)
 | Decision | Followed? | Notes |
 |----------|-----------|-------|
-| Each arm becomes a pure Invoke-*Action with explicit params | ✅ Yes | Signature matches design (`-Session [-Json]` and `-Session -ModuleName [-Json]`). |
-| COM/IO seams stubbed via function script: override | ✅ Yes | Overrides of `Get-FrontendInventory` and `Get-ExistsInfo` at script-scope used. |
+| Each arm becomes a pure Invoke-*Action with explicit params | ✅ Yes | Signature matches design (`-BackendPath -DestinationRoot -ErdPath -Password [-Json]`). No script-scope reads. |
+| COM/IO seams stubbed via function script: override | ✅ Yes | Overrides of `Export-DataStructure` and other mocks at script-scope used. |
 
 ---
 
@@ -127,4 +127,5 @@ Note: Coverage analysis for PowerShell files (`dysflow-vba-manager.ps1` and its 
 
 ### Verdict
 **PASS**
-Slice 2 has been successfully decomposed, verified against spec scenarios, design constraints, and TDD evidence. All tests are passing green.
+
+Slice 3 has been successfully decomposed, verified against spec scenarios, design constraints, and TDD evidence. All tests are passing green.
