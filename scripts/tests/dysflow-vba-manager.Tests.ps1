@@ -567,3 +567,136 @@ Describe "Invoke-ExportAction — behavioral (decompose S1)" {
         }
     }
 }
+
+# ===========================================================================
+# S2 — Behavioral tests for Invoke-ListObjectsAction & Invoke-ExistsAction
+# Extract via AST from the production source, stub I/O seams, assert behavior.
+# ===========================================================================
+
+Describe "Invoke-ListObjectsAction — behavioral (decompose S2)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ListObjectsAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ListObjectsAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        
+        $script:FakeInventory = [PSCustomObject]@{
+            forms           = @("Form_A")
+            reports         = @("Report_B")
+            modules         = @("Module_C")
+            classes         = @("Class_D")
+            documentModules = @("ThisWorkbook")
+        }
+
+        function script:Get-FrontendInventory {
+            param($AccessApplication, $VbProject)
+            return $script:FakeInventory
+        }
+
+        $script:FakeSession = [PSCustomObject]@{
+            VbProject          = [PSCustomObject]@{ }
+            AccessApplication  = [PSCustomObject]@{ }
+        }
+    }
+
+    Context "output format routing" {
+        It "returns inventory in JSON format when -Json switch is present" {
+            $result = Invoke-ListObjectsAction -Session $script:FakeSession -Json
+            $resultObject = $result | ConvertFrom-Json
+            $resultObject.forms[0] | Should -Be "Form_A"
+            $resultObject.reports[0] | Should -Be "Report_B"
+            $resultObject.modules[0] | Should -Be "Module_C"
+            $resultObject.classes[0] | Should -Be "Class_D"
+            $resultObject.documentModules[0] | Should -Be "ThisWorkbook"
+        }
+
+        It "outputs status messages to the console (using Write-Status) when -Json switch is not present" {
+            $result = Invoke-ListObjectsAction -Session $script:FakeSession
+            $result | Should -BeNullOrEmpty
+            $script:StatusMessages | Should -Contain "Forms: Form_A"
+            $script:StatusMessages | Should -Contain "Reports: Report_B"
+            $script:StatusMessages | Should -Contain "Modules: Module_C"
+            $script:StatusMessages | Should -Contain "Classes: Class_D"
+            $script:StatusMessages | Should -Contain "DocumentModules: ThisWorkbook"
+        }
+    }
+}
+
+Describe "Invoke-ExistsAction — behavioral (decompose S2)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ExistsAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ExistsAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Stub Write-Status
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+
+        $script:FakeExistsInfo = [PSCustomObject]@{
+            moduleName          = "MyModule"
+            accessObjectExists  = $false
+            accessObjectKind    = "None"
+            accessObjectName    = $null
+            vbComponentExists   = $false
+            vbComponentName     = $null
+            isDocumentModule    = $false
+            suggestedImportMode = "import"
+        }
+
+        function script:Get-ExistsInfo {
+            param($AccessApplication, $VbProject, $ModuleName)
+            return $script:FakeExistsInfo
+        }
+
+        $script:FakeSession = [PSCustomObject]@{
+            VbProject          = [PSCustomObject]@{ }
+            AccessApplication  = [PSCustomObject]@{ }
+        }
+    }
+
+    Context "module presence checks" {
+        It "returns JSON when -Json switch is present" {
+            $result = Invoke-ExistsAction -Session $script:FakeSession -ModuleName "MyModule" -Json
+            $resultObject = $result | ConvertFrom-Json
+            $resultObject.moduleName | Should -Be "MyModule"
+            $resultObject.vbComponentExists | Should -Be $false
+        }
+
+        It "outputs status messages to the console when -Json switch is not present" {
+            $result = Invoke-ExistsAction -Session $script:FakeSession -ModuleName "MyModule"
+            $result | Should -BeNullOrEmpty
+            $script:StatusMessages | Should -Contain "moduleName: MyModule"
+            $script:StatusMessages | Should -Contain "accessObjectExists: False"
+            $script:StatusMessages | Should -Contain "vbComponentExists: False"
+        }
+    }
+}
