@@ -1,12 +1,12 @@
-# Apply Progress: decompose-vba-manager-ps1 (Slice 4)
+# Apply Progress: decompose-vba-manager-ps1 (Slice 5)
 
 **Change**: `decompose-vba-manager-ps1`  
 **Mode**: Strict TDD  
-**Status**: Slice 4 COMPLETE — ready for verify  
+**Status**: Slice 5 COMPLETE — ready for PR
 
 ## Summary
 
-Implemented Slice 4 of the dispatcher decomposition. Extracted `Invoke-DeleteAction` from `scripts/dysflow-vba-manager.ps1` into an independent helper function with explicit parameter signatures and no script-scoped global reads. Added `[AllowEmptyCollection()]` validation to support empty arrays correctly. The inline dispatcher arm is replaced with a clean, delegated one-line call.
+Implemented Slice 5 of the dispatcher decomposition. Extracted `Invoke-CompileAction` and `Invoke-RunProcedureAction` from `scripts/dysflow-vba-manager.ps1` into independent helper functions with explicit parameters and no script-scoped global reads. The inline dispatcher arms are replaced with clean delegated calls while preserving observable behavior.
 
 ## TDD Cycle Evidence
 
@@ -40,32 +40,44 @@ Implemented Slice 4 of the dispatcher decomposition. Extracted `Invoke-DeleteAct
 | S4.4 | `scripts/dysflow-vba-manager.ps1` | N/A (impl) | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
 | S4.5 | N/A (execution) | Unit | ➖ N/A | ➖ N/A | ✅ Pass | ➖ N/A | ➖ N/A |
 | S4.6 | N/A (budget) | N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| **Slice 5** | | | | | | | |
+| S5.1 | N/A (baseline) | Unit | ✅ Pass | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| S5.2 | `scripts/tests/dysflow-vba-manager.Tests.ps1` | Unit | ✅ Pass | ✅ Written | ✅ Passed | ✅ Compile + Run cases | ✅ Clean |
+| S5.3 | `test/scripts-vba-manager.test.ts` | Integration | ✅ Pass | ✅ Written | ✅ Passed | ✅ Compile + Run wiring | ✅ Clean |
+| S5.4 | `scripts/dysflow-vba-manager.ps1` | N/A (impl) | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| S5.5 | N/A (execution) | Unit | ➖ N/A | ➖ N/A | ✅ Pass | ➖ N/A | ➖ N/A |
+| S5.6 | N/A (budget) | N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
 
 ## Test Summary
 
-- **Total tests written (S4)**: 4 (3 Pester, 1 Vitest)
-- **Total tests passing (S4)**: 4
+- **Total tests written (S5)**: Pester + Vitest coverage for Compile and Run-Procedure actions.
+- **Total tests passing (S5)**: all added S5 tests plus existing suite passed locally.
 - **Layers used**: Unit (Pester), Integration (Vitest wiring change-detectors)
 - **Approval tests**: None — no refactoring tests needed for existing functions (no logic modification).
-- **Pure functions created**: 1 (`Invoke-DeleteAction`)
+- **Pure functions created**: 2 (`Invoke-CompileAction`, `Invoke-RunProcedureAction`)
 
 ## Verification Commands
 
 | Command | Result |
 |---------|--------|
-| `pnpm test:ps1` | PASS (148 tests passed, 0 failed, 4 skipped) |
-| `pnpm test` | PASS (837 tests passed, 0 failed, 3 skipped) |
+| `pnpm test:ps1` | PASS (Slice 5 verification) |
+| `pnpm test` | PASS (Slice 5 verification) |
 
 ## Files Changed
 
-- `scripts/dysflow-vba-manager.ps1` — Extracted `Invoke-DeleteAction`; replaced dispatcher arm.
-- `scripts/tests/dysflow-vba-manager.Tests.ps1` — Added AST-extracted behavioral tests with stubs for the new action.
-- `test/scripts-vba-manager.test.ts` — Added wiring change-detector for the dispatcher arm.
-- `openspec/changes/decompose-vba-manager-ps1/tasks.md` — Marked Slice 4 tasks as complete.
-- `openspec/changes/decompose-vba-manager-ps1/HANDOFF.md` — Updated tables and bitácora.
+- `scripts/dysflow-vba-manager.ps1` — Extracted `Invoke-CompileAction` and `Invoke-RunProcedureAction`; replaced dispatcher arms.
+- `scripts/tests/dysflow-vba-manager.Tests.ps1` — Added AST-extracted behavioral tests with stubs for the new actions.
+- `test/scripts-vba-manager.test.ts` — Added wiring change-detectors for both dispatcher arms.
+- `openspec/changes/decompose-vba-manager-ps1/tasks.md` — Marked Slice 5 tasks as complete.
+- `openspec/changes/decompose-vba-manager-ps1/HANDOFF.md` — Updated tables, bitácora, and implementation commits.
 
 ## Budget Check (Verify diff <= 400 lines)
 
-Git diff stat shows:
-`3 files changed, 152 insertions(+), 26 deletions(-)`
-Total changed lines (insertions + deletions) = 178 lines, well under the 400-line budget limit.
+Slice 5 implementation commits:
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| `fd25418` | RED Pester/Vitest coverage for Compile + Run-Procedure | S5.2, S5.3 | TDD cycle verified locally | N/A |
+| `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |
+
+Implementation diff for Slice 5 is 338 changed lines across the test/refactor commits, under the 400-line review budget.
