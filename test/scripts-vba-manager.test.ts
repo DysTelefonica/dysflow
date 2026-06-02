@@ -85,6 +85,14 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(script).toContain("Invoke-ExportAction");
   });
 
+  it("S2: List-Objects arm in dispatcher calls Invoke-ListObjectsAction (wiring change-detector)", () => {
+    expect(script).toContain("Invoke-ListObjectsAction");
+  });
+
+  it("S2: Exists arm in dispatcher calls Invoke-ExistsAction (wiring change-detector)", () => {
+    expect(script).toContain("Invoke-ExistsAction");
+  });
+
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
     const lines = script.split("\n");
     const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));
