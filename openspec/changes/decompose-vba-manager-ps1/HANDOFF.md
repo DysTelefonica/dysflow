@@ -44,9 +44,9 @@ se reorganiza en funciones. Cada `Invoke-*` extraído debe quedar cubierto por P
 | spec | ✅ HECHO | `specs/vba-manager-actions/spec.md` + engram #10368 | Contrato observable de las 10 acciones |
 | design | ✅ HECHO | `design.md` + engram #10370 | Tabla de firmas Invoke-*; Import devuelve result object (no flag) |
 | tasks | ✅ HECHO | `tasks.md` + engram #10371 | 49 tareas en 7 slices. Forecast: chained=Yes, S7 risk High |
-| apply | ✅ HECHO | `apply-progress` #10372 | Slice 3 (Generate-ERD) ✅ completado con TDD |
-| verify | ✅ Slice 3 PASS | `verify-report.md` #10376 | Slice 3 verificado PASS (0 CRITICAL / 0 WARNING) |
-| verify | ⏳ pendiente | `verify-report.md` | Slices 4-7 pendientes |
+| apply | ✅ HECHO | apply-progress #10372 | Slice 4 (Delete) ✅ completado con TDD |
+| verify | ✅ Slice 4 PASS | verify-report.md #10376 | Slice 4 verificado PASS (0 CRITICAL / 0 WARNING) |
+| verify | ⏳ pendiente | verify-report.md | Slices 5-7 pendientes |
 | archive | ⏳ pendiente | `archive-report.md` | |
 
 Leyenda: ✅ hecho · 🔄 en curso · ⏳ pendiente · ⚠️ bloqueado
@@ -63,7 +63,7 @@ explícitos; seams I/O COM/DAO → parámetros) + Pester de comportamiento via A
 | 1 | Export | `Invoke-ExportAction` | 2961-3007 | ~250 | Bajo | ✅ **MERGEADO a main** (PR #386, issue #385, checks verdes) |
 | 2 | Read-only | `Invoke-ListObjectsAction`, `Invoke-ExistsAction` | 3128-3158 | ~200 | Muy bajo | ✅ **PR #388 abierta** (stacked-to-main, base: main) |
 | 3 | ERD | `Invoke-GenerateErdAction` (DAO, sin sesión VBE) | 3204-3240 | ~200 | Bajo | ✅ **PR #390 abierta** (stacked a PR #388) |
-| 4 | Delete | `Invoke-DeleteAction` | 3099-3126 | ~200 | Bajo | ⏳ |
+| 4 | Delete | `Invoke-DeleteAction` | 3099-3126 | ~200 | Bajo | ✅ **PR #392 abierta** (stacked a PR #390) |
 | 5 | Compile/Run | `Invoke-CompileAction`, `Invoke-RunProcedureAction` | 3160-3202 | ~250 | Bajo | ⏳ |
 | 6 | Tests/Encoding | `Invoke-RunTestsAction`, `Invoke-FixEncodingAction` | 3174-3258 | ~250 | Bajo-medio | ⏳ |
 | 7 | Import | `Invoke-ImportAction` (retry loop + flag `$importCreatedNewComponents`) | 3008-3097 | ~400 | Medio | ⏳ |
@@ -105,4 +105,7 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
 - **2026-06-02** — **PR #388 creada** (Slice 2) vinculada al issue #387. Commits: e76508d (test), d95f21b (refactor), b4139d9 (docs). Pushed y PR abierta.
 - **2026-06-02** — **Slice 3 (Generate-ERD) completado**. Implementada `Invoke-GenerateErdAction` usando TDD estricto. Pruebas Pester con extracción AST, mocked stubs, y de-coupling de COM añadidas. Pruebas Vitest con wiring change-detectors añadidas. Total de líneas del diff: 209 (173+, 36-), bien por debajo del límite de 400. Todo verde localmente. Listo para verificar y enviar PR del Slice 3.
 - **2026-06-02** — **Slice 3 Verificación completada PASS**. 145 pruebas Pester y 836 pruebas Vitest pasadas con éxito. Se generó el informe de verificación y se guardó en engram y openspec. Próximo paso: abrir PR de Slice 3.
-- **2026-06-02** — **PR #390 creada** (Slice 3) vinculada al issue #389. Commits: b05acca (test), f0c0d5a (refactor), 44fb4d5 (docs). Pushed y PR abierta stacked a `refactor/decompose-vba-manager-s2-list-exists`.
+- **2026-06-02** — PR #390 creada (Slice 3) vinculada al issue #389. Commits: b05acca (test), f0c0d5a (refactor), 44fb4d5 (docs). Pushed y PR abierta stacked a `refactor/decompose-vba-manager-s2-list-exists`.
+- **2026-06-02** — **Slice 4 (Delete action) completado**. Implementada `Invoke-DeleteAction` usando TDD estricto. Pruebas Pester con extracción AST, stubbing de COM/Remove action, y aserción de acumulación de errores para borrados parciales añadidas. Pruebas Vitest con wiring change-detectors añadidas. Total de líneas del diff: 178 (152+, 26-), bien por debajo del límite de 400. Todo verde localmente. Listo para verificar.
+- **2026-06-02** — **Slice 4 Verificación completada PASS**. 148 pruebas Pester and 837 pruebas Vitest pasadas con éxito. Se generó el informe de verificación y se guardó en engram y openspec. Próximo paso: abrir PR de Slice 4.
+- **2026-06-02** — **PR #392 creada** (Slice 4) vinculada al issue #391. Commits: 5923f2b (test), 42cf477 (refactor), [docs committed next]. Pushed y PR abierta stacked a `refactor/decompose-vba-manager-s3-generate-erd`.

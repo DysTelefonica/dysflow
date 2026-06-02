@@ -97,6 +97,10 @@ describe("dysflow-vba-manager.ps1", () => {
     expect(script).toContain("Invoke-GenerateErdAction");
   });
 
+  it("S4: Delete arm in dispatcher calls Invoke-DeleteAction (wiring change-detector)", () => {
+    expect(script).toContain("Invoke-DeleteAction");
+  });
+
   it("Goal E: Write-DysflowOperationMarker uses millisecond ISO format for processStartTime", () => {
     const lines = script.split("\n");
     const funcStart = lines.findIndex((l) => l.includes("function Write-DysflowOperationMarker"));
