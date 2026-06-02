@@ -3202,8 +3202,108 @@ function Invoke-FixEncodingAction {
     Write-Status -Message "OK Fix-Encoding completado" -Color Green
 }
 
+function Invoke-ImportAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$NormalizedModules,
+        [Parameter(Mandatory = $true)][string]$ModulesPath,
+        [Parameter(Mandatory = $true)][string]$ImportMode,
+        [switch]$Json
+    )
+
+    $vbProject = $Session.VbProject
+
+    $targets = @()
+    if ($NormalizedModules.Count -gt 0) {
+        $targets = $NormalizedModules
+    } else {
+        # FIX: incluir *.form.txt y extraer nombre correctamente
+        $targets = @(Get-ChildItem -Path $ModulesPath -File -Recurse `
+            -Include "*.bas", "*.cls", "*.frm", "*.form.txt" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                if ($_.Name -match '\.form\.txt$') { $_.Name -replace '\.form\.txt$', '' }
+                else { $_.BaseName }
+            } | Sort-Object -Unique)
+    }
+
+    $total = $targets.Count
+    $useRetryImport = ($targets.Count -gt 1)
+    $createdComponentNames = New-Object System.Collections.Generic.List[string]
+    $pendingTargets = @($targets)
+    $pass = 0
+    $lastErrors = @{}
+    $maxPasses = if ($useRetryImport) { [Math]::Max(2, $targets.Count) } else { 1 }
+
+    do {
+        $pass++
+        $progressThisPass = $false
+        $failedThisPass = New-Object System.Collections.Generic.List[string]
+        $idx = 0
+
+        foreach ($name in $pendingTargets) {
+            $idx++
+            if ($useRetryImport -and $pass -gt 1) {
+                Write-Status -Message ("[{0}/{1}] Importando (pasada {2}): {3}" -f $idx, $pendingTargets.Count, $pass, $name) -Color Cyan
+            } else {
+                Write-Status -Message ("[{0}/{1}] Importando: {2}" -f $idx, $total, $name) -Color Cyan
+            }
+
+            try {
+                $beforeExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
+                $importResult = Import-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -ImportMode $ImportMode
+                if (-not $beforeExists) {
+                    $afterExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
+                    if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
+                        $createdComponentNames.Add([string]$afterExists) | Out-Null
+                    }
+                }
+                $progressThisPass = $true
+                if ($lastErrors.ContainsKey($name)) { $lastErrors.Remove($name) }
+            } catch {
+                $failedThisPass.Add($name) | Out-Null
+                $lastErrors[$name] = $_.Exception.Message
+                if (-not $useRetryImport) { throw }
+            }
+        }
+
+        $pendingTargets = @($failedThisPass)
+    } while ($useRetryImport -and $pendingTargets.Count -gt 0 -and $progressThisPass -and $pass -lt $maxPasses)
+
+    $moduleResults = New-Object System.Collections.Generic.List[object]
+    foreach ($t in $targets) {
+        if ($lastErrors.ContainsKey($t)) {
+            $moduleResults.Add([pscustomobject]@{
+                module = [string]$t
+                status = "error"
+                error  = [string]$lastErrors[$t]
+            }) | Out-Null
+        } else {
+            $moduleResults.Add([pscustomobject]@{
+                module = [string]$t
+                status = "ok"
+            }) | Out-Null
+        }
+    }
+    Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
+
+    if ($pendingTargets.Count -gt 0) {
+        $details = @($pendingTargets | ForEach-Object {
+            if ($lastErrors.ContainsKey($_)) { "{0}: {1}" -f $_, $lastErrors[$_] } else { $_ }
+        }) -join "; "
+        $scopeLabel = if ($NormalizedModules.Count -eq 0) { "Import-all" } else { "Import" }
+        throw ("{0} no pudo completar algunos módulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details)
+    }
+
+    return [pscustomobject]@{
+        CreatedComponentNames = @($createdComponentNames)
+        Total = [int]$total
+    }
+}
+
 $session = $null
-$importCreatedNewComponents = $false
 
 try {
     $DestinationRoot = Resolve-DestinationRoot -DestinationRoot $DestinationRoot
@@ -3248,94 +3348,11 @@ try {
 
     } elseif ($Action -eq "Import") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $vbProject = $session.VbProject
-
-        $targets = @()
-        if ($normalizedModules.Count -gt 0) {
-            $targets = $normalizedModules
-        } else {
-            # FIX: incluir *.form.txt y extraer nombre correctamente
-            $targets = @(Get-ChildItem -Path $ModulesPath -File -Recurse `
-                -Include "*.bas", "*.cls", "*.frm", "*.form.txt" -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    if ($_.Name -match '\.form\.txt$') { $_.Name -replace '\.form\.txt$', '' }
-                    else { $_.BaseName }
-                } | Sort-Object -Unique)
+        $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -Json:$Json
+        if ($importResult.CreatedComponentNames.Count -gt 0) {
+            Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($importResult.CreatedComponentNames)
         }
-
-        $total = $targets.Count
-        $useRetryImport = ($targets.Count -gt 1)
-        $createdComponentNames = New-Object System.Collections.Generic.List[string]
-        $pendingTargets = @($targets)
-        $pass = 0
-        $lastErrors = @{}
-        $maxPasses = if ($useRetryImport) { [Math]::Max(2, $targets.Count) } else { 1 }
-
-        do {
-            $pass++
-            $progressThisPass = $false
-            $failedThisPass = New-Object System.Collections.Generic.List[string]
-            $idx = 0
-
-            foreach ($name in $pendingTargets) {
-                $idx++
-                if ($useRetryImport -and $pass -gt 1) {
-                    Write-Status -Message ("[{0}/{1}] Importando (pasada {2}): {3}" -f $idx, $pendingTargets.Count, $pass, $name) -Color Cyan
-                } else {
-                    Write-Status -Message ("[{0}/{1}] Importando: {2}" -f $idx, $total, $name) -Color Cyan
-                }
-
-                try {
-                    $beforeExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
-                    $importResult = Import-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $session.AccessApplication -ImportMode $ImportMode
-                    if (-not $beforeExists) {
-                        $afterExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
-                        if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
-                            $importCreatedNewComponents = $true
-                            $createdComponentNames.Add([string]$afterExists) | Out-Null
-                        }
-                    }
-                    $progressThisPass = $true
-                    if ($lastErrors.ContainsKey($name)) { $lastErrors.Remove($name) }
-                } catch {
-                    $failedThisPass.Add($name) | Out-Null
-                    $lastErrors[$name] = $_.Exception.Message
-                    if (-not $useRetryImport) { throw }
-                }
-            }
-
-            $pendingTargets = @($failedThisPass)
-        } while ($useRetryImport -and $pendingTargets.Count -gt 0 -and $progressThisPass -and $pass -lt $maxPasses)
-
-        $moduleResults = New-Object System.Collections.Generic.List[object]
-        foreach ($t in $targets) {
-            if ($lastErrors.ContainsKey($t)) {
-                $moduleResults.Add([pscustomobject]@{
-                    module = [string]$t
-                    status = "error"
-                    error  = [string]$lastErrors[$t]
-                }) | Out-Null
-            } else {
-                $moduleResults.Add([pscustomobject]@{
-                    module = [string]$t
-                    status = "ok"
-                }) | Out-Null
-            }
-        }
-        Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
-
-        if ($pendingTargets.Count -gt 0) {
-            $details = @($pendingTargets | ForEach-Object {
-                if ($lastErrors.ContainsKey($_)) { "{0}: {1}" -f $_, $lastErrors[$_] } else { $_ }
-            }) -join "; "
-            $scopeLabel = if ($normalizedModules.Count -eq 0) { "Import-all" } else { "Import" }
-            throw ("{0} no pudo completar algunos módulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details)
-        }
-
-        if ($importCreatedNewComponents) {
-            Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($createdComponentNames)
-        }
-        Write-Status -Message ("OK Import completado ({0})" -f $total) -Color Green
+        Write-Status -Message ("OK Import completado ({0})" -f $importResult.Total) -Color Green
 
     } elseif ($Action -eq "Delete") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution

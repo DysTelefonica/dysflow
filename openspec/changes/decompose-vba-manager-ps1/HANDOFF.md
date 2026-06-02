@@ -44,10 +44,10 @@ se reorganiza en funciones. Cada `Invoke-*` extraído debe quedar cubierto por P
 | spec | ✅ HECHO | `specs/vba-manager-actions/spec.md` + engram #10368 | Contrato observable de las 10 acciones |
 | design | ✅ HECHO | `design.md` + engram #10370 | Tabla de firmas Invoke-*; Import devuelve result object (no flag) |
 | tasks | ✅ HECHO | `tasks.md` + engram #10371 | 49 tareas en 7 slices. Forecast: chained=Yes, S7 risk High |
-| apply | ✅ Slice 6 HECHO (sin commit) | apply-progress #10372 actualizado | Slice 6 (Run-Tests/Fix-Encoding) ✅ implementado con TDD; commit/PR pendiente |
+| apply | ✅ Slice 7 corrective apply HECHO (sin commit) | apply-progress #10372 actualizado | Slice 7 (Import) corregido tras verify FAIL; commit/PR pendiente por instrucción |
 | verify | ✅ Slice 4 PASS | verify-report.md #10376 | Slice 4 verificado PASS (0 CRITICAL / 0 WARNING) |
 | verify | ✅ Slice 5 PASS | verify-report.md | Slice 5 verificado PASS (0 CRITICAL / 0 WARNING) |
-| verify | ⏳ pendiente | verify-report.md | Slices 6-7 pendientes |
+| verify | ⏳ pendiente | verify-report.md | Slice 7 requiere verify formal tras corrective apply |
 | archive | ⏳ pendiente | `archive-report.md` | |
 
 Leyenda: ✅ hecho · 🔄 en curso · ⏳ pendiente · ⚠️ bloqueado
@@ -67,7 +67,7 @@ explícitos; seams I/O COM/DAO → parámetros) + Pester de comportamiento via A
 | 4 | Delete | `Invoke-DeleteAction` | 3099-3126 | ~200 | Bajo | ✅ **PR #392 abierta** (stacked a PR #390) |
 | 5 | Compile/Run | `Invoke-CompileAction`, `Invoke-RunProcedureAction` | 3160-3202 | ~250 | Bajo | ✅ **S5 implementado en rama `refactor/decompose-vba-manager-s5-compile-run`** |
 | 6 | Tests/Encoding | `Invoke-RunTestsAction`, `Invoke-FixEncodingAction` | 3174-3258 | ~250 | Bajo-medio | ✅ **implementado localmente en rama `refactor/decompose-vba-manager-s5-compile-run` (sin commit)** |
-| 7 | Import | `Invoke-ImportAction` (retry loop + flag `$importCreatedNewComponents`) | 3008-3097 | ~400 | Medio | ⏳ |
+| 7 | Import | `Invoke-ImportAction` (retry loop + created-components return signal) | 3008-3097 | ~400 | Medio | ✅ **corrective apply local en main (sin commit); verify formal pendiente** |
 
 **Riesgos clave** (de explore): (1) vars script-scope implícitas → SIEMPRE pasar como parámetros explícitos;
 (2) Import devuelve `CreatedNewComponents` que dispara `Save-VbaProjectModules`; (3) pipeline encoding ANSI↔UTF-8
@@ -115,6 +115,8 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
 - **2026-06-02** — **Slice 5 (Compile + Run-Procedure) completado**. Implementadas `Invoke-CompileAction` e `Invoke-RunProcedureAction` usando TDD estricto. Commits: `fd25418` (RED Pester/Vitest) y `43d22be` (refactor). Verificación local PASS: Pester/Vitest verdes; 0 CRITICAL / 0 WARNING. Pendiente inmediato: push + PR stacked a #392, luego re-aplicar WIP S6/S7 preservado en `stash@{0}`.
 - **2026-06-02** — **Slice 6 (Run-Tests + Fix-Encoding) implementado localmente sin commit**. Se añadieron fixtures de encoding (`scripts/tests/fixtures/ansi-sample.bas`, `utf8bom-original.bas`, `utf8nobom-expected.bas`), Pester behavior-first para `Invoke-RunTestsAction`/`Invoke-FixEncodingAction`, byte-level UTF-8 NoBOM via `Invoke-FixEncodingAction -Location Src`, y wiring Vitest S6. Se extrajeron ambas funciones con parámetros explícitos y `[ref]$session` para preservar el cierre del router `finally`. Verificación: `pnpm test:ps1` PASS (153/0/4) y `pnpm test` PASS (841/0/3). Diff budget: 248+/78- en 3 tracked files + 3 fixtures pequeñas; commit/PR pendiente por instrucción de no commitear.
 - **2026-06-02** — **Slice 6 corrective apply tras verify FAIL**. Corregido `Invoke-RunTestsAction`: `ProceduresJsonFile` no usa `Test-Path`; si viene no vacío intenta `Get-Content` y no cae al JSON inline. Añadida prueba RED→GREEN para esa regresión. `ansi-sample.bas` ahora se ejercita byte-a-byte con `Convert-AnsiToUtf8NoBom`; el spec queda alineado al contrato real de `Fix-Encoding -Location Src` (quita BOM UTF-8, no convierte ANSI). Vitest wiring fortalecido: los checks S1-S6 ahora miran el cuerpo del arm del dispatcher, no definiciones de función. Targeted PASS: Pester 155/0/4, Vitest `test/scripts-vba-manager.test.ts` 14/0.
+- **2026-06-02** — **Slice 7 (Import) implementado localmente sin commit tras PR #396 merge a main**. Baseline verde: `pnpm test:ps1` 155/0/4 y `pnpm test` 841/0/3. RED confirmado: Pester falló por `Invoke-ImportAction not found`; Vitest falló porque el arm Import aún no delegaba. Se extrajo `Invoke-ImportAction` con parámetros explícitos, retry loop y `##MODULE_RESULTS`; el router elimina `$importCreatedNewComponents` y usa `CreatedComponentNames` para llamar `Save-VbaProjectModules`. Agregada verificación byte-level de `Convert-Utf8ToAnsiTempFile` para el path Import y limpieza final de `script.split("\n")` en `test/scripts-vba-manager.test.ts`. Final GREEN: `pnpm test:ps1` 160/0/4, `pnpm test` 842/0/3, `git diff --check` limpio excepto warnings LF→CRLF.
+- **2026-06-02** — **Slice 7 corrective apply tras verify FAIL**. Verify detectó drift observable: `Invoke-ImportAction` emitía `OK Import completado` antes de que el router intentara `Save-VbaProjectModules`, permitiendo falso OK si fallaba el save de componentes recién creados. Se agregó cobertura RED→GREEN: Pester prueba que `Invoke-ImportAction` devuelve `CreatedComponentNames` sin emitir el OK final; Vitest prueba que el arm Import guarda antes de emitir el OK. Fix: mover el OK final al router después de `Save-VbaProjectModules`. Targeted GREEN: `pnpm test:ps1` 161/0/4 y `pnpm vitest run test/scripts-vba-manager.test.ts` 16/0. Required final apply verification PASS: `pnpm test:ps1` 161/0/4, `pnpm test` 843/0/3, `git diff --check` sin errores (solo warnings LF→CRLF). Formal SDD verify pendiente.
 
 ## Implementation commits
 
@@ -123,3 +125,4 @@ session-scoped, no mover/duplicar; (5) baseline `pnpm test:ps1` + `pnpm test` de
 | `fd25418` | RED tests for Compile/Run-Procedure extraction | S5.2, S5.3 | Pester/Vitest RED→GREEN cycle completed locally | N/A |
 | `43d22be` | Extract `Invoke-CompileAction` + `Invoke-RunProcedureAction` | S5.4, S5.5, S5.6 | Local Pester/Vitest PASS; SDD verify Slice 5 PASS | N/A |
 | _uncommitted_ | Extract `Invoke-RunTestsAction` + `Invoke-FixEncodingAction`; corrective verify fixes | S6.1-S6.8 | `pnpm test:ps1` PASS; `pnpm test` PASS; corrective targeted Pester/Vitest PASS | N/A |
+| _uncommitted_ | Extract `Invoke-ImportAction`; final wiring cleanup; corrective save-before-OK fix | S7.1-S7.8 + corrective verify FAIL fix | Baseline Pester/Vitest PASS; RED Pester/Vitest confirmed; corrective RED reproduced; targeted GREEN `pnpm test:ps1` PASS (161/0/4) and Vitest PASS (16/0); required final apply verification PASS; formal SDD verify pending | N/A |
