@@ -27,42 +27,13 @@ import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
 
-export type VbaSourceComparisonFile = {
-  moduleName: string;
-  fileType: string;
-  path: string;
-  relativePath: string;
-};
-
-export type VbaSourceComparisonEntry = {
-  moduleName: string;
-  fileType: string;
-  sourcePath?: string;
-  binaryPath?: string;
-};
-
-export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
-  sourceSnippet: string;
-  binarySnippet: string;
-};
-
-export type VbaVerifyResult = {
-  operation: "verify_code" | "verify_binary";
-  ok: boolean;
-  dryRun: true;
-  willModifyAccess: false;
-  sourceRoot: string;
-  matched: readonly VbaSourceComparisonEntry[];
-  different: readonly VbaSourceComparisonEntry[];
-  missingInSource: readonly VbaSourceComparisonEntry[];
-  missingInBinary: readonly VbaSourceComparisonEntry[];
-  diffs?: readonly VbaSourceDiffEntry[];
-};
-
-export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
-  operation: "reconcile_binary";
-  recommendation: string;
-};
+export type {
+  VbaReconcilePlanResult,
+  VbaSourceComparisonEntry,
+  VbaSourceComparisonFile,
+  VbaSourceDiffEntry,
+  VbaVerifyResult,
+} from "../../core/services/vba-source-comparison.js";
 
 export type VbaManagerExecutionRequest = {
   scriptPath: string;
