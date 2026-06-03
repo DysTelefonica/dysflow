@@ -12,14 +12,25 @@
 
 1. Read this whole file. The **Status board** below tells you which issue is in flight and the
    **exact next action**.
-2. For the issue currently `in-progress`, open its GitHub issue (link in the board) — the issue body
-   is the authoritative spec (context, problem with `file:line`, acceptance criteria, constraints).
+2. For the issue currently in flight, open its GitHub issue (link in the board) — the issue body is
+   the authoritative spec (context, problem with `file:line`, acceptance criteria, constraints).
 3. Recover SDD state for the active change (see **Artifact store** section) before writing code.
 4. Honor the **Workflow contract** below. Do not skip the close + archive steps.
 5. After every meaningful step, update this ledger (status, branch, PR, next action) and the
    `Last updated` line.
+6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
+   which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-03 — ledger created; environment incident diagnosed & worked around (see below); no issue implemented yet.
+`Last updated`: 2026-06-03 — **#410 (CI fix) and #405 both merged to main; CI green.** Next: #406.
+
+---
+
+## Progress log
+
+- **#410** (CI fix, unplanned but prioritized): main was red on Linux CI (pre-existing, 4+ runs).
+  Fixed 5 Windows-coupled tests → PR #411 merged → **main green again** (first time since v1.2.12).
+- **#405**: SDD full cycle done → PR #409 merged → issue closed → SDD archived (engram report).
+- Next up: **#406**.
 
 ---
 
@@ -46,13 +57,15 @@ below takes effect.
 
 Each issue is handled as its own SDD change and follows this lifecycle:
 
-1. **SDD plan** → proposal → spec → design → tasks (right-sized: small issues may collapse phases).
-2. **Implement** on a dedicated branch (`refactor/<issue>-<slug>` or `feat/...`).
-3. **Verify** → `pnpm test` green + `tsc --noEmit && biome check` clean. No assertion edits made
-   solely to fit a refactor (see `docs/testing/testing-philosophy.md`).
-4. **PR** → one PR per issue, linking the issue (`Closes #NNN`).
-5. **Close** the GitHub issue (merging the PR with `Closes #NNN` does this automatically).
-6. **Archive** the SDD change (`/sdd-archive`) so the change folder/observation is closed.
+1. **SDD plan** → proposal → (spec/design as right-sized) → tasks. Delegated to sub-agents (the
+   `sdd-*` skills cannot load under the bash gotcha; use the `sdd-*` sub-agent types instead).
+2. **Implement** on a dedicated branch (`refactor/<issue>-<slug>` or `fix/`, `feat/`), STRICT TDD.
+3. **Verify** → fresh-context adversarial review + `pnpm test` green + `tsc --noEmit && biome check`
+   clean. No assertion edits made solely to fit a refactor (see `docs/testing/testing-philosophy.md`).
+4. **PR** → one PR per issue, linking the issue (`Closes #NNN`). Branch off the latest `main`.
+5. **CI green** → merge (`gh pr merge --merge --delete-branch`). Merging closes the issue.
+6. **Archive** the SDD change → save an engram archive-report (`sdd/<change>/archive-report`); the
+   `openspec/changes/<change>/` files remain on `main` as the permanent record.
 7. **Update this ledger** → mark the issue `done`, record PR link, advance to the next issue.
 
 ### Hard constraints (apply to every issue)
@@ -71,8 +84,9 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 
 | Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
 |-------|-------|-------|----------|--------|--------|----|------------|
-| 1 | [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | high | `in-progress` | `refactor/405-unify-mcp-tool-registration` | — | `405-unify-mcp-tool-registration` |
-| 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `todo` | — | — | — |
+| 0 | [#410](https://github.com/DysTelefonica/dysflow/issues/410) | Make Windows-coupled CI tests platform-aware (red main) | high | `done` ✅ | (merged) | [#411](https://github.com/DysTelefonica/dysflow/pull/411) | — |
+| 1 | [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | high | `done` ✅ | (merged) | [#409](https://github.com/DysTelefonica/dysflow/pull/409) | `405-unify-mcp-tool-registration` |
+| 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `todo` ⏭️ NEXT | — | — | — |
 | 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `todo` | — | — | — |
 | 4 | [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | medium | `todo` | — | — | — |
 
@@ -82,46 +96,47 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 
 ## Per-issue working notes
 
-### #405 — Unify bifurcated MCP tool registration
-- **Key files**: `src/adapters/mcp/tools.ts` (explicit handlers `:272-430`; dispatch loop `~:433`;
-  `MCP_TOOL_ROUTES` `:457-506`; dedup `add` guard `:264-269`).
-- **Guardrail**: tool counts in `test/adapters/mcp/release-matrix-gate.test.ts` (45+2+5=48) MUST NOT change.
-- **Next action**: start SDD planning.
-- **Notes**: _(none yet)_
+### #410 — CI fix (DONE)
+Pre-existing red Linux CI: 5 Windows-coupled tests asserted `powershell.exe`/`taskkill` unconditionally.
+Made them platform-aware (assert `POWERSHELL_EXE`; branch kill-path on `process.platform`). Test-only.
+PR #411 merged; main green.
 
-### #406 — Remove duplicated VBA comparison types
+### #405 — Unify bifurcated MCP tool registration (DONE)
+Outcome: single `registerMcpToolList()` (pure, throws on duplicate names), `ALIAS_TOOL_NAMES` partitions
+alias vs dispatch by construction. Behavior preserved (counts 45/2/5/48 unchanged). PR #409 merged.
+Artifacts: `openspec/changes/405-unify-mcp-tool-registration/` + engram `sdd/405-.../*`.
+
+### #406 — Remove duplicated VBA comparison types (NEXT)
 - **Key files**: core source of truth `src/core/services/vba-source-comparison.ts:16-62`; delete the
   duplicates in `src/adapters/vba-sync/vba-sync-adapter.ts:30-65`; re-export pattern already at `:611`.
 - **Scope**: pure type move; behavior must be identical; `tsc --noEmit` proves it.
-- **Next action**: queued behind #405.
-- **Notes**: _(none yet)_
+- **Right-sized**: lightweight SDD (proposal + tasks → apply → verify).
+- **Next action**: branch `refactor/406-...` off main, plan + implement.
 
 ### #407 — AccessOperationRegistry ownership
 - **Key files**: singleton at `src/core/runner/access-runner.ts:118` + `getDefaultAccessOperationRegistry()` `:121`;
   consumers `src/adapters/mcp/tools.ts:277`, `src/adapters/http/server.ts`.
 - **Decision needed in proposal**: explicit injection (preferred) vs. intentional + test-pinned shared state.
-- **Next action**: queued.
-- **Notes**: _(none yet)_
+- **Right-sized**: full SDD (design decision).
 
 ### #408 — HTTP input validation parity
 - **Key files**: `src/adapters/http/server.ts:175-177,197` (`String(body.data.x ?? "")` with no schema);
   reuse `src/adapters/mcp/validator.ts` approach.
-- **Next action**: queued.
-- **Notes**: _(none yet)_
+- **Right-sized**: lightweight SDD.
 
 ---
 
 ## Execution settings (decided 2026-06-03)
 
 - **Execution mode**: `auto` — phases run back-to-back without pausing.
-- **Delivery**: one PR per issue (issues are independent).
+- **Delivery**: one PR per issue (issues are independent). Branch off latest `main`.
 - **SDD weight (right-sized)**:
-  - `#405`, `#407` → **full SDD** (explore→propose→spec→design→tasks→apply→verify→archive) — real design decisions.
-  - `#406`, `#408` → **lightweight** (proposal + tasks → apply → verify → archive) — mechanical changes, no heavy design phase.
+  - `#407` → **full SDD** (real design decision).
+  - `#406`, `#408` → **lightweight** (proposal + tasks → apply → verify).
 
 ## Artifact store
 
-SDD artifacts (proposal/spec/design/tasks/progress/verify) for each change are persisted in:
+SDD artifacts (proposal/spec/design/tasks/progress/verify/archive-report) for each change are persisted in:
 
 - **Backend**: `hybrid` — versioned files in `openspec/changes/<change-name>/` **and** engram observations.
 - **How to recover**:
