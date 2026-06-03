@@ -84,13 +84,14 @@ async function callMcp(method, params = {}, options = {}) {
     let settled = false;
 
     const requestId = 2;
+    let resultPending = null;
     const finish = (result) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       try { child.stdin.end(); } catch {}
       try { child.kill(); } catch {}
-      resolveCall(result);
+      resolveCall({ ...result, childPid: child.pid });
     };
     const timer = setTimeout(() => {
       finish({ response, exit: { code: null, signal: "TIMEOUT" }, stdout, stderr, timedOut: true, isError: true, text: "Timed out waiting for MCP response" });
@@ -111,13 +112,24 @@ async function callMcp(method, params = {}, options = {}) {
         if (message.id !== requestId) continue;
         response = message;
         const isError = Boolean(response?.error || response?.result?.isError);
-        finish({ response, exit: { code: 0, signal: null }, stdout, stderr, timedOut: false, isError, text: toolText(response) });
+        resultPending = { response, exit: { code: null, signal: null }, stdout, stderr, timedOut: false, isError, text: toolText(response) };
+        clearTimeout(timer);
+        try { child.stdin.end(); } catch {}
+        try { child.kill(); } catch {}
       }
     });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
     child.on("error", (error) => finish({ response, exit: { code: null, signal: "SPAWN_ERROR" }, stdout, stderr, timedOut: false, isError: true, text: error.message }));
     child.on("close", (code, signal) => {
-      if (!settled) finish({ response, exit: { code, signal }, stdout, stderr, timedOut: false, isError: true, text: response ? toolText(response) : "MCP process closed before response" });
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (resultPending) {
+        resultPending.exit = { code, signal };
+        resolveCall({ ...resultPending, childPid: child.pid });
+      } else {
+        resolveCall({ response, exit: { code, signal }, stdout, stderr, timedOut: false, isError: true, text: response ? toolText(response) : "MCP process closed before response", childPid: child.pid });
+      }
     });
 
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "dysflow-mcp-e2e", version: "1" } } }) + "\n");
@@ -139,7 +151,7 @@ async function record(area, tool, args = {}, options = {}) {
   rows.push({ area, tool, pass, expected: options.expected ?? "success", ms, summary: normalize(result.text || result.stderr || JSON.stringify(result.exit)) });
   console.log(`${pass ? "PASS" : "FAIL"}\t${tool}\t${ms}ms\t${rows.at(-1).summary}`);
 
-  const zombie = await waitForNoZombies(5000, 200);
+  const zombie = await waitForNoZombies(result.childPid, 5000, 200);
   const zombiePass = !zombie.found;
   const zombieTool = `${tool}:zombie-check`;
   rows.push({
@@ -216,24 +228,63 @@ await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedur
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
 
-function checkAccessProcesses() {
+function checkAccessProcesses(childPid) {
   try {
-    const stdout = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
+    const stdout = execSync('wmic process get ProcessId,ParentProcessId,Name /format:csv', { encoding: "utf8" });
     const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
-    return lines.some((line) => {
-      const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
-      return !isNaN(pid) && !suiteBaselinePids.has(pid);
-    });
+    const parentMap = new Map();
+    const nameMap = new Map();
+    for (const line of lines) {
+      const parts = line.split(",");
+      if (parts.length < 4) continue;
+      const name = parts[1];
+      const parent = parseInt(parts[2], 10);
+      const pid = parseInt(parts[3], 10);
+      if (!isNaN(pid) && !isNaN(parent)) {
+        parentMap.set(pid, parent);
+        nameMap.set(pid, name);
+      }
+    }
+
+    for (const [pid, name] of nameMap.entries()) {
+      if (name.toUpperCase() === "MSACCESS.EXE") {
+        if (childPid) {
+          let current = pid;
+          let visited = new Set();
+          while (current && current !== 0 && !visited.has(current)) {
+            visited.add(current);
+            const parent = parentMap.get(current);
+            if (parent === childPid) {
+              return true;
+            }
+            current = parent;
+          }
+        } else {
+          if (!suiteBaselinePids.has(pid)) {
+            return true;
+          }
+        }
+      }
+    }
   } catch (err) {
-    console.error("Failed to check processes:", err);
-    return false;
+    try {
+      const stdout = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
+      const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
+      return lines.some((line) => {
+        const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
+        return !isNaN(pid) && !suiteBaselinePids.has(pid);
+      });
+    } catch (fallbackErr) {
+      console.error("Failed to check processes:", fallbackErr);
+    }
   }
+  return false;
 }
 
-async function waitForNoZombies(timeoutMs = 30000, pollMs = 200) {
+async function waitForNoZombies(childPid, timeoutMs = 30000, pollMs = 200) {
   const start = Date.now();
   while (true) {
-    const found = checkAccessProcesses();
+    const found = checkAccessProcesses(childPid);
     if (!found) return { found: false, elapsed: Date.now() - start };
     if (Date.now() - start >= timeoutMs) return { found: true, elapsed: Date.now() - start };
     await new Promise((r) => setTimeout(r, pollMs));

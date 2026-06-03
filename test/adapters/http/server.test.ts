@@ -647,4 +647,159 @@ describe("Dysflow HTTP adapter", () => {
       expect(body.ok).toBe(true);
     });
   });
+
+  describe("HTTP Request Body Validation", () => {
+    it("rejects POST /access/cleanup with missing or empty operationId", async () => {
+      const server = await startTestServer();
+      const response = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accessPath: "C:/db/front.accdb" }),
+      });
+      expect(response.response.status).toBe(400);
+      expect(response.body.ok).toBe(false);
+      expect(response.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response.body.error.message).toContain("operationId is required");
+
+      const response2 = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operationId: "   ", accessPath: "C:/db/front.accdb" }),
+      });
+      expect(response2.response.status).toBe(400);
+      expect(response2.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response2.body.error.message).toContain(
+        "operationId must be at least 1 non-whitespace character",
+      );
+    });
+
+    it("rejects POST /query/read with missing sql or extra fields", async () => {
+      const server = await startTestServer();
+      const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.response.status).toBe(400);
+      expect(response.body.ok).toBe(false);
+      expect(response.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response.body.error.message).toContain("sql is required");
+
+      const response2 = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sql: "SELECT 1", extra: "field" }),
+      });
+      expect(response2.response.status).toBe(400);
+      expect(response2.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response2.body.error.message).toContain("extra is not allowed");
+    });
+
+    it("rejects POST /query/write with missing sql or extra fields", async () => {
+      const server = await startTestServer({ writesEnabled: true });
+      const response = await readJson<HttpErrorBody>(`${server.url}/query/write`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.response.status).toBe(400);
+      expect(response.body.ok).toBe(false);
+      expect(response.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response.body.error.message).toContain("sql is required");
+
+      const response2 = await readJson<HttpErrorBody>(`${server.url}/query/write`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sql: "UPDATE People SET name='Ada'", extra: "field" }),
+      });
+      expect(response2.response.status).toBe(400);
+      expect(response2.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response2.body.error.message).toContain("extra is not allowed");
+    });
+
+    it("rejects POST /vba/execute with missing moduleName/procedureName or arguments not as array", async () => {
+      const server = await startTestServer({ writesEnabled: true });
+      const response = await readJson<HttpErrorBody>(`${server.url}/vba/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ moduleName: "Automation" }),
+      });
+      expect(response.response.status).toBe(400);
+      expect(response.body.ok).toBe(false);
+      expect(response.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response.body.error.message).toContain("procedureName is required");
+
+      const response2 = await readJson<HttpErrorBody>(`${server.url}/vba/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          moduleName: "Automation",
+          procedureName: "Refresh",
+          arguments: "not-an-array",
+        }),
+      });
+      expect(response2.response.status).toBe(400);
+      expect(response2.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response2.body.error.message).toContain("arguments must be an array");
+    });
+
+    it("redacts httpToken, accessPassword, and backendPassword in validation error messages", async () => {
+      const server = await startTestServer({
+        httpToken: "dummy-token-val",
+        env: {
+          DYSFLOW_ACCESS_PASSWORD: "dummy-access-pwd",
+          DYSFLOW_BACKEND_PASSWORD: "dummy-backend-pwd",
+        },
+      });
+
+      const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer dummy-token-val",
+        },
+        body: JSON.stringify({
+          sql: "SELECT 1",
+          "dummy-token-val-key": "some-val",
+        }),
+      });
+
+      expect(response.response.status).toBe(400);
+      expect(response.body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(response.body.error.message).toContain("[REDACTED]-key is not allowed");
+      expect(response.body.error.message).not.toContain("dummy-token-val");
+
+      const response2 = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer dummy-token-val",
+        },
+        body: JSON.stringify({
+          sql: "SELECT 1",
+          "dummy-access-pwd-key": "some-val",
+        }),
+      });
+
+      expect(response2.response.status).toBe(400);
+      expect(response2.body.error.message).toContain("[REDACTED]-key is not allowed");
+      expect(response2.body.error.message).not.toContain("dummy-access-pwd");
+
+      const response3 = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer dummy-token-val",
+        },
+        body: JSON.stringify({
+          sql: "SELECT 1",
+          "dummy-backend-pwd-key": "some-val",
+        }),
+      });
+
+      expect(response3.response.status).toBe(400);
+      expect(response3.body.error.message).toContain("[REDACTED]-key is not allowed");
+      expect(response3.body.error.message).not.toContain("dummy-backend-pwd");
+    });
+  });
 });

@@ -112,11 +112,8 @@ Deleted the 5 duplicate type declarations in `vba-sync-adapter.ts` (were identic
 re-exported them from `core/services/vba-source-comparison.ts`. Pure type move; tsc clean; behavior
 identical. PR #412 merged.
 
-### #407 — AccessOperationRegistry ownership
-- **Key files**: singleton at `src/core/runner/access-runner.ts:118` + `getDefaultAccessOperationRegistry()` `:121`;
-  consumers `src/adapters/mcp/tools.ts:277`, `src/adapters/http/server.ts`.
-- **Decision needed in proposal**: explicit injection (preferred) vs. intentional + test-pinned shared state.
-- **Right-sized**: full SDD (design decision).
+### #407 — AccessOperationRegistry ownership (DONE)
+Outcome: Removed process-global defaultRegistry singleton and getDefaultAccessOperationRegistry() from core. Injected explicit registries from composition roots. All tests and compilation gates verified green.
 
 ### #408 — HTTP input validation parity
 - **Key files**: `src/adapters/http/server.ts:175-177,197` (`String(body.data.x ?? "")` with no schema);
