@@ -2,6 +2,26 @@
 
 All notable changes to Dysflow will be documented in this file.
 
+## [v1.2.13] - 2026-06-03
+
+### Changed
+
+- **Unification of Access COM automation and process control into a shared module.** Refactored both `dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1` to load and delegate COM lifecycle management, process attribution, and WMI queries to a single source of truth: `scripts/lib/dysflow-access-com.ps1`. This eliminates duplicate WMI and COM setup code, preventing script drift.
+- **Hardened cleanup safety and zombie-prevention.** Null-PID close paths now run a ROT close fallback instead of just warning, and unattributed processes are reported as warnings rather than killed.
+- **Behavioral testing at the port.** Added a Pester suite `dysflow-access-com.Tests.ps1` to cover `Open-CanonicalAccess`, `Close-CanonicalAccess`, and the WMI timeout bounds.
+
+## [v1.2.12] - 2026-06-02
+
+### Fixed
+
+- **Documentation alignment.** Documentation alignment after v1.2.11 tag was prepared.
+
+## [v1.2.11] - 2026-06-02
+
+### Fixed
+
+- **Access cleanup fix.** Restrict MSACCESS cleanup to owned processes.
+
 ## [v1.2.10] - 2026-06-01
 
 ### Changed
