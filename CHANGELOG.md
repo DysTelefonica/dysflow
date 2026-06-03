@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.2.15] - 2026-06-03
+
+### Changed
+
+- **Explicit registry ownership (#407).** Removed the global `AccessOperationRegistry` singleton from `access-runner.ts` and refactored MCP and HTTP adapters to explicitly construct and inject registries.
+
+### Added
+
+- **HTTP adapter input validation (#408).** Integrated JSON schema validation (with secret sanitization) for request bodies on POST `/access/cleanup`, `/query/read`, `/query/write`, and `/vba/execute`.
+
+### Fixed
+
+- **E2E test harness zombie check.** Solved E2E test suite race conditions and false positives by awaiting child process close events and tracking descendant PIDs using `wmic`.
+
 ## [v1.2.14] - 2026-06-03
 
 ### Added
