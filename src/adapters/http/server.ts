@@ -80,17 +80,22 @@ export async function startDysflowHttpServer(
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
   const services = options.services ?? (await createHttpServices(options.env, options.cwd));
 
+  const envSource = options.env ?? process.env;
   let httpToken = options.httpToken;
   let allowedProcedures = options.allowedProcedures;
-  let accessPassword: string | undefined;
-  let backendPassword: string | undefined;
+  let accessPassword = envSource.DYSFLOW_ACCESS_PASSWORD ?? envSource.ACCESS_VBA_PASSWORD;
+  let backendPassword = envSource.DYSFLOW_BACKEND_PASSWORD;
 
   const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
   if (configResult.ok) {
     if (httpToken === undefined) httpToken = configResult.data.httpToken;
     if (allowedProcedures === undefined) allowedProcedures = configResult.data.allowedProcedures;
-    accessPassword = configResult.data.accessPassword;
-    backendPassword = configResult.data.backendPassword;
+    if (configResult.data.accessPassword !== undefined) {
+      accessPassword = configResult.data.accessPassword;
+    }
+    if (configResult.data.backendPassword !== undefined) {
+      backendPassword = configResult.data.backendPassword;
+    }
   }
 
   const server = createServer((request, response) => {
