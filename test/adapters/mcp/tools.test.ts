@@ -5,6 +5,7 @@ import {
   type DysflowMcpServices,
   MCP_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
+  registerMcpToolList,
   rejectWriteSqlInReadMode,
   translateCoreResultToMcpContent,
 } from "../../../src/adapters/mcp/tools";
@@ -1292,5 +1293,32 @@ describe("MCP tool registration over core services", () => {
         );
       }
     });
+  });
+});
+
+// #405: registration invariants — duplicate names throw
+describe("registration invariants — duplicate names throw (#405)", () => {
+  function makeTool(name: string) {
+    return {
+      name,
+      description: `fake tool ${name}`,
+      handler: async () => ({ content: [{ type: "text" as const, text: "ok" }], isError: false }),
+    };
+  }
+
+  it("throws on two entries with the same name", () => {
+    const a = makeTool("tool_alpha");
+    const dupA = makeTool("tool_alpha");
+    expect(() => registerMcpToolList([a, dupA])).toThrow(/Duplicate MCP tool/);
+  });
+
+  it("returns a list of the same length when all names are distinct", () => {
+    const entries = [makeTool("tool_a"), makeTool("tool_b"), makeTool("tool_c")];
+    const result = registerMcpToolList(entries);
+    expect(result).toHaveLength(3);
+    const names = result.map((t) => t.name);
+    expect(names).toContain("tool_a");
+    expect(names).toContain("tool_b");
+    expect(names).toContain("tool_c");
   });
 });
