@@ -9,14 +9,18 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
-import type {
-  AccessOperationRecord,
-  AccessOperationRegistry,
+import {
+  type AccessOperationRecord,
+  type AccessOperationRegistry,
+  InMemoryAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
-import { getDefaultAccessOperationRegistry } from "../../core/runner/access-runner.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
+import { sanitizeSecrets } from "../../core/utils/index.js";
+import type { JsonObjectSchema } from "../mcp/schemas/dysflow-schemas.js";
+import { CLEANUP_SCHEMA, HTTP_QUERY_SCHEMA, HTTP_VBA_EXECUTE_SCHEMA } from "../mcp/schemas.js";
+import { validateInput } from "../mcp/validator.js";
 import { createHttpServices } from "./http-services-factory.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
@@ -76,13 +80,21 @@ export async function startDysflowHttpServer(
   const maxBodyBytes = normalizeMaxBodyBytes(options.maxBodyBytes);
   const services = options.services ?? (await createHttpServices(options.env, options.cwd));
 
+  const envSource = options.env ?? process.env;
   let httpToken = options.httpToken;
   let allowedProcedures = options.allowedProcedures;
-  if (httpToken === undefined || allowedProcedures === undefined) {
-    const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
-    if (configResult.ok) {
-      if (httpToken === undefined) httpToken = configResult.data.httpToken;
-      if (allowedProcedures === undefined) allowedProcedures = configResult.data.allowedProcedures;
+  let accessPassword = envSource.DYSFLOW_ACCESS_PASSWORD ?? envSource.ACCESS_VBA_PASSWORD;
+  let backendPassword = envSource.DYSFLOW_BACKEND_PASSWORD;
+
+  const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
+  if (configResult.ok) {
+    if (httpToken === undefined) httpToken = configResult.data.httpToken;
+    if (allowedProcedures === undefined) allowedProcedures = configResult.data.allowedProcedures;
+    if (configResult.data.accessPassword !== undefined) {
+      accessPassword = configResult.data.accessPassword;
+    }
+    if (configResult.data.backendPassword !== undefined) {
+      backendPassword = configResult.data.backendPassword;
     }
   }
 
@@ -93,6 +105,8 @@ export async function startDysflowHttpServer(
       maxBodyBytes,
       httpToken,
       allowedProcedures,
+      accessPassword,
+      backendPassword,
     });
   });
 
@@ -118,6 +132,8 @@ async function routeRequest(
     maxBodyBytes: number;
     httpToken?: string;
     allowedProcedures?: readonly string[];
+    accessPassword?: string;
+    backendPassword?: string;
   },
 ): Promise<void> {
   const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
@@ -145,7 +161,7 @@ async function routeRequest(
   }
 
   if (method === "GET" && path === "/access/operations") {
-    const registry = context.services.operationRegistry ?? getDefaultAccessOperationRegistry();
+    const registry = context.services.operationRegistry ?? new InMemoryAccessOperationRegistry();
     sendOperationResult(
       response,
       successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })),
@@ -157,6 +173,9 @@ async function routeRequest(
     const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
       sendBodyReadFailure(body);
+      return;
+    }
+    if (!handleValidation(body.data, CLEANUP_SCHEMA, context, response)) {
       return;
     }
     const cleanupService = context.services.cleanupService;
@@ -172,8 +191,8 @@ async function routeRequest(
     sendOperationResult(
       response,
       await cleanupService.cleanup({
-        operationId: String(body.data.operationId ?? ""),
-        accessPath: String(body.data.accessPath ?? ""),
+        operationId: body.data.operationId as string,
+        accessPath: body.data.accessPath as string,
         force: body.data.force === true,
       }),
     );
@@ -194,7 +213,10 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    const sql = String(body.data.sql ?? "");
+    if (!handleValidation(body.data, HTTP_QUERY_SCHEMA, context, response)) {
+      return;
+    }
+    const sql = body.data.sql as string;
     if (!looksLikeReadOnlySql(sql)) {
       sendOperationResult(
         response,
@@ -225,10 +247,13 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
+    if (!handleValidation(body.data, HTTP_QUERY_SCHEMA, context, response)) {
+      return;
+    }
     sendOperationResult(
       response,
       await context.services.queryService.execute({
-        sql: String(body.data.sql ?? ""),
+        sql: body.data.sql as string,
         mode: "write",
       }),
     );
@@ -243,6 +268,9 @@ async function routeRequest(
     const body = await readJsonBody(request, context.maxBodyBytes);
     if (!body.ok) {
       sendBodyReadFailure(body);
+      return;
+    }
+    if (!handleValidation(body.data, HTTP_VBA_EXECUTE_SCHEMA, context, response)) {
       return;
     }
     const vbaRequest = toVbaRequest(body.data);
@@ -303,15 +331,34 @@ function looksLikeReadOnlySql(sql: string): boolean {
   return firstToken === "select" && !/\binto\b/.test(tokenized);
 }
 
-function toVbaRequest(body: JsonBody): AccessVbaRequest {
-  const request: AccessVbaRequest = {
-    moduleName: String(body.moduleName ?? ""),
-    procedureName: String(body.procedureName ?? ""),
-  };
-  if (Array.isArray(body.arguments)) {
-    request.arguments = body.arguments;
+function handleValidation(
+  bodyData: unknown,
+  schema: JsonObjectSchema,
+  context: { httpToken?: string; accessPassword?: string; backendPassword?: string },
+  response: ServerResponse,
+): boolean {
+  const error = validateInput(bodyData, schema);
+  if (error !== undefined) {
+    const secrets = [context.httpToken, context.accessPassword, context.backendPassword].filter(
+      (s): s is string => typeof s === "string" && s.length > 0,
+    );
+    const sanitized = sanitizeSecrets(error, secrets);
+    sendOperationResult(
+      response,
+      failureResult(createDysflowError("HTTP_INVALID_INPUT", sanitized)),
+      400,
+    );
+    return false;
   }
-  return request;
+  return true;
+}
+
+function toVbaRequest(body: JsonBody): AccessVbaRequest {
+  return {
+    moduleName: body.moduleName as string,
+    procedureName: body.procedureName as string,
+    arguments: Array.isArray(body.arguments) ? body.arguments : undefined,
+  };
 }
 
 async function readJsonBody(

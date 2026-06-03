@@ -757,6 +757,36 @@ describe("AccessPowerShellRunner", () => {
       durationMs: 44,
     });
   });
+
+  it("each runner gets its own isolated in-memory registry by default and does not share state", () => {
+    const runner1 = new AccessPowerShellRunner({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 0,
+        timedOut: false,
+      }),
+      preflightCleanup: noOpPreflight,
+    });
+    const runner2 = new AccessPowerShellRunner({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 0,
+        timedOut: false,
+      }),
+      preflightCleanup: noOpPreflight,
+    });
+
+    const registry1 = (runner1 as unknown as { operationRegistry: unknown }).operationRegistry;
+    const registry2 = (runner2 as unknown as { operationRegistry: unknown }).operationRegistry;
+
+    expect(registry1).toBeDefined();
+    expect(registry2).toBeDefined();
+    expect(registry1).not.toBe(registry2);
+  });
 });
 
 describe("sanitizePowerShellOutput", () => {

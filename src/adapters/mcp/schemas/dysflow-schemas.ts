@@ -111,12 +111,34 @@ export const CLEANUP_SCHEMA: JsonObjectSchema = {
   required: ["operationId", "accessPath"],
   additionalProperties: false,
   properties: {
-    operationId: { type: "string", description: "Dysflow-owned Access operation id." },
+    operationId: {
+      type: "string",
+      minLength: 1,
+      description: "Dysflow-owned Access operation id.",
+    },
     accessPath: {
       type: "string",
       description: "Access database path associated with the operation.",
     },
     force: { type: "boolean", description: "Force cleanup when supported." },
+  },
+};
+
+export const HTTP_QUERY_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["sql"],
+  additionalProperties: false,
+  properties: { sql: { type: "string", minLength: 1 } },
+};
+
+export const HTTP_VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["moduleName", "procedureName"],
+  additionalProperties: false,
+  properties: {
+    moduleName: { type: "string", minLength: 1 },
+    procedureName: { type: "string", minLength: 1 },
+    arguments: { type: "array", items: {} },
   },
 };
 

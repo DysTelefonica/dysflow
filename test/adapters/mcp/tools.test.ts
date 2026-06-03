@@ -14,6 +14,7 @@ import {
   type OperationResult,
   successResult,
 } from "../../../src/core/contracts/index";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
@@ -1320,5 +1321,51 @@ describe("registration invariants — duplicate names throw (#405)", () => {
     expect(names).toContain("tool_a");
     expect(names).toContain("tool_b");
     expect(names).toContain("tool_c");
+  });
+});
+
+describe("AccessOperationRegistry explicit injection", () => {
+  it("dysflow_access_operations_list and list_access_operations list operations from the injected registry", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      operationId: "op-test-mcp",
+      action: "run" as const,
+      accessPath: "C:/data/app.accdb",
+      projectRootAbs: "C:/repo/app",
+      destinationRootAbs: "C:/repo/app/out",
+      metadata: { procedureName: "Refresh" },
+      status: "starting",
+      accessPid: null,
+      processStartTime: null,
+      updatedAt: "2026-06-03T12:00:00.000Z",
+    });
+
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      operationRegistry: registry,
+    });
+
+    const listTool = tools.find((t) => t.name === "dysflow_access_operations_list");
+    const aliasListTool = tools.find((t) => t.name === "list_access_operations");
+
+    expect(listTool).toBeDefined();
+    expect(aliasListTool).toBeDefined();
+
+    if (listTool === undefined || aliasListTool === undefined) {
+      throw new Error("Tools not found");
+    }
+
+    const result = await listTool.handler({});
+    const aliasResult = await aliasListTool.handler({});
+
+    const expectedContent = {
+      content: [{ type: "text", text: expect.stringContaining("op-test-mcp") }],
+      isError: false,
+    };
+
+    expect(result).toMatchObject(expectedContent);
+    expect(aliasResult).toMatchObject(expectedContent);
   });
 });

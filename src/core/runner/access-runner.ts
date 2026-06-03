@@ -115,12 +115,7 @@ export type AccessPowerShellRunnerOptions = {
   lockAcquireTimeoutMs?: number;
 };
 
-const defaultRegistry = new InMemoryAccessOperationRegistry();
 const accessExecutionLocks = new Map<string, Promise<void>>();
-
-export function getDefaultAccessOperationRegistry(): AccessOperationRegistry {
-  return defaultRegistry;
-}
 
 export class AccessPowerShellRunner implements AccessRunner {
   private readonly executor: PowerShellExecutor;
@@ -134,7 +129,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   constructor(options: AccessPowerShellRunnerOptions = {}) {
     this.executor = options.executor ?? spawnPowerShell;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
-    this.operationRegistry = options.operationRegistry ?? defaultRegistry;
+    this.operationRegistry = options.operationRegistry ?? new InMemoryAccessOperationRegistry();
     this.preflightCleanup =
       options.preflightCleanup ??
       new AccessOperationPreflightCleanupService({
