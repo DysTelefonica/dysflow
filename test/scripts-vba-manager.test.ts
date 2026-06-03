@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const script = readFileSync("scripts/dysflow-vba-manager.ps1", "utf8");
+const sharedModule = readFileSync("scripts/lib/dysflow-access-com.ps1", "utf8");
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -43,19 +44,25 @@ function extractFunctionBody(source: string, name: string): string {
 }
 
 describe("dysflow-vba-manager.ps1", () => {
-  it("Goal B: defines a bounded WMI helper function", () => {
-    expect(script).toContain("function Get-MsAccessProcessesBounded");
+  it("Goal B: defines a bounded WMI helper function (in shared module, dot-sourced by this script)", () => {
+    // After the Slice 1 dedup, Get-MsAccessProcessesBounded lives in
+    // scripts/lib/dysflow-access-com.ps1 and is dot-sourced by both scripts.
+    // The behavioral contract (bounded WMI, injectable seam) is preserved in the module.
+    expect(sharedModule).toContain("function Get-MsAccessProcessesBounded");
+    // Dot-source line must be present in the script so the function is available at runtime.
+    expect(script).toContain(". (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')");
     // After the injectable-seam refactor the job is started via Start-Job -ScriptBlock $WmiScriptBlock;
     // the literal CIM query is the default value of the $WmiScriptBlock param.
-    expect(script).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
+    expect(sharedModule).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
     // The default WmiScriptBlock param must still query MSACCESS.EXE
-    expect(script).toContain("Get-CimInstance Win32_Process");
-    expect(script).toContain("Wait-Job");
+    expect(sharedModule).toContain("Get-CimInstance Win32_Process");
+    expect(sharedModule).toContain("Wait-Job");
   });
 
   it("Goal B: Close-TargetAccessDbIfOpen delegates to the bounded helper", () => {
-    // The bounded helper must be called from within the function
-    const funcBody = extractFunctionBody(script, "Close-TargetAccessDbIfOpen");
+    // Slice 5: Close-TargetAccessDbIfOpen was moved to the shared module (single source of truth).
+    // The bounded helper must be called from within the function in the shared module.
+    const funcBody = extractFunctionBody(sharedModule, "Close-TargetAccessDbIfOpen");
     expect(funcBody).toContain("Get-MsAccessProcessesBounded");
   });
 

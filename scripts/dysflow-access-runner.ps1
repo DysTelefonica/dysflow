@@ -10,10 +10,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Script-scoped variables for tracking exit code and child process PID.
+# Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
+# Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
+# and allows the Add-Type Win32.NativeMethods guard to work correctly.
+. (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+
+# Script-scoped variables for tracking exit code, child process PID, and canonical session.
 # Return-based script exits ensure the finally block is always executed.
 $script:exitCode = 0
 $script:accessPid = $null
+$script:canonicalSession = $null
 
 
 
@@ -25,9 +31,7 @@ if ([string]::IsNullOrEmpty($AccessPassword)) {
 }
 
 $BackendPassword = $env:DYSFLOW_BACKEND_PASSWORD
-$MSO_AUTOMATION_SECURITY_LOW = 1
 $startupInfo = $null
-$originalAutomationSecurity = $null
 
 function New-DaoDbEngine {
   $engineCandidates = @(
@@ -219,49 +223,8 @@ function ConvertTo-IsoStartTime {
   return ([datetime]::Parse($text)).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
 }
 
-function Get-ProcessIdFromHwnd {
-  [CmdletBinding()]
-  Param(
-    [Parameter(Mandatory = $true)][IntPtr]$Hwnd
-  )
-  if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
-    Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class NativeMethods {
-  [DllImport("user32.dll")]
-  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-}
-"@
-  }
-  [uint32]$pid = 0
-  [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
-  return [int]$pid
-}
-
-function Get-MsAccessProcessesBounded {
-  param(
-    [int] $TimeoutSeconds = 4,
-    [scriptblock] $WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
-  )
-  # Run the WMI query inside a background job so a hung WMI provider (e.g. a zombie Access
-  # process stuck on a unreachable UNC share) cannot block the caller indefinitely.
-  $job = Start-Job -ScriptBlock $WmiScriptBlock
-  $procs = @()
-  if (Wait-Job $job -Timeout $TimeoutSeconds) {
-    $procs = @(Receive-Job $job -ErrorAction SilentlyContinue |
-      Select-Object ProcessId, CreationDate, CommandLine)
-  } else {
-    Stop-Job $job -ErrorAction SilentlyContinue
-    Write-Debug "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Timeout tras ${TimeoutSeconds}s."
-  }
-  Remove-Job $job -Force -ErrorAction SilentlyContinue
-  return $procs
-}
-
-function Get-MsAccessProcesses {
-  Get-MsAccessProcessesBounded
-}
+# Get-ProcessIdFromHwnd, Get-MsAccessProcessesBounded, Get-MsAccessProcesses
+# are provided by the shared module dot-sourced above.
 
 function Write-AccessProcessMarker {
   param($Before, [string] $AccessDbPath)
@@ -1593,47 +1556,32 @@ try {
     }
   }
 
-  $access = New-Object -ComObject Access.Application
-  $access.Visible = $false
+  # Delegate COM spawn, AutomationSecurity setup, and 3-layer PID capture to the canonical open.
+  # -OpenDatabase:$false for isDirectTargetQuery (spawns COM but does not call OpenCurrentDatabase;
+  # the DAO engine is used directly instead).
+  $script:canonicalSession = Open-CanonicalAccess `
+    -DbPath    $AccessDbPath `
+    -Password  $AccessPassword `
+    -OpenDatabase:(-not $isDirectTargetQuery)
+
+  $access = $script:canonicalSession.AccessApplication
+  $script:accessPid = $script:canonicalSession.OwnedPid
+
+  # Runner-owned responsibilities not delegated to the canonical:
+  # - Visible/UserControl must be false for headless operation.
+  # - DYSFLOW_ACCESS_PROCESS marker is runner-specific stderr protocol; canonical does not emit it.
+  try { $access.Visible = $false } catch { Write-Debug "Diagnostics: $_" }
   try { $access.UserControl = $false } catch { Write-Debug "Diagnostics: $_" }
-  try {
-    $originalAutomationSecurity = $access.AutomationSecurity
-    $access.AutomationSecurity = $MSO_AUTOMATION_SECURITY_LOW
-  } catch { Write-Debug "Diagnostics: $_" }
-  # Primary PID capture: use the window handle returned by Access itself — deterministic,
-  # no ambiguity even when multiple Access instances are running simultaneously.
-  try {
-    $hwnd = [IntPtr]$access.hWndAccessApp
-    if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
-      $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
-      if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
-    }
-  } catch { Write-Debug "Diagnostics: $_" }
-  # Fallback: WMI pre/post diff (heuristic — only used when hWnd returned 0).
-  if (-not $script:accessPid) {
+
+  # Emit DYSFLOW_ACCESS_PROCESS marker using the PID returned by the canonical open.
+  if ($script:accessPid) {
+    Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid
+  } else {
+    # Fallback: WMI diff (heuristic — only used when the canonical 3-layer ladder found no PID).
     Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
   }
 
   if (-not $isDirectTargetQuery) {
-    if ([string]::IsNullOrEmpty($AccessPassword)) {
-      $access.OpenCurrentDatabase($AccessDbPath)
-    } else {
-      $access.OpenCurrentDatabase($AccessDbPath, $false, $AccessPassword)
-    }
-    # Retry hWnd after OpenCurrentDatabase in case the window was not ready immediately.
-    try {
-      if (-not $script:accessPid) {
-        $hwnd2 = [IntPtr]$access.hWndAccessApp
-        if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
-          $script:accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
-          if ($script:accessPid) { Write-AccessProcessMarkerFromPid -AccessPid $script:accessPid }
-        }
-      }
-    } catch { Write-Debug "Diagnostics: $_" }
-    # Fallback: WMI diff (only when hWnd still returned 0).
-    if (-not $script:accessPid) {
-      Write-AccessProcessMarker -Before $before -AccessDbPath $AccessDbPath
-    }
     try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
   }
 
@@ -1897,54 +1845,31 @@ try {
 
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" }
   }
-  if ($null -ne $access) {
-    if ($null -ne $originalAutomationSecurity) {
-      try { $access.AutomationSecurity = $originalAutomationSecurity } catch { Write-Debug "Diagnostics: $_" }
-    }
+  # Delegate COM teardown + PID kill to Close-CanonicalAccess.
+  # This is THE FIX for the zombie leak (Slice 5):
+  #   - If OwnedPid is non-null  → synchronous kill (Stop-Process + poll 20s + taskkill last-resort).
+  #   - If OwnedPid is null      → ROT close via -RotCloseAction + lock-file check + WARN.
+  #                                 Previously: only WARN — process lingered ~5s → zombie.
+  # AutomationSecurity is restored by Close-CanonicalAccess using Session.OriginalAutomationSecurity.
+  if ($null -ne $script:canonicalSession) {
+    try {
+      Close-CanonicalAccess `
+        -Session       $script:canonicalSession `
+        -DbPath        $AccessDbPath `
+        -RotCloseAction { param($p) Close-TargetAccessDbIfOpen -AccessPath $p } | Out-Null
+    } catch { Write-Debug "Diagnostics: $_" }
+  } elseif ($null -ne $access) {
+    # Fallback if Open-CanonicalAccess never completed (threw before returning a session).
     try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
     try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) } catch { Write-Debug "Diagnostics: $_" }
-  }
-  # Resolve the PID to terminate. Only the PID captured for this runner-owned Access
-  # instance is safe to terminate. If PID attribution was missed (or New-Object reused
-  # an existing COM instance), do not kill by database path or CommandLine alone: that
-  # can target a user's Access process that dysflow does not own.
-  $pidToKill = $script:accessPid
-  if ($null -eq $pidToKill -and $null -ne $access) {
-    [Console]::Error.WriteLine("WARN: Access PID attribution was unavailable; skipped force cleanup instead of killing by database path/CommandLine only.")
-  }
-  if ($null -ne $pidToKill) {
-    # Force-kill and wait deterministically until the process is actually gone, instead of
-    # a fixed sleep — Access can linger in the process table during COM/handle teardown.
-    Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
-    $waited = 0
-    while ($waited -lt 20000) {
-      $alive = $null
-      try { $alive = Get-Process -Id $pidToKill -ErrorAction SilentlyContinue } catch { $alive = $null }
-      if (-not $alive) { break }
-      Start-Sleep -Milliseconds 100
-      $waited += 100
-      Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
-    }
-    # Last resort: if process is still alive after the polite wait, use taskkill which sends
-    # WM_CLOSE + after timeout kills the process tree. Only targets the specific PID we own.
-    if ($null -ne $pidToKill) {
-      $stillAlive = $null
-      try { $stillAlive = Get-Process -Id $pidToKill -ErrorAction SilentlyContinue } catch { $stillAlive = $null }
-      if ($stillAlive) {
-        try {
-          Start-Process -FilePath "taskkill" -ArgumentList "/F", "/PID", $pidToKill -NoNewWindow -Wait:$false -ErrorAction SilentlyContinue
-        } catch { Write-Debug "Diagnostics: $_" }
-      }
-    }
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
   }
   if ($null -ne $startupInfo) {
     try { Restore-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
     Remove-Item -LiteralPath $sentinelPath -Force -ErrorAction SilentlyContinue
   }
-  # See comment above: force GC to release Access COM RCW wrappers after script exit.
-  [System.GC]::Collect()
-  [System.GC]::WaitForPendingFinalizers()
   exit $script:exitCode
 }
 

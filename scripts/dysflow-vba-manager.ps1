@@ -72,6 +72,11 @@ Param(
 $ErrorActionPreference = "Stop"
 $script:QuietOutput = [bool]$Json
 
+# Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
+# Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
+# and allows the Add-Type Win32.NativeMethods guard to work correctly.
+. (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+
 function Write-DysflowOperationMarker {
     [CmdletBinding()]
     Param(
@@ -945,193 +950,10 @@ function Assert-AccessDocumentTextLooksLoadable {
     }
 }
 
-function Get-ProcessIdFromHwnd {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)][IntPtr]$Hwnd
-    )
+# Get-ProcessIdFromHwnd is provided by the shared module dot-sourced above.
 
-    if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
-        Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class NativeMethods {
-  [DllImport("user32.dll")]
-  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-}
-"@
-    }
-
-    [uint32]$pid = 0
-    [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
-    return [int]$pid
-}
-
-function Close-TargetAccessDbIfOpen {
-    # Cierra SOLO la instancia COM de Access que tiene abierta la BD indicada,
-    # iterando el ROT completo para no afectar otras instancias de Access en ejecucion.
-    # Toda la interaccion COM se hace en C# para evitar el problema de __ComObject opaco.
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)][string]$AccessPath
-    )
-
-    $resolved = $null
-    $rp = Resolve-Path -Path $AccessPath -ErrorAction SilentlyContinue
-    if ($rp) { $resolved = $rp.Path }
-    # Fallback: si Resolve-Path falla (OneDrive, rutas largas), usar el path raw
-    if (-not $resolved) {
-        if (Test-Path -LiteralPath $AccessPath) { $resolved = $AccessPath }
-        else {
-            Write-Status -Message ("Close-TargetAccessDbIfOpen: no se pudo resolver la ruta: {0}" -f $AccessPath) -Color DarkYellow
-            return
-        }
-    }
-
-    # Registrar tipos solo una vez por sesion de PowerShell
-    if (-not ([System.Management.Automation.PSTypeName]"RotManager").Type) {
-        Add-Type -TypeDefinition @"
-using System;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-
-public class RotCloseResult {
-    public bool Success;
-    public string Error;
-    public int ClosedCount;
-}
-
-public class RotManager {
-    [DllImport("ole32.dll")]
-    private static extern int GetRunningObjectTable(uint reserved, out IRunningObjectTable pprot);
-
-    [DllImport("ole32.dll")]
-    private static extern int CreateBindCtx(uint reserved, out IBindCtx ppbc);
-
-    public static RotCloseResult CloseDatabaseIfOpen(string dbPath) {
-        var result = new RotCloseResult { Success = true };
-        IRunningObjectTable rot = null;
-        IEnumMoniker enumMk = null;
-        IBindCtx bindCtx = null;
-
-        try {
-            int hr = GetRunningObjectTable(0, out rot);
-            if (hr != 0 || rot == null) { result.Error = "No se pudo obtener el ROT"; return result; }
-
-            hr = CreateBindCtx(0, out bindCtx);
-            if (hr != 0 || bindCtx == null) { result.Error = "No se pudo crear BindCtx"; return result; }
-
-            rot.EnumRunning(out enumMk);
-            if (enumMk == null) { result.Error = "EnumRunning devolvio null"; return result; }
-
-            enumMk.Reset();
-            var monikers = new IMoniker[1];
-
-            while (enumMk.Next(1, monikers, IntPtr.Zero) == 0) {
-                if (monikers[0] == null) continue;
-                object comObj = null;
-                try {
-                    string displayName = null;
-                    try { monikers[0].GetDisplayName(bindCtx, null, out displayName); } catch { continue; }
-                    if (string.IsNullOrEmpty(displayName) || !displayName.Contains("Access.Application")) continue;
-
-                    try { rot.GetObject(monikers[0], out comObj); } catch { continue; }
-                    if (comObj == null) continue;
-
-                    // Usar reflection (late-binding) — funciona sobre __ComObject sin interop assembly
-                    object db = null;
-                    string openDbName = null;
-                    try {
-                        db = comObj.GetType().InvokeMember("CurrentDb",
-                            BindingFlags.InvokeMethod, null, comObj, null);
-                        if (db != null) {
-                            openDbName = (string)db.GetType().InvokeMember("Name",
-                                BindingFlags.GetProperty, null, db, null);
-                        }
-                    } catch {
-                        // No tiene BD abierta o instancia corrupta — saltar
-                    } finally {
-                        if (db != null) try { Marshal.ReleaseComObject(db); } catch { }
-                    }
-
-                    if (!string.IsNullOrEmpty(openDbName) &&
-                        string.Equals(openDbName, dbPath, StringComparison.OrdinalIgnoreCase)) {
-                        try {
-                            comObj.GetType().InvokeMember("CloseCurrentDatabase",
-                                BindingFlags.InvokeMethod, null, comObj, null);
-                            try {
-                                comObj.GetType().InvokeMember("Quit",
-                                    BindingFlags.InvokeMethod, null, comObj, null);
-                            } catch { }
-                            result.ClosedCount++;
-                        } catch { }
-                    }
-                } catch {
-                    // Este moniker no sirve — continuar
-                } finally {
-                    if (comObj != null) try { Marshal.ReleaseComObject(comObj); } catch { }
-                    try { Marshal.ReleaseComObject(monikers[0]); } catch { }
-                    monikers[0] = null;
-                }
-            }
-        } catch (Exception ex) {
-            result.Success = false;
-            result.Error = ex.Message;
-        } finally {
-            if (enumMk != null) try { Marshal.ReleaseComObject(enumMk); } catch { }
-            if (bindCtx != null) try { Marshal.ReleaseComObject(bindCtx); } catch { }
-            if (rot != null) try { Marshal.ReleaseComObject(rot); } catch { }
-        }
-        return result;
-    }
-}
-"@
-    }
-
-    $closedViaRot = $false
-    try {
-        $result = [RotManager]::CloseDatabaseIfOpen($resolved)
-        if ($result.ClosedCount -gt 0) {
-            Write-Status -Message ("Cerrada(s) {0} instancia(s) COM de la BD: {1}" -f $result.ClosedCount, $resolved) -Color Yellow
-            $closedViaRot = $true
-        }
-        if ($result.Error) {
-            Write-Status -Message ("ROT warning: {0}" -f $result.Error) -Color DarkYellow
-        }
-    } catch { Write-Debug "Diagnostics: $_" }
-
-    # Fallback: si el ROT no cerro nada, buscar proceso MSACCESS con lock bloqueado
-    if (-not $closedViaRot) {
-        $lockPath = Get-AccessLockFilePath -AccessPath $resolved
-        if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {
-            Write-Status -Message ("Detectado lock activo: {0}" -f $lockPath) -Color Yellow
-
-            # Buscar MSACCESS.EXE por CommandLine solo para diagnosticar bloqueos. Coincidir
-            # por ruta NO demuestra ownership: puede ser otra sesion/agente usando la misma BD.
-            # En ese caso se reporta/bloquea; no se mata ningun proceso no atribuido.
-            # Get-CimInstance puede deadlockear si hay procesos zombie colgados en I/O de red
-            # (e.g. UNC inalcanzable); usar el helper acotado que envuelve la llamada en un Job.
-            $cimProcs = @(Get-MsAccessProcessesBounded)
-
-            if ($cimProcs.Count -gt 0) {
-                $matchingPids = [System.Collections.Generic.List[int]]::new()
-                foreach ($cim in $cimProcs) {
-                    if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
-                        $matchingPids.Add([int]$cim.ProcessId)
-                    }
-                }
-                if ($matchingPids.Count -gt 0) {
-                    Write-Status -Message ("MSACCESS no atribuido bloquea '{0}' (PIDs: {1}); no se cerrara ningun proceso sin OperationId/PID propio." -f $resolved, ($matchingPids -join ', ')) -Color DarkYellow
-                } else {
-                    Write-Status -Message ("Ningun MSACCESS contiene '{0}' en CommandLine. PIDs activos: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', ')) -Color DarkYellow
-                }
-            } else {
-                Write-Status -Message "No se pudo enumerar MSACCESS por CommandLine; no se cerrara ningun proceso no atribuido." -Color DarkYellow
-            }
-        }
-    }
-}
+# Close-TargetAccessDbIfOpen is provided by the shared module dot-sourced above.
+# Moved to scripts/lib/dysflow-access-com.ps1 in Slice 5 — single source of truth.
 
 function Open-AccessDatabase {
     [CmdletBinding()]
@@ -1142,12 +964,11 @@ function Open-AccessDatabase {
         [switch]$AllowStartupExecution
     )
 
+    $canonical = $null
     $access = $null
     $originalBypass = $null
-    $accessPid = $null
     $vbe = $null
     $vbProject = $null
-    $prePids = @()
     $startupInfo = $null
 
     try {
@@ -1176,53 +997,27 @@ function Open-AccessDatabase {
             }
         }
 
-        try {
-            $prePids = @(Get-Process MSACCESS -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-        } catch {
-            $prePids = @()
-        }
+        # Delegate COM spawn + 3-layer PID capture to the canonical open.
+        # Open-CanonicalAccess handles: New-Object Access.Application, AutomationSecurity=1,
+        # hWnd layer-1 (pre-open), OpenCurrentDatabase, hWnd layer-2 (post-open retry),
+        # WMI diff layer-3 (fallback, bounded, never overwrites a stronger layer).
+        $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password
+        $access = $canonical.AccessApplication
 
-        $access = New-Object -ComObject Access.Application
-        $access.Visible = $false
-        $access.UserControl = $false
-        $access.AutomationSecurity = 1
-        try {
-            $hwnd = [IntPtr]$access.hWndAccessApp
-            if ($hwnd -and $hwnd -ne [IntPtr]::Zero) {
-                $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd
-            }
-        } catch { Write-Debug "Diagnostics: $_" }
-
-        $access.OpenCurrentDatabase($AccessPath, $false, $Password)
+        # Set Visible/UserControl after spawn — canonical does not set these; we set them here
+        # for defensive headless operation (Access default is already headless when COM-created,
+        # but we keep these explicit assignments for clarity and backward compatibility).
+        try { $access.Visible = $false } catch { Write-Debug "Diagnostics: $_" }
+        try { $access.UserControl = $false } catch { Write-Debug "Diagnostics: $_" }
         try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
-        # Retry hWnd after OpenCurrentDatabase in case the window was not ready immediately.
-        try {
-            if (-not $accessPid) {
-                $hwnd2 = [IntPtr]$access.hWndAccessApp
-                if ($hwnd2 -and $hwnd2 -ne [IntPtr]::Zero) {
-                    $accessPid = Get-ProcessIdFromHwnd -Hwnd $hwnd2
-                }
-            }
-        } catch { Write-Debug "Diagnostics: $_" }
 
-        # Fallback: pre/post process diff — only used when hWndAccessApp returned 0.
-        # Never overwrite a PID already captured via the deterministic hWnd path.
-        try {
-            if (-not $accessPid) {
-                $post = @(Get-Process MSACCESS -ErrorAction SilentlyContinue | Select-Object -Property Id, StartTime)
-                $new = @($post | Where-Object { $_.Id -notin $prePids })
-                if ($new.Count -eq 1) {
-                    $accessPid = [int]$new[0].Id
-                } elseif ($new.Count -gt 1) {
-                    Write-Status -Message ("WARN: se detectaron varias instancias nuevas de MSACCESS y no se pudo identificar con certeza cuál pertenece a '{0}'. Se evita fijar un PID ambiguo." -f $AccessPath) -Color DarkYellow
-                }
-            }
-        } catch { Write-Debug "Diagnostics: $_" }
+        $accessPid = $canonical.OwnedPid
 
         if (-not $accessPid) {
             Write-Status -Message ("WARN: no se pudo determinar el PID de Access para '{0}'. El cierre final se hara por COM/ROT y el lock podria persistir si Access queda vivo." -f $AccessPath) -Color DarkYellow
         }
 
+        # DYSFLOW_OPERATION marker — emitted by vba-manager, NOT by the canonical function.
         Write-DysflowOperationMarker -Status "running" -AccessPid $accessPid
 
         $vbe = $access.VBE
@@ -1235,14 +1030,26 @@ function Open-AccessDatabase {
             OriginalBypass    = $originalBypass
             StartupInfo       = $startupInfo
             ProcessId         = $accessPid
+            # Store the canonical session so Close-AccessDatabase can delegate teardown back
+            # to Close-CanonicalAccess (owns AutomationSecurity restore + GC + kill logic).
+            CanonicalSession  = $canonical
         }
     } catch {
-        if ($access) {
-            try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
-            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
-        }
+        # Release secondary COM objects acquired after the canonical open.
         foreach ($obj in @($vbProject, $vbe)) {
             if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+        }
+        # If the canonical session was created, delegate full teardown to Close-CanonicalAccess
+        # (handles CloseCurrentDatabase, Quit, FinalReleaseComObject, GC, kill).
+        if ($canonical) {
+            try {
+                Close-CanonicalAccess -Session $canonical -DbPath $AccessPath `
+                    -RotCloseAction { param($p) Close-TargetAccessDbIfOpen -AccessPath $p }
+            } catch { Write-Debug "Diagnostics: $_" }
+        } elseif ($access) {
+            # Canonical open threw before returning a session — do a best-effort release.
+            try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
         }
         if ($originalBypass) {
             try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $originalBypass } catch { Write-Debug "Diagnostics: $_" }
@@ -1254,42 +1061,9 @@ function Open-AccessDatabase {
     }
 }
 
-# Run a WMI Get-CimInstance for MSACCESS.EXE inside a background job so a hung WMI provider
-# (e.g. a zombie Access process stuck on an unreachable UNC share) cannot block the caller
-# indefinitely. Returns whatever processes were retrieved; returns an empty array on timeout.
-function Get-MsAccessProcessesBounded {
-    [CmdletBinding()]
-    Param(
-        [int]$TimeoutSeconds = 4,
-        [scriptblock]$WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
-    )
-    $job = Start-Job -ScriptBlock $WmiScriptBlock
-    $procs = @()
-    if (Wait-Job $job -Timeout $TimeoutSeconds) {
-        $procs = @(Receive-Job $job -ErrorAction SilentlyContinue)
-    } else {
-        Stop-Job $job -ErrorAction SilentlyContinue
-        Write-Status -Message "WMI colgado al enumerar MSACCESS (probable proceso zombie en red). Timeout tras ${TimeoutSeconds}s." -Color DarkYellow
-    }
-    Remove-Job $job -Force -ErrorAction SilentlyContinue
-    return $procs
-}
+# Get-MsAccessProcessesBounded is provided by the shared module dot-sourced above.
 
-function Get-AccessLockFilePath {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)][string]$AccessPath
-    )
-
-    $ext = [System.IO.Path]::GetExtension($AccessPath)
-    if ([string]::Equals($ext, ".accdb", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return [System.IO.Path]::ChangeExtension($AccessPath, ".laccdb")
-    }
-    if ([string]::Equals($ext, ".mdb", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return [System.IO.Path]::ChangeExtension($AccessPath, ".ldb")
-    }
-    return $null
-}
+# Get-AccessLockFilePath is provided by the shared module dot-sourced above.
 
 # Diagnostic helper: find an MSACCESS.EXE PID that appears to have the given
 # database open, identified only by the database path in the process command
@@ -1308,28 +1082,7 @@ function Find-AccessPidByDatabase {
     return $null
 }
 
-# Force-terminate a specific PID and wait deterministically until it is actually gone,
-# instead of relying on a fixed sleep. Access can stay in the process table briefly after
-# CloseCurrentDatabase/Quit while it releases COM and file handles.
-function Stop-AccessPidAndWait {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)][int]$AccessPid,
-        [int]$TimeoutMs = 20000
-    )
-    try { Stop-Process -Id $AccessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
-    $elapsed = 0
-    while ($elapsed -lt $TimeoutMs) {
-        $alive = $null
-        try { $alive = Get-Process -Id $AccessPid -ErrorAction SilentlyContinue } catch { $alive = $null }
-        if (-not $alive) { return $true }
-        Start-Sleep -Milliseconds 100
-        $elapsed += 100
-        # Re-issue the kill in case the first signal was dropped during COM teardown.
-        try { Stop-Process -Id $AccessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
-    }
-    return $false
-}
+# Stop-AccessPidAndWait is provided by the shared module dot-sourced above.
 
 function Close-AccessDatabase {
     [CmdletBinding()]
@@ -1337,51 +1090,66 @@ function Close-AccessDatabase {
         [Parameter(Mandatory = $true)]$Session,
         [Parameter(Mandatory = $true)][string]$AccessPath,
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
-        [string]$Password
+        [string]$Password,
+        # Injectable seams forwarded to Close-CanonicalAccess — for testing only.
+        # Production callers omit these; defaults are the real implementations.
+        [scriptblock]$KillPidAction  = $null,
+        [scriptblock]$LockFileAction = $null
     )
 
-    $access = $Session.AccessApplication
     $orig = $Session.OriginalBypass
     $startupInfo = $Session.StartupInfo
-    $accessPid = $Session.ProcessId
 
-    $hasOwnedAccessPid = [bool]$accessPid
-
-    if ($access) {
-        try { $access.CloseCurrentDatabase() } catch { Write-Debug "Diagnostics: $_" }
-        try { $access.Quit() } catch { Write-Debug "Diagnostics: $_" }
-    }
-
-    foreach ($obj in @($Session.VbProject, $Session.Vbe, $Session.AccessApplication)) {
+    # Release secondary COM objects (Vbe, VbProject) that vba-manager holds but
+    # the canonical session does not know about — must happen BEFORE canonical teardown.
+    foreach ($obj in @($Session.VbProject, $Session.Vbe)) {
         if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
-    [System.GC]::Collect()
-    [System.GC]::WaitForPendingFinalizers()
-
-    # Kill Access BEFORE DAO restore operations only when this operation captured
-    # an owned PID at open time. A PID resolved later by database path is
-    # diagnostic-only and must not be force-killed because path-only is not
-    # ownership.
-    if ($hasOwnedAccessPid) {
-        $terminated = Stop-AccessPidAndWait -AccessPid $accessPid
-        if (-not $terminated) {
-            Write-Status -Message ("WARN: no se pudo confirmar la terminacion del PID {0} para '{1}' tras la espera acotada." -f $accessPid, $AccessPath) -Color DarkYellow
-        }
+    # Build a canonical session from the vba-manager session fields so
+    # Close-CanonicalAccess can own the COM teardown + GC + kill logic.
+    # Prefer the CanonicalSession stored at open time (contains OriginalAutomationSecurity);
+    # fall back to constructing one from the flat fields for sessions opened before Slice 4.
+    $canonicalSession = if ($Session.PSObject.Properties['CanonicalSession'] -and $Session.CanonicalSession) {
+        $Session.CanonicalSession
     } else {
-        $diagnosticPid = Find-AccessPidByDatabase -AccessPath $AccessPath
-        if ($diagnosticPid) {
-            Write-Status -Message ("WARN: se cierra '{0}' sin PID propio de Access. PID {1} coincide solo por ruta y no se forzara su terminacion." -f $AccessPath, $diagnosticPid) -Color DarkYellow
-        } else {
-            Write-Status -Message ("WARN: se cierra '{0}' sin PID propio de Access. Se reintentara el cierre por ROT y se verificara el lock." -f $AccessPath) -Color DarkYellow
+        [PSCustomObject]@{
+            AccessApplication          = $Session.AccessApplication
+            OwnedPid                   = $Session.ProcessId
+            OriginalAutomationSecurity = 1  # safe default; canonical will restore to 1
+            PidAttributed              = ($null -ne $Session.ProcessId)
         }
-        try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
-        Start-Sleep -Milliseconds 300
     }
 
+    # Delegate COM teardown + kill to Close-CanonicalAccess:
+    #   - CloseCurrentDatabase, Quit, FinalReleaseComObject, GC (BEFORE kill)
+    #   - Owned PID: Stop-AccessPidAndWait synchronous (with taskkill last-resort)
+    #   - Null PID:  WARN + ROT close via RotCloseAction + lock-file check via LockFileAction
+    # The DYSFLOW_OPERATION marker and AllowBypassKey/startup restore stay here in vba-manager.
+    $rotClose = { param($p) Close-TargetAccessDbIfOpen -AccessPath $p }
+
+    $closeArgs = @{
+        Session       = $canonicalSession
+        DbPath        = $AccessPath
+        RotCloseAction = $rotClose
+    }
+    if ($KillPidAction)  { $closeArgs['KillPidAction']  = $KillPidAction }
+    if ($LockFileAction) { $closeArgs['LockFileAction'] = $LockFileAction }
+
+    $closeResult = Close-CanonicalAccess @closeArgs
+
+    if ($null -ne $canonicalSession.OwnedPid -and -not $closeResult.OwnedPidKilled) {
+        Write-Status -Message ("WARN: no se pudo confirmar la terminacion del PID {0} para '{1}' tras la espera acotada." -f $canonicalSession.OwnedPid, $AccessPath) -Color DarkYellow
+    }
+
+    # Restore AllowBypassKey and startup features — these belong to vba-manager,
+    # NOT to the canonical close (which does not know about DAO/startup state).
     try { Restore-AllowBypassKey -AccessPath $AccessPath -Password $Password -OriginalState $orig } catch { Write-Debug "Diagnostics: $_" }
     try { Restore-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo } catch { Write-Debug "Diagnostics: $_" }
 
+    # Additional lock-file check after restore: if the lock persists, try ROT close once more.
+    # The canonical already checked the lock in the null-PID path; this check covers the
+    # owned-PID path where the lock might linger briefly after the kill.
     $lockPath = Get-AccessLockFilePath -AccessPath $AccessPath
 
     if ($lockPath) {
