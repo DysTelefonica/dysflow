@@ -12,6 +12,7 @@ import {
   resolveDefaultRunnerScriptPath,
   sanitizePowerShellOutput,
 } from "../../../src/core/runner/access-runner.js";
+import { POWERSHELL_EXE } from "../../../src/core/runner/powershell-executor.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
@@ -72,7 +73,7 @@ describe("AccessPowerShellRunner", () => {
     });
     expect(calls).toEqual([
       {
-        command: "powershell.exe",
+        command: POWERSHELL_EXE,
         timeoutMs: 1_500,
         args: [
           "-NoProfile",

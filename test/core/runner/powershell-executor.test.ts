@@ -201,15 +201,22 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     await vi.advanceTimersByTimeAsync(250);
     await Promise.resolve();
 
-    const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
-    expect(taskkillCall).toBeDefined();
-    expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "9999"]);
-    expect(kill).not.toHaveBeenCalled();
+    if (process.platform === "win32") {
+      const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+      expect(taskkillCall).toBeDefined();
+      expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "9999"]);
+      expect(kill).not.toHaveBeenCalled();
 
-    // Fire taskkill close so the awaited kill resolves
-    taskkillCloseCallback?.(0);
-    await Promise.resolve();
-    await Promise.resolve();
+      // Fire taskkill close so the awaited kill resolves
+      taskkillCloseCallback?.(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    } else {
+      // On non-Windows, taskkill is never spawned; child.kill() is used instead
+      const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+      expect(taskkillCall).toBeUndefined();
+      expect(kill).toHaveBeenCalledTimes(1);
+    }
 
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
   });
@@ -243,15 +250,22 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
     controller.abort();
     await Promise.resolve();
 
-    const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
-    expect(taskkillCall).toBeDefined();
-    expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "8888"]);
-    expect(kill).not.toHaveBeenCalled();
+    if (process.platform === "win32") {
+      const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+      expect(taskkillCall).toBeDefined();
+      expect(taskkillCall?.[1]).toEqual(["/T", "/F", "/PID", "8888"]);
+      expect(kill).not.toHaveBeenCalled();
 
-    // Fire taskkill close so the awaited kill resolves
-    taskkillCloseCallback?.(0);
-    await Promise.resolve();
-    await Promise.resolve();
+      // Fire taskkill close so the awaited kill resolves
+      taskkillCloseCallback?.(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    } else {
+      // On non-Windows, taskkill is never spawned; child.kill() is used instead
+      const taskkillCall = mockSpawn.mock.calls.find((c) => c[0] === "taskkill");
+      expect(taskkillCall).toBeUndefined();
+      expect(kill).toHaveBeenCalledTimes(1);
+    }
 
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
   });
@@ -326,16 +340,22 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     await vi.advanceTimersByTimeAsync(250);
     await Promise.resolve();
 
-    // taskkill was spawned but its close event has NOT fired yet
-    expect(taskkillCloseCallback).toBeDefined();
-    // Result must not have settled yet (taskkill still running)
-    expect(settled).toBe(false);
+    if (process.platform === "win32") {
+      // taskkill was spawned but its close event has NOT fired yet
+      expect(taskkillCloseCallback).toBeDefined();
+      // Result must not have settled yet (taskkill still running)
+      expect(settled).toBe(false);
 
-    // Now fire the taskkill close event — result must settle after this
-    taskkillCloseCallback?.(0);
-    // Flush microtask chain: inner Promise resolve → killProcessTree resolves →
-    // .then(finish) → outer Promise resolves → resultPromise.then(settled = true)
-    for (let i = 0; i < 8; i++) await Promise.resolve();
+      // Now fire the taskkill close event — result must settle after this
+      taskkillCloseCallback?.(0);
+      // Flush microtask chain: inner Promise resolve → killProcessTree resolves →
+      // .then(finish) → outer Promise resolves → resultPromise.then(settled = true)
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    } else {
+      // On non-Windows, child.kill() is called synchronously in the timeout handler,
+      // so settlement is immediate — taskkillCloseCallback is never populated
+      expect(taskkillCloseCallback).toBeUndefined();
+    }
 
     expect(settled).toBe(true);
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
@@ -381,13 +401,19 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     controller.abort();
     await Promise.resolve();
 
-    // taskkill was spawned but its close event has NOT fired yet
-    expect(taskkillCloseCallback).toBeDefined();
-    expect(settled).toBe(false);
+    if (process.platform === "win32") {
+      // taskkill was spawned but its close event has NOT fired yet
+      expect(taskkillCloseCallback).toBeDefined();
+      expect(settled).toBe(false);
 
-    // Fire taskkill close — flush microtask chain
-    taskkillCloseCallback?.(0);
-    for (let i = 0; i < 8; i++) await Promise.resolve();
+      // Fire taskkill close — flush microtask chain
+      taskkillCloseCallback?.(0);
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    } else {
+      // On non-Windows, child.kill() is called synchronously in the abort handler,
+      // so settlement is immediate — taskkillCloseCallback is never populated
+      expect(taskkillCloseCallback).toBeUndefined();
+    }
 
     expect(settled).toBe(true);
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
