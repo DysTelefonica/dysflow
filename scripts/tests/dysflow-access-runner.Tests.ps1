@@ -510,16 +510,16 @@ Describe "seed_fixture SQL injection prevention" {
 
 # ===========================================================================
 # P1 — Behavioral tests for Get-MsAccessProcessesBounded (#380)
-# Extract the function via AST so the tests always run against the production
-# source and a seam-only rename/move would require test changes.
+# The function moved to scripts/lib/dysflow-access-com.ps1 (Slice 1 dedup).
+# Tests now load it from the module; the production behavior contract is unchanged.
 # ===========================================================================
 
 Describe "Get-MsAccessProcessesBounded — behavioral (issue #380)" {
     BeforeAll {
-        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $script:SharedModulePath = Join-Path $PSScriptRoot ".." "lib" "dysflow-access-com.ps1"
 
         $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path $script:RunnerPath).Path,
+            (Resolve-Path $script:SharedModulePath).Path,
             [ref]$null, [ref]$null
         )
         $fnAst = $ast.FindAll(
@@ -527,7 +527,7 @@ Describe "Get-MsAccessProcessesBounded — behavioral (issue #380)" {
               $args[0].Name -eq 'Get-MsAccessProcessesBounded' },
             $true
         ) | Select-Object -First 1
-        if (-not $fnAst) { throw "Get-MsAccessProcessesBounded not found in $($script:RunnerPath)" }
+        if (-not $fnAst) { throw "Get-MsAccessProcessesBounded not found in $($script:SharedModulePath)" }
         Invoke-Expression $fnAst.Extent.Text
     }
 
@@ -1039,21 +1039,101 @@ Describe "Access runner final cleanup ownership guard" {
             $script:RunnerSource,
             '(?s)function Write-AccessProcessMarker \{.*?\n\}'
         ).Value
+        $script:ModulePath = Join-Path $PSScriptRoot ".." "lib" "dysflow-access-com.ps1"
+        $script:ModuleSource = Get-Content -LiteralPath $script:ModulePath -Raw
     }
 
-    It "keeps force cleanup limited to the runner-owned captured PID" {
-        $script:RunnerSource | Should -Match ([regex]::Escape('$pidToKill = $script:accessPid'))
-        $script:RunnerSource | Should -Not -Match '(?s)\$pidToKill\s*=\s*\$script:accessPid.*\$pidToKill\s*=\s*\[int\]\$proc\.ProcessId'
-        $script:RunnerSource | Should -Not -Match '(?s)\$pidToKill\s*=\s*\$script:accessPid.*CommandLine\.ToLowerInvariant\(\)\.Contains\(\$dbKey\)'
+    # Slice 5: the runner now delegates cleanup to Close-CanonicalAccess (shared module).
+    # The ownership invariant (kill only the attributed OwnedPid, never by path/CommandLine)
+    # is enforced by Close-CanonicalAccess — NOT by inline $pidToKill logic in the runner.
+    It "delegates COM teardown to Close-CanonicalAccess via the canonical session" {
+        # Runner must call Close-CanonicalAccess with the canonical session.
+        $script:RunnerSource | Should -Match ([regex]::Escape('Close-CanonicalAccess'))
+        $script:RunnerSource | Should -Match ([regex]::Escape('$script:canonicalSession'))
+        # Runner must NOT contain the old inline kill pattern that was replaced.
+        $script:RunnerSource | Should -Not -Match ([regex]::Escape('$pidToKill = $script:accessPid'))
     }
 
-    It "warns instead of killing when Access PID attribution is missing" {
-        $script:RunnerSource | Should -Match 'Access PID attribution was unavailable; skipped force cleanup'
+    It "runner does not kill by database path or CommandLine — invariant enforced by canonical module" {
+        # The canonical module enforces the invariant: UnattributedKilled is always $false.
+        # Confirm the invariant field is hardcoded to $false (never set to $true).
+        $script:ModuleSource | Should -Match ([regex]::Escape('UnattributedKilled = $false'))
+        # The canonical module must NOT contain a kill invocation keyed on CommandLine.
+        # This rules out any "kill by CommandLine match" pattern (e.g. Stop-Process resolved by path).
+        $script:ModuleSource | Should -Not -Match 'Stop-Process.*CommandLine'
+        # Runner passes -RotCloseAction so the null-PID fallback runs ROT close instead of bare WARN.
+        $script:RunnerSource | Should -Match ([regex]::Escape('-RotCloseAction'))
     }
 
     It "does not claim ownership from a path-only CommandLine match in Write-AccessProcessMarker" {
         $script:WriteAccessProcessMarkerSource | Should -Not -BeNullOrEmpty
         $script:WriteAccessProcessMarkerSource | Should -Not -Match 'CommandLine\.ToLowerInvariant\(\)\.Contains\(\$AccessDbPath\.ToLowerInvariant\(\)\)'
         $script:WriteAccessProcessMarkerSource | Should -Match 'skipped process marker instead of claiming ownership from database path/CommandLine only'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Slice 5 — port test: null-PID close runs ROT fallback, no force-kill, no throw
+# ---------------------------------------------------------------------------
+# THE FIX: before Slice 5, the runner's finally block with OwnedPid=$null only emitted
+# a WARN and left the MSACCESS process to die on its own (~5s) → zombie-check FAIL.
+# After Slice 5, Close-CanonicalAccess is called with -RotCloseAction, so the null-PID
+# path runs ROT close + lock-check + WARN instead of a bare WARN.
+#
+# This test pins the observable contract directly on the canonical module
+# (the runner's behavior flows through it — per testing-philosophy.md, test at the port):
+#   - OwnedPid=$null → OwnedPidKilled=$false
+#   - OwnedPid=$null → UnattributedKilled=$false (invariant)
+#   - OwnedPid=$null → RotCloseAction IS invoked (the ROT fallback runs)
+#   - Close does NOT throw
+
+Describe "Slice 5 fix — null-PID close runs ROT fallback (behavior at the port)" {
+    BeforeAll {
+        $script:ModulePath = Join-Path $PSScriptRoot ".." "lib" "dysflow-access-com.ps1"
+        . (Resolve-Path $script:ModulePath).Path
+    }
+
+    Context "null-PID path: ROT fallback runs, no force-kill, no exception" {
+        It "OwnedPidKilled=false, UnattributedKilled=false, RotCloseAction invoked, no throw" {
+            # Track whether RotCloseAction was called (proves ROT fallback ran).
+            $rotCalls = [System.Collections.Generic.List[string]]::new()
+
+            $fakeApp = [PSCustomObject]@{ AutomationSecurity = 3 }
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name CloseCurrentDatabase -Value {}
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name Quit -Value { param($s) }
+
+            # Build a canonical session with OwnedPid=$null (attribution failed).
+            $session = [PSCustomObject]@{
+                AccessApplication          = $fakeApp
+                OwnedPid                   = $null
+                OriginalAutomationSecurity = 3
+                PidAttributed              = $false
+            }
+
+            $threw = $false
+            $result = $null
+            try {
+                $result = Close-CanonicalAccess `
+                    -Session        $session `
+                    -DbPath         "C:\fake.accdb" `
+                    -RotCloseAction { param($p) $rotCalls.Add($p) } `
+                    -KillPidAction  { param([int]$AccessPid) $true } `
+                    -LockFileAction { $false }
+            } catch {
+                $threw = $true
+            }
+
+            # No exception — Close must be safe even when PID attribution failed.
+            $threw             | Should -Be $false -Because "Close with null-PID must never throw"
+
+            # Owned-PID kill must NOT have fired (no PID to kill).
+            $result.OwnedPidKilled     | Should -Be $false -Because "no PID was attributed so nothing should be killed"
+
+            # Invariant: unattributed processes are NEVER killed.
+            $result.UnattributedKilled | Should -Be $false -Because "invariant: unattributed MSACCESS is never force-killed"
+
+            # THE FIX: RotCloseAction MUST have been called (ROT fallback runs instead of bare WARN).
+            $rotCalls.Count | Should -BeGreaterOrEqual 1 -Because "null-PID path must invoke -RotCloseAction to attempt ROT close"
+        }
     }
 }
