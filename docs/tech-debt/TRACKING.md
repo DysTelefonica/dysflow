@@ -21,7 +21,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-03 — **#410 (CI fix) and #405 both merged to main; CI green.** Next: #406.
+`Last updated`: 2026-06-03 — **#410, #405, #406 merged to main; CI green.** Next: #407.
 
 ---
 
@@ -30,7 +30,8 @@
 - **#410** (CI fix, unplanned but prioritized): main was red on Linux CI (pre-existing, 4+ runs).
   Fixed 5 Windows-coupled tests → PR #411 merged → **main green again** (first time since v1.2.12).
 - **#405**: SDD full cycle done → PR #409 merged → issue closed → SDD archived (engram report).
-- Next up: **#406**.
+- **#406**: pure type-move, lightweight SDD → PR #412 merged → issue closed → archived.
+- Next up: **#407**.
 
 ---
 
@@ -86,8 +87,8 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 |-------|-------|-------|----------|--------|--------|----|------------|
 | 0 | [#410](https://github.com/DysTelefonica/dysflow/issues/410) | Make Windows-coupled CI tests platform-aware (red main) | high | `done` ✅ | (merged) | [#411](https://github.com/DysTelefonica/dysflow/pull/411) | — |
 | 1 | [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | high | `done` ✅ | (merged) | [#409](https://github.com/DysTelefonica/dysflow/pull/409) | `405-unify-mcp-tool-registration` |
-| 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `todo` ⏭️ NEXT | — | — | — |
-| 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `todo` | — | — | — |
+| 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `done` ✅ | (merged) | [#412](https://github.com/DysTelefonica/dysflow/pull/412) | `406-remove-duplicate-vba-comparison-types` |
+| 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `todo` ⏭️ NEXT | — | — | — |
 | 4 | [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | medium | `todo` | — | — | — |
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
@@ -106,12 +107,10 @@ Outcome: single `registerMcpToolList()` (pure, throws on duplicate names), `ALIA
 alias vs dispatch by construction. Behavior preserved (counts 45/2/5/48 unchanged). PR #409 merged.
 Artifacts: `openspec/changes/405-unify-mcp-tool-registration/` + engram `sdd/405-.../*`.
 
-### #406 — Remove duplicated VBA comparison types (NEXT)
-- **Key files**: core source of truth `src/core/services/vba-source-comparison.ts:16-62`; delete the
-  duplicates in `src/adapters/vba-sync/vba-sync-adapter.ts:30-65`; re-export pattern already at `:611`.
-- **Scope**: pure type move; behavior must be identical; `tsc --noEmit` proves it.
-- **Right-sized**: lightweight SDD (proposal + tasks → apply → verify).
-- **Next action**: branch `refactor/406-...` off main, plan + implement.
+### #406 — Remove duplicated VBA comparison types (DONE)
+Deleted the 5 duplicate type declarations in `vba-sync-adapter.ts` (were identical to core) and
+re-exported them from `core/services/vba-source-comparison.ts`. Pure type move; tsc clean; behavior
+identical. PR #412 merged.
 
 ### #407 — AccessOperationRegistry ownership
 - **Key files**: singleton at `src/core/runner/access-runner.ts:118` + `getDefaultAccessOperationRegistry()` `:121`;
