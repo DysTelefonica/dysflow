@@ -19,7 +19,7 @@ export type PowerShellProcessOptions = {
   onStderr?(text: string): void;
 };
 
-export const POWERSHELL_EXE = "powershell.exe";
+export const POWERSHELL_EXE = process.platform === "win32" ? "powershell.exe" : "pwsh";
 
 /** Maximum time to wait for taskkill to exit before giving up and settling anyway. */
 const KILL_TREE_BOUND_MS = 3_000;
@@ -64,6 +64,8 @@ export const POWERSHELL_SYSTEM_ENV_KEYS = [
   "APPDATA",
   "HOMEDRIVE",
   "HOMEPATH",
+  "HOME",
+  "USER",
 ] as const;
 
 function buildChildEnv(
@@ -75,6 +77,9 @@ function buildChildEnv(
       base[key] = process.env[key];
     }
   }
+  if (process.platform !== "win32") {
+    base.DYSFLOW_MOCK_COM = "1";
+  }
   return { ...base, ...override };
 }
 
@@ -83,7 +88,9 @@ export function spawnPowerShellProcess(
 ): Promise<PowerShellProcessResult> {
   const startedAt = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(options.command ?? POWERSHELL_EXE, options.args, {
+    const resolvedCommand =
+      options.command === "powershell.exe" || !options.command ? POWERSHELL_EXE : options.command;
+    const child = spawn(resolvedCommand, options.args, {
       shell: false,
       windowsHide: true,
       cwd: options.cwd,
@@ -107,7 +114,7 @@ export function spawnPowerShellProcess(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      if (child.pid !== undefined) {
+      if (child.pid !== undefined && process.platform === "win32") {
         void killProcessTree(child.pid).then(() => {
           finish(null);
         });
@@ -121,7 +128,7 @@ export function spawnPowerShellProcess(
       "abort",
       () => {
         timedOut = true;
-        if (child.pid !== undefined) {
+        if (child.pid !== undefined && process.platform === "win32") {
           void killProcessTree(child.pid).then(() => {
             finish(null);
           });

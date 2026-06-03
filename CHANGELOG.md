@@ -1,6 +1,17 @@
 # Changelog
 
-All notable changes to Dysflow will be documented in this file.
+## [v1.2.14] - 2026-06-03
+
+### Added
+
+- **Cross-Platform COM and WMI mocking for Linux/macOS CI.** Added a mock COM module (`scripts/lib/dysflow-mock-com.ps1`) that implements `Access.Application`, `DAO.DBEngine`, and `Database` (with iterable `TableDefs` and `QueryDefs` collections) to run test suites without Windows or real Microsoft Access dependencies.
+- **Node.js execution support for Linux environments.** Updated `powershell-executor.ts` to automatically execute `pwsh` on non-Windows platforms and inject `DYSFLOW_MOCK_COM=1` environment variable.
+
+### Fixed
+
+- **WMI test characterization bypass.** Bypassed the mock COM interceptor in `Get-MsAccessProcessesBounded` if a custom `WmiScriptBlock` is supplied, allowing behavioral Pester tests to run correctly.
+- **Mock PID kill blocks.** Gated `Stop-AccessPidAndWait` to return `$true` immediately when `DYSFLOW_MOCK_COM=1` to prevent fake PIDs from causing long timeouts.
+- **E2E test exclusion.** Automatically skip real-database E2E integration tests in `test/e2e/` when `DYSFLOW_MOCK_COM=1` is active since mocking does not perform physical file system writes.
 
 ## [v1.2.13] - 2026-06-03
 

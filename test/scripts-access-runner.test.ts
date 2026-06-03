@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
+const sharedModule = readFileSync("scripts/lib/dysflow-access-com.ps1", "utf8");
 
 describe("dysflow-access-runner.ps1", () => {
   it("serializes seed_fixture numeric, boolean, and null values without quoting them as strings", () => {
@@ -105,15 +106,17 @@ describe("dysflow-access-runner.ps1", () => {
 
   it("Goal B: defines a bounded WMI helper and uses it instead of bare Get-CimInstance in cleanup/fallback paths", () => {
     // The bounded helper function must be defined
-    expect(script).toContain("function Get-MsAccessProcessesBounded");
+    expect(sharedModule).toContain("function Get-MsAccessProcessesBounded");
     // It must use Start-Job + Wait-Job — after the injectable-seam refactor the job is started
     // via Start-Job -ScriptBlock $WmiScriptBlock; the literal CIM query is the param default.
-    expect(script).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
+    expect(sharedModule).toContain("Start-Job -ScriptBlock $WmiScriptBlock");
     // The default WmiScriptBlock param must still query MSACCESS.EXE
-    expect(script).toContain("Get-CimInstance Win32_Process");
-    expect(script).toContain("Wait-Job");
+    expect(sharedModule).toContain("Get-CimInstance Win32_Process");
+    expect(sharedModule).toContain("Wait-Job");
     // Get-MsAccessProcesses (WMI-fallback snapshot) must delegate to the bounded helper
-    expect(script).toContain("Get-MsAccessProcessesBounded");
+    expect(sharedModule).toContain("Get-MsAccessProcessesBounded");
+    // Dot-source line must be present in the script so the function is available at runtime.
+    expect(script).toContain(". (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')");
     // No bare Get-CimInstance Win32_Process outside a scriptblock.
     // Lines containing the CIM call that are acceptable:
     //   - commented lines (trimStart starts with #)
@@ -130,8 +133,8 @@ describe("dysflow-access-runner.ps1", () => {
       );
     expect(linesWithBareCim).toHaveLength(0);
     // hWnd primary path and Get-ProcessIdFromHwnd must still be present
-    expect(script).toContain("hWndAccessApp");
-    expect(script).toContain("Get-ProcessIdFromHwnd");
+    expect(sharedModule).toContain("hWndAccessApp");
+    expect(sharedModule).toContain("Get-ProcessIdFromHwnd");
     // DYSFLOW_ACCESS_PROCESS marker must still be emitted
     expect(script).toContain("DYSFLOW_ACCESS_PROCESS");
   });

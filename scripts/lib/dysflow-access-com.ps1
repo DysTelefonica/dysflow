@@ -48,6 +48,16 @@
         UnattributedKilled      [bool]     — INVARIANT: always $false; unattributed processes are never killed
 #>
 
+# Auto-detect Linux/macOS and activate mock COM environment
+if (($PSVersionTable.Platform -and $PSVersionTable.Platform -ne 'Win32NT') -or ($IsWindows -eq $false)) {
+    $env:DYSFLOW_MOCK_COM = '1'
+}
+
+# Dot-source mock COM implementation if running under mock environment
+if ($env:DYSFLOW_MOCK_COM -eq '1') {
+    . (Join-Path $PSScriptRoot 'dysflow-mock-com.ps1')
+}
+
 # ---------------------------------------------------------------------------
 # Win32 PID-from-hWnd helper
 # ---------------------------------------------------------------------------
@@ -62,8 +72,13 @@ function Get-ProcessIdFromHwnd {
         [Parameter(Mandatory = $true)][IntPtr]$Hwnd
     )
 
-    if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
-        Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
+    if ($env:DYSFLOW_MOCK_COM -eq '1') {
+        return 1234
+    }
+
+    if ($env:DYSFLOW_MOCK_COM -ne '1' -and -not ($IsWindows -eq $false)) {
+        if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
+            Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public static class NativeMethods {
@@ -71,11 +86,14 @@ public static class NativeMethods {
   public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 }
 "@
+        }
+
+        [uint32]$pid = 0
+        [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
+        return [int]$pid
     }
 
-    [uint32]$pid = 0
-    [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
-    return [int]$pid
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -98,6 +116,16 @@ function Get-MsAccessProcessesBounded {
         [int]$TimeoutSeconds = 4,
         [scriptblock]$WmiScriptBlock = { Get-CimInstance Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue }
     )
+
+    if ($env:DYSFLOW_MOCK_COM -eq '1' -and ($PSBoundParameters.ContainsKey('WmiScriptBlock') -eq $false)) {
+        return @(
+            [PSCustomObject]@{
+                ProcessId    = 1234
+                CreationDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+                CommandLine  = "MSACCESS.EXE /embedding"
+            }
+        )
+    }
 
     # Run the WMI query inside a background job so a hung WMI provider (e.g. a zombie Access
     # process stuck on an unreachable UNC share) cannot block the caller indefinitely.
@@ -223,9 +251,10 @@ function Close-TargetAccessDbIfOpen {
         }
     }
 
-    # Register types once per PowerShell session
-    if (-not ([System.Management.Automation.PSTypeName]"RotManager").Type) {
-        Add-Type -TypeDefinition @"
+    # Register types once per PowerShell session (Windows only)
+    if ($env:DYSFLOW_MOCK_COM -ne '1' -and -not ($IsWindows -eq $false)) {
+        if (-not ([System.Management.Automation.PSTypeName]"RotManager").Type) {
+            Add-Type -TypeDefinition @"
 using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -322,19 +351,22 @@ public class RotManager {
     }
 }
 "@
+        }
     }
 
     $closedViaRot = $false
-    try {
-        $result = [RotManager]::CloseDatabaseIfOpen($resolved)
-        if ($result.ClosedCount -gt 0) {
-            Write-Debug ("Close-TargetAccessDbIfOpen: closed {0} COM instance(s) for: {1}" -f $result.ClosedCount, $resolved)
-            $closedViaRot = $true
-        }
-        if ($result.Error) {
-            Write-Debug ("Close-TargetAccessDbIfOpen: ROT warning: {0}" -f $result.Error)
-        }
-    } catch { Write-Debug "Diagnostics: $_" }
+    if ($env:DYSFLOW_MOCK_COM -ne '1' -and -not ($IsWindows -eq $false)) {
+        try {
+            $result = [RotManager]::CloseDatabaseIfOpen($resolved)
+            if ($result.ClosedCount -gt 0) {
+                Write-Debug ("Close-TargetAccessDbIfOpen: closed {0} COM instance(s) for: {1}" -f $result.ClosedCount, $resolved)
+                $closedViaRot = $true
+            }
+            if ($result.Error) {
+                Write-Debug ("Close-TargetAccessDbIfOpen: ROT warning: {0}" -f $result.Error)
+            }
+        } catch { Write-Debug "Diagnostics: $_" }
+    }
 
     # Fallback: if ROT closed nothing, check for an active lock file and log diagnostics
     if (-not $closedViaRot) {
@@ -418,7 +450,7 @@ function Open-CanonicalAccess {
         [bool]$SetAutomationSecurityLow = $true,
         # --- Injectable seams (testing only; production callers omit these) ---
         # Spawns the COM object.  Default: New-Object -ComObject Access.Application
-        [scriptblock]$ComSpawnAction    = { New-Object -ComObject "Access.Application" },
+        [scriptblock]$ComSpawnAction    = { if ($env:DYSFLOW_MOCK_COM -eq '1') { Get-MockAccessApplication } else { New-Object -ComObject "Access.Application" } },
         # Resolves an hWnd ([IntPtr]) to a PID ([int]).  Default: Get-ProcessIdFromHwnd
         [scriptblock]$HwndToPidAction   = { param([IntPtr]$Hwnd) Get-ProcessIdFromHwnd -Hwnd $Hwnd },
         # Returns the current list of MSACCESS processes.  Default: Get-MsAccessProcessesBounded
@@ -571,7 +603,7 @@ function Close-CanonicalAccess {
 
         # Step 4: release the COM callable wrapper
         try {
-            if ($null -ne $access) {
+            if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
                 [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null
             }
         } catch { Write-Debug "Close-CanonicalAccess: FinalReleaseComObject threw: $_" }

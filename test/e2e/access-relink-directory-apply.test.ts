@@ -35,7 +35,7 @@ function hasDaoCom(): boolean {
   }
 }
 
-const canRun = hasDaoCom();
+const canRun = hasDaoCom() && process.env.DYSFLOW_MOCK_COM !== "1";
 if (!canRun) {
   console.warn("[dysflow] Skipping relink-directory apply E2E: DAO.DBEngine.120 unavailable.");
 }

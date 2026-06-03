@@ -15,7 +15,11 @@ import { AccessVbaService } from "../../src/core/services/vba-service";
 
 const fixtureFront = resolve("E2E_testing/NoConformidades.accdb");
 const fixtureBackend = resolve("E2E_testing/NoConformidades_Datos.accdb");
-const canRunAccessE2e = existsSync(fixtureFront) && existsSync(fixtureBackend) && hasAccessCom();
+const canRunAccessE2e =
+  existsSync(fixtureFront) &&
+  existsSync(fixtureBackend) &&
+  hasAccessCom() &&
+  process.env.DYSFLOW_MOCK_COM !== "1";
 const startedServers: Server[] = [];
 
 if (!canRunAccessE2e) {
@@ -85,7 +89,11 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
     try {
       const config = loadDysflowConfig({
         cwd: workspace.root,
-        env: { DYSFLOW_BACKEND_PASSWORD: "backend-secret" },
+        env: {
+          DYSFLOW_BACKEND_PASSWORD: process.env.DYSFLOW_BACKEND_PASSWORD ?? "backend-secret",
+          DYSFLOW_ACCESS_PASSWORD: process.env.DYSFLOW_ACCESS_PASSWORD,
+          ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD,
+        },
       });
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
@@ -121,7 +129,9 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       const config = loadDysflowConfig({
         cwd: workspace.root,
         env: {
-          DYSFLOW_BACKEND_PASSWORD: "backend-secret",
+          DYSFLOW_BACKEND_PASSWORD: process.env.DYSFLOW_BACKEND_PASSWORD ?? "backend-secret",
+          DYSFLOW_ACCESS_PASSWORD: process.env.DYSFLOW_ACCESS_PASSWORD,
+          ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD,
         },
       });
       expect(config.ok).toBe(true);
@@ -153,7 +163,14 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
   it("serves diagnostics and read SQL through the real Access runner", async () => {
     const workspace = createAccessFixtureWorkspace();
     try {
-      const config = loadDysflowConfig({ cwd: workspace.root, env: {} });
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: {
+          DYSFLOW_ACCESS_PASSWORD: process.env.DYSFLOW_ACCESS_PASSWORD,
+          ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD,
+          DYSFLOW_BACKEND_PASSWORD: process.env.DYSFLOW_BACKEND_PASSWORD,
+        },
+      });
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
@@ -183,6 +200,11 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
         response,
         body: (await response.json()) as Record<string, unknown>,
       }));
+
+      if (diagnostics.response.status !== 200 || query.response.status !== 200) {
+        console.error("DIAGNOSTICS BODY:", diagnostics.body);
+        console.error("QUERY BODY:", query.body);
+      }
 
       expect(diagnostics.response.status).toBe(200);
       expect(diagnostics.body).toMatchObject({ ok: true });

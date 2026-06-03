@@ -153,6 +153,10 @@ function New-DaoDbEngine {
     [CmdletBinding()]
     Param()
 
+    if ($env:DYSFLOW_MOCK_COM -eq '1') {
+        return Get-MockDaoDbEngine
+    }
+
     $engineCandidates = @(
         "DAO.DBEngine.160",
         "DAO.DBEngine.150",
