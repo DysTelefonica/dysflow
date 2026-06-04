@@ -68,8 +68,8 @@ export type AccessRunnerOperation =
 
 export type AccessProcessOwnership = {
   pid: number;
-  processStartTime: string;
-  commandLine?: string;
+  processStartTime: string | null;
+  commandLine?: string | null;
 };
 export type PowerShellExecutionResult = {
   exitCode: number | null;
@@ -194,6 +194,16 @@ export class AccessPowerShellRunner implements AccessRunner {
             updatedAt: this.clock(),
           });
 
+          // Compute secrets before the executor call so they are in scope for
+          // marker-payload sanitization inside onAccessProcessCaptured (#417).
+          const dynamicBackendPassword =
+            finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined
+              ? finalOperation.request.backendPassword
+              : config.backendPassword;
+          const secrets = [config.accessPassword, dynamicBackendPassword].filter(
+            (secret): secret is string => Boolean(secret),
+          );
+
           const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
           const execution = await this.executor(
             POWERSHELL_EXE,
@@ -206,11 +216,17 @@ export class AccessPowerShellRunner implements AccessRunner {
               onProgress: options.onProgress,
               onAccessProcessCaptured: async (process) => {
                 try {
+                  // Sanitize free-text marker fields before persisting so secrets
+                  // (passwords, tokens) are never stored in the registry (#417).
+                  const safeCommandLine =
+                    typeof process.commandLine === "string"
+                      ? sanitizeSecrets(process.commandLine, secrets)
+                      : undefined;
                   record =
                     (await this.operationRegistry.update(operationId, {
                       accessPid: process.pid,
                       processStartTime: process.processStartTime,
-                      commandLine: process.commandLine,
+                      commandLine: safeCommandLine,
                       status: "running",
                       updatedAt: this.clock(),
                     })) ?? record;
@@ -225,16 +241,6 @@ export class AccessPowerShellRunner implements AccessRunner {
                 }
               },
             },
-          );
-          let dynamicBackendPassword = config.backendPassword;
-          if (
-            finalOperation.kind === "query" &&
-            finalOperation.request.backendPassword !== undefined
-          ) {
-            dynamicBackendPassword = finalOperation.request.backendPassword;
-          }
-          const secrets = [config.accessPassword, dynamicBackendPassword].filter(
-            (secret): secret is string => Boolean(secret),
           );
           const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
           record = await this.updateOperationFromExecution(record, execution);
@@ -518,6 +524,62 @@ export function resolveDefaultRunnerScriptPath(
   return DEFAULT_RUNNER_SCRIPT_PATH;
 }
 
+/**
+ * TS↔PowerShell marker contract for ACCESS_PROCESS lines.
+ *
+ * The PowerShell child script emits one line of the form:
+ *   DYSFLOW_ACCESS_PROCESS {"pid":<number>,"processStartTime":<ISO-string|null>,"commandLine":<string|null>}
+ *
+ * Required fields: pid (number).
+ * Nullable fields (the PowerShell child renders absent values as JSON null, not omission):
+ *   - processStartTime: ISO-8601 string, or null when the child cannot resolve the OS StartTime
+ *     (see ConvertTo-IsoStartTime in scripts/dysflow-access-runner.ps1).
+ *   - commandLine: the full command line of the spawned Access process, or null on the primary
+ *     hWnd capture path (Write-AccessProcessMarkerFromPid), which avoids WMI/CIM and so has no
+ *     command line to report.
+ *
+ * Any unrecognised fields are ignored. A malformed line is treated as plain stderr.
+ */
+type AccessProcessMarker = {
+  pid: number;
+  processStartTime: string | null;
+  commandLine?: string | null;
+};
+
+/**
+ * TS↔PowerShell marker contract for PROGRESS lines.
+ *
+ * The PowerShell child script emits one line of the form:
+ *   DYSFLOW_PROGRESS {"percent":<0-100>,"total"?:<number>,"message"?:<string>}
+ *
+ * Required fields: percent (0–100 number).
+ * Optional fields: total (integer), message (human-readable string).
+ *
+ * Progress is best-effort telemetry — malformed lines are silently swallowed.
+ */
+type ProgressMarker = {
+  percent: number;
+  total?: number;
+  message?: string;
+};
+
+export function isAccessProcessMarker(value: unknown): value is AccessProcessMarker {
+  return (
+    isRecord(value) &&
+    typeof value.pid === "number" &&
+    (value.processStartTime === null ||
+      value.processStartTime === undefined ||
+      typeof value.processStartTime === "string") &&
+    (value.commandLine === null ||
+      value.commandLine === undefined ||
+      typeof value.commandLine === "string")
+  );
+}
+
+function isProgressMarker(value: unknown): value is ProgressMarker {
+  return isRecord(value) && typeof value.percent === "number";
+}
+
 const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
   const captureTasks: Promise<void>[] = [];
   let stderr = "";
@@ -531,10 +593,12 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
       for (const line of text.split(/\r?\n/)) {
         if (line.startsWith(ACCESS_PROCESS_MARKER)) {
           try {
-            const parsed = JSON.parse(
-              line.slice(ACCESS_PROCESS_MARKER.length),
-            ) as AccessProcessOwnership;
-            captureTasks.push(options.onAccessProcessCaptured(parsed));
+            const parsed: unknown = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length));
+            if (isAccessProcessMarker(parsed)) {
+              captureTasks.push(options.onAccessProcessCaptured(parsed));
+            } else {
+              nonMarkerLines.push(line);
+            }
           } catch {
             nonMarkerLines.push(line);
           }
@@ -542,12 +606,10 @@ const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
         }
         if (line.startsWith(PROGRESS_MARKER)) {
           try {
-            const data = JSON.parse(line.slice(PROGRESS_MARKER.length)) as {
-              percent: number;
-              total?: number;
-              message?: string;
-            };
-            options.onProgress?.(data.percent, data.total, data.message);
+            const data: unknown = JSON.parse(line.slice(PROGRESS_MARKER.length));
+            if (isProgressMarker(data)) {
+              options.onProgress?.(data.percent, data.total, data.message);
+            }
           } catch {
             // swallow malformed progress lines — progress is best-effort telemetry
           }
