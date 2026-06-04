@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — #414, #415, #416, #417 done (PRs #421-#424 merged, CI green). **NEXT: Issue E (#418).**
+`Last updated`: 2026-06-04 — #414-#418 done (PRs #421-#425 merged, CI green). **NEXT: Issue F (#419).** Plus a new follow-up issue H (lock-heartbeat test flake, must fix before release).
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
@@ -51,6 +51,7 @@ All 5 issues shipped in v1.2.15. No open work remaining from this campaign.
 - **2026-06-04**: #415 (med) done — release cross-process lock before in-process waiter; md5→sha256 lock path. PR #422 merged, CI green, SDD archived. Behavior-preserving (verified inline).
 - **2026-06-04**: #416 (med) done — constant-time bearer token compare (timingSafeEqual + length guard). PR #423 merged, CI green, SDD archived.
 - **2026-06-04**: #417 (med) done — sanitize marker commandLine before registry + typed marker guards. PR #424 merged, CI green, SDD archived. Caught & fixed a real regression: the typed guard must accept null processStartTime/commandLine (PS emits both as JSON null). Added marker-contract test.
+- **2026-06-04**: #418 (med) done — single authoritative timeout in vba-sync (removed adapter Promise.race wrapper; executor timer wins). PR #425 merged, CI green, SDD archived. Fresh verify flagged a flaky #414 test → tracked as follow-up issue H below.
 
 ---
 
@@ -105,9 +106,12 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | 2 | [#415](https://github.com/DysTelefonica/dysflow/issues/415) | refactor(core): harden Access lock release ordering and hashing | medium | `done` ✅ | (merged) | [#422](https://github.com/DysTelefonica/dysflow/pull/422) | `415-lock-release-ordering-hash` |
 | 3 | [#416](https://github.com/DysTelefonica/dysflow/issues/416) | fix(http): use constant-time comparison for bearer token | medium | `done` ✅ | (merged) | [#423](https://github.com/DysTelefonica/dysflow/pull/423) | `416-timing-safe-bearer-token` |
 | 4 | [#417](https://github.com/DysTelefonica/dysflow/issues/417) | fix(core): sanitize PID/progress marker payloads before they reach the registry | medium | `done` ✅ | (merged) | [#424](https://github.com/DysTelefonica/dysflow/pull/424) | `417-sanitize-marker-payloads` |
-| 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `todo` | — | — | `418-consolidate-vba-timeout` |
+| 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `done` ✅ | (merged) | [#425](https://github.com/DysTelefonica/dysflow/pull/425) | `418-consolidate-vba-timeout` |
 | 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `todo` | — | — | `419-runner-output-parsing` |
 | 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `todo` | — | — | `420-mcp-http-request-shaping` |
+| H | [#426](https://github.com/DysTelefonica/dysflow/issues/426) | test(core): de-flake lock-heartbeat test (fake timers vs real utimes) | medium | `todo` | — | — | `426-deflake-lock-heartbeat` |
+
+> Issue H (#426) is a campaign follow-up surfaced by the #418 fresh verify: the #414 heartbeat test is genuinely flaky (~1/3) and **must be fixed before the release** to keep CI deterministic.
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
 
