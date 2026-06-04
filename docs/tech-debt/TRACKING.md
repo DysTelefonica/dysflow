@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — #414-#418 + #426 done (PRs #421-#425, #427 merged, CI green). **NEXT: Issue F (#419).**
+`Last updated`: 2026-06-04 — #414-#419 + #426 done (PRs #421-#425, #427 merged; #419 committed directly to main). **NEXT: Issue G (#420).**
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -110,7 +110,7 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | 3 | [#416](https://github.com/DysTelefonica/dysflow/issues/416) | fix(http): use constant-time comparison for bearer token | medium | `done` ✅ | (merged) | [#423](https://github.com/DysTelefonica/dysflow/pull/423) | `416-timing-safe-bearer-token` |
 | 4 | [#417](https://github.com/DysTelefonica/dysflow/issues/417) | fix(core): sanitize PID/progress marker payloads before they reach the registry | medium | `done` ✅ | (merged) | [#424](https://github.com/DysTelefonica/dysflow/pull/424) | `417-sanitize-marker-payloads` |
 | 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `done` ✅ | (merged) | [#425](https://github.com/DysTelefonica/dysflow/pull/425) | `418-consolidate-vba-timeout` |
-| 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `todo` | — | — | `419-runner-output-parsing` |
+| 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `done` ✅ | (merged) | — | `419-runner-output-parsing` |
 | 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `todo` | — | — | `420-mcp-http-request-shaping` |
 | H | [#426](https://github.com/DysTelefonica/dysflow/issues/426) | test(core): de-flake lock-heartbeat test (fake timers vs real utimes) | medium | `done` ✅ | (merged) | [#427](https://github.com/DysTelefonica/dysflow/pull/427) | `426-deflake-lock-heartbeat` |
 
