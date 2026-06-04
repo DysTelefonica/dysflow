@@ -8,3 +8,5 @@ openspec/
 *.ldb
 
 opencode.json
+
+*.accdb
