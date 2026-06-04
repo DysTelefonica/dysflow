@@ -505,7 +505,9 @@ function collectDiagnostics(
 
 function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TData {
   const safeStdout = sanitizeSecrets(stdout, secrets);
-  if (safeStdout.trim().length === 0) return {} as TData;
+  if (safeStdout.trim().length === 0) {
+    throw new SyntaxError("Runner output is empty");
+  }
   const parsed: unknown = JSON.parse(safeStdout);
   if (!isRecord(parsed)) {
     throw new SyntaxError(`Runner output is not a JSON object (got ${typeof parsed})`);

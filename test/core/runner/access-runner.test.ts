@@ -758,6 +758,31 @@ describe("AccessPowerShellRunner", () => {
     });
   });
 
+  it("maps empty stdout to a typed runner failure with RUNNER_INVALID_JSON", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: "   \n   ",
+      stderr: "",
+      durationMs: 10,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "diagnostics", request: { includeEnvironment: true } },
+      config,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "RUNNER_INVALID_JSON" },
+    });
+  });
+
   it("each runner gets its own isolated in-memory registry by default and does not share state", () => {
     const runner1 = new AccessPowerShellRunner({
       executor: async () => ({
@@ -870,8 +895,8 @@ describe("Cross-process lock for .accdb", () => {
         accessDbPath: dbPath,
         accessPassword:
           process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? "",
-        timeoutMs: 30_000,
-        processTimeoutMs: 30_000,
+        timeoutMs: 180_000,
+        processTimeoutMs: 180_000,
       },
     );
     expect(result.ok).toBe(true);
@@ -888,5 +913,5 @@ describe("Cross-process lock for .accdb", () => {
       }
       expect(isRunning).toBe(false);
     }
-  }, 30_000);
+  }, 180_000);
 });

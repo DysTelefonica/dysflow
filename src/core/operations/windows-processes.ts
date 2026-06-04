@@ -45,6 +45,42 @@ export function parseCimDateTimeToIso(value: string | null | undefined): string 
 /** PS-side CIM job timeout in seconds (shorter than the Node-level execFile timeout). */
 const CIM_JOB_TIMEOUT_SEC = 4;
 
+export function normalizeProcessList(stdout: string): OsProcessInfo[] {
+  if (stdout.trim().length === 0) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  if (parsed === null || typeof parsed !== "object") {
+    return [];
+  }
+  const rawList = Array.isArray(parsed) ? parsed : [parsed];
+  const results: OsProcessInfo[] = [];
+  for (const item of rawList) {
+    if (item === null || typeof item !== "object") {
+      continue;
+    }
+    const p = item as Record<string, unknown>;
+    const pid = p.ProcessId;
+    const name = p.Name;
+    if (typeof pid !== "number" || typeof name !== "string") {
+      continue;
+    }
+    const creationDate = typeof p.CreationDate === "string" ? p.CreationDate : undefined;
+    const commandLine = typeof p.CommandLine === "string" ? p.CommandLine : undefined;
+    const startTime = creationDate ? parseCimDateTimeToIso(creationDate) : undefined;
+    results.push({
+      pid,
+      name,
+      startTime: startTime || undefined,
+      commandLine: commandLine || undefined,
+    });
+  }
+  return results;
+}
+
 /**
  * Builds a PS 5.1-compatible script that:
  * 1. Runs the CIM query in a background job to bound WMI hangs.
@@ -80,30 +116,8 @@ export class WindowsMsAccessProcessInspector implements ProcessInspector {
       ["-NoProfile", "-NonInteractive", "-Command", script],
       { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
-    if (stdout.trim().length === 0) return undefined;
-    let parsed: {
-      ProcessId: number;
-      Name: string;
-      CreationDate?: string | null;
-      CommandLine?: string | null;
-    };
-    try {
-      parsed = JSON.parse(stdout) as {
-        ProcessId: number;
-        Name: string;
-        CreationDate?: string | null;
-        CommandLine?: string | null;
-      };
-    } catch {
-      return undefined;
-    }
-    const startTime = parsed.CreationDate ? parseCimDateTimeToIso(parsed.CreationDate) : undefined;
-    return {
-      pid: parsed.ProcessId,
-      name: parsed.Name,
-      startTime: startTime || undefined,
-      commandLine: parsed.CommandLine ?? undefined,
-    };
+    const processes = normalizeProcessList(stdout);
+    return processes[0];
   }
 }
 
@@ -130,34 +144,6 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
       ["-NoProfile", "-NonInteractive", "-Command", script],
       { windowsHide: true, timeout: PROCESS_INSPECTOR_TIMEOUT_MS },
     );
-    if (stdout.trim().length === 0) return [];
-    let parsed: Array<{
-      ProcessId: number;
-      Name: string;
-      CreationDate?: string | null;
-      CommandLine?: string | null;
-    }>;
-    try {
-      parsed = JSON.parse(stdout) as Array<{
-        ProcessId: number;
-        Name: string;
-        CreationDate?: string | null;
-        CommandLine?: string | null;
-      }>;
-    } catch {
-      return [];
-    }
-    if (!Array.isArray(parsed)) {
-      parsed = [parsed];
-    }
-    return parsed.map((p) => {
-      const startTime = p.CreationDate ? parseCimDateTimeToIso(p.CreationDate) : undefined;
-      return {
-        pid: p.ProcessId,
-        name: p.Name,
-        startTime: startTime || undefined,
-        commandLine: p.CommandLine ?? undefined,
-      };
-    });
+    return normalizeProcessList(stdout);
   }
 }

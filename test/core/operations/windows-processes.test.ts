@@ -6,6 +6,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import {
+  normalizeProcessList,
   PROCESS_INSPECTOR_TIMEOUT_MS,
   parseCimDateTimeToIso,
   WindowsMsAccessProcessInspector,
@@ -223,5 +224,93 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
     expect(result.length).toBe(2);
     expect(result[0]?.commandLine).toBeUndefined();
     expect(result[1]?.commandLine).toBe('MSACCESS.EXE "C:/data/b.accdb"');
+  });
+});
+
+describe("normalizeProcessList", () => {
+  it("returns empty array for empty string or whitespace", () => {
+    expect(normalizeProcessList("")).toEqual([]);
+    expect(normalizeProcessList("  \n  ")).toEqual([]);
+  });
+
+  it("returns empty array for invalid JSON or non-object values", () => {
+    expect(normalizeProcessList("invalid-json")).toEqual([]);
+    expect(normalizeProcessList("42")).toEqual([]);
+    expect(normalizeProcessList("null")).toEqual([]);
+    expect(normalizeProcessList('"string"')).toEqual([]);
+    expect(normalizeProcessList("true")).toEqual([]);
+  });
+
+  it("returns single process list when input is a single valid process object", () => {
+    const json = JSON.stringify({
+      ProcessId: 1234,
+      Name: "MSACCESS.EXE",
+      CreationDate: "20260518123456.000000+000",
+      CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+    });
+    expect(normalizeProcessList(json)).toEqual([
+      {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-18T12:34:56.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      },
+    ]);
+  });
+
+  it("returns multiple process list when input is an array of process objects", () => {
+    const json = JSON.stringify([
+      {
+        ProcessId: 1234,
+        Name: "MSACCESS.EXE",
+        CreationDate: "20260518123456.000000+000",
+        CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      },
+      {
+        ProcessId: 5678,
+        Name: "MSACCESS.EXE",
+      },
+    ]);
+    expect(normalizeProcessList(json)).toEqual([
+      {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-18T12:34:56.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      },
+      {
+        pid: 5678,
+        name: "MSACCESS.EXE",
+        startTime: undefined,
+        commandLine: undefined,
+      },
+    ]);
+  });
+
+  it("filters out invalid process objects (missing ProcessId or Name)", () => {
+    const json = JSON.stringify([
+      {
+        Name: "MSACCESS.EXE",
+      },
+      {
+        ProcessId: 5678,
+      },
+      {
+        ProcessId: "invalid",
+        Name: "MSACCESS.EXE",
+      },
+      {
+        ProcessId: 1234,
+        Name: "MSACCESS.EXE",
+      },
+    ]);
+    expect(normalizeProcessList(json)).toEqual([
+      {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: undefined,
+        commandLine: undefined,
+      },
+    ]);
   });
 });

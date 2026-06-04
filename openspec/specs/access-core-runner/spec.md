@@ -25,6 +25,36 @@ The stdout stream MUST NOT be used for any intermediate signaling.
 - WHEN the runner handles process termination
 - THEN it MUST return a structured error and MUST NOT throw an unhandled exception
 
+### Requirement: Empty Stdout Rejection
+
+The system MUST reject empty stdout from the runner process as invalid JSON and throw a `SyntaxError` to distinguish empty output from a valid empty-object payload.
+
+#### Scenario: Empty stdout
+- GIVEN empty or whitespace stdout from the runner process
+- WHEN the runner parses the output
+- THEN it MUST throw a `SyntaxError`
+- AND the caller MUST receive a typed `RUNNER_INVALID_JSON` error instead of an empty object
+
+### Requirement: Process List Normalization
+
+The process scanner and inspector MUST type-safely parse and normalize process list payloads. They MUST handle single process objects, process arrays, empty strings, and invalid process structures without throwing exceptions, always returning a validated array of processes.
+
+#### Scenario: Single process object
+- GIVEN a process list containing a single process object
+- WHEN parsed and normalized
+- THEN it MUST return an array containing that process object
+
+#### Scenario: Process array
+- GIVEN a process list containing an array of process objects
+- WHEN parsed and normalized
+- THEN it MUST return a validated array of those processes
+
+#### Scenario: Invalid process structure or empty input
+- GIVEN an empty string, invalid JSON, or non-object process info payload
+- WHEN parsed and normalized
+- THEN it MUST return an empty array `[]`
+- AND filter out any processes missing required properties (such as process ID or name) or containing incorrect types
+
 ### Requirement: Progress Callback Option
 
 The runner MUST accept an optional `onProgress` callback in its options:
