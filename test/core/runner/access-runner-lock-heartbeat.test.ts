@@ -111,8 +111,23 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     expect(Date.now() - beforeHeartbeat.mtimeMs).toBeGreaterThan(CROSS_PROCESS_LOCK_STALE_MS);
 
     // Advance fake time by exactly one heartbeat interval (STALE_MS / 2).
-    // The heartbeat should run and touch (utimes) the lock dir.
+    // The heartbeat callback fires synchronously but its utimes() call is fire-and-forget
+    // (the callback does not return the promise), so advanceTimersByTimeAsync cannot await it.
+    // We therefore poll the real filesystem until the mtime changes from the backdated value —
+    // this is deterministic: we know the exact stale time we set and wait until it no longer
+    // matches, which only happens after the utimes() write settles.
     await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2);
+
+    // Poll (using real time via vi.waitFor) until the heartbeat write has landed on disk.
+    // The staleness threshold was set at staleTime.getTime(); anything newer means the
+    // heartbeat refreshed the mtime.
+    await vi.waitFor(
+      async () => {
+        const info = await stat(lockPath);
+        expect(info.mtimeMs).toBeGreaterThan(staleTime.getTime());
+      },
+      { timeout: 5_000, interval: 20 },
+    );
 
     // After the heartbeat tick, the real mtime on disk must have been refreshed.
     // A second acquirer checking Date.now() - mtime > STALE_MS should now get FALSE.
