@@ -646,6 +646,57 @@ describe("Dysflow HTTP adapter", () => {
       expect(response.status).toBe(200);
       expect(body.ok).toBe(true);
     });
+
+    it("rejects `/query/read` with 401 when token has same length but wrong value (timing-safe compare)", async () => {
+      // This exercises the timingSafeEqual path: same byte length, wrong content.
+      // A naive string compare already rejects this, but with timingSafeEqual the guard
+      // must NOT throw even when both buffers have the same length.
+      const server = await startTestServer({ httpToken: "secret-token-16b" });
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer secret-token-BAD",
+        },
+        body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+      });
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_UNAUTHORIZED");
+    });
+
+    it("rejects `/query/read` with 401 (not 500) when token has a different length — length guard must prevent timingSafeEqual throw", async () => {
+      // timingSafeEqual THROWS if the two buffers differ in length.
+      // Without the length guard this would produce a 500 Internal Server Error.
+      // This test asserts the server returns 401 and does NOT throw/500.
+      const server = await startTestServer({ httpToken: "short" });
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer a-much-longer-wrong-token",
+        },
+        body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+      });
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_UNAUTHORIZED");
+    });
+
+    it("rejects `/query/read` with 401 when an empty token string is sent (missing after Bearer prefix)", async () => {
+      const server = await startTestServer({ httpToken: "my-secret-token" });
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer ",
+        },
+        body: JSON.stringify({ sql: "SELECT * FROM Users;" }),
+      });
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("HTTP_UNAUTHORIZED");
+    });
   });
 
   describe("HTTP Request Body Validation", () => {
