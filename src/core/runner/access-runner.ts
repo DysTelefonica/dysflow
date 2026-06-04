@@ -68,8 +68,8 @@ export type AccessRunnerOperation =
 
 export type AccessProcessOwnership = {
   pid: number;
-  processStartTime: string;
-  commandLine?: string;
+  processStartTime: string | null;
+  commandLine?: string | null;
 };
 export type PowerShellExecutionResult = {
   exitCode: number | null;
@@ -220,7 +220,7 @@ export class AccessPowerShellRunner implements AccessRunner {
                   // Sanitize free-text marker fields before persisting so secrets
                   // (passwords, tokens) are never stored in the registry (#417).
                   const safeCommandLine =
-                    process.commandLine !== undefined
+                    typeof process.commandLine === "string"
                       ? sanitizeSecrets(process.commandLine, secrets)
                       : undefined;
                   record =
@@ -529,17 +529,22 @@ export function resolveDefaultRunnerScriptPath(
  * TS↔PowerShell marker contract for ACCESS_PROCESS lines.
  *
  * The PowerShell child script emits one line of the form:
- *   DYSFLOW_ACCESS_PROCESS {"pid":<number>,"processStartTime":<ISO-string>,"commandLine"?:<string>}
+ *   DYSFLOW_ACCESS_PROCESS {"pid":<number>,"processStartTime":<ISO-string|null>,"commandLine":<string|null>}
  *
- * Required fields: pid (number), processStartTime (ISO-8601 string).
- * Optional fields: commandLine (string — the full command line of the spawned Access process).
+ * Required fields: pid (number).
+ * Nullable fields (the PowerShell child renders absent values as JSON null, not omission):
+ *   - processStartTime: ISO-8601 string, or null when the child cannot resolve the OS StartTime
+ *     (see ConvertTo-IsoStartTime in scripts/dysflow-access-runner.ps1).
+ *   - commandLine: the full command line of the spawned Access process, or null on the primary
+ *     hWnd capture path (Write-AccessProcessMarkerFromPid), which avoids WMI/CIM and so has no
+ *     command line to report.
  *
  * Any unrecognised fields are ignored. A malformed line is treated as plain stderr.
  */
 type AccessProcessMarker = {
   pid: number;
-  processStartTime: string;
-  commandLine?: string;
+  processStartTime: string | null;
+  commandLine?: string | null;
 };
 
 /**
@@ -559,12 +564,16 @@ type ProgressMarker = {
   message?: string;
 };
 
-function isAccessProcessMarker(value: unknown): value is AccessProcessMarker {
+export function isAccessProcessMarker(value: unknown): value is AccessProcessMarker {
   return (
     isRecord(value) &&
     typeof value.pid === "number" &&
-    typeof value.processStartTime === "string" &&
-    (value.commandLine === undefined || typeof value.commandLine === "string")
+    (value.processStartTime === null ||
+      value.processStartTime === undefined ||
+      typeof value.processStartTime === "string") &&
+    (value.commandLine === null ||
+      value.commandLine === undefined ||
+      typeof value.commandLine === "string")
   );
 }
 
