@@ -21,7 +21,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-03 — **#410, #405, #406 merged to main; CI green.** Next: #407.
+`Last updated`: 2026-06-04 — **CAMPAIGN COMPLETE.** All 5 issues (#410, #405, #406, #407, #408) merged to main; CI green; shipped in v1.2.15. No open work remaining.
 
 ---
 
@@ -31,7 +31,10 @@
   Fixed 5 Windows-coupled tests → PR #411 merged → **main green again** (first time since v1.2.12).
 - **#405**: SDD full cycle done → PR #409 merged → issue closed → SDD archived (engram report).
 - **#406**: pure type-move, lightweight SDD → PR #412 merged → issue closed → archived.
-- Next up: **#407**.
+- **#407 + #408**: shipped together in PR #413 (remove global registry + HTTP input validation;
+  also resolved an E2E race). Both issues closed → both SDD changes archived under
+  `openspec/changes/archive/2026-06-03-407-...` and `.../2026-06-03-408-...`. Released in v1.2.15.
+- **Campaign closed.** Nothing left in flight.
 
 ---
 
@@ -88,8 +91,8 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | 0 | [#410](https://github.com/DysTelefonica/dysflow/issues/410) | Make Windows-coupled CI tests platform-aware (red main) | high | `done` ✅ | (merged) | [#411](https://github.com/DysTelefonica/dysflow/pull/411) | — |
 | 1 | [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | high | `done` ✅ | (merged) | [#409](https://github.com/DysTelefonica/dysflow/pull/409) | `405-unify-mcp-tool-registration` |
 | 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `done` ✅ | (merged) | [#412](https://github.com/DysTelefonica/dysflow/pull/412) | `406-remove-duplicate-vba-comparison-types` |
-| 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `todo` ⏭️ NEXT | — | — | — |
-| 4 | [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | medium | `todo` | — | — | — |
+| 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `done` ✅ | (merged) | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | `407-access-operation-registry-ownership` |
+| 4 | [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | medium | `done` ✅ | (merged) | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | `408-http-input-validation` |
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
 
@@ -115,10 +118,10 @@ identical. PR #412 merged.
 ### #407 — AccessOperationRegistry ownership (DONE)
 Outcome: Removed process-global defaultRegistry singleton and getDefaultAccessOperationRegistry() from core. Injected explicit registries from composition roots. All tests and compilation gates verified green.
 
-### #408 — HTTP input validation parity
-- **Key files**: `src/adapters/http/server.ts:175-177,197` (`String(body.data.x ?? "")` with no schema);
-  reuse `src/adapters/mcp/validator.ts` approach.
-- **Right-sized**: lightweight SDD.
+### #408 — HTTP input validation parity (DONE)
+Outcome: HTTP adapter now validates request input at the boundary (parity with the MCP `validateInput`
+path) and returns 400 on malformed payloads instead of silently coercing via `String(... ?? "")`.
+Shipped together with #407 in PR #413. Released in v1.2.15.
 
 ---
 
