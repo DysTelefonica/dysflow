@@ -18,7 +18,7 @@ import {
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { sanitizeSecrets } from "../../core/utils/index.js";
+import { looksLikeReadOnlySql, sanitizeSecrets } from "../../core/utils/index.js";
 import type { JsonObjectSchema } from "../mcp/schemas/dysflow-schemas.js";
 import { CLEANUP_SCHEMA, HTTP_QUERY_SCHEMA, HTTP_VBA_EXECUTE_SCHEMA } from "../mcp/schemas.js";
 import { validateInput } from "../mcp/validator.js";
@@ -194,8 +194,8 @@ async function routeRequest(
     sendOperationResult(
       response,
       await cleanupService.cleanup({
-        operationId: body.data.operationId as string,
-        accessPath: body.data.accessPath as string,
+        operationId: getStringParam(body.data, "operationId"),
+        accessPath: getStringParam(body.data, "accessPath"),
         force: body.data.force === true,
       }),
     );
@@ -219,7 +219,7 @@ async function routeRequest(
     if (!handleValidation(body.data, HTTP_QUERY_SCHEMA, context, response)) {
       return;
     }
-    const sql = body.data.sql as string;
+    const sql = getStringParam(body.data, "sql");
     if (!looksLikeReadOnlySql(sql)) {
       sendOperationResult(
         response,
@@ -256,7 +256,7 @@ async function routeRequest(
     sendOperationResult(
       response,
       await context.services.queryService.execute({
-        sql: body.data.sql as string,
+        sql: getStringParam(body.data, "sql"),
         mode: "write",
       }),
     );
@@ -305,35 +305,6 @@ async function routeRequest(
   );
 }
 
-/**
- * Heuristic check — not a security boundary.
- * Returns true if sql looks like a single SELECT with no INTO clause.
- * writesEnabled is the authoritative write gate.
- */
-function looksLikeReadOnlySql(sql: string): boolean {
-  // Step 1: strip line comments and block comments
-  const withoutComments = sql
-    .replace(/--.*$/gm, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .trim()
-    .toLowerCase();
-
-  // Step 2: strip string literals so that ; or keywords inside them are invisible
-  const tokenized = withoutComments.replace(/'([^']|'')*'/g, "''").replace(/"([^"]|"")*"/g, '""');
-
-  // Step 3: split on top-level semicolons and filter empty fragments
-  const statements = tokenized
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  // Step 4: must be exactly one non-empty statement
-  if (statements.length !== 1) return false;
-
-  const firstToken = statements[0].match(/^[a-z]+/)?.[0];
-  return firstToken === "select" && !/\binto\b/.test(tokenized);
-}
-
 function handleValidation(
   bodyData: unknown,
   schema: JsonObjectSchema,
@@ -358,8 +329,8 @@ function handleValidation(
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
   return {
-    moduleName: body.moduleName as string,
-    procedureName: body.procedureName as string,
+    moduleName: getStringParam(body, "moduleName"),
+    procedureName: getStringParam(body, "procedureName"),
     arguments: Array.isArray(body.arguments) ? body.arguments : undefined,
   };
 }
@@ -453,4 +424,12 @@ function sendJson(response: ServerResponse, statusCode: number, body: unknown): 
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("x-content-type-options", "nosniff");
   response.end(JSON.stringify(body));
+}
+
+export function getStringParam(obj: Record<string, unknown>, key: string): string {
+  const val = obj[key];
+  if (typeof val !== "string") {
+    throw new Error(`Parameter '${key}' must be a string.`);
+  }
+  return val;
 }

@@ -465,59 +465,61 @@ describe("VbaSyncAdapter Orchestrator", () => {
     if (!result.ok) expect(result.error.code).toBe("TOOL_NOT_IMPLEMENTED");
   });
 
-  it("validateStrictContext returns success when strictContext is not set", () => {
-    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
-    const result = service.validateStrictContext(
-      { accessPath: "C:/db/front.accdb" },
-      { accessPath: "C:/db/front.accdb", destinationRoot: "C:/repo" },
-    );
+  it("validateStrictContext success when strictContext is not set", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+    const result = await service.execute("compile_vba", {});
     expect(result.ok).toBe(true);
   });
 
-  it("validateStrictContext returns STRICT_CONTEXT_MISMATCH when expected path provided but target has none", () => {
-    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
-    const result = service.validateStrictContext(
-      {
-        strictContext: true,
-        expectedAccessPath: "C:/db/front.accdb",
-      },
-      {
-        accessPath: undefined, // no accessPath resolved
-        destinationRoot: "C:/repo",
-      },
-    );
+  it("validateStrictContext returns STRICT_CONTEXT_MISMATCH when resolved path differs from expected", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+    const result = await service.execute("compile_vba", {
+      strictContext: true,
+      expectedAccessPath: "C:/db/different.accdb",
+    });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+    if (!result.ok) {
+      expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
+    }
   });
 
-  it("validateStrictContext returns STRICT_CONTEXT_MISMATCH when resolved path differs from expected", () => {
-    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
-    const result = service.validateStrictContext(
-      {
-        strictContext: true,
-        expectedAccessPath: "C:/db/front.accdb",
-      },
-      {
-        accessPath: "C:/db/different.accdb",
-        destinationRoot: "C:/repo",
-      },
-    );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("STRICT_CONTEXT_MISMATCH");
-  });
-
-  it("validateStrictContext passes when strictWrite is set and paths match", () => {
-    const service = new VbaSyncAdapter({ accessPath: "C:/db/front.accdb", env: {} });
-    const result = service.validateStrictContext(
-      {
-        strictWrite: true,
-        expectedDestinationRoot: "C:/repo",
-      },
-      {
-        accessPath: "C:/db/front.accdb",
-        destinationRoot: "C:/repo",
-      },
-    );
+  it("validateStrictContext passes when strictWrite is set and paths match", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "{}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+    const result = await service.execute("compile_vba", {
+      strictWrite: true,
+      expectedDestinationRoot: "C:/repo",
+    });
     expect(result.ok).toBe(true);
   });
 
@@ -544,59 +546,57 @@ describe("VbaSyncAdapter Orchestrator", () => {
       }),
     });
 
-    // run_vba with an unknown extra key like "unsupportedKey"
-    // VbaExecutionAdapter maps run_vba via executeMappedTool
-    // We can't easily inject a custom extra key via run_vba, so let's drive through
-    // a direct call to executeMappedTool with a mapping that has an unsupported extra key
-    type ServiceInternals = {
-      executeMappedTool: (
-        toolName: string,
-        params: Record<string, unknown>,
-        mapping: {
-          action: string;
-          json: boolean;
-          moduleNames: (p: unknown) => string[];
-          extra: (p: unknown) => Record<string, unknown>;
-        },
-      ) => Promise<unknown>;
-    };
-    const internals = service as unknown as ServiceInternals;
-    const result = await internals.executeMappedTool(
-      "run_vba",
-      {},
-      {
-        action: "Run",
-        json: true,
-        moduleNames: () => [],
-        extra: () => ({ unsupportedKey: "value" }), // not in VBA_MANAGER_EXTRA_KEYS
+    (service as unknown as { executionAdapter: unknown }).executionAdapter = {
+      execute: async () => {
+        return (
+          service as unknown as {
+            executeMappedTool: (
+              toolName: string,
+              params: Record<string, unknown>,
+              mapping: unknown,
+            ) => Promise<unknown>;
+          }
+        ).executeMappedTool(
+          "run_vba",
+          {},
+          {
+            action: "Run",
+            json: true,
+            moduleNames: () => [],
+            extra: () => ({ unsupportedKey: "value" }),
+          },
+        );
       },
-    );
-    expect((result as { ok: boolean }).ok).toBe(false);
-    if (!(result as { ok: boolean }).ok) {
-      expect((result as { error: { code: string } }).error.code).toBe(
-        "VBA_MANAGER_EXTRA_NOT_ALLOWED",
-      );
+    };
+
+    const result = await service.execute("run_vba", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_EXTRA_NOT_ALLOWED");
     }
   });
 
   it("resolveExecutionTarget uses service-level accessPath when no params override", async () => {
+    let capturedRequest: { accessPath?: string } | undefined;
     const service = new VbaSyncAdapter({
       accessPath: "C:/db/service.accdb",
       destinationRoot: "C:/repo",
       env: {},
-      executor: async () => ({
-        exitCode: 0,
-        stdout: "{}",
-        stderr: "",
-        durationMs: 1,
-        timedOut: false,
-      }),
+      executor: async (req) => {
+        capturedRequest = req;
+        return {
+          exitCode: 0,
+          stdout: "{}",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
     });
-    const target = await service.resolveExecutionTarget({});
-    expect(target.ok).toBe(true);
-    if (target.ok) {
-      expect(target.data.accessPath).toBe("C:/db/service.accdb");
-    }
+    const result = await service.execute("compile_vba", {});
+    expect(result.ok).toBe(true);
+    expect(capturedRequest).toBeDefined();
+    expect(capturedRequest?.accessPath).toBe("C:/db/service.accdb");
   });
 
   it("resolveExecutionTarget loads config from disk when accessPath is undefined and repo config exists", async () => {
@@ -615,22 +615,25 @@ describe("VbaSyncAdapter Orchestrator", () => {
         }),
         "utf8",
       );
+      let capturedRequest: { accessPath?: string } | undefined;
       const service = new VbaSyncAdapter({
         cwd: root,
         env: {},
-        executor: async () => ({
-          exitCode: 0,
-          stdout: "{}",
-          stderr: "",
-          durationMs: 1,
-          timedOut: false,
-        }),
+        executor: async (req) => {
+          capturedRequest = req;
+          return {
+            exitCode: 0,
+            stdout: "{}",
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        },
       });
-      const target = await service.resolveExecutionTarget({});
-      expect(target.ok).toBe(true);
-      if (target.ok) {
-        expect(target.data.accessPath).toBeDefined();
-      }
+      const result = await service.execute("compile_vba", {});
+      expect(result.ok).toBe(true);
+      expect(capturedRequest).toBeDefined();
+      expect(capturedRequest?.accessPath?.replace(/\\/g, "/")).toBe("C:/db/project.accdb");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -646,8 +649,8 @@ describe("VbaSyncAdapter Orchestrator", () => {
         cwd: root,
         env: {},
       });
-      const target = await service.resolveExecutionTarget({});
-      expect(target.ok).toBe(false);
+      const result = await service.execute("compile_vba", {});
+      expect(result.ok).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

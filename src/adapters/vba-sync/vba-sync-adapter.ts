@@ -22,7 +22,7 @@ import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powers
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
-import { VbaModulesAdapter } from "./vba-modules-adapter.js";
+import { VbaModulesAdapter, type VbaModulesExecutionTarget } from "./vba-modules-adapter.js";
 import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
@@ -136,9 +136,38 @@ export class VbaSyncAdapter implements VbaSyncPort {
       preflightCleanup: options.preflightCleanup,
       cwd: this.cwd,
     });
-    this.executionAdapter = new VbaExecutionAdapter(this);
-    this.formsAdapter = new VbaFormsAdapter(this);
-    this.modulesAdapter = new VbaModulesAdapter(this);
+    this.executionAdapter = new VbaExecutionAdapter({
+      cwd: this.cwd,
+      executeMappedTool: (toolName, params, mapping) =>
+        this.executeMappedTool(toolName, params, mapping),
+    });
+    this.formsAdapter = new VbaFormsAdapter({
+      executor: this.executor,
+      env: this.env,
+      cwd: this.cwd,
+      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
+      validateStrictContext: (params, target) =>
+        this.validateStrictContext(
+          params,
+          target as { accessPath?: string; destinationRoot: string; projectRoot?: string },
+        ),
+      executeMappedTool: (toolName, params, mapping) =>
+        this.executeMappedTool(toolName, params, mapping),
+    });
+    this.modulesAdapter = new VbaModulesAdapter({
+      scriptPath: this.scriptPath,
+      accessPassword: this.accessPassword,
+      cwd: this.cwd,
+      resolveExecutionTarget: (params) =>
+        this.resolveExecutionTarget(params) as unknown as Promise<
+          OperationResult<VbaModulesExecutionTarget>
+        >,
+      validateStrictContext: (params, target) => this.validateStrictContext(params, target),
+      runPreflightCleanup: (target) => this.runPreflightCleanup(target),
+      executor: this.executor,
+      executeMappedTool: (toolName, params, mapping) =>
+        this.executeMappedTool(toolName, params, mapping),
+    });
   }
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
@@ -160,7 +189,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     return failureResult(createDysflowError("TOOL_NOT_IMPLEMENTED", TOOL_NOT_IMPLEMENTED_MESSAGE));
   }
 
-  public async executeMappedTool(
+  private async executeMappedTool(
     toolName: string,
     params: Record<string, unknown>,
     mapping: DirectMapping,
@@ -270,7 +299,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     });
   }
 
-  public async runPreflightCleanup(target: {
+  private async runPreflightCleanup(target: {
     accessPath?: string;
     projectRoot?: string;
   }): Promise<AccessOperationPreflightCleanupResult> {
@@ -330,7 +359,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     await rm(operation.operationFile, { force: true }).catch(() => undefined);
   }
 
-  public async resolveExecutionTarget(
+  private async resolveExecutionTarget(
     params: Record<string, unknown>,
   ): Promise<
     OperationResult<
@@ -406,7 +435,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     });
   }
 
-  public validateStrictContext(
+  private validateStrictContext(
     params: Record<string, unknown>,
     target: { accessPath?: string; destinationRoot: string; projectRoot?: string },
   ): OperationResult<undefined> {

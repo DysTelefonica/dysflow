@@ -15,7 +15,7 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { isRecord, stringValue } from "../../core/utils/index.js";
+import { isRecord, looksLikeReadOnlySql, stringValue } from "../../core/utils/index.js";
 import { DYSFLOW_MCP_TOOL_NAMES, type DysflowMcpToolName } from "./mcp-tool-registry.js";
 import {
   CLEANUP_SCHEMA,
@@ -99,12 +99,14 @@ function invalidInput(message: string): McpToolResult {
   return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
 }
 
-const WRITE_SQL_PATTERN =
-  /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|EXEC(?:UTE)?|GRANT|REVOKE)\b/i;
-
 export function rejectWriteSqlInReadMode(sql: string): string | undefined {
-  if (!WRITE_SQL_PATTERN.test(sql)) return undefined;
-  const keyword = sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "";
+  if (looksLikeReadOnlySql(sql)) return undefined;
+  const match = sql
+    .toLowerCase()
+    .match(/\b(insert|update|delete|create|drop|alter|truncate|into|exec|execute|grant|revoke)\b/);
+  const keyword = match
+    ? match[1].toUpperCase()
+    : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
   return `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
 }
 
@@ -650,19 +652,17 @@ function parseMcpArgsJson(argsJson: string | undefined): McpArgsJsonParseResult 
 
 function toQueryRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
-  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
-  const columnName = stringValue(params.columnName) ?? stringValue(params.column);
   return {
     action: name as AccessQueryRequest["action"],
     mode: "read",
-    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
-    tableName,
-    columnName,
-    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
-    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
-    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
-    exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
-    importPath: stringValue(params.importPath) ?? stringValue(params.path),
+    sql: getStr(params, "sql", ["query"]) ?? "",
+    tableName: getStr(params, "tableName", ["table"]),
+    columnName: getStr(params, "columnName", ["column"]),
+    backendPath: getStr(params, "backendPath", ["comparePath"]),
+    databasePath: getStr(params, "databasePath", ["sourcePath"]),
+    rootPath: getStr(params, "rootPath", ["directory"]),
+    exportPath: getStr(params, "exportPath", ["path"]),
+    importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
   };
@@ -670,18 +670,17 @@ function toQueryRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRe
 
 function toWriteFixtureRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRequest {
   const params = isRecord(input) ? input : {};
-  const tableName = stringValue(params.tableName) ?? stringValue(params.table);
   return {
     action: name as AccessQueryRequest["action"],
     mode: "write",
-    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
-    tableName,
-    columnName: stringValue(params.columnName) ?? stringValue(params.column),
-    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
-    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
-    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
-    scriptPath: stringValue(params.scriptPath) ?? stringValue(params.path),
-    definition: stringValue(params.definition) ?? stringValue(params.fields),
+    sql: getStr(params, "sql", ["query"]) ?? "",
+    tableName: getStr(params, "tableName", ["table"]),
+    columnName: getStr(params, "columnName", ["column"]),
+    backendPath: getStr(params, "backendPath", ["comparePath"]),
+    databasePath: getStr(params, "databasePath", ["sourcePath"]),
+    rootPath: getStr(params, "rootPath", ["directory"]),
+    scriptPath: getStr(params, "scriptPath", ["path"]),
+    definition: getStr(params, "definition", ["fields"]),
     rows: rowsValue(params.rows),
     dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
@@ -699,14 +698,14 @@ function toMaintenanceRequest(
   return {
     action: name as AccessQueryRequest["action"],
     mode: queryMode,
-    sql: stringValue(params.sql) ?? stringValue(params.query) ?? "",
-    tableName: stringValue(params.tableName) ?? stringValue(params.table),
-    columnName: stringValue(params.columnName) ?? stringValue(params.column),
-    backendPath: stringValue(params.backendPath) ?? stringValue(params.comparePath),
-    rootPath: stringValue(params.rootPath) ?? stringValue(params.directory),
-    databasePath: stringValue(params.databasePath) ?? stringValue(params.sourcePath),
-    exportPath: stringValue(params.exportPath) ?? stringValue(params.path),
-    importPath: stringValue(params.importPath) ?? stringValue(params.path),
+    sql: getStr(params, "sql", ["query"]) ?? "",
+    tableName: getStr(params, "tableName", ["table"]),
+    columnName: getStr(params, "columnName", ["column"]),
+    backendPath: getStr(params, "backendPath", ["comparePath"]),
+    rootPath: getStr(params, "rootPath", ["directory"]),
+    databasePath: getStr(params, "databasePath", ["sourcePath"]),
+    exportPath: getStr(params, "exportPath", ["path"]),
+    importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
     dryRun: resolveIsDryRun(input),
@@ -723,10 +722,22 @@ function toMaintenanceRequest(
     recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
     timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
     backendPassword:
-      stringValue(params.backendPassword) ??
-      stringValue(params.password) ??
-      (params.passwordEnv ? env[stringValue(params.passwordEnv) ?? ""] : undefined),
+      getStr(params, "backendPassword", ["password"]) ??
+      (params.passwordEnv ? env[getStr(params, "passwordEnv") ?? ""] : undefined),
   };
+}
+
+export function getStr(
+  params: Record<string, unknown>,
+  key: string,
+  fallbackKeys?: readonly string[],
+): string | undefined {
+  const keys = [key, ...(fallbackKeys ?? [])];
+  for (const k of keys) {
+    const val = stringValue(params[k]);
+    if (val !== undefined) return val;
+  }
+  return undefined;
 }
 
 function stringArrayValue(value: unknown): string[] | undefined {

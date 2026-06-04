@@ -1,0 +1,21 @@
+# Archive Report: 419-runner-output-parsing
+
+## Change Metadata
+- **Change Name**: 419-runner-output-parsing
+- **Status**: COMPLETE
+- **Date**: 2026-06-04
+- **Project**: dysflow
+
+## Traceability
+- **Proposal Memory ID**: #10684 (sdd/419-runner-output-parsing/proposal)
+- **Archive Report Memory ID**: #10685 (sdd/419-runner-output-parsing/archive-report)
+
+## Summary
+- **What**: SDD change `419-runner-output-parsing` COMPLETE and archived. Fixed robust process list parsing and empty stdout rejection inside `WindowsMsAccessProcessScanner`, `WindowsMsAccessProcessInspector`, and `AccessPowerShellRunner` to prevent runtime validator bypass.
+- **Why**: Issue #419 (high risk) — empty stdout from PowerShell process runner was interpreted as an empty success payload `{}` by `ensureResultShape`, which bypassed validation rules. Also, process scanning crashed or failed when the JSON output was not formatted as an array.
+- **Where**:
+  - `src/core/operations/windows-processes.ts`
+  - `src/core/runner/access-runner.ts`
+  - `test/core/operations/windows-processes.test.ts`
+  - `test/core/runner/access-runner.test.ts`
+- **Learned**: All 878 tests passed. Verification audit showed complete TDD cycles. Normalizing output via the new `normalizeProcessList` utility makes parsing resilient against empty, whitespace, non-object, and malformed inputs. Empty stdout is now properly rejected with a `SyntaxError` and returns `RUNNER_INVALID_JSON` to the caller.

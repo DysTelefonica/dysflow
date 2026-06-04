@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.16] - 2026-06-04
+
+### Added
+
+- **Consolidated read-only SQL validation (#420).** Implemented a core utility `looksLikeReadOnlySql` in `src/core/utils/index.ts` supporting CTE queries (`WITH ... SELECT`) and validation. Exposed it across HTTP `/query/read` route and MCP read tools to reject DML/DDL write queries.
+- **Type-safe parameter extraction in HTTP and MCP (#420).** Added `getStringParam` parameter validator in `src/adapters/http/server.ts` to type-safely parse request bodies and remove unsafe `as string` casts. Implemented `getStr` fallback mapping helper in `src/adapters/mcp/tools.ts` to simplify MCP tool payload mappers.
+
+### Changed
+
+- **VBA Sync port hardening (#420).** Reduced visibility of `VbaSyncAdapter` internal orchestration methods to `private`. Refactored sub-adapter constructor delegation to bind anonymous delegate wrappers. Refactored the corresponding unit tests to target exclusively the public `execute()` port, ensuring implementation changes do not break tests.
+
 ## [v1.2.15] - 2026-06-03
 
 ### Changed

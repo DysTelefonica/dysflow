@@ -49,3 +49,42 @@ export async function readJsonFileAsync<T>(path: string): Promise<T> {
     throw new Error(`Invalid JSON file: ${path}`);
   }
 }
+
+/**
+ * Heuristic check — not a security boundary.
+ * Returns true if sql looks like a single SELECT or read-only CTE (WITH ... SELECT).
+ * Denies write keywords (insert, update, delete, create, drop, alter, truncate, into, exec, execute, grant, revoke).
+ */
+export function looksLikeReadOnlySql(sql: string): boolean {
+  // Step 1: strip line comments and block comments
+  const withoutComments = sql
+    .replace(/--.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim()
+    .toLowerCase();
+
+  // Step 2: strip string literals so that ; or keywords inside them are invisible
+  const tokenized = withoutComments.replace(/'([^']|'')*'/g, "''").replace(/"([^"]|"")*"/g, '""');
+
+  // Step 3: split on top-level semicolons and filter empty fragments
+  const statements = tokenized
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  // Step 4: must be exactly one non-empty statement
+  if (statements.length !== 1) return false;
+
+  const firstToken = statements[0].match(/^[a-z]+/)?.[0];
+  if (firstToken !== "select" && firstToken !== "with") return false;
+
+  // Step 5: block DDL/DML write keywords
+  const forbiddenKeywords =
+    /\b(insert|update|delete|create|drop|alter|truncate|into|exec|execute|grant|revoke)\b/;
+  if (forbiddenKeywords.test(tokenized)) return false;
+
+  // Step 6: CTE queries must contain at least one SELECT
+  if (firstToken === "with" && !/\bselect\b/.test(tokenized)) return false;
+
+  return true;
+}

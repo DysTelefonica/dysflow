@@ -3,7 +3,7 @@ import { request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { startDysflowHttpServer } from "../../../src/adapters/http/server";
+import { getStringParam, startDysflowHttpServer } from "../../../src/adapters/http/server";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -224,8 +224,8 @@ describe("Dysflow HTTP adapter", () => {
     expect(services.calls.queries).toEqual([]);
   });
 
-  // intentional: no semicolon, first token is SELECT — looksLikeReadOnlySql passes; writesEnabled is the real gate
-  it("accepts SELECT without semicolon followed by DDL keyword (heuristic limit)", async () => {
+  // now rejected: DDL keyword DROP is blocked by the hardened consolidated check
+  it("rejects SELECT without semicolon followed by DDL keyword", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -235,8 +235,40 @@ describe("Dysflow HTTP adapter", () => {
       body: JSON.stringify({ sql: "SELECT * FROM People DROP TABLE People" }),
     });
 
+    expect(response.response.status).toBe(400);
+    expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
+  });
+
+  it("accepts CTE queries starting with WITH ... SELECT on /query/read", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "WITH cte AS (SELECT * FROM People) SELECT * FROM cte" }),
+    });
+
     expect(response.response.status).toBe(200);
     expect(services.calls.queries).toHaveLength(1);
+  });
+
+  it("rejects write CTE queries containing write keywords on /query/read", async () => {
+    const services = createFakeServices();
+    const server = await startTestServer({ services });
+
+    const response = await readJson<HttpErrorBody>(`${server.url}/query/read`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sql: "WITH cte AS (INSERT INTO People VALUES (1)) SELECT * FROM cte",
+      }),
+    });
+
+    expect(response.response.status).toBe(400);
+    expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
+    expect(services.calls.queries).toEqual([]);
   });
 
   it.each([
@@ -851,6 +883,18 @@ describe("Dysflow HTTP adapter", () => {
       expect(response3.response.status).toBe(400);
       expect(response3.body.error.message).toContain("[REDACTED]-key is not allowed");
       expect(response3.body.error.message).not.toContain("dummy-backend-pwd");
+    });
+  });
+
+  describe("getStringParam helper", () => {
+    it("extracts a string parameter successfully", () => {
+      expect(getStringParam({ sql: "SELECT * FROM T" }, "sql")).toBe("SELECT * FROM T");
+      expect(getStringParam({ sql: "" }, "sql")).toBe("");
+    });
+
+    it("throws an error when parameter is missing or not a string", () => {
+      expect(() => getStringParam({ sql: 123 }, "sql")).toThrow("Parameter 'sql' must be a string");
+      expect(() => getStringParam({}, "sql")).toThrow("Parameter 'sql' must be a string");
     });
   });
 });

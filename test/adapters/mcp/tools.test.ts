@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
+  getStr,
   MCP_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
   registerMcpToolList,
@@ -1181,6 +1182,24 @@ describe("MCP tool registration over core services", () => {
       expect(rejectWriteSqlInReadMode("SELECT COUNT(*) FROM T WHERE x=1")).toBeUndefined();
     });
 
+    it("returns undefined for CTE queries starting with WITH ... SELECT", () => {
+      expect(
+        rejectWriteSqlInReadMode("WITH cte AS (SELECT * FROM People) SELECT * FROM cte"),
+      ).toBeUndefined();
+      expect(
+        rejectWriteSqlInReadMode("  with cte as (select id from T) select * from cte"),
+      ).toBeUndefined();
+    });
+
+    it("rejects CTE queries containing write keywords", () => {
+      expect(
+        rejectWriteSqlInReadMode("WITH cte AS (DELETE FROM People) SELECT * FROM cte"),
+      ).not.toBeUndefined();
+      expect(
+        rejectWriteSqlInReadMode("WITH cte AS (INSERT INTO People VALUES(1)) SELECT * FROM cte"),
+      ).not.toBeUndefined();
+    });
+
     it("rejects DDL and DML write keywords", () => {
       const cases = [
         "INSERT INTO T VALUES (1)",
@@ -1367,5 +1386,14 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     expect(result).toMatchObject(expectedContent);
     expect(aliasResult).toMatchObject(expectedContent);
+  });
+
+  describe("getStr helper", () => {
+    it("returns string values and resolves fallbacks", () => {
+      expect(getStr({ tableName: "People" }, "tableName", ["table"])).toBe("People");
+      expect(getStr({ table: "People" }, "tableName", ["table"])).toBe("People");
+      expect(getStr({ tableName: "   ", table: "People" }, "tableName", ["table"])).toBe("People");
+      expect(getStr({}, "tableName", ["table"])).toBeUndefined();
+    });
   });
 });
