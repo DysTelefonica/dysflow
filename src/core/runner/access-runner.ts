@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DysflowConfig } from "../config/dysflow-config.js";
@@ -349,7 +349,9 @@ async function acquireCrossProcessAccessLock(lockPath: string, timeoutMs: number
   while (Date.now() < deadline) {
     try {
       await mkdir(lockPath, { recursive: false });
-      await writeFile(join(lockPath, "owner"), `${process.pid}\n`, "utf8").catch(() => {});
+      // Write owner identity so a future acquirer can log who held the lock.
+      const owner = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
+      await writeFile(join(lockPath, "owner.json"), owner, "utf8").catch(() => {});
       return;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
@@ -368,6 +370,32 @@ async function acquireCrossProcessAccessLock(lockPath: string, timeoutMs: number
 
 async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {
   await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * While a process holds the cross-process lock it must periodically refresh the lock dir
+ * mtime so that a concurrent acquirer never sees it as stale.  The interval is half the
+ * stale threshold so at least one heartbeat always falls inside a legitimate hold window.
+ *
+ * Returns a cleanup function that MUST be called in the `finally` block.  Failing to clear
+ * the interval would leave a dangling timer that could touch a deleted (and possibly
+ * recreated by another process) directory.
+ */
+function startLockHeartbeat(lockPath: string): () => void {
+  const intervalMs = CROSS_PROCESS_LOCK_STALE_MS / 2;
+  const handle = setInterval(() => {
+    const now = new Date();
+    utimes(lockPath, now, now).catch(() => {
+      // Swallow — if the dir is gone the lock has already been released.
+    });
+  }, intervalMs);
+  // Allow the Node.js event loop to exit even if the interval is somehow not cleared.
+  if (typeof handle === "object" && handle !== null && "unref" in handle) {
+    (handle as NodeJS.Timeout).unref();
+  }
+  return () => {
+    clearInterval(handle);
+  };
 }
 
 async function runWithAccessExecutionLock<T>(
@@ -390,9 +418,11 @@ async function runWithAccessExecutionLock<T>(
   const lockPath = getCrossProcessLockPath(accessPath);
   await mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
   await acquireCrossProcessAccessLock(lockPath, lockAcquireTimeoutMs);
+  const stopHeartbeat = startLockHeartbeat(lockPath);
   try {
     return await work();
   } finally {
+    stopHeartbeat();
     releaseCurrent();
     if (accessExecutionLocks.get(key) === current) accessExecutionLocks.delete(key);
     await releaseCrossProcessAccessLock(lockPath);
