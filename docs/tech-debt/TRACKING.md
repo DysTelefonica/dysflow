@@ -20,7 +20,9 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — #414-#418 done (PRs #421-#425 merged, CI green). **NEXT: Issue F (#419).** Plus a new follow-up issue H (lock-heartbeat test flake, must fix before release).
+`Last updated`: 2026-06-04 — #414-#418 + #426 done (PRs #421-#425, #427 merged, CI green). **NEXT: Issue F (#419).**
+
+> CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
@@ -52,6 +54,7 @@ All 5 issues shipped in v1.2.15. No open work remaining from this campaign.
 - **2026-06-04**: #416 (med) done — constant-time bearer token compare (timingSafeEqual + length guard). PR #423 merged, CI green, SDD archived.
 - **2026-06-04**: #417 (med) done — sanitize marker commandLine before registry + typed marker guards. PR #424 merged, CI green, SDD archived. Caught & fixed a real regression: the typed guard must accept null processStartTime/commandLine (PS emits both as JSON null). Added marker-contract test.
 - **2026-06-04**: #418 (med) done — single authoritative timeout in vba-sync (removed adapter Promise.race wrapper; executor timer wins). PR #425 merged, CI green, SDD archived. Fresh verify flagged a flaky #414 test → tracked as follow-up issue H below.
+- **2026-06-04**: #426 (H, med) done — de-flaked the #414 lock-heartbeat test (vi.waitFor poll vs fire-and-forget utimes race). PR #427 merged, CI green, SDD archived. Test-only.
 
 ---
 
@@ -109,7 +112,7 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `done` ✅ | (merged) | [#425](https://github.com/DysTelefonica/dysflow/pull/425) | `418-consolidate-vba-timeout` |
 | 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `todo` | — | — | `419-runner-output-parsing` |
 | 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `todo` | — | — | `420-mcp-http-request-shaping` |
-| H | [#426](https://github.com/DysTelefonica/dysflow/issues/426) | test(core): de-flake lock-heartbeat test (fake timers vs real utimes) | medium | `todo` | — | — | `426-deflake-lock-heartbeat` |
+| H | [#426](https://github.com/DysTelefonica/dysflow/issues/426) | test(core): de-flake lock-heartbeat test (fake timers vs real utimes) | medium | `done` ✅ | (merged) | [#427](https://github.com/DysTelefonica/dysflow/pull/427) | `426-deflake-lock-heartbeat` |
 
 > Issue H (#426) is a campaign follow-up surfaced by the #418 fresh verify: the #414 heartbeat test is genuinely flaky (~1/3) and **must be fixed before the release** to keep CI deterministic.
 
