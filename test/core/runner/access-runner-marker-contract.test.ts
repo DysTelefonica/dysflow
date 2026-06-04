@@ -14,9 +14,9 @@ import { isAccessProcessMarker } from "../../../src/core/runner/access-runner.js
 
 describe("isAccessProcessMarker — TS↔PS marker contract (#417)", () => {
   it("accepts a marker with an ISO processStartTime string", () => {
-    expect(
-      isAccessProcessMarker({ pid: 42, processStartTime: "2026-06-01T00:00:00.000Z" }),
-    ).toBe(true);
+    expect(isAccessProcessMarker({ pid: 42, processStartTime: "2026-06-01T00:00:00.000Z" })).toBe(
+      true,
+    );
   });
 
   it("accepts a marker with processStartTime null (PS could not resolve StartTime)", () => {
@@ -27,9 +27,9 @@ describe("isAccessProcessMarker — TS↔PS marker contract (#417)", () => {
   it("accepts a marker with commandLine null (primary hWnd capture path)", () => {
     // Write-AccessProcessMarkerFromPid emits commandLine:null (no WMI → no command line).
     // This is the shape that broke real PID capture before the fix.
-    expect(
-      isAccessProcessMarker({ pid: 42, processStartTime: null, commandLine: null }),
-    ).toBe(true);
+    expect(isAccessProcessMarker({ pid: 42, processStartTime: null, commandLine: null })).toBe(
+      true,
+    );
   });
 
   it("accepts a marker with an optional commandLine", () => {
@@ -54,8 +54,6 @@ describe("isAccessProcessMarker — TS↔PS marker contract (#417)", () => {
   });
 
   it("rejects a marker whose commandLine is not a string", () => {
-    expect(
-      isAccessProcessMarker({ pid: 1, processStartTime: null, commandLine: 123 }),
-    ).toBe(false);
+    expect(isAccessProcessMarker({ pid: 1, processStartTime: null, commandLine: 123 })).toBe(false);
   });
 });

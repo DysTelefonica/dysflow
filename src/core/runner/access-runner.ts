@@ -197,8 +197,7 @@ export class AccessPowerShellRunner implements AccessRunner {
           // Compute secrets before the executor call so they are in scope for
           // marker-payload sanitization inside onAccessProcessCaptured (#417).
           const dynamicBackendPassword =
-            finalOperation.kind === "query" &&
-            finalOperation.request.backendPassword !== undefined
+            finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined
               ? finalOperation.request.backendPassword
               : config.backendPassword;
           const secrets = [config.accessPassword, dynamicBackendPassword].filter(
