@@ -51,7 +51,7 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanupResult } from "../../core/operations/access-operation-preflight.js";
 import type { VbaExecutionTarget } from "../../core/services/vba-source-comparison.js";
-import type { VbaManagerExecutionRequest, VbaManagerExecutionResult } from "./vba-sync-adapter.js";
+import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 
 export type VbaModulesExecutionTarget = VbaExecutionTarget &
   Pick<
@@ -73,7 +73,7 @@ export interface VbaModulesOrchestrator {
   runPreflightCleanup(
     target: VbaModulesExecutionTarget,
   ): Promise<AccessOperationPreflightCleanupResult>;
-  executeWithTimeout(request: VbaManagerExecutionRequest): Promise<VbaManagerExecutionResult>;
+  executor: VbaManagerExecutor;
   executeMappedTool(
     toolName: string,
     params: Record<string, unknown>,
@@ -143,7 +143,7 @@ export class VbaModulesAdapter {
       resolveExecutionTarget: this.orchestrator.resolveExecutionTarget.bind(this.orchestrator),
       validateStrictContext: this.orchestrator.validateStrictContext.bind(this.orchestrator),
       runPreflightCleanup: this.orchestrator.runPreflightCleanup.bind(this.orchestrator),
-      executeWithTimeout: this.orchestrator.executeWithTimeout.bind(this.orchestrator),
+      runVbaManager: this.orchestrator.executor.bind(this.orchestrator),
     };
   }
 

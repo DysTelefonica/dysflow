@@ -38,7 +38,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async () => ({
+      runVbaManager: async () => ({
         exitCode: 0,
         stdout: "",
         stderr: "",
@@ -71,7 +71,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async () => ({
+      runVbaManager: async () => ({
         exitCode: 0,
         stdout: "",
         stderr: "",
@@ -104,7 +104,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async () => ({
+      runVbaManager: async () => ({
         exitCode: null,
         stdout: "",
         stderr: "",
@@ -138,7 +138,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async () => ({
+      runVbaManager: async () => ({
         exitCode: 1,
         stdout: "",
         stderr: "export error",
@@ -173,7 +173,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (req: { timeoutMs: number; destinationRoot: string }) => {
+      runVbaManager: async (req: { timeoutMs: number; destinationRoot: string }) => {
         capturedTimeoutMs = req.timeoutMs;
         await mkdir(req.destinationRoot, { recursive: true });
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
@@ -209,7 +209,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (req: { destinationRoot: string }) => {
+      runVbaManager: async (req: { destinationRoot: string }) => {
         const destMod = join(req.destinationRoot, "modules");
         await mkdir(destMod, { recursive: true });
         await writeFile(join(destMod, "Mod.bas"), "binary content", "utf8");
@@ -398,7 +398,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (request: { destinationRoot: string }) => {
+      runVbaManager: async (request: { destinationRoot: string }) => {
         // Simulate PowerShell exporting the module to the temporary destinationRoot
         const destModules = join(request.destinationRoot, "modules");
         await mkdir(destModules, { recursive: true });
@@ -459,7 +459,7 @@ describe("vba-source-comparison", () => {
         orphanedKilled: [],
         errors: [],
       }),
-      executeWithTimeout: async (request: VbaExecutionRequest) => {
+      runVbaManager: async (request: VbaExecutionRequest) => {
         const destModules = join(request.destinationRoot, "modules");
         await mkdir(destModules, { recursive: true });
         await writeFile(join(destModules, "Mod.bas"), "content", "utf8");
