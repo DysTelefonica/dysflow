@@ -1,6 +1,12 @@
 {
   "tests": [
     {
+      "name": "KillSwitch operador OFF ON OFF persiste TbConfiguracion",
+      "procedure": "Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "killswitch", "cache-readiness", "issue-42", "spec-010", "write-controlled"]
+    },
+    {
       "name": "E2E KillSwitch escribe y restaura TbConfiguracion",
       "procedure": "Test_E2E_KillSwitch_EscribeYRestauraTbConfiguracion_Atomic",
       "expect": { "ok": true },
@@ -11,6 +17,12 @@
       "procedure": "Test_E2E_KillSwitch_OffOnOff_Restore_Atomic",
       "expect": { "ok": true },
       "tags": ["e2e", "atomic", "killswitch", "cache-readiness", "write-controlled"]
+    },
+    {
+      "name": "Estado catalogo cache warm-up uses catalogue-backed state",
+      "procedure": "Test_EstadoCatalogo_CacheWarmup_UsesCatalogBackedState_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "estado-cache-bootstrap", "issue-47", "red", "cache-readiness", "write-controlled"]
     }
   ]
 }

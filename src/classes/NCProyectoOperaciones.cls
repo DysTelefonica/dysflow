@@ -1365,6 +1365,27 @@ errores:
     End If
 End Function
 
+Public Sub MarcarListadoStalePorAccion( _
+                                      ByVal p_IDNC As Long, _
+                                      Optional ByRef p_Error As String _
+                                      )
+    Dim db As DAO.Database
+    Dim sql As String
+
+    On Error GoTo errores
+
+    p_Error = ""
+    If p_IDNC <= 0 Then Exit Sub
+
+    Set db = getdb()
+    sql = "UPDATE TbCacheListadoNC SET CacheValida=False WHERE IDNoConformidad=" & CStr(p_IDNC) & ";"
+    db.Execute sql, dbFailOnError
+    Exit Sub
+
+errores:
+    p_Error = "NCProyectoOperaciones.MarcarListadoStalePorAccion: " & Err.Description
+End Sub
+
 Private Sub SincronizarEstadoCacheListado( _
                                         ByVal p_Motivo As String, _
                                         Optional ByRef p_Error As String _

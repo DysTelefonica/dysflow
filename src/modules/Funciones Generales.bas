@@ -2261,7 +2261,15 @@ Public Function EstablecerComboCodigo( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+
     cmb.RowSource = ""
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+
     Set m_Col = m_ObjEntorno.ColNCsProyecto
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -2777,7 +2785,15 @@ Public Function EstablecerComboJuridicas( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+
     cmb.RowSource = ""
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+
     Set m_Col = m_ObjEntorno.ColJuridicasDistintas
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then

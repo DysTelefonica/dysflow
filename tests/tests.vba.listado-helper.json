@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Listado helper fallback empty cache logs",
+      "procedure": "Test_ListadoHelper_Fallback_EmptyCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback"]
+    },
+    {
+      "name": "Listado helper fallback disabled cache logs",
+      "procedure": "Test_ListadoHelper_Fallback_DisabledCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback"]
+    },
+    {
+      "name": "Listado helper fallback no user safe log",
+      "procedure": "Test_ListadoHelper_Fallback_NoUser_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback", "resilient"]
+    },
+    {
+      "name": "Listado helper cache preferred when rows exist",
+      "procedure": "Test_ListadoHelper_CachePreferred_WhenCacheHasRows_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "cache"]
+    },
+    {
+      "name": "Listado helper fallback filter parity",
+      "procedure": "Test_ListadoHelper_FilterParity_Fallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "filter-parity"]
+    }
+  ]
+}

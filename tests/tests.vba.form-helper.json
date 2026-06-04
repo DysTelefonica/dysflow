@@ -1,0 +1,58 @@
+{
+  "tests": [
+    {
+      "name": "FormHelper Coverage canary (skeleton validation)",
+      "procedure": "Test_FormHelper_Coverage_Canary_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "canary", "skeleton"]
+    },
+    {
+      "name": "FormHelper Listing EnsureSchema pipe columns present after Ensure",
+      "procedure": "Test_FormHelper_Listing_EnsureSchema_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "schema", "ensure"]
+    },
+    {
+      "name": "FormHelper Listing empty cache falls back to legacy source",
+      "procedure": "Test_FormHelper_Listing_EmptyCacheFallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "listing", "fallback", "sc-1.1"]
+    },
+    {
+      "name": "FormHelper Listing disabled cache falls back to legacy source",
+      "procedure": "Test_FormHelper_Listing_DisabledCacheFallback_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "listing", "fallback", "sc-1.3"]
+    },
+    {
+      "name": "FormHelper Listing cache filters use deterministic cache fixture",
+      "procedure": "Test_FormHelper_Listing_CacheFilters_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "listing", "cache", "filters"]
+    },
+    {
+      "name": "FormHelper Open alta mode returns fresh NCProyecto",
+      "procedure": "Test_FormHelper_Open_AltaMode_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "open", "alta"]
+    },
+    {
+      "name": "FormHelper Open edicion mode loads existing NCProyecto",
+      "procedure": "Test_FormHelper_Open_EdicionMode_Exists_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "open", "edicion", "exists"]
+    },
+    {
+      "name": "FormHelper Open edicion mode reports missing NCProyecto",
+      "procedure": "Test_FormHelper_Open_EdicionMode_NotFound_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "open", "edicion", "not-found"]
+    },
+    {
+      "name": "FormHelper Open edicion mode allows borrado NCProyecto load",
+      "procedure": "Test_FormHelper_Open_EdicionMode_Borrado_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "open", "edicion", "borrado"]
+    }
+  ]
+}

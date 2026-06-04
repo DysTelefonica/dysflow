@@ -64,8 +64,8 @@ Public Function IsCacheEnabled() As Boolean
     Set rs = db.OpenRecordset(SQL, dbOpenSnapshot)
     
     If Not rs.EOF Then
-        If Not IsNull(rs.Fields(CAMPO_CACHE_HABILITADA).Value) Then
-            IsCacheEnabled = (rs.Fields(CAMPO_CACHE_HABILITADA).Value = True)
+        If Not IsNull(rs.Fields(CAMPO_CACHE_HABILITADA).value) Then
+            IsCacheEnabled = (rs.Fields(CAMPO_CACHE_HABILITADA).value = True)
         End If
     End If
     
@@ -248,6 +248,27 @@ Private Function EnsureTbCacheListadoNC(ByVal p_Db As DAO.Database, Optional ByR
     EnsureListadoField p_Db, "Cerrada", "TEXT(10)"
     EnsureListadoField p_Db, "FechaCache", "DATETIME"
     EnsureListadoField p_Db, "CacheValida", "YESNO"
+    ' WU3 (SDD cache-form-filter-coverage, REQ-LISTING-AC-CONCAT and
+    ' REQ-LISTING-AR-CONCAT): 1-to-N denormalized columns populated via
+    ' PipeFlatten from TbNCAccionCorrectivas / TbNCAccionesRealizadas.
+    ' Allows Google/PC search to find NCs whose child rows contain a term,
+    ' without joins at filter time. Per design §3.1 and §3.2.
+    EnsureListadoField p_Db, "AccionesCorrectivasConcatenadas", "LONGTEXT"
+    EnsureListadoField p_Db, "AccionesRealizadasConcatenadas", "LONGTEXT"
+
+    ' Schema-first guard for legacy/sandbox backends: after DDL, refresh DAO
+    ' metadata and verify the W3 fields before any caller can insert/filter on
+    ' them. This keeps EnsureCacheSchemaReadiness fail-fast instead of letting
+    ' fixtures or runtime SQL fail later with an unknown-field error.
+    p_Db.TableDefs.Refresh
+    If Not FieldExists(p_Db, NOMBRE_TABLA_LISTADO, "AccionesCorrectivasConcatenadas") Then
+        p_Error = "Missing required field TbCacheListadoNC.AccionesCorrectivasConcatenadas after ensure"
+        Exit Function
+    End If
+    If Not FieldExists(p_Db, NOMBRE_TABLA_LISTADO, "AccionesRealizadasConcatenadas") Then
+        p_Error = "Missing required field TbCacheListadoNC.AccionesRealizadasConcatenadas after ensure"
+        Exit Function
+    End If
 
     pkExists = IndexExists(p_Db, NOMBRE_TABLA_LISTADO, "PrimaryKey") Or IndexExists(p_Db, NOMBRE_TABLA_LISTADO, "PK_TbCacheListadoNC")
     If Not pkExists Then
@@ -265,6 +286,7 @@ End Function
 Private Sub EnsureListadoField(ByVal p_Db As DAO.Database, ByVal p_FieldName As String, ByVal p_FieldTypeDDL As String)
     If Not FieldExists(p_Db, NOMBRE_TABLA_LISTADO, p_FieldName) Then
         p_Db.Execute "ALTER TABLE " & NOMBRE_TABLA_LISTADO & " ADD COLUMN " & p_FieldName & " " & p_FieldTypeDDL, dbFailOnError
+        p_Db.TableDefs.Refresh
     End If
 End Sub
 
@@ -326,11 +348,11 @@ Public Function ObtenerNCConCache( _
                                     p_IDNC As String, _
                                     Optional p_ForceUpdate As Boolean = False, _
                                     Optional ByRef p_Error As String _
-                                ) As NCProyecto
+                                ) As ncProyecto
     
     Dim inicio As Long
     Dim duracion As Long
-    Dim nc As NCProyecto
+    Dim nc As ncProyecto
     Dim existeCache As Boolean
     Dim esValido As Boolean
     
@@ -383,11 +405,11 @@ End Function
 Public Function ObtenerNCDesdeCache( _
     p_IDNC As String, _
     Optional ByRef p_Error As String _
-) As NCProyecto
+) As ncProyecto
     
     Dim rcd As DAO.Recordset
     Dim SQL As String
-    Dim nc As NCProyecto
+    Dim nc As ncProyecto
     Dim jsonNC As String
     Dim jsonACs As String
     Dim jsonARs As String
@@ -412,11 +434,11 @@ Public Function ObtenerNCDesdeCache( _
     End If
     
     ' Crear objeto NC
-    Set nc = New NCProyecto
+    Set nc = New ncProyecto
     nc.IDNoConformidad = p_IDNC
     
     ' Parsear JSON de NC
-    jsonNC = Nz(rcd!DatosNC, "")
+    jsonNC = Nz(rcd!datosNC, "")
     If jsonNC <> "" Then
         ParseJSONToNC nc, jsonNC, p_Error
         If p_Error <> "" Then
@@ -626,7 +648,7 @@ Public Function GenerarCacheCompleto( _
         !CacheValida = True
         
         ' Asignación directa a campos Memo (Access gestiona la longitud automáticamente)
-        !DatosNC = jsonNC
+        !datosNC = jsonNC
         !DatosACs = jsonACs
         !DatosARs = jsonARs
         !DatosReplanificaciones = jsonReplanif
@@ -688,7 +710,24 @@ Public Function InvalidarCache( _
     qdf.Execute
     qdf.Close
     Set qdf = Nothing
-    
+
+    ' WU3 (SDD cache-form-filter-coverage, REQ-LISTING-INVALIDATION):
+    ' invalidar también el cache de listado (TbCacheListadoNC) para que
+    ' la próxima lectura de la grilla principal regenere la fila
+    ' desnormalizada (incluyendo los nuevos campos
+    ' AccionesCorrectivasConcatenadas y AccionesRealizadasConcatenadas).
+    ' Si la fila no existe en TbCacheListadoNC, el UPDATE es no-op.
+    On Error Resume Next
+    Set qdf = getdb().CreateQueryDef("")
+    qdf.SQL = "UPDATE " & NOMBRE_TABLA_LISTADO & _
+              " SET CacheValida=False, FechaCache=Now(), Version=Version+1" & _
+              " WHERE IDNoConformidad=[pIDNC];"
+    qdf.Parameters("pIDNC") = p_IDNC
+    qdf.Execute
+    qdf.Close
+    Set qdf = Nothing
+    On Error GoTo errores
+
     LogCacheOperacion p_IDNC, "Invalidar", p_Razon, usuario, True
     If Not Cache_IndicadoresProyectoMaterializado_Sincronizar(syncError) Then
         p_Error = "CacheNCProyecto.InvalidarCache no pudo sincronizar indicadores de Proyecto: " & syncError
@@ -739,7 +778,7 @@ End Function
 
 ' Actualiza caché cuando se modifican datos de NC
 Public Function ActualizarCacheNC( _
-    p_NC As NCProyecto, _
+    p_NC As ncProyecto, _
     Optional p_CamposModificados As String = "*", _
     Optional ByRef p_Error As String _
 ) As Boolean
@@ -1051,7 +1090,7 @@ Private Function GenerarJSONNC( _
                                 ByRef p_Error As String _
                             ) As String
     
-    Dim nc As NCProyecto
+    Dim nc As ncProyecto
     Dim SQL As String
     Dim rcd As DAO.Recordset
     Dim campo As Variant
@@ -1074,12 +1113,12 @@ Private Function GenerarJSONNC( _
     End If
     
     ' Crear objeto NC para obtener ColCampos
-    Set nc = New NCProyecto
+    Set nc = New ncProyecto
     Set dictNC = New Scripting.Dictionary
     dictNC.CompareMode = TextCompare
     
     For Each campo In nc.ColCampos
-        dictNC.Add campo, Nz(rcd.Fields(campo).Value, "")
+        dictNC.Add campo, Nz(rcd.Fields(campo).value, "")
     Next
     
     rcd.Close
@@ -1128,7 +1167,7 @@ Private Function GenerarJSONACs( _
             dictAC.CompareMode = TextCompare
             
             For Each campo In AC.ColCampos
-                dictAC.Add campo, Nz(rcd.Fields(campo).Value, "")
+                dictAC.Add campo, Nz(rcd.Fields(campo).value, "")
             Next campo
             
             col.Add CStr(dictAC("IdAccionCorrectiva")), dictAC
@@ -1199,7 +1238,7 @@ Private Function GenerarJSONARs( _
             dictAR.CompareMode = TextCompare
             
             For Each campo In AR.ColCampos
-                dictAR.Add campo, Nz(rcd.Fields(campo).Value, "")
+                dictAR.Add campo, Nz(rcd.Fields(campo).value, "")
             Next campo
             
             dictARs.Add CStr(rcd!IDAccionRealizada), dictAR
@@ -1254,7 +1293,7 @@ Private Function GenerarJSONReplanificaciones( _
             dictReplanif.CompareMode = TextCompare
             
             For Each campo In replanif.ColCampos
-                dictReplanif.Add campo, Nz(rcd.Fields(campo).Value, "")
+                dictReplanif.Add campo, Nz(rcd.Fields(campo).value, "")
             Next campo
             
             col.Add CStr(dictReplanif("IDReplanificacion")), dictReplanif
@@ -1361,7 +1400,7 @@ End Function
 ' ============================================
 
 Private Function ParseJSONToNC( _
-    p_NC As NCProyecto, _
+    p_NC As ncProyecto, _
     p_JSON As String, _
     ByRef p_Error As String _
 ) As Boolean
@@ -1622,6 +1661,7 @@ Public Function GetListadoFiltradoSQL( _
                                 Optional ByVal p_RegistrosCerrados As String = "", _
                                 Optional ByVal p_ResponsableTelefonica As String = "", _
                                 Optional ByVal p_Google As String = "", _
+                                Optional ByVal p_Juridica As String = "", _
                                 Optional ByRef p_Error As String _
                             ) As Collection
 
@@ -1640,7 +1680,17 @@ Public Function GetListadoFiltradoSQL( _
         Set GetListadoFiltradoSQL = col
         Exit Function
     End If
-    
+
+    ' WU3 (SDD cache-form-filter-coverage): asegurar que el esquema
+    ' listado-cacheado existe antes de la query. Cubre DBs legacy que
+    ' no tengan aún las columnas AccionesCorrectivasConcatenadas /
+    ' AccionesRealizadasConcatenadas (REQ-LISTING-MIGRATION-SCHEMA).
+    Dim m_EnsureErr As String
+    If Not EnsureTbCacheListadoNC(getdb(), m_EnsureErr) Then
+        p_Error = "GetListadoFiltradoSQL: no se pudo asegurar esquema listado: " & m_EnsureErr
+        Exit Function
+    End If
+
     ' Spec-003/005: el listado se filtra contra la caché backend compartida.
     ' Los alias mantienen compatible NCProyectoListItemVM.CargarDesdeRecordset.
     SQL = "SELECT IDNoConformidad, CodigoNoConformidad, IDExpediente, " & _
@@ -1651,7 +1701,7 @@ Public Function GetListadoFiltradoSQL( _
           "FROM " & NOMBRE_TABLA_LISTADO & " WHERE CacheValida=True "
     
     If p_Codigo <> "" Then
-        SQL = SQL & "AND CodigoNoConformidad LIKE '*" & Replace(p_Codigo, "'", "''") & "*' "
+        SQL = SQL & "AND CodigoNoConformidad = " & SqlText(p_Codigo) & " "
     End If
     
     If p_IDExpediente > 0 Then
@@ -1700,7 +1750,21 @@ Public Function GetListadoFiltradoSQL( _
     End If
 
     If p_Google <> "" Then
-        SQL = SQL & "AND (Descripcion LIKE '*" & Replace(p_Google, "'", "''") & "*' OR Notas LIKE '*" & Replace(p_Google, "'", "''") & "*') "
+        ' WU3 (SDD cache-form-filter-coverage, REQ-LISTING-SEARCH-CHILDREN):
+        ' Google/PC search ahora también busca en las columnas
+        ' desnormalizadas de acciones (PipeFlatten). Esto permite que el
+        ' usuario encuentre una NC cuyo texto relevante está en una
+        ' Acción Correctiva o Acción Realizada, no solo en Descripcion/
+        ' Notas. Si las columnas no existen (DB legacy), SQL fallaría,
+        ' así que el caller tiene la guarda de EnsureTbCacheListadoNC.
+        SQL = SQL & "AND (Descripcion LIKE '*" & Replace(p_Google, "'", "''") & _
+              "*' OR Notas LIKE '*" & Replace(p_Google, "'", "''") & _
+              "*' OR AccionesCorrectivasConcatenadas LIKE '*" & Replace(p_Google, "'", "''") & _
+              "*' OR AccionesRealizadasConcatenadas LIKE '*" & Replace(p_Google, "'", "''") & "*') "
+    End If
+
+    If p_Juridica <> "" Then
+        SQL = SQL & "AND JuridicaExp LIKE '*" & Replace(p_Juridica, "'", "''") & "*' "
     End If
     
     SQL = SQL & "ORDER BY FechaApertura DESC"
@@ -2549,6 +2613,55 @@ errores:
     LimpiarCacheCompleta = False
 End Function
 
+' Guarded wrapper used by the estado catalogue bootstrap before promotion/cache trust.
+Public Function BootstrapEstadoCacheWarmup(Optional ByRef p_Error As String) As Boolean
+    On Error GoTo errores
+
+    Dim reloadError As String
+    Dim readinessError As String
+    Dim rebuildError As String
+    Dim syncError As String
+
+    p_Error = ""
+    BootstrapEstadoCacheWarmup = False
+
+    If Not AssertEstadoBootstrapEnvironment(p_Error) Then Exit Function
+
+    If m_ObjEntorno Is Nothing Then Set m_ObjEntorno = New entorno
+    If Not m_ObjEntorno.ReloadEstadoDictionariesFromCatalogo(reloadError) Then
+        p_Error = "BootstrapEstadoCacheWarmup reload failed: " & reloadError
+        LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", p_Error, ObtenerUsuarioConectado(), False
+        Exit Function
+    End If
+
+    If Not EnsureCacheSchemaReadiness(readinessError) Then
+        p_Error = "BootstrapEstadoCacheWarmup readiness failed: " & readinessError
+        LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", p_Error, ObtenerUsuarioConectado(), False
+        Exit Function
+    End If
+
+    If Not ReconstruirListadoEstados(rebuildError) Then
+        p_Error = "BootstrapEstadoCacheWarmup rebuild failed: " & rebuildError
+        LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", p_Error, ObtenerUsuarioConectado(), False
+        Exit Function
+    End If
+
+    If Not SincronizarCache(syncError) Then
+        p_Error = "BootstrapEstadoCacheWarmup sync failed: " & syncError
+        LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", p_Error, ObtenerUsuarioConectado(), False
+        Exit Function
+    End If
+
+    LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", "Bootstrap warm-up completed with catalogue-backed state", ObtenerUsuarioConectado(), True
+    BootstrapEstadoCacheWarmup = True
+    Exit Function
+
+errores:
+    p_Error = "BootstrapEstadoCacheWarmup: " & Err.Description
+    LogCacheOperacion "0", "BootstrapEstadoCacheWarmup", p_Error, ObtenerUsuarioConectado(), False
+    BootstrapEstadoCacheWarmup = False
+End Function
+
 ' ============================================
 ' HELPERS
 ' ============================================
@@ -2579,3 +2692,4 @@ Private Function LogCacheOperacion( _
            
     getdb().Execute SQL
 End Function
+

@@ -6,7 +6,7 @@
   "destinationRoot": "src",
   "projectRoot": ".",
   "allowWrites": true,
-  "timeoutMs": 300000,
+  "timeoutMs": 600000,
   "passwordEnv": "ACCESS_VBA_PASSWORD",
   "frontendPasswordEnv": "ACCESS_VBA_PASSWORD",
   "backendPasswordEnv": "ACCESS_VBA_PASSWORD"

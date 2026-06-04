@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "FormHelper Listing EnsureSchema pipe columns present after Ensure",
+      "procedure": "Test_FormHelper_Listing_EnsureSchema_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "schema", "ensure"]
+    }
+  ]
+}

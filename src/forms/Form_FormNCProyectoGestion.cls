@@ -4,7 +4,7 @@ Option Explicit
 
 Public Event NCSeleccinonada(p_NC As NCProyecto)
 Public m_NCSeleccionada As NCProyecto
-Private m_ColFiltrado As Scripting.Dictionary
+Private m_ColFiltrado As Collection
 Private m_Expediente As Expediente
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
 
@@ -888,207 +888,33 @@ errores:
     End If
 
 End Function
-Public Function getNCsFiltrados(Optional ByRef p_Error As String) As Scripting.Dictionary
-    
-    Dim m_TodosParametrosBusquedaVacios As EnumSino
-    'Dim m_CasiTodosParametrosBusquedaVacios As EnumSino
-    Dim m_ID As Variant
-    Dim m_Col As Scripting.Dictionary
-    Dim m_NC As NCProyecto
-    Dim m_EnumEstado As EnumEstadoNC
-    Dim m_Estado As String
-    
-    Dim m_ColGoogle As Scripting.Dictionary
+Public Function getNCsFiltrados(Optional ByRef p_Error As String) As Collection
+
     On Error GoTo errores
-    
-    m_TodosParametrosBusquedaVacios = TodosParametrosBusquedaVacios(p_Error)
+
+    Set getNCsFiltrados = GetNCsProyectoGestionFiltrados( _
+                            p_Codigo:=Nz(Me.ComboCodigo, ""), _
+                            p_IDExpediente:=CLng(Val(Nz(Me.IDExpediente, "0"))), _
+                            p_Juridica:=Nz(Me.ComboJuridica, ""), _
+                            p_IDTipo:=CLng(Val(Nz(Me.ComboTipo.Column(0), "0"))), _
+                            p_EstadoValor:=Nz(Me.EstadoNC, ""), _
+                            p_EstadoEnum:=CLng(Val(Nz(Me.EstadoNC.Column(1), "-1"))), _
+                            p_Descripcion:=Nz(Me.Descripcion, ""), _
+                            p_Notas:=Nz(Me.Notas, ""), _
+                            p_RequiereControlEficacia:=Nz(Me.ComboRequiereControlEficacia, ""), _
+                            p_ControlEficaciaRelleno:=Nz(Me.ComboControlEficaciaRelleno, ""), _
+                            p_RegistrosCerrados:=Nz(Me.ComboRegistrosCerrados, ""), _
+                            p_ResponsableTelefonica:=Nz(Me.ResponsableTelefonica, ""), _
+                            p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD, ""), _
+                            p_Google:=Nz(Me.Google, ""), _
+                            p_Error:=p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
-'    If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
-'        Exit Function
-'    End If
-    m_EnumEstado = Nz(Me.EstadoNC.Column(1), -1)
-    If m_EnumEstado = 0 And Nz(Me.Google, "") <> "" Then
-        Me.EstadoNC = Null
-        
-    End If
-    If m_EnumEstado = 0 Then
-        Set m_Col = constructor.getNCsProyectoAbiertas(p_Error:=p_Error)
-    Else
-        If Nz(Me.Google, "") <> "" Then
-            Set m_Col = getNCsProyectoPorPalabraClave(p_PC:=Me.Google, p_Error:=p_Error)
-        Else
-            If Nz(Me.EstadoNC, "") = "Abiertas" Then
-                Set m_Col = constructor.getNCsProyectosTotalesParaAbiertas(p_Error:=p_Error)
-            Else
-                Set m_Col = constructor.getNCsProyectosTotales(p_Error:=p_Error)
-            End If
-            
-        End If
-    End If
-    If p_Error <> "" Then
-        Err.Raise 1000
-    End If
-    If m_Col Is Nothing Then
-        Exit Function
-    End If
-    
-    For Each m_ID In m_Col
-        Set m_NC = m_Col(m_ID)
-        If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
-        
-            GoTo relleno
-        
-        End If
-        With m_NC
-            'If .IDNoConformidad = "364" Then Stop
-            If Nz(Me.ComboCodigo, "") <> "" Then
-                If .CodigoNoConformidad <> Me.ComboCodigo Then
-                    GoTo siguiente
-                Else
-                    'Stop
-                End If
-            End If
-            If Nz(Me.IDExpediente, "") <> "" Then
-                If .IDExpediente <> Me.IDExpediente Then
-                    GoTo siguiente
-                End If
-            End If
-            
-            If Nz(Me.ComboJuridica, "") <> "" Then
-                If InStr(1, .JuridicaExp, Me.ComboJuridica) = 0 Then
-                    GoTo siguiente
-                End If
-            End If
-            
-            
-            If Nz(Me.ComboTipo.Column(0), "") <> "" Then
-                If .IDTipo <> Me.ComboTipo.Column(0) Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.Descripcion, "") <> "" Then
-                If InStr(1, .Descripcion, Me.Descripcion) = 0 Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.Notas, "") <> "" Then
-                If InStr(1, .Notas, Me.Notas) = 0 Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.ComboRequiereControlEficacia, "") <> "" Then
-                If .RequiereControlEficacia <> Me.ComboRequiereControlEficacia Then
-                    GoTo siguiente
-                End If
-            
-            End If
-            If Nz(Me.ComboControlEficaciaRelleno, "") = "Sí" Then
-                If .ControlEficacia = "" Then
-                    GoTo siguiente
-                End If
-            ElseIf Nz(Me.ComboControlEficaciaRelleno, "") = "No" Then
-                If .ControlEficacia <> "" Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.ComboRegistrosCerrados, "") = "Sí" Then
-                If Not IsDate(.FECHACIERRE) Then
-                    GoTo siguiente
-                End If
-            ElseIf Nz(Me.ComboRegistrosCerrados, "") = "No" Then
-                If IsDate(.FECHACIERRE) Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.ResponsableTelefonica, "") <> "" Then
-                If .ResponsableTelefonicaObj Is Nothing Then
-                    GoTo siguiente
-                Else
-                    If .ResponsableTelefonicaObj.Nombre <> Me.ResponsableTelefonica Then
-                        GoTo siguiente
-                    End If
-                End If
-                
-            End If
-            If Nz(Me.RESPONSABLECALIDAD, "") <> "" Then
-                If .RESPONSABLECALIDAD <> Me.RESPONSABLECALIDAD Then
-                     GoTo siguiente
-                End If
-                
-            End If
-            If Nz(Me.EstadoNC, "") <> "" And Nz(Me.EstadoNC, "") <> "Abiertas" Then
-                If .Estado <> m_ObjEntorno.ColEstadosNC(CStr(m_EnumEstado)) Then
-                    GoTo siguiente
-                End If
-            End If
-            
-        End With
-relleno:
-        If getNCsFiltrados Is Nothing Then
-            Set getNCsFiltrados = New Scripting.Dictionary
-            getNCsFiltrados.CompareMode = TextCompare
-        End If
-        If Not getNCsFiltrados.Exists(CStr(m_NC.IDNoConformidad)) Then
-            getNCsFiltrados.Add CStr(m_NC.IDNoConformidad), m_NC
-        End If
-siguiente:
-        Set m_NC = Nothing
-    Next
     Exit Function
 errores:
     If Err.Number <> 1000 Then
         p_Error = "El método getNCsFiltrados ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    
-End Function
-
-Public Function TodosParametrosBusquedaVacios(Optional ByRef p_Error As String) As EnumSino
-
-    
-    
-    On Error GoTo errores
-    If Nz(Me.ComboCodigo, "") = "" And Nz(Me.IDExpediente, "") = "" And _
-                    Nz(Me.ComboJuridica, "") = "" And Nz(Me.ComboTipo, "") = "" And _
-                    Nz(Me.EstadoNC, "") = "" And Nz(Me.Descripcion, "") = "" And Nz(Me.Notas, "") = "" _
-                    And Nz(Me.ComboRequiereControlEficacia, "") = "" And Nz(Me.ComboControlEficaciaRelleno, "") = "" _
-                    And Nz(Me.RESPONSABLECALIDAD, "") = "" And Nz(Me.ComboRegistrosCerrados, "") = "" _
-                    And Nz(Me.ResponsableTelefonica, "") = "" And Nz(Me.Google, "") = "" Then
-        TodosParametrosBusquedaVacios = EnumSino.Sí
-    Else
-    
-        TodosParametrosBusquedaVacios = EnumSino.No
-    End If
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método TodosParametrosBusquedaVacios ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    
-End Function
-
-Public Function CasiTodosParametrosBusquedaVacios(Optional ByRef p_Error As String) As EnumSino
-
-    
-    
-    On Error GoTo errores
-    If Nz(Me.ComboCodigo, "") = "" And Nz(Me.IDExpediente, "") = "" And _
-                    Nz(Me.ComboJuridica, "") = "" And Nz(Me.ComboTipo, "") = "" And _
-                    Nz(Me.Descripcion, "") = "" And Nz(Me.Notas, "") = "" And Nz(Me.ComboRequiereControlEficacia, "") = "" _
-                      And Nz(Me.ComboControlEficaciaRelleno, "") = "" And Nz(Me.ResponsableTelefonica, "") = "" _
-                      And Nz(Me.ComboRegistrosCerrados, "") = "" And Nz(Me.RESPONSABLECALIDAD, "") = "" Then
-        CasiTodosParametrosBusquedaVacios = EnumSino.Sí
-    Else
-    
-        CasiTodosParametrosBusquedaVacios = EnumSino.No
-    End If
-    
-    Exit Function
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método CasiTodosParametrosBusquedaVacios ha devuelto el error: " & vbNewLine & Err.Description
     End If
     
 End Function
@@ -1445,12 +1271,11 @@ End Sub
 
 
 Private Function RellenarListaConCol( _
-                                    p_col As Scripting.Dictionary, _
+                                    p_col As Collection, _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim m_NC As NCProyecto
-    Dim m_ID As Variant
+    Dim m_Item As Object
     
     Dim lst As ListBox
     
@@ -1464,16 +1289,12 @@ Private Function RellenarListaConCol( _
     End If
     Set lst = Me.ListaFiltrados
     lst.RowSource = "IDNoconformidad;Código;Descripción;Exp.;Estado;FApertura;FCierre"
-    For Each m_ID In p_col
-        Set m_NC = p_col(m_ID)
-        With m_NC
-            lst.AddItem .IDNoConformidad & ";" & .CodigoNoConformidad & ";" & _
-                        Replace(.Descripcion, ";", ":") & _
-                        ";" & Replace(.ExpedienteCalculadoTexto, ";", ":") & ";" & .Estado & ";" & _
-                        .FechaApertura & ";" & .FECHACIERRE
-        End With
-        
-        Set m_NC = Nothing
+    For Each m_Item In p_col
+        lst.AddItem BuildNCProyectoGestionListRow(m_Item, p_Error)
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Set m_Item = Nothing
     Next
     
     

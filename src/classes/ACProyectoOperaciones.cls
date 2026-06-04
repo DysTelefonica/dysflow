@@ -234,9 +234,9 @@ Public Function Registrar( _
         End If
         rcdDatos.Close
         Set rcdDatos = Nothing
-         ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache .IDNoConformidad, "Cambio en Accion Correctiva", p_Error
-        ' -------------------------
+         ' --- INTEGRACIÓN CACHÉ LISTADO ---
+        MarcarListadoStalePorAccion .IDNoConformidad, p_Error
+        ' -------------------------------
         If .nc.NCProyectoAsociada Is Nothing Then
             ActualizarDatosCalculados p_Error
             If p_Error <> "" Then
@@ -332,9 +332,9 @@ Public Function Eliminar(Optional ByRef p_Error As String) As String
                 "FROM TbNCAccionCorrectivas " & _
                 "WHERE IDAccionCorrectiva=" & .IdAccionCorrectiva & ";"
         getdb().Execute m_SQL
-         ' --- INTEGRACIÓN CACHÉ ---
-        CacheNCProyecto.InvalidarCache .IDNoConformidad, "Eliminación de Acción Correctiva", p_Error
-        ' -------------------------
+         ' --- INTEGRACIÓN CACHÉ LISTADO ---
+        MarcarListadoStalePorAccion .IDNoConformidad, p_Error
+        ' -------------------------------
         Set .nc.ACs = Nothing
         ActualizarDatosNCProyecto .nc, p_Error
         If p_Error <> "" Then
@@ -353,6 +353,16 @@ errores:
         p_Error = "El método ACProyectoOperaciones.Eliminar ha devuelto el error " & Err.Number & vbNewLine & "Detalle: " & Err.Description
     End If
 End Function
+
+Private Sub MarcarListadoStalePorAccion( _
+                                      ByVal p_IDNC As Long, _
+                                      Optional ByRef p_Error As String _
+                                      )
+    Dim op As NCProyectoOperaciones
+
+    Set op = New NCProyectoOperaciones
+    op.MarcarListadoStalePorAccion p_IDNC, p_Error
+End Sub
 
 
 

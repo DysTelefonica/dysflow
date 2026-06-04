@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Cache listado ACAR search via pipe columns",
+      "procedure": "Test_CacheListado_ACAR_SearchPipeColumns_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu3", "acar", "pipe-search"]
+    },
+    {
+      "name": "PipeFlatten logs missing source table",
+      "procedure": "Test_PipeFlatten_MissingTable_Logs_ACAR_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu3", "pipe-flatten", "missing-table"]
+    },
+    {
+      "name": "NCProyectoOperaciones marks listing stale for ACAR writes",
+      "procedure": "Test_NCProyectoOperaciones_ACAR_InvalidatesListing_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "wu3", "invalidation"]
+    }
+  ]
+}

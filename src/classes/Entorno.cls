@@ -165,15 +165,160 @@ errores:
     Me.Error = m_Error
 End Property
 
-Public Property Get ColEstadosAR() As Scripting.Dictionary
+Public Function ReloadEstadoDictionariesFromCatalogo(Optional ByRef p_Error As String = "") As Boolean
     On Error GoTo errores
-    
-    Me.Error = ""
-    m_Error = ""
-    If Not m_ObjColEstadosAR Is Nothing Then
-        Set ColEstadosAR = m_ObjColEstadosAR
-        Exit Property
+
+    Dim db As DAO.Database
+
+    p_Error = ""
+    ReloadEstadoDictionariesFromCatalogo = False
+
+    Set db = getdb(p_Error)
+    If db Is Nothing Then
+        If p_Error = "" Then p_Error = "Entorno.ReloadEstadoDictionariesFromCatalogo: no se pudo abrir el backend activo"
+        GoTo salida
     End If
+
+    If Not TableExistsInEstadoCatalogo(db, "TbEstadoCatalogo") Then
+        p_Error = "Entorno.ReloadEstadoDictionariesFromCatalogo: TbEstadoCatalogo no existe"
+        GoTo salida
+    End If
+
+    If Not LoadEstadoFamilyFromCatalogo(db, "NC", ESTADO_CATALOGO_NC_COUNT, "BORRADA|REGISTRADA|PLANIFICADA|ENEJECUCION|ENEJECUCIONFUERADEPLAZO|ACSSINTAREAS|Cerrada|CERRADAPTECE|CERRADAPTECECADUCADA|CERRADACENOCONFORME", m_ObjColEstadosNC, m_ObjColEstadosNCTexto, m_objColEstadosNCTitulo, p_Error) Then GoTo salida
+    If Not LoadEstadoFamilyFromCatalogo(db, "AC", ESTADO_CATALOGO_AC_COUNT, "ACTIVA|SINACCIONES|FINALIZADA|PTEREPLANIFICAR|PTEREREGULARIZAR|REGISTRADA", m_ObjColEstadosAC, m_ObjColEstadosACTexto, m_ObjColEstadosACTitulo, p_Error) Then GoTo salida
+    If Not LoadEstadoFamilyFromCatalogo(db, "AR", ESTADO_CATALOGO_AR_COUNT, "ACTIVA|FINALIZADA|PTEREPLANIFICAR|IRREGULAR|REGISTRADA", m_ObjColEstadosAR, m_ObjColEstadosARTexto, m_ObjColEstadosARTitulo, p_Error) Then GoTo salida
+
+    ReloadEstadoDictionariesFromCatalogo = True
+
+salida:
+    Set db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "Entorno.ReloadEstadoDictionariesFromCatalogo: " & Err.Number & " - " & Err.Description
+    Resume salida
+End Function
+
+Private Function EnsureEstadoDictionariesLoaded(ByRef p_Error As String) As Boolean
+    If Not m_ObjColEstadosNC Is Nothing Then
+        If Not m_ObjColEstadosNCTexto Is Nothing Then
+            If Not m_objColEstadosNCTitulo Is Nothing Then
+                If Not m_ObjColEstadosAC Is Nothing Then
+                    If Not m_ObjColEstadosACTexto Is Nothing Then
+                        If Not m_ObjColEstadosACTitulo Is Nothing Then
+                            If Not m_ObjColEstadosAR Is Nothing Then
+                                If Not m_ObjColEstadosARTexto Is Nothing Then
+                                    If Not m_ObjColEstadosARTitulo Is Nothing Then
+                                        EnsureEstadoDictionariesLoaded = True
+                                        Exit Function
+                                    End If
+                                End If
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    End If
+
+    ' Try catalogue-first; fall back to hardcoded if catalogue is absent/unavailable.
+    If ReloadEstadoDictionariesFromCatalogo(p_Error) Then
+        EnsureEstadoDictionariesLoaded = True
+        Exit Function
+    End If
+
+    ' Fallback: load hardcoded dictionaries to preserve zero regression.
+    Dim loadError As String
+    LoadHardcodedEstadoDictionaries loadError
+    If loadError = "" Then
+        EnsureEstadoDictionariesLoaded = True
+    Else
+        p_Error = loadError
+    End If
+End Function
+
+Private Sub LoadHardcodedEstadoDictionaries(ByRef p_Error As String)
+    On Error GoTo EH
+    p_Error = ""
+
+    Set m_ObjColEstadosNC = New Scripting.Dictionary
+    m_ObjColEstadosNC.CompareMode = TextCompare
+    With m_ObjColEstadosNC
+        .Add CStr(EnumEstadoNC.BORRADA), "BORRADA"
+        .Add CStr(EnumEstadoNC.REGISTRADA), "REGISTRADA"
+        .Add CStr(EnumEstadoNC.PLANIFICADA), "PLANIFICADA"
+        .Add CStr(EnumEstadoNC.ENEJECUCION), "ENEJECUCION"
+        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "ENEJECUCIONFUERADEPLAZO"
+        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "ACSSINTAREAS"
+        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
+        .Add CStr(EnumEstadoNC.CERRADAPTECE), "CERRADAPTECE"
+        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "CERRADAPTECECADUCADA"
+        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "CERRADACENOCONFORME"
+    End With
+
+    Set m_ObjColEstadosNCTexto = New Scripting.Dictionary
+    m_ObjColEstadosNCTexto.CompareMode = TextCompare
+    With m_ObjColEstadosNCTexto
+        .Add "BORRADA", EnumEstadoNC.BORRADA
+        .Add "REGISTRADA", EnumEstadoNC.REGISTRADA
+        .Add "PLANIFICADA", EnumEstadoNC.PLANIFICADA
+        .Add "ENEJECUCION", EnumEstadoNC.ENEJECUCION
+        .Add "ENEJECUCIONFUERADEPLAZO", EnumEstadoNC.ENEJECUCIONFUERADEPLAZO
+        .Add "ACSSINTAREAS", EnumEstadoNC.ACSSINTAREAS
+        .Add "Cerrada", EnumEstadoNC.Cerrada
+        .Add "CERRADAPTECE", EnumEstadoNC.CERRADAPTECE
+        .Add "CERRADAPTECECADUCADA", EnumEstadoNC.CERRADAPTECECADUCADA
+        .Add "CERRADACENOCONFORME", EnumEstadoNC.CERRADACENOCONFORME
+    End With
+
+    Set m_objColEstadosNCTitulo = New Scripting.Dictionary
+    m_objColEstadosNCTitulo.CompareMode = TextCompare
+    With m_objColEstadosNCTitulo
+        .Add CStr(EnumEstadoNC.BORRADA), "Borrada"
+        .Add CStr(EnumEstadoNC.REGISTRADA), "Registrada"
+        .Add CStr(EnumEstadoNC.PLANIFICADA), "Planificada"
+        .Add CStr(EnumEstadoNC.ENEJECUCION), "En ejecución"
+        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "En ejecución fuera de plazo"
+        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "Acciones sin tareas"
+        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
+        .Add CStr(EnumEstadoNC.CERRADAPTECE), "Cerrada Pendiente de control de eficacia"
+        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "Cerrada Pendiente de control de eficacia caducada"
+        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "Cerrada con Control de eficacia no conforme"
+    End With
+
+    Set m_ObjColEstadosAC = New Scripting.Dictionary
+    m_ObjColEstadosAC.CompareMode = TextCompare
+    With m_ObjColEstadosAC
+        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAC.SINACCIONES), "SINACCIONES"
+        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PTEREPLANIFICAR"
+        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "PTEREREGULARIZAR"
+        .Add CStr(EnumEstadoAC.REGISTRADA), "REGISTRADA"
+    End With
+
+    Set m_ObjColEstadosACTexto = New Scripting.Dictionary
+    m_ObjColEstadosACTexto.CompareMode = TextCompare
+    With m_ObjColEstadosACTexto
+        .Add "ACTIVA", EnumEstadoAC.ACTIVA
+        .Add "SINACCIONES", EnumEstadoAC.SINACCIONES
+        .Add "FINALIZADA", EnumEstadoAC.FINALIZADA
+        .Add "PTEREPLANIFICAR", EnumEstadoAC.PTEREPLANIFICAR
+        .Add "PTEREREGULARIZAR", EnumEstadoAC.PTEREREGULARIZAR
+        .Add "REGISTRADA", EnumEstadoAC.REGISTRADA
+    End With
+
+    Set m_ObjColEstadosACTitulo = New Scripting.Dictionary
+    m_ObjColEstadosACTitulo.CompareMode = TextCompare
+    With m_ObjColEstadosACTitulo
+        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAC.SINACCIONES), "SIN ACCIONES"
+        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
+        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "ALGUNA ACCIÓN IRREGULAR"
+        .Add CStr(EnumEstadoAC.REGISTRADA), "TODAS LAS ACCIONES SIN PLANIFICAR"
+    End With
+
     Set m_ObjColEstadosAR = New Scripting.Dictionary
     m_ObjColEstadosAR.CompareMode = TextCompare
     With m_ObjColEstadosAR
@@ -183,6 +328,143 @@ Public Property Get ColEstadosAR() As Scripting.Dictionary
         .Add CStr(EnumEstadoAR.IRREGULAR), "IRREGULAR"
         .Add CStr(EnumEstadoAR.REGISTRADA), "REGISTRADA"
     End With
+
+    Set m_ObjColEstadosARTexto = New Scripting.Dictionary
+    m_ObjColEstadosARTexto.CompareMode = TextCompare
+    With m_ObjColEstadosARTexto
+        .Add "ACTIVA", EnumEstadoAR.ACTIVA
+        .Add "FINALIZADA", EnumEstadoAR.FINALIZADA
+        .Add "PTEREPLANIFICAR", EnumEstadoAR.PTEREPLANIFICAR
+        .Add "IRREGULAR", EnumEstadoAR.IRREGULAR
+        .Add "REGISTRADA", EnumEstadoAR.REGISTRADA
+    End With
+
+    Set m_ObjColEstadosARTitulo = New Scripting.Dictionary
+    m_ObjColEstadosARTitulo.CompareMode = TextCompare
+    With m_ObjColEstadosARTitulo
+        .Add CStr(EnumEstadoAR.ACTIVA), "ACTIVA"
+        .Add CStr(EnumEstadoAR.FINALIZADA), "FINALIZADA"
+        .Add CStr(EnumEstadoAR.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
+        .Add CStr(EnumEstadoAR.IRREGULAR), "ESTADO IRREGULAR"
+        .Add CStr(EnumEstadoAR.REGISTRADA), "REGISTRADA"
+    End With
+
+    Exit Sub
+EH:
+    p_Error = "LoadHardcodedEstadoDictionaries: " & Err.Number & " - " & Err.Description
+End Sub
+
+Private Function LoadEstadoFamilyFromCatalogo( _
+    ByVal p_Db As DAO.Database, _
+    ByVal p_TipoEntidad As String, _
+    ByVal p_ExpectedCount As Long, _
+    ByVal p_ExpectedCodesPipe As String, _
+    ByRef p_ById As Scripting.Dictionary, _
+    ByRef p_ByCode As Scripting.Dictionary, _
+    ByRef p_TitleById As Scripting.Dictionary, _
+    ByRef p_Error As String _
+) As Boolean
+    On Error GoTo errores
+
+    Dim rs As DAO.Recordset
+    Dim sql As String
+    Dim enumKey As String
+    Dim enumValue As Long
+    Dim codigo As String
+    Dim titulo As String
+    Dim texto As String
+
+    Set p_ById = New Scripting.Dictionary
+    p_ById.CompareMode = TextCompare
+    Set p_ByCode = New Scripting.Dictionary
+    p_ByCode.CompareMode = TextCompare
+    Set p_TitleById = New Scripting.Dictionary
+    p_TitleById.CompareMode = TextCompare
+
+    sql = "SELECT EnumValor, Codigo, Titulo, Texto FROM TbEstadoCatalogo WHERE TipoEntidad = " & EstadoCatalogoSqlText(p_TipoEntidad) & " AND Activo = True AND Version = " & ESTADO_CATALOGO_VERSION & " ORDER BY EnumValor"
+    Set rs = p_Db.OpenRecordset(sql, dbOpenSnapshot)
+
+    Do While Not rs.EOF
+        enumValue = CLng(Nz(rs.Fields("EnumValor").Value, 0))
+        enumKey = CStr(enumValue)
+        codigo = Trim$(Nz(rs.Fields("Codigo").Value, ""))
+        titulo = Trim$(Nz(rs.Fields("Titulo").Value, ""))
+        texto = Trim$(Nz(rs.Fields("Texto").Value, ""))
+        If texto = "" Then texto = codigo
+        If titulo = "" Then titulo = texto
+
+        If codigo = "" Then
+            p_Error = "TbEstadoCatalogo " & p_TipoEntidad & " contiene Codigo vacío"
+            GoTo salida
+        End If
+        If p_ById.Exists(enumKey) Then
+            p_Error = "TbEstadoCatalogo " & p_TipoEntidad & " contiene EnumValor duplicado: " & enumKey
+            GoTo salida
+        End If
+        If p_ByCode.Exists(codigo) Then
+            p_Error = "TbEstadoCatalogo " & p_TipoEntidad & " contiene Codigo duplicado: " & codigo
+            GoTo salida
+        End If
+
+        p_ById.Add enumKey, codigo
+        p_ByCode.Add codigo, enumValue
+        p_TitleById.Add enumKey, titulo
+        rs.MoveNext
+    Loop
+
+    If p_ById.Count <> p_ExpectedCount Then
+        p_Error = "TbEstadoCatalogo " & p_TipoEntidad & " cardinalidad inválida: " & CStr(p_ById.Count) & "/" & CStr(p_ExpectedCount)
+        GoTo salida
+    End If
+    If Not AssertExpectedEstadoCodes(p_ByCode, p_TipoEntidad, p_ExpectedCodesPipe, p_Error) Then GoTo salida
+
+    LoadEstadoFamilyFromCatalogo = True
+
+salida:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Exit Function
+
+errores:
+    p_Error = "LoadEstadoFamilyFromCatalogo " & p_TipoEntidad & ": " & Err.Number & " - " & Err.Description
+    Resume salida
+End Function
+
+Private Function AssertExpectedEstadoCodes(ByVal p_ByCode As Scripting.Dictionary, ByVal p_TipoEntidad As String, ByVal p_ExpectedCodesPipe As String, ByRef p_Error As String) As Boolean
+    Dim codes() As String
+    Dim i As Long
+
+    codes = Split(p_ExpectedCodesPipe, "|")
+    For i = LBound(codes) To UBound(codes)
+        If Not p_ByCode.Exists(codes(i)) Then
+            p_Error = "TbEstadoCatalogo " & p_TipoEntidad & " no contiene Codigo requerido: " & codes(i)
+            Exit Function
+        End If
+    Next i
+    AssertExpectedEstadoCodes = True
+End Function
+
+Private Function TableExistsInEstadoCatalogo(ByVal p_Db As DAO.Database, ByVal p_TableName As String) As Boolean
+    On Error GoTo missing
+    Dim tdf As DAO.TableDef
+    Set tdf = p_Db.TableDefs(p_TableName)
+    TableExistsInEstadoCatalogo = True
+    Exit Function
+missing:
+    TableExistsInEstadoCatalogo = False
+End Function
+
+Private Function EstadoCatalogoSqlText(ByVal p_Value As String) As String
+    EstadoCatalogoSqlText = "'" & Replace(p_Value, "'", "''") & "'"
+End Function
+
+Public Property Get ColEstadosAR() As Scripting.Dictionary
+    On Error GoTo errores
+    
+    Me.Error = ""
+    m_Error = ""
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosAR = m_ObjColEstadosAR
     
     Exit Property
@@ -199,19 +481,7 @@ Public Property Get ColEstadosARTexto() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosARTexto Is Nothing Then
-        Set ColEstadosARTexto = m_ObjColEstadosARTexto
-        Exit Property
-    End If
-    Set m_ObjColEstadosARTexto = New Scripting.Dictionary
-    m_ObjColEstadosARTexto.CompareMode = TextCompare
-    With m_ObjColEstadosARTexto
-        .Add "ACTIVA", EnumEstadoAR.ACTIVA
-        .Add "FINALIZADA", EnumEstadoAR.FINALIZADA
-        .Add "PTEREPLANIFICAR", EnumEstadoAR.PTEREPLANIFICAR
-        .Add "IRREGULAR", EnumEstadoAR.IRREGULAR
-        .Add "REGISTRADA", EnumEstadoAR.REGISTRADA
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosARTexto = m_ObjColEstadosARTexto
     
     Exit Property
@@ -226,19 +496,7 @@ Public Property Get ColEstadosARTitulo() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosARTitulo Is Nothing Then
-        Set ColEstadosARTitulo = m_ObjColEstadosARTitulo
-        Exit Property
-    End If
-    Set m_ObjColEstadosARTitulo = New Scripting.Dictionary
-    m_ObjColEstadosARTitulo.CompareMode = TextCompare
-    With m_ObjColEstadosARTitulo
-        .Add CStr(EnumEstadoAR.ACTIVA), "ACTIVA"
-        .Add CStr(EnumEstadoAR.FINALIZADA), "FINALIZADA"
-        .Add CStr(EnumEstadoAR.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
-        .Add CStr(EnumEstadoAR.IRREGULAR), "ESTADO IRREGULAR"
-        .Add CStr(EnumEstadoAR.REGISTRADA), "REGISTRADA"
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosARTitulo = m_ObjColEstadosARTitulo
     
     Exit Property
@@ -253,20 +511,7 @@ Public Property Get ColEstadosAC() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosAC Is Nothing Then
-        Set ColEstadosAC = m_ObjColEstadosAC
-        Exit Property
-    End If
-    Set m_ObjColEstadosAC = New Scripting.Dictionary
-    m_ObjColEstadosAC.CompareMode = TextCompare
-    With m_ObjColEstadosAC
-        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
-        .Add CStr(EnumEstadoAC.SINACCIONES), "SINACCIONES"
-        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
-        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PTEREPLANIFICAR"
-        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "PTEREREGULARIZAR"
-        .Add CStr(EnumEstadoAC.REGISTRADA), "REGISTRADA"
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosAC = m_ObjColEstadosAC
     
     Exit Property
@@ -282,20 +527,7 @@ Public Property Get ColEstadosACTexto() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosACTexto Is Nothing Then
-        Set ColEstadosACTexto = m_ObjColEstadosACTexto
-        Exit Property
-    End If
-    Set m_ObjColEstadosACTexto = New Scripting.Dictionary
-    m_ObjColEstadosACTexto.CompareMode = TextCompare
-    With m_ObjColEstadosACTexto
-        .Add "ACTIVA", EnumEstadoAC.ACTIVA
-        .Add "SINACCIONES", EnumEstadoAC.SINACCIONES
-        .Add "FINALIZADA", EnumEstadoAC.FINALIZADA
-        .Add "PTEREPLANIFICAR", EnumEstadoAC.PTEREPLANIFICAR
-        .Add "PTEREREGULARIZAR", EnumEstadoAC.PTEREREGULARIZAR
-        .Add "REGISTRADA", EnumEstadoAC.REGISTRADA
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosACTexto = m_ObjColEstadosACTexto
     
     Exit Property
@@ -311,20 +543,7 @@ Public Property Get ColEstadosACTitulo() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosACTitulo Is Nothing Then
-        Set ColEstadosACTitulo = m_ObjColEstadosACTitulo
-        Exit Property
-    End If
-    Set m_ObjColEstadosACTitulo = New Scripting.Dictionary
-    m_ObjColEstadosACTitulo.CompareMode = TextCompare
-    With m_ObjColEstadosACTitulo
-        .Add CStr(EnumEstadoAC.ACTIVA), "ACTIVA"
-        .Add CStr(EnumEstadoAC.SINACCIONES), "SIN ACCIONES"
-        .Add CStr(EnumEstadoAC.FINALIZADA), "FINALIZADA"
-        .Add CStr(EnumEstadoAC.PTEREPLANIFICAR), "PENDIENTE DE REPLANIFICAR"
-        .Add CStr(EnumEstadoAC.PTEREREGULARIZAR), "ALGUNA ACCIÓN IRREGULAR"
-        .Add CStr(EnumEstadoAC.REGISTRADA), "TODAS LAS ACCIONES SIN PLANIFICAR"
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosACTitulo = m_ObjColEstadosACTitulo
     
     Exit Property
@@ -1408,24 +1627,7 @@ Public Property Get ColEstadosNC() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosNC Is Nothing Then
-        Set ColEstadosNC = m_ObjColEstadosNC
-        Exit Property
-    End If
-    Set m_ObjColEstadosNC = New Scripting.Dictionary
-    m_ObjColEstadosNC.CompareMode = TextCompare
-    With m_ObjColEstadosNC
-        .Add CStr(EnumEstadoNC.BORRADA), "BORRADA"
-        .Add CStr(EnumEstadoNC.REGISTRADA), "REGISTRADA"
-        .Add CStr(EnumEstadoNC.PLANIFICADA), "PLANIFICADA"
-        .Add CStr(EnumEstadoNC.ENEJECUCION), "ENEJECUCION"
-        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "ENEJECUCIONFUERADEPLAZO"
-        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "ACSSINTAREAS"
-        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
-        .Add CStr(EnumEstadoNC.CERRADAPTECE), "CERRADAPTECE"
-        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "CERRADAPTECECADUCADA"
-        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "CERRADACENOCONFORME"
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosNC = m_ObjColEstadosNC
     
     Exit Property
@@ -1441,24 +1643,7 @@ Public Property Get ColEstadosNCTexto() As Scripting.Dictionary
     
     Me.Error = ""
     m_Error = ""
-    If Not m_ObjColEstadosNCTexto Is Nothing Then
-        Set ColEstadosNCTexto = m_ObjColEstadosNCTexto
-        Exit Property
-    End If
-    Set m_ObjColEstadosNCTexto = New Scripting.Dictionary
-    m_ObjColEstadosNCTexto.CompareMode = TextCompare
-    With m_ObjColEstadosNCTexto
-        .Add "BORRADA", EnumEstadoNC.BORRADA
-        .Add "REGISTRADA", EnumEstadoNC.REGISTRADA 'aún sin acciones
-        .Add "PLANIFICADA", EnumEstadoNC.PLANIFICADA 'todas las acciones sin fecha
-        .Add "ENEJECUCION", EnumEstadoNC.ENEJECUCION
-        .Add "ENEJECUCIONFUERADEPLAZO", EnumEstadoNC.ENEJECUCIONFUERADEPLAZO
-        .Add "ACSSINTAREAS", EnumEstadoNC.ACSSINTAREAS
-        .Add "Cerrada", EnumEstadoNC.Cerrada
-        .Add "CERRADAPTECE", EnumEstadoNC.CERRADAPTECE
-        .Add "CERRADAPTECECADUCADA", EnumEstadoNC.CERRADAPTECECADUCADA
-        .Add "CERRADACENOCONFORME", EnumEstadoNC.CERRADACENOCONFORME
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosNCTexto = m_ObjColEstadosNCTexto
     
     Exit Property
@@ -1473,24 +1658,7 @@ Public Property Get ColEstadosNCTitulo() As Scripting.Dictionary
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
-    If Not m_objColEstadosNCTitulo Is Nothing Then
-        Set ColEstadosNCTitulo = m_objColEstadosNCTitulo
-        Exit Property
-    End If
-    Set m_objColEstadosNCTitulo = New Scripting.Dictionary
-    With m_objColEstadosNCTitulo
-        .CompareMode = TextCompare
-        .Add CStr(EnumEstadoNC.BORRADA), "Borrada"
-        .Add CStr(EnumEstadoNC.REGISTRADA), "Registrada"
-        .Add CStr(EnumEstadoNC.PLANIFICADA), "Planificada"
-        .Add CStr(EnumEstadoNC.ENEJECUCION), "En ejecución"
-        .Add CStr(EnumEstadoNC.ENEJECUCIONFUERADEPLAZO), "En ejecución fuera de plazo"
-        .Add CStr(EnumEstadoNC.ACSSINTAREAS), "Acciones sin tareas"
-        .Add CStr(EnumEstadoNC.Cerrada), "Cerrada"
-        .Add CStr(EnumEstadoNC.CERRADAPTECE), "Cerrada Pendiente de control de eficacia"
-        .Add CStr(EnumEstadoNC.CERRADAPTECECADUCADA), "Cerrada Pendiente de control de eficacia caducada"
-        .Add CStr(EnumEstadoNC.CERRADACENOCONFORME), "Cerrada con Control de eficacia no conforme"
-    End With
+    If Not EnsureEstadoDictionariesLoaded(m_Error) Then Err.Raise 1000
     Set ColEstadosNCTitulo = m_objColEstadosNCTitulo
     
     Exit Property

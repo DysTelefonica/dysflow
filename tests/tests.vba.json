@@ -275,6 +275,120 @@
       "procedure": "Test_Issue19_CE_EficaciaOK_SinCambios",
       "expect": { "ok": true },
       "tags": ["atomic", "issue-19", "ce-gating", "object", "issue-45"]
+    },
+    {
+      "name": "Estado catalogo schema creation",
+      "procedure": "Test_EstadoCatalogo_SchemaCreation_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "schema"]
+    },
+    {
+      "name": "Estado catalogo production guard blocks unsafe backend",
+      "procedure": "Test_EstadoCatalogo_ProductionGuard_BlocksUnsafe_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "guard"]
+    },
+    {
+      "name": "Estado catalogo idempotent double run",
+      "procedure": "Test_EstadoCatalogo_IdempotentDoubleRun_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "idempotence"]
+    },
+    {
+      "name": "Estado catalogo parity expected codes",
+      "procedure": "Test_EstadoCatalogo_ParityExpectedCodes_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "parity"]
+    },
+    {
+      "name": "Estado catalogo dictionary reload from fixture",
+      "procedure": "Test_EstadoCatalogo_DictionaryReload_FromFixture_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "dictionary"]
+    },
+    {
+      "name": "Estado catalogo dictionary reload fails on missing code",
+      "procedure": "Test_EstadoCatalogo_DictionaryReload_FailsOnMissingCode_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "estado-cache-bootstrap", "issue-47", "red", "dictionary", "fail-fast"]
+    },
+    {
+      "name": "Cache listado Codigo exact match R1",
+      "procedure": "Test_CacheListado_Codigo_ExactMatch_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1"]
+    },
+    {
+      "name": "Cache listado Codigo exact excludes prefix overlap R1",
+      "procedure": "Test_CacheListado_Codigo_ExactNoSubstring_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1"]
+    },
+    {
+      "name": "Cache listado Juridica contains filter R2",
+      "procedure": "Test_CacheListado_Juridica_LikeFilter_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1"]
+    },
+    {
+      "name": "Cache listado flat filters combined regression guard",
+      "procedure": "Test_CacheListado_FlatFilters_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "regression-guard"]
+    },
+    {
+      "name": "Cache listado VM rendering contract regression guard",
+      "procedure": "Test_CacheListado_VM_Rendering_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "regression-guard"]
+    },
+    {
+      "name": "PipeFlatten empty if no children",
+      "procedure": "Test_PipeFlatten_EmptyIfNoChildren_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "pipe-flatten"]
+    },
+    {
+      "name": "PipeFlatten one child",
+      "procedure": "Test_PipeFlatten_OneChild_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "pipe-flatten"]
+    },
+    {
+      "name": "PipeFlatten multiple children pipe delimited",
+      "procedure": "Test_PipeFlatten_MultipleChildren_PipeDelimited_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "pipe-flatten"]
+    },
+    {
+      "name": "PipeFlatten sanitizes pipe in content",
+      "procedure": "Test_PipeFlatten_SanitizesPipe_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "pipe-flatten", "sanitize"]
+    },
+    {
+      "name": "PipeFlatten resilient if source table missing",
+      "procedure": "Test_PipeFlatten_ResilientIfTableMissing_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-form-filter-coverage", "issue-cache-form-filter-coverage", "red", "wu1", "pipe-flatten", "resilient"]
+    },
+    {
+      "name": "Form fallback empty cache logs FormCacheFallback",
+      "procedure": "Test_Form_Fallback_EmptyCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "legacy-ui-fallback", "fallback"]
+    },
+    {
+      "name": "Form fallback cache disabled logs FormCacheFallback",
+      "procedure": "Test_Form_Fallback_DisabledCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "legacy-ui-fallback", "fallback"]
+    },
+    {
+      "name": "Form fallback no user resilient",
+      "procedure": "Test_Form_Fallback_NoLogFailure_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "legacy-ui-fallback", "fallback", "resilient"]
     }
   ]
 }

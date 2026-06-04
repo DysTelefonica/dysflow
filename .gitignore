@@ -1,6 +1,7 @@
 
 .atl/
 .access-vba-skill/
+.dysflow/runtime/
 
 openspec/
 *.laccdb

@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Issue #41 operator warmup list/detail/log evidence",
+      "procedure": "Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic",
+      "expect": { "ok": true },
+      "tags": ["e2e", "atomic", "cache-warmup", "issue-41", "plan-002", "spec-009", "staging", "sandbox", "write-controlled"]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "FormHelper Coverage canary (skeleton validation)",
+      "procedure": "Test_FormHelper_Coverage_Canary_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-ncproyecto-helper-coverage", "issue-40", "red", "wu1", "canary", "skeleton"]
+    }
+  ]
+}

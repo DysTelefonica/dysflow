@@ -16,7 +16,7 @@ Public Function Test_KillSwitch_IsCacheEnabled_Atomic() As String
     On Error GoTo EH
 
     Dim logs As Collection
-    Dim estado As Boolean
+    Dim Estado As Boolean
     Dim sessionStarted As Boolean
     Dim sessionErr As String
     Dim fixtureErr As String
@@ -34,10 +34,10 @@ Public Function Test_KillSwitch_IsCacheEnabled_Atomic() As String
         Exit Function
     End If
 
-    estado = IsCacheEnabled()
-    TestHelper.AddLog logs, "IsCacheEnabled ejecutado. Estado=" & CStr(estado)
+    Estado = IsCacheEnabled()
+    TestHelper.AddLog logs, "IsCacheEnabled ejecutado. Estado=" & CStr(Estado)
 
-    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonOk(logs, estado)
+    Test_KillSwitch_IsCacheEnabled_Atomic = TestHelper.BuildJsonOk(logs, Estado)
     Call TestHelper.EndTestSession(logs)
     Exit Function
 EH:
@@ -361,7 +361,7 @@ Private Function CountRowsBackend(ByVal p_Table As String, Optional ByVal p_Wher
 
     Set db = getdb()
     Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
-    CountRowsBackend = CLng(Nz(rs.Fields("Cnt").Value, 0))
+    CountRowsBackend = CLng(Nz(rs.Fields("Cnt").value, 0))
     rs.Close
     Set rs = Nothing
     Set db = Nothing
@@ -402,6 +402,8 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(opError = "", "Set OFF sin error", logs, assertError)
     If assertError <> "" Then GoTo Fail
+    Call AssertPersistedCacheFlag(False, "TbConfiguracion.ID=1.CacheHabilitada debe persistir OFF", logs, assertError)
+    If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(IsCacheEnabled() = False, "Estado persistido OFF", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
@@ -410,6 +412,8 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(opError = "", "Set ON sin error", logs, assertError)
     If assertError <> "" Then GoTo Fail
+    Call AssertPersistedCacheFlag(True, "TbConfiguracion.ID=1.CacheHabilitada debe persistir ON", logs, assertError)
+    If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(IsCacheEnabled() = True, "Estado persistido ON", logs, assertError)
     If assertError <> "" Then GoTo Fail
 
@@ -417,6 +421,8 @@ Public Function Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic() As Stri
     Call TestHelper.AssertTrue(CacheConfig_SetEnabled(False, opError), "Set OFF final debe devolver True", logs, assertError)
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(opError = "", "Set OFF final sin error", logs, assertError)
+    If assertError <> "" Then GoTo Fail
+    Call AssertPersistedCacheFlag(False, "TbConfiguracion.ID=1.CacheHabilitada debe persistir OFF final", logs, assertError)
     If assertError <> "" Then GoTo Fail
     Call TestHelper.AssertTrue(IsCacheEnabled() = False, "Estado persistido OFF final", logs, assertError)
     If assertError <> "" Then GoTo Fail
@@ -446,6 +452,45 @@ EH:
         Test_KillSwitch_SetEnabled_OffOnOff_Persistence_Atomic = TestHelper.BuildJsonFail(Err.Description, logs)
     End If
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
+End Function
+
+Private Sub AssertPersistedCacheFlag(ByVal p_Expected As Boolean, ByVal p_Message As String, ByRef p_Logs As Collection, ByRef p_AssertError As String)
+    Dim actual As Boolean
+    Dim readError As String
+
+    If Not TryReadPersistedCacheFlag(actual, readError) Then
+        Call TestHelper.AssertTrue(False, p_Message & " | lectura falló: " & readError, p_Logs, p_AssertError)
+        Exit Sub
+    End If
+
+    Call TestHelper.AssertTrue(actual = p_Expected, p_Message & " | esperado=" & CStr(p_Expected) & ", actual=" & CStr(actual), p_Logs, p_AssertError)
+End Sub
+
+Private Function TryReadPersistedCacheFlag(ByRef p_Value As Boolean, Optional ByRef p_Error As String) As Boolean
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+
+    On Error GoTo EH
+    TryReadPersistedCacheFlag = False
+    p_Error = ""
+
+    Set db = getdb()
+    Set rs = db.OpenRecordset("SELECT CacheHabilitada FROM TbConfiguracion WHERE ID=1", dbOpenSnapshot)
+
+    If rs.EOF Then Err.Raise 1000, "Test_KillSwitch.TryReadPersistedCacheFlag", "TbConfiguracion.ID=1 no existe"
+    p_Value = CBool(Nz(rs.Fields("CacheHabilitada").value, False))
+    TryReadPersistedCacheFlag = True
+
+SALIR:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+    Exit Function
+
+EH:
+    p_Error = Err.Description
+    Resume SALIR
 End Function
 
 Private Function TableHasField(ByVal p_Table As String, ByVal p_Field As String) As Boolean

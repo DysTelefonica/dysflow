@@ -58,6 +58,11 @@ Public Enum EnumEstadoAR
     REGISTRADA = 5 'cuando no hay ninguna fecha
 End Enum
 
+Public Const ESTADO_CATALOGO_VERSION As Long = 1
+Public Const ESTADO_CATALOGO_NC_COUNT As Long = 10
+Public Const ESTADO_CATALOGO_AC_COUNT As Long = 6
+Public Const ESTADO_CATALOGO_AR_COUNT As Long = 5
+
 Public Enum EnumTipoTareaNCProyecto
     PORCOMPLETARDATOSOBLIGATORIOS = 1
     PORREGULARIZARFECHASACCIONES = 2

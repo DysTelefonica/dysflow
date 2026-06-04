@@ -16,7 +16,7 @@ El código generado se trabaja mediante exportación a `src/` y validación post
 - `destinationRoot`: `src`
 - `projectRoot`: `.`
 - `allowWrites`: `true`
-- `timeoutMs`: `300000`
+- `timeoutMs`: `600000`
 - La contraseña se resuelve con `ACCESS_VBA_PASSWORD`; no pasar ni documentar passwords inline.
 
 **No usar** `projectId: "no_conformidades"` — puede resolver a otro entorno. El identificador seguro es `00-no-conformidades-staging-clean`.
