@@ -1,14 +1,13 @@
 # Tech-Debt Remediation — Tracking Ledger
 
-> **Single source of truth** for the multi-issue tech-debt cleanup that came out of the
-> 2026-06-03 fresh architecture review of the dysflow MCP runtime. This ledger exists so that
-> **any AI (or human) can resume the work exactly where it was left** if the active session runs
-> out of tokens or is compacted. Keep it accurate — update it as the **first** action after any
-> state change, before moving on.
+> **Single source of truth** for the multi-issue tech-debt cleanup campaigns in the dysflow MCP
+> runtime. This ledger exists so that **any AI (or human) can resume the work exactly where it was
+> left** if the active session runs out of tokens or is compacted. Keep it accurate — update it as
+> the **first** action after any state change, before moving on.
 
 ---
 
-## ⛑️ If you are resuming this work — READ THIS FIRST
+## If you are resuming this work — READ THIS FIRST
 
 1. Read this whole file. The **Status board** below tells you which issue is in flight and the
    **exact next action**.
@@ -21,39 +20,46 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — **CAMPAIGN COMPLETE.** All 5 issues (#410, #405, #406, #407, #408) merged to main; CI green; shipped in v1.2.15. No open work remaining.
+`Last updated`: 2026-06-04 — campaign opened, 7 issues filed, none started yet — **NEXT: Issue A (#414).**
 
 ---
 
-## Progress log
+## Previous campaign (2026-06-03) — CLOSED
 
-- **#410** (CI fix, unplanned but prioritized): main was red on Linux CI (pre-existing, 4+ runs).
-  Fixed 5 Windows-coupled tests → PR #411 merged → **main green again** (first time since v1.2.12).
-- **#405**: SDD full cycle done → PR #409 merged → issue closed → SDD archived (engram report).
-- **#406**: pure type-move, lightweight SDD → PR #412 merged → issue closed → archived.
-- **#407 + #408**: shipped together in PR #413 (remove global registry + HTTP input validation;
-  also resolved an E2E race). Both issues closed → both SDD changes archived under
-  `openspec/changes/archive/2026-06-03-407-...` and `.../2026-06-03-408-...`. Released in v1.2.15.
-- **Campaign closed.** Nothing left in flight.
+All 5 issues shipped in v1.2.15. No open work remaining from this campaign.
+
+| Issue | Title | PR | Result |
+|-------|-------|----|--------|
+| [#410](https://github.com/DysTelefonica/dysflow/issues/410) | Make Windows-coupled CI tests platform-aware | [#411](https://github.com/DysTelefonica/dysflow/pull/411) | done ✅ |
+| [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | [#409](https://github.com/DysTelefonica/dysflow/pull/409) | done ✅ |
+| [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | [#412](https://github.com/DysTelefonica/dysflow/pull/412) | done ✅ |
+| [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | done ✅ |
+| [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | done ✅ |
 
 ---
 
-## ⚙️ Environment gotcha (READ if bash commands look broken)
+## Active campaign (opened 2026-06-04)
+
+### Progress log
+
+- **2026-06-04**: Architecture review complete. 7 issues filed (#414–#420). Campaign opened.
+
+---
+
+## Environment gotcha (READ if bash commands look broken)
 
 The Bash tool spawns **Git Bash**, which mounts `C:` only at `/cygdrive/c`, but the Claude Code
 harness writes its cwd-tracking marker under `/c/...`. Result: **every bash command exits `1` with a
 trailing `…/Temp/claude-XXXX-cwd: No such file or directory`** even though the command itself ran and
 its output is valid. This also makes the **Skill tool fail** (its `!command` substitution treats the
-non-zero exit as fatal) — so `sdd-init` and the `sdd-*` skills will not load until the durable fix
-below takes effect.
+non-zero exit as fatal).
 
-- **Per-command workaround (works now)**: prefix any bash command with `mount C:/ /c 2>/dev/null;` —
-  this makes the marker write succeed and the real exit code surface. Without it, judge success by
-  parsing output, not the exit code.
+- **Per-command workaround (works now)**: prefix any bash command with `mount C:/ /c 2>/dev/null;`.
 - **Durable fix (already applied, needs a Claude Code restart to activate)**: `BASH_ENV` is set in
   `HKCU\Environment` to `C:/Users/adm1/.claude-bash-env.sh`, which runs `mount C:/ /c` for every
-  non-interactive bash. After the next session restart, bash exit codes are correct and skills work.
+  non-interactive bash.
 - Could not create `/etc/fstab` (Program Files ACL blocks writes even though `test -w /etc` lies).
+- **Judge `gh` success by the printed issue URL, not the exit code.**
 
 ---
 
@@ -61,15 +67,13 @@ below takes effect.
 
 Each issue is handled as its own SDD change and follows this lifecycle:
 
-1. **SDD plan** → proposal → (spec/design as right-sized) → tasks. Delegated to sub-agents (the
-   `sdd-*` skills cannot load under the bash gotcha; use the `sdd-*` sub-agent types instead).
-2. **Implement** on a dedicated branch (`refactor/<issue>-<slug>` or `fix/`, `feat/`), STRICT TDD.
+1. **SDD plan** → proposal → (spec/design as right-sized) → tasks.
+2. **Implement** on a dedicated branch (`fix/<issue>-<slug>` or `refactor/`), STRICT TDD.
 3. **Verify** → fresh-context adversarial review + `pnpm test` green + `tsc --noEmit && biome check`
-   clean. No assertion edits made solely to fit a refactor (see `docs/testing/testing-philosophy.md`).
+   clean. No assertion edits made solely to fit a refactor.
 4. **PR** → one PR per issue, linking the issue (`Closes #NNN`). Branch off the latest `main`.
 5. **CI green** → merge (`gh pr merge --merge --delete-branch`). Merging closes the issue.
-6. **Archive** the SDD change → save an engram archive-report (`sdd/<change>/archive-report`); the
-   `openspec/changes/<change>/` files remain on `main` as the permanent record.
+6. **Archive** the SDD change → save an engram archive-report; openspec files remain on `main`.
 7. **Update this ledger** → mark the issue `done`, record PR link, advance to the next issue.
 
 ### Hard constraints (apply to every issue)
@@ -81,18 +85,21 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 - Biome strict: no `any`, no non-null assertions.
 - Conventional commits. **No** AI co-author / attribution lines.
 - Never touch the production runtime (`%LOCALAPPDATA%\dysflow`). Build to `test-runtime/` for E2E.
+- A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.16` → title `v1.2.16`).
 
 ---
 
-## Status board (in order of importance)
+## Status board
 
 | Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
 |-------|-------|-------|----------|--------|--------|----|------------|
-| 0 | [#410](https://github.com/DysTelefonica/dysflow/issues/410) | Make Windows-coupled CI tests platform-aware (red main) | high | `done` ✅ | (merged) | [#411](https://github.com/DysTelefonica/dysflow/pull/411) | — |
-| 1 | [#405](https://github.com/DysTelefonica/dysflow/issues/405) | Unify bifurcated MCP tool registration | high | `done` ✅ | (merged) | [#409](https://github.com/DysTelefonica/dysflow/pull/409) | `405-unify-mcp-tool-registration` |
-| 2 | [#406](https://github.com/DysTelefonica/dysflow/issues/406) | Remove duplicated VBA comparison types | high | `done` ✅ | (merged) | [#412](https://github.com/DysTelefonica/dysflow/pull/412) | `406-remove-duplicate-vba-comparison-types` |
-| 3 | [#407](https://github.com/DysTelefonica/dysflow/issues/407) | Make AccessOperationRegistry ownership explicit | medium | `done` ✅ | (merged) | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | `407-access-operation-registry-ownership` |
-| 4 | [#408](https://github.com/DysTelefonica/dysflow/issues/408) | HTTP adapter input validation parity | medium | `done` ✅ | (merged) | [#413](https://github.com/DysTelefonica/dysflow/pull/413) | `408-http-input-validation` |
+| 1 | [#414](https://github.com/DysTelefonica/dysflow/issues/414) | fix(core): cross-process Access lock can be declared stale while still held | high | `todo` | — | — | `414-access-lock-stale-heartbeat` |
+| 2 | [#415](https://github.com/DysTelefonica/dysflow/issues/415) | refactor(core): harden Access lock release ordering and hashing | medium | `todo` | — | — | `415-lock-release-ordering-hash` |
+| 3 | [#416](https://github.com/DysTelefonica/dysflow/issues/416) | fix(http): use constant-time comparison for bearer token | medium | `todo` | — | — | `416-timing-safe-bearer-token` |
+| 4 | [#417](https://github.com/DysTelefonica/dysflow/issues/417) | fix(core): sanitize PID/progress marker payloads before they reach the registry | medium | `todo` | — | — | `417-sanitize-marker-payloads` |
+| 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `todo` | — | — | `418-consolidate-vba-timeout` |
+| 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `todo` | — | — | `419-runner-output-parsing` |
+| 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `todo` | — | — | `420-mcp-http-request-shaping` |
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
 
@@ -100,38 +107,87 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 
 ## Per-issue working notes
 
-### #410 — CI fix (DONE)
-Pre-existing red Linux CI: 5 Windows-coupled tests asserted `powershell.exe`/`taskkill` unconditionally.
-Made them platform-aware (assert `POWERSHELL_EXE`; branch kill-path on `process.platform`). Test-only.
-PR #411 merged; main green.
+### #414 — fix(core): cross-process Access lock stale-heartbeat (TODO)
 
-### #405 — Unify bifurcated MCP tool registration (DONE)
-Outcome: single `registerMcpToolList()` (pure, throws on duplicate names), `ALIAS_TOOL_NAMES` partitions
-alias vs dispatch by construction. Behavior preserved (counts 45/2/5/48 unchanged). PR #409 merged.
-Artifacts: `openspec/changes/405-unify-mcp-tool-registration/` + engram `sdd/405-.../*`.
+**Evidence**
+- `src/core/runner/access-runner.ts:357` — `acquireCrossProcessAccessLock`: evicts lock dir after `CROSS_PROCESS_LOCK_STALE_MS` (30 s) mtime age; owner never heartbeats.
+- `src/core/runner/access-runner.ts:118` — `accessExecutionLocks`: module-level mutable `Map` (not injectable).
 
-### #406 — Remove duplicated VBA comparison types (DONE)
-Deleted the 5 duplicate type declarations in `vba-sync-adapter.ts` (were identical to core) and
-re-exported them from `core/services/vba-source-comparison.ts`. Pure type move; tsc clean; behavior
-identical. PR #412 merged.
-
-### #407 — AccessOperationRegistry ownership (DONE)
-Outcome: Removed process-global defaultRegistry singleton and getDefaultAccessOperationRegistry() from core. Injected explicit registries from composition roots. All tests and compilation gates verified green.
-
-### #408 — HTTP input validation parity (DONE)
-Outcome: HTTP adapter now validates request input at the boundary (parity with the MCP `validateInput`
-path) and returns 400 on malformed payloads instead of silently coercing via `String(... ?? "")`.
-Shipped together with #407 in PR #413. Released in v1.2.15.
+**Fix direction**: heartbeat the lock dir mtime during long ops (e.g. `setInterval(touch, STALE_MS/2)`), OR derive staleness from owner-PID liveness. Also make `accessExecutionLocks` injectable. Full SDD recommended.
 
 ---
 
-## Execution settings (decided 2026-06-03)
+### #415 — refactor(core): Access lock release ordering and hashing (TODO)
+
+**Evidence**
+- `src/core/runner/access-runner.ts:393–399` — `finally` calls `releaseCurrent()` before `await releaseCrossProcessAccessLock(lockPath)`.
+- `src/core/runner/access-runner.ts:343` — `getCrossProcessLockPath` uses `createHash("md5")`.
+
+**Fix direction**: swap the release order; replace `md5` with `sha256` (truncated to 16 hex chars). Lightweight SDD.
+
+---
+
+### #416 — fix(http): constant-time bearer token comparison (TODO)
+
+**Evidence**
+- `src/adapters/http/server.ts:157` — `if (token !== context.httpToken)`: timing oracle.
+
+**Fix direction**: `crypto.timingSafeEqual` over equal-length `Buffer` instances; handle length mismatch without early-return. Lightweight SDD.
+
+---
+
+### #417 — fix(core): sanitize marker payloads before registry storage (TODO)
+
+**Evidence**
+- `src/core/runner/access-runner.ts:499–530` — marker JSON parsed from raw stderr before `sanitizeSecrets` runs; `commandLine` stored un-redacted.
+
+**Fix direction**: run `sanitizeSecrets` on marker payload fields (especially `commandLine`) before storing. Document the TS↔PS marker contract inline. Lightweight SDD.
+
+---
+
+### #418 — refactor(core): consolidate vba-sync triple timeout (TODO)
+
+**Evidence**
+- `src/adapters/vba-sync/vba-sync-adapter.ts:445–467` — `executeWithTimeout`: own `Promise.race`.
+- `src/core/runner/powershell-executor.ts:115` — independent kill timer.
+- `src/adapters/vba-sync/vba-sync-adapter.ts:203–211` — `psTimeoutMs` recomputed in `executeMappedTool`.
+
+**Fix direction**: propagate a single authoritative timeout; remove or delegate the redundant layers. Full SDD recommended (touches core boundary carefully).
+
+---
+
+### #419 — fix(core): runner output parsing robustness (TODO)
+
+**Evidence**
+- `src/adapters/.../windows-processes.ts:141–152` — `JSON.parse(stdout) as Array<…>` contradicts runtime `Array.isArray` guard for single-result PS output.
+- `src/core/runner/access-runner.ts:472` — `parseRunnerData` returns `{}` for empty stdout; accepted as success by `ensureResultShape(isRecord)` at `src/core/services/query-service.ts:51`.
+
+**Fix direction**: type parse result as `unknown`, normalize to array; distinguish empty stdout from valid empty-object payload. Lightweight SDD.
+
+---
+
+### #420 — refactor: MCP/HTTP request-shaping and read-only SQL consolidation (TODO)
+
+**Evidence**
+- `src/adapters/http/server.ts:194,195,219,256,358,359` — `body.data.x as string` unsafe casts.
+- `src/adapters/mcp/tools.ts:651–730` — `toQueryRequest`/`toWriteFixtureRequest`/`toMaintenanceRequest` duplicate alias-fallback logic (~80 lines).
+- `src/adapters/mcp/tools.ts:102–109` + `src/adapters/http/server.ts:310–332` — two divergent read-only SQL heuristics.
+- `src/adapters/http/server.ts:330–331` — `looksLikeReadOnlySql` rejects valid `WITH … SELECT` CTEs.
+- `src/adapters/vba-sync/vba-sync-adapter.ts:409` — `validateStrictContext`, `resolveExecutionTarget`, `executeWithTimeout`, `executeMappedTool`, `runPreflightCleanup` are `public` only for tests.
+
+**Fix direction**: typed extraction helpers for HTTP body fields; declarative field-mapping table; canonical read-only SQL heuristic in core (CTE-aware); reduce method visibility + rewrite tests at port. Lightweight SDD.
+
+---
+
+## Execution settings (decided 2026-06-04)
 
 - **Execution mode**: `auto` — phases run back-to-back without pausing.
+- **Artifact store**: `hybrid` — versioned files in `openspec/changes/<change-name>/` **and** engram observations.
 - **Delivery**: one PR per issue (issues are independent). Branch off latest `main`.
 - **SDD weight (right-sized)**:
-  - `#407` → **full SDD** (real design decision).
-  - `#406`, `#408` → **lightweight** (proposal + tasks → apply → verify).
+  - `#414` (Issue A), `#418` (Issue E) → **full SDD** (real design decisions, cross-cutting concerns).
+  - `#415`, `#416`, `#417`, `#419`, `#420` (Issues B, C, D, F, G) → **lightweight** (proposal + tasks → apply → verify).
+- **Final goal**: ship a new release with all 7 implemented. The release title must equal the tag name exactly.
 
 ## Artifact store
 
