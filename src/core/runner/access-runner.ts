@@ -340,7 +340,7 @@ export class AccessPowerShellRunner implements AccessRunner {
 }
 
 export function getCrossProcessLockPath(accessPath: string): string {
-  const hash = createHash("md5").update(accessPath.toLowerCase()).digest("hex");
+  const hash = createHash("sha256").update(accessPath.toLowerCase()).digest("hex").slice(0, 16);
   return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
@@ -423,9 +423,9 @@ async function runWithAccessExecutionLock<T>(
     return await work();
   } finally {
     stopHeartbeat();
+    await releaseCrossProcessAccessLock(lockPath);
     releaseCurrent();
     if (accessExecutionLocks.get(key) === current) accessExecutionLocks.delete(key);
-    await releaseCrossProcessAccessLock(lockPath);
   }
 }
 
