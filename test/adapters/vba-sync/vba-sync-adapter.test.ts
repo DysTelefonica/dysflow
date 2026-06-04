@@ -194,34 +194,38 @@ describe("VbaSyncAdapter Orchestrator", () => {
     });
   });
 
-  it("timeout: executor receives a cancellation signal and resolves VBA_MANAGER_TIMEOUT", async () => {
-    vi.useFakeTimers();
-    try {
-      let capturedSignal: AbortSignal | undefined;
-      const executor: VbaManagerExecutor = (request) => {
-        capturedSignal = request.signal;
-        return new Promise(() => {});
+  it("timeout: slow executor resolves VBA_MANAGER_TIMEOUT — authoritative timeout is the executor's own timer", async () => {
+    // The executor layer (spawnPowerShellProcess) is the single authoritative timeout:
+    // it owns the kill and sets timedOut=true in the result.  The adapter no longer
+    // races the executor against a parallel timer — it simply maps timedOut:true → VBA_MANAGER_TIMEOUT.
+    const executor: VbaManagerExecutor = async (request) => {
+      // Simulate executor timing out and killing the process itself
+      return {
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        durationMs: request.timeoutMs,
+        timedOut: true,
       };
-      const service = new VbaSyncAdapter({
-        executor,
-        processTimeoutMs: 50,
-        scriptPath: "scripts/dysflow-vba-manager.ps1",
-        accessPath: "C:/db/front.accdb",
-        env: {},
-      });
+    };
+    const service = new VbaSyncAdapter({
+      executor,
+      processTimeoutMs: 50,
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      env: {},
+    });
 
-      const resultPromise = service.execute("exists", { moduleName: "Module1" });
-      await vi.advanceTimersByTimeAsync(50);
+    const result = await service.execute("exists", { moduleName: "Module1" });
 
-      expect(capturedSignal?.aborted).toBe(true);
-      await expect(resultPromise).resolves.toMatchObject({
-        ok: false,
-        error: { code: "VBA_MANAGER_TIMEOUT", retryable: true },
-        durationMs: 50,
-      });
-    } finally {
-      vi.useRealTimers();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+      expect(result.error.retryable).toBe(true);
+      // durationMs in the error message reflects the executor's authoritative timeout duration
+      expect(result.error.message).toContain("timed out after 50ms");
     }
+    expect(result.durationMs).toBe(50);
   });
 
   it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {

@@ -89,7 +89,7 @@ export type VbaComparisonContext = {
     target: VbaExecutionTarget,
   ): OperationResult<undefined>;
   runPreflightCleanup(target: VbaExecutionTarget): Promise<AccessOperationPreflightCleanupResult>;
-  executeWithTimeout(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
+  runVbaManager(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
 };
 
 export async function compareSourceAgainstBinary(
@@ -129,7 +129,7 @@ export async function compareSourceAgainstBinary(
     const preflightDiagnostics = diagnosticsFromPreflightCleanup(
       await ctx.runPreflightCleanup(target.data),
     );
-    const result = await ctx.executeWithTimeout(request);
+    const result = await ctx.runVbaManager(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
       return failureResult(

@@ -224,7 +224,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       : timedRequest;
     let result: VbaManagerExecutionResult;
     try {
-      result = await this.executeWithTimeout(trackedRequest);
+      result = await this.executor(trackedRequest);
     } catch (error) {
       await this.finishTrackedOperation(trackedOperation, { status: "failed" });
       throw error;
@@ -440,30 +440,6 @@ export class VbaSyncAdapter implements VbaSyncPort {
       }
     }
     return successResult(undefined);
-  }
-
-  public async executeWithTimeout(
-    request: VbaManagerExecutionRequest,
-  ): Promise<VbaManagerExecutionResult> {
-    const controller = new AbortController();
-    const requestWithSignal = { ...request, signal: controller.signal };
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<VbaManagerExecutionResult>((resolve) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        resolve({
-          exitCode: null,
-          stdout: "",
-          stderr: "",
-          durationMs: request.timeoutMs,
-          timedOut: true,
-        });
-      }, request.timeoutMs);
-    });
-    const execution = this.executor(requestWithSignal).finally(() => {
-      if (timer !== undefined) clearTimeout(timer);
-    });
-    return Promise.race([execution, timeout]);
   }
 }
 
