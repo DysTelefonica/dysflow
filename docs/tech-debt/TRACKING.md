@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — #414 done (PR #421 merged, CI green). **NEXT: Issue B (#415).**
+`Last updated`: 2026-06-04 — #414, #415 done (PRs #421, #422 merged, CI green). **NEXT: Issue C (#416).**
 
 ---
 
@@ -44,6 +44,7 @@ All 5 issues shipped in v1.2.15. No open work remaining from this campaign.
 
 - **2026-06-04**: Architecture review complete. 7 issues filed (#414–#420). Campaign opened.
 - **2026-06-04**: #414 (high) done — heartbeat keeps cross-process Access lock fresh. PR #421 merged, CI green, SDD archived (engram `sdd/414-.../archive-report`). D4 (injectable lock Map) de-scoped as non-essential.
+- **2026-06-04**: #415 (med) done — release cross-process lock before in-process waiter; md5→sha256 lock path. PR #422 merged, CI green, SDD archived. Behavior-preserving (verified inline).
 
 ---
 
@@ -95,7 +96,7 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
 |-------|-------|-------|----------|--------|--------|----|------------|
 | 1 | [#414](https://github.com/DysTelefonica/dysflow/issues/414) | fix(core): cross-process Access lock can be declared stale while still held | high | `done` ✅ | (merged) | [#421](https://github.com/DysTelefonica/dysflow/pull/421) | `414-access-lock-stale-heartbeat` |
-| 2 | [#415](https://github.com/DysTelefonica/dysflow/issues/415) | refactor(core): harden Access lock release ordering and hashing | medium | `todo` | — | — | `415-lock-release-ordering-hash` |
+| 2 | [#415](https://github.com/DysTelefonica/dysflow/issues/415) | refactor(core): harden Access lock release ordering and hashing | medium | `done` ✅ | (merged) | [#422](https://github.com/DysTelefonica/dysflow/pull/422) | `415-lock-release-ordering-hash` |
 | 3 | [#416](https://github.com/DysTelefonica/dysflow/issues/416) | fix(http): use constant-time comparison for bearer token | medium | `todo` | — | — | `416-timing-safe-bearer-token` |
 | 4 | [#417](https://github.com/DysTelefonica/dysflow/issues/417) | fix(core): sanitize PID/progress marker payloads before they reach the registry | medium | `todo` | — | — | `417-sanitize-marker-payloads` |
 | 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `todo` | — | — | `418-consolidate-vba-timeout` |
