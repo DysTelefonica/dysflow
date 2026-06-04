@@ -76,10 +76,7 @@ describe("AccessPowerShellRunner — marker payload sanitization (#417)", () => 
       scriptPath: "C:/tools/runner.ps1",
     });
 
-    await runner.run(
-      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
-      config,
-    );
+    await runner.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
 
     // The registry record for a completed op is purged from InMemory (parity with FileRegistry).
     // We need to intercept the update call. Instead, use a registry that persists completed records.
@@ -104,10 +101,7 @@ describe("AccessPowerShellRunner — marker payload sanitization (#417)", () => 
       scriptPath: "C:/tools/runner.ps1",
     });
 
-    await runner2.run(
-      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
-      config,
-    );
+    await runner2.run({ kind: "vba", request: { moduleName: "M", procedureName: "P" } }, config);
 
     // Find the update that stored the commandLine (from onAccessProcessCaptured)
     const markerUpdate = capturedUpdates.find((u) => u.commandLine !== undefined);
