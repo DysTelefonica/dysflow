@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import {
@@ -154,7 +155,9 @@ async function routeRequest(
       return;
     }
     const token = authHeader.substring(7);
-    if (token !== context.httpToken) {
+    const tokenBuf = Buffer.from(token, "utf8");
+    const expectedBuf = Buffer.from(context.httpToken, "utf8");
+    if (tokenBuf.length !== expectedBuf.length || !timingSafeEqual(tokenBuf, expectedBuf)) {
       sendUnauthorized(response);
       return;
     }
