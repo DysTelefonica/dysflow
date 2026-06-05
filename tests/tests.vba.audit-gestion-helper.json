@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Audit gestion helper cache ON source contract RED",
+      "procedure": "Test_AuditListadoHelper_CacheOn_SourceContract_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice1", "red", "cache"]
+    },
+    {
+      "name": "Audit gestion helper fallback observable RED",
+      "procedure": "Test_AuditListadoHelper_Fallback_Observable_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice1", "red", "fallback"]
+    },
+    {
+      "name": "Audit gestion helper row/report contracts RED",
+      "procedure": "Test_AuditListadoHelper_RowAndReportContracts_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice1", "red", "row-format"]
+    },
+    {
+      "name": "Audit gestion form report constructor path characterization",
+      "procedure": "Test_AuditGestionForm_ReportConstructorPath_Characterization",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice1", "characterization"]
+    }
+  ]
+}
