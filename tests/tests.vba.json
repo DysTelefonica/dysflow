@@ -133,6 +133,12 @@
       "tags": ["form-contract", "indicator-refresh", "regression", "issue-38"]
     },
     {
+      "name": "Issue50 seguimiento proyecto carga diferida con helper",
+      "procedure": "Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract",
+      "expect": { "ok": true },
+      "tags": ["form-contract", "indicator-deferred-load", "helper-extraction", "issue-50"]
+    },
+    {
       "name": "Issue38 seguimiento auditoria actualizar fuerza modo auditoria",
       "procedure": "Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract",
       "expect": { "ok": true },

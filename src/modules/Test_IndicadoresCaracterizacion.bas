@@ -2149,6 +2149,47 @@ Public Function Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract
         "PROYECTO")
 End Function
 
+Public Function Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim clsText As String
+    Dim formText As String
+    Dim clsPath As String
+    Dim formPath As String
+    Dim loadBody As String
+
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    clsPath = CurrentProject.Path & "\src\forms\Form_FormNCProyectoSeguimiento.cls"
+    formPath = CurrentProject.Path & "\src\forms\Form_FormNCProyectoSeguimiento.form.txt"
+
+    clsText = ReadTextFileForIndicatorContract(clsPath)
+    formText = ReadTextFileForIndicatorContract(formPath)
+    loadBody = ExtractIndicatorFormOpenBody(clsText)
+
+    TestHelper.AddLog logs, "Arrange: leído seguimiento proyecto " & clsPath
+    TestHelper.AddLog logs, "Arrange: leída definición " & formPath
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private m_CargaInicialIndicadoresPendiente As Boolean", vbTextCompare) > 0, "Seguimiento debe conservar flag de carga diferida", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private m_CargandoIndicadores As Boolean", vbTextCompare) > 0, "Seguimiento debe evitar cargas concurrentes", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "Private Sub Form_Timer()", vbTextCompare) > 0, "Seguimiento debe cargar desde Form_Timer", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, formText, "OnTimer =""[Event Procedure]""", vbTextCompare) > 0, "El .form.txt debe enlazar OnTimer", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, loadBody, "PintarIndicadores", vbTextCompare) = 0, "Form_Load no debe ejecutar PintarIndicadores directamente", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, loadBody, "Me.TimerInterval = 100", vbTextCompare) > 0, "Form_Load debe programar timer para pintar primero", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "NCProyectoSeguimientoHelper.CargarIndicadoresSeguimientoProyecto", vbTextCompare) > 0, "El timer debe delegar lógica al helper de seguimiento", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(1, clsText, "p_DuracionSegundos:=m_UltimaDuracionIndicadores", vbTextCompare) > 0, "El helper debe devolver duración para diagnosticar lentitud", logs, assertError)
+
+    If assertError <> "" Then
+        Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract = TestHelper.BuildJsonOk(logs, "issue50_seguimiento_deferred_helper_ok")
+    End If
+    Exit Function
+
+errores:
+    Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract = TestHelper.BuildJsonFail(Err.Description, logs)
+End Function
+
 Public Function Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract() As String
     Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract = AssertIssue38SeguimientoActualizarModo( _
         "Form_FormNCAuditoriaSeguimiento", _
@@ -2258,13 +2299,23 @@ Private Function AssertIssue38SeguimientoActualizarModo( _
     TestHelper.AddLog logs, "Arrange: leído seguimiento " & clsPath
     TestHelper.AddLog logs, "Arrange: leído definición " & formPath
     Call TestHelper.AssertTrue(clickBody <> "", "Debe existir ComandoActualizar_Click", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores", vbTextCompare) > 0, "ComandoActualizar debe llamar PintarIndicadores", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, clickBody, "p_Modo:=", vbTextCompare) > 0, "ComandoActualizar debe pasar p_Modo explícito", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, clickBody, p_ModoEsperado, vbTextCompare) > 0, "ComandoActualizar debe forzar modo " & p_ModoEsperado, logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error", vbTextCompare) = 0, "ComandoActualizar no debe usar modo AMBOS implícito", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, formText, "PintarIndicadores", vbTextCompare) > 0, "El .form.txt debe conservar llamada a PintarIndicadores", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, formText, "p_Modo:=", vbTextCompare) > 0, "El .form.txt debe conservar p_Modo explícito", logs, assertError)
-    Call TestHelper.AssertTrue(InStr(1, formText, p_ModoEsperado, vbTextCompare) > 0, "El .form.txt debe conservar modo " & p_ModoEsperado, logs, assertError)
+    If p_FormName = "Form_FormNCProyectoSeguimiento" Then
+        Call TestHelper.AssertTrue(InStr(1, clickBody, "m_CargaInicialIndicadoresPendiente = True", vbTextCompare) > 0, "ComandoActualizar debe programar carga diferida", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, clickBody, "Me.TimerInterval = 100", vbTextCompare) > 0, "ComandoActualizar debe activar timer", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, clsText, "NCProyectoSeguimientoHelper.CargarIndicadoresSeguimientoProyecto", vbTextCompare) > 0, "Seguimiento Proyecto debe delegar lógica al helper", logs, assertError)
+    Else
+        Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores", vbTextCompare) > 0, "ComandoActualizar debe llamar PintarIndicadores", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, clickBody, "p_Modo:=", vbTextCompare) > 0, "ComandoActualizar debe pasar p_Modo explícito", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, clickBody, p_ModoEsperado, vbTextCompare) > 0, "ComandoActualizar debe forzar modo " & p_ModoEsperado, logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, clickBody, "PintarIndicadores p_Reiniciando:=EnumSino.Sí, p_Error:=m_Error", vbTextCompare) = 0, "ComandoActualizar no debe usar modo AMBOS implícito", logs, assertError)
+    End If
+    If p_FormName = "Form_FormNCProyectoSeguimiento" Then
+        Call TestHelper.AssertTrue(InStr(1, formText, "OnTimer =""[Event Procedure]""", vbTextCompare) > 0, "El .form.txt debe conservar solo el binding OnTimer", logs, assertError)
+    Else
+        Call TestHelper.AssertTrue(InStr(1, formText, "PintarIndicadores", vbTextCompare) > 0, "El .form.txt debe conservar llamada a PintarIndicadores", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, formText, "p_Modo:=", vbTextCompare) > 0, "El .form.txt debe conservar p_Modo explícito", logs, assertError)
+        Call TestHelper.AssertTrue(InStr(1, formText, p_ModoEsperado, vbTextCompare) > 0, "El .form.txt debe conservar modo " & p_ModoEsperado, logs, assertError)
+    End If
 
     If assertError <> "" Then
         AssertIssue38SeguimientoActualizarModo = TestHelper.BuildJsonFail(assertError, logs)
