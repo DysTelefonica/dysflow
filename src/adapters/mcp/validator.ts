@@ -44,6 +44,14 @@ function validateJsonSchemaProperty(
       return `${path} must be at least ${property.minLength} non-whitespace character${property.minLength === 1 ? "" : "s"}.`;
   }
 
+  if (property.minimum !== undefined && typeof value === "number") {
+    if (value < property.minimum) return `${path} must be at least ${property.minimum}.`;
+  }
+
+  if (property.maximum !== undefined && typeof value === "number") {
+    if (value > property.maximum) return `${path} must be at most ${property.maximum}.`;
+  }
+
   if (property.pattern !== undefined && typeof value === "string") {
     if (!new RegExp(property.pattern).test(value))
       return `${path} does not match the required pattern.`;

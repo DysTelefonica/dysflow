@@ -7,6 +7,8 @@ export type JsonSchemaProperty = {
   description?: string;
   enum?: readonly string[];
   minLength?: number;
+  minimum?: number;
+  maximum?: number;
   pattern?: string;
   items?: JsonSchemaProperty;
   additionalProperties?: boolean;
@@ -297,10 +299,12 @@ export const SCHEMA_PROPS = {
   diff: { type: "boolean", description: "Include a diff when supported." } as JsonSchemaProperty,
   limit: {
     type: "number",
+    minimum: 1,
     description: "Maximum number of items or diff lines.",
   } as JsonSchemaProperty,
   timeoutMs: {
     type: "number",
+    minimum: 1,
     description: "Operation timeout in milliseconds. Overrides project config timeout.",
   } as JsonSchemaProperty,
   replace: { type: "boolean", description: "Replace existing resources." } as JsonSchemaProperty,
@@ -318,7 +322,7 @@ export const SCHEMA_PROPS = {
   controlType: { type: "string", description: "Control type." } as JsonSchemaProperty,
   type: { type: "string", description: "Control type alias." } as JsonSchemaProperty,
   location: { type: "string", description: "Encoding fix location." } as JsonSchemaProperty,
-  top: { type: "number", description: "Maximum returned rows." } as JsonSchemaProperty,
+  top: { type: "number", minimum: 1, description: "Maximum returned rows." } as JsonSchemaProperty,
   testsPath: { type: "string", description: "VBA test plan path." } as JsonSchemaProperty,
   exists_name: {
     type: "string",

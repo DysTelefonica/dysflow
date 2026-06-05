@@ -20,13 +20,42 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — **MCP hardening campaign COMPLETE**: #429, #430, #431 all DONE and on `main`. Lower-priority findings (decorative parity-registry, validator min/max numeric bounds, MCP/HTTP redaction convergence) remain in engram obs #10705 for a future campaign. No campaign work in flight.
+`Last updated`: 2026-06-05 — Phase 1 (#429-#431) COMPLETE. **Phase 2 in flight**: #432 (validator numeric bounds) DONE on `main`. **NEXT: file + implement the parity-registry single-source-of-truth follow-up.** HTTP→core-mapper convergence was investigated and DROPPED as non-debt (see phase-2 section). engram obs #10705.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
+
+---
+
+## Active campaign (2026-06-05, phase 2) — MCP hardening follow-ups
+
+> Lower-priority findings from the fresh MCP review (engram obs #10705), tackled after phase 1.
+> Same rules: SDD + strict TDD, direct commits to `main`, one commit per issue. **Scope-checked
+> against the live code** — a candidate is DROPPED if it isn't real debt.
+
+### Status board
+
+| Order | Issue | Title | Severity | Status | SDD change |
+|-------|-------|-------|----------|--------|------------|
+| 1 | [#432](https://github.com/DysTelefonica/dysflow/issues/432) | fix(mcp): input validator ignores numeric bounds (timeoutMs/limit/top) | medium | `done` ✅ (main) | `432-validator-numeric-bounds` |
+| 2 | _to be filed_ | refactor(mcp): parity-registry single source of truth (status vs HIDDEN_STUB_TOOL_NAMES) | low | `todo` | `433-parity-registry-sot` |
+
+### Dropped (investigated, NOT real debt)
+
+- **HTTP → core-mapper convergence**: HTTP's query surface is SQL-only — `server.ts:238,258` build
+  `{ sql, mode }` via type-safe `getStringParam`. It does NOT duplicate MCP's alias-shaping, so forcing
+  it onto `buildQueryReadRequest` would only add irrelevant `undefined` fields. No drift to fix.
+
+### Progress log
+
+- **2026-06-05**: #432 DONE. `JsonSchemaProperty` gained `minimum`/`maximum`; the validator now enforces
+  numeric bounds; `timeoutMs`/`limit`/`top` declare `minimum: 1`. RED-first
+  (`test/adapters/mcp/validator.test.ts`, 19 behavior tests at the validator port). 925 passed, lint
+  clean. Committed direct to main. **NEXT: #433** — make tool availability a single source of truth
+  (`tool-parity-registry` `status` vs `HIDDEN_STUB_TOOL_NAMES`).
 
 ---
 
