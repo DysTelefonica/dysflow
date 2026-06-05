@@ -5,6 +5,13 @@ import type {
   VbaSyncPort,
 } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import {
+  type AccessQueryAction,
+  buildMaintenanceRequest,
+  buildQueryReadRequest,
+  buildWriteFixtureRequest,
+  resolveIsDryRun,
+} from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
@@ -16,13 +23,16 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import {
-  isRecord,
   looksLikeReadOnlySql,
   sanitizeConnectStrings,
   sanitizeSecrets,
-  stringValue,
 } from "../../core/utils/index.js";
-import { DYSFLOW_MCP_TOOL_NAMES, type DysflowMcpToolName } from "./mcp-tool-registry.js";
+import {
+  DYSFLOW_MCP_TOOL_NAMES,
+  type DysflowMcpToolName,
+  QUERY_TOOL_NAMES,
+  type QueryToolName,
+} from "./mcp-tool-registry.js";
 import {
   CLEANUP_SCHEMA,
   DOCTOR_SCHEMA,
@@ -408,7 +418,9 @@ function buildAliasTools(
       inputSchema: execSqlSchema,
       handler: async (input) =>
         handleValidatedMcpWrite(input, execSqlSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(toWriteFixtureRequest("exec_sql", input)),
+          services.queryService.execute(
+            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.exec_sql, input),
+          ),
         ),
     },
     {
@@ -417,7 +429,9 @@ function buildAliasTools(
       inputSchema: runScriptSchema,
       handler: async (input) =>
         handleValidatedMcpWrite(input, runScriptSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(toWriteFixtureRequest("run_script", input)),
+          services.queryService.execute(
+            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.run_script, input),
+          ),
         ),
     },
     {
@@ -426,7 +440,9 @@ function buildAliasTools(
       inputSchema: createTableSchema,
       handler: async (input) =>
         handleValidatedMcpWrite(input, createTableSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(toWriteFixtureRequest("create_table", input)),
+          services.queryService.execute(
+            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.create_table, input),
+          ),
         ),
     },
     {
@@ -435,7 +451,9 @@ function buildAliasTools(
       inputSchema: dropTableSchema,
       handler: async (input) =>
         handleValidatedMcpWrite(input, dropTableSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(toWriteFixtureRequest("drop_table", input)),
+          services.queryService.execute(
+            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.drop_table, input),
+          ),
         ),
     },
     {
@@ -444,7 +462,9 @@ function buildAliasTools(
       inputSchema: seedFixtureSchema,
       handler: async (input) =>
         handleValidatedMcpWrite(input, seedFixtureSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(toWriteFixtureRequest("seed_fixture", input)),
+          services.queryService.execute(
+            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.seed_fixture, input),
+          ),
         ),
     },
     {
@@ -457,7 +477,10 @@ function buildAliasTools(
           teardownFixtureSchema,
           writesEnabled,
           writeAccessResolver,
-          () => services.queryService.execute(toWriteFixtureRequest("teardown_fixture", input)),
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.teardown_fixture, input),
+            ),
         ),
     },
   ];
@@ -555,6 +578,36 @@ export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
   teardown_fixture: { kind: "query-write-fixture" },
 };
 
+/**
+ * Typed binding of MCP query tool names to their domain `AccessQueryRequest`
+ * action. This REPLACES the former `name as AccessQueryRequest["action"]` cast:
+ * the `Record<QueryToolName, AccessQueryAction>` type makes a missing entry a
+ * COMPILE error (every query tool must be listed) and an out-of-union value a
+ * COMPILE error (the action must be a valid `AccessQueryRequest["action"]`).
+ *
+ * The binding is an identity map (tool name === action) but is written
+ * explicitly rather than derived, so the type checker — not a runtime cast —
+ * guarantees coverage. The companion test mcp-tool-action-map.test.ts asserts
+ * coverage against MCP_TOOL_ROUTES at runtime as a second net.
+ */
+export const MCP_TOOL_QUERY_ACTIONS: Record<QueryToolName, AccessQueryAction> = Object.fromEntries(
+  QUERY_TOOL_NAMES.map((name) => [name, name]),
+) as Record<QueryToolName, AccessQueryAction>;
+
+/**
+ * Narrows a routed tool name to a {@link QueryToolName} so the typed action map
+ * can be indexed without a cast. Query routes (read / maintenance / write
+ * fixture) are exactly the QUERY_TOOL_NAMES; this is asserted at runtime by the
+ * action-map coverage test.
+ */
+function queryActionFor(name: DysflowMcpToolName): AccessQueryAction {
+  const action = MCP_TOOL_QUERY_ACTIONS[name as QueryToolName];
+  if (action === undefined) {
+    throw new Error(`No AccessQueryRequest action registered for MCP tool: ${name}`);
+  }
+  return action;
+}
+
 function mcpSchemaFor(name: keyof typeof MCP_TOOL_SCHEMAS): JsonObjectSchema {
   const schema = MCP_TOOL_SCHEMAS[name];
   if (schema === undefined) {
@@ -611,7 +664,13 @@ function createDispatchTool(
             ],
           };
         case "query-maintenance": {
-          const maintenanceRequest = toMaintenanceRequest(name, input, env);
+          const queryMode = getToolDefinition(name).queryMode ?? "write";
+          const maintenanceRequest = buildMaintenanceRequest(
+            queryActionFor(name),
+            queryMode,
+            input,
+            (key) => env[key],
+          );
           return translateCoreResultToMcpContent(
             await services.queryService.execute(maintenanceRequest),
             resolveInScopeSecrets(maintenanceRequest.backendPassword),
@@ -619,11 +678,13 @@ function createDispatchTool(
         }
         case "query-read":
           return translateCoreResultToMcpContent(
-            await services.queryService.execute(toQueryRequest(name, input)),
+            await services.queryService.execute(buildQueryReadRequest(queryActionFor(name), input)),
           );
         case "query-write-fixture":
           return translateCoreResultToMcpContent(
-            await services.queryService.execute(toWriteFixtureRequest(name, input)),
+            await services.queryService.execute(
+              buildWriteFixtureRequest(queryActionFor(name), input),
+            ),
           );
       }
     },
@@ -640,13 +701,6 @@ async function isWriteAllowed(
   return await writeAccessResolver(input);
 }
 
-function resolveIsDryRun(input: unknown): boolean {
-  if (!isRecord(input)) return true;
-  if (input.apply === true) return false;
-  if (input.dryRun === false) return false;
-  return true;
-}
-
 type McpArgsJsonParseResult = { ok: true; value: unknown[] } | { ok: false; message: string };
 
 function parseMcpArgsJson(argsJson: string | undefined): McpArgsJsonParseResult {
@@ -657,126 +711,6 @@ function parseMcpArgsJson(argsJson: string | undefined): McpArgsJsonParseResult 
   } catch {
     return { ok: false, message: "argsJson must be valid JSON." };
   }
-}
-
-function toQueryRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRequest {
-  const params = isRecord(input) ? input : {};
-  return {
-    action: name as AccessQueryRequest["action"],
-    mode: "read",
-    sql: getStr(params, "sql", ["query"]) ?? "",
-    tableName: getStr(params, "tableName", ["table"]),
-    columnName: getStr(params, "columnName", ["column"]),
-    backendPath: getStr(params, "backendPath", ["comparePath"]),
-    databasePath: getStr(params, "databasePath", ["sourcePath"]),
-    rootPath: getStr(params, "rootPath", ["directory"]),
-    exportPath: getStr(params, "exportPath", ["path"]),
-    importPath: getStr(params, "importPath", ["path"]),
-    queryDefinitions:
-      queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-  };
-}
-
-function toWriteFixtureRequest(name: DysflowMcpToolName, input: unknown): AccessQueryRequest {
-  const params = isRecord(input) ? input : {};
-  return {
-    action: name as AccessQueryRequest["action"],
-    mode: "write",
-    sql: getStr(params, "sql", ["query"]) ?? "",
-    tableName: getStr(params, "tableName", ["table"]),
-    columnName: getStr(params, "columnName", ["column"]),
-    backendPath: getStr(params, "backendPath", ["comparePath"]),
-    databasePath: getStr(params, "databasePath", ["sourcePath"]),
-    rootPath: getStr(params, "rootPath", ["directory"]),
-    scriptPath: getStr(params, "scriptPath", ["path"]),
-    definition: getStr(params, "definition", ["fields"]),
-    rows: rowsValue(params.rows),
-    dryRun: resolveIsDryRun(input),
-    allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
-    denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
-  };
-}
-
-function toMaintenanceRequest(
-  name: DysflowMcpToolName,
-  input: unknown,
-  env: Record<string, string | undefined>,
-): AccessQueryRequest {
-  const params = isRecord(input) ? input : {};
-  const queryMode = getToolDefinition(name).queryMode ?? "write";
-  return {
-    action: name as AccessQueryRequest["action"],
-    mode: queryMode,
-    sql: getStr(params, "sql", ["query"]) ?? "",
-    tableName: getStr(params, "tableName", ["table"]),
-    columnName: getStr(params, "columnName", ["column"]),
-    backendPath: getStr(params, "backendPath", ["comparePath"]),
-    rootPath: getStr(params, "rootPath", ["directory"]),
-    databasePath: getStr(params, "databasePath", ["sourcePath"]),
-    exportPath: getStr(params, "exportPath", ["path"]),
-    importPath: getStr(params, "importPath", ["path"]),
-    queryDefinitions:
-      queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-    dryRun: resolveIsDryRun(input),
-    maps: Array.isArray(params.maps)
-      ? params.maps.filter(
-          (m): m is { from: string; to: string } =>
-            isRecord(m) && typeof m.from === "string" && typeof m.to === "string",
-        )
-      : undefined,
-    denyPrefixes: stringArrayValue(params.denyPrefixes),
-    strictLocal: params.strictLocal === true ? true : undefined,
-    removeUnresolved: params.removeUnresolved === true ? true : undefined,
-    noBackup: params.backup === false ? true : undefined,
-    recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
-    timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
-    backendPassword:
-      getStr(params, "backendPassword", ["password"]) ??
-      (params.passwordEnv ? env[getStr(params, "passwordEnv") ?? ""] : undefined),
-  };
-}
-
-export function getStr(
-  params: Record<string, unknown>,
-  key: string,
-  fallbackKeys?: readonly string[],
-): string | undefined {
-  const keys = [key, ...(fallbackKeys ?? [])];
-  for (const k of keys) {
-    const val = stringValue(params[k]);
-    if (val !== undefined) return val;
-  }
-  return undefined;
-}
-
-function stringArrayValue(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const values = value.filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0,
-  );
-  return values.length > 0 ? values : undefined;
-}
-
-function singleStringArrayValue(value: unknown): string[] | undefined {
-  const single = stringValue(value);
-  return single === undefined ? undefined : [single];
-}
-
-function rowsValue(value: unknown): readonly Record<string, unknown>[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const rows = value.filter(isRecord);
-  return rows.length > 0 ? rows : undefined;
-}
-
-function queryDefinitionsValue(
-  value: unknown,
-): readonly { name: string; sql: string }[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const definitions = value
-    .filter(isRecord)
-    .map((item) => ({ name: stringValue(item.name) ?? "", sql: stringValue(item.sql) ?? "" }))
-    .filter((item) => item.name.length > 0 && item.sql.length > 0);
-  return definitions.length > 0 ? definitions : undefined;
 }
 
 /**

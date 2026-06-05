@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — MCP hardening campaign in flight. **#429 DONE** (MCP error path now redacts secrets; committed direct to main). **NEXT: #430 (extract request-shaping mapper to core).**
+`Last updated`: 2026-06-05 — MCP hardening campaign in flight. **#429 + #430 DONE** (secret redaction; request-shaping mapper extracted to `src/core` with an exhaustive typed action map). **NEXT: #431 (split tools.ts god-file).**
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -56,7 +56,7 @@
 | Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
 |-------|-------|-------|----------|--------|--------|----|------------|
 | 1 | [#429](https://github.com/DysTelefonica/dysflow/issues/429) | fix(mcp): MCP error path leaks secrets (only paths redacted) | security/med | `done` ✅ | (main) | — | `429-mcp-secret-redaction` |
-| 2 | [#430](https://github.com/DysTelefonica/dysflow/issues/430) | refactor(core): extract MCP request-shaping into a core mapper (+ typed action map) | medium | `todo` | — | — | `430-mcp-request-shaping-core` |
+| 2 | [#430](https://github.com/DysTelefonica/dysflow/issues/430) | refactor(core): extract MCP request-shaping into a core mapper (+ typed action map) | medium | `done` ✅ | (main) | — | `430-mcp-request-shaping-core` |
 | 3 | [#431](https://github.com/DysTelefonica/dysflow/issues/431) | refactor(mcp): split tools.ts god-file (811 LOC) | medium | `todo` | — | — | `431-split-mcp-tools` |
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
@@ -86,6 +86,18 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
   RED test `test/adapters/mcp/sanitize-error-secrets.test.ts` (behavior at the port). 887 passed,
   tsc + biome clean. Committed direct to main. **NEXT: #430** — extract the input→`AccessQueryRequest`
   mapper to `src/core` (pure) + replace `name as action` casts with an exhaustive typed map.
+- **2026-06-05**: #430 (structural root) DONE. Pure request-shaping mapper extracted to
+  `src/core/mapping/access-query-request-mapper.ts` (imports only `core/contracts` + `core/utils`;
+  secret lookup via injected `EnvAccessor` so core never touches `process.env`). The 3 unvalidated
+  `name as AccessQueryRequest["action"]` casts replaced by `MCP_TOOL_QUERY_ACTIONS:
+  Record<QueryToolName, AccessQueryAction>` (missing/extra key = compile error) + a runtime
+  coverage test cross-checking `MCP_TOOL_ROUTES`. `getStr`/`resolveIsDryRun` moved to core with
+  behavior tests. Behavior-preserving; `query.requests` port assertions stayed green. core-boundary
+  GREEN, full `pnpm lint` clean (incl. tsconfig.test.json), 906 passed. NOTE: observed 1 intermittent
+  flake of the known live-Access diagnostics test on the dev box (not in CI, unrelated to #430);
+  green on re-run. HTTP still shapes inline — mapper designed HTTP-reusable, convergence is a clean
+  future issue. Committed direct to main. **NEXT: #431** — split `tools.ts` god-file; move
+  `sanitizeMcpErrorMessage` to `src/core/utils`.
 
 ---
 

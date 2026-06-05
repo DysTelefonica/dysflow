@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
-  getStr,
   MCP_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
   registerMcpToolList,
@@ -1386,14 +1385,5 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     expect(result).toMatchObject(expectedContent);
     expect(aliasResult).toMatchObject(expectedContent);
-  });
-
-  describe("getStr helper", () => {
-    it("returns string values and resolves fallbacks", () => {
-      expect(getStr({ tableName: "People" }, "tableName", ["table"])).toBe("People");
-      expect(getStr({ table: "People" }, "tableName", ["table"])).toBe("People");
-      expect(getStr({ tableName: "   ", table: "People" }, "tableName", ["table"])).toBe("People");
-      expect(getStr({}, "tableName", ["table"])).toBeUndefined();
-    });
   });
 });
