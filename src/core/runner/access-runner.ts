@@ -505,10 +505,19 @@ function collectDiagnostics(
 
 function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TData {
   const safeStdout = sanitizeSecrets(stdout, secrets);
-  if (safeStdout.trim().length === 0) {
+  const trimmed = safeStdout.trim();
+  if (trimmed.length === 0) {
     throw new SyntaxError("Runner output is empty");
   }
-  const parsed: unknown = JSON.parse(safeStdout);
+
+  let jsonStr = trimmed;
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    jsonStr = trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  const parsed: unknown = JSON.parse(jsonStr);
   if (!isRecord(parsed)) {
     throw new SyntaxError(`Runner output is not a JSON object (got ${typeof parsed})`);
   }

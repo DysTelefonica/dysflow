@@ -526,8 +526,22 @@ function buildTargetDiagnostics(
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
   const safe = sanitizeSecrets(stdout, secrets).trim();
   if (safe.length === 0) return { ok: true };
+
+  let jsonStr = safe;
+  const firstBrace = safe.indexOf("{");
+  const lastBrace = safe.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    jsonStr = safe.slice(firstBrace, lastBrace + 1);
+  } else {
+    const firstBracket = safe.indexOf("[");
+    const lastBracket = safe.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      jsonStr = safe.slice(firstBracket, lastBracket + 1);
+    }
+  }
+
   try {
-    return JSON.parse(safe) as unknown;
+    return JSON.parse(jsonStr) as unknown;
   } catch {
     return { ok: true, stdout: safe };
   }
