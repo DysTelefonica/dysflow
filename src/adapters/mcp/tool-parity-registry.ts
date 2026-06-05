@@ -120,3 +120,23 @@ export function getToolDefinition(name: DysflowMcpToolName): ParityToolDefinitio
 export function getToolDefinitionsBySlice(slice: ParitySlice): readonly DysflowMcpToolName[] {
   return TOOL_PARITY_REGISTRY.filter((tool) => tool.slice === slice).map((tool) => tool.name);
 }
+
+/**
+ * Returns the set of tool names whose status is "pending" in the parity registry.
+ * This is the single source of truth for which tools are hidden stubs — derived
+ * from the registry rather than maintained as a separate hand-authored literal.
+ * Exported for contract testing (closes #433).
+ */
+export function pendingToolNames(): ReadonlySet<DysflowMcpToolName> {
+  return new Set(
+    TOOL_PARITY_REGISTRY.filter((tool) => tool.status === "pending").map((tool) => tool.name),
+  );
+}
+
+/**
+ * Returns true when the named tool is a hidden stub (status "pending" in the
+ * parity registry). Use this instead of the removed HIDDEN_STUB_TOOL_NAMES set.
+ */
+export function isHiddenStubTool(name: DysflowMcpToolName): boolean {
+  return getToolDefinition(name).status === "pending";
+}

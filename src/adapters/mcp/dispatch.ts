@@ -25,7 +25,7 @@ import {
   translateCoreResultToMcpContent,
 } from "./result-translation.js";
 import { type JsonObjectSchema, MCP_TOOL_SCHEMAS, NO_INPUT_SCHEMA } from "./schemas.js";
-import { getToolDefinition } from "./tool-parity-registry.js";
+import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
@@ -173,17 +173,6 @@ export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
   seed_fixture: { kind: "query-write-fixture" },
   teardown_fixture: { kind: "query-write-fixture" },
 };
-
-/**
- * Tools that always return TOOL_NOT_IMPLEMENTED.
- * They are hidden from tools/list to avoid advertising unworkable operations,
- * but remain registered so direct calls return a clear error rather than a routing failure.
- * Exported for contract testing.
- */
-export const HIDDEN_STUB_TOOL_NAMES = new Set<DysflowMcpToolName>([
-  "verify_binary",
-  "reconcile_binary",
-]);
 
 /**
  * Typed binding of MCP query tool names to their domain `AccessQueryRequest`
@@ -424,7 +413,7 @@ export function createDispatchTool(
     name,
     description: definition.description,
     inputSchema: schema,
-    hidden: HIDDEN_STUB_TOOL_NAMES.has(name) ? true : undefined,
+    hidden: isHiddenStubTool(name) ? true : undefined,
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);

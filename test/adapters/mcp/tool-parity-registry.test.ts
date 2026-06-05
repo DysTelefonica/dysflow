@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
-import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
-import { HIDDEN_STUB_TOOL_NAMES, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
+import {
+  isHiddenStubTool,
+  pendingToolNames,
+  TOOL_PARITY_REGISTRY,
+} from "../../../src/adapters/mcp/tool-parity-registry";
+import { MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 
 /**
  * Contract test: every tool that has a real handler route in tools.ts
  * must have status "implemented" in the parity registry.
  *
  * "Real handler route" means the tool is NOT a hidden stub
- * (i.e., NOT in HIDDEN_STUB_TOOL_NAMES — those always return TOOL_NOT_IMPLEMENTED).
+ * (i.e., isHiddenStubTool(name) is false — those always return TOOL_NOT_IMPLEMENTED).
  */
 describe("tool-parity-registry implementedToolNames contract", () => {
   it("marks every non-stub tool as implemented in the registry", () => {
@@ -16,7 +20,7 @@ describe("tool-parity-registry implementedToolNames contract", () => {
 
     const mismatches: string[] = [];
     for (const name of DYSFLOW_MCP_TOOL_NAMES) {
-      if (HIDDEN_STUB_TOOL_NAMES.has(name)) continue; // stubs legitimately return NOT_IMPLEMENTED
+      if (isHiddenStubTool(name)) continue; // stubs legitimately return NOT_IMPLEMENTED
       const entry = registryByName.get(name);
       if (entry?.status !== "implemented") {
         mismatches.push(name);
@@ -33,7 +37,7 @@ describe("tool-parity-registry implementedToolNames contract", () => {
     for (const name of DYSFLOW_MCP_TOOL_NAMES) {
       const route = MCP_TOOL_ROUTES[name];
       expect(route, `${name} must have an explicit route`).toBeDefined();
-      if (!HIDDEN_STUB_TOOL_NAMES.has(name)) {
+      if (!isHiddenStubTool(name)) {
         expect(
           (route as { kind: string }).kind,
           `${name} must not be stub in MCP_TOOL_ROUTES`,
@@ -46,7 +50,7 @@ describe("tool-parity-registry implementedToolNames contract", () => {
   it("keeps hidden stub tools as pending in the registry", () => {
     const registryByName = new Map(TOOL_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
 
-    for (const name of HIDDEN_STUB_TOOL_NAMES) {
+    for (const name of pendingToolNames()) {
       const entry = registryByName.get(name);
       expect(entry?.status, `${name} is a hidden stub and should remain "pending"`).toBe("pending");
     }

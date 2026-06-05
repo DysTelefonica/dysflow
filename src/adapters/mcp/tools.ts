@@ -7,7 +7,6 @@ import { registerMcpTools, rejectWriteSqlInReadMode } from "./dispatch.js";
 
 export {
   ALIAS_TOOL_NAMES,
-  HIDDEN_STUB_TOOL_NAMES,
   MCP_TOOL_QUERY_ACTIONS,
   MCP_TOOL_ROUTES,
   registerMcpToolList,

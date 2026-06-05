@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — Phase 1 (#429-#431) COMPLETE. **Phase 2 in flight**: #432 (validator numeric bounds) DONE on `main`. **NEXT: file + implement the parity-registry single-source-of-truth follow-up.** HTTP→core-mapper convergence was investigated and DROPPED as non-debt (see phase-2 section). engram obs #10705.
+`Last updated`: 2026-06-05 — Phase 1 (#429-#431) COMPLETE. Phase 2 (#432, #433) COMPLETE. **All campaigns complete**. engram obs #10705.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -41,7 +41,7 @@
 | Order | Issue | Title | Severity | Status | SDD change |
 |-------|-------|-------|----------|--------|------------|
 | 1 | [#432](https://github.com/DysTelefonica/dysflow/issues/432) | fix(mcp): input validator ignores numeric bounds (timeoutMs/limit/top) | medium | `done` ✅ (main) | `432-validator-numeric-bounds` |
-| 2 | _to be filed_ | refactor(mcp): parity-registry single source of truth (status vs HIDDEN_STUB_TOOL_NAMES) | low | `todo` | `433-parity-registry-sot` |
+| 2 | [#433](https://github.com/DysTelefonica/dysflow/issues/433) | refactor(mcp): parity-registry single source of truth (status vs HIDDEN_STUB_TOOL_NAMES) | low | `done` ✅ (main) | `433-parity-registry-sot` |
 
 ### Dropped (investigated, NOT real debt)
 
@@ -54,8 +54,11 @@
 - **2026-06-05**: #432 DONE. `JsonSchemaProperty` gained `minimum`/`maximum`; the validator now enforces
   numeric bounds; `timeoutMs`/`limit`/`top` declare `minimum: 1`. RED-first
   (`test/adapters/mcp/validator.test.ts`, 19 behavior tests at the validator port). 925 passed, lint
-  clean. Committed direct to main. **NEXT: #433** — make tool availability a single source of truth
-  (`tool-parity-registry` `status` vs `HIDDEN_STUB_TOOL_NAMES`).
+  clean. Committed direct to main.
+- **2026-06-05**: #433 DONE. Removed duplicate `HIDDEN_STUB_TOOL_NAMES` set from `dispatch.ts` and `tools.ts`.
+  Derived hidden stub flag from parity registry using `isHiddenStubTool` helper. Added invariant test
+  `test/adapters/mcp/stub-hidden-invariant.test.ts` to ensure consistency.
+  Committed direct to main. All campaigns complete.
 
 ---
 

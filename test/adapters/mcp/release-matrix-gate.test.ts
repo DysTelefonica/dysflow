@@ -3,8 +3,11 @@ import {
   DYSFLOW_MCP_TOOL_NAMES,
   type DysflowMcpToolName,
 } from "../../../src/adapters/mcp/mcp-tool-registry";
-import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry";
-import { createDysflowMcpTools, HIDDEN_STUB_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
+import {
+  pendingToolNames,
+  TOOL_PARITY_REGISTRY,
+} from "../../../src/adapters/mcp/tool-parity-registry";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 class FakeVbaService {
@@ -34,7 +37,7 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
   it("documents and validates exact tool counts", () => {
     const toolCount = DYSFLOW_MCP_TOOL_NAMES.length;
-    const stubCount = HIDDEN_STUB_TOOL_NAMES.size;
+    const stubCount = pendingToolNames().size;
     const modernCount = tools.filter(
       (t) => !DYSFLOW_MCP_TOOL_NAMES.includes(t.name as DysflowMcpToolName),
     ).length;
@@ -104,11 +107,12 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
   });
 
   it("guarantees parity registry matches implementation and no stubs are marked implemented", () => {
+    const pending = pendingToolNames();
     for (const entry of TOOL_PARITY_REGISTRY) {
       if (entry.status === "implemented") {
-        expect(HIDDEN_STUB_TOOL_NAMES.has(entry.name)).toBe(false);
+        expect(pending.has(entry.name)).toBe(false);
       } else {
-        expect(HIDDEN_STUB_TOOL_NAMES.has(entry.name)).toBe(true);
+        expect(pending.has(entry.name)).toBe(true);
       }
     }
   });
