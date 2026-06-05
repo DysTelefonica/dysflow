@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.18] - 2026-06-05
+
+### Fixed
+
+- **Robust MCP JSON response parsing**: Added JSON substring extraction in `parseRunnerData` and `parseOutput` to gracefully isolate tool responses from ambient warning output or text written to stdout by PowerShell. Ensures full E2E test parity.
+
 ## [v1.2.17] - 2026-06-05
 
 ### Added
