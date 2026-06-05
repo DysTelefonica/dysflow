@@ -10,6 +10,7 @@ Private Const TEST_AUD_ID As Long = 900490
 Private Const TEST_NC_CACHE_EXPECTED As Long = 900491
 Private Const TEST_NC_FALLBACK As Long = 900492
 Private Const TEST_NC_ROW As Long = 900493
+Private Const TEST_NC_KEYWORD_CLOSED As Long = 900494
 Private Const LOG_OPERATION_AUDIT_FALLBACK As String = "FormAuditCacheFallback"
 
 Public Function Test_AuditListadoHelper_CacheOn_SourceContract_RED() As String
@@ -184,23 +185,65 @@ EH:
     Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonFail(Err.Description, logs)
 End Function
 
+Public Function Test_AuditListadoHelper_LegacyKeywordAbiertasParity() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+    Dim col As Collection
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoHelper_LegacyKeywordAbiertasParity = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    CleanupSlice1 db
+    SeedAuditFixture db, TEST_AUD_ID, TEST_NC_KEYWORD_CLOSED, "AUD-KEY", "legacy keyword abiertas parity", "QA KEY", "Cerrada"
+    TestHelper.AddLog logs, "Arrange: legacy form selected keyword source before Estado='Abiertas'; Abiertas must not narrow keyword results"
+
+    Set col = GetNCAuditoriaGestionFiltradas( _
+                p_IDAuditoria:=TEST_AUD_ID, _
+                p_PalabraClave:="legacy keyword abiertas parity", _
+                p_Estado:="Abiertas", _
+                p_CacheEnabled:=False, _
+                p_Error:=errMsg)
+    If errMsg <> "" Then Err.Raise 1000, , errMsg
+    If Not AssertCollectionHasOnlyAuditId(col, TEST_NC_KEYWORD_CLOSED, logs, assertError) Then GoTo Fail
+
+    Test_AuditListadoHelper_LegacyKeywordAbiertasParity = TestHelper.BuildJsonOk(logs, "legacy-keyword-abiertas-parity")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoHelper_LegacyKeywordAbiertasParity = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoHelper_LegacyKeywordAbiertasParity = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then CleanupSlice1 db
+    TestHelper.EndTestSession logs
+End Function
+
 Private Sub SchemaGateSlice1(ByVal p_Logs As Collection)
     TestHelper.AddLog p_Logs, "Schema gate: TbAuditorias required IDAuditoria; TbNoConformidadesAuditoria required ID, CAUSARAIZ, RequiereControlEficacia; TbLogCache requires IDNoConformidad. No TbCacheListadoNCAuditoria exists; TbCacheListadoNC is project-side only. FK order: TbAuditorias -> TbNoConformidadesAuditoria."
 End Sub
 
-Private Sub SeedAuditFixture(ByVal p_Db As DAO.Database, ByVal p_IDAuditoria As Long, ByVal p_IDNC As Long, ByVal p_Numero As String, ByVal p_Descripcion As String, ByVal p_Responsable As String)
+Private Sub SeedAuditFixture(ByVal p_Db As DAO.Database, ByVal p_IDAuditoria As Long, ByVal p_IDNC As Long, ByVal p_Numero As String, ByVal p_Descripcion As String, ByVal p_Responsable As String, Optional ByVal p_Estado As String = "Abierta")
     p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID=" & CStr(p_IDNC), dbFailOnError
     p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria=" & CStr(p_IDAuditoria), dbFailOnError
     p_Db.Execute "INSERT INTO TbAuditorias (IDAuditoria, Tipo, FechaInicio, FechaFin) VALUES (" & CStr(p_IDAuditoria) & ", 'AUD-SLICE1', Date(), Date())", dbFailOnError
     p_Db.Execute "INSERT INTO TbNoConformidadesAuditoria " & _
                  "(ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereControlEficacia, Tipo, ESTADO, Borrado) VALUES (" & _
                  CStr(p_IDNC) & ", " & CStr(p_IDAuditoria) & ", Date(), " & TestHelper.SqlText(p_Numero) & ", " & TestHelper.SqlText(p_Descripcion) & ", " & _
-                 TestHelper.SqlText("Causa slice1") & ", " & TestHelper.SqlText(p_Responsable) & ", 'No', 'Auditoria', 'Abierta', 0)", dbFailOnError
+                 TestHelper.SqlText("Causa slice1") & ", " & TestHelper.SqlText(p_Responsable) & ", 'No', 'Auditoria', " & TestHelper.SqlText(p_Estado) & ", 0)", dbFailOnError
 End Sub
 
 Private Sub CleanupSlice1(ByVal p_Db As DAO.Database)
     p_Db.Execute "DELETE FROM TbLogCache WHERE TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'", dbFailOnError
-    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_ROW), dbFailOnError
+    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_KEYWORD_CLOSED), dbFailOnError
     p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria=" & CStr(TEST_AUD_ID), dbFailOnError
 End Sub
 

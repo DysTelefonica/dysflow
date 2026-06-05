@@ -23,6 +23,12 @@
       "procedure": "Test_AuditGestionForm_ReportConstructorPath_Characterization",
       "expect": { "ok": true },
       "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice1", "characterization"]
+    },
+    {
+      "name": "Audit gestion helper legacy keyword abiertas parity",
+      "procedure": "Test_AuditListadoHelper_LegacyKeywordAbiertasParity",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice3", "parity"]
     }
   ]
 }

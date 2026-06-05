@@ -174,7 +174,9 @@ End Function
 Public Sub RefreshNCAuditoriaGestionCaches(Optional ByRef p_Error As String)
     On Error GoTo errores
     p_Error = ""
-    If Not TableExists(AUDIT_CACHE_TABLE) Then LogFallback "Audit cache refresh skipped: validated audit cache source is not available"
+    If Not TableExists(AUDIT_CACHE_TABLE) Then
+        LogFallback "Audit cache refresh skipped: validated audit cache source is not available"
+    End If
     Exit Sub
 
 errores:
@@ -195,62 +197,113 @@ Private Function LoadFallbackAuditRows( _
     Optional ByRef p_Error As String _
     ) As Collection
 
-    Dim rs As DAO.Recordset
+    Dim source As Scripting.Dictionary
     Dim col As Collection
+    Dim seen As Scripting.Dictionary
     Dim nc As NCAuditoria
-    Dim SQL As String
+    Dim itemKey As Variant
 
     On Error GoTo errores
     p_Error = ""
-    SQL = "SELECT ID FROM TbNoConformidadesAuditoria WHERE 1=1" & _
-          AuditWhere(p_IDAuditoria, p_Tipo, p_Descripcion, p_ResponsableImplantacion, p_Estado, p_PalabraClave, p_RequiereControlEficacia, p_ControlEficaciaRelleno) & _
-          " ORDER BY Tipo, Numero;"
-    Set rs = getdb().OpenRecordset(SQL, dbOpenSnapshot)
-    If rs.EOF Then GoTo Cleanup
+
+    If p_PalabraClave <> "" Then
+        Set source = getNCsAuditoriaPorPalabraClave(p_PC:=p_PalabraClave, p_Error:=p_Error)
+    Else
+        If p_Estado = "Abiertas" Then
+            Set source = constructor.getNCsAuditoriaAbiertas(p_Error:=p_Error)
+        Else
+            Set source = constructor.getNCsAuditoriasTotales(p_Error:=p_Error)
+        End If
+    End If
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If source Is Nothing Then
+        Exit Function
+    End If
 
     Set col = New Collection
-    Do While Not rs.EOF
-        Set nc = constructor.getNCAuditoria(p_IDNC:=CStr(rs!ID), p_Error:=p_Error)
-        If p_Error <> "" Then Err.Raise 1000
-        If Not nc Is Nothing Then col.Add nc, CStr(nc.id)
-        Set nc = Nothing
-        rs.MoveNext
-    Loop
+    Set seen = New Scripting.Dictionary
+    seen.CompareMode = TextCompare
 
-    If col.count > 0 Then Set LoadFallbackAuditRows = col
-Cleanup:
-    If Not rs Is Nothing Then
-        rs.Close
+    For Each itemKey In source
+        Set nc = source(itemKey)
+        If MatchesAuditGestionFilters( _
+                p_NC:=nc, _
+                p_IDAuditoria:=p_IDAuditoria, _
+                p_Tipo:=p_Tipo, _
+                p_Descripcion:=p_Descripcion, _
+                p_ResponsableImplantacion:=p_ResponsableImplantacion, _
+                p_Estado:=p_Estado, _
+                p_RequiereControlEficacia:=p_RequiereControlEficacia, _
+                p_ControlEficaciaRelleno:=p_ControlEficaciaRelleno) Then
+            If Not seen.Exists(CStr(nc.id)) Then
+                col.Add nc
+                seen.Add CStr(nc.id), True
+            End If
+        End If
+        Set nc = Nothing
+    Next itemKey
+
+    If col.count > 0 Then
+        Set LoadFallbackAuditRows = col
     End If
-    Set rs = Nothing
     Exit Function
 
 errores:
     If Err.Number <> 1000 Then
         p_Error = "El método LoadFallbackAuditRows ha devuelto el error: " & Err.Description
     End If
-    Resume Cleanup
 End Function
 
-Private Function AuditWhere( _
-    ByVal p_IDAuditoria As Long, ByVal p_Tipo As String, ByVal p_Descripcion As String, _
-    ByVal p_ResponsableImplantacion As String, ByVal p_Estado As String, ByVal p_PalabraClave As String, _
-    ByVal p_RequiereControlEficacia As String, ByVal p_ControlEficaciaRelleno As String) As String
+Private Function MatchesAuditGestionFilters( _
+    ByVal p_NC As NCAuditoria, _
+    ByVal p_IDAuditoria As Long, _
+    ByVal p_Tipo As String, _
+    ByVal p_Descripcion As String, _
+    ByVal p_ResponsableImplantacion As String, _
+    ByVal p_Estado As String, _
+    ByVal p_RequiereControlEficacia As String, _
+    ByVal p_ControlEficaciaRelleno As String _
+    ) As Boolean
 
-    If p_IDAuditoria > 0 Then AuditWhere = AuditWhere & " AND IDAuditoria=" & CStr(p_IDAuditoria)
-    If p_Tipo <> "" Then AuditWhere = AuditWhere & " AND Tipo Like " & LikeText(p_Tipo)
-    If p_Descripcion <> "" Then AuditWhere = AuditWhere & " AND DESCRIPCION Like " & LikeText(p_Descripcion)
-    If p_ResponsableImplantacion <> "" Then AuditWhere = AuditWhere & " AND RESPONSABLEIMPLANTACION Like " & LikeText(p_ResponsableImplantacion)
-    If p_Estado <> "" Then AuditWhere = AuditWhere & " AND ESTADO=" & SqlText(p_Estado)
-    If p_RequiereControlEficacia <> "" Then AuditWhere = AuditWhere & " AND RequiereControlEficacia=" & SqlText(p_RequiereControlEficacia)
-    If p_ControlEficaciaRelleno = "Sí" Then AuditWhere = AuditWhere & " AND Len(Nz(ControlEficacia,''))>0"
-    If p_ControlEficaciaRelleno = "No" Then AuditWhere = AuditWhere & " AND Len(Nz(ControlEficacia,''))=0"
-    If p_PalabraClave <> "" Then
-        AuditWhere = AuditWhere & " AND (DESCRIPCION Like " & LikeText(p_PalabraClave) & _
-                     " OR CAUSARAIZ Like " & LikeText(p_PalabraClave) & _
-                     " OR CORRECCION Like " & LikeText(p_PalabraClave) & _
-                     " OR Notas Like " & LikeText(p_PalabraClave) & ")"
+    Dim estadoTexto As String
+
+    On Error GoTo noMatch
+    If p_NC Is Nothing Then Exit Function
+
+    If p_IDAuditoria > 0 Then
+        If p_NC.IDAuditoria <> p_IDAuditoria Then Exit Function
     End If
+    If p_Tipo <> "" Then
+        If p_NC.Tipo <> p_Tipo Then Exit Function
+    End If
+    If p_Descripcion <> "" Then
+        If InStr(1, p_NC.Descripcion, p_Descripcion) = 0 Then Exit Function
+    End If
+    If p_ResponsableImplantacion <> "" Then
+        If p_NC.RESPONSABLEIMPLANTACION <> p_ResponsableImplantacion Then Exit Function
+    End If
+    If p_Estado <> "" Then
+        If p_Estado <> "Abiertas" Then
+            estadoTexto = m_ObjEntorno.ColEstadosNCTitulo(CStr(p_NC.EstadoEnum))
+            If estadoTexto <> p_Estado Then Exit Function
+        End If
+    End If
+    If p_RequiereControlEficacia <> "" Then
+        If p_NC.RequiereControlEficacia <> p_RequiereControlEficacia Then Exit Function
+    End If
+    If p_ControlEficaciaRelleno = "Sí" Then
+        If p_NC.ControlEficacia = "" Then Exit Function
+    ElseIf p_ControlEficaciaRelleno = "No" Then
+        If p_NC.ControlEficacia <> "" Then Exit Function
+    End If
+
+    MatchesAuditGestionFilters = True
+    Exit Function
+
+noMatch:
+    MatchesAuditGestionFilters = False
 End Function
 
 Private Function DefaultCacheEnabled() As Boolean
