@@ -20,13 +20,65 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-04 — #414-#419 + #426 done (PRs #421-#425, #427 merged; #419 committed directly to main). **NEXT: Issue G (#420).**
+`Last updated`: 2026-06-05 — 2026-06-04 campaign CLOSED (#414-#420 + #426 all shipped). New **MCP hardening campaign** opened from a fresh MCP review: #429-#431, ordered by severity. **NEXT: #429 (MCP secret redaction).**
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
+
+---
+
+## Active campaign (opened 2026-06-05) — MCP hardening (fresh review)
+
+> Source: fresh adversarial review of the MCP adapter (`src/adapters/mcp/*`), verified **live
+> against code after #420 merged**. Full analysis in engram
+> (`tech-debt/mcp-fresh-analysis-2026-06`, obs #10705). Issues ordered by severity:
+> security → structural root → maintainability. The **Workflow contract**, **Hard constraints**,
+> **Environment gotcha** and **Artifact store** sections below apply unchanged to this campaign.
+
+### Execution settings (decided 2026-06-05)
+
+- **Execution mode**: `auto` — phases run back-to-back.
+- **Artifact store**: `hybrid` — `openspec/changes/<change>/` files + engram observations.
+- **Delivery**: one PR per issue, branch off latest `main`, `gh pr merge --merge --delete-branch`
+  (merge closes the issue). **No dangling branches after merge.**
+- **SDD weight**: `#429` lightweight (proposal + tasks) · `#430` **full SDD** (core boundary, real
+  design decision) · `#431` lightweight, sequence **after #430**.
+- **Strict TDD**: ON. Runner `pnpm test`. RED before GREEN, every issue.
+- **Local testing**: build to `test-runtime/` only. **NEVER** touch the production runtime
+  `%LOCALAPPDATA%\dysflow`. **Clean up `test-runtime/` when the campaign finishes.**
+
+### Status board
+
+| Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
+|-------|-------|-------|----------|--------|--------|----|------------|
+| 1 | [#429](https://github.com/DysTelefonica/dysflow/issues/429) | fix(mcp): MCP error path leaks secrets (only paths redacted) | security/med | `todo` | — | — | `429-mcp-secret-redaction` |
+| 2 | [#430](https://github.com/DysTelefonica/dysflow/issues/430) | refactor(core): extract MCP request-shaping into a core mapper (+ typed action map) | medium | `todo` | — | — | `430-mcp-request-shaping-core` |
+| 3 | [#431](https://github.com/DysTelefonica/dysflow/issues/431) | refactor(mcp): split tools.ts god-file (811 LOC) | medium | `todo` | — | — | `431-split-mcp-tools` |
+
+Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
+
+### Per-issue summary (authoritative spec = the GitHub issue body)
+
+- **#429 (security, FIRST)** — MCP errors run only `sanitizeMcpErrorMessage` (paths) at
+  `tools.ts:773-792,794-810` + `stdio-wrappers.ts:41`; HTTP additionally runs `sanitizeSecrets`
+  (`server.ts:319`). A secret in a core error (password resolved at `tools.ts:724-726`) leaks on
+  MCP. **Fix**: route MCP errors through secret redaction; assert MCP↔HTTP parity at the port.
+- **#430 (structural root)** — `toQueryRequest` / `toWriteFixtureRequest` / `toMaintenanceRequest`
+  (`tools.ts:653-728`) map input→`AccessQueryRequest` in the adapter (hexagonal violation +
+  MCP/HTTP/CLI drift); `name as action` casts (`:656,674,699`) unvalidated. **Fix**: move mapper
+  to `src/core` (pure); replace casts with exhaustive `Record<DysflowMcpToolName, action>`.
+- **#431 (maintainability, AFTER #430)** — `tools.ts` is an 811-line god-file (5 responsibilities);
+  `sanitizeMcpErrorMessage` misplaced. **Fix**: split into cohesive modules; move sanitizer to
+  `src/core/utils`. Behavior-preserving.
+
+### Progress log
+
+- **2026-06-05**: Campaign opened from a fresh MCP review. 3 issues filed (#429–#431), ordered by
+  severity. **NEXT: #429** — write the RED test proving a secret inside a core error reaches the
+  MCP client, then route MCP errors through secret redaction (parity with HTTP).
 
 ---
 
@@ -44,7 +96,9 @@ All 5 issues shipped in v1.2.15. No open work remaining from this campaign.
 
 ---
 
-## Active campaign (opened 2026-06-04)
+## Previous campaign (2026-06-04) — CLOSED
+
+All 7 issues (#414–#420) + follow-up #426 shipped. #419 and #420 landed directly on `main`.
 
 ### Progress log
 
@@ -111,7 +165,7 @@ Each issue is handled as its own SDD change and follows this lifecycle:
 | 4 | [#417](https://github.com/DysTelefonica/dysflow/issues/417) | fix(core): sanitize PID/progress marker payloads before they reach the registry | medium | `done` ✅ | (merged) | [#424](https://github.com/DysTelefonica/dysflow/pull/424) | `417-sanitize-marker-payloads` |
 | 5 | [#418](https://github.com/DysTelefonica/dysflow/issues/418) | refactor(core): consolidate the triple timeout machinery in the vba-sync path | medium | `done` ✅ | (merged) | [#425](https://github.com/DysTelefonica/dysflow/pull/425) | `418-consolidate-vba-timeout` |
 | 6 | [#419](https://github.com/DysTelefonica/dysflow/issues/419) | fix(core): runner output parsing robustness | low | `done` ✅ | (merged) | — | `419-runner-output-parsing` |
-| 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `todo` | — | — | `420-mcp-http-request-shaping` |
+| 7 | [#420](https://github.com/DysTelefonica/dysflow/issues/420) | refactor: MCP/HTTP request-shaping and read-only SQL consolidation | low | `done` ✅ | (merged) | — | `420-mcp-http-request-shaping` |
 | H | [#426](https://github.com/DysTelefonica/dysflow/issues/426) | test(core): de-flake lock-heartbeat test (fake timers vs real utimes) | medium | `done` ✅ | (merged) | [#427](https://github.com/DysTelefonica/dysflow/pull/427) | `426-deflake-lock-heartbeat` |
 
 > Issue H (#426) is a campaign follow-up surfaced by the #418 fresh verify: the #414 heartbeat test is genuinely flaky (~1/3) and **must be fixed before the release** to keep CI deterministic.
