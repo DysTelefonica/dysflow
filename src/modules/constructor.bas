@@ -1871,6 +1871,9 @@ errores:
         p_Error = "El método getNCsDeAuditoria ha devuelto el error: " & Err.Description
     End If
 End Function
+' Legacy fallback only for project form listing: Form_FormNCProyectoGestion must prefer
+' NCProyectoGestionListadoHelper/TbCacheListadoNC and reach this loader only through a logged fallback.
+' Keep available for bootstrap, detail, report, and non-list consumers.
 Public Function getNCsProyectoAbiertas( _
                                          Optional p_db As DAO.Database, _
                                         Optional ByRef p_Error As String _
@@ -1998,6 +2001,9 @@ errores:
         p_Error = "El método getNCsAuditoriaAbiertas ha devuelto el error: " & Err.Description
     End If
 End Function
+' Legacy fallback only for project form listing: Form_FormNCProyectoGestion must prefer
+' NCProyectoGestionListadoHelper/TbCacheListadoNC and reach this loader only through a logged fallback.
+' Keep available for bootstrap, detail, report, and non-list consumers.
 Public Function getNCsProyectosTotales( _
                                         Optional p_db As DAO.Database, _
                                         Optional ByRef p_Error As String _
@@ -3141,6 +3147,9 @@ errores:
 End Function
 
 
+' Legacy fallback only for project form listing: Form_FormNCProyectoGestion must prefer
+' NCProyectoGestionListadoHelper/TbCacheListadoNC and reach this loader only through a logged fallback.
+' Keep available for bootstrap, detail, report, and non-list consumers.
 Public Function getNCsProyectoPorPalabraClave( _
                                                 p_PC As String, _
                                                 Optional p_db As DAO.Database, _

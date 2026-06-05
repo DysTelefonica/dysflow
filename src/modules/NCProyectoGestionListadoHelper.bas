@@ -129,6 +129,91 @@ errores:
     End If
 End Function
 
+Public Function ResolveNCProyectoGestionSelection( _
+    ByVal p_Current As NCProyecto, _
+    ByVal p_SelectedID As String, _
+    Optional ByRef p_Error As String _
+    ) As NCProyecto
+
+    On Error GoTo errores
+
+    p_Error = ""
+    If p_SelectedID = "" Then Exit Function
+
+    If Not p_Current Is Nothing Then
+        If CStr(p_Current.IDNoConformidad) = CStr(p_SelectedID) Then
+            Set ResolveNCProyectoGestionSelection = p_Current
+            Exit Function
+        End If
+    End If
+
+    Set ResolveNCProyectoGestionSelection = constructor.getNCProyecto( _
+                                            p_IDNC:=p_SelectedID, _
+                                            p_Error:=p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+    Exit Function
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método ResolveNCProyectoGestionSelection ha devuelto el error: " & Err.Description
+    End If
+End Function
+
+Public Function BuildNCProyectoGestionReportCollection( _
+    ByVal p_ListedItems As Collection, _
+    Optional ByRef p_Error As String _
+    ) As Scripting.Dictionary
+
+    Dim item As Object
+    Dim nc As NCProyecto
+    Dim itemID As String
+    Dim loggedDetailFallback As Boolean
+    Dim result As Scripting.Dictionary
+
+    On Error GoTo errores
+
+    p_Error = ""
+    If p_ListedItems Is Nothing Then Exit Function
+    If p_ListedItems.count = 0 Then
+        p_Error = "No hay elementos en la lista una vez tratados"
+        Exit Function
+    End If
+
+    Set result = New Scripting.Dictionary
+    result.CompareMode = TextCompare
+
+    For Each item In p_ListedItems
+        itemID = GetNCProyectoGestionItemID(item)
+        If itemID <> "" Then
+            If TypeOf item Is NCProyecto Then
+                Set nc = item
+            Else
+                If Not loggedDetailFallback Then
+                    LogFallback "Report-prep detail hydration from cache-backed project listing"
+                    loggedDetailFallback = True
+                End If
+                Set nc = constructor.getNCProyecto(p_IDNC:=itemID, p_Error:=p_Error)
+                If p_Error <> "" Then Err.Raise 1000
+            End If
+
+            If Not nc Is Nothing Then
+                If Not result.Exists(CStr(nc.IDNoConformidad)) Then
+                    result.Add CStr(nc.IDNoConformidad), nc
+                End If
+            End If
+            Set nc = Nothing
+        End If
+    Next item
+
+    If result.count > 0 Then Set BuildNCProyectoGestionReportCollection = result
+    Exit Function
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método BuildNCProyectoGestionReportCollection ha devuelto el error: " & Err.Description
+    End If
+End Function
+
 Private Function GetNCsProyectoGestionFallback( _
     Optional ByVal p_Codigo As String = "", _
     Optional ByVal p_IDExpediente As Long = 0, _
@@ -402,5 +487,16 @@ Private Function ReadVariantPropertyWithFallback(ByVal p_Item As Object, ByVal p
     If Err.Number <> 0 Then
         Err.Clear
         ReadVariantPropertyWithFallback = ""
+    End If
+End Function
+
+Private Function GetNCProyectoGestionItemID(ByVal p_Item As Object) As String
+    On Error Resume Next
+
+    If p_Item Is Nothing Then Exit Function
+    GetNCProyectoGestionItemID = CStr(CallByName(p_Item, "IDNoConformidad", VbGet))
+    If Err.Number <> 0 Then
+        Err.Clear
+        GetNCProyectoGestionItemID = ""
     End If
 End Function
