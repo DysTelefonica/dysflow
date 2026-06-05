@@ -2506,8 +2506,8 @@ function Get-PSReferenceArgumentIndexFromError {
 
     $raw = [int]$match.Groups["index"].Value
     $oneBased = $raw - 1
-    if ($oneBased -ge 0 -and $oneBased -lt $ArgumentCount) { return $oneBased }
-    if ($raw -ge 0 -and $raw -lt $ArgumentCount) { return $raw }
+    if ($oneBased -ge 0 -and $oneBased -lt 10) { return $oneBased }
+    if ($raw -ge 0 -and $raw -lt 10) { return $raw }
     return $null
 }
 
@@ -2544,7 +2544,7 @@ function Invoke-AccessProcedure {
             for ($i = $ProcedureArgs.Count; $i -lt $metadata.Count; $i++) {
                 $param = $metadata[$i]
                 if ($null -ne $param -and $param.optional -and $param.byRef) {
-                    $effectiveArgs.Add("") | Out-Null
+                    $effectiveArgs.Add([System.Reflection.Missing]::Value) | Out-Null
                     continue
                 }
                 break
@@ -2568,7 +2568,7 @@ function Invoke-AccessProcedure {
         }
         foreach ($key in @($byRefArgs.Keys)) {
             while ($invokeArgs.Count -le [int]$key) {
-                $invokeArgs += ""
+                $invokeArgs += [System.Reflection.Missing]::Value
             }
         }
 
@@ -2598,6 +2598,9 @@ function Invoke-AccessProcedure {
                 $param = if ($retryIndex -lt $metadata.Count) { $metadata[$retryIndex] } else { $null }
                 $name = if ($null -ne $param -and -not [string]::IsNullOrWhiteSpace($param.name)) { [string]$param.name } elseif ($retryIndex -eq ($ProcedureArgs.Count - 1)) { "p_Error" } else { "arg$($retryIndex + 1)" }
                 $byRefArgs[$retryIndex] = [pscustomobject]@{ name = $name }
+                while ($invokeArgs.Count -le [int]$retryIndex) {
+                    $invokeArgs += [System.Reflection.Missing]::Value
+                }
             }
         }
         if (-not $ran) {

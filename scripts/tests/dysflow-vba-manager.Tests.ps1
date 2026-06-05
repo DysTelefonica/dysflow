@@ -1715,5 +1715,126 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
     }
 }
 
+Describe "Invoke-AccessProcedure — optional ByRef argument marshaling (issue #428)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        # Load Get-PSReferenceArgumentIndexFromError
+        $fnAst1 = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Get-PSReferenceArgumentIndexFromError' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $fnAst1.Extent.Text
+
+        # Load Invoke-AccessProcedure
+        $fnAst2 = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-AccessProcedure' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $fnAst2.Extent.Text
+
+        # Load Convert-RunReturnValue
+        $fnAst3 = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Convert-RunReturnValue' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $fnAst3.Extent.Text
+
+        # Load Convert-RunReturnPayload
+        $fnAst4 = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Convert-RunReturnPayload' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $fnAst4.Extent.Text
+    }
+
+    BeforeEach {
+        $script:RunByRefCalls = [System.Collections.Generic.List[object]]::new()
+        $script:Attempt = 0
+    }
+
+    Context "Get-PSReferenceArgumentIndexFromError" {
+        It "allows retry index up to 10 even if it exceeds ArgumentCount" {
+            $idx = Get-PSReferenceArgumentIndexFromError -Message "Cannot convert value to PSReference. Argument: '2'" -ArgumentCount 1
+            $idx | Should -Be 1
+        }
+    }
+
+    Context "Invoke-AccessProcedure padding" {
+        It "pads optional ByRef parameters with Missing::Value when metadata matches" {
+            # Mock Get-VbaProcedureParameterMetadata
+            function script:Get-VbaProcedureParameterMetadata {
+                param($VbProject, $ProcedureName)
+                return @(
+                    [pscustomobject]@{ name = "arg1"; byRef = $false; optional = $false },
+                    [pscustomobject]@{ name = "p_Error"; byRef = $true; optional = $true }
+                )
+            }
+
+            # Mock Invoke-AccessApplicationRunByRefIndex to record arguments
+            function script:Invoke-AccessApplicationRunByRefIndex {
+                param($AccessApplication, $ProcedureName, $InvokeArgs, $ByRefIndex)
+                $script:RunByRefCalls.Add([pscustomobject]@{
+                    InvokeArgs = $InvokeArgs
+                    ByRefIndex = $ByRefIndex
+                })
+                return "ok"
+            }
+
+            $res = Invoke-AccessProcedure -AccessApplication "fake-app" -VbProject "fake-proj" -ProcedureName "TestProc" -ProcedureArgs @("hello")
+            $res.ok | Should -Be $true
+            $res.returnValue | Should -Be "ok"
+            $script:RunByRefCalls.Count | Should -Be 1
+            $call = $script:RunByRefCalls[0]
+            $call.ByRefIndex | Should -Be 1
+            $call.InvokeArgs.Count | Should -Be 2
+            $call.InvokeArgs[0] | Should -Be "hello"
+            $call.InvokeArgs[1] | Should -Be ([System.Reflection.Missing]::Value)
+        }
+
+        It "handles PSReference error on missing optional trailing argument by retrying with Missing::Value" {
+            # No metadata scenario
+            function script:Get-VbaProcedureParameterMetadata {
+                param($VbProject, $ProcedureName)
+                return @()
+            }
+
+            # Mock Invoke-AccessApplicationRunByRefIndex to fail on 1st attempt and succeed on 2nd
+            function script:Invoke-AccessApplicationRunByRefIndex {
+                param($AccessApplication, $ProcedureName, $InvokeArgs, $ByRefIndex)
+                $script:Attempt++
+                if ($script:Attempt -eq 1) {
+                    throw [System.Management.Automation.MethodInvocationException]::new("Cannot convert value to PSReference. Argument: '2'")
+                }
+                $script:RunByRefCalls.Add([pscustomobject]@{
+                    InvokeArgs = $InvokeArgs
+                    ByRefIndex = $ByRefIndex
+                })
+                return "ok"
+            }
+
+            $res = Invoke-AccessProcedure -AccessApplication "fake-app" -VbProject "fake-proj" -ProcedureName "TestProc" -ProcedureArgs @("hello")
+            $res.ok | Should -Be $true
+            $res.returnValue | Should -Be "ok"
+            $script:RunByRefCalls.Count | Should -Be 1
+            $call = $script:RunByRefCalls[0]
+            $call.ByRefIndex | Should -Be 1
+            $call.InvokeArgs.Count | Should -Be 2
+            $call.InvokeArgs[0] | Should -Be "hello"
+            $call.InvokeArgs[1] | Should -Be ([System.Reflection.Missing]::Value)
+        }
+    }
+}
+
+
 
 
