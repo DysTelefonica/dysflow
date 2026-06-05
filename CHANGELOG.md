@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.2.17] - 2026-06-05
+
+### Added
+
+- **PowerShell Runner optional ByRef support (#428)**: Added dynamic padding and marshaling using `[System.Reflection.Missing]::Value` for omitted trailing `Optional ByRef` parameters in `dysflow-vba-manager.ps1`.
+- **PowerShell argument retry index expansion (#428)**: Expanded retry logic to match and wrap missing ByRef arguments up to position 10, correcting PSReference errors when executing without complete metadata.
+- **MCP input validator numeric bounds checking (#432)**: Configured the validator to enforce minimum/maximum boundaries in JSON Schemas, ensuring parameters like `timeoutMs`, `limit`, and `top` must be positive integers >= 1.
+- **Stub hidden state single source of truth (#433)**: Consolidated tool stub availability checks by removing `HIDDEN_STUB_TOOL_NAMES` and querying `isHiddenStubTool()` derived directly from the `TOOL_PARITY_REGISTRY`. Added invariant tests.
+
+### Fixed
+
+- **MCP error path secret leakage (#429)**: Folded connection string password redaction into MCP error reporting, matching HTTP adapter security parity.
+
+### Changed
+
+- **MCP request-shaping core refactoring (#430)**: Extracted parameter mapping from the adapter layer to a pure module `src/core/mapping/access-query-request-mapper.ts` with explicit action maps.
+- **Decomposed MCP tools god-file (#431)**: Split the 811-line `tools.ts` into specialized files: `dispatch.ts` and `result-translation.ts`, relocating `sanitizeMcpErrorMessage` to `src/core/utils/sanitize-error.ts`.
+
 ## [v1.2.16] - 2026-06-04
 
 ### Added
