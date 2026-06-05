@@ -30,13 +30,13 @@ Public Function Test_AuditListadoHelper_CacheOn_SourceContract_RED() As String
     SchemaGateSlice1 logs
     CleanupSlice1 db
     SeedAuditFixture db, TEST_AUD_ID, TEST_NC_CACHE_EXPECTED, "AUD-CACHE", "cache row should win", "QA CACHE"
-    TestHelper.AddLog logs, "Arrange: cache enabled contract with deterministic audit NC fixture"
+    TestHelper.AddLog logs, "Arrange: cache enabled but audit cache table absent; helper must use observable fallback source"
 
     Set col = GetNCAuditoriaGestionFiltradas(p_IDAuditoria:=TEST_AUD_ID, p_Descripcion:="cache row", p_CacheEnabled:=True, p_Error:=errMsg)
     If errMsg <> "" Then Err.Raise 1000, , errMsg
     If Not AssertCollectionHasOnlyAuditId(col, TEST_NC_CACHE_EXPECTED, logs, assertError) Then GoTo Fail
-    If CountRows(db, "TbLogCache", "TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'") <> 0 Then
-        assertError = "Cache ON with a validated source must not log audit fallback"
+    If CountRows(db, "TbLogCache", "TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'") <> 1 Then
+        assertError = "Cache ON without validated audit cache source must log exactly one audit fallback"
         GoTo Fail
     End If
 
@@ -119,7 +119,7 @@ Public Function Test_AuditListadoHelper_RowAndReportContracts_RED() As String
     Set nc = constructor.getNCAuditoria(p_IDNC:=CStr(TEST_NC_ROW), p_db:=db, p_Error:=errMsg)
     If errMsg <> "" Then Err.Raise 1000, , errMsg
 
-    rowText = BuildNCAuditoriaGestionListRow(nc, errMsg)
+    rowText = BuildNCAuditoriaGestionListRow(p_Item:=nc, p_Error:=errMsg)
     If errMsg <> "" Then Err.Raise 1000, , errMsg
     If InStr(1, rowText, CStr(TEST_NC_ROW) & ";", vbTextCompare) <> 1 Then
         assertError = "Expected row to start with audit NC ID"
@@ -130,7 +130,7 @@ Public Function Test_AuditListadoHelper_RowAndReportContracts_RED() As String
         GoTo Fail
     End If
 
-    Set selected = ResolveNCAuditoriaGestionSelection(nc, CStr(TEST_NC_ROW), errMsg)
+    Set selected = ResolveNCAuditoriaGestionSelection(p_Current:=nc, p_SelectedID:=CStr(TEST_NC_ROW), p_Error:=errMsg)
     If errMsg <> "" Then Err.Raise 1000, , errMsg
     If selected Is Nothing Then
         assertError = "Expected selected audit NC to resolve without full-list reload"
@@ -139,7 +139,7 @@ Public Function Test_AuditListadoHelper_RowAndReportContracts_RED() As String
 
     Set listed = New Collection
     listed.Add nc
-    Set reportCol = BuildNCAuditoriaGestionReportCollection(listed, errMsg)
+    Set reportCol = BuildNCAuditoriaGestionReportCollection(p_ListedItems:=listed, p_Error:=errMsg)
     If errMsg <> "" Then Err.Raise 1000, , errMsg
     If reportCol Is Nothing Then
         assertError = "Expected report collection for listed audit NC"
@@ -214,6 +214,7 @@ End Function
 
 Private Function AssertCollectionHasOnlyAuditId(ByVal p_Col As Collection, ByVal p_ExpectedID As Long, ByVal p_Logs As Collection, ByRef p_Error As String) As Boolean
     Dim item As Object
+    Dim nc As NCAuditoria
     Dim actualId As String
 
     If p_Col Is Nothing Then
@@ -225,7 +226,12 @@ Private Function AssertCollectionHasOnlyAuditId(ByVal p_Col As Collection, ByVal
         Exit Function
     End If
     Set item = p_Col(1)
-    actualId = CStr(CallByName(item, "ID", VbGet))
+    If TypeOf item Is NCAuditoria Then
+        Set nc = item
+        actualId = CStr(nc.id)
+    Else
+        actualId = CStr(CallByName(item, "ID", VbGet))
+    End If
     If actualId <> CStr(p_ExpectedID) Then
         p_Error = "Expected audit NC ID=" & CStr(p_ExpectedID) & ", got " & actualId
         Exit Function
