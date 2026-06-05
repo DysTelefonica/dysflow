@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — 2026-06-04 campaign CLOSED (#414-#420 + #426 all shipped). New **MCP hardening campaign** opened from a fresh MCP review: #429-#431, ordered by severity. **NEXT: #429 (MCP secret redaction).**
+`Last updated`: 2026-06-05 — MCP hardening campaign in flight. **#429 DONE** (MCP error path now redacts secrets; committed direct to main). **NEXT: #430 (extract request-shaping mapper to core).**
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -42,8 +42,9 @@
 
 - **Execution mode**: `auto` — phases run back-to-back.
 - **Artifact store**: `hybrid` — `openspec/changes/<change>/` files + engram observations.
-- **Delivery**: one PR per issue, branch off latest `main`, `gh pr merge --merge --delete-branch`
-  (merge closes the issue). **No dangling branches after merge.**
+- **Delivery**: direct commits to `main` (user directive 2026-06-05), one commit per issue with
+  `Closes #NNN`. The full local gate (`pnpm test` + `tsc --noEmit` + `biome check` on changed files)
+  MUST be green before each push. Only `main` exists — no feature branches.
 - **SDD weight**: `#429` lightweight (proposal + tasks) · `#430` **full SDD** (core boundary, real
   design decision) · `#431` lightweight, sequence **after #430**.
 - **Strict TDD**: ON. Runner `pnpm test`. RED before GREEN, every issue.
@@ -54,7 +55,7 @@
 
 | Order | Issue | Title | Severity | Status | Branch | PR | SDD change |
 |-------|-------|-------|----------|--------|--------|----|------------|
-| 1 | [#429](https://github.com/DysTelefonica/dysflow/issues/429) | fix(mcp): MCP error path leaks secrets (only paths redacted) | security/med | `todo` | — | — | `429-mcp-secret-redaction` |
+| 1 | [#429](https://github.com/DysTelefonica/dysflow/issues/429) | fix(mcp): MCP error path leaks secrets (only paths redacted) | security/med | `done` ✅ | (main) | — | `429-mcp-secret-redaction` |
 | 2 | [#430](https://github.com/DysTelefonica/dysflow/issues/430) | refactor(core): extract MCP request-shaping into a core mapper (+ typed action map) | medium | `todo` | — | — | `430-mcp-request-shaping-core` |
 | 3 | [#431](https://github.com/DysTelefonica/dysflow/issues/431) | refactor(mcp): split tools.ts god-file (811 LOC) | medium | `todo` | — | — | `431-split-mcp-tools` |
 
@@ -77,8 +78,14 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 ### Progress log
 
 - **2026-06-05**: Campaign opened from a fresh MCP review. 3 issues filed (#429–#431), ordered by
-  severity. **NEXT: #429** — write the RED test proving a secret inside a core error reaches the
-  MCP client, then route MCP errors through secret redaction (parity with HTTP).
+  severity.
+- **2026-06-05**: #429 (security) DONE. Secret redaction folded into the single MCP error sink
+  `sanitizeMcpErrorMessage`: `sanitizeConnectStrings` (heuristic `;PWD=...`) applied at EVERY error
+  boundary incl. the transport net, plus exact-value `sanitizeSecrets` at the `query-maintenance`
+  sink for HTTP parity (new `resolveInScopeSecrets` helper passes the resolved `backendPassword`).
+  RED test `test/adapters/mcp/sanitize-error-secrets.test.ts` (behavior at the port). 887 passed,
+  tsc + biome clean. Committed direct to main. **NEXT: #430** — extract the input→`AccessQueryRequest`
+  mapper to `src/core` (pure) + replace `name as action` casts with an exhaustive typed map.
 
 ---
 

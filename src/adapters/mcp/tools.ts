@@ -15,7 +15,13 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { isRecord, looksLikeReadOnlySql, stringValue } from "../../core/utils/index.js";
+import {
+  isRecord,
+  looksLikeReadOnlySql,
+  sanitizeConnectStrings,
+  sanitizeSecrets,
+  stringValue,
+} from "../../core/utils/index.js";
 import { DYSFLOW_MCP_TOOL_NAMES, type DysflowMcpToolName } from "./mcp-tool-registry.js";
 import {
   CLEANUP_SCHEMA,
@@ -604,10 +610,13 @@ function createDispatchTool(
               },
             ],
           };
-        case "query-maintenance":
+        case "query-maintenance": {
+          const maintenanceRequest = toMaintenanceRequest(name, input, env);
           return translateCoreResultToMcpContent(
-            await services.queryService.execute(toMaintenanceRequest(name, input, env)),
+            await services.queryService.execute(maintenanceRequest),
+            resolveInScopeSecrets(maintenanceRequest.backendPassword),
           );
+        }
         case "query-read":
           return translateCoreResultToMcpContent(
             await services.queryService.execute(toQueryRequest(name, input)),
@@ -770,15 +779,27 @@ function queryDefinitionsValue(
   return definitions.length > 0 ? definitions : undefined;
 }
 
+/**
+ * Builds the explicit secret list for a maintenance error sink, mirroring the
+ * HTTP adapter which filters non-empty secret values before sanitizeSecrets.
+ * Returns undefined when no secret is in scope so the sink falls back to the
+ * heuristic-only path.
+ */
+function resolveInScopeSecrets(...values: readonly (string | undefined)[]): string[] | undefined {
+  const secrets = values.filter((v): v is string => typeof v === "string" && v.length > 0);
+  return secrets.length > 0 ? secrets : undefined;
+}
+
 export function translateCoreResultToMcpContent<TData>(
   result: OperationResult<TData>,
+  secrets?: readonly string[],
 ): McpToolResult {
   if (!result.ok) {
     return {
       content: [
         {
           type: "text",
-          text: `${result.error.code}: ${sanitizeMcpErrorMessage(result.error.message)}`,
+          text: `${result.error.code}: ${sanitizeMcpErrorMessage(result.error.message, secrets)}`,
         },
       ],
       isError: true,
@@ -791,11 +812,19 @@ export function translateCoreResultToMcpContent<TData>(
   };
 }
 
-export function sanitizeMcpErrorMessage(message: string): string {
+export function sanitizeMcpErrorMessage(message: string, secrets?: readonly string[]): string {
+  // Secret redaction runs BEFORE path stripping so that:
+  // 1. Explicit known secret values (parity with the HTTP adapter, which calls
+  //    sanitizeSecrets at its sink) are removed verbatim while still intact.
+  // 2. Connect-string passwords (`;PWD=...`) are stripped heuristically even when
+  //    the exact value is not known at this sink. This is a defense-in-depth net
+  //    applied uniformly at every MCP error boundary (translate + transport wrapper).
+  let result = secrets !== undefined ? sanitizeSecrets(message, secrets) : message;
+  result = sanitizeConnectStrings(result);
   // Each alternative is applied sequentially to avoid nested unbounded quantifiers
   // in a single combined pattern (defense against catastrophic backtracking).
   // UNC paths: \\server\share[\subdir...][\ ]
-  let result = message.replace(
+  result = result.replace(
     /\\\\[^\\\s"'<>|:*?]+\\[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?/g,
     "[PATH]",
   );
