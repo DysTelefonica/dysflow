@@ -5,7 +5,7 @@ Option Explicit
 Public Event NCSeleccinonada(p_NC As NCAuditoria)
 Public m_NCSeleccionada As NCAuditoria
 Private m_Expediente As Expediente
-Private m_ColFiltrado As Scripting.Dictionary
+Private m_ColFiltrado As Collection
 Private m_ParaVinculo As Boolean
 Private m_Error As String
 
@@ -21,6 +21,10 @@ Private Sub ComandoActualizar_Click()
     VBA.DoEvents
     On Error GoTo errores
     m_Error = ""
+    RefreshNCAuditoriaGestionCaches p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
     
     Set m_ObjEntorno.ColAuditorias = Nothing
     Set m_ObjEntorno.ColNCsAuditoria = Nothing
@@ -45,20 +49,26 @@ Private Function ActualizarDatosFiltrados( _
                                             Optional ByRef p_Error As String _
                                             ) As String
    
-    Dim m_ID As Variant
+    Dim m_Item As Object
     Dim m_NC As NCAuditoria
-    Dim lst As ListBox
-    Dim i As Long
     On Error GoTo errores
-    Set lst = Me.ListaFiltrados
     If m_ColFiltrado Is Nothing Then
         Exit Function
     End If
     Set lbl = Me.lblEstado
     
     
-    For Each m_ID In m_ColFiltrado
-        Set m_NC = m_ColFiltrado(m_ID)
+    For Each m_Item In m_ColFiltrado
+        If TypeOf m_Item Is NCAuditoria Then
+            Set m_NC = m_Item
+        Else
+            Set m_NC = constructor.getNCAuditoria( _
+                        p_IDNC:=CStr(CallByName(m_Item, "ID", VbGet)), _
+                        p_Error:=p_Error)
+            If p_Error <> "" Then
+                Err.Raise 1000
+            End If
+        End If
         With m_NC
             Avance .Titulo & " ...."
             .FPREVCIERREGrabar
@@ -428,9 +438,6 @@ End Sub
 
 Private Sub ComandoInformeLista_Click()
     Dim m_Col As Scripting.Dictionary
-    Dim lst As ListBox
-    Dim m_NC As NCAuditoria
-    Dim i As Long
     
     On Error GoTo errores
     VBA.DoEvents
@@ -439,26 +446,16 @@ Private Sub ComandoInformeLista_Click()
     
     m_Error = ""
    
-    Set lst = Me.ListaFiltrados
-    If lst.ListCount = 0 Then
+    If Me.ListaFiltrados.ListCount = 0 Then
         m_Error = "No hay elementos en la lista"
         Err.Raise 1000
     End If
-    For i = 1 To lst.ListCount - 1
-        Set m_NC = constructor.getNCAuditoria(p_IDNC:=lst.Column(0, i), p_Error:=m_Error)
-        If m_Error <> "" Then
-            Err.Raise 1000
-        End If
-        If Not m_NC Is Nothing Then
-            If m_Col Is Nothing Then
-                Set m_Col = New Scripting.Dictionary
-                m_Col.CompareMode = TextCompare
-            End If
-            If Not m_Col.Exists(CStr(m_NC.id)) Then
-                m_Col.Add m_NC.id, m_NC
-            End If
-        End If
-    Next
+    Set m_Col = BuildNCAuditoriaGestionReportCollection( _
+                    p_ListedItems:=m_ColFiltrado, _
+                    p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
     If m_Col Is Nothing Then
         m_Error = "No hay elementos en la lista una vez tratados"
         Err.Raise 1000
@@ -535,15 +532,9 @@ Private Sub ComandoInforme_Click()
     VBA.DoEvents
     m_Error = ""
 
-    If m_NCSeleccionada Is Nothing Then
-        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
-        If m_Error <> "" Then
-            Err.Raise 1000
-        End If
-        If m_NCSeleccionada Is Nothing Then
-            m_Error = "Se ha de seleccionar un elemento de la lista"
-            Err.Raise 1000
-        End If
+    EnsureNCAuditoriaGestionSelected p_EmptyMessage:="Se ha de seleccionar un elemento de la lista", p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
     End If
     GenerarWordNoConformidades p_EsDeProyecto:=EnumSino.No, p_NC:=m_NCSeleccionada, p_Error:=m_Error
     If m_Error <> "" Then
@@ -727,105 +718,23 @@ errores:
     DoCmd.Close acForm, Me.Name, acSaveNo
 End Sub
 
-Public Function getNCsAudtoriasFiltrados(Optional ByRef p_Error As String) As Scripting.Dictionary
-    
-    Dim m_TodosParametrosBusquedaVacios As EnumSino
-    Dim m_ID As Variant
-    Dim m_Col As Scripting.Dictionary
-    Dim m_NC As NCAuditoria
-    
-    
-    Dim m_ColGoogle As Scripting.Dictionary
+Public Function getNCsAudtoriasFiltrados(Optional ByRef p_Error As String) As Collection
+
     On Error GoTo errores
-    
-    m_TodosParametrosBusquedaVacios = TodosParametrosBusquedaVacios(p_Error:=p_Error)
+
+    Set getNCsAudtoriasFiltrados = GetNCAuditoriaGestionFiltradas( _
+                                    p_IDAuditoria:=CLng(Val(Nz(Me.Auditoria.Column(0), "0"))), _
+                                    p_Tipo:=Nz(Me.Tipo, ""), _
+                                    p_Descripcion:=Nz(Me.Descripcion, ""), _
+                                    p_ResponsableImplantacion:=Nz(Me.RESPONSABLEIMPLANTACION, ""), _
+                                    p_Estado:=Nz(Me.Estado.Column(0), ""), _
+                                    p_PalabraClave:=Nz(Me.PalabraClave, ""), _
+                                    p_RequiereControlEficacia:=Nz(Me.ComboRequiereControlEficacia, ""), _
+                                    p_ControlEficaciaRelleno:=Nz(Me.ComboControlEficaciaRelleno, ""), _
+                                    p_Error:=p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
-'    If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
-'        Exit Function
-'    End If
-    
-   
-    If Nz(Me.PalabraClave, "") <> "" Then
-        Set m_Col = getNCsAuditoriaPorPalabraClave(p_PC:=Me.PalabraClave, p_Error:=p_Error)
-    Else
-        If Nz(Me.Estado.Column(0), "") = "Abiertas" Then
-            Set m_Col = constructor.getNCsAuditoriaAbiertas(p_Error:=p_Error)
-        Else
-            Set m_Col = constructor.getNCsAuditoriasTotales(p_Error:=p_Error)
-        End If
-        
-    End If
-    If m_Col Is Nothing Then
-        Exit Function
-    End If
-    
-    For Each m_ID In m_Col
-        Set m_NC = m_Col(m_ID)
-        If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
-            GoTo rellenar
-        End If
-        With m_NC
-            'If .ID = "16" Then Stop
-            If Nz(Me.Auditoria.Column(0), "") <> "" Then
-                If .IDAuditoria <> Me.Auditoria.Column(0) Then
-                    GoTo siguiente
-                
-                End If
-            End If
-            
-            If Nz(Me.Tipo, "") <> "" Then
-                If .Tipo <> Me.Tipo Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.Descripcion, "") <> "" Then
-                If InStr(1, .Descripcion, Me.Descripcion) = 0 Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.RESPONSABLEIMPLANTACION, "") <> "" Then
-                If .RESPONSABLEIMPLANTACION <> Me.RESPONSABLEIMPLANTACION Then
-                    GoTo siguiente
-                
-                End If
-            End If
-            
-            If Nz(Me.Estado, "") <> "" And Nz(Me.Estado, "") <> "Abiertas" Then
-                If m_ObjEntorno.ColEstadosNCTitulo(CStr(.EstadoEnum)) <> Me.Estado Then
-                    GoTo siguiente
-                End If
-            End If
-            If Nz(Me.ComboRequiereControlEficacia, "") <> "" Then
-                If .RequiereControlEficacia <> Me.ComboRequiereControlEficacia Then
-                    GoTo siguiente
-                End If
-            
-            End If
-            
-            If Nz(Me.ComboControlEficaciaRelleno, "") = "Sí" Then
-                If .ControlEficacia = "" Then
-                    GoTo siguiente
-                End If
-            ElseIf Nz(Me.ComboControlEficaciaRelleno, "") = "No" Then
-                If .ControlEficacia <> "" Then
-                    GoTo siguiente
-                End If
-            End If
-            
-        End With
-rellenar:
-        If getNCsAudtoriasFiltrados Is Nothing Then
-            Set getNCsAudtoriasFiltrados = New Scripting.Dictionary
-            getNCsAudtoriasFiltrados.CompareMode = TextCompare
-        End If
-        If Not getNCsAudtoriasFiltrados.Exists(CStr(m_NC.id)) Then
-            getNCsAudtoriasFiltrados.Add CStr(m_NC.id), m_NC
-        End If
-siguiente:
-        Set m_NC = Nothing
-    Next
     Exit Function
 errores:
     If Err.Number <> 1000 Then
@@ -859,9 +768,6 @@ End Function
 
 
 Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
-    
-    Dim m_ID As Variant
-    Dim m_NC As NCAuditoria
     
     Dim m_IDNCPrevia As String
     Dim i As Long
@@ -965,18 +871,12 @@ Private Sub ListaFiltrados_Click()
         VBA.DoEvents
         Exit Sub
     End If
-    If m_NCSeleccionada Is Nothing Then
-        Set m_NCSeleccionada = constructor.getNCAuditoria(p_IDNC:=Me.ListaFiltrados.Column(0), p_Error:=m_Error)
-        If m_Error <> "" Then
-            Err.Raise 1000
-        End If
-    Else
-        If Me.ListaFiltrados.Column(0) <> m_NCSeleccionada.id Then
-            Set m_NCSeleccionada = constructor.getNCAuditoria(p_IDNC:=Me.ListaFiltrados.Column(0), p_Error:=m_Error)
-            If m_Error <> "" Then
-                Err.Raise 1000
-            End If
-        End If
+    Set m_NCSeleccionada = ResolveNCAuditoriaGestionSelection( _
+                            p_Current:=m_NCSeleccionada, _
+                            p_SelectedID:=Me.ListaFiltrados.Column(0), _
+                            p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
     End If
     If m_NCSeleccionada Is Nothing Then
         VBA.DoEvents
@@ -1065,14 +965,11 @@ errores:
 End Function
 
 Private Function RellenarListaConCol( _
-                                    p_col As Scripting.Dictionary, _
+                                    p_col As Collection, _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim m_NC As NCAuditoria
-    Dim m_ID As Variant
-    Dim m_Auditoria As Auditoria
-    Dim m_NombreAuditoria As String
+    Dim m_Item As Object
     Dim lst As ListBox
     
     
@@ -1085,26 +982,12 @@ Private Function RellenarListaConCol( _
     End If
     Set lst = Me.ListaFiltrados
     lst.RowSource = "IDNoconformidad;Auditoría;Tipo;Nº;Descripción;Responsable;Estado;FApertura;FCierre"
-    For Each m_ID In p_col
-        Set m_NC = p_col(m_ID)
-        With m_NC
-            Set m_Auditoria = m_NC.Auditoria
-            p_Error = m_NC.Error
-            If p_Error <> "" Then
-                Err.Raise 1000
-            End If
-            If Not m_Auditoria Is Nothing Then
-                m_NombreAuditoria = m_Auditoria.NombreAuditoria
-            Else
-                m_NombreAuditoria = "Desconocida"
-            End If
-            .EstadoGrabar
-            lst.AddItem .id & ";" & m_NombreAuditoria & ";" & m_NC.Tipo & ";" & _
-                        Format(m_NC.Numero, "00") & ";" & Replace(.Descripcion, ";", ":") & ";" & _
-                        .RESPONSABLEIMPLANTACION & ";" & .Estado & ";" & .FechaApertura & ";" & .FECHACIERRE
-        End With
-        
-        Set m_NC = Nothing
+    For Each m_Item In p_col
+        lst.AddItem BuildNCAuditoriaGestionListRow(p_Item:=m_Item, p_Error:=p_Error)
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        Set m_Item = Nothing
     Next
    
     If lst.ListCount > 1 Then
@@ -1117,6 +1000,33 @@ errores:
         p_Error = "El método RellenarListaConCol ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
+
+Private Sub EnsureNCAuditoriaGestionSelected( _
+    Optional ByVal p_EmptyMessage As String = "Seleccione un elemento de la lista", _
+    Optional ByRef p_Error As String _
+    )
+
+    On Error GoTo errores
+
+    p_Error = ""
+    Set m_NCSeleccionada = ResolveNCAuditoriaGestionSelection( _
+                            p_Current:=m_NCSeleccionada, _
+                            p_SelectedID:=Nz(Me.ListaFiltrados.Column(0), ""), _
+                            p_Error:=p_Error)
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If m_NCSeleccionada Is Nothing Then
+        p_Error = p_EmptyMessage
+        Err.Raise 1000
+    End If
+    Exit Sub
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método EnsureNCAuditoriaGestionSelected ha devuelto el error: " & Err.Description
+    End If
+End Sub
 
 
 Private Function EstablecerCombos( _

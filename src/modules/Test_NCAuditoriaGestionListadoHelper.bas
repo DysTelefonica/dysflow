@@ -175,10 +175,12 @@ Public Function Test_AuditGestionForm_ReportConstructorPath_Characterization() A
     src = CreateObject("Scripting.FileSystemObject").OpenTextFile(path, 1, False).ReadAll
     TestHelper.AddLog logs, "Characterization: inspected exported form source for ComandoInforme_Click constructor path"
 
-    If InStr(1, src, "Set m_NCSeleccionada = constructor.getNCProyecto", vbTextCompare) = 0 Then
-        Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonFail("Expected current suspicious getNCProyecto report path not found", logs)
+    If InStr(1, src, "EnsureNCAuditoriaGestionSelected p_EmptyMessage:=", vbTextCompare) = 0 Then
+        Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonFail("Expected report path to delegate selected audit NC resolution", logs)
+    ElseIf InStr(1, src, "Set m_NCSeleccionada = constructor.getNCProyecto", vbTextCompare) > 0 Then
+        Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonFail("Report path must not hydrate audit NC through constructor.getNCProyecto", logs)
     Else
-        Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonOk(logs, "current-report-path-uses-getNCProyecto")
+        Test_AuditGestionForm_ReportConstructorPath_Characterization = TestHelper.BuildJsonOk(logs, "report-path-delegates-audit-selection")
     End If
     Exit Function
 EH:

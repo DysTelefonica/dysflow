@@ -65,6 +65,8 @@ End Function
 
 Public Function BuildNCAuditoriaGestionListRow(ByVal p_Item As Object, Optional ByRef p_Error As String) As String
     Dim nc As NCAuditoria
+    Dim auditoria As Auditoria
+    Dim auditoriaTexto As String
 
     On Error GoTo errores
     p_Error = ""
@@ -72,8 +74,19 @@ Public Function BuildNCAuditoriaGestionListRow(ByVal p_Item As Object, Optional 
 
     If TypeOf p_Item Is NCAuditoria Then
         Set nc = p_Item
-        BuildNCAuditoriaGestionListRow = CStr(nc.id) & ";" & CStr(nc.IDAuditoria) & ";" & _
-                                          CStr(nc.Tipo) & ";" & CStr(nc.Numero) & ";" & _
+        Set auditoria = nc.Auditoria
+        p_Error = nc.Error
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If Not auditoria Is Nothing Then
+            auditoriaTexto = auditoria.NombreAuditoria
+        Else
+            auditoriaTexto = "Desconocida"
+        End If
+        nc.EstadoGrabar
+        BuildNCAuditoriaGestionListRow = CStr(nc.id) & ";" & CleanListValue(auditoriaTexto) & ";" & _
+                                          CStr(nc.Tipo) & ";" & Format(nc.Numero, "00") & ";" & _
                                           CleanListValue(CStr(nc.Descripcion)) & ";" & _
                                           CleanListValue(CStr(nc.RESPONSABLEIMPLANTACION)) & ";" & _
                                           CleanListValue(CStr(nc.Estado)) & ";" & _
