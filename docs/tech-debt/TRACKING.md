@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — MCP hardening campaign in flight. **#429 + #430 DONE** (secret redaction; request-shaping mapper extracted to `src/core` with an exhaustive typed action map). **NEXT: #431 (split tools.ts god-file).**
+`Last updated`: 2026-06-05 — **MCP hardening campaign COMPLETE**: #429, #430, #431 all DONE and on `main`. Lower-priority findings (decorative parity-registry, validator min/max numeric bounds, MCP/HTTP redaction convergence) remain in engram obs #10705 for a future campaign. No campaign work in flight.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -30,7 +30,7 @@
 
 ---
 
-## Active campaign (opened 2026-06-05) — MCP hardening (fresh review)
+## Previous campaign (2026-06-05) — MCP hardening (fresh review) — CLOSED
 
 > Source: fresh adversarial review of the MCP adapter (`src/adapters/mcp/*`), verified **live
 > against code after #420 merged**. Full analysis in engram
@@ -57,7 +57,7 @@
 |-------|-------|-------|----------|--------|--------|----|------------|
 | 1 | [#429](https://github.com/DysTelefonica/dysflow/issues/429) | fix(mcp): MCP error path leaks secrets (only paths redacted) | security/med | `done` ✅ | (main) | — | `429-mcp-secret-redaction` |
 | 2 | [#430](https://github.com/DysTelefonica/dysflow/issues/430) | refactor(core): extract MCP request-shaping into a core mapper (+ typed action map) | medium | `done` ✅ | (main) | — | `430-mcp-request-shaping-core` |
-| 3 | [#431](https://github.com/DysTelefonica/dysflow/issues/431) | refactor(mcp): split tools.ts god-file (811 LOC) | medium | `todo` | — | — | `431-split-mcp-tools` |
+| 3 | [#431](https://github.com/DysTelefonica/dysflow/issues/431) | refactor(mcp): split tools.ts god-file (811 LOC) | medium | `done` ✅ | (main) | — | `431-split-mcp-tools` |
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
 
@@ -98,6 +98,17 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
   green on re-run. HTTP still shapes inline — mapper designed HTTP-reusable, convergence is a clean
   future issue. Committed direct to main. **NEXT: #431** — split `tools.ts` god-file; move
   `sanitizeMcpErrorMessage` to `src/core/utils`.
+- **2026-06-05**: #431 (maintainability) DONE — campaign COMPLETE. `tools.ts` god-file decomposed:
+  thin facade (modern tool defs + `createDysflowMcpTools` + backward-compat re-exports) plus new
+  `src/adapters/mcp/dispatch.ts` (routes, dispatch loop, alias builders, registration, read-mode SQL
+  guard) and `src/adapters/mcp/result-translation.ts` (shared MCP types + `translateCoreResultToMcpContent`
+  + `resolveInScopeSecrets`). `sanitizeMcpErrorMessage` relocated to `src/core/utils/sanitize-error.ts`
+  (pure, no adapter imports; secrets→connect-strings→path order preserved byte-for-byte). Public
+  exports preserved via re-export → zero test changes. core-boundary GREEN, 906 passed, `pnpm lint`
+  clean. Behavior-preserving. Committed direct to main.
+- **Remaining (future campaign, out of scope here)**: decorative `tool-parity-registry` status vs
+  `HIDDEN_STUB_TOOL_NAMES` double source of truth; `validator.ts` lacks numeric `minimum`/`maximum`;
+  HTTP still shapes its request inline (the #430 core mapper is HTTP-reusable). See engram obs #10705.
 
 ---
 

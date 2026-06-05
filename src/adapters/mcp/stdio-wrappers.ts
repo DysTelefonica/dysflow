@@ -1,5 +1,5 @@
-import type { DysflowMcpTool } from "./tools.js";
-import { sanitizeMcpErrorMessage } from "./tools.js";
+import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
+import type { DysflowMcpTool } from "./result-translation.js";
 
 /**
  * Wraps a tool handler so that thrown exceptions are caught and returned as a
