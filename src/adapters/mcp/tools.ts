@@ -3,7 +3,7 @@ import { successResult } from "../../core/contracts/index.js";
 import type { AccessOperationRecord } from "../../core/operations/access-operation-registry.js";
 import { InMemoryAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
-import { registerMcpTools, rejectWriteSqlInReadMode } from "./dispatch.js";
+import { registerMcpTools } from "./dispatch.js";
 
 export {
   ALIAS_TOOL_NAMES,

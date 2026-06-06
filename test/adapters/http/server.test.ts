@@ -222,7 +222,9 @@ describe("Dysflow HTTP adapter", () => {
       diagnostics: [],
       durationMs: 0,
     });
-    expect(services.calls.queries).toEqual([{ sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "read" }]);
+    expect(services.calls.queries).toEqual([
+      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "read" },
+    ]);
   });
 
   it("rejects Access SELECT INTO write SQL on the read route by delegating to the core guard", async () => {
@@ -501,7 +503,9 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([{ sql: "SELECT 1; INSERT INTO T VALUES(1)", mode: "read" }]);
+    expect(services.calls.queries).toEqual([
+      { sql: "SELECT 1; INSERT INTO T VALUES(1)", mode: "read" },
+    ]);
   });
 
   it("exposes operations from an injected FileAccessOperationRegistry via GET /access/operations (#176)", async () => {

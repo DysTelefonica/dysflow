@@ -1,17 +1,17 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import {
   type AccessQueryRequest,
-  type OperationResult,
-  type RelinkDirectoryReport,
   createDysflowError,
   failureResult,
+  type OperationResult,
+  type RelinkDirectoryReport,
 } from "../contracts/index.js";
 import {
   type AccessRunner,
   type AccessRunnerProgressCallback,
   ensureResultShape,
 } from "../runner/access-runner.js";
-import { isRecord, looksLikeReadOnlySql, detectWriteSqlKeyword } from "../utils/index.js";
+import { detectWriteSqlKeyword, isRecord, looksLikeReadOnlySql } from "../utils/index.js";
 
 export type AccessQueryResult = {
   rows?: readonly Record<string, unknown>[];
