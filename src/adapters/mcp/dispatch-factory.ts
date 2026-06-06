@@ -4,7 +4,7 @@ import {
   buildWriteFixtureRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
-import { detectWriteSqlKeyword } from "../../core/utils/index.js";
+
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
 import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
 import type { DysflowMcpToolName } from "./mcp-tool-registry.js";
@@ -18,18 +18,6 @@ import {
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
 
-// ─── Read-mode SQL guard ───────────────────────────────────────────────────────
-
-/**
- * Returns an error string when sql contains write keywords that are forbidden
- * in read-only query mode, or undefined when the sql looks read-only.
- * Exported for contract testing.
- */
-export function rejectWriteSqlInReadMode(sql: string): string | undefined {
-  const keyword = detectWriteSqlKeyword(sql);
-  if (keyword === undefined) return undefined;
-  return `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
-}
 
 // ─── Dispatch tool factory ────────────────────────────────────────────────────
 

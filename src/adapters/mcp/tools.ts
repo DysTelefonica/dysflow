@@ -10,7 +10,6 @@ export {
   MCP_TOOL_QUERY_ACTIONS,
   MCP_TOOL_ROUTES,
   registerMcpToolList,
-  rejectWriteSqlInReadMode,
 } from "./dispatch.js";
 export {
   type DysflowMcpServices,

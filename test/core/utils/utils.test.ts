@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
+  detectWriteSqlKeyword,
+  looksLikeReadOnlySql,
   isRecord,
   REDACTED_SECRET,
   readJsonFileAsync,
@@ -240,5 +242,64 @@ describe("readJsonFileAsync", () => {
   it("rejects when the file does not exist", async () => {
     const missingPath = join(tmpDir, "does-not-exist-async.json");
     await expect(readJsonFileAsync(missingPath)).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// looksLikeReadOnlySql and detectWriteSqlKeyword
+// ---------------------------------------------------------------------------
+describe("looksLikeReadOnlySql and detectWriteSqlKeyword", () => {
+  it("allows read-only queries", () => {
+    expect(looksLikeReadOnlySql("SELECT * FROM People")).toBe(true);
+    expect(looksLikeReadOnlySql("  select id from T")).toBe(true);
+    expect(looksLikeReadOnlySql("SELECT COUNT(*) FROM T WHERE x=1")).toBe(true);
+  });
+
+  it("allows SELECT containing WITH (CTE) when it reads", () => {
+    expect(
+      looksLikeReadOnlySql("WITH cte AS (SELECT * FROM People) SELECT * FROM cte"),
+    ).toBe(true);
+    expect(
+      looksLikeReadOnlySql("  with cte as (select id from T) select * from cte"),
+    ).toBe(true);
+  });
+
+  it("blocks CTE queries containing writes", () => {
+    expect(
+      looksLikeReadOnlySql("WITH cte AS (DELETE FROM People) SELECT * FROM cte"),
+    ).toBe(false);
+    expect(
+      looksLikeReadOnlySql("WITH cte AS (INSERT INTO People VALUES(1)) SELECT * FROM cte"),
+    ).toBe(false);
+  });
+
+  it("blocks DDL/DML statements", () => {
+    const ddlDmlList = [
+      "insert into T values (1)",
+      "UPDATE T SET x=1",
+      "DELETE FROM T",
+      "CREATE TABLE T (a int)",
+      "DROP TABLE T",
+      "ALTER TABLE T ADD COLUMN c text",
+      "TRUNCATE TABLE T",
+      "EXEC proc",
+      "EXECUTE proc",
+      "GRANT select on T to public",
+      "REVOKE select on T from public",
+    ];
+    for (const sql of ddlDmlList) {
+      expect(looksLikeReadOnlySql(sql), `should reject: ${sql}`).toBe(false);
+    }
+  });
+
+  it("blocks writes case-insensitively", () => {
+    expect(looksLikeReadOnlySql("delete from T")).toBe(false);
+    expect(looksLikeReadOnlySql("Drop Table T")).toBe(false);
+    expect(looksLikeReadOnlySql("INSERT into T values(1)")).toBe(false);
+  });
+
+  it("extracts the forbidden keyword in uppercase", () => {
+    const result = detectWriteSqlKeyword("DROP TABLE People");
+    expect(result).toBe("DROP");
   });
 });

@@ -20,7 +20,7 @@ export {
   parseMcpArgsJson,
   writesDisabled,
 } from "./dispatch-common.js";
-export { createDispatchTool, rejectWriteSqlInReadMode } from "./dispatch-factory.js";
+export { createDispatchTool } from "./dispatch-factory.js";
 export {
   MCP_TOOL_QUERY_ACTIONS,
   MCP_TOOL_ROUTES,
