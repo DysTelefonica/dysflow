@@ -1,15 +1,17 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import type {
-  AccessQueryRequest,
-  OperationResult,
-  RelinkDirectoryReport,
+import {
+  type AccessQueryRequest,
+  type OperationResult,
+  type RelinkDirectoryReport,
+  createDysflowError,
+  failureResult,
 } from "../contracts/index.js";
 import {
   type AccessRunner,
   type AccessRunnerProgressCallback,
   ensureResultShape,
 } from "../runner/access-runner.js";
-import { isRecord } from "../utils/index.js";
+import { isRecord, looksLikeReadOnlySql, detectWriteSqlKeyword } from "../utils/index.js";
 
 export type AccessQueryResult = {
   rows?: readonly Record<string, unknown>[];
@@ -43,6 +45,14 @@ export class AccessQueryService {
     request: AccessQueryRequest,
     onProgress?: AccessRunnerProgressCallback,
   ): Promise<OperationResult<AccessQueryResult>> {
+    if (request.mode === "read" && typeof request.sql === "string" && request.sql.trim() !== "") {
+      if (!looksLikeReadOnlySql(request.sql)) {
+        const keyword = detectWriteSqlKeyword(request.sql);
+        const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
+        return failureResult(createDysflowError("INVALID_READ_ONLY_QUERY", forbiddenMessage));
+      }
+    }
+
     const result = await this.runner.run<AccessQueryResult>(
       { kind: "query", request },
       this.config,
