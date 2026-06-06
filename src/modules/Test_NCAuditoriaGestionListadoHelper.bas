@@ -11,6 +11,10 @@ Private Const TEST_NC_CACHE_EXPECTED As Long = 900491
 Private Const TEST_NC_FALLBACK As Long = 900492
 Private Const TEST_NC_ROW As Long = 900493
 Private Const TEST_NC_KEYWORD_CLOSED As Long = 900494
+Private Const TEST_NC_CACHE_VALID As Long = 900495
+Private Const TEST_NC_CACHE_INVALID As Long = 900496
+Private Const TEST_NC_CACHE_FALLBACK As Long = 900497
+Private Const TEST_NC_CACHE_CLOSED As Long = 900498
 Private Const LOG_OPERATION_AUDIT_FALLBACK As String = "FormAuditCacheFallback"
 Private Const AUDIT_LIST_CACHE_TABLE As String = "TbCacheListadoNCAuditoria"
 
@@ -321,6 +325,106 @@ Cleanup:
     TestHelper.EndTestSession logs
 End Function
 
+Public Function Test_AuditListadoHelper_ValidCacheHit_Phase2_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+    Dim col As Collection
+    Dim rowText As String
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoHelper_ValidCacheHit_Phase2_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    CleanupSlice1 db
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    SeedAuditCacheRow db, TEST_AUD_ID, TEST_NC_CACHE_VALID, "AUD-CACHE2", "cache hit;from backend", True
+    SeedAuditCacheRow db, TEST_AUD_ID, TEST_NC_CACHE_INVALID, "AUD-STALE", "cache hit;from backend", False
+    SeedAuditCacheRow db, TEST_AUD_ID, TEST_NC_CACHE_CLOSED, "AUD-CLOSED", "cache hit;from backend", True, "Cerrada", "Sí"
+    TestHelper.AddLog logs, "Arrange: open valid, closed valid, and invalid backend audit cache rows with same filter marker"
+
+    Set col = GetNCAuditoriaGestionFiltradas(p_IDAuditoria:=TEST_AUD_ID, p_Descripcion:="cache hit", p_Estado:="Abiertas", p_CacheEnabled:=True, p_Error:=errMsg)
+    If errMsg <> "" Then Err.Raise 1000, , errMsg
+    If Not AssertCollectionHasOnlyAuditId(col, TEST_NC_CACHE_VALID, logs, assertError) Then GoTo Fail
+    rowText = BuildNCAuditoriaGestionListRow(col(1), errMsg)
+    If errMsg <> "" Then Err.Raise 1000, , errMsg
+    If InStr(1, rowText, CStr(TEST_NC_CACHE_VALID) & ";", vbTextCompare) <> 1 Then assertError = "Cache row must preserve list ID contract": GoTo Fail
+    If InStr(1, rowText, "cache hit:from backend", vbTextCompare) = 0 Then assertError = "Cache row must sanitize semicolons for list contract": GoTo Fail
+    If CountRows(db, AUDIT_LIST_CACHE_TABLE, "ID IN (" & CStr(TEST_NC_CACHE_VALID) & "," & CStr(TEST_NC_CACHE_INVALID) & "," & CStr(TEST_NC_CACHE_CLOSED) & ") AND CacheValida=True") <> 2 Then
+        assertError = "Expected exactly two valid cache rows in deterministic fixture before Abiertas filtering"
+        GoTo Fail
+    End If
+    If CountRows(db, "TbLogCache", "TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'") <> 0 Then
+        assertError = "Valid cache hit must not log fallback telemetry"
+        GoTo Fail
+    End If
+
+    Test_AuditListadoHelper_ValidCacheHit_Phase2_RED = TestHelper.BuildJsonOk(logs, "audit-cache-valid-hit")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoHelper_ValidCacheHit_Phase2_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoHelper_ValidCacheHit_Phase2_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then CleanupSlice1 db
+    TestHelper.EndTestSession logs
+End Function
+
+Public Function Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+    Dim col As Collection
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    CleanupSlice1 db
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    SeedAuditFixture db, TEST_AUD_ID, TEST_NC_CACHE_FALLBACK, "AUD-FB2", "fallback phase2 row", "QA FALLBACK2"
+    SeedAuditCacheRow db, TEST_AUD_ID, TEST_NC_CACHE_INVALID, "AUD-INVALID", "fallback phase2 row", False
+    TestHelper.AddLog logs, "Arrange: only invalid cache rows exist; fallback source has exactly one deterministic row"
+
+    Set col = GetNCAuditoriaGestionFiltradas(p_IDAuditoria:=TEST_AUD_ID, p_Descripcion:="fallback phase2", p_CacheEnabled:=True, p_Error:=errMsg)
+    If errMsg <> "" Then Err.Raise 1000, , errMsg
+    If Not AssertCollectionHasOnlyAuditId(col, TEST_NC_CACHE_FALLBACK, logs, assertError) Then GoTo Fail
+    If CountRows(db, AUDIT_LIST_CACHE_TABLE, "ID=" & CStr(TEST_NC_CACHE_INVALID) & " AND CacheValida=True") <> 0 Then
+        assertError = "Invalid cache fixture must not be counted as valid"
+        GoTo Fail
+    End If
+    If CountRows(db, "TbLogCache", "TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'") <> 1 Then
+        assertError = "No valid cache rows must log exactly one FormAuditCacheFallback telemetry row"
+        GoTo Fail
+    End If
+
+    Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED = TestHelper.BuildJsonOk(logs, "audit-cache-no-valid-fallback")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then CleanupSlice1 db
+    TestHelper.EndTestSession logs
+End Function
+
 Private Sub SchemaGateSlice1(ByVal p_Logs As Collection)
     TestHelper.AddLog p_Logs, "Schema gate: TbAuditorias IDAuditoria Long required; TbNoConformidadesAuditoria ID Long required, CAUSARAIZ LongText required, RequiereControlEficacia Text(25) required, ControlEficacia LongText; audit AC IDAccionCorrectiva Long required and ID parent Long; audit AR IDAccionRealizada Long required and IDAccionCorrectiva parent Long; TbLogCache IDNoConformidad Long required; TbCacheListadoNC uses RequiereControlEficacia Text(10) and ControlEficacia Text(255), so audit cache must diverge. FK order: TbAuditorias -> TbNoConformidadesAuditoria -> TbNCAuditoriaAccionCorrectivas -> TbNCAuditoriaAccionesRealizadas."
 End Sub
@@ -397,8 +501,19 @@ End Sub
 
 Private Sub CleanupSlice1(ByVal p_Db As DAO.Database)
     p_Db.Execute "DELETE FROM TbLogCache WHERE TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'", dbFailOnError
-    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_KEYWORD_CLOSED), dbFailOnError
+    If TableExistsInDb(p_Db, AUDIT_LIST_CACHE_TABLE) Then
+        p_Db.Execute "DELETE FROM " & AUDIT_LIST_CACHE_TABLE & " WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_CACHE_FALLBACK), dbFailOnError
+    End If
+    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_CACHE_FALLBACK), dbFailOnError
     p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria=" & CStr(TEST_AUD_ID), dbFailOnError
+End Sub
+
+Private Sub SeedAuditCacheRow(ByVal p_Db As DAO.Database, ByVal p_IDAuditoria As Long, ByVal p_IDNC As Long, ByVal p_Numero As String, ByVal p_Descripcion As String, ByVal p_CacheValida As Boolean, Optional ByVal p_Estado As String = "Abierta", Optional ByVal p_Cerrada As String = "No")
+    p_Db.Execute "DELETE FROM " & AUDIT_LIST_CACHE_TABLE & " WHERE ID=" & CStr(p_IDNC), dbFailOnError
+    p_Db.Execute "INSERT INTO " & AUDIT_LIST_CACHE_TABLE & " " & _
+                 "(ID, IDAuditoria, Tipo, Numero, Descripcion, CAUSARAIZ, RESPONSABLEIMPLANTACION, Estado, FechaApertura, FECHACIERRE, RequiereControlEficacia, ControlEficacia, Notas, Cerrada, Borrado, AccionesCorrectivasConcatenadas, AccionesRealizadasConcatenadas, FechaCache, CacheValida, Version) VALUES (" & _
+                 CStr(p_IDNC) & ", " & CStr(p_IDAuditoria) & ", 'Auditoria', " & TestHelper.SqlText(p_Numero) & ", " & TestHelper.SqlText(p_Descripcion) & ", " & _
+                 TestHelper.SqlText("Causa cache phase2") & ", 'QA CACHE2', " & TestHelper.SqlText(p_Estado) & ", Date(), Null, 'No', Null, Null, " & TestHelper.SqlText(p_Cerrada) & ", 0, Null, Null, Now(), " & IIf(p_CacheValida, "True", "False") & ", 1)", dbFailOnError
 End Sub
 
 Private Function CountRows(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_Where As String) As Long
@@ -426,6 +541,8 @@ Private Function AssertCollectionHasOnlyAuditId(ByVal p_Col As Collection, ByVal
     If TypeOf item Is NCAuditoria Then
         Set nc = item
         actualId = CStr(nc.id)
+    ElseIf TypeName(item) = "Dictionary" Then
+        actualId = CStr(item("ID"))
     Else
         actualId = CStr(CallByName(item, "ID", VbGet))
     End If

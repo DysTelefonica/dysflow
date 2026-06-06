@@ -41,6 +41,18 @@
       "procedure": "Test_AuditListadoHelper_LegacyKeywordAbiertasParity",
       "expect": { "ok": true },
       "tags": ["atomic", "audit-gestion-cache-helper", "issue-49", "slice3", "parity"]
+    },
+    {
+      "name": "Audit listado helper valid cache hit phase 2",
+      "procedure": "Test_AuditListadoHelper_ValidCacheHit_Phase2_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice2", "cache-hit"]
+    },
+    {
+      "name": "Audit listado helper no valid cache fallback phase 2",
+      "procedure": "Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice2", "fallback", "telemetry"]
     }
   ]
 }

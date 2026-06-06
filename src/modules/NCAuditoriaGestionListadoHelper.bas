@@ -24,6 +24,7 @@ Public Function GetNCAuditoriaGestionFiltradas( _
 
     Dim useCache As Boolean
     Dim reason As String
+    Dim cacheRows As Collection
 
     On Error GoTo errores
     p_Error = ""
@@ -35,10 +36,26 @@ Public Function GetNCAuditoriaGestionFiltradas( _
     End If
 
     If useCache Then
-        If TableExists(AUDIT_CACHE_TABLE) Then
-            reason = "Audit cache source exists but no validated reader is implemented in this slice"
-        Else
-            reason = "Audit cache source not available: " & AUDIT_CACHE_TABLE
+        Set cacheRows = TryReadNCAuditoriaListadoCache( _
+                            p_IDAuditoria:=p_IDAuditoria, _
+                            p_Tipo:=p_Tipo, _
+                            p_Descripcion:=p_Descripcion, _
+                            p_ResponsableImplantacion:=p_ResponsableImplantacion, _
+                            p_Estado:=p_Estado, _
+                            p_PalabraClave:=p_PalabraClave, _
+                            p_RequiereControlEficacia:=p_RequiereControlEficacia, _
+                            p_ControlEficaciaRelleno:=p_ControlEficaciaRelleno, _
+                            p_FallbackReason:=reason, _
+                            p_Error:=p_Error)
+        If p_Error <> "" Then
+            reason = p_Error
+            p_Error = ""
+        End If
+        If Not cacheRows Is Nothing Then
+            If cacheRows.count > 0 Then
+                Set GetNCAuditoriaGestionFiltradas = cacheRows
+                Exit Function
+            End If
         End If
     Else
         reason = "Audit cache disabled"
@@ -389,10 +406,18 @@ End Function
 
 Private Function ReadText(ByVal p_Item As Object, ByVal p_Property As String) As String
     On Error Resume Next
-    ReadText = CStr(CallByName(p_Item, p_Property, VbGet))
-    If Err.Number <> 0 Then
-        Err.Clear
-        ReadText = ""
+    If TypeName(p_Item) = "Dictionary" Then
+        If p_Item.Exists(p_Property) Then
+            ReadText = CStr(p_Item(p_Property))
+        Else
+            ReadText = ""
+        End If
+    Else
+        ReadText = CStr(CallByName(p_Item, p_Property, VbGet))
+        If Err.Number <> 0 Then
+            Err.Clear
+            ReadText = ""
+        End If
     End If
 End Function
 
