@@ -1835,6 +1835,113 @@ Describe "Invoke-AccessProcedure — optional ByRef argument marshaling (issue #
     }
 }
 
+# ===========================================================================
+# Issue #443: behavioral test for Write-DysflowOperationMarker ISO format.
+# Replaces the former source-text test "Goal E: Write-DysflowOperationMarker
+# uses millisecond ISO format for processStartTime" in scripts-vba-manager.test.ts.
+#
+# Contract: Write-DysflowOperationMarker must write processStartTime in
+# ISO 8601 format with exactly 3 fractional digits (ms) + Z — NOT the
+# .ToString('o') round-trip format which gives 7 fractional digits.
+#
+# Strategy: extract the function via AST (no body assertions), set the required
+# script-scope variables ($OperationFile to a temp path), stub Get-Process to
+# return a fake process with a known start time, call the function, read the
+# written JSON file, and assert the processStartTime format.
+# ===========================================================================
 
+Describe "Write-DysflowOperationMarker — ISO millisecond format behavioral (issue #443)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
 
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
 
+        # Extract Write-DysflowOperationMarker via AST (loader only)
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Write-DysflowOperationMarker' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Write-DysflowOperationMarker not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        # Write-DysflowOperationMarker reads script-scope vars: $OperationFile, $OperationId,
+        # $Action, $AccessPath, $DestinationRoot. Set them as test-scope vars.
+        $script:TempMarkerFile = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-marker-test-{0}.json" -f [guid]::NewGuid().ToString("N"))
+        Set-Variable -Name OperationFile   -Value $script:TempMarkerFile -Scope Script
+        Set-Variable -Name OperationId     -Value "test-op-123"          -Scope Script
+        Set-Variable -Name Action          -Value "Export"               -Scope Script
+        Set-Variable -Name AccessPath      -Value "C:\test\mydb.accdb"   -Scope Script
+        Set-Variable -Name DestinationRoot -Value "C:\test\dest"         -Scope Script
+
+        # Stub Write-Status (called on error path)
+        function script:Write-Status { param([string]$Message, $Color) }
+
+        # Stub Get-Process so it returns a fake process with a known UTC start time.
+        # The function calls: $p = Get-Process -Id $AccessPid -ErrorAction Stop
+        $knownUtcTime = [datetime]::new(2026, 3, 15, 8, 30, 45, 123, [System.DateTimeKind]::Utc)
+        $script:FakeProcess = [PSCustomObject]@{
+            Id        = 99001
+            StartTime = $knownUtcTime.ToLocalTime()  # Process.StartTime is local time
+        }
+        function script:Get-Process {
+            param($Id, $ErrorAction)
+            if ($Id -eq 99001) { return $script:FakeProcess }
+            throw "Process not found: $Id"
+        }
+    }
+
+    AfterEach {
+        Remove-Item -LiteralPath $script:TempMarkerFile -Force -ErrorAction SilentlyContinue
+    }
+
+    Context "processStartTime ISO format" {
+        It "writes a JSON file with processStartTime having exactly 3 fractional digits and Z" {
+            # Call with known fake PID — function writes to $OperationFile
+            Write-DysflowOperationMarker -Status "running" -AccessPid 99001
+
+            # File must have been created
+            Test-Path -LiteralPath $script:TempMarkerFile | Should -Be $true `
+                -Because "Write-DysflowOperationMarker must create the operation marker file"
+
+            # Read raw JSON — ConvertFrom-Json auto-converts ISO date strings to [datetime]
+            # objects, losing the original string format. We assert on the raw JSON text instead
+            # to verify the format that was actually written to disk.
+            $rawJson = Get-Content -LiteralPath $script:TempMarkerFile -Raw
+
+            # processStartTime must appear in the JSON
+            $rawJson | Should -Match '"processStartTime"' `
+                -Because "processStartTime key must be present in the written JSON"
+
+            # Extract the value of processStartTime from the raw JSON string
+            $startTimeMatch = [regex]::Match($rawJson, '"processStartTime"\s*:\s*"([^"]+)"')
+            $startTimeMatch.Success | Should -Be $true `
+                -Because "processStartTime must be a non-null string value in the JSON"
+
+            $startTime = $startTimeMatch.Groups[1].Value
+
+            # Contract: exactly 3 fractional digits + Z (not 7 from .ToString('o'))
+            $isoPattern3ms = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+            $startTime | Should -Match $isoPattern3ms `
+                -Because "processStartTime must use the 3-digit millisecond ISO format, not the 7-digit round-trip format from .ToString('o')"
+
+            $startTime | Should -Not -Match '\.\d{7}Z$' `
+                -Because ".ToString('o') produces 7 fractional digits — the function must use .ToString('yyyy-MM-ddTHH:mm:ss.fffZ')"
+        }
+
+        It "writes processStartTime as null when AccessPid is not provided" {
+            Write-DysflowOperationMarker -Status "running"
+
+            Test-Path -LiteralPath $script:TempMarkerFile | Should -Be $true
+            $rawJson = Get-Content -LiteralPath $script:TempMarkerFile -Raw
+            # When no PID is provided, processStartTime should be null (JSON null, not a string)
+            $rawJson | Should -Match '"processStartTime"\s*:\s*null' `
+                -Because "no AccessPid was provided, so processStartTime should be JSON null"
+        }
+    }
+}

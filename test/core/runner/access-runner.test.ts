@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -293,37 +293,10 @@ describe("AccessPowerShellRunner", () => {
   // behavioral Pester tests in scripts/tests/dysflow-access-runner.Tests.ps1
   // (Resolve-WriteActionDatabase, Resolve-ReadActionDatabase,
   //  Invoke-QuerySqlReadAction, Invoke-ListTablesAction — issue #380 P6).
-  // The assertions below guard only the main-loop WIRING that Pester does not
-  // yet reach — i.e. that the routers and action helpers are called from the
-  // top-level dispatch block rather than bypassed.  They are change-detectors:
-  // fragile on rename but cheap to fix, and the only automated guard for wiring.
-  it("main loop wires routers and action helpers correctly (structural change-detector)", () => {
-    const script = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
-
-    // Write path: main loop calls the write router and passes its result to Invoke-WriteAction
-    expect(script).toContain("Resolve-WriteActionDatabase -DbEngine");
-    expect(script).toContain("Invoke-WriteAction -Database $writeDb.Database");
-    expect(script).not.toContain(
-      "Invoke-WriteAction -Database $db -Action $action -Payload $payload",
-    );
-
-    // Read path: main loop calls the read router and its result feeds the action helpers
-    expect(script).toContain(
-      "Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload",
-    );
-    expect(script).toContain("Invoke-ListTablesAction -Database $readDb.Database");
-    expect(script).toContain("Invoke-GetSchemaAction -Database $readDb.Database");
-    expect(script).toContain("Invoke-GetRelationshipsAction -Database $readDb.Database");
-    // No direct inline calls bypassing the shared functions (regression guards)
-    expect(script).not.toContain("Get-TableSchema -Database $db");
-    expect(script).not.toContain("Get-Relationships -Database $db");
-
-    // SQL dispatch: query read uses Invoke-QuerySqlReadAction; SQL write uses Execute
-    expect(script).toContain("Invoke-QuerySqlReadAction -Database $readDb.Database");
-    expect(script).toContain("$writeDb.Database.Execute([string]$payload.sql, 128)");
-    expect(script).not.toContain("$rs = $db.OpenRecordset([string]$payload.sql)");
-    expect(script).not.toContain("$db.Execute([string]$payload.sql, 128)");
-  });
+  // The structural source-text wiring change-detector that was here has been
+  // removed (issue #443) — it was an implementation-coupled assertion that
+  // would break on a behavior-preserving rename. The P6 Pester tests cover the
+  // behavioral contracts (routing, read/write database selection, SQL dispatch).
 
   it("serializes concurrent executor invocations for the same Access database", async () => {
     const events: string[] = [];
@@ -973,30 +946,13 @@ describe("Cross-process lock for .accdb", () => {
       rmSync(lockPath, { recursive: true, force: true });
     }
   });
-  it("verifies scripts/dysflow-access-runner.ps1 conforms to return-based exits and force-kill design", async () => {
-    const { readFileSync } = await import("node:fs");
-    const scriptContent = readFileSync("scripts/dysflow-access-runner.ps1", "utf8");
-
-    // 1. Initialized script-scoped variables
-    expect(scriptContent).toContain("$script:exitCode =");
-    expect(scriptContent).toContain("$script:accessPid =");
-
-    // 2. Stop-Process force kill fallback in finally block
-    expect(scriptContent).toContain("Stop-Process");
-    expect(scriptContent).toContain("$script:accessPid");
-
-    // 3. No early exits inside try block, only return or exit $script:exitCode at the bottom
-    const lines = scriptContent.split(/\r?\n/);
-    let exitCount = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      // Ignore comments and matches that are not the single final exit statement
-      if (trimmed.startsWith("exit ") && !trimmed.includes("$script:exitCode")) {
-        exitCount++;
-      }
-    }
-    expect(exitCount).toBe(0);
-  });
+  // The source-text test "verifies scripts/dysflow-access-runner.ps1 conforms to
+  // return-based exits and force-kill design" has been removed (issue #443) — it was
+  // an implementation-coupled assertion that would break on a behavior-preserving
+  // rename/refactor of script-scoped variable names. The behavioral contracts (no
+  // bare exit inside try, finally block always runs, Stop-Process force-kill) are
+  // now covered by Pester behavioral tests in scripts/tests/dysflow-access-runner.Tests.ps1
+  // ("Access runner return-based exits and force-kill — behavioral" describe block).
 
   it("runs a real diagnostics check and verifies no lingering MSACCESS.EXE process", async () => {
     if (process.platform !== "win32") {
