@@ -1,10 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import {
   type DysflowConfig,
   loadDysflowConfigAsync,
   redactDysflowConfig,
 } from "../../core/config/dysflow-config.js";
+import { isAbsolutePath } from "../../core/utils/index.js";
 import { parseNamedArgs } from "./install-utils.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
@@ -116,7 +117,7 @@ function toPortableProjectPath(value: string | undefined, projectRoot: string): 
   if (value === undefined) {
     return undefined;
   }
-  const absolutePath = isAbsolute(value) ? resolve(value) : resolve(projectRoot, value);
+  const absolutePath = isAbsolutePath(value) ? resolve(value) : resolve(projectRoot, value);
   const projectRelative = relative(projectRoot, absolutePath);
   return projectRelative.length === 0
     ? basename(absolutePath)

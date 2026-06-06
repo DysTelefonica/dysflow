@@ -141,10 +141,7 @@ export class AccessOperationCleanupService {
     }
 
     const commandLine = process.commandLine ?? record.commandLine ?? "";
-    if (
-      commandLine.length > 0 &&
-      !normalizePathForMatching(commandLine).includes(normalizePathForMatching(record.accessPath))
-    ) {
+    if (commandLine.length > 0 && !pathMatchesAccessPath(commandLine, record.accessPath)) {
       return failureResult(
         createDysflowError(
           "CLEANUP_COMMAND_LINE_MISMATCH",

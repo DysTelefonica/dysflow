@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -6,7 +6,13 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
-import { isRecord, readJsonFileAsync, stringValue, truthy } from "../../core/utils/index.js";
+import {
+  isAbsolutePath,
+  isRecord,
+  readJsonFileAsync,
+  stringValue,
+  truthy,
+} from "../../core/utils/index.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const EXECUTION_MAPPINGS: Record<string, DirectMapping> = {
@@ -114,7 +120,7 @@ export class VbaExecutionAdapter {
 
       const projectRoot = stringValue(params.projectRoot) || this.orchestrator.cwd;
       const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
-      const resolvedPath = isAbsolute(testsPath) ? testsPath : resolve(projectRoot, testsPath);
+      const resolvedPath = isAbsolutePath(testsPath) ? testsPath : resolve(projectRoot, testsPath);
       const parsed = await readJsonFileAsync<unknown>(resolvedPath);
       const tests = normalizeTestPlan(parsed);
       const filterParts = parseTestFilter(params.filter);
