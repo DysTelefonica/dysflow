@@ -109,8 +109,12 @@ export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP
   },
 );
 
+const TOOL_MAP = new Map<DysflowMcpToolName, ParityToolDefinition>(
+  TOOL_PARITY_REGISTRY.map((tool) => [tool.name, tool]),
+);
+
 export function getToolDefinition(name: DysflowMcpToolName): ParityToolDefinition {
-  const entry = TOOL_PARITY_REGISTRY.find((tool) => tool.name === name);
+  const entry = TOOL_MAP.get(name);
   if (entry === undefined) {
     throw new Error(`Unknown MCP tool: ${name}`);
   }

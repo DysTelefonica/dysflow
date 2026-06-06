@@ -796,12 +796,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
   });
 
   describe("delegation to form service and comparison modules", () => {
-    it("re-exports VbaFormService, comparison helpers, and related types for backward compatibility", async () => {
-      const adapterModule = await import("../../../src/adapters/vba-sync/vba-sync-adapter");
-      expect(adapterModule.VbaFormService).toBeDefined();
-      expect(adapterModule.compareSourceAgainstBinary).toBeDefined();
-      expect(adapterModule.planReconcileBinary).toBeDefined();
-    });
+
 
     it("delegates form-related operations to VbaFormService methods", async () => {
       const service = new VbaSyncAdapter({

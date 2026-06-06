@@ -39,30 +39,7 @@ import {
 } from "./schemas.js";
 import { validateInput } from "./validator.js";
 
-// ─── Write helpers (used by modern tools below) ────────────────────────────────
-
-function writesDisabled(): McpToolResult {
-  return {
-    content: [
-      { type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." },
-    ],
-    isError: true,
-  };
-}
-
-function invalidInput(message: string): McpToolResult {
-  return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
-}
-
-async function isWriteAllowed(
-  input: unknown,
-  writesEnabled: boolean,
-  writeAccessResolver: McpWriteAccessResolver | undefined,
-): Promise<boolean> {
-  if (writesEnabled) return true;
-  if (writeAccessResolver === undefined) return false;
-  return await writeAccessResolver(input);
-}
+import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
 
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 

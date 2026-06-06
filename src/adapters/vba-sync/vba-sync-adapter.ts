@@ -1,6 +1,7 @@
 import { readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
+import { type DysflowConfig } from "../../core/config/dysflow-config.js";
+import { resolveExecutionTarget as resolveExecutionTargetInCore } from "../../core/config/execution-target.js";
 import {
   createDysflowError,
   failureResult,
@@ -373,76 +374,12 @@ export class VbaSyncAdapter implements VbaSyncPort {
 
   private async resolveExecutionTarget(
     params: Record<string, unknown>,
-  ): Promise<
-    OperationResult<
-      Pick<
-        DysflowConfig,
-        | "accessDbPath"
-        | "backendPath"
-        | "destinationRoot"
-        | "projectRoot"
-        | "projectId"
-        | "configSource"
-        | "timeoutMs"
-        | "processTimeoutMs"
-      > & { accessPath?: string; destinationRoot: string }
-    >
-  > {
-    const hasExplicitConfigOverride =
-      stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
-    const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
-    if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
-      const config = await loadDysflowConfigAsync({
-        env: this.env,
-        cwd: this.cwd,
-        accessDbPath: stringValue(params.accessPath),
-        backendPath: stringValue(params.backendPath),
-        destinationRoot: stringValue(params.destinationRoot),
-        projectRoot: stringValue(params.projectRoot),
-        projectId: stringValue(params.projectId),
-        contextId: stringValue(params.contextId),
-      });
-      if (!config.ok) return config;
-      return successResult({
-        ...config.data,
-        accessPath: config.data.accessDbPath,
-        destinationRoot:
-          stringValue(params.destinationRoot) ??
-          config.data.destinationRoot ??
-          config.data.projectRoot ??
-          this.cwd,
-      });
-    }
-
-    if (this.accessPath === undefined) {
-      const repoConfig = await loadDysflowConfigAsync({ env: this.env, cwd: this.cwd });
-      if (repoConfig.ok) {
-        return successResult({
-          ...repoConfig.data,
-          accessPath: repoConfig.data.accessDbPath,
-          destinationRoot:
-            stringValue(params.destinationRoot) ??
-            repoConfig.data.destinationRoot ??
-            repoConfig.data.projectRoot ??
-            this.cwd,
-        });
-      }
-      return repoConfig;
-    }
-
-    const destinationRoot =
-      stringValue(params.destinationRoot) ??
-      stringValue(params.projectRoot) ??
-      this.destinationRoot ??
-      this.cwd;
-    return successResult({
-      configSource: "runtime-default",
-      accessDbPath: this.accessPath ?? "",
+  ) {
+    return resolveExecutionTargetInCore(params, {
+      env: this.env,
+      cwd: this.cwd,
       accessPath: this.accessPath,
-      destinationRoot,
-      projectRoot: stringValue(params.projectRoot) ?? this.destinationRoot ?? this.cwd,
-      projectId: undefined,
-      timeoutMs: this.processTimeoutMs,
+      destinationRoot: this.destinationRoot,
       processTimeoutMs: this.processTimeoutMs,
     });
   }
@@ -596,10 +533,3 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
   });
 };
 
-export { VbaFormService } from "../../core/services/vba-form-service.js";
-export {
-  collectVbaSourceFiles,
-  compareSourceAgainstBinary,
-  compareVbaSourceTrees,
-  planReconcileBinary,
-} from "../../core/services/vba-source-comparison.js";
