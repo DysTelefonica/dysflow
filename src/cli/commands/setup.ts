@@ -129,12 +129,27 @@ async function updateProjectConfigId(
 ): Promise<string> {
   const projectRoot = context.cwd ?? process.cwd();
   const projectPath = join(projectRoot, ".dysflow", "project.json");
-  const raw = await readFile(projectPath, "utf8").catch(() => "{}");
+  let raw: string;
+  try {
+    raw = await readFile(projectPath, "utf8");
+  } catch (error) {
+    const err = error as { code?: string };
+    if (err?.code === "ENOENT") {
+      raw = "{}";
+    } else {
+      throw error;
+    }
+  }
   let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new Error(`Invalid .dysflow/project.json: ${projectPath}`);
+    const val = JSON.parse(raw);
+    if (typeof val !== "object" || val === null || Array.isArray(val)) {
+      throw new Error("JSON value is not a plain object");
+    }
+    parsed = val as Record<string, unknown>;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid .dysflow/project.json: ${projectPath}. ${message}`);
   }
   parsed.id = projectId;
   await mkdir(dirname(projectPath), { recursive: true });
