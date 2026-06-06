@@ -59,6 +59,25 @@ describe("install-utils helpers", () => {
     }
   });
 
+  it("readJson rejects if file exists but contains invalid JSON or non-object JSON", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dysflow-utils-test-"));
+    try {
+      const corruptFile = join(tempDir, "corrupt.json");
+      fs.writeFileSync(corruptFile, "{invalid}");
+      await expect(readJson(corruptFile)).rejects.toThrow("Syntax error in JSON file");
+
+      const arrayFile = join(tempDir, "array.json");
+      fs.writeFileSync(arrayFile, "[1, 2, 3]");
+      await expect(readJson(arrayFile)).rejects.toThrow("JSON value is not a plain object");
+
+      const nullFile = join(tempDir, "null.json");
+      fs.writeFileSync(nullFile, "null");
+      await expect(readJson(nullFile)).rejects.toThrow("JSON value is not a plain object");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("runCommand executes a real process and runCommandOutput returns stdout", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "dysflow-utils-test-"));
     try {
@@ -76,6 +95,20 @@ describe("install-utils helpers", () => {
         tempDir,
       );
       expect(output).toBe("hello-stdout");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("runCommand times out and throws an error", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dysflow-utils-test-"));
+    try {
+      const nodeScript = "setTimeout(() => {}, 10000);";
+      const start = Date.now();
+      await expect(
+        runCommand("node", ["-e", nodeScript], tempDir, { timeoutMs: 100 }),
+      ).rejects.toThrow("timed out after 100ms");
+      expect(Date.now() - start).toBeLessThan(1000);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

@@ -1,4 +1,4 @@
-import { type ExecFileOptions, execFile } from "node:child_process";
+import { type ExecFileOptions, execFile, spawn } from "node:child_process";
 
 export const MAX_SUBPROCESS_BUFFER_BYTES = 10 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -20,9 +20,13 @@ function runCommandWithTimeout(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let timer: NodeJS.Timeout | undefined;
+    let isTimedOut = false;
     const child = execFile(execCmd, execArgs, options, (error, stdout, stderr) => {
       if (timer) {
         clearTimeout(timer);
+      }
+      if (isTimedOut) {
+        return;
       }
       if (error) {
         reject(error);
@@ -36,12 +40,25 @@ function runCommandWithTimeout(
     });
 
     timer = setTimeout(() => {
-      try {
-        child.kill("SIGKILL");
-      } catch {
-        // ignore kill errors
+      isTimedOut = true;
+      if (child.pid !== undefined && process.platform === "win32") {
+        const taskkill = spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        const handleEnd = () => {
+          reject(new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`));
+        };
+        taskkill.on("close", handleEnd);
+        taskkill.on("error", handleEnd);
+      } else {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore kill errors
+        }
+        reject(new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`));
       }
-      reject(new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 }
