@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -8,6 +8,7 @@ import {
   successResult,
 } from "../contracts/index.js";
 import {
+  isAbsolutePath,
   REDACTED_SECRET,
   readJsonFileAsync,
   readJsonFileSync,
@@ -424,11 +425,14 @@ function resolveProjectRoot(
 function resolveProjectPath(value: string | undefined, projectRoot: string): string | undefined {
   const normalized = stringValue(value);
   if (normalized === undefined) return undefined;
-  return isAbsolute(normalized) ? resolve(normalized) : resolve(projectRoot, normalized);
+  // Already-absolute paths (POSIX, Windows drive-letter, or UNC) must be kept verbatim:
+  // node:path.resolve() is host-platform-specific and would wrongly prefix cwd to a
+  // Windows-style path when running on POSIX (e.g. Linux CI).
+  return isAbsolutePath(normalized) ? normalized : resolve(projectRoot, normalized);
 }
 
 function resolvePathMaybeRelative(value: string, cwd: string): string {
-  return isAbsolute(value) ? resolve(value) : resolve(cwd, value);
+  return isAbsolutePath(value) ? value : resolve(cwd, value);
 }
 
 async function findRepoProjectConfigPathAsync(
