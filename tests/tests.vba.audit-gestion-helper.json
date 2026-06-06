@@ -1,6 +1,18 @@
 {
   "tests": [
     {
+      "name": "Audit listado cache backend schema contract RED",
+      "procedure": "Test_AuditListadoCache_BackendSchemaContract_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice1", "schema", "backend"]
+    },
+    {
+      "name": "Audit listado cache idempotent indexes contract RED",
+      "procedure": "Test_AuditListadoCache_IdempotentIndexesContract_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice1", "schema", "indexes"]
+    },
+    {
       "name": "Audit gestion helper cache ON source contract RED",
       "procedure": "Test_AuditListadoHelper_CacheOn_SourceContract_RED",
       "expect": { "ok": true },

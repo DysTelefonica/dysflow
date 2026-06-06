@@ -12,6 +12,98 @@ Private Const TEST_NC_FALLBACK As Long = 900492
 Private Const TEST_NC_ROW As Long = 900493
 Private Const TEST_NC_KEYWORD_CLOSED As Long = 900494
 Private Const LOG_OPERATION_AUDIT_FALLBACK As String = "FormAuditCacheFallback"
+Private Const AUDIT_LIST_CACHE_TABLE As String = "TbCacheListadoNCAuditoria"
+
+Public Function Test_AuditListadoCache_BackendSchemaContract_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoCache_BackendSchemaContract_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    TestHelper.AddLog logs, "Act: ensure audit list-cache schema through backend getdb(), never frontend CurrentDb"
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+
+    If Not TableExistsInDb(db, AUDIT_LIST_CACHE_TABLE) Then assertError = "Missing backend table " & AUDIT_LIST_CACHE_TABLE: GoTo Fail
+    If FrontendHasLocalTable(AUDIT_LIST_CACHE_TABLE) Then assertError = "Frontend local table must not satisfy backend cache contract": GoTo Fail
+    If Not AssertField(db, "ID", dbLong, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "IDAuditoria", dbLong, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Tipo", dbText, 255, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Numero", dbText, 255, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Descripcion", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "CAUSARAIZ", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "RESPONSABLEIMPLANTACION", dbText, 255, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Estado", dbText, 255, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "FechaApertura", dbDate, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "FECHACIERRE", dbDate, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "RequiereControlEficacia", dbText, 25, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "ControlEficacia", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Notas", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Cerrada", dbText, 10, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Borrado", dbBoolean, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "AccionesCorrectivasConcatenadas", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "AccionesRealizadasConcatenadas", dbMemo, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "FechaCache", dbDate, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "CacheValida", dbBoolean, 0, logs, assertError) Then GoTo Fail
+    If Not AssertField(db, "Version", dbLong, 0, logs, assertError) Then GoTo Fail
+
+    Test_AuditListadoCache_BackendSchemaContract_RED = TestHelper.BuildJsonOk(logs, "audit-list-cache-backend-schema")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoCache_BackendSchemaContract_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoCache_BackendSchemaContract_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    TestHelper.EndTestSession logs
+End Function
+
+Public Function Test_AuditListadoCache_IdempotentIndexesContract_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoCache_IdempotentIndexesContract_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    TestHelper.AddLog logs, "Act: ensured schema twice to prove non-destructive idempotence"
+
+    If Not IndexIsUnique(db, AUDIT_LIST_CACHE_TABLE, "PK_TbCacheListadoNCAuditoria", "ID") Then
+        assertError = "Expected unique ID index PK_TbCacheListadoNCAuditoria"
+        GoTo Fail
+    End If
+    If Not IndexExistsInDb(db, AUDIT_LIST_CACHE_TABLE, "IX_TbCacheListadoNCAuditoria_AuditoriaValida") Then assertError = "Missing AuditoriaValida index": GoTo Fail
+    If Not IndexExistsInDb(db, AUDIT_LIST_CACHE_TABLE, "IX_TbCacheListadoNCAuditoria_EstadoValida") Then assertError = "Missing EstadoValida index": GoTo Fail
+
+    Test_AuditListadoCache_IdempotentIndexesContract_RED = TestHelper.BuildJsonOk(logs, "audit-list-cache-idempotent-indexes")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoCache_IdempotentIndexesContract_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoCache_IdempotentIndexesContract_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    TestHelper.EndTestSession logs
+End Function
 
 Public Function Test_AuditListadoHelper_CacheOn_SourceContract_RED() As String
     Dim logs As Collection
@@ -230,8 +322,68 @@ Cleanup:
 End Function
 
 Private Sub SchemaGateSlice1(ByVal p_Logs As Collection)
-    TestHelper.AddLog p_Logs, "Schema gate: TbAuditorias required IDAuditoria; TbNoConformidadesAuditoria required ID, CAUSARAIZ, RequiereControlEficacia; TbLogCache requires IDNoConformidad. No TbCacheListadoNCAuditoria exists; TbCacheListadoNC is project-side only. FK order: TbAuditorias -> TbNoConformidadesAuditoria."
+    TestHelper.AddLog p_Logs, "Schema gate: TbAuditorias IDAuditoria Long required; TbNoConformidadesAuditoria ID Long required, CAUSARAIZ LongText required, RequiereControlEficacia Text(25) required, ControlEficacia LongText; audit AC IDAccionCorrectiva Long required and ID parent Long; audit AR IDAccionRealizada Long required and IDAccionCorrectiva parent Long; TbLogCache IDNoConformidad Long required; TbCacheListadoNC uses RequiereControlEficacia Text(10) and ControlEficacia Text(255), so audit cache must diverge. FK order: TbAuditorias -> TbNoConformidadesAuditoria -> TbNCAuditoriaAccionCorrectivas -> TbNCAuditoriaAccionesRealizadas."
 End Sub
+
+Private Function AssertField(ByVal p_Db As DAO.Database, ByVal p_FieldName As String, ByVal p_Type As Long, ByVal p_Size As Long, ByVal p_Logs As Collection, ByRef p_Error As String) As Boolean
+    Dim fld As DAO.Field
+    On Error GoTo missing
+    Set fld = p_Db.TableDefs(AUDIT_LIST_CACHE_TABLE).Fields(p_FieldName)
+    If fld.Type <> p_Type Then p_Error = "Unexpected type for " & p_FieldName & ": " & CStr(fld.Type): Exit Function
+    If p_Size > 0 Then
+        If fld.Size <> p_Size Then p_Error = "Unexpected size for " & p_FieldName & ": " & CStr(fld.Size): Exit Function
+    End If
+    TestHelper.AddLog p_Logs, "Assert schema: " & p_FieldName & " type=" & CStr(p_Type) & " size=" & CStr(p_Size)
+    AssertField = True
+    Exit Function
+missing:
+    p_Error = "Missing field " & p_FieldName
+End Function
+
+Private Function TableExistsInDb(ByVal p_Db As DAO.Database, ByVal p_TableName As String) As Boolean
+    Dim tdf As DAO.TableDef
+    On Error GoTo notfound
+    Set tdf = p_Db.TableDefs(p_TableName)
+    TableExistsInDb = True
+    Exit Function
+notfound:
+    TableExistsInDb = False
+End Function
+
+Private Function FrontendHasLocalTable(ByVal p_TableName As String) As Boolean
+    Dim tdf As DAO.TableDef
+    On Error GoTo done
+    For Each tdf In CurrentDb.TableDefs
+        If StrComp(tdf.Name, p_TableName, vbTextCompare) = 0 Then
+            If Len(tdf.Connect) = 0 Then FrontendHasLocalTable = True
+            Exit Function
+        End If
+    Next tdf
+done:
+End Function
+
+Private Function IndexExistsInDb(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_IndexName As String) As Boolean
+    Dim idx As DAO.Index
+    On Error GoTo notfound
+    Set idx = p_Db.TableDefs(p_TableName).Indexes(p_IndexName)
+    IndexExistsInDb = True
+    Exit Function
+notfound:
+    IndexExistsInDb = False
+End Function
+
+Private Function IndexIsUnique(ByVal p_Db As DAO.Database, ByVal p_TableName As String, ByVal p_IndexName As String, ByVal p_FieldName As String) As Boolean
+    Dim idx As DAO.Index
+    On Error GoTo notfound
+    Set idx = p_Db.TableDefs(p_TableName).Indexes(p_IndexName)
+    If Not idx.Unique Then Exit Function
+    If idx.Fields.count <> 1 Then Exit Function
+    If StrComp(idx.Fields(0).Name, p_FieldName, vbTextCompare) <> 0 Then Exit Function
+    IndexIsUnique = True
+    Exit Function
+notfound:
+    IndexIsUnique = False
+End Function
 
 Private Sub SeedAuditFixture(ByVal p_Db As DAO.Database, ByVal p_IDAuditoria As Long, ByVal p_IDNC As Long, ByVal p_Numero As String, ByVal p_Descripcion As String, ByVal p_Responsable As String, Optional ByVal p_Estado As String = "Abierta")
     p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID=" & CStr(p_IDNC), dbFailOnError
