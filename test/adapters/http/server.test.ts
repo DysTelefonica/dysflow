@@ -7,10 +7,12 @@ import { getStringParam, startDysflowHttpServer } from "../../../src/adapters/ht
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
+  createDysflowError,
   failureResult,
   successResult,
 } from "../../../src/core/contracts/index";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
+import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../../src/core/utils/index";
 
 const startedServers: Server[] = [];
 type HttpServerOptions = NonNullable<Parameters<typeof startDysflowHttpServer>[0]>;
@@ -54,6 +56,20 @@ function createFakeServices(overrides: Partial<HttpServices> = {}) {
     queryService: {
       execute: async (request: AccessQueryRequest) => {
         calls.queries.push(request);
+        if (
+          request.mode === "read" &&
+          typeof request.sql === "string" &&
+          request.sql.trim() !== "" &&
+          !looksLikeReadOnlySql(request.sql)
+        ) {
+          const keyword = detectWriteSqlKeyword(request.sql);
+          return failureResult(
+            createDysflowError(
+              "INVALID_READ_ONLY_QUERY",
+              `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`,
+            ),
+          );
+        }
         return successResult({ rows: [{ id: 1, name: "Ada" }] }, { durationMs: 5 });
       },
     },
@@ -185,7 +201,7 @@ describe("Dysflow HTTP adapter", () => {
     });
   });
 
-  it("rejects write SQL sent to the read route before it reaches core services", async () => {
+  it("rejects write SQL on the read route by translating the core guard's failure to HTTP 400", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -206,10 +222,12 @@ describe("Dysflow HTTP adapter", () => {
       diagnostics: [],
       durationMs: 0,
     });
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "read" },
+    ]);
   });
 
-  it("rejects Access SELECT INTO write SQL on the read route", async () => {
+  it("rejects Access SELECT INTO write SQL on the read route by delegating to the core guard", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -221,11 +239,13 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "SELECT * INTO ArchivedPeople FROM People", mode: "read" },
+    ]);
   });
 
   // now rejected: DDL keyword DROP is blocked by the hardened consolidated check
-  it("rejects SELECT without semicolon followed by DDL keyword", async () => {
+  it("rejects SELECT without semicolon followed by DDL keyword by delegating to the core guard", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -237,7 +257,9 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "SELECT * FROM People DROP TABLE People", mode: "read" },
+    ]);
   });
 
   it("accepts CTE queries starting with WITH ... SELECT on /query/read", async () => {
@@ -254,7 +276,7 @@ describe("Dysflow HTTP adapter", () => {
     expect(services.calls.queries).toHaveLength(1);
   });
 
-  it("rejects write CTE queries containing write keywords on /query/read", async () => {
+  it("rejects write CTE queries containing write keywords on /query/read via the core guard", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -268,7 +290,9 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "WITH cte AS (INSERT INTO People VALUES (1)) SELECT * FROM cte", mode: "read" },
+    ]);
   });
 
   it.each([
@@ -276,7 +300,7 @@ describe("Dysflow HTTP adapter", () => {
     "WITH changed AS (DELETE FROM People RETURNING *) SELECT * FROM changed",
     "EXEC dangerous_procedure",
     "selection FROM People",
-  ])("rejects non-read SQL edge case: %s", async (sql) => {
+  ])("rejects non-read SQL edge case by delegating to the core guard: %s", async (sql) => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -288,7 +312,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([{ sql, mode: "read" }]);
   });
 
   it("rejects request bodies above the configured size limit before parsing JSON", async () => {
@@ -467,7 +491,7 @@ describe("Dysflow HTTP adapter", () => {
     expect(services.calls.queries).toHaveLength(1);
   });
 
-  it("rejects two real statements separated by a top-level semicolon (SELECT then INSERT)", async () => {
+  it("rejects two real statements separated by a top-level semicolon (SELECT then INSERT) via the core guard", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -479,7 +503,9 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "SELECT 1; INSERT INTO T VALUES(1)", mode: "read" },
+    ]);
   });
 
   it("exposes operations from an injected FileAccessOperationRegistry via GET /access/operations (#176)", async () => {
@@ -514,7 +540,7 @@ describe("Dysflow HTTP adapter", () => {
     expect(result.data.some((op) => op.operationId === "op-test-http-shared-registry")).toBe(true);
   });
 
-  it("rejects INSERT followed by DELETE separated by a top-level semicolon", async () => {
+  it("rejects INSERT followed by DELETE separated by a top-level semicolon via the core guard", async () => {
     const services = createFakeServices();
     const server = await startTestServer({ services });
 
@@ -526,7 +552,9 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([]);
+    expect(services.calls.queries).toEqual([
+      { sql: "INSERT INTO T VALUES (1); DELETE FROM T", mode: "read" },
+    ]);
   });
 
   it("POST /access/cleanup with injected cleanupService calls cleanup with correct operationId and accessPath", async () => {

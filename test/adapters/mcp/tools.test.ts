@@ -9,7 +9,9 @@ import {
   rejectWriteSqlInReadMode,
   translateCoreResultToMcpContent,
 } from "../../../src/adapters/mcp/tools";
+import type { AccessQueryRequest } from "../../../src/core/contracts/index";
 import {
+  createDysflowError,
   failureResult,
   type OperationResult,
   successResult,
@@ -18,6 +20,7 @@ import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/ac
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
+import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../../src/core/utils/index";
 
 class FakeVbaService {
   public requests: unknown[] = [];
@@ -31,8 +34,20 @@ class FakeVbaService {
 class FakeQueryService {
   public requests: unknown[] = [];
   constructor(private readonly result: OperationResult<AccessQueryResult>) {}
-  async execute(request: unknown): Promise<OperationResult<AccessQueryResult>> {
+  async execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>> {
     this.requests.push(request);
+    if (
+      request &&
+      request.mode === "read" &&
+      typeof request.sql === "string" &&
+      request.sql.trim() !== ""
+    ) {
+      if (!looksLikeReadOnlySql(request.sql)) {
+        const keyword = detectWriteSqlKeyword(request.sql);
+        const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
+        return failureResult(createDysflowError("INVALID_READ_ONLY_QUERY", forbiddenMessage));
+      }
+    }
     return this.result;
   }
 }
@@ -1229,7 +1244,7 @@ describe("MCP tool registration over core services", () => {
       expect(result).toContain("DROP");
     });
 
-    it("blocks DDL via query_sql tool and never calls queryService", async () => {
+    it("blocks DDL via query_sql tool by delegating to queryService", async () => {
       const query = new FakeQueryService(successResult({ rows: [] }));
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1237,14 +1252,18 @@ describe("MCP tool registration over core services", () => {
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       });
 
-      await expect(
-        tools.find((t) => t.name === "query_sql")?.handler({ sql: "DROP TABLE TbConfiguracion" }),
-      ).resolves.toMatchObject({ isError: true });
+      const result = await tools
+        .find((t) => t.name === "query_sql")
+        ?.handler({ sql: "DROP TABLE TbConfiguracion" });
+      expect(result).toMatchObject({
+        isError: true,
+        content: [{ type: "text", text: expect.stringContaining("INVALID_READ_ONLY_QUERY") }],
+      });
 
-      expect(query.requests).toEqual([]);
+      expect(query.requests).toHaveLength(1);
     });
 
-    it("blocks DDL via dysflow_query_execute with mode read and never calls queryService", async () => {
+    it("blocks DDL via dysflow_query_execute with mode read by delegating to queryService", async () => {
       const query = new FakeQueryService(successResult({ rows: [] }));
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1252,13 +1271,15 @@ describe("MCP tool registration over core services", () => {
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       });
 
-      await expect(
-        tools
-          .find((t) => t.name === "dysflow_query_execute")
-          ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "read" }),
-      ).resolves.toMatchObject({ isError: true });
+      const result = await tools
+        .find((t) => t.name === "dysflow_query_execute")
+        ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "read" });
+      expect(result).toMatchObject({
+        isError: true,
+        content: [{ type: "text", text: expect.stringContaining("INVALID_READ_ONLY_QUERY") }],
+      });
 
-      expect(query.requests).toEqual([]);
+      expect(query.requests).toHaveLength(1);
     });
 
     it("allows write SQL via dysflow_query_execute with mode write when writes enabled", async () => {

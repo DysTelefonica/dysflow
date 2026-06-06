@@ -18,7 +18,7 @@ import {
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { looksLikeReadOnlySql, sanitizeSecrets } from "../../core/utils/index.js";
+import { sanitizeSecrets } from "../../core/utils/index.js";
 import type { JsonObjectSchema } from "../mcp/schemas/dysflow-schemas.js";
 import { CLEANUP_SCHEMA, HTTP_QUERY_SCHEMA, HTTP_VBA_EXECUTE_SCHEMA } from "../mcp/schemas.js";
 import { validateInput } from "../mcp/validator.js";
@@ -220,7 +220,8 @@ async function routeRequest(
       return;
     }
     const sql = getStringParam(body.data, "sql");
-    if (!looksLikeReadOnlySql(sql)) {
+    const result = await context.services.queryService.execute({ sql, mode: "read" });
+    if (!result.ok && result.error.code === "INVALID_READ_ONLY_QUERY") {
       sendOperationResult(
         response,
         failureResult(
@@ -233,10 +234,7 @@ async function routeRequest(
       );
       return;
     }
-    sendOperationResult(
-      response,
-      await context.services.queryService.execute({ sql, mode: "read" }),
-    );
+    sendOperationResult(response, result);
     return;
   }
 

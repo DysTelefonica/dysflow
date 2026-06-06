@@ -3,7 +3,7 @@ import { successResult } from "../../core/contracts/index.js";
 import type { AccessOperationRecord } from "../../core/operations/access-operation-registry.js";
 import { InMemoryAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
-import { registerMcpTools, rejectWriteSqlInReadMode } from "./dispatch.js";
+import { registerMcpTools } from "./dispatch.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -97,10 +97,6 @@ export function createDysflowMcpTools(
         const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
         const request = input as AccessQueryRequest;
-        if (request.mode === "read") {
-          const sqlGuard = rejectWriteSqlInReadMode(request.sql);
-          if (sqlGuard !== undefined) return invalidInput(sqlGuard);
-        }
         if (
           request.mode === "write" &&
           !(await isWriteAllowed(request, writesEnabled, writeAccessResolver))

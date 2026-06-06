@@ -8,7 +8,7 @@ import {
   mcpSchemaFor,
   parseMcpArgsJson,
 } from "./dispatch-common.js";
-import { rejectWriteSqlInReadMode } from "./dispatch-factory.js";
+
 import { MCP_TOOL_QUERY_ACTIONS } from "./dispatch-routes.js";
 import type { DysflowMcpToolName } from "./mcp-tool-registry.js";
 import {
@@ -136,8 +136,6 @@ export function buildAliasTools(
           sourcePath?: string;
         };
         const sql = request.sql ?? request.query ?? "";
-        const sqlGuard = rejectWriteSqlInReadMode(sql);
-        if (sqlGuard !== undefined) return invalidInput(sqlGuard);
         return translateCoreResultToMcpContent(
           await services.queryService.execute({
             sql,
