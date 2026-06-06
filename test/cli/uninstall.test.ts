@@ -358,4 +358,18 @@ describe("uninstall execution side-effects", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("rejects uninstalling a directory that does not contain dysflow or test-runtime in its path", async () => {
+    const unrelatedDir = join(tmpdir(), "unrelated-dir-for-uninstall-test");
+    await mkdir(unrelatedDir, { recursive: true });
+    try {
+      const context = { env: {} };
+      const result = await handleUninstallCommand(["--runtime-dir", unrelatedDir], context);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Aborted: Unsafe runtime directory path");
+      expect(await fileExists(unrelatedDir)).toBe(true);
+    } finally {
+      await rm(unrelatedDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -65,6 +65,16 @@ export function isSafeToDelete(dirPath: string, env: NodeJS.ProcessEnv): boolean
     return false;
   }
 
+  // Path-guard: Directory absolute path must contain "dysflow" or "test-runtime" or "test_runtime"
+  // to prevent accidental deletion of unrelated parent/user directories.
+  const hasSafeName =
+    normalized.includes("dysflow") ||
+    normalized.includes("test-runtime") ||
+    normalized.includes("test_runtime");
+  if (!hasSafeName) {
+    return false;
+  }
+
   const systemPaths = [
     env.SystemDrive ? path.join(env.SystemDrive, "/") : "c:/",
     env.SystemRoot ? path.resolve(env.SystemRoot) : "c:/windows",
