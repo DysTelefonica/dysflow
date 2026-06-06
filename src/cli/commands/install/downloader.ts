@@ -148,26 +148,7 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         }
 
         if (archiveResponse.status === 404) {
-          // Archive not available for this release — fall back to git clone
-          try {
-            await runCommand(
-              "git",
-              ["clone", "--depth", "1", "--branch", tagName, GITHUB_REPO_URL, packageRoot],
-              tempRoot,
-              { timeoutMs: 120_000 },
-            );
-            const commitSha = await tryResolveGitCommitSha(packageRoot);
-            await runCommand("pnpm", ["install", "--frozen-lockfile"], packageRoot, {
-              timeoutMs: 120_000,
-            });
-            await runCommand("pnpm", ["build"], packageRoot, { timeoutMs: 120_000 });
-            return { packageRoot, commitSha, cleanup };
-          } catch (cloneError) {
-            await cleanup();
-            throw new Error(
-              `Release archive not available and git clone failed: ${cloneError instanceof Error ? cloneError.message : String(cloneError)}`,
-            );
-          }
+          throw new Error(`Release archive not available for version ${tagName} (HTTP 404).`);
         }
 
         if (!archiveResponse.ok) {

@@ -7,6 +7,7 @@ import {
   successResult,
 } from "../contracts/index.js";
 import type { AccessOperationRegistry } from "./access-operation-registry.js";
+import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
 
 export type OsProcessInfo = {
   pid: number;
@@ -245,27 +246,6 @@ export function sameProcessStartTime(
   const tsB = Date.parse(b);
   if (Number.isNaN(tsA) || Number.isNaN(tsB)) return false;
   return Math.floor(tsA / 1000) === Math.floor(tsB / 1000);
-}
-
-function pathMatchesAccessPath(commandLine: string, accessPath: string): boolean {
-  const normalizedAccessPath = normalizePathForMatching(accessPath);
-  const tokenPattern = /"([^"]*)"|(\S+)/g;
-  let match: RegExpExecArray | null;
-  match = tokenPattern.exec(commandLine);
-  while (match !== null) {
-    const token = match[1] ?? match[2] ?? "";
-    if (normalizePathForMatching(token) === normalizedAccessPath) return true;
-    match = tokenPattern.exec(commandLine);
-  }
-
-  return false;
-}
-
-function normalizePathForMatching(value: string): string {
-  return value
-    .replace(/\\/g, "/")
-    .replace(/^\/+|\/+$/g, "")
-    .toLowerCase();
 }
 
 function formatError(error: unknown): string {

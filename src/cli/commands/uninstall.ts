@@ -5,6 +5,7 @@ import {
   fileExists,
   getHome,
   getSystemMarkerPath,
+  isSafeToDelete,
   removeAgentConfig,
   resolveAgentConfigPaths,
   resolveRuntimeDir,
@@ -63,12 +64,23 @@ export async function handleUninstallCommand(
   // Revert agent configurations
   const agentConfigPaths = resolveAgentConfigPaths(home);
   for (const agent of ALL_AGENTS) {
-    await removeAgentConfig(agent, agentConfigPaths);
+    try {
+      await removeAgentConfig(agent, agentConfigPaths);
+    } catch {
+      // Ignore cleanup failures on uninstall to ensure it proceeds
+    }
   }
 
   // Delete resolved runtime directory recursively if it exists
   const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
   if (await fileExists(runtimeDir)) {
+    if (!isSafeToDelete(runtimeDir, env)) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: `Aborted: Unsafe runtime directory path: ${runtimeDir}`,
+      };
+    }
     await rm(runtimeDir, { recursive: true, force: true });
   }
 

@@ -280,32 +280,17 @@ describe("createGitHubReleaseUpdateProvider — preparePackage", () => {
     }
   });
 
-  it("falls back to git clone on HTTP 404 archive and calls cleanup on clone failure", async () => {
+  it("throws an error on HTTP 404 archive not found", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
     try {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 
-      // git clone fails
-      execFileMock.mockImplementationOnce(
-        (
-          _file: unknown,
-          _args: unknown,
-          options: unknown,
-          callback: (...args: unknown[]) => void,
-        ) => {
-          const cb = typeof options === "function" ? options : callback;
-          if (cb) {
-            queueMicrotask(() => cb(new Error("git clone failed: repo not found"), null));
-          }
-        },
-      );
-
       const provider = createGitHubReleaseUpdateProvider();
       await expect(
         provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }),
-      ).rejects.toThrow(/git clone failed/);
+      ).rejects.toThrow(/Release archive not available for version v1.0.0/);
     } finally {
       globalThis.fetch = originalFetch;
     }

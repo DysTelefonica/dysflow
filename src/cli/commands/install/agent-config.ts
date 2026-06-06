@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { ensureObject, fileExists, readJson, writeJson } from "./file-utils.js";
+import { ensureObject, fileExists, readJson, writeJson, writeFileAtomically } from "./file-utils.js";
 
 export type AgentName = "codex" | "opencode" | "claude" | "pi";
 export const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
@@ -34,8 +34,7 @@ export async function removeDysflowMcpConfig(agent: AgentName, filePath: string)
     const raw = await readFile(filePath, "utf8");
     const updated = removeCodexMcpSection(raw);
     if (updated === raw) return;
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, updated, "utf8");
+    await writeFileAtomically(filePath, updated);
     return;
   }
 

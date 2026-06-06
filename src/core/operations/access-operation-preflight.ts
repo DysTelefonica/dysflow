@@ -1,5 +1,6 @@
 import type { Diagnostic } from "../contracts/index.js";
 import { createDiagnostic } from "../contracts/index.js";
+import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
 import type {
   OsProcessInfo,
   ProcessInspector,
@@ -103,8 +104,8 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     request: AccessOperationPreflightCleanupRequest,
   ): boolean {
     return (
-      normalizePath(record.accessPath) === normalizePath(request.accessPath) &&
-      normalizePath(record.projectRootAbs ?? "") === normalizePath(request.projectRoot)
+      normalizePathForMatching(record.accessPath) === normalizePathForMatching(request.accessPath) &&
+      normalizePathForMatching(record.projectRootAbs ?? "") === normalizePathForMatching(request.projectRoot)
     );
   }
 
@@ -229,14 +230,12 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       return;
     }
 
-    const normalizedAccessPath = normalizePathForMatching(request.accessPath);
-
     for (const process of processes) {
       if (process.name.toUpperCase() !== "MSACCESS.EXE") continue;
       if (handledPids.has(process.pid)) continue;
 
       if (process.commandLine === undefined) continue;
-      if (!pathMatchesAccessPath(process.commandLine, normalizedAccessPath)) continue;
+      if (!pathMatchesAccessPath(process.commandLine, request.accessPath)) continue;
 
       result.errors.push({
         operationId: "orphan",
@@ -291,12 +290,11 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       return;
     }
 
-    const normalizedAccessPath = normalizePathForMatching(record.accessPath);
     const matchingProcess = processes.find(
       (process) =>
         process.name.toUpperCase() === "MSACCESS.EXE" &&
         process.commandLine !== undefined &&
-        pathMatchesAccessPath(process.commandLine, normalizedAccessPath),
+        pathMatchesAccessPath(process.commandLine, record.accessPath),
     );
     if (matchingProcess !== undefined) {
       handledPids.add(matchingProcess.pid);
@@ -319,40 +317,7 @@ export function diagnosticsFromPreflightCleanup(
   );
 }
 
-function normalizePath(value: string): string {
-  return value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-}
 
-function normalizePathForMatching(value: string): string {
-  return value
-    .replace(/\\/g, "/")
-    .replace(/^\/+|\/+$/g, "")
-    .toLowerCase();
-}
-
-function pathMatchesAccessPath(commandLine: string, normalizedAccessPath: string): boolean {
-  const normalizedAccessPathLower = normalizedAccessPath.toLowerCase();
-
-  const tokenPattern = /"([^"]*)"|(\S+)/g;
-  const tokens: string[] = [];
-  let match = tokenPattern.exec(commandLine);
-  while (match !== null) {
-    const token = match[1] ?? match[2] ?? "";
-    if (token.length > 0) {
-      tokens.push(token.replace(/\\/g, "/").toLowerCase());
-    }
-    match = tokenPattern.exec(commandLine);
-  }
-
-  for (const token of tokens) {
-    const normalizedToken = token.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    if (normalizedToken === normalizedAccessPathLower) {
-      return true;
-    }
-  }
-
-  return false;
-}
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

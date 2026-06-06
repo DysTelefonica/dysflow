@@ -4,7 +4,7 @@ import {
   buildWriteFixtureRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
-import { looksLikeReadOnlySql } from "../../core/utils/index.js";
+import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../core/utils/index.js";
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
 import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
 import type { DysflowMcpToolName } from "./mcp-tool-registry.js";
@@ -26,13 +26,8 @@ import { validateInput } from "./validator.js";
  * Exported for contract testing.
  */
 export function rejectWriteSqlInReadMode(sql: string): string | undefined {
-  if (looksLikeReadOnlySql(sql)) return undefined;
-  const match = sql
-    .toLowerCase()
-    .match(/\b(insert|update|delete|create|drop|alter|truncate|into|exec|execute|grant|revoke)\b/);
-  const keyword = match
-    ? match[1].toUpperCase()
-    : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
+  const keyword = detectWriteSqlKeyword(sql);
+  if (keyword === undefined) return undefined;
   return `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
 }
 

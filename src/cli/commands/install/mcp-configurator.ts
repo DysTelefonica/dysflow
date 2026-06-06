@@ -1,7 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentConfigPaths, AgentName } from "./agent-config.js";
-import { ensureObject, fileExists, readJson, writeJson } from "./file-utils.js";
+import { ensureObject, fileExists, readJson, writeJson, writeFileAtomically } from "./file-utils.js";
 
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {
   if (agent === "codex") {
@@ -54,8 +54,7 @@ export function replaceCodexMcpSection(content: string, commandPath: string): st
 async function configureCodex(filePath: string, commandPath: string): Promise<void> {
   const raw = await readFile(filePath, "utf8").catch(() => "");
   const updated = replaceCodexMcpSection(raw, commandPath);
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, updated, "utf8");
+  await writeFileAtomically(filePath, updated);
 }
 
 async function configureOpencode(filePath: string, command: readonly string[]): Promise<void> {

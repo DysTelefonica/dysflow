@@ -1479,7 +1479,7 @@ describe("checksum verification during update", () => {
     }
   });
 
-  it("falls back to git clone on HTTP 404 archive response", async () => {
+  it("throws immediately on HTTP 404 archive response — does NOT fall back to git clone", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
@@ -1490,37 +1490,20 @@ describe("checksum verification during update", () => {
         status: 404,
       });
 
-      execFileMock.mockImplementation((_file, _args, options, callback) => {
-        const cb = typeof options === "function" ? options : callback;
-        if (cb) {
-          queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
-        }
-      });
-
       const provider = createGitHubReleaseUpdateProvider();
-      // This will fail at the pnpm build step in test (no real repo), but the important
-      // thing is that it DOES attempt git clone (execFileMock called with git clone args)
-      // and does NOT throw the HTTP-error message
-      try {
-        await provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" });
-      } catch {
-        // may throw from pnpm build failure in test env — that's fine
-      }
+      await expect(
+        provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
+      ).rejects.toThrow("Release archive not available for version v1.2.3 (HTTP 404)");
 
-      expect(execFileMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.arrayContaining(["clone", "--depth", "1", "--branch", "v1.2.3"]),
-        expect.anything(),
-        expect.anything(),
+      // fetch must have been called exactly once — no git clone attempt
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const cloneCalls = execFileMock.mock.calls.filter(
+        (call) => Array.isArray(call[1]) && (call[1] as string[]).includes("clone"),
       );
+      expect(cloneCalls).toHaveLength(0);
     } finally {
       globalThis.fetch = originalFetch;
-      execFileMock.mockImplementation((_file, _args, options, callback) => {
-        const cb = typeof options === "function" ? options : callback;
-        if (cb) {
-          queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
-        }
-      });
     }
   });
 });

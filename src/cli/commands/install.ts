@@ -73,7 +73,11 @@ export async function applyIntegrationSelection(
         await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir);
         continue;
       }
-      await removeAgentConfig(agent, agentConfigPaths);
+      try {
+        await removeAgentConfig(agent, agentConfigPaths);
+      } catch {
+        // Ignore cleanup failures for unselected agents
+      }
     }
     return {
       exitCode: 0,

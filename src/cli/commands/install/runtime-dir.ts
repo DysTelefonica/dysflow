@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 export const RUNTIME_MARKER_FILE = ".dysflow-marker";
@@ -53,4 +54,56 @@ export function resolveRuntimeDir(
     env.LOCALAPPDATA ?? path.join(env.USERPROFILE ?? env.HOME ?? "", "AppData", "Local");
 
   return path.join(localAppData, "dysflow");
+}
+
+export function isSafeToDelete(dirPath: string, env: NodeJS.ProcessEnv): boolean {
+  const resolved = path.resolve(dirPath);
+  const normalized = resolved.replace(/\\/g, "/").toLowerCase();
+
+  // Guard against empty, null, or root paths
+  if (!normalized || normalized.length <= 4) {
+    return false;
+  }
+
+  const systemPaths = [
+    env.SystemDrive ? path.join(env.SystemDrive, "/") : "c:/",
+    env.SystemRoot ? path.resolve(env.SystemRoot) : "c:/windows",
+    env.ProgramData ? path.resolve(env.ProgramData) : "c:/programdata",
+    env.ProgramFiles ? path.resolve(env.ProgramFiles) : "c:/program files",
+    env.ProgramFilesX86 ? path.resolve(env.ProgramFilesX86) : "c:/program files (x86)",
+    env.USERPROFILE ? path.resolve(env.USERPROFILE) : "",
+    env.HOME ? path.resolve(env.HOME) : "",
+    env.LOCALAPPDATA ? path.resolve(env.LOCALAPPDATA) : "",
+    env.APPDATA ? path.resolve(env.APPDATA) : "",
+    env.TEMP ? path.resolve(env.TEMP) : "",
+    env.TMP ? path.resolve(env.TMP) : "",
+    tmpdir() ? path.resolve(tmpdir()) : "",
+  ].filter(Boolean).map(p => path.resolve(p).replace(/\\/g, "/").toLowerCase());
+
+  // Add user folders
+  const usersDir = path.resolve(env.SystemDrive ?? "C:", "Users").replace(/\\/g, "/").toLowerCase();
+  systemPaths.push(usersDir);
+  systemPaths.push("c:/users");
+  systemPaths.push("/home");
+  systemPaths.push("/");
+
+  // Add standard profile subfolders to systemPaths
+  const userProfile = env.USERPROFILE || env.HOME;
+  if (userProfile) {
+    const resolvedProfile = path.resolve(userProfile);
+    const subfolders = ["documents", "desktop", "downloads", "pictures", "music", "videos"];
+    for (const sub of subfolders) {
+      systemPaths.push(path.join(resolvedProfile, sub).replace(/\\/g, "/").toLowerCase());
+    }
+  }
+
+  const systemPathsSet = new Set(systemPaths.map(p => p.replace(/\/$/, "")));
+
+  for (const sysDir of systemPathsSet) {
+    if (sysDir === normalized || sysDir.startsWith(normalized + "/")) {
+      return false;
+    }
+  }
+
+  return true;
 }

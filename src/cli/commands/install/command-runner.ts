@@ -1,10 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { execFile, type ExecFileOptions } from "node:child_process";
 
 export const MAX_SUBPROCESS_BUFFER_BYTES = 10 * 1024 * 1024;
-
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 function createCommandError(command: string, error: unknown): Error {
@@ -14,21 +10,39 @@ function createCommandError(command: string, error: unknown): Error {
   return new Error(`${command} failed.`);
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+function runCommandWithTimeout(
+  command: string,
+  args: readonly string[],
+  execCmd: string,
+  execArgs: string[],
+  options: ExecFileOptions,
+  timeoutMs: number,
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    let timer: NodeJS.Timeout | undefined;
+    const child = execFile(execCmd, execArgs, options, (error, stdout, stderr) => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (error) {
+        reject(error);
+      } else {
+        if (stdout && typeof stdout === "object" && "stdout" in stdout) {
+          resolve(stdout as any);
+        } else {
+          resolve({ stdout: stdout as string, stderr: stderr as string });
+        }
+      }
+    });
+
+    timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignore kill errors
+      }
+      reject(new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (reason) => {
-        clearTimeout(timer);
-        reject(reason);
-      },
-    );
   });
 }
 
@@ -43,15 +57,18 @@ export async function runCommand(
   const execCmd = isCmd ? process.env.ComSpec || "cmd.exe" : command;
   const execArgs = isCmd ? ["/d", "/s", "/c", `${command}.cmd`, ...args] : [...args];
   try {
-    await withTimeout(
-      execFileAsync(execCmd, execArgs, {
+    await runCommandWithTimeout(
+      command,
+      args,
+      execCmd,
+      execArgs,
+      {
         cwd,
         windowsHide: true,
         maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
         shell: false,
-      }),
+      },
       timeoutMs,
-      `${command} ${args.join(" ")}`,
     );
   } catch (error) {
     throw createCommandError(`${command} ${args.join(" ")}`, error);
@@ -69,15 +86,18 @@ export async function runCommandOutput(
   const execCmd = isCmd ? process.env.ComSpec || "cmd.exe" : command;
   const execArgs = isCmd ? ["/d", "/s", "/c", `${command}.cmd`, ...args] : [...args];
   try {
-    const { stdout } = await withTimeout(
-      execFileAsync(execCmd, execArgs, {
+    const { stdout } = await runCommandWithTimeout(
+      command,
+      args,
+      execCmd,
+      execArgs,
+      {
         cwd,
         windowsHide: true,
         maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
         shell: false,
-      }),
+      },
       timeoutMs,
-      `${command} ${args.join(" ")}`,
     );
     return String(stdout).trim();
   } catch (error) {
