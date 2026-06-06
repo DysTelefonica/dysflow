@@ -83,7 +83,7 @@ export async function resolveExecutionTarget(
     destinationRoot,
     projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
     projectId: undefined,
-    timeoutMs: context.processTimeoutMs,
-    processTimeoutMs: context.processTimeoutMs,
+    timeoutMs: context.processTimeoutMs ?? 30000,
+    processTimeoutMs: context.processTimeoutMs ?? 30000,
   });
 }
