@@ -1,5 +1,22 @@
 # Changelog
 
+## [v1.2.20] - 2026-06-06
+
+### Changed
+
+- **SQL read-only guard moved into core (#444)**: The read-only SQL check is now owned by `AccessQueryService.execute` in core; MCP and HTTP adapters delegate to it instead of re-implementing the keyword heuristic.
+- **Unified path normalization (#437)**: Added a platform-agnostic `isAbsolutePath()` in `src/core/utils/path-utils.ts` (POSIX, Windows drive-letter, UNC) and migrated all `node:path.isAbsolute` call sites; already-absolute paths are no longer passed through `node:path.resolve`, fixing cross-platform path resolution.
+
+### Fixed
+
+- **Guard destructive runtime delete (#434)**: The runtime delete path now verifies a path-safety check before removing files.
+- **Stop silent config data loss on corrupt JSON (#435)**: `readJson` rejects non-object JSON payloads instead of silently coercing them.
+- **Kill spawned child process on timeout (#438)**: `runCommandWithTimeout` now kills the spawned child on timeout to release file locks.
+
+### Security
+
+- **Update trust model documented (#436)**: The only update mechanism is the GitHub Release tar.gz verified via SHA-256 against the release `SHA256SUMS`; there is no git-clone/source-build fallback. Documented in `docs/security/update-trust-model.md`. `spawnPowerShellProcess` is documented as using `shell:false` with args as an array and a sandboxed environment.
+
 ## [v1.2.19] - 2026-06-06
 
 ### Fixed
