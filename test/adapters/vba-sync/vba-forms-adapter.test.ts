@@ -108,4 +108,120 @@ describe("VbaFormsAdapter", () => {
       error: { code: "VBA_CATALOG_WRITE_FAILED" },
     });
   });
+
+  // --- Task 3.2: form tools must NOT call runner-only orchestrator functions ---
+
+  it("validate_form_spec does not call resolveExecutionTarget or validateStrictContext", async () => {
+    const resolveExecutionTarget = vi.fn();
+    const validateStrictContext = vi.fn();
+    const orchestrator: VbaFormsOrchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget,
+      validateStrictContext,
+      executeMappedTool: vi.fn(),
+    };
+    const adapter = new VbaFormsAdapter(orchestrator);
+
+    await adapter.execute("validate_form_spec", {
+      spec: { name: "Form_NoRunner", kind: "Form", controls: [] },
+    });
+
+    expect(resolveExecutionTarget).not.toHaveBeenCalled();
+    expect(validateStrictContext).not.toHaveBeenCalled();
+  });
+
+  it("generate_form does not call resolveExecutionTarget or validateStrictContext", async () => {
+    const resolveExecutionTarget = vi.fn();
+    const validateStrictContext = vi.fn();
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-no-runner-"));
+    const orchestrator: VbaFormsOrchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: root,
+      resolveExecutionTarget,
+      validateStrictContext,
+      executeMappedTool: vi.fn(),
+    };
+    const adapter = new VbaFormsAdapter(orchestrator);
+
+    await adapter.execute("generate_form", {
+      spec: { name: "Form_NoRunner", kind: "Form", controls: [] },
+      destinationRoot: root,
+    });
+
+    expect(resolveExecutionTarget).not.toHaveBeenCalled();
+    expect(validateStrictContext).not.toHaveBeenCalled();
+  });
+
+  it("catalog_add_control does not call resolveExecutionTarget or validateStrictContext", async () => {
+    const resolveExecutionTarget = vi.fn();
+    const validateStrictContext = vi.fn();
+    const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-no-runner-"));
+    const orchestrator: VbaFormsOrchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: root,
+      resolveExecutionTarget,
+      validateStrictContext,
+      executeMappedTool: vi.fn(),
+    };
+    const adapter = new VbaFormsAdapter(orchestrator);
+
+    await adapter.execute("catalog_add_control", {
+      spec: { name: "Form_NoRunner", kind: "Form", controls: [] },
+      controlName: "btn",
+      controlType: "Button",
+    });
+
+    expect(resolveExecutionTarget).not.toHaveBeenCalled();
+    expect(validateStrictContext).not.toHaveBeenCalled();
+  });
+
+  it("harvest_form_catalog does not call resolveExecutionTarget or validateStrictContext", async () => {
+    const resolveExecutionTarget = vi.fn();
+    const validateStrictContext = vi.fn();
+    const orchestrator: VbaFormsOrchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget,
+      validateStrictContext,
+      executeMappedTool: vi.fn(),
+    };
+    const adapter = new VbaFormsAdapter(orchestrator);
+
+    await adapter.execute("harvest_form_catalog", { destinationRoot: "C:/repo" });
+
+    expect(resolveExecutionTarget).not.toHaveBeenCalled();
+    expect(validateStrictContext).not.toHaveBeenCalled();
+  });
+
+  it("generate_erd still calls executeMappedTool (runner path stays intact)", async () => {
+    const executeMappedTool = vi.fn().mockResolvedValue({ ok: true, data: {} });
+    const resolveExecutionTarget = vi.fn();
+    const validateStrictContext = vi.fn();
+    const orchestrator: VbaFormsOrchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget,
+      validateStrictContext,
+      executeMappedTool,
+    };
+    const adapter = new VbaFormsAdapter(orchestrator);
+
+    await adapter.execute("generate_erd", {
+      backendPath: "C:/db/backend.accdb",
+      erdPath: "C:/repo/erd.json",
+    });
+
+    expect(executeMappedTool).toHaveBeenCalledTimes(1);
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "generate_erd",
+      expect.any(Object),
+      expect.objectContaining({ action: "Generate-ERD" }),
+    );
+  });
 });

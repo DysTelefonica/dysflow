@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   createDysflowError,
@@ -6,29 +6,68 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import { isRecord, readJsonFileAsync, stringValue } from "../utils/index.js";
+import { isRecord, stringValue } from "../utils/index.js";
+
+// ---------------------------------------------------------------------------
+// I/O Port interfaces — owned by core, implemented by adapters
+// ---------------------------------------------------------------------------
+
+export interface FormFileSystemPort {
+  mkdir(path: string, options: { recursive: true }): Promise<string | undefined>;
+  readdir(path: string): Promise<string[]>;
+  readJson<T>(path: string): Promise<T>;
+  writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
+}
+
+export interface FormClockPort {
+  nowIso(): string;
+}
+
+// ---------------------------------------------------------------------------
+// Service options — only real, typed dependencies
+// ---------------------------------------------------------------------------
 
 export type VbaFormServiceOptions = {
   cwd?: string;
-  executor?: unknown;
-  env?: Record<string, string | undefined>;
-  resolveExecutionTarget?: unknown;
-  validateStrictContext?: unknown;
+  fileSystem?: FormFileSystemPort;
+  clock?: FormClockPort;
 };
+
+// ---------------------------------------------------------------------------
+// Default Node.js port implementations (used when no explicit port is injected)
+// ---------------------------------------------------------------------------
+
+const nodeFileSystem: FormFileSystemPort = {
+  mkdir: (path, options) => mkdir(path, options),
+  readdir: (path) => readdir(path),
+  readJson: async <T>(path: string): Promise<T> => {
+    const raw = await readFile(path, "utf8");
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      throw new Error(`Invalid JSON file: ${path}`);
+    }
+  },
+  writeFile: (path, data, encoding) => writeFile(path, data, encoding),
+};
+
+const nodeClock: FormClockPort = {
+  nowIso: () => new Date().toISOString(),
+};
+
+// ---------------------------------------------------------------------------
+// VbaFormService
+// ---------------------------------------------------------------------------
 
 export class VbaFormService {
   private readonly cwd: string;
-  private readonly executor?: unknown;
-  private readonly env: Record<string, string | undefined>;
-  private readonly resolveExecutionTarget?: unknown;
-  private readonly validateStrictContext?: unknown;
+  private readonly fileSystem: FormFileSystemPort;
+  private readonly clock: FormClockPort;
 
   constructor(options: VbaFormServiceOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
-    this.executor = options.executor;
-    this.env = options.env ?? process.env;
-    this.resolveExecutionTarget = options.resolveExecutionTarget;
-    this.validateStrictContext = options.validateStrictContext;
+    this.fileSystem = options.fileSystem ?? nodeFileSystem;
+    this.clock = options.clock ?? nodeClock;
   }
 
   async validateFormSpec(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
@@ -51,7 +90,7 @@ export class VbaFormService {
     const destinationRoot =
       stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const formsDir = resolve(destinationRoot, "forms");
-    await mkdir(formsDir, { recursive: true });
+    await this.fileSystem.mkdir(formsDir, { recursive: true });
 
     const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
     const outputPath = resolve(formsDir, fileName);
@@ -60,12 +99,12 @@ export class VbaFormService {
         name: spec.data.name,
         kind: spec.data.kind,
         controls: spec.data.controls,
-        generatedAt: new Date().toISOString(),
+        generatedAt: this.clock.nowIso(),
       },
       null,
       2,
     );
-    await writeFile(outputPath, payload, "utf8");
+    await this.fileSystem.writeFile(outputPath, payload, "utf8");
 
     return successResult({
       generated: true,
@@ -96,9 +135,9 @@ export class VbaFormService {
         createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlType."),
       );
     }
-    const catalog = await readJsonFileAsync<Record<string, unknown>>(catalogPath).catch(
-      () => ({}) as Record<string, unknown>,
-    );
+    const catalog = await this.fileSystem
+      .readJson<Record<string, unknown>>(catalogPath)
+      .catch(() => ({}) as Record<string, unknown>);
     const forms = isRecord(catalog.forms) ? (catalog.forms as Record<string, unknown>) : {};
     const controls = Array.isArray(forms[spec.data.name])
       ? (forms[spec.data.name] as unknown[])
@@ -107,8 +146,8 @@ export class VbaFormService {
     forms[spec.data.name] = controls;
     const updated = { ...catalog, forms };
     try {
-      await mkdir(resolve(catalogPath, ".."), { recursive: true });
-      await writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");
+      await this.fileSystem.mkdir(resolve(catalogPath, ".."), { recursive: true });
+      await this.fileSystem.writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");
     } catch (err) {
       return failureResult(
         createDysflowError(
@@ -141,9 +180,9 @@ export class VbaFormService {
           !entry.toLowerCase().endsWith(".report.json")
         )
           continue;
-        const spec = await readJsonFileAsync<Record<string, unknown>>(resolve(folder, entry)).catch(
-          () => undefined,
-        );
+        const spec = await this.fileSystem
+          .readJson<Record<string, unknown>>(resolve(folder, entry))
+          .catch(() => undefined);
         if (spec === undefined) continue;
         const controls = Array.isArray(spec.controls) ? spec.controls : [];
         catalog.push({
@@ -175,7 +214,7 @@ export class VbaFormService {
     const specPath = stringValue(params.specPath);
     const loaded =
       specFromInput ??
-      (specPath ? await readJsonFileAsync<Record<string, unknown>>(specPath) : undefined);
+      (specPath ? await this.fileSystem.readJson<Record<string, unknown>>(specPath) : undefined);
     if (loaded === undefined) {
       return failureResult(
         createDysflowError("FORM_SPEC_MISSING", "validate_form_spec requires spec or specPath."),
@@ -214,7 +253,7 @@ export class VbaFormService {
 
   private async safeReadDir(path: string): Promise<string[]> {
     try {
-      return await readdir(path);
+      return await this.fileSystem.readdir(path);
     } catch {
       return [];
     }

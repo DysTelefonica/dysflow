@@ -1,9 +1,10 @@
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import {
   createDysflowError,
   failureResult,
   type OperationResult,
 } from "../../core/contracts/index.js";
-import { VbaFormService } from "../../core/services/vba-form-service.js";
+import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
@@ -18,6 +19,22 @@ const FORMS_MAPPINGS: Record<string, DirectMapping> = {
       erdPath: stringValue(input.erdPath),
     }),
   ),
+};
+
+// Node.js implementation of the form filesystem port.
+// Adapters own the concrete I/O; core owns only the interface.
+const nodeFormFileSystem: FormFileSystemPort = {
+  mkdir: (path, options) => mkdir(path, options),
+  readdir: (path) => readdir(path),
+  readJson: async <T>(path: string): Promise<T> => {
+    const raw = await readFile(path, "utf8");
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      throw new Error(`Invalid JSON file: ${path}`);
+    }
+  },
+  writeFile: (path, data, encoding) => writeFile(path, data, encoding),
 };
 
 export interface VbaFormsOrchestrator {
@@ -41,11 +58,8 @@ export class VbaFormsAdapter {
 
   constructor(private readonly orchestrator: VbaFormsOrchestrator) {
     this.formService = new VbaFormService({
-      executor: this.orchestrator.executor,
-      env: this.orchestrator.env,
-      resolveExecutionTarget: this.orchestrator.resolveExecutionTarget.bind(this.orchestrator),
-      validateStrictContext: this.orchestrator.validateStrictContext.bind(this.orchestrator),
       cwd: this.orchestrator.cwd,
+      fileSystem: nodeFormFileSystem,
     });
   }
 
