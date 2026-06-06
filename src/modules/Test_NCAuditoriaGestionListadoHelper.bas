@@ -15,6 +15,14 @@ Private Const TEST_NC_CACHE_VALID As Long = 900495
 Private Const TEST_NC_CACHE_INVALID As Long = 900496
 Private Const TEST_NC_CACHE_FALLBACK As Long = 900497
 Private Const TEST_NC_CACHE_CLOSED As Long = 900498
+Private Const TEST_NC_PHASE3_DESC As Long = 900499
+Private Const TEST_NC_PHASE3_CAUSA As Long = 900500
+Private Const TEST_NC_PHASE3_AC As Long = 900501
+Private Const TEST_NC_PHASE3_AR As Long = 900502
+Private Const TEST_AC_PHASE3 As Long = 900503
+Private Const TEST_AR_PHASE3 As Long = 900504
+Private Const TEST_AC_PHASE3_AR As Long = 900505
+Private Const TEST_NC_PHASE3_HIGH As Long = 900506
 Private Const LOG_OPERATION_AUDIT_FALLBACK As String = "FormAuditCacheFallback"
 Private Const AUDIT_LIST_CACHE_TABLE As String = "TbCacheListadoNCAuditoria"
 
@@ -425,6 +433,93 @@ Cleanup:
     TestHelper.EndTestSession logs
 End Function
 
+Public Function Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    CleanupSlice1 db
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    SeedAuditParityGraph db, logs
+    TestHelper.AddLog logs, "Arrange: seeded FK graph in order Auditoria -> NC -> AC -> AR; cache is empty before rebuild"
+
+    If Not RebuildNCAuditoriaListadoCache(TEST_AUD_ID, errMsg) Then Err.Raise 1000, , errMsg
+    If Not AssertKeywordFindsOnly(TEST_NC_PHASE3_DESC, "PH3-DESC-ONLY", logs, assertError) Then GoTo Fail
+    If Not AssertKeywordFindsOnly(TEST_NC_PHASE3_CAUSA, "PH3-CAUSA-ONLY", logs, assertError) Then GoTo Fail
+    If Not AssertKeywordFindsOnly(TEST_NC_PHASE3_AC, "PH3-AC-ONLY", logs, assertError) Then GoTo Fail
+    If Not AssertKeywordFindsOnly(TEST_NC_PHASE3_AR, "PH3-AR-ONLY", logs, assertError) Then GoTo Fail
+    If CountRows(db, "TbLogCache", "TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'") <> 0 Then
+        assertError = "Keyword parity cache hits must not log fallback"
+        GoTo Fail
+    End If
+
+    Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED = TestHelper.BuildJsonOk(logs, "audit-cache-keyword-parity")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then CleanupSlice1 db
+    TestHelper.EndTestSession logs
+End Function
+
+Public Function Test_AuditListadoCache_Invalidation_Phase3_RED() As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim errMsg As String
+    Dim assertError As String
+
+    On Error GoTo EH
+    Set logs = TestHelper.NewLogs()
+    If Not TestHelper.BeginTestSession(logs, errMsg) Then
+        Test_AuditListadoCache_Invalidation_Phase3_RED = TestHelper.BuildJsonFail(errMsg, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(errMsg)
+    SchemaGateSlice1 logs
+    CleanupSlice1 db
+    If Not EnsureNCAuditoriaListadoCacheSchema(errMsg) Then Err.Raise 1000, , errMsg
+    SeedAuditParityGraph db, logs
+    If Not RebuildNCAuditoriaListadoCache(TEST_AUD_ID, errMsg) Then Err.Raise 1000, , errMsg
+
+    If Not InvalidateNCAuditoriaListadoCacheItem(TEST_NC_PHASE3_DESC, errMsg) Then Err.Raise 1000, , errMsg
+    If CountRows(db, AUDIT_LIST_CACHE_TABLE, "ID=" & CStr(TEST_NC_PHASE3_DESC) & " AND CacheValida=True") <> 0 Then
+        assertError = "Item invalidation must mark the deterministic cache row invalid"
+        GoTo Fail
+    End If
+    If Not InvalidateNCAuditoriaListadoCacheAll(TEST_AUD_ID, errMsg) Then Err.Raise 1000, , errMsg
+    If CountRows(db, AUDIT_LIST_CACHE_TABLE, "IDAuditoria=" & CStr(TEST_AUD_ID) & " AND CacheValida=True") <> 0 Then
+        assertError = "Audit-wide invalidation must clear all valid rows for the test audit"
+        GoTo Fail
+    End If
+
+    Test_AuditListadoCache_Invalidation_Phase3_RED = TestHelper.BuildJsonOk(logs, "audit-cache-invalidation")
+    GoTo Cleanup
+Fail:
+    Test_AuditListadoCache_Invalidation_Phase3_RED = TestHelper.BuildJsonFail(assertError, logs)
+    GoTo Cleanup
+EH:
+    Test_AuditListadoCache_Invalidation_Phase3_RED = TestHelper.BuildJsonFail(Err.Description, logs)
+Cleanup:
+    On Error Resume Next
+    If Not db Is Nothing Then CleanupSlice1 db
+    TestHelper.EndTestSession logs
+End Function
+
 Private Sub SchemaGateSlice1(ByVal p_Logs As Collection)
     TestHelper.AddLog p_Logs, "Schema gate: TbAuditorias IDAuditoria Long required; TbNoConformidadesAuditoria ID Long required, CAUSARAIZ LongText required, RequiereControlEficacia Text(25) required, ControlEficacia LongText; audit AC IDAccionCorrectiva Long required and ID parent Long; audit AR IDAccionRealizada Long required and IDAccionCorrectiva parent Long; TbLogCache IDNoConformidad Long required; TbCacheListadoNC uses RequiereControlEficacia Text(10) and ControlEficacia Text(255), so audit cache must diverge. FK order: TbAuditorias -> TbNoConformidadesAuditoria -> TbNCAuditoriaAccionCorrectivas -> TbNCAuditoriaAccionesRealizadas."
 End Sub
@@ -502,11 +597,42 @@ End Sub
 Private Sub CleanupSlice1(ByVal p_Db As DAO.Database)
     p_Db.Execute "DELETE FROM TbLogCache WHERE TipoOperacion='" & LOG_OPERATION_AUDIT_FALLBACK & "'", dbFailOnError
     If TableExistsInDb(p_Db, AUDIT_LIST_CACHE_TABLE) Then
-        p_Db.Execute "DELETE FROM " & AUDIT_LIST_CACHE_TABLE & " WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_CACHE_FALLBACK), dbFailOnError
+        p_Db.Execute "DELETE FROM " & AUDIT_LIST_CACHE_TABLE & " WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_PHASE3_HIGH), dbFailOnError
     End If
-    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_CACHE_FALLBACK), dbFailOnError
+    p_Db.Execute "DELETE FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada=" & CStr(TEST_AR_PHASE3), dbFailOnError
+    p_Db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=" & CStr(TEST_AC_PHASE3), dbFailOnError
+    p_Db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=" & CStr(TEST_AC_PHASE3_AR), dbFailOnError
+    p_Db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID BETWEEN " & CStr(TEST_NC_CACHE_EXPECTED) & " AND " & CStr(TEST_NC_PHASE3_HIGH), dbFailOnError
     p_Db.Execute "DELETE FROM TbAuditorias WHERE IDAuditoria=" & CStr(TEST_AUD_ID), dbFailOnError
 End Sub
+
+Private Sub SeedAuditParityGraph(ByVal p_Db As DAO.Database, ByVal p_Logs As Collection)
+    SeedAuditFixture p_Db, TEST_AUD_ID, TEST_NC_PHASE3_DESC, "AUD-PH3-D", "PH3-DESC-ONLY", "QA PH3"
+    p_Db.Execute "INSERT INTO TbNoConformidadesAuditoria " & _
+                 "(ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereControlEficacia, Tipo, ESTADO, Borrado) VALUES (" & _
+                 CStr(TEST_NC_PHASE3_CAUSA) & ", " & CStr(TEST_AUD_ID) & ", Date(), 'AUD-PH3-C', 'PH3 neutral desc causa', 'PH3-CAUSA-ONLY', 'QA PH3', 'No', 'Auditoria', 'Abierta', 0)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNoConformidadesAuditoria " & _
+                 "(ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereControlEficacia, Tipo, ESTADO, Borrado) VALUES (" & _
+                 CStr(TEST_NC_PHASE3_AC) & ", " & CStr(TEST_AUD_ID) & ", Date(), 'AUD-PH3-A', 'PH3 neutral desc ac', 'PH3 neutral causa ac', 'QA PH3', 'No', 'Auditoria', 'Abierta', 0)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNoConformidadesAuditoria " & _
+                 "(ID, IDAuditoria, FechaApertura, Numero, DESCRIPCION, CAUSARAIZ, RESPONSABLEIMPLANTACION, RequiereControlEficacia, Tipo, ESTADO, Borrado) VALUES (" & _
+                 CStr(TEST_NC_PHASE3_AR) & ", " & CStr(TEST_AUD_ID) & ", Date(), 'AUD-PH3-R', 'PH3 neutral desc ar', 'PH3 neutral causa ar', 'QA PH3', 'No', 'Auditoria', 'Abierta', 0)", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAuditoriaAccionCorrectivas (IDAccionCorrectiva, ID, NAccion, AccionCorrectiva, FechaAccionCorrectiva, ESTADO, Responsable) VALUES (" & CStr(TEST_AC_PHASE3) & ", " & CStr(TEST_NC_PHASE3_AC) & ", 1, 'PH3-AC-ONLY', Date(), 'Abierta', 'QA PH3')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAuditoriaAccionCorrectivas (IDAccionCorrectiva, ID, NAccion, AccionCorrectiva, FechaAccionCorrectiva, ESTADO, Responsable) VALUES (" & CStr(TEST_AC_PHASE3_AR) & ", " & CStr(TEST_NC_PHASE3_AR) & ", 1, 'PH3 neutral ac ar', Date(), 'Abierta', 'QA PH3')", dbFailOnError
+    p_Db.Execute "INSERT INTO TbNCAuditoriaAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, FechaAccionRealizada, FechaInicio, FechaFinPrevista, ESTADO, Responsable) VALUES (" & CStr(TEST_AR_PHASE3) & ", " & CStr(TEST_AC_PHASE3_AR) & ", 1, 'PH3-AR-ONLY', Date(), Date(), Date(), 'Abierta', 'QA PH3')", dbFailOnError
+    TestHelper.AddLog p_Logs, "Seed: deterministic Phase 3 audit graph includes description, cause, AC, and AR keyword-only rows"
+End Sub
+
+Private Function AssertKeywordFindsOnly(ByVal p_ExpectedID As Long, ByVal p_Keyword As String, ByVal p_Logs As Collection, ByRef p_Error As String) As Boolean
+    Dim errMsg As String
+    Dim col As Collection
+
+    Set col = GetNCAuditoriaGestionFiltradas(p_IDAuditoria:=TEST_AUD_ID, p_PalabraClave:=p_Keyword, p_CacheEnabled:=True, p_Error:=errMsg)
+    If errMsg <> "" Then p_Error = errMsg: Exit Function
+    If Not AssertCollectionHasOnlyAuditId(col, p_ExpectedID, p_Logs, p_Error) Then Exit Function
+    TestHelper.AddLog p_Logs, "Assert keyword parity via cache for " & p_Keyword
+    AssertKeywordFindsOnly = True
+End Function
 
 Private Sub SeedAuditCacheRow(ByVal p_Db As DAO.Database, ByVal p_IDAuditoria As Long, ByVal p_IDNC As Long, ByVal p_Numero As String, ByVal p_Descripcion As String, ByVal p_CacheValida As Boolean, Optional ByVal p_Estado As String = "Abierta", Optional ByVal p_Cerrada As String = "No")
     p_Db.Execute "DELETE FROM " & AUDIT_LIST_CACHE_TABLE & " WHERE ID=" & CStr(p_IDNC), dbFailOnError

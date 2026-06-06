@@ -206,6 +206,8 @@ Public Sub RefreshNCAuditoriaGestionCaches(Optional ByRef p_Error As String)
     p_Error = ""
     If Not TableExists(AUDIT_CACHE_TABLE) Then
         LogFallback "Audit cache refresh skipped: validated audit cache source is not available"
+    ElseIf Not RebuildNCAuditoriaListadoCache(0, p_Error) Then
+        Err.Raise 1000
     End If
     Exit Sub
 

@@ -53,6 +53,18 @@
       "procedure": "Test_AuditListadoHelper_NoValidCacheFallback_Phase2_RED",
       "expect": { "ok": true },
       "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice2", "fallback", "telemetry"]
+    },
+    {
+      "name": "Audit listado cache rebuild keyword parity phase 3",
+      "procedure": "Test_AuditListadoCache_RebuildKeywordParity_Phase3_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice3", "rebuild", "parity"]
+    },
+    {
+      "name": "Audit listado cache invalidation phase 3",
+      "procedure": "Test_AuditListadoCache_Invalidation_Phase3_RED",
+      "expect": { "ok": true },
+      "tags": ["atomic", "audit-backend-list-cache", "issue-57", "slice3", "invalidation"]
     }
   ]
 }
