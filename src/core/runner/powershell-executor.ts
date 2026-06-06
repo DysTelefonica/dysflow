@@ -68,6 +68,16 @@ export const POWERSHELL_SYSTEM_ENV_KEYS = [
   "USER",
 ] as const;
 
+/**
+ * Constructs the environment object passed to the child PowerShell process.
+ *
+ * Only keys listed in {@link POWERSHELL_SYSTEM_ENV_KEYS} are copied from the host
+ * environment. All other host variables — including secrets, tokens, and credentials
+ * that may be present in `process.env` — are NOT forwarded to the child process.
+ *
+ * The `override` map is merged last, allowing callers to inject process-specific
+ * variables (e.g. `DYSFLOW_ACCESS_PASSWORD`) without exposing the full host environment.
+ */
 function buildChildEnv(
   override?: Record<string, string | undefined>,
 ): Record<string, string | undefined> {
@@ -83,6 +93,26 @@ function buildChildEnv(
   return { ...base, ...override };
 }
 
+/**
+ * Spawns a PowerShell (or arbitrary) process and returns a settled result.
+ *
+ * **Security properties — do not remove these options:**
+ *
+ * - `shell: false` — the executable and arguments are passed directly to the OS as an
+ *   array, never interpreted by a shell. Shell metacharacters (spaces, quotes, pipes,
+ *   semicolons, backticks) in `options.args` values are therefore inert and cannot be
+ *   used to inject additional commands. Callers that construct `args` from
+ *   externally-derived input (user data, file paths, query parameters) are still
+ *   responsible for validating those values before passing them here; `shell: false`
+ *   eliminates shell injection but does not validate argument semantics.
+ *
+ * - `windowsHide: true` — prevents a visible console window from flashing on Windows.
+ *
+ * - env sandbox via {@link buildChildEnv} — only the keys in
+ *   {@link POWERSHELL_SYSTEM_ENV_KEYS} are forwarded from the host environment.
+ *   Host secrets (API tokens, passwords, etc.) are NOT inherited by the child unless
+ *   the caller explicitly passes them through `options.env`.
+ */
 export function spawnPowerShellProcess(
   options: PowerShellProcessOptions,
 ): Promise<PowerShellProcessResult> {

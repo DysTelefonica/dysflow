@@ -39,6 +39,20 @@ afterEach(() => {
 const spawnOptions = (): { env?: Record<string, unknown> } =>
   (mockSpawn.mock.calls.at(0)?.[2] as { env?: Record<string, unknown> }) ?? {};
 
+describe("spawnPowerShellProcess — spawn security options", () => {
+  it("spawns with shell:false so args are never shell-interpolated", async () => {
+    await spawnPowerShellProcess({
+      args: ["-Command", "exit 0"],
+      timeoutMs: 5_000,
+    });
+
+    // The third argument to spawn() is the options object.
+    const capturedOptions = mockSpawn.mock.calls.at(0)?.[2] as { shell?: unknown };
+    expect(capturedOptions).toBeDefined();
+    expect(capturedOptions.shell).toBe(false);
+  });
+});
+
 describe("spawnPowerShellProcess — child env construction", () => {
   it("does NOT forward non-allowlisted host secrets to the child process", async () => {
     await spawnPowerShellProcess({

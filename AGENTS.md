@@ -41,3 +41,6 @@ Commands:
 - Conventional commits. No AI co-author / attribution lines in commit messages.
 - A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.8` → title `v1.2.8`).
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
+- Update path security: the ONLY update mechanism is the GitHub Release tar.gz with SHA-256
+  verification. There is NO git-clone / source-build fallback. See
+  [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
