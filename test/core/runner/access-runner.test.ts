@@ -40,7 +40,7 @@ describe("AccessPowerShellRunner", () => {
       calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
       return {
         exitCode: 0,
-        stdout: '{"returnValue":42}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":42}',
         stderr: "",
         durationMs: 12,
         timedOut: false,
@@ -111,7 +111,7 @@ describe("AccessPowerShellRunner", () => {
       calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
       return {
         exitCode: 0,
-        stdout: '{"returnValue":true}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":true}',
         stderr: "",
         durationMs: 9,
         timedOut: false,
@@ -152,7 +152,7 @@ describe("AccessPowerShellRunner", () => {
       calls.push({ command, args, timeoutMs: options.timeoutMs, env: options.env });
       return {
         exitCode: 0,
-        stdout: '{"comparison":{"missingInBackend":[],"extraInBackend":[]}}',
+        stdout: 'DYSFLOW_RESULT {"comparison":{"missingInBackend":[],"extraInBackend":[]}}',
         stderr: "",
         durationMs: 8,
         timedOut: false,
@@ -202,7 +202,7 @@ describe("AccessPowerShellRunner", () => {
       calls.push({ cmd, args, env: options.env });
       return {
         exitCode: 0,
-        stdout: '{"rows":[]}',
+        stdout: 'DYSFLOW_RESULT {"rows":[]}',
         stderr: "",
         durationMs: 8,
         timedOut: false,
@@ -246,7 +246,7 @@ describe("AccessPowerShellRunner", () => {
       calls.push({ args });
       return {
         exitCode: 0,
-        stdout: '{"rows":[]}',
+        stdout: 'DYSFLOW_RESULT {"rows":[]}',
         stderr: "",
         durationMs: 8,
         timedOut: false,
@@ -343,7 +343,7 @@ describe("AccessPowerShellRunner", () => {
       events.push(`end:${options.operationId}`);
       return {
         exitCode: 0,
-        stdout: '{"returnValue":true}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":true}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -438,7 +438,7 @@ describe("AccessPowerShellRunner", () => {
     const runner = new AccessPowerShellRunner({
       executor: async () => ({
         exitCode: 0,
-        stdout: "{}",
+        stdout: "DYSFLOW_RESULT {}",
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -480,7 +480,7 @@ describe("AccessPowerShellRunner", () => {
     const runner = new AccessPowerShellRunner({
       executor: async () => ({
         exitCode: 0,
-        stdout: "{}",
+        stdout: "DYSFLOW_RESULT {}",
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -520,7 +520,7 @@ describe("AccessPowerShellRunner", () => {
       await Promise.allSettled([captureTask]);
       return {
         exitCode: 0,
-        stdout: '{"returnValue":42}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":42}',
         stderr: "",
         durationMs: 12,
         timedOut: false,
@@ -783,6 +783,122 @@ describe("AccessPowerShellRunner", () => {
     });
   });
 
+  // --- DYSFLOW_RESULT sentinel contract (issue #440) ---
+
+  it("extracts result from DYSFLOW_RESULT sentinel line ignoring surrounding diagnostic braces", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: [
+        "DEBUG: connecting {host=localhost}",
+        'DYSFLOW_RESULT {"ok":true,"data":42}',
+        "DEBUG: done {elapsed=12ms}",
+      ].join("\n"),
+      stderr: "",
+      durationMs: 10,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: true, data: { ok: true, data: 42 } });
+  });
+
+  it("extracts result when sentinel is the only stdout line (clean output)", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: 'DYSFLOW_RESULT {"ok":true,"returnValue":99}',
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: true, data: { ok: true, returnValue: 99 } });
+  });
+
+  it("maps missing DYSFLOW_RESULT sentinel to RUNNER_INVALID_JSON (no silent fallback)", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: '{"ok":true}',
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+  });
+
+  it("maps duplicate DYSFLOW_RESULT sentinel lines to RUNNER_INVALID_JSON", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: ['DYSFLOW_RESULT {"ok":true}', 'DYSFLOW_RESULT {"ok":false}'].join("\n"),
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+  });
+
+  it("maps malformed JSON after DYSFLOW_RESULT sentinel to RUNNER_INVALID_JSON", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: "DYSFLOW_RESULT not-valid-json",
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+  });
+
   it("each runner gets its own isolated in-memory registry by default and does not share state", () => {
     const runner1 = new AccessPowerShellRunner({
       executor: async () => ({
@@ -887,7 +1003,12 @@ describe("Cross-process lock for .accdb", () => {
       return;
     }
     const dbPath = join(process.cwd(), "E2E_testing/NoConformidades.accdb");
-    const runner = new AccessPowerShellRunner();
+    // Pass scriptPath explicitly so the test always uses the dev script regardless of DYSFLOW_HOME.
+    // AGENTS.md: "Never modify the production runtime at %LOCALAPPDATA%\dysflow" — tests must
+    // not inadvertently use it either.
+    const runner = new AccessPowerShellRunner({
+      scriptPath: join(process.cwd(), "scripts/dysflow-access-runner.ps1"),
+    });
     const result = await runner.run(
       { kind: "diagnostics", request: {} },
       {
@@ -899,6 +1020,8 @@ describe("Cross-process lock for .accdb", () => {
         processTimeoutMs: 180_000,
       },
     );
+    // eslint-disable-next-line no-console
+    console.log("DEBUG REAL TEST result:", JSON.stringify(result));
     expect(result.ok).toBe(true);
     const pid = result.operation?.accessPid;
     expect(pid).toBeTypeOf("number");

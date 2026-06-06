@@ -46,7 +46,7 @@ function buildMixedStderrExecutor(capturedPids: number[]): PowerShellExecutor {
 
     return {
       exitCode: 0,
-      stdout: '{"returnValue":null}',
+      stdout: 'DYSFLOW_RESULT {"returnValue":null}',
       stderr: "plain text line",
       durationMs: 5,
       timedOut: false,
@@ -101,7 +101,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
       options.onProgress?.(25, undefined, undefined);
       return {
         exitCode: 0,
-        stdout: '{"returnValue":null}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":null}',
         stderr: "",
         durationMs: 3,
         timedOut: false,
@@ -140,7 +140,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
       // No progress calls — only a plain stderr line returned
       return {
         exitCode: 0,
-        stdout: '{"returnValue":null}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":null}',
         stderr: "plain text diagnostic info",
         durationMs: 2,
         timedOut: false,

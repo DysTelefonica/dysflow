@@ -34,7 +34,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       });
       return {
         exitCode: 0,
-        stdout: '{"returnValue":"ok"}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":"ok"}',
         stderr: "",
         durationMs: 10,
         timedOut: false,

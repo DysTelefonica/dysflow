@@ -149,6 +149,19 @@ function Write-Status {
     }
 }
 
+# TS<->PS result channel contract (issue #440).
+# Emits exactly one DYSFLOW_RESULT <compact-single-line-json> line on stdout.
+# All terminal result emits must route through this function — never emit raw ConvertTo-Json to stdout.
+# -Depth is parameterized to preserve each call site's existing depth.
+function Write-DysflowResult {
+    param(
+        [Parameter(Mandatory = $true)] [object] $Result,
+        [Parameter(Mandatory = $false)] [int] $Depth = 20
+    )
+    $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
+    Write-Output ("DYSFLOW_RESULT " + $json)
+}
+
 function New-DaoDbEngine {
     [CmdletBinding()]
     Param()
@@ -2735,7 +2748,7 @@ function Invoke-ListObjectsAction {
 
     $inventory = Get-FrontendInventory -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject
     if ($Json) {
-        $inventory | ConvertTo-Json -Depth 6
+        Write-DysflowResult -Result $inventory -Depth 6
     } else {
         Write-Status -Message ("Forms: {0}" -f ($inventory.forms -join ", ")) -Color Cyan
         Write-Status -Message ("Reports: {0}" -f ($inventory.reports -join ", ")) -Color Cyan
@@ -2755,7 +2768,7 @@ function Invoke-ExistsAction {
 
     $info = Get-ExistsInfo -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ModuleName $ModuleName
     if ($Json) {
-        $info | ConvertTo-Json -Depth 6
+        Write-DysflowResult -Result $info -Depth 6
     } else {
         Write-Status -Message ("moduleName: {0}" -f $info.moduleName) -Color Cyan
         Write-Status -Message ("accessObjectExists: {0}" -f $info.accessObjectExists) -Color Cyan
@@ -2847,7 +2860,7 @@ function Invoke-DeleteAction {
             }) | Out-Null
         }
     }
-    Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
+    Write-DysflowResult -Result $moduleResults -Depth 4
     $failedDeletes = @($moduleResults | Where-Object { $_.status -eq "error" })
     if ($failedDeletes.Count -gt 0) {
         throw ("Delete no pudo completar {0}/{1} objeto(s): {2}" -f $failedDeletes.Count, $NormalizedModules.Count, (($failedDeletes | ForEach-Object { "{0}: {1}" -f $_.module, $_.error }) -join "; "))
@@ -2864,7 +2877,7 @@ function Invoke-CompileAction {
 
     $compileResult = Invoke-CompileVbaProject -AccessApplication $Session.AccessApplication
     if ($Json) {
-        $compileResult | ConvertTo-Json -Depth 6
+        Write-DysflowResult -Result $compileResult -Depth 6
     } else {
         if ($compileResult.ok) {
             Write-Status -Message "OK compilación VBA completada" -Color Green
@@ -2889,7 +2902,7 @@ function Invoke-RunProcedureAction {
     $procedureArgs = Convert-ProcedureArgsJson -JsonText $ProcedureArgsJson
     $runResult = Invoke-AccessProcedure -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ProcedureName $ProcedureName -ProcedureArgs $procedureArgs
     if ($Json) {
-        $runResult | ConvertTo-Json -Depth 6
+        Write-DysflowResult -Result $runResult -Depth 6
     } else {
         if ($runResult.ok) {
             Write-Status -Message ("OK {0} ejecutado. ReturnValue: {1}" -f $runResult.procedure, $runResult.returnValue) -Color Green
@@ -2922,7 +2935,7 @@ function Invoke-RunTestsAction {
     $Session.Value = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
     $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
     if ($Json) {
-        ConvertTo-Json -InputObject @($batchResults) -Depth 6
+        Write-DysflowResult -Result @($batchResults) -Depth 6
     }
 }
 
@@ -3041,7 +3054,7 @@ function Invoke-ImportAction {
             }) | Out-Null
         }
     }
-    Write-Host ("##MODULE_RESULTS:{0}" -f ($moduleResults | ConvertTo-Json -Compress -Depth 4))
+    Write-DysflowResult -Result $moduleResults -Depth 4
 
     if ($pendingTargets.Count -gt 0) {
         $details = @($pendingTargets | ForEach-Object {

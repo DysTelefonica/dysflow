@@ -108,7 +108,7 @@ describe("VbaModulesAdapter", () => {
       calls.push(request);
       return {
         exitCode: 0,
-        stdout: '{"ok":true}',
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
         stderr: "",
         durationMs: 12,
         timedOut: false,
@@ -450,7 +450,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
       executor: async () => ({
         exitCode: 0,
-        stdout: '{"ok":true}',
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -481,7 +481,7 @@ describe("VbaModulesAdapter", () => {
         calls.push(request);
         return {
           exitCode: 0,
-          stdout: '{"exists":true}',
+          stdout: 'DYSFLOW_RESULT {"exists":true}',
           stderr: "",
           durationMs: 1,
           timedOut: false,

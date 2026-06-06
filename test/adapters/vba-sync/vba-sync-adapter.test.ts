@@ -32,7 +32,13 @@ describe("VbaSyncAdapter Orchestrator", () => {
       executor: async (request) => {
         launchedOperationId = (request as { operationId?: string }).operationId;
         launchedOperationFile = (request as { operationFile?: string }).operationFile;
-        return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
       },
     });
 
@@ -90,7 +96,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       env: {},
       executor: async () => ({
         exitCode: 0,
-        stdout: '{"ok":true}',
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -130,7 +136,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       calls.push("executor");
       return {
         exitCode: 0,
-        stdout: '{"ok":true}',
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
         stderr: "",
         durationMs: 7,
         timedOut: false,
@@ -167,7 +173,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       destinationRoot: "C:/repo",
       executor: async () => ({
         exitCode: 0,
-        stdout: '{"ok":true}',
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
         stderr: "",
         durationMs: 9,
         timedOut: false,
@@ -269,7 +275,13 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const capturedTimeouts: number[] = [];
     const executor: VbaManagerExecutor = async (request) => {
       capturedTimeouts.push(request.timeoutMs);
-      return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
     };
     const service = new VbaSyncAdapter({
       executor,
@@ -304,7 +316,13 @@ describe("VbaSyncAdapter Orchestrator", () => {
     let capturedTimeout = 0;
     const executor: VbaManagerExecutor = async (request) => {
       capturedTimeout = request.timeoutMs;
-      return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
     };
     const service = new VbaSyncAdapter({
       executor,
@@ -324,7 +342,13 @@ describe("VbaSyncAdapter Orchestrator", () => {
     let capturedTimeout = 0;
     const executor: VbaManagerExecutor = async (request) => {
       capturedTimeout = request.timeoutMs;
-      return { exitCode: 0, stdout: '{"ok":true}', stderr: "", durationMs: 1, timedOut: false };
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
     };
     const service = new VbaSyncAdapter({
       executor,
@@ -471,7 +495,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       env: {},
       executor: async () => ({
         exitCode: 0,
-        stdout: "{}",
+        stdout: "DYSFLOW_RESULT {}",
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -510,7 +534,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       env: {},
       executor: async () => ({
         exitCode: 0,
-        stdout: "{}",
+        stdout: "DYSFLOW_RESULT {}",
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -586,7 +610,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
         capturedRequest = req;
         return {
           exitCode: 0,
-          stdout: "{}",
+          stdout: "DYSFLOW_RESULT {}",
           stderr: "",
           durationMs: 1,
           timedOut: false,
@@ -623,7 +647,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
           capturedRequest = req;
           return {
             exitCode: 0,
-            stdout: "{}",
+            stdout: "DYSFLOW_RESULT {}",
             stderr: "",
             durationMs: 1,
             timedOut: false,
@@ -654,6 +678,121 @@ describe("VbaSyncAdapter Orchestrator", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  // --- DYSFLOW_RESULT sentinel contract (issue #440) ---
+
+  it("parseOutput extracts result from DYSFLOW_RESULT sentinel line ignoring surrounding diagnostic braces", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: [
+          "INFO: loading {module=TempModule}",
+          'DYSFLOW_RESULT {"ok":true,"modules":[]}',
+          "INFO: done {elapsed=5ms}",
+        ].join("\n"),
+        stderr: "",
+        durationMs: 3,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: true, data: { ok: true, modules: [] } });
+  });
+
+  it("parseOutput extracts array result from DYSFLOW_RESULT sentinel line", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT [{"name":"Module1"},{"name":"Module2"}]',
+        stderr: "",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("list_objects", {});
+
+    expect(result).toMatchObject({ ok: true, data: [{ name: "Module1" }, { name: "Module2" }] });
+  });
+
+  it("parseOutput maps missing DYSFLOW_RESULT sentinel to VBA_MANAGER_INVALID_OUTPUT (no silent fallback)", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: '{"ok":true}',
+        stderr: "",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_INVALID_OUTPUT" } });
+  });
+
+  it("parseOutput maps duplicate DYSFLOW_RESULT sentinel lines to VBA_MANAGER_INVALID_OUTPUT", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: ['DYSFLOW_RESULT {"ok":true}', 'DYSFLOW_RESULT {"ok":false}'].join("\n"),
+        stderr: "",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_INVALID_OUTPUT" } });
+  });
+
+  it("parseOutput maps malformed JSON after DYSFLOW_RESULT sentinel to VBA_MANAGER_INVALID_OUTPUT", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT not-valid-json",
+        stderr: "",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_INVALID_OUTPUT" } });
+  });
+
+  it("parseOutput maps empty stdout to VBA_MANAGER_INVALID_OUTPUT instead of silent ok:true", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_INVALID_OUTPUT" } });
   });
 
   describe("delegation to form service and comparison modules", () => {

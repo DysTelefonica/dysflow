@@ -61,7 +61,7 @@ describe("AccessPowerShellRunner — marker payload sanitization (#417)", () => 
       });
       return {
         exitCode: 0,
-        stdout: '{"returnValue":null}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":null}',
         stderr: "",
         durationMs: 5,
         timedOut: false,
@@ -144,7 +144,7 @@ describe("AccessPowerShellRunner — marker payload sanitization (#417)", () => 
       });
       return {
         exitCode: 0,
-        stdout: '{"returnValue":null}',
+        stdout: 'DYSFLOW_RESULT {"returnValue":null}',
         stderr: "",
         durationMs: 5,
         timedOut: false,

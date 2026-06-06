@@ -73,7 +73,13 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
 
     const executor: PowerShellExecutor = async () => {
       await executorRunning;
-      return { exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false };
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
     };
 
     const runner = new AccessPowerShellRunner({
@@ -153,7 +159,13 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     let executorCallCount = 0;
     const executor: PowerShellExecutor = async () => {
       executorCallCount++;
-      return { exitCode: 0, stdout: "{}", stderr: "", durationMs: 1, timedOut: false };
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
     };
 
     const runner = new AccessPowerShellRunner({

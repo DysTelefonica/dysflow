@@ -60,6 +60,16 @@ const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 const PROGRESS_MARKER = "DYSFLOW_PROGRESS ";
 
+// Import and re-export the result channel contract so existing consumers of access-runner.ts
+// continue to work without changes (backward-compat re-exports).
+import {
+  extractResultPayload,
+  RESULT_MARKER,
+  RunnerResultChannelError,
+} from "./ps-result-channel.js";
+
+export { extractResultPayload, RESULT_MARKER, RunnerResultChannelError };
+
 export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
 export type AccessRunnerOperation =
   | { kind: "vba"; request: AccessVbaRequest }
@@ -504,20 +514,9 @@ function collectDiagnostics(
 }
 
 function parseRunnerData<TData>(stdout: string, secrets: readonly string[]): TData {
-  const safeStdout = sanitizeSecrets(stdout, secrets);
-  const trimmed = safeStdout.trim();
-  if (trimmed.length === 0) {
-    throw new SyntaxError("Runner output is empty");
-  }
-
-  let jsonStr = trimmed;
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    jsonStr = trimmed.slice(firstBrace, lastBrace + 1);
-  }
-
-  const parsed: unknown = JSON.parse(jsonStr);
+  // Strict sentinel extraction (issue #440): result MUST be on a DYSFLOW_RESULT line.
+  // RunnerResultChannelError and SyntaxError both propagate loudly to the caller.
+  const parsed = extractResultPayload(stdout, secrets);
   if (!isRecord(parsed)) {
     throw new SyntaxError(`Runner output is not a JSON object (got ${typeof parsed})`);
   }

@@ -19,6 +19,7 @@ import {
   createAccessOperationId,
 } from "../../core/operations/access-operation-registry.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
+import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
@@ -282,7 +283,18 @@ export class VbaSyncAdapter implements VbaSyncPort {
       );
     }
 
-    const parsedOutput = parseOutput(result.stdout, secrets);
+    let parsedOutput: unknown;
+    try {
+      parsedOutput = parseOutput(result.stdout, secrets);
+    } catch {
+      return failureResult(
+        createDysflowError(
+          "VBA_MANAGER_INVALID_OUTPUT",
+          `${toolName} produced output with no ${RESULT_MARKER.trim()} sentinel line.`,
+        ),
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+      );
+    }
     if (toolName === "import_all" || toolName === "import_modules") {
       return successResult(
         {
@@ -523,28 +535,14 @@ function buildTargetDiagnostics(
   };
 }
 
+/**
+ * Strict sentinel-based output extractor (issue #440).
+ * Result MUST be on a `DYSFLOW_RESULT <compact-json>` line.
+ * Throws RunnerResultChannelError on missing/duplicate sentinel,
+ * or SyntaxError on malformed payload. No silent fallback.
+ */
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
-  const safe = sanitizeSecrets(stdout, secrets).trim();
-  if (safe.length === 0) return { ok: true };
-
-  let jsonStr = safe;
-  const firstBrace = safe.indexOf("{");
-  const lastBrace = safe.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    jsonStr = safe.slice(firstBrace, lastBrace + 1);
-  } else {
-    const firstBracket = safe.indexOf("[");
-    const lastBracket = safe.lastIndexOf("]");
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      jsonStr = safe.slice(firstBracket, lastBracket + 1);
-    }
-  }
-
-  try {
-    return JSON.parse(jsonStr) as unknown;
-  } catch {
-    return { ok: true, stdout: safe };
-  }
+  return extractResultPayload(stdout, secrets);
 }
 
 async function readVbaManagerOperationMarker(

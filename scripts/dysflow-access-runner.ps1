@@ -289,6 +289,19 @@ function Write-DysflowProgress {
   [Console]::Error.WriteLine('DYSFLOW_PROGRESS ' + ($obj | ConvertTo-Json -Compress -Depth 2))
 }
 
+# TS<->PS result channel contract (issue #440).
+# Emits exactly one DYSFLOW_RESULT <compact-single-line-json> line on stdout.
+# All terminal result emits must route through this function — never emit raw ConvertTo-Json to stdout.
+# -Depth is parameterized to preserve each call site's existing depth.
+function Write-DysflowResult {
+  param(
+    [Parameter(Mandatory = $true)] [object] $Result,
+    [Parameter(Mandatory = $false)] [int] $Depth = 20
+  )
+  $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
+  Write-Output ("DYSFLOW_RESULT " + $json)
+}
+
 function ConvertFrom-JsonCompat {
   param([string] $Json)
   if ([string]::IsNullOrWhiteSpace($Json)) { return @{} }
@@ -1396,7 +1409,7 @@ if ($Operation -eq 'query') {
   if ([string]$earlyPayload.action -eq 'relink_directory') {
     try {
       $result = Invoke-RelinkDirectory -Payload $earlyPayload
-      $result | ConvertTo-Json -Depth 20 -Compress
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
@@ -1414,7 +1427,7 @@ if ($Operation -eq 'query') {
     try {
       $result = Invoke-ListAccessFilesAction -RootPath ([string]$earlyPayload.rootPath)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 10
+      Write-DysflowResult -Result $result -Depth 10
       $script:exitCode = 0; return
     } catch {
       [Console]::Error.WriteLine($_.Exception.Message)
@@ -1438,56 +1451,56 @@ if ($Operation -eq 'query') {
       if ([string]::IsNullOrWhiteSpace($earlyAction) -or $earlyAction -eq 'query_sql') {
         $result = Invoke-QuerySqlReadAction -Database $directDb -Sql ([string]$earlyPayload.sql)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'list_tables') {
         $result = Invoke-ListTablesAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'get_schema') {
         $result = Invoke-GetSchemaAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'count_rows') {
         $result = Invoke-CountRowsAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'distinct_values') {
         $result = Invoke-DistinctValuesAction -Database $directDb -TableName ([string]$earlyPayload.tableName) -ColumnName ([string]$earlyPayload.columnName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'get_relationships') {
         $result = Invoke-GetRelationshipsAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'list_linked_tables') {
         $result = Invoke-ListLinkedTablesAction -Database $directDb
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
         $script:exitCode = 0; return
       }
 
       if ($earlyAction -eq 'compare_backends') {
         $result = Invoke-CompareBackendsAction -Database $directDb -BackendPath ([string]$earlyPayload.backendPath)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
         $script:exitCode = 0; return
       }
     } catch {
@@ -1529,7 +1542,7 @@ try {
   if ($action -eq 'compact_repair') {
     $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
-    $result | ConvertTo-Json -Compress -Depth 20
+    Write-DysflowResult -Result $result -Depth 20
     $script:exitCode = 0; return
   }
 
@@ -1596,7 +1609,7 @@ try {
       [ordered]@{ name = 'access-db-path'; ok = $true; message = 'configured' },
       [ordered]@{ name = 'access-open'; ok = $true; message = 'opened' }
     )
-    [ordered]@{ checks = $checks } | ConvertTo-Json -Compress -Depth 10
+    Write-DysflowResult -Result ([ordered]@{ checks = $checks }) -Depth 10
     $script:exitCode = 0; return
   }
 
@@ -1607,7 +1620,7 @@ try {
     Write-DysflowProgress -Percent 40 -Message "Executing operation"
     $returnValue = $access.Run.Invoke($runArgs)
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
-    [ordered]@{ returnValue = $returnValue } | ConvertTo-Json -Compress -Depth 10
+    Write-DysflowResult -Result ([ordered]@{ returnValue = $returnValue }) -Depth 10
     $script:exitCode = 0; return
   }
 
@@ -1619,7 +1632,7 @@ try {
         if ([string]::IsNullOrWhiteSpace($directAction) -and $payload.mode -eq 'write') { $directAction = 'exec_sql' }
         $result = Invoke-WriteAction -Database $directDb -Action $directAction -Payload $payload
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
       } finally {
         try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
         try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
@@ -1635,7 +1648,7 @@ try {
         try {
           $result = Invoke-QuerySqlReadAction -Database $readDb.Database -Sql ([string]$payload.sql)
           Write-DysflowProgress -Percent 90 -Message "Finalizing"
-          $result | ConvertTo-Json -Compress -Depth 20
+          Write-DysflowResult -Result $result -Depth 20
         } finally {
           if ($readDb.Owned) {
             try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1649,7 +1662,7 @@ try {
       try {
         $writeDb.Database.Execute([string]$payload.sql, 128)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ affectedRows = $writeDb.Database.RecordsAffected } | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result ([ordered]@{ affectedRows = $writeDb.Database.RecordsAffected }) -Depth 10
       } finally {
         if ($writeDb.Owned) {
           try { $writeDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1665,7 +1678,7 @@ try {
       try {
         $result = Invoke-ListTablesAction -Database $readDb.Database
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
       } finally {
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1678,7 +1691,7 @@ try {
     if ($action -eq 'list_linked_tables') {
       $tables = @(Get-TableNames -Database $db -LinkedOnly)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ tables = $tables } | ConvertTo-Json -Compress -Depth 10
+      Write-DysflowResult -Result ([ordered]@{ tables = $tables }) -Depth 10
       $script:exitCode = 0; return
     }
 
@@ -1687,7 +1700,7 @@ try {
       try {
         $result = Invoke-GetSchemaAction -Database $readDb.Database -TableName ([string]$payload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
       } finally {
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1702,7 +1715,7 @@ try {
       try {
         $result = Invoke-CountRowsAction -Database $readDb.Database -TableName ([string]$payload.tableName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
       } finally {
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1717,7 +1730,7 @@ try {
       try {
         $result = Invoke-DistinctValuesAction -Database $readDb.Database -TableName ([string]$payload.tableName) -ColumnName ([string]$payload.columnName)
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 10
+        Write-DysflowResult -Result $result -Depth 10
       } finally {
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1730,14 +1743,14 @@ try {
     if ($action -eq 'compare_backends') {
       $result = Compare-BackendTables -CurrentDb $db -BackendPath ([string]$payload.backendPath)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'list_access_files') {
       $files = @(Get-AccessFiles -RootPath ([string]$payload.rootPath))
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ files = $files } | ConvertTo-Json -Compress -Depth 10
+      Write-DysflowResult -Result ([ordered]@{ files = $files }) -Depth 10
       $script:exitCode = 0; return
     }
 
@@ -1746,7 +1759,7 @@ try {
       try {
         $result = Invoke-GetRelationshipsAction -Database $readDb.Database
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
       } finally {
         if ($readDb.Owned) {
           try { $readDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -1759,7 +1772,7 @@ try {
     if ($action -eq 'list_links') {
       $links = @(Get-LinkInfo -Database $db)
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      [ordered]@{ links = $links } | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result ([ordered]@{ links = $links }) -Depth 20
       $script:exitCode = 0; return
     }
 
@@ -1768,54 +1781,54 @@ try {
       if ($dryRun) {
         $backendPath = [string]$payload.backendPath
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        [ordered]@{ dryRun = $true; backendPath = $backendPath; linkedTables = @() } | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result ([ordered]@{ dryRun = $true; backendPath = $backendPath; linkedTables = @() }) -Depth 20
         $script:exitCode = 0; return
       }
       $result = Update-LinkTables -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'relink_tables') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'localize_backend_links') {
       $result = Update-LinkTables -Database $db -Payload $payload -RefreshOnly
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'unlink_table') {
       $result = Remove-LinkTable -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'export_queries') {
       $result = Export-QueryDefinitions -Database $db -Payload $payload -AccessDbPath $AccessDbPath
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'import_queries') {
       $result = Import-QueryDefinitions -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
     if ($action -eq 'compact_repair') {
       $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
-      $result | ConvertTo-Json -Compress -Depth 20
+      Write-DysflowResult -Result $result -Depth 20
       $script:exitCode = 0; return
     }
 
@@ -1824,7 +1837,7 @@ try {
       try {
         $result = Invoke-WriteAction -Database $writeDb.Database -Action $action -Payload $payload
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        $result | ConvertTo-Json -Compress -Depth 20
+        Write-DysflowResult -Result $result -Depth 20
       } finally {
         if ($writeDb.Owned) {
           try { $writeDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
