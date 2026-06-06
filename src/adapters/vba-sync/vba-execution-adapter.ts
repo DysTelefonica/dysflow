@@ -15,7 +15,7 @@ import {
 } from "../../core/utils/index.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
-const EXECUTION_MAPPINGS: Record<string, DirectMapping> = {
+const EXECUTION_MAPPINGS = {
   compile_vba: mapping("Compile", true),
   test_vba: mapping(
     "Run-Tests",

@@ -27,6 +27,7 @@ export function parseNamedArgs(
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === undefined) continue;
     const spec = specMap.get(arg);
     if (!spec) {
       const msg = onUnknown ? onUnknown(arg) : `Unsupported option: ${arg}`;

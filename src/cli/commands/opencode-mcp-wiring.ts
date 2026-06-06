@@ -51,8 +51,8 @@ export type OpencodeMcpWiringOptions = {
  * - Otherwise → command[0] is the entrypoint.
  */
 function resolveEntrypoint(command: string[]): string | null {
-  if (command.length === 0) return null;
   const exe = command[0];
+  if (exe === undefined) return null;
   const lowerExe = exe.toLowerCase();
   // node / node.exe is the interpreter — the actual entrypoint is the next arg.
   if (lowerExe === "node" || lowerExe === "node.exe") {

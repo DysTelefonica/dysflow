@@ -34,7 +34,7 @@ describe("FileAccessOperationRegistry sharing", () => {
       // Assert that registryB sees it
       const recent = await registryB.listRecent({ limit: 10 });
       expect(recent).toHaveLength(1);
-      expect(recent[0].operationId).toBe("op-sharing-1");
+      expect(recent[0]?.operationId).toBe("op-sharing-1");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

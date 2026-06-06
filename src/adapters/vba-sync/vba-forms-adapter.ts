@@ -9,7 +9,7 @@ import { stringValue } from "../../core/utils/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
 
-const FORMS_MAPPINGS: Record<string, DirectMapping> = {
+const FORMS_MAPPINGS = {
   generate_erd: mapping(
     "Generate-ERD",
     false,

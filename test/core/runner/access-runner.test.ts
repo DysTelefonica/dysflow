@@ -136,7 +136,7 @@ describe("AccessPowerShellRunner", () => {
     );
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].env).toEqual({
+    expect(calls[0]?.env).toEqual({
       DYSFLOW_BACKEND_PASSWORD: "backend-secret",
     });
   });
@@ -181,11 +181,14 @@ describe("AccessPowerShellRunner", () => {
       },
     );
 
-    const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
-    const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error("Expected call");
+    const payloadArgIndex = firstCall.args.indexOf("-PayloadJson");
+    const payloadArg = payloadArgIndex >= 0 ? firstCall.args[payloadArgIndex + 1] : undefined;
     const payload = payloadArg ? (JSON.parse(payloadArg) as Record<string, unknown>) : undefined;
 
-    expect(calls[0].env).toEqual({ DYSFLOW_BACKEND_PASSWORD: "backend-secret" });
+    expect(firstCall.env).toEqual({ DYSFLOW_BACKEND_PASSWORD: "backend-secret" });
     expect(payload).toMatchObject({
       action: "compare_backends",
       backendPath: "C:/data/backend.accdb",
@@ -230,8 +233,11 @@ describe("AccessPowerShellRunner", () => {
       },
     );
 
-    const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
-    const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error("Expected call");
+    const payloadArgIndex = firstCall.args.indexOf("-PayloadJson");
+    const payloadArg = payloadArgIndex >= 0 ? firstCall.args[payloadArgIndex + 1] : undefined;
     const payload = payloadArg ? (JSON.parse(payloadArg) as Record<string, unknown>) : undefined;
 
     expect(payload).toMatchObject({
@@ -277,8 +283,11 @@ describe("AccessPowerShellRunner", () => {
       },
     );
 
-    const payloadArgIndex = calls[0].args.indexOf("-PayloadJson");
-    const payloadArg = payloadArgIndex >= 0 ? calls[0].args[payloadArgIndex + 1] : undefined;
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error("Expected call");
+    const payloadArgIndex = firstCall.args.indexOf("-PayloadJson");
+    const payloadArg = payloadArgIndex >= 0 ? firstCall.args[payloadArgIndex + 1] : undefined;
     const payload = payloadArg ? (JSON.parse(payloadArg) as Record<string, unknown>) : undefined;
 
     expect(payload).toMatchObject({

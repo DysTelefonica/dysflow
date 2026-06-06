@@ -137,13 +137,15 @@ describe("uninstall.ts static import isolation", () => {
       const imports: string[] = [];
       let match = regex.exec(content);
       while (match !== null) {
-        imports.push(match[1]);
+        const imp = match[1];
+        if (imp !== undefined) imports.push(imp);
         match = regex.exec(content);
       }
       const simpleImportRegex = /import\s+['"](.*?)['"]/g;
       let simpleMatch = simpleImportRegex.exec(content);
       while (simpleMatch !== null) {
-        imports.push(simpleMatch[1]);
+        const imp = simpleMatch[1];
+        if (imp !== undefined) imports.push(imp);
         simpleMatch = simpleImportRegex.exec(content);
       }
 

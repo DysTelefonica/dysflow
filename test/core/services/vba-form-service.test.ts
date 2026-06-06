@@ -527,7 +527,10 @@ describe("VbaFormService", () => {
 
       expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining("forms"), { recursive: true });
       expect(writtenFiles).toHaveLength(1);
-      const payload = JSON.parse(writtenFiles[0].data);
+      const firstWritten = writtenFiles[0];
+      expect(firstWritten).toBeDefined();
+      if (!firstWritten) throw new Error("Expected written file");
+      const payload = JSON.parse(firstWritten.data);
       expect(payload).toMatchObject({
         name: "Form_FakePort",
         kind: "Form",
@@ -552,7 +555,10 @@ describe("VbaFormService", () => {
         destinationRoot: "/fake",
       });
 
-      const payload = JSON.parse(writtenFiles[0].data);
+      const firstWritten = writtenFiles[0];
+      expect(firstWritten).toBeDefined();
+      if (!firstWritten) throw new Error("Expected written file");
+      const payload = JSON.parse(firstWritten.data);
       expect(payload.generatedAt).toBe("2099-12-31T23:59:59.999Z");
     });
 
@@ -596,7 +602,10 @@ describe("VbaFormService", () => {
         const data = result.data as { controlCount: number };
         expect(data.controlCount).toBe(2);
       }
-      const written = JSON.parse(writtenFiles[0].data);
+      const firstWritten = writtenFiles[0];
+      expect(firstWritten).toBeDefined();
+      if (!firstWritten) throw new Error("Expected written file");
+      const written = JSON.parse(firstWritten.data);
       expect(written.forms.Form_Cat).toHaveLength(2);
       expect(written.forms.Form_Cat[1]).toEqual({ name: "newCtrl", type: "TextBox" });
     });
@@ -620,7 +629,10 @@ describe("VbaFormService", () => {
       });
 
       expect(result.ok).toBe(true);
-      const written = JSON.parse(writtenFiles[0].data);
+      const firstWritten = writtenFiles[0];
+      expect(firstWritten).toBeDefined();
+      if (!firstWritten) throw new Error("Expected written file");
+      const written = JSON.parse(firstWritten.data);
       expect(written.forms.Form_New).toEqual([{ name: "btn", type: "Button" }]);
     });
 
@@ -675,10 +687,10 @@ describe("VbaFormService", () => {
         };
         expect(data.total).toBe(2);
         expect(data.forms).toHaveLength(1);
-        expect(data.forms[0].name).toBe("MyForm");
-        expect(data.forms[0].controls).toBe(2);
-        expect(data.reports[0].name).toBe("MyReport");
-        expect(data.reports[0].controls).toBe(3);
+        expect(data.forms[0]?.name).toBe("MyForm");
+        expect(data.forms[0]?.controls).toBe(2);
+        expect(data.reports[0]?.name).toBe("MyReport");
+        expect(data.reports[0]?.controls).toBe(3);
       }
     });
 

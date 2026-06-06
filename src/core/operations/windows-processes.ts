@@ -26,11 +26,13 @@ export function parseCimDateTimeToIso(value: string | null | undefined): string 
   }
 
   const [, year, month, day, hour, minute, second, microseconds, offsetRaw] = match;
+  if (offsetRaw === undefined) return "";
   const ms = Math.floor(Number(microseconds) / 1000);
   const msStr = String(ms).padStart(3, "0");
 
   // Convert offset "+ooo" / "-ooo" (minutes-from-UTC as 3 digits) to ISO offset
   const sign = offsetRaw[0];
+  if (sign === undefined) return "";
   const offsetMinutes = Number(offsetRaw.slice(1));
   if (offsetMinutes === 0) {
     return `${year}-${month}-${day}T${hour}:${minute}:${second}.${msStr}Z`;

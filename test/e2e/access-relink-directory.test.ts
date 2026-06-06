@@ -109,27 +109,6 @@ function readConnect(dbPath: string, tableName: string): string {
   return out.trim();
 }
 
-function _tableExists(dbPath: string, tableName: string): boolean {
-  const out = execFileSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `
-    $e=New-Object -ComObject DAO.DBEngine.120
-    try {
-      $db=$e.OpenDatabase('${dbPath}',$false,$true)
-      try { $found=$false; foreach($td in $db.TableDefs){ if($td.Name -eq '${tableName}'){ $found=$true; break } }; if($found){'yes'}else{'no'} }
-      finally { $db.Close() }
-    } finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($e)|Out-Null }
-  `,
-    ],
-    { encoding: "utf8", windowsHide: true, timeout: 30_000 },
-  );
-  return out.trim() === "yes";
-}
-
 // ---------------------------------------------------------------------------
 // Service factory
 // ---------------------------------------------------------------------------

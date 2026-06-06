@@ -75,7 +75,9 @@ export function looksLikeReadOnlySql(sql: string): boolean {
   // Step 4: must be exactly one non-empty statement
   if (statements.length !== 1) return false;
 
-  const firstToken = statements[0].match(/^[a-z]+/)?.[0];
+  const stmt = statements[0];
+  if (stmt === undefined) return false;
+  const firstToken = stmt.match(/^[a-z]+/)?.[0];
   if (firstToken !== "select" && firstToken !== "with") return false;
 
   // Step 5: block DDL/DML write keywords
@@ -94,7 +96,10 @@ export function detectWriteSqlKeyword(sql: string): string | undefined {
   const match = sql
     .toLowerCase()
     .match(/\b(insert|update|delete|create|drop|alter|truncate|into|exec|execute|grant|revoke)\b/);
-  return match ? match[1].toUpperCase() : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
+  const matchVal = match?.[1];
+  return matchVal !== undefined
+    ? matchVal.toUpperCase()
+    : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
 }
 
 export * from "./path-utils.js";

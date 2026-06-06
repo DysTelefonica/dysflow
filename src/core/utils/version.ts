@@ -1,5 +1,5 @@
 function parseVersionValue(value: string): number[] {
-  const clean = value.split(/[-+]/)[0].trim();
+  const clean = (value.split(/[-+]/)[0] ?? "").trim();
   if (clean.length === 0) {
     return [0];
   }

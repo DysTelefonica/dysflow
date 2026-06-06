@@ -6,7 +6,7 @@ async function readText(path: string): Promise<string> {
 }
 
 function workflowRunCommands(workflow: string): string[] {
-  return [...workflow.matchAll(/^\s*run:\s*(.+)$/gm)].map((match) => match[1].trim());
+  return [...workflow.matchAll(/^\s*run:\s*(.+)$/gm)].map((match) => (match[1] ?? "").trim());
 }
 
 describe("repository quality gates", () => {
@@ -111,10 +111,9 @@ describe("repository quality gates", () => {
       "vitest.config.ts must declare all four threshold fields",
     ).toBeGreaterThanOrEqual(4);
     for (const match of thresholdMatches) {
-      const value = Number(match[1]);
-      expect(value, `threshold for ${match[0].split(":")[0].trim()} must be > 0`).toBeGreaterThan(
-        0,
-      );
+      const value = Number(match[1] ?? "0");
+      const label = ((match[0] ?? "").split(":")[0] ?? "").trim();
+      expect(value, `threshold for ${label} must be > 0`).toBeGreaterThan(0);
     }
   });
 });

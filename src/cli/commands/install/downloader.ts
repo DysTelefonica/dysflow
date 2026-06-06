@@ -182,8 +182,14 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
           let expectedHash: string | undefined;
           for (const line of lines) {
             const parts = line.trim().split(/\s+/);
-            if (parts.length >= 2 && parts[1].replace(/^\*/, "") === archiveName) {
-              expectedHash = parts[0];
+            const part0 = parts[0];
+            const part1 = parts[1];
+            if (
+              part0 !== undefined &&
+              part1 !== undefined &&
+              part1.replace(/^\*/, "") === archiveName
+            ) {
+              expectedHash = part0;
               break;
             }
           }

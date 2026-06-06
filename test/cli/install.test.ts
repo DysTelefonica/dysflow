@@ -54,7 +54,7 @@ const expectedOpenCodeCommand = (runtimeDir: string): string[] => [
 
 const expectRuntimeLauncherCommand = (command: unknown): void => {
   expect(command).toEqual(expect.any(Array));
-  expect((command as string[])[0].toLowerCase()).toMatch(/dysflow\.cmd$/);
+  expect(((command as string[])[0] ?? "").toLowerCase()).toMatch(/dysflow\.cmd$/);
 };
 
 const getLocalDysflowVersion = async (): Promise<string> => {

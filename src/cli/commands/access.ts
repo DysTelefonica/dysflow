@@ -6,8 +6,10 @@ import type { CommandHandler } from "./types.js";
 
 function extractRootPath(args: readonly string[]): string | undefined {
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--root" && args[i + 1] !== undefined && !args[i + 1].startsWith("--")) {
-      return args[i + 1];
+    const arg = args[i];
+    const nextArg = args[i + 1];
+    if (arg === "--root" && nextArg !== undefined && !nextArg.startsWith("--")) {
+      return nextArg;
     }
   }
   return undefined;

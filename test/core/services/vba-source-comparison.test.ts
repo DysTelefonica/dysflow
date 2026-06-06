@@ -356,11 +356,11 @@ describe("vba-source-comparison", () => {
     const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], true);
     expect(comparison.ok).toBe(false);
     expect(comparison.matched).toHaveLength(1);
-    expect(comparison.matched[0].moduleName).toBe("Mod1");
+    expect(comparison.matched[0]?.moduleName).toBe("Mod1");
     expect(comparison.different).toHaveLength(1);
-    expect(comparison.different[0].moduleName).toBe("Mod2");
+    expect(comparison.different[0]?.moduleName).toBe("Mod2");
     expect(comparison.diffs).toHaveLength(1);
-    expect(comparison.diffs?.[0].sourceSnippet).toContain("source content");
+    expect(comparison.diffs?.[0]?.sourceSnippet).toContain("source content");
   });
 
   it("runs compareSourceAgainstBinary and delegates using ctx", async () => {

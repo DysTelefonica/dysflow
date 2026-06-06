@@ -188,10 +188,10 @@ describe("MCP tool registration over core services", () => {
     });
     const schema = tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema;
 
-    expect(schema?.properties.projectId.description).toContain("canonical project identity");
-    expect(schema?.properties.projectId.description).toContain("Engram");
-    expect(schema?.properties.contextId.description).toContain("run/context id");
-    expect(schema?.properties.contextId.description).toContain("Do not duplicate projectId");
+    expect(schema?.properties?.projectId?.description).toContain("canonical project identity");
+    expect(schema?.properties?.projectId?.description).toContain("Engram");
+    expect(schema?.properties?.contextId?.description).toContain("run/context id");
+    expect(schema?.properties?.contextId?.description).toContain("Do not duplicate projectId");
   });
 
   it("accepts contextId/projectId on short core calls without requiring local path injection", async () => {

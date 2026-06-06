@@ -26,7 +26,7 @@ describe("MCP_TOOL_SCHEMAS parity (#200)", () => {
 describe("HTTP validation schemas", () => {
   it("CLEANUP_SCHEMA has minLength: 1 for operationId", () => {
     expect(CLEANUP_SCHEMA.properties.operationId).toBeDefined();
-    expect(CLEANUP_SCHEMA.properties.operationId.minLength).toBe(1);
+    expect(CLEANUP_SCHEMA.properties.operationId?.minLength).toBe(1);
   });
 
   it("HTTP_QUERY_SCHEMA validates sql input with no additional properties", () => {

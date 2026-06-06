@@ -68,13 +68,14 @@ describe("Dysflow TUI rendering", () => {
   });
 
   it("keeps every logo line aligned to the same width", () => {
-    const [logo] = renderDashboard({
+    const logo = renderDashboard({
       localVersion: "0.2.0",
       latestVersion: "0.2.0",
       cursor: 0,
-    }).split("local:");
+    }).split("local:")[0];
+    expect(logo).toBeDefined();
     const lineWidths = logo
-      .trimEnd()
+      ?.trimEnd()
       .split("\n")
       .map((line) => line.length);
 

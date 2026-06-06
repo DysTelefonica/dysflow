@@ -32,12 +32,13 @@ export class RunnerResultChannelError extends Error {
 export function extractResultPayload(stdout: string, secrets: readonly string[]): unknown {
   const safe = sanitizeSecrets(stdout, secrets);
   const lines = safe.split(/\r?\n/).filter((l) => l.startsWith(RESULT_MARKER));
-  if (lines.length === 0)
+  const firstLine = lines[0];
+  if (firstLine === undefined)
     throw new RunnerResultChannelError("No DYSFLOW_RESULT line in runner output");
   if (lines.length > 1)
     throw new RunnerResultChannelError(
       `Expected exactly 1 DYSFLOW_RESULT line, got ${lines.length}`,
     );
   // JSON.parse propagates SyntaxError as-is on malformed payload (loud)
-  return JSON.parse(lines[0].slice(RESULT_MARKER.length));
+  return JSON.parse(firstLine.slice(RESULT_MARKER.length));
 }

@@ -111,10 +111,12 @@ async function runIntegrationSelectionLoop(options: {
     if (key === "down") cursor = (cursor + 1) % ALL_AGENTS.length;
     if (key === "space") {
       const agent = ALL_AGENTS[cursor];
-      if (selected.has(agent)) {
-        selected.delete(agent);
-      } else {
-        selected.add(agent);
+      if (agent !== undefined) {
+        if (selected.has(agent)) {
+          selected.delete(agent);
+        } else {
+          selected.add(agent);
+        }
       }
     }
     if (key === "enter") {

@@ -24,7 +24,7 @@ import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
-import { VbaModulesAdapter, type VbaModulesExecutionTarget } from "./vba-modules-adapter.js";
+import { VbaModulesAdapter } from "./vba-modules-adapter.js";
 import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
@@ -160,10 +160,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       scriptPath: this.scriptPath,
       accessPassword: this.accessPassword,
       cwd: this.cwd,
-      resolveExecutionTarget: (params) =>
-        this.resolveExecutionTarget(params) as unknown as Promise<
-          OperationResult<VbaModulesExecutionTarget>
-        >,
+      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
       validateStrictContext: (params, target) => this.validateStrictContext(params, target),
       runPreflightCleanup: (target) => this.runPreflightCleanup(target),
       executor: this.executor,

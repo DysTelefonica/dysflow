@@ -23,9 +23,10 @@ export function parseRuntimeMarker(content: string): string | undefined {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  if (lines.length === 0) return undefined;
-  if (/^\d+$/.test(lines[0])) return lines[1];
-  return lines[0];
+  const line0 = lines[0];
+  if (line0 === undefined) return undefined;
+  if (/^\d+$/.test(line0)) return lines[1];
+  return line0;
 }
 
 export function resolveRuntimeDir(

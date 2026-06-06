@@ -59,7 +59,9 @@ export function isCodexSectionDysflowOwned(content: string): boolean {
 
   let end = lines.length;
   for (let index = start + 1; index < lines.length; index += 1) {
-    const line = lines[index].trim();
+    const rawLine = lines[index];
+    if (rawLine === undefined) continue;
+    const line = rawLine.trim();
     if (!line.startsWith("#") && line.startsWith("[") && line.endsWith("]")) {
       const sectionName = line.slice(1, -1);
       if (!sectionName.startsWith("mcp_servers.dysflow")) {
@@ -122,7 +124,9 @@ export function removeCodexMcpSection(content: string): string {
 
   let end = lines.length;
   for (let index = start + 1; index < lines.length; index += 1) {
-    const line = lines[index].trim();
+    const rawLine = lines[index];
+    if (rawLine === undefined) continue;
+    const line = rawLine.trim();
     if (!line.startsWith("#") && line.startsWith("[") && line.endsWith("]")) {
       const sectionName = line.slice(1, -1);
       if (!sectionName.startsWith("mcp_servers.dysflow")) {
