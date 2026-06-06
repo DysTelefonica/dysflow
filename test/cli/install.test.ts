@@ -229,6 +229,43 @@ describe("Dysflow MCP config state", () => {
     }
   });
 
+  it("leaves foreign (independently-configured) agent config entries untouched", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-foreign-config-"));
+    try {
+      const codexConfig = join(root, "config.toml");
+      await writeFile(
+        codexConfig,
+        [
+          "[mcp_servers.other]",
+          "command = 'other-tool'",
+          "[mcp_servers.dysflow]",
+          "command = 'C:/foreign-tool/bin/foreign.cmd'",
+          "args = ['mcp']",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const jsonConfig = join(root, "opencode.json");
+      await writeFile(
+        jsonConfig,
+        `${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" }, dysflow: { enabled: true, type: "local", command: ["C:/foreign-tool/bin/foreign.cmd", "mcp"] } } }, null, 2)}\n`,
+        "utf8",
+      );
+
+      expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(true);
+      expect(await hasDysflowMcpConfig("opencode", jsonConfig)).toBe(true);
+
+      await removeDysflowMcpConfig("codex", codexConfig);
+      await removeDysflowMcpConfig("opencode", jsonConfig);
+
+      // They should still be there because they are foreign (do not point to dysflow)
+      expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(true);
+      expect(await hasDysflowMcpConfig("opencode", jsonConfig)).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("does not create config files when removing absent Dysflow entries", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-config-absent-"));
     try {
@@ -298,7 +335,7 @@ describe("Dysflow MCP config state", () => {
         "utf8",
       );
       await mkdir(join(home, ".codex"), { recursive: true });
-      await writeFile(codexConfig, "[mcp_servers.dysflow]\ncommand = 'old'\n", "utf8");
+      await writeFile(codexConfig, "[mcp_servers.dysflow]\ncommand = 'C:/old/dysflow/bin/dysflow.cmd'\n", "utf8");
       await mkdir(join(home, ".config", "opencode"), { recursive: true });
       await writeFile(
         opencodeConfig,
@@ -310,7 +347,7 @@ describe("Dysflow MCP config state", () => {
       });
       await writeFile(
         claudeDesktopConfig,
-        `${JSON.stringify({ mcpServers: { other: { command: "other" }, dysflow: { command: "old", args: ["mcp"] } } }, null, 2)}\n`,
+        `${JSON.stringify({ mcpServers: { other: { command: "other" }, dysflow: { command: "C:/old/dysflow/bin/dysflow.cmd", args: ["mcp"] } } }, null, 2)}\n`,
         "utf8",
       );
 
