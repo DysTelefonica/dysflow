@@ -209,6 +209,7 @@ End Function
 
 Public Function RebuildNCAuditoriaListadoCache(Optional ByVal p_IDAuditoria As Long = 0, Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
+    Dim wrk As DAO.Workspace
     Dim rs As DAO.Recordset
     Dim sql As String
     Dim transactionStarted As Boolean
@@ -216,9 +217,10 @@ Public Function RebuildNCAuditoriaListadoCache(Optional ByVal p_IDAuditoria As L
     On Error GoTo EH
     p_Error = ""
     Set db = getdb()
+    Set wrk = DBEngine.Workspaces(0)
     If Not EnsureNCAuditoriaListadoCacheSchema(p_Error) Then Exit Function
 
-    db.BeginTrans
+    wrk.BeginTrans
     transactionStarted = True
 
     sql = "UPDATE " & CACHE_TABLE & " SET CacheValida=False, FechaCache=Now()"
@@ -232,15 +234,16 @@ Public Function RebuildNCAuditoriaListadoCache(Optional ByVal p_IDAuditoria As L
         If Not UpsertListadoItemInDb(db, CLng(rs!ID), p_Error) Then GoTo RollbackRebuild
         rs.MoveNext
     Loop
-    db.CommitTrans
+    wrk.CommitTrans
     transactionStarted = False
     RebuildNCAuditoriaListadoCache = True
 
 CleanExit:
     On Error Resume Next
-    If transactionStarted Then db.Rollback
+    If transactionStarted Then wrk.Rollback
     If Not rs Is Nothing Then rs.Close
     Set rs = Nothing
+    Set wrk = Nothing
     Set db = Nothing
     Exit Function
 RollbackRebuild:
