@@ -18,9 +18,10 @@ import {
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
+import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { sanitizeSecrets } from "../../core/utils/index.js";
 import type { JsonObjectSchema } from "../mcp/schemas/dysflow-schemas.js";
-import { CLEANUP_SCHEMA, HTTP_QUERY_SCHEMA, HTTP_VBA_EXECUTE_SCHEMA } from "../mcp/schemas.js";
+import { CLEANUP_SCHEMA, HTTP_QUERY_SCHEMA, HTTP_WRITE_QUERY_SCHEMA, HTTP_VBA_EXECUTE_SCHEMA } from "../mcp/schemas.js";
 import { validateInput } from "../mcp/validator.js";
 import { createHttpServices } from "./http-services-factory.js";
 
@@ -248,7 +249,7 @@ async function routeRequest(
       sendBodyReadFailure(body);
       return;
     }
-    if (!handleValidation(body.data, HTTP_QUERY_SCHEMA, context, response)) {
+    if (!handleValidation(body.data, HTTP_WRITE_QUERY_SCHEMA, context, response)) {
       return;
     }
     sendOperationResult(
@@ -256,6 +257,7 @@ async function routeRequest(
       await context.services.queryService.execute({
         sql: getStringParam(body.data, "sql"),
         mode: "write",
+        dryRun: resolveIsDryRun(body.data),
       }),
     );
     return;

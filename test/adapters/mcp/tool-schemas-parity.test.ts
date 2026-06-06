@@ -3,6 +3,7 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-regis
 import {
   CLEANUP_SCHEMA,
   HTTP_QUERY_SCHEMA,
+  HTTP_WRITE_QUERY_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
 } from "../../../src/adapters/mcp/schemas";
 import { MCP_TOOL_SCHEMAS } from "../../../src/adapters/mcp/tools";
@@ -36,6 +37,27 @@ describe("HTTP validation schemas", () => {
     expect(HTTP_QUERY_SCHEMA.properties.sql).toEqual({
       type: "string",
       minLength: 1,
+      maxLength: 100000,
+    });
+  });
+
+  it("HTTP_WRITE_QUERY_SCHEMA validates sql input and dryRun/apply parameters", () => {
+    expect(HTTP_WRITE_QUERY_SCHEMA).toBeDefined();
+    expect(HTTP_WRITE_QUERY_SCHEMA.type).toBe("object");
+    expect(HTTP_WRITE_QUERY_SCHEMA.required).toEqual(["sql"]);
+    expect(HTTP_WRITE_QUERY_SCHEMA.additionalProperties).toBe(false);
+    expect(HTTP_WRITE_QUERY_SCHEMA.properties.sql).toEqual({
+      type: "string",
+      minLength: 1,
+      maxLength: 100000,
+    });
+    expect(HTTP_WRITE_QUERY_SCHEMA.properties.dryRun).toEqual({
+      type: "boolean",
+      description: "Run without applying writes.",
+    });
+    expect(HTTP_WRITE_QUERY_SCHEMA.properties.apply).toEqual({
+      type: "boolean",
+      description: "Apply a write instead of dry run.",
     });
   });
 

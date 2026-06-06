@@ -456,11 +456,37 @@ describe("Dysflow HTTP adapter", () => {
     expect(writeQuery.response.status).toBe(200);
     expect(vba.response.status).toBe(200);
     expect(services.calls.queries).toEqual([
-      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write" },
+      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write", dryRun: true },
     ]);
     expect(services.calls.vba).toEqual([
       { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] },
     ]);
+
+    // Test that apply: true propagates dryRun: false
+    const writeQueryApply = await readJson(`${server.url}/query/write`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1", apply: true }),
+    });
+    expect(writeQueryApply.response.status).toBe(200);
+    expect(services.calls.queries[1]).toEqual({
+      sql: "UPDATE People SET name='Ada' WHERE id=1",
+      mode: "write",
+      dryRun: false,
+    });
+
+    // Test that dryRun: false propagates dryRun: false
+    const writeQueryDryRunFalse = await readJson(`${server.url}/query/write`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1", dryRun: false }),
+    });
+    expect(writeQueryDryRunFalse.response.status).toBe(200);
+    expect(services.calls.queries[2]).toEqual({
+      sql: "UPDATE People SET name='Ada' WHERE id=1",
+      mode: "write",
+      dryRun: false,
+    });
   });
 
   it("accepts SELECT with a semicolon inside a string literal", async () => {
