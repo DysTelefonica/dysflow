@@ -30,7 +30,10 @@ export async function readJson(filePath: string): Promise<Record<string, unknown
   }
   try {
     const parsed = JSON.parse(raw);
-    return ensureObject(parsed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("JSON value is not a plain object");
+    }
+    return parsed as Record<string, unknown>;
   } catch (error) {
     const err = error as { message?: string };
     throw new Error(`Syntax error in JSON file ${filePath}: ${err.message ?? String(error)}`);
