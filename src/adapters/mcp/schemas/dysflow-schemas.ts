@@ -7,10 +7,12 @@ export type JsonSchemaProperty = {
   description?: string;
   enum?: readonly string[];
   minLength?: number;
+  maxLength?: number;
   minimum?: number;
   maximum?: number;
   pattern?: string;
   items?: JsonSchemaProperty;
+  maxItems?: number;
   additionalProperties?: boolean;
   properties?: Record<string, JsonSchemaProperty>;
 };
@@ -126,12 +128,7 @@ export const CLEANUP_SCHEMA: JsonObjectSchema = {
   },
 };
 
-export const HTTP_QUERY_SCHEMA: JsonObjectSchema = {
-  type: "object",
-  required: ["sql"],
-  additionalProperties: false,
-  properties: { sql: { type: "string", minLength: 1 } },
-};
+
 
 export const HTTP_VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
   type: "object",
@@ -204,21 +201,24 @@ export const SCHEMA_PROPS = {
   definition: { type: "string", description: "Table definition or fields." } as JsonSchemaProperty,
   fields: { type: "string", description: "Table definition alias." } as JsonSchemaProperty,
   // query / SQL
-  sql: { type: "string", minLength: 1, description: "SQL text." } as JsonSchemaProperty,
-  query: { type: "string", minLength: 1, description: "SQL query alias." } as JsonSchemaProperty,
+  sql: { type: "string", minLength: 1, maxLength: 100000, description: "SQL text." } as JsonSchemaProperty,
+  query: { type: "string", minLength: 1, maxLength: 100000, description: "SQL query alias." } as JsonSchemaProperty,
   queryDefinitions: {
     type: "array",
+    maxItems: 200,
     items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } },
     description: "Query definitions.",
   } as JsonSchemaProperty,
   queries: {
     type: "array",
+    maxItems: 200,
     items: { type: "object", properties: { name: { type: "string" }, sql: { type: "string" } } },
     description: "Query definitions alias.",
   } as JsonSchemaProperty,
   // write / fixture
   rows: {
     type: "array",
+    maxItems: 1000,
     items: { type: "object", additionalProperties: true },
     description: "Fixture rows.",
   } as JsonSchemaProperty,
@@ -243,6 +243,7 @@ export const SCHEMA_PROPS = {
   moduleName: { type: "string", description: "VBA module name." } as JsonSchemaProperty,
   moduleNames: {
     type: "array",
+    maxItems: 100,
     items: { type: "string" },
     description: "VBA module names.",
   } as JsonSchemaProperty,
@@ -254,7 +255,11 @@ export const SCHEMA_PROPS = {
     type: "string",
     description: "JSON encoded VBA test procedures.",
   } as JsonSchemaProperty,
-  argsJson: { type: "string", description: "JSON encoded argument array." } as JsonSchemaProperty,
+  argsJson: {
+    type: "string",
+    description:
+      "JSON encoded argument array. Non-arrays will be wrapped in a single-element array [value].",
+  } as JsonSchemaProperty,
   compile: { type: "boolean", description: "Compile before running." } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: { type: "string", description: "VBA import mode." } as JsonSchemaProperty,
@@ -347,4 +352,22 @@ export const STRICT_CTX = {
   expectedAccessPath: SCHEMA_PROPS.expectedAccessPath,
   expectedProjectRoot: SCHEMA_PROPS.expectedProjectRoot,
   expectedDestinationRoot: SCHEMA_PROPS.expectedDestinationRoot,
+};
+
+export const HTTP_QUERY_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["sql"],
+  additionalProperties: false,
+  properties: { sql: { type: "string", minLength: 1, maxLength: 100000 } },
+};
+
+export const HTTP_WRITE_QUERY_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["sql"],
+  additionalProperties: false,
+  properties: {
+    sql: { type: "string", minLength: 1, maxLength: 100000 },
+    dryRun: SCHEMA_PROPS.dryRun,
+    apply: SCHEMA_PROPS.apply,
+  },
 };

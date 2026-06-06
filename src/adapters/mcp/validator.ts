@@ -44,12 +44,22 @@ function validateJsonSchemaProperty(
       return `${path} must be at least ${property.minLength} non-whitespace character${property.minLength === 1 ? "" : "s"}.`;
   }
 
+  if (property.maxLength !== undefined && typeof value === "string") {
+    if (value.length > property.maxLength)
+      return `${path} must be at most ${property.maxLength} characters.`;
+  }
+
   if (property.minimum !== undefined && typeof value === "number") {
     if (value < property.minimum) return `${path} must be at least ${property.minimum}.`;
   }
 
   if (property.maximum !== undefined && typeof value === "number") {
     if (value > property.maximum) return `${path} must be at most ${property.maximum}.`;
+  }
+
+  if (property.maxItems !== undefined && Array.isArray(value)) {
+    if (value.length > property.maxItems)
+      return `${path} must have at most ${property.maxItems} items.`;
   }
 
   if (property.pattern !== undefined && typeof value === "string") {

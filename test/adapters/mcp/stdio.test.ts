@@ -152,6 +152,17 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     if (result === undefined || result.ok) throw new Error("expected registry deprecation failure");
     expect(result.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
     expect(result.error.message).toContain("deprecated");
+
+    const result2 = await services.vbaSyncToolService?.execute("import_all", {
+      contextId: "registered-project",
+      dryRun: "true",
+      importMode: "Code",
+    });
+
+    expect(result2?.ok).toBe(false);
+    if (result2 === undefined || result2.ok) throw new Error("expected registry deprecation failure");
+    expect(result2.error.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+    expect(result2.error.message).toContain("deprecated");
   });
 
   it("rejects registered read query by projectId after global registry deprecation", async () => {

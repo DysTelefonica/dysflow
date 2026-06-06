@@ -150,3 +150,41 @@ describe("SCHEMA_PROPS — bounded numeric fields (#432)", () => {
     });
   });
 });
+
+describe("validateInput — maxLength and maxItems bounds", () => {
+  const schemaWithMaxLength: JsonObjectSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      str: { type: "string", maxLength: 5 },
+    },
+  };
+
+  const schemaWithMaxItems: JsonObjectSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      arr: { type: "array", maxItems: 3, items: { type: "string" } },
+    },
+  };
+
+  it("rejects string longer than maxLength", () => {
+    const result = validateInput({ str: "abcdef" }, schemaWithMaxLength);
+    expect(result).toBe("str must be at most 5 characters.");
+  });
+
+  it("accepts string within maxLength", () => {
+    const result = validateInput({ str: "abcde" }, schemaWithMaxLength);
+    expect(result).toBeUndefined();
+  });
+
+  it("rejects array with items exceeding maxItems", () => {
+    const result = validateInput({ arr: ["a", "b", "c", "d"] }, schemaWithMaxItems);
+    expect(result).toBe("arr must have at most 3 items.");
+  });
+
+  it("accepts array within maxItems limit", () => {
+    const result = validateInput({ arr: ["a", "b", "c"] }, schemaWithMaxItems);
+    expect(result).toBeUndefined();
+  });
+});

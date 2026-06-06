@@ -19,7 +19,7 @@ import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
-import { isRecord } from "../../core/utils/index.js";
+import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
@@ -292,7 +292,7 @@ function createUnavailableVbaSyncToolService(
       const params = isRecord(input) ? input : {};
       const isSafeImportDryRun =
         (toolName === "import_all" || toolName === "import_modules") &&
-        (params.dryRun === true || params.dryRun === "true");
+        truthy(params.dryRun);
       if (isSafeImportDryRun) return fallback.execute(toolName, input);
       return failureResult(error);
     },
