@@ -3,8 +3,8 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-regis
 import {
   CLEANUP_SCHEMA,
   HTTP_QUERY_SCHEMA,
-  HTTP_WRITE_QUERY_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
+  HTTP_WRITE_QUERY_SCHEMA,
 } from "../../../src/adapters/mcp/schemas";
 import { MCP_TOOL_SCHEMAS } from "../../../src/adapters/mcp/tools";
 

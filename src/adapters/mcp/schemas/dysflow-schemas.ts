@@ -128,8 +128,6 @@ export const CLEANUP_SCHEMA: JsonObjectSchema = {
   },
 };
 
-
-
 export const HTTP_VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: ["moduleName", "procedureName"],
@@ -201,8 +199,18 @@ export const SCHEMA_PROPS = {
   definition: { type: "string", description: "Table definition or fields." } as JsonSchemaProperty,
   fields: { type: "string", description: "Table definition alias." } as JsonSchemaProperty,
   // query / SQL
-  sql: { type: "string", minLength: 1, maxLength: 100000, description: "SQL text." } as JsonSchemaProperty,
-  query: { type: "string", minLength: 1, maxLength: 100000, description: "SQL query alias." } as JsonSchemaProperty,
+  sql: {
+    type: "string",
+    minLength: 1,
+    maxLength: 100000,
+    description: "SQL text.",
+  } as JsonSchemaProperty,
+  query: {
+    type: "string",
+    minLength: 1,
+    maxLength: 100000,
+    description: "SQL query alias.",
+  } as JsonSchemaProperty,
   queryDefinitions: {
     type: "array",
     maxItems: 200,

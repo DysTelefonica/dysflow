@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   detectWriteSqlKeyword,
-  looksLikeReadOnlySql,
   isRecord,
+  looksLikeReadOnlySql,
   REDACTED_SECRET,
   readJsonFileAsync,
   readJsonFileSync,
@@ -256,18 +256,12 @@ describe("looksLikeReadOnlySql and detectWriteSqlKeyword", () => {
   });
 
   it("allows SELECT containing WITH (CTE) when it reads", () => {
-    expect(
-      looksLikeReadOnlySql("WITH cte AS (SELECT * FROM People) SELECT * FROM cte"),
-    ).toBe(true);
-    expect(
-      looksLikeReadOnlySql("  with cte as (select id from T) select * from cte"),
-    ).toBe(true);
+    expect(looksLikeReadOnlySql("WITH cte AS (SELECT * FROM People) SELECT * FROM cte")).toBe(true);
+    expect(looksLikeReadOnlySql("  with cte as (select id from T) select * from cte")).toBe(true);
   });
 
   it("blocks CTE queries containing writes", () => {
-    expect(
-      looksLikeReadOnlySql("WITH cte AS (DELETE FROM People) SELECT * FROM cte"),
-    ).toBe(false);
+    expect(looksLikeReadOnlySql("WITH cte AS (DELETE FROM People) SELECT * FROM cte")).toBe(false);
     expect(
       looksLikeReadOnlySql("WITH cte AS (INSERT INTO People VALUES(1)) SELECT * FROM cte"),
     ).toBe(false);

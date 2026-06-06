@@ -291,8 +291,7 @@ function createUnavailableVbaSyncToolService(
     execute: async (toolName, input) => {
       const params = isRecord(input) ? input : {};
       const isSafeImportDryRun =
-        (toolName === "import_all" || toolName === "import_modules") &&
-        truthy(params.dryRun);
+        (toolName === "import_all" || toolName === "import_modules") && truthy(params.dryRun);
       if (isSafeImportDryRun) return fallback.execute(toolName, input);
       return failureResult(error);
     },

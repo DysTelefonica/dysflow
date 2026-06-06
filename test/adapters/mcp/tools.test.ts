@@ -377,9 +377,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools.find((t) => t.name === "query_sql")?.handler({ sql: "" }),
     ).resolves.toMatchObject({ isError: true });
-    await expect(
-      tools.find((t) => t.name === "query_sql")?.handler({}),
-    ).resolves.toMatchObject({
+    await expect(tools.find((t) => t.name === "query_sql")?.handler({})).resolves.toMatchObject({
       isError: true,
       content: [{ text: expect.stringContaining("sql is required") }],
     });
@@ -1186,7 +1184,7 @@ describe("MCP tool registration over core services", () => {
         failureResult(
           createDysflowError(
             "INVALID_READ_ONLY_QUERY",
-            "DROP statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode \"write\" for write operations.",
+            'DROP statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.',
           ),
         ),
       );
@@ -1212,7 +1210,7 @@ describe("MCP tool registration over core services", () => {
         failureResult(
           createDysflowError(
             "INVALID_READ_ONLY_QUERY",
-            "DELETE statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode \"write\" for write operations.",
+            'DELETE statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.',
           ),
         ),
       );
@@ -1255,7 +1253,6 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("context props unification — single source of truth (#200)", () => {
-
     it("schemas that previously used CONTEXT_PROPERTIES still include projectId and contextId", () => {
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),

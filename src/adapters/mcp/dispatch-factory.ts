@@ -18,7 +18,6 @@ import {
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
 
-
 // ─── Dispatch tool factory ────────────────────────────────────────────────────
 
 export function createDispatchTool(
