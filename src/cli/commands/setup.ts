@@ -6,6 +6,7 @@ import {
   redactDysflowConfig,
 } from "../../core/config/dysflow-config.js";
 import type { CliCommandContext, CliResult } from "./types.js";
+import { parseNamedArgs } from "./install-utils.js";
 
 const HELP_TEXT =
   "Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--set-project-id <id>] [--help]";
@@ -82,54 +83,33 @@ export async function handleSetupCommand(
 function parseSetupArgs(
   args: readonly string[],
 ): { ok: true; options: SetupOptions } | { ok: false; message: string } {
-  const options: SetupOptions = { writeProject: false };
+  const parsed = parseNamedArgs({
+    specs: [
+      { name: "--write-project", type: "boolean" },
+      { name: "--access-path", type: "string" },
+      { name: "--backend-path", type: "string" },
+      { name: "--project-id", type: "string" },
+      { name: "--set-project-id", type: "string" },
+    ],
+    args,
+    onUnknown: (arg) => `Unsupported setup option: ${arg}`,
+    onMissing: (arg) => `Missing value for ${arg}.`,
+  });
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--write-project") {
-      options.writeProject = true;
-      continue;
-    }
-    if (arg === "--access-path") {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        return { ok: false, message: "Missing value for --access-path." };
-      }
-      options.accessPath = value;
-      index += 1;
-      continue;
-    }
-    if (arg === "--backend-path") {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        return { ok: false, message: "Missing value for --backend-path." };
-      }
-      options.backendPath = value;
-      index += 1;
-      continue;
-    }
-    if (arg === "--project-id") {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        return { ok: false, message: "Missing value for --project-id." };
-      }
-      options.projectId = value;
-      index += 1;
-      continue;
-    }
-    if (arg === "--set-project-id") {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        return { ok: false, message: "Missing value for --set-project-id." };
-      }
-      options.setProjectId = value;
-      index += 1;
-      continue;
-    }
-    return { ok: false, message: `Unsupported setup option: ${arg}` };
+  if (!parsed.ok) {
+    return { ok: false, message: parsed.message };
   }
 
-  return { ok: true, options };
+  return {
+    ok: true,
+    options: {
+      writeProject: parsed.values["--write-project"] === true,
+      accessPath: parsed.values["--access-path"] as string | undefined,
+      backendPath: parsed.values["--backend-path"] as string | undefined,
+      projectId: parsed.values["--project-id"] as string | undefined,
+      setProjectId: parsed.values["--set-project-id"] as string | undefined,
+    },
+  };
 }
 
 function toPortableProjectPath(value: string | undefined, projectRoot: string): string | undefined {

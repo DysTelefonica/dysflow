@@ -6,6 +6,7 @@ import {
   getHome,
   getSystemMarkerPath,
   isSafeToDelete,
+  parseNamedArgs,
   removeAgentConfig,
   resolveAgentConfigPaths,
   resolveRuntimeDir,
@@ -25,25 +26,23 @@ export function parseUninstallArgs(
     return { ok: false, message: UNINSTALL_USAGE };
   }
 
-  const options: UninstallOptions = {};
+  const parsed = parseNamedArgs({
+    specs: [{ name: "--runtime-dir", type: "string" }],
+    args,
+    onUnknown: (arg) => `Unsupported uninstall option: ${arg}`,
+    onMissing: (arg) => `Missing value for ${arg}.`,
+  });
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    if (arg === "--runtime-dir") {
-      const runtimeDir = args[index + 1];
-      if (runtimeDir === undefined || runtimeDir.startsWith("--")) {
-        return { ok: false, message: "Missing value for --runtime-dir." };
-      }
-      options.runtimeDir = runtimeDir;
-      index += 1;
-      continue;
-    }
-
-    return { ok: false, message: `Unsupported uninstall option: ${arg}` };
+  if (!parsed.ok) {
+    return { ok: false, message: parsed.message };
   }
 
-  return { ok: true, options };
+  return {
+    ok: true,
+    options: {
+      runtimeDir: parsed.values["--runtime-dir"] as string | undefined,
+    },
+  };
 }
 
 export async function handleUninstallCommand(

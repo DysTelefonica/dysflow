@@ -1,6 +1,7 @@
 import type { RelinkDirectoryReport } from "../../../core/contracts/index.js";
 import type { AccessQueryService } from "../../../core/services/query-service.js";
 import type { CliCommandContext, CliResult } from "../types.js";
+import { parseNamedArgs } from "../arg-parser.js";
 
 export type AliasMapEntry = { from: string; to: string };
 
@@ -26,135 +27,41 @@ const USAGE =
 export function parseRelinkDirectoryArgs(
   args: readonly string[],
 ): ParseResult<RelinkDirectoryOptions> {
-  let rootPath: string | undefined;
-  let applySet = false;
-  let dryRunSet = false;
-  let recursive = true;
-  let backup = true;
-  let strictLocal = false;
-  let removeUnresolved = false;
-  let passwordEnv: string | undefined;
-  let json = false;
-  let timeoutMs: number | undefined;
-  const maps: AliasMapEntry[] = [];
-  const denyPrefixes: string[] = [];
+  const parsed = parseNamedArgs({
+    specs: [
+      { name: "--root", type: "string" },
+      { name: "--apply", type: "boolean" },
+      { name: "--dry-run", type: "boolean" },
+      { name: "--backup", type: "boolean" },
+      { name: "--no-backup", type: "boolean" },
+      { name: "--recursive", type: "boolean" },
+      { name: "--strict-local", type: "boolean" },
+      { name: "--remove-unresolved", type: "boolean" },
+      { name: "--json", type: "boolean" },
+      { name: "--map", type: "string", multiple: true },
+      { name: "--deny-prefix", type: "string", multiple: true },
+      { name: "--password-env", type: "string" },
+      { name: "--timeout-ms", type: "string" },
+    ],
+    args,
+    onUnknown: (arg) => `Unknown option: ${arg}\n${USAGE}`,
+    onMissing: (arg) => `Missing value for ${arg}.`,
+  });
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    if (arg === "--root") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        return { ok: false, error: "Missing value for --root." };
-      }
-      rootPath = next;
-      i++;
-      continue;
-    }
-
-    if (arg === "--apply") {
-      applySet = true;
-      continue;
-    }
-
-    if (arg === "--dry-run") {
-      dryRunSet = true;
-      continue;
-    }
-
-    if (arg === "--backup") {
-      backup = true;
-      continue;
-    }
-
-    if (arg === "--no-backup") {
-      backup = false;
-      continue;
-    }
-
-    if (arg === "--recursive") {
-      recursive = true;
-      continue;
-    }
-
-    if (arg === "--strict-local") {
-      strictLocal = true;
-      continue;
-    }
-
-    if (arg === "--remove-unresolved") {
-      removeUnresolved = true;
-      continue;
-    }
-
-    if (arg === "--json") {
-      json = true;
-      continue;
-    }
-
-    if (arg === "--map") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        return { ok: false, error: "Missing value for --map." };
-      }
-      const eqIndex = next.indexOf("=");
-      if (eqIndex === -1) {
-        return {
-          ok: false,
-          error: `Invalid --map format: "${next}". Expected: OldName.accdb=NewName.accdb`,
-        };
-      }
-      maps.push({ from: next.slice(0, eqIndex), to: next.slice(eqIndex + 1) });
-      i++;
-      continue;
-    }
-
-    if (arg === "--deny-prefix") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        return { ok: false, error: "Missing value for --deny-prefix." };
-      }
-      denyPrefixes.push(next);
-      i++;
-      continue;
-    }
-
-    if (arg === "--password-env") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        return { ok: false, error: "Missing value for --password-env." };
-      }
-      passwordEnv = next;
-      i++;
-      continue;
-    }
-
-    if (arg === "--timeout-ms") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        return { ok: false, error: "Missing value for --timeout-ms." };
-      }
-      const parsed = Number(next);
-      if (!Number.isFinite(parsed) || parsed <= 0) {
-        return {
-          ok: false,
-          error: `Invalid --timeout-ms value: "${next}". Expected a positive integer.`,
-        };
-      }
-      timeoutMs = parsed;
-      i++;
-      continue;
-    }
-
-    return { ok: false, error: `Unknown option: ${arg}\n${USAGE}` };
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.message };
   }
 
+  const rootPath = parsed.values["--root"] as string | undefined;
   if (rootPath === undefined) {
     return {
       ok: false,
       error: `--root is required.\n${USAGE}`,
     };
   }
+
+  const applySet = parsed.values["--apply"] === true;
+  const dryRunSet = parsed.values["--dry-run"] === true;
 
   if (applySet && dryRunSet) {
     return {
@@ -163,17 +70,47 @@ export function parseRelinkDirectoryArgs(
     };
   }
 
+  const maps: AliasMapEntry[] = [];
+  const rawMaps = (parsed.values["--map"] as string[]) ?? [];
+  for (const next of rawMaps) {
+    const eqIndex = next.indexOf("=");
+    if (eqIndex === -1) {
+      return {
+        ok: false,
+        error: `Invalid --map format: "${next}". Expected: OldName.accdb=NewName.accdb`,
+      };
+    }
+    maps.push({ from: next.slice(0, eqIndex), to: next.slice(eqIndex + 1) });
+  }
+
+  const denyPrefixes = (parsed.values["--deny-prefix"] as string[]) ?? [];
+
+  let timeoutMs: number | undefined;
+  const timeoutVal = parsed.values["--timeout-ms"] as string | undefined;
+  if (timeoutVal !== undefined) {
+    const parsedTimeout = Number(timeoutVal);
+    if (!Number.isFinite(parsedTimeout) || parsedTimeout <= 0) {
+      return {
+        ok: false,
+        error: `Invalid --timeout-ms value: "${timeoutVal}". Expected a positive integer.`,
+      };
+    }
+    timeoutMs = parsedTimeout;
+  }
+
+  const backup = parsed.values["--no-backup"] !== true;
+
   return {
     ok: true,
     value: {
       rootPath,
       apply: applySet,
-      recursive,
+      recursive: true, // Defaults to true, --recursive flag is just a no-op that sets it to true
       backup,
-      strictLocal,
-      removeUnresolved,
-      passwordEnv,
-      json,
+      strictLocal: parsed.values["--strict-local"] === true,
+      removeUnresolved: parsed.values["--remove-unresolved"] === true,
+      passwordEnv: parsed.values["--password-env"] as string | undefined,
+      json: parsed.values["--json"] === true,
       timeoutMs,
       maps,
       denyPrefixes,

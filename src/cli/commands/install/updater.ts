@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { compareVersions } from "../../../core/utils/version.js";
 import type { CliResult } from "../types.js";
+import { parseNamedArgs } from "../arg-parser.js";
 import { type AgentName, ALL_AGENTS } from "./agent-config.js";
 import {
   createGitHubReleaseUpdateProvider,
@@ -60,50 +61,55 @@ export function parseInstallArgs(
     return { ok: false, message: INSTALL_USAGE };
   }
 
-  const options: InstallOptions = {
-    agentNames: [],
-    interactive: true,
-  };
+  const parsed = parseNamedArgs({
+    specs: [
+      { name: "--runtime-dir", type: "string" },
+      { name: "--agents", type: "string" },
+      { name: "--agent-all", type: "boolean" },
+      { name: "--no-tui", type: "boolean" },
+    ],
+    args,
+    onUnknown: (arg) => `Unsupported install option: ${arg}`,
+    onMissing: (arg) => `Missing value for ${arg}.`,
+  });
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    if (arg === "--runtime-dir") {
-      const runtimeDir = args[index + 1];
-      if (runtimeDir === undefined || runtimeDir.startsWith("--")) {
-        return { ok: false, message: "Missing value for --runtime-dir." };
-      }
-      options.runtimeDir = runtimeDir;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--agents") {
-      const parsed = parseAgentList(args[index + 1]);
-      if (!parsed.ok) {
-        return { ok: false, message: parsed.message };
-      }
-      options.agentNames = parsed.agents;
-      options.interactive = false;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--agent-all") {
-      options.interactive = false;
-      options.agentNames = [...ALL_AGENTS];
-      continue;
-    }
-
-    if (arg === "--no-tui") {
-      options.interactive = false;
-      continue;
-    }
-
-    return { ok: false, message: `Unsupported install option: ${arg}` };
+  if (!parsed.ok) {
+    return { ok: false, message: parsed.message };
   }
 
-  return { ok: true, options };
+  const agentAll = parsed.values["--agent-all"] === true;
+  const noTui = parsed.values["--no-tui"] === true;
+  const rawAgents = parsed.values["--agents"] as string | undefined;
+
+  let agentNames: AgentName[] = [];
+  let interactive = true;
+
+  if (rawAgents !== undefined) {
+    const parsedAgents = parseAgentList(rawAgents);
+    if (!parsedAgents.ok) {
+      return { ok: false, message: parsedAgents.message };
+    }
+    agentNames = parsedAgents.agents;
+    interactive = false;
+  }
+
+  if (agentAll) {
+    interactive = false;
+    agentNames = [...ALL_AGENTS];
+  }
+
+  if (noTui) {
+    interactive = false;
+  }
+
+  return {
+    ok: true,
+    options: {
+      runtimeDir: parsed.values["--runtime-dir"] as string | undefined,
+      agentNames,
+      interactive,
+    },
+  };
 }
 
 export function parseUpdateArgs(
@@ -113,39 +119,29 @@ export function parseUpdateArgs(
     return { ok: false, message: UPDATE_USAGE };
   }
 
-  const options: UpdateOptions = {
-    runtimeDir: undefined,
-    force: false,
-    skipChecksum: false,
-  };
+  const parsed = parseNamedArgs({
+    specs: [
+      { name: "--runtime-dir", type: "string" },
+      { name: "--force", type: "boolean" },
+      { name: "--skip-checksum", type: "boolean" },
+    ],
+    args,
+    onUnknown: (arg) => `Unsupported update option: ${arg}`,
+    onMissing: (arg) => `Missing value for ${arg}.`,
+  });
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    if (arg === "--runtime-dir") {
-      const runtimeDir = args[index + 1];
-      if (runtimeDir === undefined || runtimeDir.startsWith("--")) {
-        return { ok: false, message: "Missing value for --runtime-dir." };
-      }
-      options.runtimeDir = runtimeDir;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--force") {
-      options.force = true;
-      continue;
-    }
-
-    if (arg === "--skip-checksum") {
-      options.skipChecksum = true;
-      continue;
-    }
-
-    return { ok: false, message: `Unsupported update option: ${arg}` };
+  if (!parsed.ok) {
+    return { ok: false, message: parsed.message };
   }
 
-  return { ok: true, options };
+  return {
+    ok: true,
+    options: {
+      runtimeDir: parsed.values["--runtime-dir"] as string | undefined,
+      force: parsed.values["--force"] === true,
+      skipChecksum: parsed.values["--skip-checksum"] === true,
+    },
+  };
 }
 
 async function readPackageJsonVersion(packagePath: string): Promise<string | undefined> {

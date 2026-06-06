@@ -4,6 +4,7 @@ import {
   startDysflowHttpServer,
 } from "../../adapters/http/server.js";
 import type { CliCommandContext, CliResult } from "./types.js";
+import { parseNamedArgs } from "./install-utils.js";
 
 export const SERVE_USAGE =
   "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes] [--token <token>]";
@@ -49,50 +50,40 @@ export async function handleServeCommand(
 function parseServeOptions(
   args: readonly string[],
 ): { ok: true; options: ServeOptions } | { ok: false; message: string } {
-  const options: ServeOptions = { host: "127.0.0.1", port: 17_321, writesEnabled: false };
+  const parsed = parseNamedArgs({
+    specs: [
+      { name: "--enable-writes", type: "boolean" },
+      { name: "--host", type: "string" },
+      { name: "--port", type: "string" },
+      { name: "--token", type: "string" },
+    ],
+    args,
+    onUnknown: (arg) => `Unsupported serve option: ${arg}`,
+    onMissing: (arg) => arg === "--port" ? "--port must be an integer between 0 and 65535." : `Missing value for ${arg}.`,
+  });
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--enable-writes") {
-      options.writesEnabled = true;
-      continue;
-    }
-
-    if (arg === "--host") {
-      const host = args[index + 1];
-      if (host === undefined || host.startsWith("--")) {
-        return { ok: false, message: "Missing value for --host." };
-      }
-      options.host = host;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--port") {
-      const portValue = args[index + 1];
-      const port = Number(portValue);
-      if (portValue === undefined || !Number.isInteger(port) || port < 0 || port > 65_535) {
-        return { ok: false, message: "--port must be an integer between 0 and 65535." };
-      }
-      options.port = port;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--token") {
-      const token = args[index + 1];
-      if (token === undefined || token.startsWith("--")) {
-        return { ok: false, message: "Missing value for --token." };
-      }
-      options.httpToken = token;
-      index += 1;
-      continue;
-    }
-
-    return { ok: false, message: `Unsupported serve option: ${arg}` };
+  if (!parsed.ok) {
+    return { ok: false, message: parsed.message };
   }
 
-  return { ok: true, options };
+  const portValue = parsed.values["--port"] as string | undefined;
+  let port = 17_321;
+  if (portValue !== undefined) {
+    port = Number(portValue);
+    if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+      return { ok: false, message: "--port must be an integer between 0 and 65535." };
+    }
+  }
+
+  return {
+    ok: true,
+    options: {
+      host: (parsed.values["--host"] as string) ?? "127.0.0.1",
+      port,
+      writesEnabled: parsed.values["--enable-writes"] === true,
+      httpToken: parsed.values["--token"] as string | undefined,
+    },
+  };
 }
 
 export type StartHttpAdapter = (
