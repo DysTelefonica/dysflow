@@ -2736,6 +2736,11 @@ function Invoke-ExportAction {
         # FIX: pasar AccessApplication para que SaveAsText funcione en formularios
         Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
     }
+    $exportResult = @{
+        ok = $true
+        exported = $targets
+    }
+    Write-DysflowResult -Result $exportResult -Depth 4
     Write-Status -Message ("OK Export completado ({0})" -f $total) -Color Green
 }
 
@@ -2826,6 +2831,11 @@ function Invoke-GenerateErdAction {
 
     Export-DataStructure -DatabasePath $BackendPath -OutputPath $mdFile -Password $Password
 
+    $result = @{
+        ok = $true
+        markdownFile = $mdFile
+    }
+    Write-DysflowResult -Result $result -Depth 4
     Write-Status -Message ("OK ERD generado en: {0}" -f $mdFile) -Color Green
 }
 
@@ -2966,6 +2976,12 @@ function Invoke-FixEncodingAction {
         Write-Status -Message ("Fix-Encoding (Access): {0}" -f $fixedAccess) -Color Yellow
     }
 
+    $result = @{
+        ok = $true
+        fixedSrc = $fixedSrc
+        fixedAccess = $fixedAccess
+    }
+    Write-DysflowResult -Result $result -Depth 4
     Write-Status -Message "OK Fix-Encoding completado" -Color Green
 }
 

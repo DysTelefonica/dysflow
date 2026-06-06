@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.19] - 2026-06-06
+
+### Fixed
+
+- **PowerShell sentinel output contract hardening**: Added `Write-DysflowResult` calls to the end of `Export`, `Fix-Encoding`, and `Generate-ERD` actions in `dysflow-vba-manager.ps1`. This ensures these tools always write the structured `DYSFLOW_RESULT` JSON line on stdout, preventing E2E failures when parsed by the MCP adapter.
+
 ## [v1.2.18] - 2026-06-05
 
 ### Fixed

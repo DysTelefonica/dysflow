@@ -104,8 +104,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     request: AccessOperationPreflightCleanupRequest,
   ): boolean {
     return (
-      normalizePathForMatching(record.accessPath) === normalizePathForMatching(request.accessPath) &&
-      normalizePathForMatching(record.projectRootAbs ?? "") === normalizePathForMatching(request.projectRoot)
+      normalizePathForMatching(record.accessPath) ===
+        normalizePathForMatching(request.accessPath) &&
+      normalizePathForMatching(record.projectRootAbs ?? "") ===
+        normalizePathForMatching(request.projectRoot)
     );
   }
 
@@ -316,8 +318,6 @@ export function diagnosticsFromPreflightCleanup(
     createDiagnostic("warning", "access.preflight", `${error.operationId}: ${error.message}`),
   );
 }
-
-
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

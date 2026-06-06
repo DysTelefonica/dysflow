@@ -5,8 +5,8 @@ import {
   loadDysflowConfigAsync,
   redactDysflowConfig,
 } from "../../core/config/dysflow-config.js";
-import type { CliCommandContext, CliResult } from "./types.js";
 import { parseNamedArgs } from "./install-utils.js";
+import type { CliCommandContext, CliResult } from "./types.js";
 
 const HELP_TEXT =
   "Usage: dysflow setup [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--set-project-id <id>] [--help]";

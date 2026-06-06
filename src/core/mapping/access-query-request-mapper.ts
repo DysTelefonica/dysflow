@@ -49,7 +49,9 @@ export const VALID_ACCESS_QUERY_ACTIONS = [
 ] as const;
 
 export function isValidAccessQueryAction(action: unknown): action is AccessQueryAction {
-  return typeof action === "string" && (VALID_ACCESS_QUERY_ACTIONS as readonly string[]).includes(action);
+  return (
+    typeof action === "string" && (VALID_ACCESS_QUERY_ACTIONS as readonly string[]).includes(action)
+  );
 }
 
 function paramsOf(input: unknown): Record<string, unknown> {

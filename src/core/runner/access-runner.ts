@@ -34,7 +34,10 @@ import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 export class RunnerLockTimeoutError extends Error {
-  constructor(public readonly lockPath: string, public readonly timeoutMs: number) {
+  constructor(
+    public readonly lockPath: string,
+    public readonly timeoutMs: number,
+  ) {
     super(`Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`);
     this.name = "RunnerLockTimeoutError";
   }
@@ -307,12 +310,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       );
     } catch (error) {
       if (error instanceof RunnerLockTimeoutError) {
-        return failureResult(
-          createDysflowError(
-            "RUNNER_LOCK_TIMEOUT",
-            error.message,
-          ),
-        );
+        return failureResult(createDysflowError("RUNNER_LOCK_TIMEOUT", error.message));
       }
       throw error;
     }

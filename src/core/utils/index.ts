@@ -94,9 +94,7 @@ export function detectWriteSqlKeyword(sql: string): string | undefined {
   const match = sql
     .toLowerCase()
     .match(/\b(insert|update|delete|create|drop|alter|truncate|into|exec|execute|grant|revoke)\b/);
-  return match
-    ? match[1].toUpperCase()
-    : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
+  return match ? match[1].toUpperCase() : (sql.trim().split(/\s+/)[0]?.toUpperCase() ?? "");
 }
 
 export * from "./path-utils.js";

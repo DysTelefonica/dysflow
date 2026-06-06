@@ -1,7 +1,7 @@
 import type { RelinkDirectoryReport } from "../../../core/contracts/index.js";
 import type { AccessQueryService } from "../../../core/services/query-service.js";
-import type { CliCommandContext, CliResult } from "../types.js";
 import { parseNamedArgs } from "../arg-parser.js";
+import type { CliCommandContext, CliResult } from "../types.js";
 
 export type AliasMapEntry = { from: string; to: string };
 

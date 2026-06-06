@@ -21,8 +21,9 @@ export async function readJson(filePath: string): Promise<Record<string, unknown
   let raw: string;
   try {
     raw = await readFile(filePath, "utf8");
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error) {
+    const err = error as { code?: string };
+    if (err?.code === "ENOENT") {
       return {};
     }
     throw error;
@@ -30,8 +31,9 @@ export async function readJson(filePath: string): Promise<Record<string, unknown
   try {
     const parsed = JSON.parse(raw);
     return ensureObject(parsed);
-  } catch (error: any) {
-    throw new Error(`Syntax error in JSON file ${filePath}: ${error.message}`);
+  } catch (error) {
+    const err = error as { message?: string };
+    throw new Error(`Syntax error in JSON file ${filePath}: ${err.message ?? String(error)}`);
   }
 }
 

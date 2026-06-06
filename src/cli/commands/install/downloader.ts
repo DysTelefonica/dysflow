@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runCommand, runCommandOutput } from "./command-runner.js";
 
-const GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
+const _GITHUB_REPO_URL = "https://github.com/DysTelefonica/dysflow.git";
 const GITHUB_LATEST_RELEASE_API =
   "https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
 

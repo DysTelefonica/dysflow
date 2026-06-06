@@ -19,8 +19,9 @@ export function readPackageVersionNear(moduleUrl: string, fallback = "0.0.0"): s
         }
         console.warn(`WARNING: package.json at ${packagePath} lacks a version string.`);
         return fallback;
-      } catch (err: any) {
-        console.warn(`WARNING: Failed to parse package.json at ${packagePath}: ${err.message}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`WARNING: Failed to parse package.json at ${packagePath}: ${message}`);
         return fallback;
       }
     }

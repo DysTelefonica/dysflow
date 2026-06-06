@@ -3,8 +3,8 @@ import {
   type StartedDysflowHttpServer,
   startDysflowHttpServer,
 } from "../../adapters/http/server.js";
-import type { CliCommandContext, CliResult } from "./types.js";
 import { parseNamedArgs } from "./install-utils.js";
+import type { CliCommandContext, CliResult } from "./types.js";
 
 export const SERVE_USAGE =
   "Usage: dysflow serve [--host 127.0.0.1] [--port 17321] [--enable-writes] [--token <token>]";
@@ -59,7 +59,10 @@ function parseServeOptions(
     ],
     args,
     onUnknown: (arg) => `Unsupported serve option: ${arg}`,
-    onMissing: (arg) => arg === "--port" ? "--port must be an integer between 0 and 65535." : `Missing value for ${arg}.`,
+    onMissing: (arg) =>
+      arg === "--port"
+        ? "--port must be an integer between 0 and 65535."
+        : `Missing value for ${arg}.`,
   });
 
   if (!parsed.ok) {

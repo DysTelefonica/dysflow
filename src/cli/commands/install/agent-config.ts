@@ -1,6 +1,12 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { ensureObject, fileExists, readJson, writeJson, writeFileAtomically } from "./file-utils.js";
+import {
+  ensureObject,
+  fileExists,
+  readJson,
+  writeFileAtomically,
+  writeJson,
+} from "./file-utils.js";
 
 export type AgentName = "codex" | "opencode" | "claude" | "pi";
 export const ALL_AGENTS = ["codex", "opencode", "claude", "pi"] as const;
@@ -97,7 +103,7 @@ export async function removeDysflowMcpConfig(agent: AgentName, filePath: string)
   if (container.dysflow === undefined) return;
 
   const entry = container.dysflow;
-  let cmd: unknown = undefined;
+  let cmd: unknown;
   if (typeof entry === "object" && entry !== null) {
     cmd = (entry as Record<string, unknown>).command;
   }

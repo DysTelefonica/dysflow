@@ -78,10 +78,15 @@ export function isSafeToDelete(dirPath: string, env: NodeJS.ProcessEnv): boolean
     env.TEMP ? path.resolve(env.TEMP) : "",
     env.TMP ? path.resolve(env.TMP) : "",
     tmpdir() ? path.resolve(tmpdir()) : "",
-  ].filter(Boolean).map(p => path.resolve(p).replace(/\\/g, "/").toLowerCase());
+  ]
+    .filter(Boolean)
+    .map((p) => path.resolve(p).replace(/\\/g, "/").toLowerCase());
 
   // Add user folders
-  const usersDir = path.resolve(env.SystemDrive ?? "C:", "Users").replace(/\\/g, "/").toLowerCase();
+  const usersDir = path
+    .resolve(env.SystemDrive ?? "C:", "Users")
+    .replace(/\\/g, "/")
+    .toLowerCase();
   systemPaths.push(usersDir);
   systemPaths.push("c:/users");
   systemPaths.push("/home");
@@ -97,10 +102,10 @@ export function isSafeToDelete(dirPath: string, env: NodeJS.ProcessEnv): boolean
     }
   }
 
-  const systemPathsSet = new Set(systemPaths.map(p => p.replace(/\/$/, "")));
+  const systemPathsSet = new Set(systemPaths.map((p) => p.replace(/\/$/, "")));
 
   for (const sysDir of systemPathsSet) {
-    if (sysDir === normalized || sysDir.startsWith(normalized + "/")) {
+    if (sysDir === normalized || sysDir.startsWith(`${normalized}/`)) {
       return false;
     }
   }

@@ -81,7 +81,9 @@ describe("access-query-request-mapper", () => {
     });
 
     it("throws an error if the action is invalid", () => {
-      expect(() => buildQueryReadRequest("invalid_action" as any, {})).toThrow("Invalid Access query action");
+      expect(() => buildQueryReadRequest("invalid_action" as unknown as "list_tables", {})).toThrow(
+        "Invalid Access query action",
+      );
     });
   });
 

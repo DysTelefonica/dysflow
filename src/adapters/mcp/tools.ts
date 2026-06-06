@@ -23,10 +23,10 @@ export {
 } from "./result-translation.js";
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
+import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
-  McpToolResult,
   McpWriteAccessResolver,
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -38,8 +38,6 @@ import {
   VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
 import { validateInput } from "./validator.js";
-
-import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
 
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 

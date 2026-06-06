@@ -1,9 +1,6 @@
-import {
-  type DysflowConfig,
-  loadDysflowConfigAsync,
-} from "./dysflow-config.js";
 import { type OperationResult, successResult } from "../contracts/index.js";
 import { stringValue } from "../utils/index.js";
+import { type DysflowConfig, loadDysflowConfigAsync } from "./dysflow-config.js";
 
 export type ExecutionTargetContext = {
   env: Record<string, string | undefined>;

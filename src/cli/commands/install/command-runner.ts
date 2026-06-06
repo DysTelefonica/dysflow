@@ -1,4 +1,4 @@
-import { execFile, type ExecFileOptions } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 
 export const MAX_SUBPROCESS_BUFFER_BYTES = 10 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -28,7 +28,7 @@ function runCommandWithTimeout(
         reject(error);
       } else {
         if (stdout && typeof stdout === "object" && "stdout" in stdout) {
-          resolve(stdout as any);
+          resolve(stdout as unknown as { stdout: string; stderr: string });
         } else {
           resolve({ stdout: stdout as string, stderr: stderr as string });
         }

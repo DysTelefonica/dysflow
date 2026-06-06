@@ -33,6 +33,8 @@ export function resolvePackageRoot(options: { moduleUrl?: string; cwd?: string }
     currentDir = parent;
   }
 
-  console.warn("WARNING: resolvePackageRoot: package.json not found in parent directories. Falling back to cwd.");
+  console.warn(
+    "WARNING: resolvePackageRoot: package.json not found in parent directories. Falling back to cwd.",
+  );
   return path.resolve(options.cwd ?? process.cwd());
 }

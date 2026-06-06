@@ -1,6 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type DysflowConfig } from "../../core/config/dysflow-config.js";
+import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import { resolveExecutionTarget as resolveExecutionTargetInCore } from "../../core/config/execution-target.js";
 import {
   createDysflowError,
@@ -372,9 +372,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     await rm(operation.operationFile, { force: true }).catch(() => undefined);
   }
 
-  private async resolveExecutionTarget(
-    params: Record<string, unknown>,
-  ) {
+  private async resolveExecutionTarget(params: Record<string, unknown>) {
     return resolveExecutionTargetInCore(params, {
       env: this.env,
       cwd: this.cwd,
@@ -532,4 +530,3 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
     signal: request.signal,
   });
 };
-

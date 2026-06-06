@@ -4,7 +4,7 @@ import {
   buildWriteFixtureRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
-import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../core/utils/index.js";
+import { detectWriteSqlKeyword } from "../../core/utils/index.js";
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
 import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
 import type { DysflowMcpToolName } from "./mcp-tool-registry.js";

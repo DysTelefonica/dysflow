@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { compareVersions } from "../../../core/utils/version.js";
-import type { CliResult } from "../types.js";
 import { parseNamedArgs } from "../arg-parser.js";
+import type { CliResult } from "../types.js";
 import { type AgentName, ALL_AGENTS } from "./agent-config.js";
 import {
   createGitHubReleaseUpdateProvider,

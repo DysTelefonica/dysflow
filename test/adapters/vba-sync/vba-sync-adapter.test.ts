@@ -796,8 +796,6 @@ describe("VbaSyncAdapter Orchestrator", () => {
   });
 
   describe("delegation to form service and comparison modules", () => {
-
-
     it("delegates form-related operations to VbaFormService methods", async () => {
       const service = new VbaSyncAdapter({
         accessPath: "C:/db/front.accdb",

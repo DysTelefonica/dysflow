@@ -335,7 +335,11 @@ describe("Dysflow MCP config state", () => {
         "utf8",
       );
       await mkdir(join(home, ".codex"), { recursive: true });
-      await writeFile(codexConfig, "[mcp_servers.dysflow]\ncommand = 'C:/old/dysflow/bin/dysflow.cmd'\n", "utf8");
+      await writeFile(
+        codexConfig,
+        "[mcp_servers.dysflow]\ncommand = 'C:/old/dysflow/bin/dysflow.cmd'\n",
+        "utf8",
+      );
       await mkdir(join(home, ".config", "opencode"), { recursive: true });
       await writeFile(
         opencodeConfig,

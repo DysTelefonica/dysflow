@@ -6,8 +6,8 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import type { AccessOperationRegistry } from "./access-operation-registry.js";
 import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
+import type { AccessOperationRegistry } from "./access-operation-registry.js";
 
 export type OsProcessInfo = {
   pid: number;
