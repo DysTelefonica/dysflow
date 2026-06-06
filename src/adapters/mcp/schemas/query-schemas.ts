@@ -25,6 +25,7 @@ const READ_TARGET_OVERRIDE = {
 export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   query_sql: {
     type: "object",
+    required: ["sql"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
@@ -302,6 +303,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       } as JsonSchemaProperty,
       maps: {
         type: "array",
+        maxItems: 100,
         items: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } },
         description: "Alias map entries (OldName.accdb=NewName.accdb).",
       } as JsonSchemaProperty,
