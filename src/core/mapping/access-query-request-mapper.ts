@@ -21,6 +21,37 @@ export type EnvAccessor = (key: string) => string | undefined;
 /** Concrete `action` values accepted by {@link AccessQueryRequest}. */
 export type AccessQueryAction = NonNullable<AccessQueryRequest["action"]>;
 
+export const VALID_ACCESS_QUERY_ACTIONS = [
+  "query_sql",
+  "list_tables",
+  "list_linked_tables",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "compare_backends",
+  "list_access_files",
+  "get_relationships",
+  "list_links",
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "export_queries",
+  "import_queries",
+  "compact_repair",
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+  "relink_directory",
+] as const;
+
+export function isValidAccessQueryAction(action: unknown): action is AccessQueryAction {
+  return typeof action === "string" && (VALID_ACCESS_QUERY_ACTIONS as readonly string[]).includes(action);
+}
+
 function paramsOf(input: unknown): Record<string, unknown> {
   return isRecord(input) ? input : {};
 }
@@ -89,6 +120,9 @@ export function buildQueryReadRequest(
   action: AccessQueryAction,
   input: unknown,
 ): AccessQueryRequest {
+  if (!isValidAccessQueryAction(action)) {
+    throw new Error(`Invalid Access query action: ${action}`);
+  }
   const params = paramsOf(input);
   return {
     action,
@@ -111,6 +145,9 @@ export function buildWriteFixtureRequest(
   action: AccessQueryAction,
   input: unknown,
 ): AccessQueryRequest {
+  if (!isValidAccessQueryAction(action)) {
+    throw new Error(`Invalid Access query action: ${action}`);
+  }
   const params = paramsOf(input);
   return {
     action,
@@ -142,6 +179,9 @@ export function buildMaintenanceRequest(
   input: unknown,
   env: EnvAccessor,
 ): AccessQueryRequest {
+  if (!isValidAccessQueryAction(action)) {
+    throw new Error(`Invalid Access query action: ${action}`);
+  }
   const params = paramsOf(input);
   return {
     action,

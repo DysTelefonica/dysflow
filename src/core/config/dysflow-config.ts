@@ -48,7 +48,12 @@ export type DysflowConfig = {
   destinationRoot?: string;
   projectRoot?: string;
   projectId?: string;
+  /** The configuration-level execution timeout. */
   timeoutMs: number;
+  /**
+   * The wall-clock process timeout. Currently consolidated to and identical with timeoutMs
+   * as separate internal vs external timeout limits are not distinguished.
+   */
   processTimeoutMs: number;
   accessPassword?: string;
   backendPassword?: string;

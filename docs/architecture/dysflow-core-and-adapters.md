@@ -57,6 +57,6 @@ A per-call override (rarely needed):
 
 ## Compatibility reference
 
-The existing implementation at `C:\Proyectos\workflow\skills\dysflow` is a compatibility reference. The productized adapter in this repository (`src/adapters/mcp`) is the active implementation.
+The existing implementation at `<workflow-repo>/skills/dysflow` is a compatibility reference. The productized adapter in this repository (`src/adapters/mcp`) is the active implementation.
 
 That boundary matters: replacing an operating Access automation path without tests is how you break production.

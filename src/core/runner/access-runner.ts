@@ -33,6 +33,13 @@ import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
+export class RunnerLockTimeoutError extends Error {
+  constructor(public readonly lockPath: string, public readonly timeoutMs: number) {
+    super(`Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`);
+    this.name = "RunnerLockTimeoutError";
+  }
+}
+
 export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
 
 export const RUNNER_INVALID_OUTPUT = "RUNNER_INVALID_OUTPUT";
@@ -299,11 +306,11 @@ export class AccessPowerShellRunner implements AccessRunner {
         },
       );
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith("RUNNER_LOCK_TIMEOUT:")) {
+      if (error instanceof RunnerLockTimeoutError) {
         return failureResult(
           createDysflowError(
             "RUNNER_LOCK_TIMEOUT",
-            error.message.slice("RUNNER_LOCK_TIMEOUT: ".length),
+            error.message,
           ),
         );
       }
@@ -379,9 +386,7 @@ async function acquireCrossProcessAccessLock(lockPath: string, timeoutMs: number
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
-  throw new Error(
-    `RUNNER_LOCK_TIMEOUT: Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`,
-  );
+  throw new RunnerLockTimeoutError(lockPath, timeoutMs);
 }
 
 async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {

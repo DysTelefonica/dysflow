@@ -79,6 +79,10 @@ describe("access-query-request-mapper", () => {
       expect(buildQueryReadRequest("list_tables", undefined).action).toBe("list_tables");
       expect(buildQueryReadRequest("list_tables", 42).sql).toBe("");
     });
+
+    it("throws an error if the action is invalid", () => {
+      expect(() => buildQueryReadRequest("invalid_action" as any, {})).toThrow("Invalid Access query action");
+    });
   });
 
   describe("buildWriteFixtureRequest", () => {

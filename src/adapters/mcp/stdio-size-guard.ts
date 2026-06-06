@@ -1,5 +1,6 @@
 import type { TransformCallback, TransformOptions, Writable } from "node:stream";
 import { Transform } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 
 export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024; // 1 MiB
 
@@ -21,6 +22,7 @@ export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024; // 1 MiB
 export class SizeLimitTransform extends Transform {
   private readonly maxBytes: number;
   private readonly errorOutput: Writable;
+  private readonly decoder = new StringDecoder("utf8");
   private buffer = "";
   private pendingBytes = 0;
   private droppingOversizedLine = false;
@@ -36,7 +38,7 @@ export class SizeLimitTransform extends Transform {
     _encoding: string,
     callback: TransformCallback,
   ): void {
-    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    const text = typeof chunk === "string" ? chunk : this.decoder.write(chunk);
     const chunkLength = text.length;
     let cursor = 0;
 
@@ -89,6 +91,10 @@ export class SizeLimitTransform extends Transform {
   }
 
   override _flush(callback: TransformCallback): void {
+    const remaining = this.decoder.end();
+    if (remaining.length > 0 && !this.droppingOversizedLine) {
+      this.buffer += remaining;
+    }
     // Stream ended. If there is still data in the buffer (no final \n), dispatch it.
     if (this.buffer.length > 0 && !this.droppingOversizedLine) {
       // Strip trailing \r before the byte limit check.

@@ -24,7 +24,7 @@ export function parseRuntimeMarker(content: string): string | undefined {
     .filter((line) => line.length > 0);
 
   if (lines.length === 0) return undefined;
-  if (lines[0] === RUNTIME_MARKER_VERSION) return lines[1];
+  if (/^\d+$/.test(lines[0])) return lines[1];
   return lines[0];
 }
 

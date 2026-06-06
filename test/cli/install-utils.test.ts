@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseRuntimeMarker } from "../../src/cli/commands/install/runtime-dir.js";
 
 // Import the helpers to test (these will fail to import or run initially)
 import {
@@ -139,3 +140,20 @@ describe("uninstall.ts static import isolation", () => {
     }
   });
 });
+
+describe("parseRuntimeMarker", () => {
+  it("parses runtime markers with version prefix correctly", () => {
+    expect(parseRuntimeMarker("1\nC:/my-dir\n")).toBe("C:/my-dir");
+    expect(parseRuntimeMarker("2\nC:/my-dir\n")).toBe("C:/my-dir"); // Future version 2 compatibility
+  });
+
+  it("parses old versionless runtime markers correctly", () => {
+    expect(parseRuntimeMarker("C:/my-dir\n")).toBe("C:/my-dir");
+  });
+
+  it("returns undefined for empty markers", () => {
+    expect(parseRuntimeMarker("")).toBeUndefined();
+    expect(parseRuntimeMarker("\n")).toBeUndefined();
+  });
+});
+

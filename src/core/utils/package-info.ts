@@ -14,8 +14,13 @@ export function readPackageVersionNear(moduleUrl: string, fallback = "0.0.0"): s
         const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as {
           version?: unknown;
         };
-        return typeof parsed.version === "string" ? parsed.version : fallback;
-      } catch {
+        if (typeof parsed.version === "string") {
+          return parsed.version;
+        }
+        console.warn(`WARNING: package.json at ${packagePath} lacks a version string.`);
+        return fallback;
+      } catch (err: any) {
+        console.warn(`WARNING: Failed to parse package.json at ${packagePath}: ${err.message}`);
         return fallback;
       }
     }
@@ -25,5 +30,6 @@ export function readPackageVersionNear(moduleUrl: string, fallback = "0.0.0"): s
     currentDir = parent;
   }
 
+  console.warn(`WARNING: package.json not found near ${moduleUrl}.`);
   return fallback;
 }
