@@ -7,6 +7,19 @@
     Pure-PowerShell helper function tests run in any environment.
 #>
 
+# Helper to stub/mock Write-DysflowResult for functions extracted via AST
+function global:Write-DysflowResult {
+    param(
+        [Parameter(Mandatory = $true)] [object] $Result,
+        [Parameter(Mandatory = $false)] [int] $Depth = 20
+    )
+    $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
+    if ($null -ne $script:HostMessages) {
+        $script:HostMessages.Add("DYSFLOW_RESULT " + $json)
+    }
+    Write-Output $json
+}
+
 Describe "dysflow-vba-manager.ps1 — script structure" {
     BeforeAll {
         $script:ScriptPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
@@ -1066,7 +1079,7 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             { Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @() } | Should -Throw "Delete requiere al menos un nombre de módulo/objeto."
         }
 
-        It "deletes all modules and outputs ##MODULE_RESULTS on success" {
+        It "deletes all modules and outputs DYSFLOW_RESULT on success" {
             Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @("Mod1", "Mod2")
 
             $script:RemoveCalls.Count | Should -Be 2
@@ -1074,9 +1087,9 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             $script:RemoveCalls[1].ModuleName | Should -Be "Mod2"
 
             $script:HostMessages.Count | Should -Be 1
-            $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
+            $script:HostMessages[0] | Should -Match "^DYSFLOW_RESULT "
             
-            $json = $script:HostMessages[0] -replace "^##MODULE_RESULTS:", ""
+            $json = $script:HostMessages[0] -replace "^DYSFLOW_RESULT ", ""
             $results = ConvertFrom-Json $json
             $results.Count | Should -Be 2
             $results[0].module | Should -Be "Mod1"
@@ -1100,9 +1113,9 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             $script:RemoveCalls[1].ModuleName | Should -Be "Mod2"
 
             $script:HostMessages.Count | Should -Be 1
-            $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
+            $script:HostMessages[0] | Should -Match "^DYSFLOW_RESULT "
             
-            $json = $script:HostMessages[0] -replace "^##MODULE_RESULTS:", ""
+            $json = $script:HostMessages[0] -replace "^DYSFLOW_RESULT ", ""
             $results = ConvertFrom-Json $json
             $results.Count | Should -Be 2
             $results[0].module | Should -Be "Mod1"
@@ -1655,7 +1668,7 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         $result.Total | Should -Be 2
     }
 
-    It "throws consolidated all-failure detail and writes per-module ##MODULE_RESULTS" {
+    It "throws consolidated all-failure detail and writes per-module DYSFLOW_RESULT" {
         $script:FailOn = @{
             Module1 = @("first module error", "first module error", "first module error")
             Module2 = @("second module error", "second module error", "second module error")
@@ -1671,8 +1684,8 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         $thrown.Exception.Message | Should -Match "Module1: first module error"
         $thrown.Exception.Message | Should -Match "Module2: second module error"
         $script:HostMessages.Count | Should -Be 1
-        $script:HostMessages[0] | Should -Match "^##MODULE_RESULTS:"
-        $results = ConvertFrom-Json ($script:HostMessages[0] -replace "^##MODULE_RESULTS:", "")
+        $script:HostMessages[0] | Should -Match "^DYSFLOW_RESULT "
+        $results = ConvertFrom-Json ($script:HostMessages[0] -replace "^DYSFLOW_RESULT ", "")
         ($results | Where-Object { $_.module -eq "Module1" }).status | Should -Be "error"
         ($results | Where-Object { $_.module -eq "Module1" }).error | Should -Be "first module error"
         ($results | Where-Object { $_.module -eq "Module2" }).status | Should -Be "error"
