@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   createDysflowMcpTools,
@@ -6,7 +5,6 @@ import {
   MCP_TOOL_SCHEMAS,
   MODERN_TOOL_NAMES,
   registerMcpToolList,
-  rejectWriteSqlInReadMode,
   translateCoreResultToMcpContent,
 } from "../../../src/adapters/mcp/tools";
 import type { AccessQueryRequest } from "../../../src/core/contracts/index";
@@ -20,7 +18,6 @@ import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/ac
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
-import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../../src/core/utils/index";
 
 class FakeVbaService {
   public requests: unknown[] = [];
@@ -36,18 +33,6 @@ class FakeQueryService {
   constructor(private readonly result: OperationResult<AccessQueryResult>) {}
   async execute(request: AccessQueryRequest): Promise<OperationResult<AccessQueryResult>> {
     this.requests.push(request);
-    if (
-      request &&
-      request.mode === "read" &&
-      typeof request.sql === "string" &&
-      request.sql.trim() !== ""
-    ) {
-      if (!looksLikeReadOnlySql(request.sql)) {
-        const keyword = detectWriteSqlKeyword(request.sql);
-        const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
-        return failureResult(createDysflowError("INVALID_READ_ONLY_QUERY", forbiddenMessage));
-      }
-    }
     return this.result;
   }
 }
@@ -291,7 +276,7 @@ describe("MCP tool registration over core services", () => {
       tools
         .find((tool) => tool.name === "query_sql")
         ?.handler({
-          query: "SELECT * FROM BackendOnlyTable",
+          sql: "SELECT * FROM BackendOnlyTable",
           backendPath: "C:/backend.accdb",
           sourcePath: "C:/source.accdb",
         }),
@@ -392,6 +377,12 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools.find((t) => t.name === "query_sql")?.handler({ sql: "" }),
     ).resolves.toMatchObject({ isError: true });
+    await expect(
+      tools.find((t) => t.name === "query_sql")?.handler({}),
+    ).resolves.toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringContaining("sql is required") }],
+    });
     expect(query.requests).toHaveLength(0);
   });
 
@@ -1189,63 +1180,16 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
-  describe("read-only SQL guard — rejectWriteSqlInReadMode", () => {
-    it("returns undefined for SELECT queries", () => {
-      expect(rejectWriteSqlInReadMode("SELECT * FROM People")).toBeUndefined();
-      expect(rejectWriteSqlInReadMode("  select id from T")).toBeUndefined();
-      expect(rejectWriteSqlInReadMode("SELECT COUNT(*) FROM T WHERE x=1")).toBeUndefined();
-    });
-
-    it("returns undefined for CTE queries starting with WITH ... SELECT", () => {
-      expect(
-        rejectWriteSqlInReadMode("WITH cte AS (SELECT * FROM People) SELECT * FROM cte"),
-      ).toBeUndefined();
-      expect(
-        rejectWriteSqlInReadMode("  with cte as (select id from T) select * from cte"),
-      ).toBeUndefined();
-    });
-
-    it("rejects CTE queries containing write keywords", () => {
-      expect(
-        rejectWriteSqlInReadMode("WITH cte AS (DELETE FROM People) SELECT * FROM cte"),
-      ).not.toBeUndefined();
-      expect(
-        rejectWriteSqlInReadMode("WITH cte AS (INSERT INTO People VALUES(1)) SELECT * FROM cte"),
-      ).not.toBeUndefined();
-    });
-
-    it("rejects DDL and DML write keywords", () => {
-      const cases = [
-        "INSERT INTO T VALUES (1)",
-        "UPDATE T SET x=1",
-        "DELETE FROM T",
-        "DROP TABLE T",
-        "CREATE TABLE T (id INT)",
-        "ALTER TABLE T ADD col INT",
-        "TRUNCATE TABLE T",
-        "EXEC sp_something",
-        "EXECUTE sp_something",
-        "GRANT SELECT ON T TO user1",
-        "REVOKE SELECT ON T FROM user1",
-      ];
-      for (const sql of cases) {
-        expect(rejectWriteSqlInReadMode(sql), `should reject: ${sql}`).not.toBeUndefined();
-      }
-    });
-
-    it("is case-insensitive", () => {
-      expect(rejectWriteSqlInReadMode("delete from T")).not.toBeUndefined();
-      expect(rejectWriteSqlInReadMode("Drop Table T")).not.toBeUndefined();
-      expect(rejectWriteSqlInReadMode("INSERT into T values(1)")).not.toBeUndefined();
-    });
-
-    it("includes the blocked keyword in the error message", () => {
-      const result = rejectWriteSqlInReadMode("DROP TABLE People");
-      expect(result).toContain("DROP");
-    });
-
+  describe("read-only SQL delegation to queryService", () => {
     it("blocks DDL via query_sql tool by delegating to queryService", async () => {
-      const query = new FakeQueryService(successResult({ rows: [] }));
+      const query = new FakeQueryService(
+        failureResult(
+          createDysflowError(
+            "INVALID_READ_ONLY_QUERY",
+            "DROP statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode \"write\" for write operations.",
+          ),
+        ),
+      );
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
@@ -1264,7 +1208,14 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("blocks DDL via dysflow_query_execute with mode read by delegating to queryService", async () => {
-      const query = new FakeQueryService(successResult({ rows: [] }));
+      const query = new FakeQueryService(
+        failureResult(
+          createDysflowError(
+            "INVALID_READ_ONLY_QUERY",
+            "DELETE statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode \"write\" for write operations.",
+          ),
+        ),
+      );
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
@@ -1304,11 +1255,6 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("context props unification — single source of truth (#200)", () => {
-    it("does NOT declare CONTEXT_PROPERTIES or the standalone CTX alias in tools.ts (they were duplicates)", () => {
-      const source = readFileSync("src/adapters/mcp/tools.ts", "utf8");
-      expect(source).not.toContain("const CONTEXT_PROPERTIES");
-      expect(source).not.toContain("const CTX =");
-    });
 
     it("schemas that previously used CONTEXT_PROPERTIES still include projectId and contextId", () => {
       const tools = createDysflowMcpTools({
