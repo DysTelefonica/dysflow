@@ -818,6 +818,328 @@ Private Function CacheMaterializado_RequireSchema(ByVal p_Db As DAO.Database, By
     End If
 End Function
 
+Private Function Issue18_RequireField( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_TableName As String, _
+                        ByVal p_FieldName As String, _
+                        ByVal p_ExpectedType As Integer, _
+                        ByVal p_Required As Boolean, _
+                        ByRef p_Logs As Collection, _
+                        ByRef p_AssertError As String _
+                    ) As Boolean
+    Dim fld As DAO.Field
+    On Error GoTo noSchema
+
+    p_Db.TableDefs.Refresh
+    Set fld = p_Db.TableDefs(p_TableName).Fields(p_FieldName)
+    If fld.Type <> p_ExpectedType Then
+        p_AssertError = "Expected " & p_TableName & "." & p_FieldName & " type=" & CStr(p_ExpectedType) & "; actual=" & CStr(fld.Type)
+        TestHelper.AddLog p_Logs, p_AssertError
+        Exit Function
+    End If
+    If p_Required Then
+        If Not fld.Required Then
+            p_AssertError = "Expected required field: " & p_TableName & "." & p_FieldName
+            TestHelper.AddLog p_Logs, p_AssertError
+            Exit Function
+        End If
+    End If
+
+    Issue18_RequireField = True
+    Exit Function
+
+noSchema:
+    p_AssertError = "Missing required schema for issue #18: " & p_TableName & "." & p_FieldName & " - " & Err.Description
+    TestHelper.AddLog p_Logs, p_AssertError
+End Function
+
+Private Function Issue18_RequireIndexFields( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_TableName As String, _
+                        ByVal p_IndexName As String, _
+                        ByVal p_FieldList As Variant, _
+                        ByRef p_Logs As Collection, _
+                        ByRef p_AssertError As String _
+                    ) As Boolean
+    Dim idx As DAO.Index
+    Dim i As Long
+    On Error GoTo noIndex
+
+    Set idx = p_Db.TableDefs(p_TableName).Indexes(p_IndexName)
+    If idx.Fields.Count < (UBound(p_FieldList) - LBound(p_FieldList) + 1) Then
+        p_AssertError = "Index " & p_IndexName & " has fewer fields than required"
+        TestHelper.AddLog p_Logs, p_AssertError
+        Exit Function
+    End If
+
+    For i = LBound(p_FieldList) To UBound(p_FieldList)
+        If StrComp(idx.Fields(CInt(i - LBound(p_FieldList))).Name, CStr(p_FieldList(i)), vbTextCompare) <> 0 Then
+            p_AssertError = "Index " & p_IndexName & " expected field " & CStr(i + 1) & "=" & CStr(p_FieldList(i)) & "; actual=" & idx.Fields(CInt(i - LBound(p_FieldList))).Name
+            TestHelper.AddLog p_Logs, p_AssertError
+            Exit Function
+        End If
+    Next i
+
+    Issue18_RequireIndexFields = True
+    Exit Function
+
+noIndex:
+    p_AssertError = "Missing required index for issue #18: " & p_TableName & "." & p_IndexName & " - " & Err.Description
+    TestHelper.AddLog p_Logs, p_AssertError
+End Function
+
+Private Function Issue18_RequireCacheDDL(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Issue18_RequireCacheDDL = False
+
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresConfig", "IDCacheConfig", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresConfig", "Dominio", dbText, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresConfig", "Activo", dbBoolean, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresConfig", "VersionRegla", dbText, True, p_Logs, p_AssertError) Then Exit Function
+
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "IDCacheConfig", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "Dominio", dbText, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "VersionRegla", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "MotivoSincronizacion", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "IDNoConformidadUltimaSync", dbLong, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoHeader", "OperadorSync", dbText, False, p_Logs, p_AssertError) Then Exit Function
+
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDCacheConfig", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "Dominio", dbText, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "ClaveEntidad", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDNoConformidad", dbLong, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDAccionCorrectiva", dbLong, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDAccionRealizada", dbLong, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "IDTarea", dbLong, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "OrigenTabla", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "ResponsableUsuarioRed", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "DisplayTitulo", dbText, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "DisplaySubtitulo", dbMemo, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "FechaActualizacionEntidad", dbDate, False, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbCacheIndicadoresProyectoDetalle", "VersionRegla", dbText, False, p_Logs, p_AssertError) Then Exit Function
+
+    TestHelper.AddLog p_Logs, "Issue #18 backend cache DDL fields are present for Proyecto and Auditoria"
+    Issue18_RequireCacheDDL = True
+End Function
+
+Private Function Issue18_RequireCacheIndexes(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Issue18_RequireCacheIndexes = False
+
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresConfig", "UX_TbCacheIndicadoresConfig_Dominio", Array("Dominio"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoHeader", "UX_TbCacheIndicadoresProyectoHeader_Dominio", Array("Dominio"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_CacheBucketResponsable", Array("Dominio", "Bucket", "ResponsableCalidad"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_CacheBucketUsuario", Array("Dominio", "Bucket", "ResponsableUsuarioRed"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_NC", Array("Dominio", "IDNoConformidad"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_Entidad", Array("Dominio", "TipoFila", "IDEntidad"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_AR", Array("Dominio", "IDAccionRealizada"), p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireIndexFields(p_Db, "TbCacheIndicadoresProyectoDetalle", "IX_TbCacheIndicadoresProyectoDetalle_Tarea", Array("Dominio", "IDTarea"), p_Logs, p_AssertError) Then Exit Function
+
+    TestHelper.AddLog p_Logs, "Issue #18 backend cache indexes are present for domain, bucket, user, NC, entity, AR, and task reads"
+    Issue18_RequireCacheIndexes = True
+End Function
+
+Private Function Issue18_RequireProyectoSourceSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Issue18_RequireProyectoSourceSchema = False
+    If Not CacheMaterializado_RequireProyectoBusinessSchema(p_Db, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesProyecto", "IDReplanificacion", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesProyecto", "IDNoConformidad", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesProyecto", "IDAccionRealizada", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    TestHelper.AddLog p_Logs, "Issue #18 Proyecto source schema inspected: NC, AC, AR, task/replanification"
+    Issue18_RequireProyectoSourceSchema = True
+End Function
+
+Private Function Issue18_RequireAuditoriaSourceSchema(ByVal p_Db As DAO.Database, ByRef p_Logs As Collection, ByRef p_AssertError As String) As Boolean
+    Issue18_RequireAuditoriaSourceSchema = False
+    If Not CacheMaterializado_RequireAuditoriaBusinessSchema(p_Db, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesAuditoria", "IDReplanificacion", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesAuditoria", "IDNoConformidad", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    If Not Issue18_RequireField(p_Db, "TbReplanificacionesAuditoria", "IDAccionRealizada", dbLong, True, p_Logs, p_AssertError) Then Exit Function
+    TestHelper.AddLog p_Logs, "Issue #18 Auditoria source schema inspected: Audit, NC, AC, AR, task/replanification"
+    Issue18_RequireAuditoriaSourceSchema = True
+End Function
+
+Public Function Test_Issue18_BackendCacheSchema_DomainFields_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue18_BackendCacheSchema_DomainFields_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireProyectoSourceSchema(db, logs, assertError), "Proyecto source schema supports deterministic fixtures", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireAuditoriaSourceSchema(db, logs, assertError), "Auditoria source schema supports deterministic fixtures", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireCacheDDL(db, logs, assertError), "Cache DDL exposes config/header/detail domain fields", logs, assertError)
+
+finalizar:
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_BackendCacheSchema_DomainFields_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_BackendCacheSchema_DomainFields_Atomic = TestHelper.BuildJsonOk(logs, "issue18_schema_domain_fields_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_BackendCacheSchema_DomainFields_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue18_BackendCacheSchema_Indexes_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue18_BackendCacheSchema_Indexes_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireCacheIndexes(db, logs, assertError), "Cache DDL exposes indexes for domain/user/NC/entity reads", logs, assertError)
+
+finalizar:
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_BackendCacheSchema_Indexes_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_BackendCacheSchema_Indexes_Atomic = TestHelper.BuildJsonOk(logs, "issue18_schema_indexes_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_BackendCacheSchema_Indexes_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim ncRows As Long
+    Dim acRows As Long
+    Dim arRows As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireProyectoSourceSchema(db, logs, assertError), "Proyecto source schema inspected before fixture", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    ncRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNoConformidades WHERE IDNoConformidad=992001")
+    acRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=992011 AND IDNoConformidad=992001")
+    arRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNCAccionesRealizadas WHERE IDAccionRealizada=992021 AND IDAccionCorrectiva=992011")
+    Call TestHelper.AssertTrue(ncRows = 1, "Fixture creates exactly one Proyecto NC sandbox row", logs, assertError)
+    Call TestHelper.AssertTrue(acRows = 1, "Fixture creates exactly one Proyecto AC sandbox row", logs, assertError)
+    Call TestHelper.AssertTrue(arRows = 1, "Fixture creates exactly one Proyecto AR sandbox row", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireCacheDDL(db, logs, assertError), "RED: Proyecto cache fixture requires issue #18 cache DDL before sync/read tests", logs, assertError)
+
+finalizar:
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonOk(logs, "issue18_proyecto_fixture_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim auditRows As Long
+    Dim ncRows As Long
+    Dim acRows As Long
+    Dim arRows As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireAuditoriaSourceSchema(db, logs, assertError), "Auditoria source schema inspected before fixture", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
+    auditRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbAuditorias WHERE IDAuditoria=992201")
+    ncRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNoConformidadesAuditoria WHERE ID=992202 AND IDAuditoria=992201")
+    acRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=992211 AND ID=992202")
+    arRows = CacheMaterializado_CountRows(db, "SELECT COUNT(*) AS Total FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada=992221 AND IDAccionCorrectiva=992211")
+    Call TestHelper.AssertTrue(auditRows = 1, "Fixture creates exactly one Auditoria sandbox row", logs, assertError)
+    Call TestHelper.AssertTrue(ncRows = 1, "Fixture creates exactly one Auditoria NC sandbox row", logs, assertError)
+    Call TestHelper.AssertTrue(acRows = 1, "Fixture creates exactly one Auditoria AC sandbox row", logs, assertError)
+    Call TestHelper.AssertTrue(arRows = 1, "Fixture creates exactly one Auditoria AR sandbox row", logs, assertError)
+    If assertError = "" Then Call TestHelper.AssertTrue(Issue18_RequireCacheDDL(db, logs, assertError), "RED: Auditoria cache fixture requires issue #18 cache DDL before sync/read tests", logs, assertError)
+
+finalizar:
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonOk(logs, "issue18_auditoria_fixture_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
 Private Sub CacheMaterializado_InsertFixtureRow( _
                         ByVal p_Db As DAO.Database, _
                         ByVal p_Bucket As String, _

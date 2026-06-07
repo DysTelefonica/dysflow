@@ -127,6 +127,30 @@
       "tags": ["atomic", "cache-sync", "issue-18"]
     },
     {
+      "name": "Issue18 backend cache schema domain fields",
+      "procedure": "Test_Issue18_BackendCacheSchema_DomainFields_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "red", "schema", "wu1"]
+    },
+    {
+      "name": "Issue18 backend cache schema indexes",
+      "procedure": "Test_Issue18_BackendCacheSchema_Indexes_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "red", "schema", "indexes", "wu1"]
+    },
+    {
+      "name": "Issue18 proyecto fixture seeds sandbox source rows",
+      "procedure": "Test_Issue18_ProyectoFixture_SeedsSandboxSourceRows_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "red", "fixture", "proyecto", "wu1"]
+    },
+    {
+      "name": "Issue18 auditoria fixture seeds sandbox source rows",
+      "procedure": "Test_Issue18_AuditoriaFixture_SeedsSandboxSourceRows_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "red", "fixture", "auditoria", "wu1"]
+    },
+    {
       "name": "Issue38 seguimiento proyecto actualizar fuerza modo proyecto",
       "procedure": "Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract",
       "expect": { "ok": true },
