@@ -1,5 +1,27 @@
 # Changelog
 
+## [v1.2.24] - 2026-06-07
+
+### Security
+
+- **Update trust boundary hardened (#476)**: Removed the undocumented `gh release view` fallback from `resolveLatestRelease`. The GitHub REST API is now the sole mechanism for the latest-release lookup; HTTP errors are surfaced verbatim with a hint about `GH_TOKEN` / `GITHUB_TOKEN`. The `--skip-checksum` flag now requires `DYSFLOW_ALLOW_INSECURE_UPDATE=1` to be set in the environment, and prints a `WARN` on the actual skip path. The trust model doc gained an explicit "No gh CLI fallback" row.
+
+### Refactored
+
+- **Access runner cross-process lock extracted (#477)**: New `src/core/runner/cross-process-lock.ts` owns the cross-process and in-process lock primitives. The in-process serialized queue map is now injectable as a 4th argument to `runWithAccessExecutionLock` for test isolation. The module-level singleton `accessExecutionLocks` map in `access-runner.ts` is gone. Behavior-preserving — existing lock tests stayed green without modification.
+- **Swallowed I/O errors surfaced (#478)**: New `logSwallowedIoError(site, err)` helper in `src/core/utils/log-swallowed-io-error.ts`. All 7 known sites that previously swallowed real I/O or parse failures into empty defaults now log on the failure path while preserving the empty-default return on the happy `ENOENT` path (access-operation-registry, vba-sync-adapter operation marker, vba-form-service, vba-source-comparison, mcp-configurator, windows-processes JSON parse).
+- **Cryptic `executeMappedTool` timeout formula extracted (#479)**: `derivePsTimeoutMs(effectiveTimeoutMs, preflightElapsedMs)` is now a named module-scope function with a JSDoc contract comment. The `5_000` literal is named `MIN_PS_TIMEOUT_MS`.
+
+### Documentation
+
+- **Security doc line refs replaced with symbol anchors (#480)**: The Callers table in `update-trust-model.md` now uses `buildPowerShellArguments` and `spawnVbaManager` symbol anchors instead of stale `file:line` refs. A new regression test (`test/docs/security-doc-anchors.test.ts`) asserts no exact `file:line` refs to internal TypeScript source positions remain in `docs/security/`.
+- **TRACKING.md Dropped entry cleaned up (#481)**: The stale "HTTP → core-mapper" Dropped entry (claiming HTTP's query surface was SQL-only) was misleading; campaign #420 already converged HTTP onto the core mapper. Replaced with a note pointing at #420 and the live code.
+
+### Chore
+
+- **Fresh-major toolchain pinned to exact versions (#482)**: `typescript: ^6.0.0` → `6.0.3`, `vite: ^6.0.0` → `6.4.2`, `vitest: ^4.0.0` → `4.1.7`, `@vitest/coverage-v8: ^4.0.0` → `4.1.7`, `@types/node: ^22.0.0` → `~22.19.0`. Aligns with the existing exact pin on `@modelcontextprotocol/sdk` and `@biomejs/biome`. `pnpm-lock.yaml` regenerated. Documented in `docs/dev/toolchain-pinning.md`.
+- **`NVIDIA Corporation/` vendor directory added to `.gitignore` (#483)**: The other working-tree cruft (coverage/, dist/, testResults.xml, test-appicon-fix.log) was already ignored; only the NVIDIA directory was missing.
+
 ## [v1.2.20] - 2026-06-06
 
 ### Changed
