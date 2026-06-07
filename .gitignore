@@ -11,6 +11,7 @@ temp-runtime/
 .DS_Store
 .dysflow/runtime/
 Thumbs.db
+/NVIDIA Corporation/
 
 # Real Access E2E fixtures may live under E2E_testing/, but source code there must stay tracked/reviewable.
 E2E_testing/**/*.accdb
