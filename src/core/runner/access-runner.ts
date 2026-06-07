@@ -1,7 +1,3 @@
-import { createHash } from "node:crypto";
-import { mkdir, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import {
@@ -33,17 +29,14 @@ import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js
 
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
-export class RunnerLockTimeoutError extends Error {
-  constructor(
-    public readonly lockPath: string,
-    public readonly timeoutMs: number,
-  ) {
-    super(`Could not acquire cross-process lock for ${lockPath} within ${timeoutMs}ms`);
-    this.name = "RunnerLockTimeoutError";
-  }
-}
+import {
+  CROSS_PROCESS_LOCK_STALE_MS,
+  getCrossProcessLockPath,
+  RunnerLockTimeoutError,
+  runWithAccessExecutionLock,
+} from "./cross-process-lock.js";
 
-export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
+export { CROSS_PROCESS_LOCK_STALE_MS, getCrossProcessLockPath, RunnerLockTimeoutError };
 
 export const RUNNER_INVALID_OUTPUT = "RUNNER_INVALID_OUTPUT";
 
@@ -135,8 +128,6 @@ export type AccessPowerShellRunnerOptions = {
   lockAcquireTimeoutMs?: number;
 };
 
-const accessExecutionLocks = new Map<string, Promise<void>>();
-
 export class AccessPowerShellRunner implements AccessRunner {
   private readonly executor: PowerShellExecutor;
   private readonly scriptPath: string;
@@ -181,7 +172,6 @@ export class AccessPowerShellRunner implements AccessRunner {
     try {
       return await runWithAccessExecutionLock(
         config.accessDbPath,
-        this.lockAcquireTimeoutMs,
         async () => {
           let finalOperation = operation;
           if (
@@ -307,6 +297,7 @@ export class AccessPowerShellRunner implements AccessRunner {
             );
           }
         },
+        this.lockAcquireTimeoutMs,
       );
     } catch (error) {
       if (error instanceof RunnerLockTimeoutError) {
@@ -357,94 +348,6 @@ export class AccessPowerShellRunner implements AccessRunner {
         updatedAt: this.clock(),
       })) ?? record
     );
-  }
-}
-
-export function getCrossProcessLockPath(accessPath: string): string {
-  const hash = createHash("sha256").update(accessPath.toLowerCase()).digest("hex").slice(0, 16);
-  return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
-}
-
-async function acquireCrossProcessAccessLock(lockPath: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      await mkdir(lockPath, { recursive: false });
-      // Write owner identity so a future acquirer can log who held the lock.
-      const owner = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
-      await writeFile(join(lockPath, "owner.json"), owner, "utf8").catch(() => {});
-      return;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      const info = await stat(lockPath).catch(() => null);
-      if (info !== null && Date.now() - info.mtimeMs > CROSS_PROCESS_LOCK_STALE_MS) {
-        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-  }
-  throw new RunnerLockTimeoutError(lockPath, timeoutMs);
-}
-
-async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {
-  await rm(lockPath, { recursive: true, force: true }).catch(() => {});
-}
-
-/**
- * While a process holds the cross-process lock it must periodically refresh the lock dir
- * mtime so that a concurrent acquirer never sees it as stale.  The interval is half the
- * stale threshold so at least one heartbeat always falls inside a legitimate hold window.
- *
- * Returns a cleanup function that MUST be called in the `finally` block.  Failing to clear
- * the interval would leave a dangling timer that could touch a deleted (and possibly
- * recreated by another process) directory.
- */
-function startLockHeartbeat(lockPath: string): () => void {
-  const intervalMs = CROSS_PROCESS_LOCK_STALE_MS / 2;
-  const handle = setInterval(() => {
-    const now = new Date();
-    utimes(lockPath, now, now).catch(() => {
-      // Swallow — if the dir is gone the lock has already been released.
-    });
-  }, intervalMs);
-  // Allow the Node.js event loop to exit even if the interval is somehow not cleared.
-  if (typeof handle === "object" && handle !== null && "unref" in handle) {
-    (handle as NodeJS.Timeout).unref();
-  }
-  return () => {
-    clearInterval(handle);
-  };
-}
-
-async function runWithAccessExecutionLock<T>(
-  accessPath: string,
-  lockAcquireTimeoutMs: number,
-  work: () => Promise<T>,
-): Promise<T> {
-  const key = accessPath.toLowerCase();
-  const previous = (accessExecutionLocks.get(key) ?? Promise.resolve()).catch(() => undefined);
-  let releaseCurrent!: () => void;
-  const current = previous.then(
-    () =>
-      new Promise<void>((resolve) => {
-        releaseCurrent = resolve;
-      }),
-  );
-  accessExecutionLocks.set(key, current);
-
-  await previous;
-  const lockPath = getCrossProcessLockPath(accessPath);
-  await mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
-  await acquireCrossProcessAccessLock(lockPath, lockAcquireTimeoutMs);
-  const stopHeartbeat = startLockHeartbeat(lockPath);
-  try {
-    return await work();
-  } finally {
-    stopHeartbeat();
-    await releaseCrossProcessAccessLock(lockPath);
-    releaseCurrent();
-    if (accessExecutionLocks.get(key) === current) accessExecutionLocks.delete(key);
   }
 }
 
