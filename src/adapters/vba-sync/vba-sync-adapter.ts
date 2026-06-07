@@ -103,6 +103,22 @@ const TOOL_NOT_IMPLEMENTED_MESSAGE =
   "This tool is tracked for parity but is not implemented by this service yet.";
 
 const PROCESS_WALL_CLOCK_BUDGET_MS = 25_000;
+export const MIN_PS_TIMEOUT_MS = 5_000;
+
+/**
+ * Derives the per-call PowerShell timeout (ms) for executeMappedTool.
+ *
+ * Contract: the result is at least MIN_PS_TIMEOUT_MS (5 s) AND at most
+ * PROCESS_WALL_CLOCK_BUDGET_MS minus preflightElapsedMs. If the preflight
+ * already consumed more than the budget, the max keeps the result at the
+ * 5 s floor.
+ */
+export function derivePsTimeoutMs(effectiveTimeoutMs: number, preflightElapsedMs: number): number {
+  return Math.max(
+    Math.min(MIN_PS_TIMEOUT_MS, effectiveTimeoutMs),
+    Math.min(effectiveTimeoutMs, PROCESS_WALL_CLOCK_BUDGET_MS) - preflightElapsedMs,
+  );
+}
 
 export class VbaSyncAdapter implements VbaSyncPort {
   public readonly executor: VbaManagerExecutor;
@@ -232,10 +248,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     const psTimeoutMs =
       explicitTimeoutMs !== undefined
         ? effectiveTimeoutMs
-        : Math.max(
-            Math.min(5_000, effectiveTimeoutMs),
-            Math.min(effectiveTimeoutMs, PROCESS_WALL_CLOCK_BUDGET_MS) - preflightElapsedMs,
-          );
+        : derivePsTimeoutMs(effectiveTimeoutMs, preflightElapsedMs);
     const timedRequest =
       psTimeoutMs !== effectiveTimeoutMs ? { ...request, timeoutMs: psTimeoutMs } : request;
     const trackedOperation = await this.startTrackedOperation(
