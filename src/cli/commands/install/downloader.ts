@@ -55,23 +55,6 @@ export function createGitHubReleaseRequestHeaders(
   };
 }
 
-async function resolveLatestReleaseWithGh(): Promise<ReleaseInfo> {
-  const tagName = await runCommandOutput(
-    "gh",
-    ["release", "view", "--repo", "DysTelefonica/dysflow", "--json", "tagName", "--jq", ".tagName"],
-    process.cwd(),
-    { timeoutMs: 30_000 },
-  );
-  if (tagName.length === 0) {
-    throw new Error("gh release view did not return a tagName.");
-  }
-  validateReleaseTagName(tagName);
-  return {
-    tagName,
-    version: normalizeReleaseVersion(tagName),
-  };
-}
-
 async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> {
   try {
     const sha = await runCommandOutput("git", ["rev-parse", "HEAD"], cwd);
@@ -96,11 +79,10 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         clearTimeout(timeout);
       }
       if (!response.ok) {
-        try {
-          return await resolveLatestReleaseWithGh();
-        } catch {
-          throw new Error(`GitHub latest release lookup failed with HTTP ${response.status}.`);
-        }
+        throw new Error(
+          `GitHub latest release lookup failed with HTTP ${response.status}. ` +
+            "Verify your GH_TOKEN / GITHUB_TOKEN is valid for private releases, or use unauthenticated requests for public releases.",
+        );
       }
 
       const body = (await response.json()) as GitHubLatestReleaseResponse;

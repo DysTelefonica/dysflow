@@ -109,62 +109,33 @@ describe("createGitHubReleaseUpdateProvider — resolveLatestRelease", () => {
     }
   });
 
-  it("falls back to gh CLI when GitHub API returns non-ok status and gh succeeds", async () => {
+  it("throws HTTP error verbatim when GitHub API returns non-ok status (no gh CLI fallback)", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
     try {
       // API returns 403
       mockFetch.mockResolvedValueOnce({ ok: false, status: 403 });
-
-      // gh CLI returns a valid tag
-      execFileMock.mockImplementationOnce(
-        (
-          _file: unknown,
-          _args: unknown,
-          options: unknown,
-          callback: (...args: unknown[]) => void,
-        ) => {
-          const cb = typeof options === "function" ? options : callback;
-          if (cb) {
-            queueMicrotask(() => cb(null, { stdout: "v3.1.0\n", stderr: "" }));
-          }
-        },
-      );
-
       const provider = createGitHubReleaseUpdateProvider();
-      const release = await provider.resolveLatestRelease();
-      expect(release.version).toBe("3.1.0");
-      expect(release.tagName).toBe("v3.1.0");
+      await expect(provider.resolveLatestRelease()).rejects.toThrow("HTTP 403");
+      // gh must NOT have been invoked
+      expect(execFileMock).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it("throws with HTTP status when API returns non-ok AND gh fallback also fails", async () => {
+  it("throws HTTP error verbatim when API returns 503 (no gh CLI fallback)", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
     try {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
-
-      // gh CLI fails
-      execFileMock.mockImplementationOnce(
-        (
-          _file: unknown,
-          _args: unknown,
-          options: unknown,
-          callback: (...args: unknown[]) => void,
-        ) => {
-          const cb = typeof options === "function" ? options : callback;
-          if (cb) {
-            queueMicrotask(() => cb(new Error("gh not found"), null));
-          }
-        },
-      );
-
       const provider = createGitHubReleaseUpdateProvider();
       await expect(provider.resolveLatestRelease()).rejects.toThrow("HTTP 503");
+      expect(execFileMock).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -13,6 +13,7 @@ verifying it against the SHA-256 checksums published in the same release.
 | Release source | `https://github.com/DysTelefonica/dysflow/releases/download/<tag>/dysflow-<tag>.tar.gz` |
 | Integrity check | SHA-256 of the downloaded archive is compared against the matching entry in `SHA256SUMS` (fetched from the same release). Mismatch is a hard error — the install does not proceed. |
 | HTTP 404 | If the archive is not available for the requested tag, the downloader throws immediately. There is no silent fallback. |
+| No gh CLI fallback | The latest-release lookup uses only the GitHub REST API. There is no `gh` CLI fallback when the API returns non-OK. |
 | Checksum bypass | `--skip-checksum` is available for development/testing. It MUST NOT be used in production installs. |
 
 **No git-clone / source-build fallback exists.** The git-clone update path was removed in

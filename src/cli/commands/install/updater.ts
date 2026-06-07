@@ -185,6 +185,29 @@ export async function handleUpdateCommand(
   }
 
   const env = context.env ?? process.env;
+
+  // Guard: --skip-checksum requires explicit opt-in
+  if (parsed.options.skipChecksum) {
+    const allowInsecure = env.DYSFLOW_ALLOW_INSECURE_UPDATE;
+    const isAllowed =
+      allowInsecure !== undefined &&
+      (allowInsecure === "1" || allowInsecure.toLowerCase() === "true");
+    if (!isAllowed) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr:
+          "Refusing --skip-checksum without DYSFLOW_ALLOW_INSECURE_UPDATE=1. " +
+          "See docs/security/update-trust-model.md.",
+      };
+    }
+    // Warn when the skip is actually applied
+    console.warn(
+      "[WARN] --skip-checksum is active: SHA-256 verification is bypassed. " +
+        "Set DYSFLOW_ALLOW_INSECURE_UPDATE=1 only in development/testing environments.",
+    );
+  }
+
   const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
   const localPackageRoot = context.packageRoot ?? resolvePackageRoot();
   const runtimePaths = resolveRuntimePaths(runtimeDir, localPackageRoot);

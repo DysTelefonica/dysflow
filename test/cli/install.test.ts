@@ -1328,6 +1328,7 @@ describe("checksum verification during update", () => {
     });
 
     const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--skip-checksum"], {
+      env: { USERPROFILE: root, DYSFLOW_ALLOW_INSECURE_UPDATE: "1" },
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: "9.9.9" }),
         preparePackage: preparePackageSpy,
@@ -1545,6 +1546,135 @@ describe("checksum verification during update", () => {
       expect(cloneCalls).toHaveLength(0);
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("resolveLatestRelease — no gh CLI fallback", () => {
+  it("throws HTTP error verbatim when GitHub API returns non-ok status (no gh fallback)", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    try {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(provider.resolveLatestRelease()).rejects.toThrow("HTTP 502");
+      // Must NOT have called gh
+      expect(execFileMock).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does NOT fall back to gh CLI when API returns 403", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+    try {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 403 });
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(provider.resolveLatestRelease()).rejects.toThrow("HTTP 403");
+      // gh must NOT have been invoked
+      expect(execFileMock).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does NOT fall back to gh CLI when API returns rate-limit error", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+    try {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 429 });
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(provider.resolveLatestRelease()).rejects.toThrow("HTTP 429");
+      expect(execFileMock).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("handleUpdateCommand — DYSFLOW_ALLOW_INSECURE_UPDATE guard", () => {
+  it("refuses --skip-checksum when DYSFLOW_ALLOW_INSECURE_UPDATE is not set", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-skip-checksum-guard-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+    await mkdir(appDir, { recursive: true });
+    await writeFile(
+      join(appDir, "package.json"),
+      JSON.stringify({ name: "dysflow", version: "0.0.1", type: "module" }),
+    );
+
+    try {
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--skip-checksum"], {
+        env: { USERPROFILE: root },
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => ({ packageRoot: root }),
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("DYSFLOW_ALLOW_INSECURE_UPDATE");
+      expect(result.stderr).toContain("--skip-checksum");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows --skip-checksum when DYSFLOW_ALLOW_INSECURE_UPDATE=1", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-skip-checksum-allow-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+    await mkdir(appDir, { recursive: true });
+    await writeFile(
+      join(appDir, "package.json"),
+      JSON.stringify({ name: "dysflow", version: "0.0.1", type: "module" }),
+    );
+
+    try {
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--skip-checksum"], {
+        env: { USERPROFILE: root, DYSFLOW_ALLOW_INSECURE_UPDATE: "1" },
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => ({ packageRoot: root }),
+        },
+      });
+
+      // Should succeed (or fail for other reasons, but NOT because of the guard)
+      // The guard should NOT block when env var is set
+      expect(result.stderr).not.toContain("DYSFLOW_ALLOW_INSECURE_UPDATE");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows --skip-checksum when DYSFLOW_ALLOW_INSECURE_UPDATE=true (case-insensitive)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-skip-checksum-true-"));
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+    await mkdir(appDir, { recursive: true });
+    await writeFile(
+      join(appDir, "package.json"),
+      JSON.stringify({ name: "dysflow", version: "0.0.1", type: "module" }),
+    );
+
+    try {
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--skip-checksum"], {
+        env: { USERPROFILE: root, DYSFLOW_ALLOW_INSECURE_UPDATE: "true" },
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => ({ packageRoot: root }),
+        },
+      });
+
+      expect(result.stderr).not.toContain("DYSFLOW_ALLOW_INSECURE_UPDATE");
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });
