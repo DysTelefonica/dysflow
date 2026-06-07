@@ -22,6 +22,7 @@ import {
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../../core/runner/powershell-executor.js";
 import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
+import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
 import { VbaModulesAdapter } from "./vba-modules-adapter.js";
@@ -480,7 +481,11 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
 async function readVbaManagerOperationMarker(
   operationFile: string,
 ): Promise<VbaManagerOperationMarker> {
-  const raw = await readFile(operationFile, "utf8").catch(() => undefined);
+  const raw = await readFile(operationFile, "utf8").catch((err: unknown) => {
+    if (isPathMissingError(err)) return undefined;
+    logSwallowedIoError("vba-sync-adapter:operation-marker-read", err);
+    return undefined;
+  });
   if (raw === undefined) return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -488,9 +493,14 @@ async function readVbaManagerOperationMarker(
     const accessPid = typeof parsed.accessPid === "number" ? parsed.accessPid : undefined;
     const processStartTime = stringValue(parsed.processStartTime);
     return { accessPid, processStartTime };
-  } catch {
+  } catch (err) {
+    logSwallowedIoError("vba-sync-adapter:operation-marker-parse", err);
     return {};
   }
+}
+
+function isPathMissingError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 }
 
 export const spawnVbaManager: VbaManagerExecutor = (request) => {

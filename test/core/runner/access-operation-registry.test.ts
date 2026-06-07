@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
@@ -486,245 +486,289 @@ describe("Access operation registry and cleanup safety", () => {
       { operationId: "new", status: "timed_out" },
     ]);
   });
+});
 
-  it("kills only the registered PID when every ownership check passes", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "timed_out",
-      accessPid: 1234,
-      processStartTime: "2026-05-15T10:00:00.000Z",
-      commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const killed: number[] = [];
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: {
-        getProcess: async () => ({
-          pid: 1234,
+describe("FileAccessOperationRegistry — swallowed-I/O diagnostics (#478)", () => {
+  it("returns empty Map for a corrupt registry file (behavior preserved) and logs the parse error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-registry-corrupt-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      // Write garbage — the file exists but is not valid JSON
+      await mkdir(dirname(registryPath), { recursive: true });
+      await writeFile(registryPath, "{ not valid json {{{", "utf8");
+
+      const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const result = await registry.listRecent();
+      expect(result).toEqual([]);
+      expect(spy).toHaveBeenCalled();
+      const loggedCall = spy.mock.calls.find((call) =>
+        (call[0] as string).includes("access-operation-registry:parse"),
+      );
+      expect(loggedCall).toBeDefined();
+      expect(loggedCall?.[0]).toMatch(/\[dysflow:swallowed-io:access-operation-registry:parse\]/);
+      spy.mockRestore();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns empty Map without logging when the registry file does not exist (first-run state)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-registry-enoent-"));
+    const registryPath = join(root, ".dysflow", "runtime", "operations.json");
+    try {
+      const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const result = await registry.listRecent();
+      expect(result).toEqual([]);
+      // ENOENT must not trigger a debug log
+      const swallowedIoCalls = spy.mock.calls.filter((call) =>
+        (call[0] as string).includes("[dysflow:swallowed-io"),
+      );
+      expect(swallowedIoCalls).toHaveLength(0);
+      spy.mockRestore();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+it("kills only the registered PID when every ownership check passes", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "timed_out",
+    accessPid: 1234,
+    processStartTime: "2026-05-15T10:00:00.000Z",
+    commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const killed: number[] = [];
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: {
+      getProcess: async () => ({
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      }),
+    },
+    processKiller: {
+      kill: async (pid) => {
+        killed.push(pid);
+      },
+    },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/data/app.accdb",
+  });
+
+  expect(result.ok).toBe(true);
+  expect(killed).toEqual([1234]);
+  // cleaned records are purged from InMemory registry (parity with FileRegistry)
+  await expect(registry.get("op-1")).resolves.toBeUndefined();
+});
+
+it("accepts cleanup when accessPath differs only by case", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "timed_out",
+    accessPid: 1234,
+    processStartTime: "2026-05-15T10:00:00.000Z",
+    commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const killed: number[] = [];
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: {
+      getProcess: async () => ({
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
+      }),
+    },
+    processKiller: {
+      kill: async (pid) => {
+        killed.push(pid);
+      },
+    },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "c:/DATA/APP.accdb",
+  });
+
+  expect(result.ok).toBe(true);
+  expect(killed).toEqual([1234]);
+});
+
+it("refuses cleanup when accessPath does not match", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "timed_out",
+    accessPid: 1234,
+    processStartTime: "2026-05-15T10:00:00.000Z",
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: { getProcess: async () => undefined },
+    processKiller: { kill: async () => undefined },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/other.accdb",
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    error: { code: "CLEANUP_ACCESS_PATH_MISMATCH" },
+  });
+});
+
+it("refuses cleanup when PID start time differs", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "timed_out",
+    accessPid: 1234,
+    processStartTime: "2026-05-15T10:00:00.000Z",
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: {
+      getProcess: async () => ({
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:05:00.000Z",
+      }),
+    },
+    processKiller: { kill: async () => undefined },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/data/app.accdb",
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    error: { code: "CLEANUP_PROCESS_START_TIME_MISMATCH" },
+  });
+});
+
+it("refuses pid_unknown operations without force", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "pid_unknown",
+    accessPid: null,
+    processStartTime: null,
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: { getProcess: async () => undefined },
+    processKiller: { kill: async () => undefined },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/data/app.accdb",
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    error: { code: "CLEANUP_PID_UNKNOWN" },
+  });
+});
+
+it("force cleanup retires stale pid_unknown operations when no matching Access process exists", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "pid_unknown",
+    accessPid: null,
+    processStartTime: null,
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const killed: number[] = [];
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: { getProcess: async () => undefined },
+    processKiller: {
+      kill: async (pid) => {
+        killed.push(pid);
+      },
+    },
+    processScanner: { listProcesses: async () => [] },
+  });
+
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/data/app.accdb",
+    force: true,
+  });
+
+  expect(result).toMatchObject({
+    ok: true,
+    data: { operationId: "op-1", accessPid: null, status: "cleaned" },
+  });
+  expect(killed).toEqual([]);
+  await expect(registry.get("op-1")).resolves.toBeUndefined();
+});
+
+it("force cleanup refuses pid_unknown operations when an unowned Access process matches accessPath", async () => {
+  const registry = new InMemoryAccessOperationRegistry();
+  await registry.create({
+    ...base,
+    status: "pid_unknown",
+    accessPid: null,
+    processStartTime: null,
+    updatedAt: "2026-05-15T10:00:00.000Z",
+  });
+  const killed: number[] = [];
+  const service = new AccessOperationCleanupService({
+    registry,
+    processInspector: { getProcess: async () => undefined },
+    processKiller: {
+      kill: async (pid) => {
+        killed.push(pid);
+      },
+    },
+    processScanner: {
+      listProcesses: async () => [
+        {
+          pid: 9876,
           name: "MSACCESS.EXE",
-          startTime: "2026-05-15T10:00:00.000Z",
+          startTime: "2026-05-15T10:15:00.000Z",
           commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
-        }),
-      },
-      processKiller: {
-        kill: async (pid) => {
-          killed.push(pid);
         },
-      },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/data/app.accdb",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(killed).toEqual([1234]);
-    // cleaned records are purged from InMemory registry (parity with FileRegistry)
-    await expect(registry.get("op-1")).resolves.toBeUndefined();
+      ],
+    },
   });
 
-  it("accepts cleanup when accessPath differs only by case", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "timed_out",
-      accessPid: 1234,
-      processStartTime: "2026-05-15T10:00:00.000Z",
-      commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const killed: number[] = [];
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: {
-        getProcess: async () => ({
-          pid: 1234,
-          name: "MSACCESS.EXE",
-          startTime: "2026-05-15T10:00:00.000Z",
-          commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
-        }),
-      },
-      processKiller: {
-        kill: async (pid) => {
-          killed.push(pid);
-        },
-      },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "c:/DATA/APP.accdb",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(killed).toEqual([1234]);
+  const result = await service.cleanup({
+    operationId: "op-1",
+    accessPath: "C:/data/app.accdb",
+    force: true,
   });
 
-  it("refuses cleanup when accessPath does not match", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "timed_out",
-      accessPid: 1234,
-      processStartTime: "2026-05-15T10:00:00.000Z",
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: { getProcess: async () => undefined },
-      processKiller: { kill: async () => undefined },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/other.accdb",
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: "CLEANUP_ACCESS_PATH_MISMATCH" },
-    });
+  expect(result).toMatchObject({
+    ok: false,
+    error: { code: "CLEANUP_UNOWNED_ACCESS_PROCESS" },
   });
-
-  it("refuses cleanup when PID start time differs", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "timed_out",
-      accessPid: 1234,
-      processStartTime: "2026-05-15T10:00:00.000Z",
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: {
-        getProcess: async () => ({
-          pid: 1234,
-          name: "MSACCESS.EXE",
-          startTime: "2026-05-15T10:05:00.000Z",
-        }),
-      },
-      processKiller: { kill: async () => undefined },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/data/app.accdb",
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: "CLEANUP_PROCESS_START_TIME_MISMATCH" },
-    });
-  });
-
-  it("refuses pid_unknown operations without force", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "pid_unknown",
-      accessPid: null,
-      processStartTime: null,
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: { getProcess: async () => undefined },
-      processKiller: { kill: async () => undefined },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/data/app.accdb",
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: "CLEANUP_PID_UNKNOWN" },
-    });
-  });
-
-  it("force cleanup retires stale pid_unknown operations when no matching Access process exists", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "pid_unknown",
-      accessPid: null,
-      processStartTime: null,
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const killed: number[] = [];
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: { getProcess: async () => undefined },
-      processKiller: {
-        kill: async (pid) => {
-          killed.push(pid);
-        },
-      },
-      processScanner: { listProcesses: async () => [] },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/data/app.accdb",
-      force: true,
-    });
-
-    expect(result).toMatchObject({
-      ok: true,
-      data: { operationId: "op-1", accessPid: null, status: "cleaned" },
-    });
-    expect(killed).toEqual([]);
-    await expect(registry.get("op-1")).resolves.toBeUndefined();
-  });
-
-  it("force cleanup refuses pid_unknown operations when an unowned Access process matches accessPath", async () => {
-    const registry = new InMemoryAccessOperationRegistry();
-    await registry.create({
-      ...base,
-      status: "pid_unknown",
-      accessPid: null,
-      processStartTime: null,
-      updatedAt: "2026-05-15T10:00:00.000Z",
-    });
-    const killed: number[] = [];
-    const service = new AccessOperationCleanupService({
-      registry,
-      processInspector: { getProcess: async () => undefined },
-      processKiller: {
-        kill: async (pid) => {
-          killed.push(pid);
-        },
-      },
-      processScanner: {
-        listProcesses: async () => [
-          {
-            pid: 9876,
-            name: "MSACCESS.EXE",
-            startTime: "2026-05-15T10:15:00.000Z",
-            commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
-          },
-        ],
-      },
-    });
-
-    const result = await service.cleanup({
-      operationId: "op-1",
-      accessPath: "C:/data/app.accdb",
-      force: true,
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: "CLEANUP_UNOWNED_ACCESS_PROCESS" },
-    });
-    expect(killed).toEqual([]);
-    await expect(registry.get("op-1")).resolves.toMatchObject({ status: "pid_unknown" });
-  });
+  expect(killed).toEqual([]);
+  await expect(registry.get("op-1")).resolves.toMatchObject({ status: "pid_unknown" });
 });
 
 describe("Access operation preflight cleanup safety", () => {

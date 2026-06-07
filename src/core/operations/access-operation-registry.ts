@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export type AccessOperationStatus =
   | "starting"
@@ -277,7 +278,11 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {
-    const raw = await readFile(this.filePath, "utf8").catch(() => undefined);
+    const raw = await readFile(this.filePath, "utf8").catch((err: unknown) => {
+      if (isPathMissingError(err)) return undefined;
+      logSwallowedIoError("access-operation-registry:read", err);
+      return undefined;
+    });
     if (raw === undefined || raw.trim().length === 0) return new Map();
     try {
       const parsed = JSON.parse(raw) as
@@ -290,7 +295,8 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
           { ...record, metadata: { ...record.metadata } },
         ]),
       );
-    } catch {
+    } catch (err) {
+      logSwallowedIoError("access-operation-registry:parse", err);
       return new Map();
     }
   }

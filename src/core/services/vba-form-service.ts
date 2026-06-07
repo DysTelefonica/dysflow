@@ -7,6 +7,7 @@ import {
   successResult,
 } from "../contracts/index.js";
 import { isRecord, stringValue } from "../utils/index.js";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 // ---------------------------------------------------------------------------
 // I/O Port interfaces — owned by core, implemented by adapters
@@ -135,9 +136,15 @@ export class VbaFormService {
         createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlType."),
       );
     }
-    const catalog = await this.fileSystem
-      .readJson<Record<string, unknown>>(catalogPath)
-      .catch(() => ({}) as Record<string, unknown>);
+    let catalog: Record<string, unknown> = {};
+    try {
+      catalog = (await this.fileSystem.readJson<Record<string, unknown>>(catalogPath)) as Record<
+        string,
+        unknown
+      >;
+    } catch (err) {
+      logSwallowedIoError("vba-form-service:catalog-read", err);
+    }
     const forms = isRecord(catalog.forms) ? (catalog.forms as Record<string, unknown>) : {};
     const controls = Array.isArray(forms[spec.data.name])
       ? (forms[spec.data.name] as unknown[])
@@ -180,9 +187,17 @@ export class VbaFormService {
           !entry.toLowerCase().endsWith(".report.json")
         )
           continue;
-        const spec = await this.fileSystem
-          .readJson<Record<string, unknown>>(resolve(folder, entry))
-          .catch(() => undefined);
+        let spec: Record<string, unknown> | undefined;
+        try {
+          spec = await this.fileSystem.readJson<Record<string, unknown>>(resolve(folder, entry));
+        } catch (err) {
+          if (isMissingPathError(err)) {
+            spec = undefined;
+          } else {
+            logSwallowedIoError("vba-form-service:spec-read", err);
+            spec = undefined;
+          }
+        }
         if (spec === undefined) continue;
         const controls = Array.isArray(spec.controls) ? spec.controls : [];
         catalog.push({
@@ -258,4 +273,8 @@ export class VbaFormService {
       return [];
     }
   }
+}
+
+function isMissingPathError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 }

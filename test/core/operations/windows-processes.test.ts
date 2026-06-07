@@ -314,3 +314,29 @@ describe("normalizeProcessList", () => {
     ]);
   });
 });
+
+describe("normalizeProcessList — swallowed-I/O diagnostics (#478)", () => {
+  it("returns empty array for garbage JSON (behavior preserved) and logs the parse error", () => {
+    const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const result = normalizeProcessList("not-valid-json{{{");
+    expect(result).toEqual([]);
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]?.[0]).toMatch(
+      /\[dysflow:swallowed-io:windows-processes:normalize-process-list\]/,
+    );
+    spy.mockRestore();
+  });
+
+  it("logs the error message from the parse failure", () => {
+    const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    normalizeProcessList("{ bad json");
+    expect(spy).toHaveBeenCalledOnce();
+    const loggedMessage = spy.mock.calls[0]?.[0] as string;
+    // V8's JSON.parse error wording differs across versions ("Unexpected token"
+    // vs "Expected property name"); the test is asserting that the helper
+    // surfaces the original error message verbatim, not a specific wording.
+    expect(loggedMessage).toMatch(/Unexpected|Expected/);
+    expect(loggedMessage).toMatch(/JSON/);
+    spy.mockRestore();
+  });
+});

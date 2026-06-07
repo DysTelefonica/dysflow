@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { logSwallowedIoError } from "../../../core/utils/log-swallowed-io-error.js";
 import type { AgentConfigPaths, AgentName } from "./agent-config.js";
 import {
   ensureObject,
@@ -11,7 +12,11 @@ import {
 
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {
   if (agent === "codex") {
-    const raw = await readFile(filePath, "utf8").catch(() => "");
+    const raw = await readFile(filePath, "utf8").catch((err: unknown) => {
+      if (isMissingPathError(err)) return "";
+      logSwallowedIoError("mcp-configurator:has-dysflow-mcp-config", err);
+      return "";
+    });
     return raw
       .replace(/\r\n/g, "\n")
       .split("\n")
@@ -60,9 +65,17 @@ export function replaceCodexMcpSection(content: string, commandPath: string): st
 }
 
 async function configureCodex(filePath: string, commandPath: string): Promise<void> {
-  const raw = await readFile(filePath, "utf8").catch(() => "");
+  const raw = await readFile(filePath, "utf8").catch((err: unknown) => {
+    if (isMissingPathError(err)) return "";
+    logSwallowedIoError("mcp-configurator:configure-codex", err);
+    return "";
+  });
   const updated = replaceCodexMcpSection(raw, commandPath);
   await writeFileAtomically(filePath, updated);
+}
+
+function isMissingPathError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 }
 
 async function configureOpencode(filePath: string, command: readonly string[]): Promise<void> {

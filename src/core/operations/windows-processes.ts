@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import type {
   OsProcessInfo,
   ProcessInspector,
@@ -52,7 +53,8 @@ export function normalizeProcessList(stdout: string): OsProcessInfo[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
-  } catch {
+  } catch (err) {
+    logSwallowedIoError("windows-processes:normalize-process-list", err);
     return [];
   }
   if (parsed === null || typeof parsed !== "object") {

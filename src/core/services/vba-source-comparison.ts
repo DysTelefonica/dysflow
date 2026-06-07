@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, parse, relative, resolve } from "node:path";
@@ -12,6 +13,7 @@ import {
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export type VbaSourceComparisonFile = {
   moduleName: string;
@@ -258,7 +260,17 @@ export async function collectVbaSourceFiles(
 ): Promise<VbaSourceComparisonFile[]> {
   const files: VbaSourceComparisonFile[] = [];
   async function visit(directory: string): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    let entries: Dirent[];
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (err) {
+      if (isMissingPathError(err)) {
+        entries = [];
+      } else {
+        logSwallowedIoError("vba-source-comparison:readdir", err);
+        entries = [];
+      }
+    }
     for (const entry of entries) {
       const path = resolve(directory, entry.name);
       if (entry.isDirectory()) {
@@ -342,4 +354,8 @@ function firstDifferentLineSnippet(leftText: string, rightText: string, label: s
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function isMissingPathError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 }
