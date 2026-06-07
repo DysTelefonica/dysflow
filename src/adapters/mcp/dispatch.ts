@@ -1,5 +1,6 @@
 import { ALIAS_TOOL_NAMES, buildAliasTools } from "./alias-tools.js";
 import { createDispatchTool } from "./dispatch-factory.js";
+import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import type {
   DysflowMcpServices,
@@ -63,8 +64,11 @@ export function registerMcpTools(
   );
 
   // Dispatch loop skips alias names — each DysflowMcpToolName is owned by exactly one path (#405).
-  const dispatchTools = DYSFLOW_MCP_TOOL_NAMES.filter((name) => !ALIAS_TOOL_NAMES.has(name)).map(
-    (name) => createDispatchTool(name, services, writesEnabled, writeAccessResolver, env),
+  const dispatchToolNames = DYSFLOW_MCP_TOOL_NAMES.filter(
+    (name): name is GeneratedDispatchToolName => !ALIAS_TOOL_NAMES.has(name),
+  );
+  const dispatchTools = dispatchToolNames.map((name) =>
+    createDispatchTool(name, services, writesEnabled, writeAccessResolver, env),
   );
 
   return registerMcpToolList([...currentTools, ...aliasTools, ...dispatchTools]);

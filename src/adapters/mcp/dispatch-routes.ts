@@ -1,4 +1,5 @@
 import type { AccessQueryAction } from "../../core/mapping/access-query-request-mapper.js";
+import type { AliasToolName } from "./alias-tools.js";
 import {
   type DysflowMcpToolName,
   QUERY_TOOL_NAMES,
@@ -13,17 +14,16 @@ export type McpToolRoute =
   | { kind: "query-maintenance"; queryMode: "read" | "write" }
   | { kind: "query-write-fixture" };
 
-export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
-  // VBA sync (21)
-  list_access_operations: { kind: "vba-sync" },
-  cleanup_access_operation: { kind: "vba-sync" },
+export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolName>;
+
+export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = {
+  // VBA sync (18)
   export_modules: { kind: "vba-sync" },
   export_all: { kind: "vba-sync" },
   import_modules: { kind: "vba-sync" },
   import_all: { kind: "vba-sync" },
   list_objects: { kind: "vba-sync" },
   exists: { kind: "vba-sync" },
-  run_vba: { kind: "vba-sync" },
   test_vba: { kind: "vba-sync" },
   compile_vba: { kind: "vba-sync" },
   verify_code: { kind: "vba-sync" },
@@ -46,8 +46,7 @@ export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
   import_queries: { kind: "query-maintenance", queryMode: "write" },
   compact_repair: { kind: "query-maintenance", queryMode: "write" },
   relink_directory: { kind: "query-maintenance", queryMode: "write" },
-  // query read (9)
-  query_sql: { kind: "query-read" },
+  // query read (8)
   list_tables: { kind: "query-read" },
   list_linked_tables: { kind: "query-read" },
   get_schema: { kind: "query-read" },
@@ -56,13 +55,6 @@ export const MCP_TOOL_ROUTES: Record<DysflowMcpToolName, McpToolRoute> = {
   compare_backends: { kind: "query-read" },
   list_access_files: { kind: "query-read" },
   get_relationships: { kind: "query-read" },
-  // write fixture (6)
-  exec_sql: { kind: "query-write-fixture" },
-  run_script: { kind: "query-write-fixture" },
-  create_table: { kind: "query-write-fixture" },
-  drop_table: { kind: "query-write-fixture" },
-  seed_fixture: { kind: "query-write-fixture" },
-  teardown_fixture: { kind: "query-write-fixture" },
 };
 
 /**
