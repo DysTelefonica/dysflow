@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). **#477 DONE** (lock extraction). **#478 DONE** (swallowed I/O). Currently in flight: #479 (timeout formula).
+`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476, #477, #478, #479 DONE** (security, lock extraction, swallowed I/O, timeout formula). Currently in flight: #480 (docs anchors).
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -366,7 +366,7 @@ This ledger is the human-readable index; the artifact store holds the detailed p
 | 1 | [#476](https://github.com/DysTelefonica/dysflow/issues/476) | fix(security): update trust boundary (gh fallback + --skip-checksum guard) | high | `done` ✅ | `476-update-trust-boundary` |
 | 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `done` ✅ | `477-lock-extract` |
 | 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `done` ✅ | `478-swallowed-io` |
-| 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `todo` | `479-timeout-formula` |
+| 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `done` ✅ | `479-timeout-formula` |
 | 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `todo` | `480-docs-anchors` |
 | 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `todo` | `481-tracking-sync` |
 | 7 | [#482](https://github.com/DysTelefonica/dysflow/issues/482) | chore(deps): pin fresh-major toolchain (TS ^6, Vite ^6, Vitest ^4) or document policy | low/med | `todo` | `482-toolchain-pin` |
@@ -396,6 +396,15 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 - **2026-06-07**: Campaign opened from the v1.2.23 post-release review. 8 issues filed (#476-#483),
   ordered by severity. #476 (security) in flight. Verification engram obs for this campaign
   records the 9 CONFIRMED / 3 REJECTED / 4 MODIFIED breakdown.
+- **2026-06-07**: #479 (timeout formula) DONE. Extracted
+  `derivePsTimeoutMs(effectiveTimeoutMs, preflightElapsedMs)` to module scope
+  in `src/adapters/vba-sync/vba-sync-adapter.ts`. The `5_000` literal is now
+  named `MIN_PS_TIMEOUT_MS` at module scope. The inline `Math.max/Math.min`
+  expression in `executeMappedTool` is replaced by a single call; the
+  `explicitTimeoutMs !== undefined` branch shape is preserved exactly. 5 new
+  tests in `test/adapters/vba-sync/ps-timeout-formula.test.ts` cover the
+  floor/over-budget/no-preflight/constant-pin scenarios. 1016 passed, 3
+  skipped. **NEXT: #480** — replace stale security doc line refs.
 - **2026-06-07**: #478 (swallowed I/O diagnostics) DONE. New helper
   `src/core/utils/log-swallowed-io-error.ts` exposes a single
   `logSwallowedIoError(site, err)` debug-level logger. All 7 known sites now
