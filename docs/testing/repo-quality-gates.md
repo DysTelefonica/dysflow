@@ -6,8 +6,9 @@ Owner: repo-engineering-hardening
 
 - `pnpm test` runs the Vitest suite.
 - `pnpm build` runs the TypeScript build.
-- Lint uses TypeScript strict checking and Biome (lint + format check) through `pnpm lint`
-  (`tsc --noEmit && biome check`). Use `pnpm format` to auto-format, `pnpm format:check` to verify.
+- Lint uses TypeScript strict checking, Biome, and the optional config/params presence guard through `pnpm lint`
+  (`node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/`). Use
+  `pnpm format` to auto-format, `pnpm format:check` to verify.
 - `pnpm coverage` runs Vitest coverage for `src/**/*.ts`.
 
 ## Coverage thresholds

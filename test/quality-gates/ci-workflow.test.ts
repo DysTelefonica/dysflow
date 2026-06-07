@@ -59,7 +59,7 @@ describe("repository quality gates", () => {
 
     expect(packageJson.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.lint).toBe(
-      "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/",
+      "node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/",
     );
     expect(packageJson.scripts).toHaveProperty("format");
     expect(packageJson.scripts).toHaveProperty("format:check");
@@ -95,7 +95,9 @@ describe("repository quality gates", () => {
     const docs = await readText("docs/testing/repo-quality-gates.md");
 
     expect(docs).toContain("Owner: repo-engineering-hardening");
-    expect(docs).toContain("Lint uses TypeScript strict checking and Biome");
+    expect(docs).toContain(
+      "Lint uses TypeScript strict checking, Biome, and the optional config/params presence guard",
+    );
     expect(docs).not.toContain("Coverage starts at a 0% floor");
   });
 
