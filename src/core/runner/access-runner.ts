@@ -20,7 +20,7 @@ import {
   type AccessOperationRecord,
   type AccessOperationRegistry,
   createAccessOperationId,
-  InMemoryAccessOperationRegistry,
+  resolveAccessOperationRegistry,
   toOperationMetadata,
 } from "../operations/access-operation-registry.js";
 import {
@@ -149,7 +149,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   constructor(options: AccessPowerShellRunnerOptions = {}) {
     this.executor = options.executor ?? spawnPowerShell;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
-    this.operationRegistry = options.operationRegistry ?? new InMemoryAccessOperationRegistry();
+    this.operationRegistry = resolveAccessOperationRegistry(options.operationRegistry);
     this.preflightCleanup =
       options.preflightCleanup ??
       new AccessOperationPreflightCleanupService({

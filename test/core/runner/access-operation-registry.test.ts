@@ -6,10 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
 import {
+  DEFAULT_RECENT_ACCESS_OPERATION_LIMIT,
   DEFAULT_STALE_LOCK_MS,
   evictOldestRecordsFromMap,
   FileAccessOperationRegistry,
   InMemoryAccessOperationRegistry,
+  listRecentAccessOperations,
 } from "../../../src/core/operations/access-operation-registry.js";
 
 const base = {
@@ -44,6 +46,28 @@ describe("Registry constants and shared helpers", () => {
     ]);
     evictOldestRecordsFromMap(records, 10);
     expect(records.size).toBe(1);
+  });
+
+  it("listRecentAccessOperations applies the shared recent-operation limit", async () => {
+    const registry = new InMemoryAccessOperationRegistry({
+      maxRecords: DEFAULT_RECENT_ACCESS_OPERATION_LIMIT + 1,
+    });
+    for (let index = 0; index <= DEFAULT_RECENT_ACCESS_OPERATION_LIMIT; index += 1) {
+      await registry.create({
+        ...base,
+        operationId: `op-${index}`,
+        status: "running",
+        accessPid: index,
+        processStartTime: null,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      });
+    }
+
+    const records = await listRecentAccessOperations(registry);
+
+    expect(records).toHaveLength(DEFAULT_RECENT_ACCESS_OPERATION_LIMIT);
+    expect(records.at(0)?.operationId).toBe(`op-${DEFAULT_RECENT_ACCESS_OPERATION_LIMIT}`);
+    expect(records.some((record) => record.operationId === "op-0")).toBe(false);
   });
 });
 

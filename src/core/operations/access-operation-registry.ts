@@ -58,10 +58,34 @@ export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistry
 };
 
 const DEFAULT_MAX_RECORDS = 1000;
+export const DEFAULT_RECENT_ACCESS_OPERATION_LIMIT = 50;
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 export const DEFAULT_STALE_LOCK_MS = 300_000;
 const LOCK_RETRY_INTERVAL_MS = 10;
 const PURGED_PERSISTENT_STATUSES = new Set<AccessOperationStatus>(["completed", "cleaned"]);
+
+export function createInMemoryAccessOperationRegistry(): AccessOperationRegistry {
+  return new InMemoryAccessOperationRegistry();
+}
+
+export function createProjectAccessOperationRegistry(config: {
+  projectRoot?: string;
+}): AccessOperationRegistry {
+  return new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath(config) });
+}
+
+export function resolveAccessOperationRegistry(
+  registry: AccessOperationRegistry | undefined,
+  createFallback: () => AccessOperationRegistry = createInMemoryAccessOperationRegistry,
+): AccessOperationRegistry {
+  return registry ?? createFallback();
+}
+
+export function listRecentAccessOperations(
+  registry: AccessOperationRegistry,
+): Promise<AccessOperationRecord[]> {
+  return registry.listRecent({ limit: DEFAULT_RECENT_ACCESS_OPERATION_LIMIT });
+}
 
 export function evictOldestRecordsFromMap(
   records: Map<string, AccessOperationRecord>,
@@ -137,7 +161,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
-    const limit = options.limit ?? 50;
+    const limit = options.limit ?? DEFAULT_RECENT_ACCESS_OPERATION_LIMIT;
     return [...(await this.readRecords()).values()]
       .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
@@ -331,7 +355,7 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
   }
 
   async listRecent(options: { limit?: number } = {}): Promise<AccessOperationRecord[]> {
-    const limit = options.limit ?? 50;
+    const limit = options.limit ?? DEFAULT_RECENT_ACCESS_OPERATION_LIMIT;
     return [...this.records.values()]
       .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
