@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476, #477, #478, #479 DONE** (security, lock extraction, swallowed I/O, timeout formula). Currently in flight: #480 (docs anchors).
+`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476, #477, #478, #479, #480 DONE** (security, lock extraction, swallowed I/O, timeout formula, docs anchors). Currently in flight: #481 (TRACKING.md sync).
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -367,7 +367,7 @@ This ledger is the human-readable index; the artifact store holds the detailed p
 | 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `done` ✅ | `477-lock-extract` |
 | 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `done` ✅ | `478-swallowed-io` |
 | 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `done` ✅ | `479-timeout-formula` |
-| 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `todo` | `480-docs-anchors` |
+| 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `done` ✅ | `480-docs-anchors` |
 | 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `todo` | `481-tracking-sync` |
 | 7 | [#482](https://github.com/DysTelefonica/dysflow/issues/482) | chore(deps): pin fresh-major toolchain (TS ^6, Vite ^6, Vitest ^4) or document policy | low/med | `todo` | `482-toolchain-pin` |
 | 8 | [#483](https://github.com/DysTelefonica/dysflow/issues/483) | chore(repo): ignore and clean local root junk (NVIDIA Corporation/) | low | `todo` | `483-nvidia-junk` |
@@ -396,6 +396,16 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 - **2026-06-07**: Campaign opened from the v1.2.23 post-release review. 8 issues filed (#476-#483),
   ordered by severity. #476 (security) in flight. Verification engram obs for this campaign
   records the 9 CONFIRMED / 3 REJECTED / 4 MODIFIED breakdown.
+- **2026-06-07**: #480 (docs anchors) DONE. The Callers table in
+  `update-trust-model.md` referenced internal source by exact line numbers
+  (`access-runner.ts:596-608`, `vba-sync-adapter.ts:524-531`); both were already
+  stale (pointed at spawn wrappers, not arg construction). Replaced with
+  symbol anchors: `buildPowerShellArguments` in access-runner.ts,
+  `spawnVbaManager` in vba-sync-adapter.ts. New regression test
+  `test/docs/security-doc-anchors.test.ts` asserts no `file:line` refs to
+  internal TypeScript source positions remain in `docs/security/`. 1018
+  passed, 3 skipped. **NEXT: #481** — remove the stale "HTTP → core-mapper"
+  Dropped entry.
 - **2026-06-07**: #479 (timeout formula) DONE. Extracted
   `derivePsTimeoutMs(effectiveTimeoutMs, preflightElapsedMs)` to module scope
   in `src/adapters/vba-sync/vba-sync-adapter.ts`. The `5_000` literal is now
