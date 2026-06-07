@@ -1,8 +1,11 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
-import { successResult } from "../../core/contracts/index.js";
-import type { AccessOperationRecord } from "../../core/operations/access-operation-registry.js";
-import { InMemoryAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
+import {
+  handleMcpAccessCleanup,
+  handleMcpAccessOperationsList,
+  handleMcpQueryExecute,
+  handleMcpVbaExecute,
+} from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
 
 export {
@@ -22,7 +25,7 @@ export {
 } from "./result-translation.js";
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
-import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
+import { invalidInput } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
@@ -70,42 +73,30 @@ export function createDysflowMcpTools(
       name: "dysflow_vba_execute",
       description: "Execute a VBA procedure through Dysflow core services.",
       inputSchema: VBA_EXECUTE_SCHEMA,
-      handler: async (input, context) => {
-        const validation = validateInput(input, VBA_EXECUTE_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
-        const request = input as AccessVbaRequest;
-        if (
-          allowedProcedures !== undefined &&
-          allowedProcedures.length > 0 &&
-          !allowedProcedures.includes(request.procedureName)
-        ) {
-          return invalidInput(
-            `Procedure '${request.procedureName}' is not in the configured allowedProcedures list.`,
-          );
-        }
-        return translateCoreResultToMcpContent(
-          await services.vbaService.execute(request, context?.sendProgress),
-        );
-      },
+      handler: async (input, context) =>
+        handleMcpVbaExecute(
+          input,
+          VBA_EXECUTE_SCHEMA,
+          services,
+          allowedProcedures,
+          (validatedInput) => validatedInput as AccessVbaRequest,
+          context,
+        ),
     },
     {
       name: "dysflow_query_execute",
       description: "Execute a query action through Dysflow core services.",
       inputSchema: QUERY_EXECUTE_SCHEMA,
-      handler: async (input, context) => {
-        const validation = validateInput(input, QUERY_EXECUTE_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
-        const request = input as AccessQueryRequest;
-        if (
-          request.mode === "write" &&
-          !(await isWriteAllowed(request, writesEnabled, writeAccessResolver))
-        ) {
-          return writesDisabled();
-        }
-        return translateCoreResultToMcpContent(
-          await services.queryService.execute(request, context?.sendProgress),
-        );
-      },
+      handler: async (input, context) =>
+        handleMcpQueryExecute(
+          input,
+          QUERY_EXECUTE_SCHEMA,
+          services,
+          writesEnabled,
+          writeAccessResolver,
+          (validatedInput) => validatedInput as AccessQueryRequest,
+          context,
+        ),
     },
     {
       name: "dysflow_doctor",
@@ -122,37 +113,20 @@ export function createDysflowMcpTools(
       name: "dysflow_access_operations_list",
       description: "List recent Dysflow Access operation records.",
       inputSchema: NO_INPUT_SCHEMA,
-      handler: async () => {
-        const registry = services.operationRegistry ?? new InMemoryAccessOperationRegistry();
-        return translateCoreResultToMcpContent(
-          successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })),
-        );
-      },
+      handler: async () => handleMcpAccessOperationsList(services),
     },
     {
       name: "dysflow_access_cleanup",
       description: "Clean up resources associated with a recent Access operation.",
       inputSchema: CLEANUP_SCHEMA,
-      handler: async (input) => {
-        const validation = validateInput(input, CLEANUP_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
-        if (services.cleanupService === undefined) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "CLEANUP_NOT_CONFIGURED: Access cleanup service is not configured.",
-              },
-            ],
-            isError: true,
-          };
-        }
-        return translateCoreResultToMcpContent(
-          await services.cleanupService.cleanup(
-            input as { operationId: string; accessPath: string; force?: boolean },
-          ),
-        );
-      },
+      handler: async (input) =>
+        handleMcpAccessCleanup(
+          input,
+          CLEANUP_SCHEMA,
+          services,
+          (validatedInput) =>
+            validatedInput as { operationId: string; accessPath: string; force?: boolean },
+        ),
     },
   ];
 

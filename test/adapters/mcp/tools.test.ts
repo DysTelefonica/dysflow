@@ -1178,6 +1178,54 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
+  describe("modern and alias handler compatibility", () => {
+    it("returns the same allowlist error for dysflow_vba_execute and run_vba", async () => {
+      const tools = createDysflowMcpTools(
+        {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        false,
+        undefined,
+        {},
+        ["AllowedProcedure"],
+      );
+
+      const modernResult = await tools
+        .find((t) => t.name === "dysflow_vba_execute")
+        ?.handler({ procedureName: "BlockedProcedure" });
+      const aliasResult = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "BlockedProcedure" });
+
+      expect(aliasResult).toEqual(modernResult);
+    });
+
+    it("delegates read-only query_sql through the same query execution path as dysflow_query_execute", async () => {
+      const query = new FakeQueryService(successResult({ rows: [{ ok: true }] }));
+      const tools = createDysflowMcpTools({
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+
+      await expect(
+        tools
+          .find((t) => t.name === "dysflow_query_execute")
+          ?.handler({ sql: "SELECT 1", mode: "read" }),
+      ).resolves.toMatchObject({ isError: false });
+      await expect(
+        tools.find((t) => t.name === "query_sql")?.handler({ sql: "SELECT 1" }),
+      ).resolves.toMatchObject({ isError: false });
+
+      expect(query.requests).toEqual([
+        { sql: "SELECT 1", mode: "read" },
+        { sql: "SELECT 1", mode: "read", backendPath: undefined, databasePath: undefined },
+      ]);
+    });
+  });
+
   describe("read-only SQL delegation to queryService", () => {
     it("blocks DDL via query_sql tool by delegating to queryService", async () => {
       const query = new FakeQueryService(
