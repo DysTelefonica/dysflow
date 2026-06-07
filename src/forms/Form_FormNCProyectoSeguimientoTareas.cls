@@ -390,10 +390,13 @@ Public Function Filtrar( _
     
     lst.RowSource = "IDAccionRealizada;NºTRA;Tarea;Responsable;Estado;F.prev.cierre;Tipo NC"
    
-    
-    Set m_ColFiltradoTareasNCProyectos = constructor.getARsDeProyectoBusqueda(p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD.Column(0), ""), _
-                            p_Responsable:=Nz(Me.Responsable.Column(0), ""), p_IDExpediente:=Nz(Me.IDExpediente, ""), _
-                            p_Estado:=Nz(Me.Estado.Column(0), ""), p_Error:=p_Error)
+     
+    Set m_ColFiltradoTareasNCProyectos = ApplySeguimientoTareasHelperFilters( _
+                            p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD.Column(0), ""), _
+                            p_Responsable:=Nz(Me.Responsable.Column(0), ""), _
+                            p_Estado:=Nz(Me.Estado.Column(0), ""), _
+                            p_IDExpediente:=Nz(Me.IDExpediente, ""), _
+                            p_Error:=p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -424,6 +427,23 @@ errores:
     If Err.Number <> 1000 Then
         p_Error = "El método Filtrar ha devuelto el error: " & vbNewLine & Err.Description
     End If
+End Function
+
+Private Function ApplySeguimientoTareasHelperFilters( _
+                        Optional ByVal p_ResponsableCalidad As String = "", _
+                        Optional ByVal p_Responsable As String = "", _
+                        Optional ByVal p_Estado As String = "", _
+                        Optional ByVal p_IDExpediente As String = "", _
+                        Optional ByRef p_Error As String _
+                        ) As Scripting.Dictionary
+
+    Set ApplySeguimientoTareasHelperFilters = NCProyectoSeguimientoTareasListadoHelper.ApplySeguimientoTareasFormFilters( _
+                                                p_FormFilteredTareas:=m_ColFiltradoTareasNCProyectos, _
+                                                p_ResponsableCalidad:=p_ResponsableCalidad, _
+                                                p_Responsable:=p_Responsable, _
+                                                p_Estado:=p_Estado, _
+                                                p_IDExpediente:=p_IDExpediente, _
+                                                p_Error:=p_Error)
 End Function
 
 Private Sub ListaFiltrados_Click()

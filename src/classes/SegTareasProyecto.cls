@@ -37,6 +37,9 @@ Public Property Get AR() As ARProyecto
 
     Me.Error = ""
     m_Error = ""
+    If m_TestingMode Then
+        If m_TestSegTareasProyectoHydrationCountersEnabled Then m_TestSegTareasProyectoARHydrationCount = m_TestSegTareasProyectoARHydrationCount + 1
+    End If
     If Not m_ObjAR Is Nothing Then
         Set AR = m_ObjAR
         Exit Property
@@ -66,6 +69,9 @@ Public Property Get AC() As ACProyecto
 
     Me.Error = ""
     m_Error = ""
+    If m_TestingMode Then
+        If m_TestSegTareasProyectoHydrationCountersEnabled Then m_TestSegTareasProyectoACHydrationCount = m_TestSegTareasProyectoACHydrationCount + 1
+    End If
     If Not m_ObjAC Is Nothing Then
         Set AC = m_ObjAC
         Exit Property
@@ -94,6 +100,9 @@ Public Property Get nc() As NCProyecto
 
     Me.Error = ""
     m_Error = ""
+    If m_TestingMode Then
+        If m_TestSegTareasProyectoHydrationCountersEnabled Then m_TestSegTareasProyectoNCHydrationCount = m_TestSegTareasProyectoNCHydrationCount + 1
+    End If
     If Not m_ObjNC Is Nothing Then
         Set nc = m_ObjNC
         Exit Property

@@ -1,0 +1,58 @@
+{
+  "tests": [
+    {
+      "name": "Seguimiento tareas helper fallback empty cache logs",
+      "procedure": "Test_TareasHelper_Fallback_EmptyCache_Logs",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "fallback"]
+    },
+    {
+      "name": "Seguimiento tareas helper fallback disabled cache logs",
+      "procedure": "Test_TareasHelper_Fallback_DisabledCache_Logs",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "fallback"]
+    },
+    {
+      "name": "Seguimiento tareas helper fallback no user safe log",
+      "procedure": "Test_TareasHelper_Fallback_NoUser_SafeLog",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "fallback"]
+    },
+    {
+      "name": "Seguimiento tareas helper fallback cache error logs",
+      "procedure": "Test_TareasHelper_Fallback_CacheError_Logs",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "fallback", "verification-gap"]
+    },
+    {
+      "name": "Seguimiento tareas helper filter parity all predicates",
+      "procedure": "Test_TareasHelper_FilterParity_AllPredicates_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "filter-parity"]
+    },
+    {
+      "name": "Seguimiento tareas helper estado selects source",
+      "procedure": "Test_TareasHelper_Estado_SelectsSource",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "filter-parity"]
+    },
+    {
+      "name": "Seguimiento tareas helper no AR per row hydration",
+      "procedure": "Test_TareasHelper_NoARPerRowHydration",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "no-hydration"]
+    },
+    {
+      "name": "Seguimiento tareas helper deterministic order export input",
+      "procedure": "Test_TareasHelper_DeterministicOrder_ExportInput",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "helper", "filter-parity", "no-hydration"]
+    },
+    {
+      "name": "Seguimiento tareas form delegates filter paths",
+      "procedure": "Test_TareasForm_Delegates_FilterPaths",
+      "expect": { "ok": true },
+      "tags": ["atomic", "ncproyecto-seguimiento-tareas-helper", "wu1", "red", "form", "delegation", "verification-gap"]
+    }
+  ]
+}
