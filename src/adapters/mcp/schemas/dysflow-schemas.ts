@@ -14,6 +14,7 @@ export type JsonSchemaProperty = {
   items?: JsonSchemaProperty;
   maxItems?: number;
   additionalProperties?: boolean;
+  required?: readonly string[];
   properties?: Record<string, JsonSchemaProperty>;
 };
 

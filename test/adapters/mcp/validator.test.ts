@@ -188,3 +188,76 @@ describe("validateInput — maxLength and maxItems bounds", () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe("validateInput — required properties", () => {
+  const schemaWithRequired: JsonObjectSchema = {
+    type: "object",
+    required: ["name"],
+    additionalProperties: false,
+    properties: {
+      name: { type: "string" },
+      config: {
+        type: "object",
+        required: ["path"],
+        additionalProperties: false,
+        properties: {
+          path: { type: "string" },
+        },
+      },
+    },
+  };
+
+  it("rejects a missing top-level required property", () => {
+    const result = validateInput({}, schemaWithRequired);
+
+    expect(result).toBe("name is required.");
+  });
+
+  it("accepts a present nested required property", () => {
+    const result = validateInput(
+      { name: "project", config: { path: "C:/data" } },
+      schemaWithRequired,
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  it("rejects a missing nested required property with its object path", () => {
+    const result = validateInput({ name: "project", config: {} }, schemaWithRequired);
+
+    expect(result).toBe("config.path is required.");
+  });
+
+  it("treats an undefined nested required property as absent", () => {
+    const result = validateInput(
+      { name: "project", config: { path: undefined } },
+      schemaWithRequired,
+    );
+
+    expect(result).toBe("config.path is required.");
+  });
+
+  it("rejects missing required properties inside array object items", () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["name"],
+            additionalProperties: false,
+            properties: {
+              name: { type: "string" },
+            },
+          },
+        },
+      },
+    };
+
+    const result = validateInput({ items: [{}] }, schema);
+
+    expect(result).toBe("items[0].name is required.");
+  });
+});
