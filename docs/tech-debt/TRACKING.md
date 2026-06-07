@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). **#477 DONE** (lock extraction). Currently in flight: #478 (swallowed I/O).
+`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). **#477 DONE** (lock extraction). **#478 DONE** (swallowed I/O). Currently in flight: #479 (timeout formula).
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -365,7 +365,7 @@ This ledger is the human-readable index; the artifact store holds the detailed p
 |-------|-------|-------|----------|--------|------------|
 | 1 | [#476](https://github.com/DysTelefonica/dysflow/issues/476) | fix(security): update trust boundary (gh fallback + --skip-checksum guard) | high | `done` ✅ | `476-update-trust-boundary` |
 | 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `done` ✅ | `477-lock-extract` |
-| 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `todo` | `478-swallowed-io` |
+| 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `done` ✅ | `478-swallowed-io` |
 | 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `todo` | `479-timeout-formula` |
 | 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `todo` | `480-docs-anchors` |
 | 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `todo` | `481-tracking-sync` |
@@ -396,6 +396,18 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 - **2026-06-07**: Campaign opened from the v1.2.23 post-release review. 8 issues filed (#476-#483),
   ordered by severity. #476 (security) in flight. Verification engram obs for this campaign
   records the 9 CONFIRMED / 3 REJECTED / 4 MODIFIED breakdown.
+- **2026-06-07**: #478 (swallowed I/O diagnostics) DONE. New helper
+  `src/core/utils/log-swallowed-io-error.ts` exposes a single
+  `logSwallowedIoError(site, err)` debug-level logger. All 7 known sites now
+  log on real I/O / parse failures while preserving the empty-default return on
+  the happy `ENOENT` path: `access-operation-registry.ts:280,293`,
+  `vba-sync-adapter.ts:483,491`, `vba-form-service.ts:138-140,183-186`,
+  `vba-source-comparison.ts:261`, `mcp-configurator.ts:14,63`,
+  `windows-processes.ts:53-56`. 4 new tests cover the registry (corrupt file
+  → log + empty) and the windows-processes JSON parse path (covers both V8
+  error wordings, "Unexpected token" and "Expected property name"). 1011 passed,
+  3 skipped; tsc + biome clean. **NEXT: #479** — extract/document the
+  `executeMappedTool` timeout formula.
 - **2026-06-07**: #477 (lock extraction) DONE. New module `src/core/runner/cross-process-lock.ts`
   owns the cross-process and in-process lock primitives (~155 LOC, no adapter imports). The
   in-process serialized queue map is now injectable as a 4th argument to
