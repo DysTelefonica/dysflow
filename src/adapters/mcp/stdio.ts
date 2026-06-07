@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -32,6 +33,7 @@ import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool } f
 import type { McpToolContext } from "./types.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
+const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 
 // MCP protocol version this server implements.
 // Check https://spec.modelcontextprotocol.io for newer versions.
@@ -197,12 +199,23 @@ export function createUnavailableServices(
   } = {},
 ): DysflowMcpServices {
   const unavailable = async () => failureResult(error);
+  const serviceCache = new Map<string, DysflowMcpServices>();
   const resolveService = async (input: unknown): Promise<DysflowMcpServices | undefined> => {
     const configResult = await resolveConfigForInput(input, options);
     if (configResult.ok && !existsSync(configResult.data.accessDbPath)) return undefined;
-    return configResult.ok
-      ? (options.serviceFactory ?? createConfiguredServices)(configResult.data)
-      : undefined;
+    if (!configResult.ok) return undefined;
+
+    const cacheKey = resolvedConfigCacheKey(configResult.data);
+    const cachedServices = serviceCache.get(cacheKey);
+    if (cachedServices !== undefined) return cachedServices;
+
+    const services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
+    if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
+      const oldestKey = serviceCache.keys().next().value;
+      if (oldestKey !== undefined) serviceCache.delete(oldestKey);
+    }
+    serviceCache.set(cacheKey, services);
+    return services;
   };
   return {
     vbaService: {
@@ -271,8 +284,39 @@ function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
   return Object.keys(params).length === 0;
 }
 
+function resolvedConfigCacheKey(config: DysflowConfig): string {
+  const identity = [
+    config.configSource,
+    config.allowWrites,
+    config.allowedProcedures === undefined ? null : [...new Set(config.allowedProcedures)].sort(),
+    pathIdentity(config.accessDbPath),
+    optionalPathIdentity(config.backendPath),
+    optionalPathIdentity(config.destinationRoot),
+    optionalPathIdentity(config.projectRoot),
+    config.projectId ?? null,
+    config.timeoutMs,
+    config.processTimeoutMs,
+    config.accessPassword ?? null,
+    config.backendPassword ?? null,
+    config.accessPasswordEnv ?? null,
+    config.backendPasswordEnv ?? null,
+    optionalPathIdentity(config.configPath),
+    config.httpToken ?? null,
+    config.httpTokenEnv ?? null,
+  ];
+  return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
+}
+
+function optionalPathIdentity(value: string | undefined): string | null {
+  return value === undefined ? null : pathIdentity(value);
+}
+
+function pathIdentity(value: string): string {
+  return resolve(value).toLowerCase();
+}
+
 function pathsMatch(left: string, right: string): boolean {
-  return resolve(left).toLowerCase() === resolve(right).toLowerCase();
+  return pathIdentity(left) === pathIdentity(right);
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

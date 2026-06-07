@@ -214,6 +214,181 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(query.requests).toEqual([]);
   }, 15_000);
 
+  it("reuses unavailable-path services when resolved config is unchanged", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-same-"));
+    const frontend = join(root, "front.accdb");
+    writeFileSync(frontend, "", "utf8");
+
+    const query = new FakeQueryService();
+    let serviceFactoryCalls = 0;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        env: {},
+        serviceFactory: () => {
+          serviceFactoryCalls += 1;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: query,
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    const request = {
+      accessPath: frontend,
+      sql: "SELECT 1",
+      mode: "read",
+    } as unknown as Parameters<typeof services.queryService.execute>[0];
+    await expect(services.queryService.execute(request)).resolves.toMatchObject({ ok: true });
+    await expect(services.queryService.execute(request)).resolves.toMatchObject({ ok: true });
+
+    expect(serviceFactoryCalls).toBe(1);
+    expect(query.requests).toHaveLength(2);
+  });
+
+  const windowsIt = process.platform === "win32" ? it : it.skip;
+
+  windowsIt("reuses unavailable-path services for equivalent Windows path identities", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-path-identity-"));
+    const frontend = join(root, "front.accdb");
+    writeFileSync(frontend, "", "utf8");
+
+    let serviceFactoryCalls = 0;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        env: {},
+        serviceFactory: () => {
+          serviceFactoryCalls += 1;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    await expect(
+      services.queryService.execute({
+        accessPath: frontend,
+        sql: "SELECT 1",
+        mode: "read",
+      } as unknown as Parameters<typeof services.queryService.execute>[0]),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      services.queryService.execute({
+        accessPath: frontend.toUpperCase(),
+        sql: "SELECT 1",
+        mode: "read",
+      } as unknown as Parameters<typeof services.queryService.execute>[0]),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(serviceFactoryCalls).toBe(1);
+  });
+
+  it("creates new unavailable-path services when resolved config changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-changed-"));
+    const firstFrontend = join(root, "first.accdb");
+    const secondFrontend = join(root, "second.accdb");
+    writeFileSync(firstFrontend, "", "utf8");
+    writeFileSync(secondFrontend, "", "utf8");
+
+    const resolvedAccessPaths: string[] = [];
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        env: {},
+        serviceFactory: (config) => {
+          resolvedAccessPaths.push(config.accessDbPath);
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    await expect(
+      services.queryService.execute({
+        accessPath: firstFrontend,
+        sql: "SELECT 1",
+        mode: "read",
+      } as unknown as Parameters<typeof services.queryService.execute>[0]),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      services.queryService.execute({
+        accessPath: secondFrontend,
+        sql: "SELECT 1",
+        mode: "read",
+      } as unknown as Parameters<typeof services.queryService.execute>[0]),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(resolvedAccessPaths).toEqual([resolve(firstFrontend), resolve(secondFrontend)]);
+  });
+
+  it("evicts the oldest unavailable-path service after the bounded cache limit", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-eviction-"));
+    const frontends = Array.from({ length: 17 }, (_, index) => join(root, `front-${index}.accdb`));
+    for (const frontend of frontends) {
+      writeFileSync(frontend, "", "utf8");
+    }
+
+    let serviceFactoryCalls = 0;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        env: {},
+        serviceFactory: () => {
+          serviceFactoryCalls += 1;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    for (const frontend of frontends) {
+      await expect(
+        services.queryService.execute({
+          accessPath: frontend,
+          sql: "SELECT 1",
+          mode: "read",
+        } as unknown as Parameters<typeof services.queryService.execute>[0]),
+      ).resolves.toMatchObject({ ok: true });
+    }
+    await expect(
+      services.queryService.execute({
+        accessPath: frontends[0],
+        sql: "SELECT 1",
+        mode: "read",
+      } as unknown as Parameters<typeof services.queryService.execute>[0]),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(serviceFactoryCalls).toBe(18);
+  });
+
   it("keeps non-dry-run VBA sync tools unavailable after startup config failure", async () => {
     const services = createUnavailableServices(
       {
