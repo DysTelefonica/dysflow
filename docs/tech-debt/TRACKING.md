@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-05 — Phase 1 (#429-#431) COMPLETE. Phase 2 (#432, #433) COMPLETE. **All campaigns complete**. engram obs #10705.
+`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). Currently in flight: #477 (lock extraction).
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -330,3 +330,79 @@ SDD artifacts (proposal/spec/design/tasks/progress/verify/archive-report) for ea
   - openspec → read `openspec/changes/<change-name>/`.
 
 This ledger is the human-readable index; the artifact store holds the detailed phase content.
+
+---
+
+## Active campaign (2026-06-07) — Tech-debt cleanup (v1.2.23 post-release review)
+
+> Source: third-party code review of `dysflow@1.2.23` flagged 16 items (weaknesses / opportunities / debt).
+> Every claim was verified adversarially against the live code by an `explore` sub-agent (engram obs
+> for this campaign). Of 16 claims: 9 CONFIRMED, 3 REJECTED (stale pre-#430, blanket "43 silent catches"
+> oversimplification, pre-commit hooks as release-blocker), 4 MODIFIED. 8 issues filed (#476-#483),
+> ordered by severity.
+>
+> Same workflow contract, hard constraints, and environment gotcha as previous campaigns.
+> **Release gate** (user directive 2026-06-07): all 8 closed AND the full E2E suite green before the
+> next release tag.
+
+### Execution settings (decided 2026-06-07)
+
+- **Execution mode**: `auto` — phases run back-to-back without pausing. User explicitly said:
+  "tienes que acabar todo el trabajo tú solo, sin mi intervención".
+- **Artifact store**: `hybrid` — versioned files in `openspec/changes/<change-name>/` **and** engram.
+- **Delivery**: direct commits to `main` (same as campaign 2026-06-05). One commit per issue with
+  `Closes #NNN`. **No feature branches** — user directive: "que no quede ninguna rama nada más que main".
+  Each sub-agent leaves the working tree dirty; orchestrator runs the local gate and commits/pushes.
+- **SDD weight (right-sized)**: every issue gets a lightweight plan (proposal + tasks) in engram /
+  openspec. Full SDD reserved for issues with real cross-cutting design decisions.
+- **Strict TDD**: ON. Runner `pnpm test`. RED before GREEN, every issue.
+- **Local testing**: build to `test-runtime/` only. **NEVER** touch the production runtime
+  `%LOCALAPPDATA%\dysflow`. **Clean up `test-runtime/` when the campaign finishes.**
+
+### Status board
+
+| Order | Issue | Title | Severity | Status | SDD change |
+|-------|-------|-------|----------|--------|------------|
+| 1 | [#476](https://github.com/DysTelefonica/dysflow/issues/476) | fix(security): update trust boundary (gh fallback + --skip-checksum guard) | high | `done` ✅ | `476-update-trust-boundary` |
+| 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `todo` | `477-lock-extract` |
+| 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `todo` | `478-swallowed-io` |
+| 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `todo` | `479-timeout-formula` |
+| 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `todo` | `480-docs-anchors` |
+| 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `todo` | `481-tracking-sync` |
+| 7 | [#482](https://github.com/DysTelefonica/dysflow/issues/482) | chore(deps): pin fresh-major toolchain (TS ^6, Vite ^6, Vitest ^4) or document policy | low/med | `todo` | `482-toolchain-pin` |
+| 8 | [#483](https://github.com/DysTelefonica/dysflow/issues/483) | chore(repo): ignore and clean local root junk (NVIDIA Corporation/) | low | `todo` | `483-nvidia-junk` |
+
+Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
+
+### Dropped (verified, NOT real debt)
+
+- **HTTP → core-mapper convergence** (claim 8 of the report): `#420` already converged HTTP query
+  read/write onto `buildQueryReadRequest` / `buildWriteFixtureRequest` from
+  `src/core/mapping/access-query-request-mapper.ts`. The report's claim was based on pre-#420 code.
+  Evidence: `src/adapters/http/server.ts:12-15,232-234,265-267`. **#481 is NOT reopening this** —
+  it is the doc cleanup, not a code change.
+- **"43 silent catch blocks" as a blanket issue**: the count (28 bare + 43 with binding + 25
+  promise) is correct but the framing is wrong. Most are legitimate best-effort cleanup. The 7
+  sites that hide real I/O errors are filed as **#478 (focussed)**.
+- **Pre-commit hooks** (claim 9): CI already gates `pnpm lint` (Biome + tsc). Hooks are
+  developer-experience, not release safety. The Biome format gate on the dev box is enforced by
+  the `lint` script that `pnpm lint` runs.
+- **Windows-only tests as a release blocker** (claim 13): 16 Access/DAO tests run only on Windows
+  CI. Already documented (line 25 of this ledger, and `vitest.integration.config.ts` gates the
+  Windows runner). The release gate is the full E2E suite, not the Linux `pnpm test` count.
+
+### Progress log
+
+- **2026-06-07**: Campaign opened from the v1.2.23 post-release review. 8 issues filed (#476-#483),
+  ordered by severity. #476 (security) in flight. Verification engram obs for this campaign
+  records the 9 CONFIRMED / 3 REJECTED / 4 MODIFIED breakdown.
+- **2026-06-07**: #476 (security, FIRST) DONE. `resolveLatestReleaseWithGh` removed from
+  `src/cli/commands/install/downloader.ts`; HTTP errors are now surfaced verbatim with a hint about
+  `GH_TOKEN` / `GITHUB_TOKEN`. `DYSFLOW_ALLOW_INSECURE_UPDATE=1` guard added to
+  `--skip-checksum` in `updater.ts`; flag is refused without the env var, with a clear
+  `WARN` printed on the actual skip path. 6 new focused tests cover the gh-fallback removal
+  (403/429/503) and the env-guard (`'1'`, `'true'`, unset → refused). `update-trust-model.md`
+  gained an explicit "No gh CLI fallback" row. `pnpm test` green (995 passed, 3 skipped);
+  `tsc -p tsconfig.json --noEmit` and `tsc -p tsconfig.test.json --noEmit` clean; biome check on
+  changed files clean. **NEXT: #477** — extract cross-process lock module.
+
