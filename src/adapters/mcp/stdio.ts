@@ -36,6 +36,26 @@ const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 // Check https://spec.modelcontextprotocol.io for newer versions.
 // To upgrade: update PROTOCOL_VERSION (re-exported as MCP_PROTOCOL_VERSION) and verify tool schema compatibility.
 export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
+
+/**
+ * Maintenance marker for the targeted MCP protocol version.
+ *
+ * Bumping `MCP_PROTOCOL_VERSION` requires updating this object in the same
+ * commit so the protocol change is mechanically auditable:
+ *   - `version` must stay equal to `MCP_PROTOCOL_VERSION`
+ *   - `reviewedAt` records the date the upstream MCP spec was last cross-checked
+ *   - `specRef` cites the upstream MCP spec revision that justifies the bump
+ *
+ * The release checklist (docs/release-checklist.md) must be reviewed before
+ * tagging a release. See docs/testing/mcp-protocol-maintenance.md for the
+ * hand-written JSON-RPC adapter policy.
+ */
+export const MCP_PROTOCOL_VERSION_REVIEW = {
+  version: "2024-11-05",
+  reviewedAt: "2026-06-07",
+  specRef: "https://modelcontextprotocol.io/specification/2024-11-05",
+} as const;
+
 export { DEFAULT_MAX_REQUEST_BYTES };
 
 export async function startMcpStdioAdapter(

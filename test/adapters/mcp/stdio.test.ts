@@ -7,6 +7,7 @@ import {
   createUnavailableServices,
   DEFAULT_MAX_REQUEST_BYTES,
   MCP_PROTOCOL_VERSION,
+  MCP_PROTOCOL_VERSION_REVIEW,
   resolveMcpWriteAccessForInput,
   resolveProjectOperationRegistryPath,
 } from "../../../src/adapters/mcp/stdio.js";
@@ -444,6 +445,17 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
 
   it("declares the targeted MCP protocol version as a named maintenance constant", () => {
     expect(MCP_PROTOCOL_VERSION).toBe("2024-11-05");
+  });
+
+  it("keeps the protocol version review marker synchronized with MCP_PROTOCOL_VERSION", () => {
+    // Any intentional MCP protocol bump must update MCP_PROTOCOL_VERSION_REVIEW
+    // in the same commit. Drift between the two is a maintenance signal.
+    expect(MCP_PROTOCOL_VERSION_REVIEW.version).toBe(MCP_PROTOCOL_VERSION);
+  });
+
+  it("records a well-formed maintenance review reference for the MCP protocol version", () => {
+    expect(MCP_PROTOCOL_VERSION_REVIEW.reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(MCP_PROTOCOL_VERSION_REVIEW.specRef).toMatch(/^https?:\/\//);
   });
 
   it("is at most 1 MiB to prevent memory amplification on slow consumers", () => {
