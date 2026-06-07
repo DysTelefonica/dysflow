@@ -5,9 +5,8 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   const params = input === undefined ? {} : input;
   if (!isRecord(params)) return "input must be an object.";
 
-  for (const required of schema.required ?? []) {
-    if (params[required] === undefined) return `${required} is required.`;
-  }
+  const missingRequired = validateRequiredProperties(params, schema.required, "");
+  if (missingRequired !== undefined) return missingRequired;
 
   if (schema.additionalProperties === false) {
     for (const key of Object.keys(params)) {
@@ -75,6 +74,9 @@ function validateJsonSchemaProperty(
   }
 
   if (property.type === "object" && isRecord(value)) {
+    const missingRequired = validateRequiredProperties(value, property.required, path);
+    if (missingRequired !== undefined) return missingRequired;
+
     if (property.additionalProperties === false) {
       for (const key of Object.keys(value)) {
         if (property.properties?.[key] === undefined) return `${path}.${key} is not allowed.`;
@@ -85,6 +87,21 @@ function validateJsonSchemaProperty(
       if (childValue === undefined) continue;
       const validation = validateJsonSchemaProperty(childValue, childProperty, `${path}.${key}`);
       if (validation !== undefined) return validation;
+    }
+  }
+
+  return undefined;
+}
+
+function validateRequiredProperties(
+  value: Record<string, unknown>,
+  requiredProperties: readonly string[] | undefined,
+  path: string,
+): string | undefined {
+  for (const required of requiredProperties ?? []) {
+    if (value[required] === undefined) {
+      const requiredPath = path === "" ? required : `${path}.${required}`;
+      return `${requiredPath} is required.`;
     }
   }
 
