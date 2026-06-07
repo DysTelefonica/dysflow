@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). Currently in flight: #477 (lock extraction).
+`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476 DONE** (security). **#477 DONE** (lock extraction). Currently in flight: #478 (swallowed I/O).
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -364,7 +364,7 @@ This ledger is the human-readable index; the artifact store holds the detailed p
 | Order | Issue | Title | Severity | Status | SDD change |
 |-------|-------|-------|----------|--------|------------|
 | 1 | [#476](https://github.com/DysTelefonica/dysflow/issues/476) | fix(security): update trust boundary (gh fallback + --skip-checksum guard) | high | `done` ✅ | `476-update-trust-boundary` |
-| 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `todo` | `477-lock-extract` |
+| 2 | [#477](https://github.com/DysTelefonica/dysflow/issues/477) | refactor(core): extract Access runner cross-process lock module | medium | `done` ✅ | `477-lock-extract` |
 | 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `todo` | `478-swallowed-io` |
 | 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `todo` | `479-timeout-formula` |
 | 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `todo` | `480-docs-anchors` |
@@ -396,6 +396,20 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 - **2026-06-07**: Campaign opened from the v1.2.23 post-release review. 8 issues filed (#476-#483),
   ordered by severity. #476 (security) in flight. Verification engram obs for this campaign
   records the 9 CONFIRMED / 3 REJECTED / 4 MODIFIED breakdown.
+- **2026-06-07**: #477 (lock extraction) DONE. New module `src/core/runner/cross-process-lock.ts`
+  owns the cross-process and in-process lock primitives (~155 LOC, no adapter imports). The
+  in-process serialized queue map is now injectable as a 4th argument to
+  `runWithAccessExecutionLock` for test isolation; default keeps the original module-level
+  singleton behavior. `access-runner.ts` no longer declares the lock Map at module scope. The
+  runner's `work` callback type was widened to `() => T | Promise<T>` (was `() => Promise<T>`)
+  to accept sync results. 12 new tests in `test/core/runner/cross-process-lock.test.ts`
+  cover path determinism, the in-process serialization contract (same key / different keys),
+  timeout error, lockState cleanup, error-path release, and heartbeat API. One pre-existing
+  detail: the test design initially used `Date.now()` in dbPath for cross-call contention
+  but that is flaky on Windows (~1ms resolution); deterministic fixed paths are used instead.
+  1007 passed, 3 skipped; tsc + biome clean. Behavior-preserving — existing
+  access-runner.test.ts lock tests stayed green without modification. **NEXT: #478** — surface
+  swallowed state/config I/O errors.
 - **2026-06-07**: #476 (security, FIRST) DONE. `resolveLatestReleaseWithGh` removed from
   `src/cli/commands/install/downloader.ts`; HTTP errors are now surfaced verbatim with a hint about
   `GH_TOKEN` / `GITHUB_TOKEN`. `DYSFLOW_ALLOW_INSECURE_UPDATE=1` guard added to
