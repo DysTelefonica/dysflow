@@ -45,9 +45,11 @@
 
 ### Dropped (investigated, NOT real debt)
 
-- **HTTP → core-mapper convergence**: HTTP's query surface is SQL-only — `server.ts:238,258` build
-  `{ sql, mode }` via type-safe `getStringParam`. It does NOT duplicate MCP's alias-shaping, so forcing
-  it onto `buildQueryReadRequest` would only add irrelevant `undefined` fields. No drift to fix.
+- **HTTP → core-mapper convergence**: resolved by campaign #420 — HTTP's `/query/read` and
+  `/query/write` already use `buildQueryReadRequest` / `buildWriteFixtureRequest` from
+  `src/core/mapping/access-query-request-mapper.ts` (see `src/adapters/http/server.ts:12-15,232-234,265-267`).
+  This entry was kept as "Dropped" for months and would mislead future readers into
+  re-doing the work. Removed in the 2026-06-07 tech-debt cleanup (#481).
 
 ### Progress log
 
