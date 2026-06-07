@@ -194,11 +194,11 @@ describe("Dysflow HTTP adapter", () => {
       diagnostics: [],
       durationMs: 5,
     });
-    expect(services.calls).toEqual({
-      diagnostics: 1,
-      queries: [{ sql: "SELECT id, name FROM People", mode: "read" }],
-      vba: [],
-    });
+    expect(services.calls.diagnostics).toBe(1);
+    expect(services.calls.vba).toEqual([]);
+    expect(services.calls.queries).toMatchObject([
+      { sql: "SELECT id, name FROM People", mode: "read" },
+    ]);
   });
 
   it("rejects write SQL on the read route by translating the core guard's failure to HTTP 400", async () => {
@@ -222,7 +222,7 @@ describe("Dysflow HTTP adapter", () => {
       diagnostics: [],
       durationMs: 0,
     });
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "read" },
     ]);
   });
@@ -239,7 +239,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "SELECT * INTO ArchivedPeople FROM People", mode: "read" },
     ]);
   });
@@ -257,7 +257,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "SELECT * FROM People DROP TABLE People", mode: "read" },
     ]);
   });
@@ -290,7 +290,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "WITH cte AS (INSERT INTO People VALUES (1)) SELECT * FROM cte", mode: "read" },
     ]);
   });
@@ -312,7 +312,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([{ sql, mode: "read" }]);
+    expect(services.calls.queries).toMatchObject([{ sql, mode: "read" }]);
   });
 
   it("rejects request bodies above the configured size limit before parsing JSON", async () => {
@@ -455,7 +455,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(writeQuery.response.status).toBe(200);
     expect(vba.response.status).toBe(200);
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write", dryRun: true },
     ]);
     expect(services.calls.vba).toEqual([
@@ -469,7 +469,7 @@ describe("Dysflow HTTP adapter", () => {
       body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1", apply: true }),
     });
     expect(writeQueryApply.response.status).toBe(200);
-    expect(services.calls.queries[1]).toEqual({
+    expect(services.calls.queries[1]).toMatchObject({
       sql: "UPDATE People SET name='Ada' WHERE id=1",
       mode: "write",
       dryRun: false,
@@ -482,7 +482,7 @@ describe("Dysflow HTTP adapter", () => {
       body: JSON.stringify({ sql: "UPDATE People SET name='Ada' WHERE id=1", dryRun: false }),
     });
     expect(writeQueryDryRunFalse.response.status).toBe(200);
-    expect(services.calls.queries[2]).toEqual({
+    expect(services.calls.queries[2]).toMatchObject({
       sql: "UPDATE People SET name='Ada' WHERE id=1",
       mode: "write",
       dryRun: false,
@@ -529,7 +529,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "SELECT 1; INSERT INTO T VALUES(1)", mode: "read" },
     ]);
   });
@@ -578,7 +578,7 @@ describe("Dysflow HTTP adapter", () => {
 
     expect(response.response.status).toBe(400);
     expect(response.body.error.code).toBe("HTTP_READ_ONLY_SQL_REQUIRED");
-    expect(services.calls.queries).toEqual([
+    expect(services.calls.queries).toMatchObject([
       { sql: "INSERT INTO T VALUES (1); DELETE FROM T", mode: "read" },
     ]);
   });

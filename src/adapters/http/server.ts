@@ -9,7 +9,10 @@ import {
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
-import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
+import {
+  buildQueryReadRequest,
+  buildWriteFixtureRequest,
+} from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
@@ -225,8 +228,9 @@ async function routeRequest(
     if (!handleValidation(body.data, HTTP_QUERY_SCHEMA, context, response)) {
       return;
     }
-    const sql = getStringParam(body.data, "sql");
-    const result = await context.services.queryService.execute({ sql, mode: "read" });
+    const result = await context.services.queryService.execute(
+      buildQueryReadRequest("query_sql", body.data),
+    );
     if (!result.ok && result.error.code === "INVALID_READ_ONLY_QUERY") {
       sendOperationResult(
         response,
@@ -259,11 +263,9 @@ async function routeRequest(
     }
     sendOperationResult(
       response,
-      await context.services.queryService.execute({
-        sql: getStringParam(body.data, "sql"),
-        mode: "write",
-        dryRun: resolveIsDryRun(body.data),
-      }),
+      await context.services.queryService.execute(
+        buildWriteFixtureRequest("query_sql", body.data),
+      ),
     );
     return;
   }
