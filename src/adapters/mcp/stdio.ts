@@ -7,10 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
-import {
-  FileAccessOperationRegistry,
-  resolveProjectOperationRegistryPath as resolveRegistryPath,
-} from "../../core/operations/access-operation-registry.js";
+import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import {
   WindowsMsAccessProcessInspector,
   WindowsMsAccessProcessScanner,
@@ -165,7 +162,7 @@ export async function resolveMcpWriteAccessForInput(
 }
 
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
-  const operationRegistry = createProjectOperationRegistry(config);
+  const operationRegistry = createProjectAccessOperationRegistry(config);
   const runner = new AccessPowerShellRunner({ operationRegistry });
   const cleanupService = new AccessOperationCleanupService({
     registry: operationRegistry,
@@ -344,9 +341,3 @@ function createUnavailableVbaSyncToolService(
 
 // re-exported from core — do not add new imports from adapters here
 export { resolveProjectOperationRegistryPath } from "../../core/operations/access-operation-registry.js";
-
-function createProjectOperationRegistry(
-  config: Pick<DysflowConfig, "projectRoot">,
-): FileAccessOperationRegistry {
-  return new FileAccessOperationRegistry({ filePath: resolveRegistryPath(config) });
-}

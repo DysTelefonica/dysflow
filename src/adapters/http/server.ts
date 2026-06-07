@@ -17,7 +17,8 @@ import type { AccessCleanupResult } from "../../core/operations/access-operation
 import {
   type AccessOperationRecord,
   type AccessOperationRegistry,
-  InMemoryAccessOperationRegistry,
+  listRecentAccessOperations,
+  resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
@@ -173,10 +174,10 @@ async function routeRequest(
   }
 
   if (method === "GET" && path === "/access/operations") {
-    const registry = context.services.operationRegistry ?? new InMemoryAccessOperationRegistry();
+    const registry = resolveAccessOperationRegistry(context.services.operationRegistry);
     sendOperationResult(
       response,
-      successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })),
+      successResult<readonly AccessOperationRecord[]>(await listRecentAccessOperations(registry)),
     );
     return;
   }

@@ -2,9 +2,8 @@ import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { createDysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import {
-  FileAccessOperationRegistry,
-  InMemoryAccessOperationRegistry,
-  resolveProjectOperationRegistryPath,
+  createInMemoryAccessOperationRegistry,
+  createProjectAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import {
   WindowsMsAccessProcessInspector,
@@ -29,9 +28,7 @@ export async function createHttpServices(
     return createUnavailableHttpServices();
   }
 
-  const operationRegistry = new FileAccessOperationRegistry({
-    filePath: resolveProjectOperationRegistryPath(configResult.data),
-  });
+  const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
   const runner = new AccessPowerShellRunner({ operationRegistry });
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
@@ -59,6 +56,6 @@ export function createUnavailableHttpServices(): DysflowHttpServices {
     diagnosticsService: { run: unavailable },
     queryService: { execute: unavailable },
     vbaService: { execute: unavailable },
-    operationRegistry: new InMemoryAccessOperationRegistry(),
+    operationRegistry: createInMemoryAccessOperationRegistry(),
   };
 }

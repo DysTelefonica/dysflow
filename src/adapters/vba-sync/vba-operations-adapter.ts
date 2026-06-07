@@ -12,8 +12,9 @@ import {
 } from "../../core/operations/access-operation-preflight.js";
 import {
   type AccessOperationRegistry,
-  FileAccessOperationRegistry,
-  resolveProjectOperationRegistryPath,
+  createProjectAccessOperationRegistry,
+  listRecentAccessOperations,
+  resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 
 export type VbaOperationsCleanupService = {
@@ -50,12 +51,10 @@ export class VbaOperationsAdapter {
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     if (toolName === "list_access_operations") {
-      const registry =
-        this.operationRegistry ??
-        new FileAccessOperationRegistry({
-          filePath: resolveProjectOperationRegistryPath({ projectRoot: this.cwd }),
-        });
-      const records = await registry.listRecent({ limit: 50 });
+      const registry = resolveAccessOperationRegistry(this.operationRegistry, () =>
+        createProjectAccessOperationRegistry({ projectRoot: this.cwd }),
+      );
+      const records = await listRecentAccessOperations(registry);
       return successResult(records);
     }
 
@@ -117,9 +116,7 @@ export class VbaOperationsAdapter {
     const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } =
       await import("../../core/operations/windows-processes.js");
     return new AccessOperationPreflightCleanupService({
-      registry: new FileAccessOperationRegistry({
-        filePath: resolveProjectOperationRegistryPath({ projectRoot }),
-      }),
+      registry: createProjectAccessOperationRegistry({ projectRoot }),
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),

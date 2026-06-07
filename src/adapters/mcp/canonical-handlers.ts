@@ -1,7 +1,10 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
 import type { AccessOperationRecord } from "../../core/operations/access-operation-registry.js";
-import { InMemoryAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import {
+  listRecentAccessOperations,
+  resolveAccessOperationRegistry,
+} from "../../core/operations/access-operation-registry.js";
 import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
@@ -85,9 +88,9 @@ export async function handleMcpQueryExecute(
 export async function handleMcpAccessOperationsList(
   services: DysflowMcpServices,
 ): Promise<McpToolResult> {
-  const registry = services.operationRegistry ?? new InMemoryAccessOperationRegistry();
+  const registry = resolveAccessOperationRegistry(services.operationRegistry);
   return translateCoreResultToMcpContent(
-    successResult<readonly AccessOperationRecord[]>(await registry.listRecent({ limit: 50 })),
+    successResult<readonly AccessOperationRecord[]>(await listRecentAccessOperations(registry)),
   );
 }
 
