@@ -63,8 +63,8 @@ the full host environment by omission.
 
 | Caller | File | Args source |
 |--------|------|-------------|
-| `AccessRunner` | `src/core/runner/access-runner.ts:596-608` | Built as a `string[]` from typed config + fixed script paths |
-| `VbaSyncAdapter` | `src/adapters/vba-sync/vba-sync-adapter.ts:524-531` | Built as a `string[]` from typed config + fixed script paths |
+| `AccessRunner` | `buildPowerShellArguments` in `src/core/runner/access-runner.ts` | Built as a `string[]` from typed config + fixed script paths |
+| `VbaSyncAdapter` | `spawnVbaManager` in `src/adapters/vba-sync/vba-sync-adapter.ts` (arg array is the first 10 lines of the executor) | Built as a `string[]` from typed config + fixed script paths |
 
 Both callers construct argument arrays from typed configuration values and known script
 paths, not from raw user input.
