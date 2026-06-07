@@ -6,8 +6,8 @@ import {
 } from "../../core/mapping/access-query-request-mapper.js";
 
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
+import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
 import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
-import type { DysflowMcpToolName } from "./mcp-tool-registry.js";
 import {
   type DysflowMcpServices,
   type DysflowMcpTool,
@@ -21,7 +21,7 @@ import { validateInput } from "./validator.js";
 // ─── Dispatch tool factory ────────────────────────────────────────────────────
 
 export function createDispatchTool(
-  name: DysflowMcpToolName,
+  name: GeneratedDispatchToolName,
   services: DysflowMcpServices,
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,

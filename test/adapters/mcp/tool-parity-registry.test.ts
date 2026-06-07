@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { GeneratedDispatchToolName } from "../../../src/adapters/mcp/dispatch-routes";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
 import {
   isHiddenStubTool,
   pendingToolNames,
   TOOL_PARITY_REGISTRY,
 } from "../../../src/adapters/mcp/tool-parity-registry";
-import { MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
+import { ALIAS_TOOL_NAMES, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 
 /**
  * Contract test: every tool that has a real handler route in tools.ts
@@ -33,8 +34,12 @@ describe("tool-parity-registry implementedToolNames contract", () => {
     ).toEqual([]);
   });
 
-  it("MCP_TOOL_ROUTES covers every tool with an explicit non-stub route", () => {
-    for (const name of DYSFLOW_MCP_TOOL_NAMES) {
+  it("MCP_TOOL_ROUTES covers every generated-dispatch tool with an explicit non-stub route", () => {
+    const generatedDispatchNames = DYSFLOW_MCP_TOOL_NAMES.filter(
+      (name): name is GeneratedDispatchToolName => !ALIAS_TOOL_NAMES.has(name),
+    );
+
+    for (const name of generatedDispatchNames) {
       const route = MCP_TOOL_ROUTES[name];
       expect(route, `${name} must have an explicit route`).toBeDefined();
       if (!isHiddenStubTool(name)) {
@@ -44,7 +49,13 @@ describe("tool-parity-registry implementedToolNames contract", () => {
         ).not.toBe("stub");
       }
     }
-    expect(Object.keys(MCP_TOOL_ROUTES).length).toBe(DYSFLOW_MCP_TOOL_NAMES.length);
+    expect(Object.keys(MCP_TOOL_ROUTES).length).toBe(generatedDispatchNames.length);
+  });
+
+  it("does not assign generated-dispatch routes to alias-owned tools", () => {
+    for (const name of ALIAS_TOOL_NAMES) {
+      expect(MCP_TOOL_ROUTES).not.toHaveProperty(name);
+    }
   });
 
   it("keeps hidden stub tools as pending in the registry", () => {
