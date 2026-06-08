@@ -3,6 +3,7 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import {
   handleMcpAccessCleanup,
   handleMcpAccessOperationsList,
+  handleMcpAccessOrphanCleanup,
   handleMcpQueryExecute,
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
@@ -36,6 +37,7 @@ import {
   CLEANUP_SCHEMA,
   DOCTOR_SCHEMA,
   NO_INPUT_SCHEMA,
+  ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
   VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
@@ -46,7 +48,7 @@ import { validateInput } from "./validator.js";
 /**
  * Canonical modern Dysflow MCP tool names.
  * These names use underscore separators and are the authoritative source of truth
- * for the five modern tool identifiers advertised via tools/list.
+ * for the six modern tool identifiers advertised via tools/list.
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
@@ -55,6 +57,7 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_doctor",
   "dysflow_access_operations_list",
   "dysflow_access_cleanup",
+  "dysflow_access_force_cleanup_orphaned",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -127,6 +130,41 @@ export function createDysflowMcpTools(
           (validatedInput) =>
             validatedInput as { operationId: string; accessPath: string; force?: boolean },
         ),
+    },
+    {
+      name: "dysflow_access_force_cleanup_orphaned",
+      description:
+        "Kill an orphaned headless MSACCESS process holding the project's accessPath. Requires explicit operator confirmation of the PID. Refuses to kill any process that is not headless or that does not hold the accessPath.",
+      inputSchema: ORPHAN_CLEANUP_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, ORPHAN_CLEANUP_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+        const request = input as { projectId?: string; accessPath?: string; confirmPid: number };
+        if (!request.accessPath) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "ORPHAN_CLEANUP_PATH_UNRESOLVED: accessPath must be provided or .dysflow/project.json must declare one.",
+              },
+            ],
+            isError: true,
+          };
+        }
+        return handleMcpAccessOrphanCleanup(
+          input,
+          ORPHAN_CLEANUP_SCHEMA,
+          services,
+          (_validatedInput) => {
+            // request is already validated; accessPath is confirmed non-null by the check above
+            return {
+              accessPath: request.accessPath as string,
+              projectRoot: process.cwd(),
+              confirmPid: request.confirmPid,
+            };
+          },
+        );
+      },
     },
   ];
 

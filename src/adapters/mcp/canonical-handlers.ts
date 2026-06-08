@@ -117,3 +117,27 @@ export async function handleMcpAccessCleanup(
     await services.cleanupService.cleanup(buildRequest(input)),
   );
 }
+
+export async function handleMcpAccessOrphanCleanup(
+  input: unknown,
+  schema: JsonObjectSchema,
+  services: DysflowMcpServices,
+  buildRequest: (input: unknown) => { accessPath: string; projectRoot: string; confirmPid: number },
+): Promise<McpToolResult> {
+  const validation = validateInput(input, schema);
+  if (validation !== undefined) return invalidInput(validation);
+  if (services.orphanCleanupService === undefined) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: "ORPHAN_CLEANUP_NOT_CONFIGURED: Access orphan cleanup service is not configured.",
+        },
+      ],
+      isError: true,
+    };
+  }
+  return translateCoreResultToMcpContent(
+    await services.orphanCleanupService.cleanupOrphan(buildRequest(input)),
+  );
+}

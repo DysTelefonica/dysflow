@@ -6,6 +6,10 @@ import type {
 } from "../../core/contracts/index.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import type {
+  AccessOrphanCandidate,
+  AccessOrphanCleanupResult,
+} from "../../core/operations/access-orphan-cleanup.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
@@ -64,6 +68,17 @@ export type DysflowMcpServices = {
       accessPath: string;
       force?: boolean;
     }): Promise<OperationResult<AccessCleanupResult>>;
+  };
+  orphanCleanupService?: {
+    listOrphans(request: {
+      accessPath: string;
+      projectRoot: string;
+    }): Promise<readonly AccessOrphanCandidate[]>;
+    cleanupOrphan(request: {
+      accessPath: string;
+      projectRoot: string;
+      confirmPid: number;
+    }): Promise<OperationResult<AccessOrphanCleanupResult>>;
   };
   /** Injected adapter for VBA sync tool dispatch. See VbaSyncPort in core/contracts. */
   vbaSyncToolService?: VbaSyncPort;

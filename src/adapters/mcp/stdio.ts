@@ -8,6 +8,7 @@ import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dy
 import { type DysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
 import {
   WindowsMsAccessProcessInspector,
   WindowsMsAccessProcessScanner,
@@ -190,12 +191,19 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
     processKiller: new WindowsProcessKiller(),
     processScanner: new WindowsMsAccessProcessScanner(),
   });
+  const orphanCleanupService = new AccessOrphanCleanupService({
+    registry: operationRegistry,
+    processScanner: new WindowsMsAccessProcessScanner(),
+    processInspector: new WindowsMsAccessProcessInspector(),
+    processKiller: new WindowsProcessKiller(),
+  });
   return {
     vbaService: new AccessVbaService({ runner, config }),
     queryService: new AccessQueryService({ runner, config }),
     diagnosticsService: new AccessDiagnosticsService({ runner, config }),
     operationRegistry,
     cleanupService,
+    orphanCleanupService,
     vbaSyncToolService: new VbaSyncAdapter({
       operationRegistry,
       cleanupService,
@@ -260,6 +268,10 @@ export function createUnavailableServices(
         });
       },
     },
+    // Note: cleanupService and orphanCleanupService are NOT included in the
+    // unavailable surface — they are lazily resolved via the dynamic resolver
+    // (resolveService) which calls createConfiguredServices when config becomes
+    // available. This mirrors the pattern used for cleanupService.
     vbaSyncToolService: createUnavailableVbaSyncToolService(error, options),
   };
 }
