@@ -137,10 +137,16 @@ Regla dura para cualquier test que toque datos, tablas, configuración, caché p
 
 ---
 
-## Skills
+## Skills inyectables a sub-agentes
 
-- `access-vba-sync`, `access-query`, `access-form-creation`, `jira-confluence-sdd`, `access-vba-tdd`
+- **SÍ inyectar**: `access-form-creation`, `access-vba-tdd`
+- **NO inyectar** (regla dura, vigente desde 2026-06-08): `access-vba-sync`, `access-query`
+  - El runtime canónico de import/export/test/query de Access es `dysflow` MCP (`projectId=00-no-conformidades-staging-clean`).
+  - Inyectar `access-vba-sync` o `access-query` a sub-agentes contradice el workflow dysflow-only y queda prohibido en este proyecto.
+- **NO inyectar** (regla dura, vigente desde 2026-06-08): `jira-confluence-sdd`
+  - Este proyecto no opera issues/tracking vía Jira/Confluence desde sub-agentes; toda la trazabilidad SDD vive en `openspec/changes/` + engram + git.
 - Los skills se resuelven desde las instalaciones globales/locales del entorno; no mantener copias vendorizadas en `.agents/skills/` dentro del repo salvo decisión explícita.
+- Registry canónico local: `.atl/skill-registry.md`. Si hay conflicto entre la lista de arriba y el registry, gana esta lista de AGENTS.md.
 
 ---
 
@@ -170,3 +176,46 @@ Regla dura para cualquier test que toque datos, tablas, configuración, caché p
    Esto aplica siempre que se encadene `Is Nothing` con acceso a `.Count`, `.Exists`, `.Keys`, `.Items` u otra propiedad de la misma colección.
 3. **No concatenar valores de campos sin verificar tipo:** campos Short Text con espacios pueden no ser numéricos aunque parezcan serlo.
 4. **Parámetros con nombre siempre para ByRef opcional:** usar `parametro:=valor` para evitar ambigüedad posicional en VBA.
+
+## Dysflow
+
+This project is a dysflow consumer. **All Access/VBA work goes through dysflow** — do not use legacy skills like `vba-sync`, `access-query`, `access-vba-sync`, or `access-form-creation` for new work. They are deprecated; dysflow replaces them.
+
+For the full reference (every tool, the sync loop, secret management, safe cleanup), read the opencode global `AGENTS.md` `<!-- gentle-ai:dysflow-reference -->` block. The summary below is the must-know subset.
+
+### Project config
+
+- This project ships a `.dysflow/project.json` at the repo root. Use its `projectId` (and any password env name declared in it) as the canonical identity.
+- If the file is missing, do not invent a project id — fix the config first.
+
+### Secret management
+
+- Never hardcode the Access password. Resolve it through `ACCESS_VBA_PASSWORD` (or the password env name declared in `.dysflow/project.json`).
+
+### Reach for these dysflow MCP tools first
+
+- Schema and data: `query_sql`, `exec_sql`, `list_tables`, `list_linked_tables`, `get_schema`, `get_relationships`, `count_rows`, `distinct_values`, `compare_backends`.
+- VBA source sync: `import_all` / `import_modules`, `export_all` / `export_modules`, `compile_vba`, `test_vba`, `run_vba`, `verify_code`, `verify_binary`, `reconcile_binary`, `delete_module`, `fix_encoding`, `list_objects`, `exists`.
+- SQL fixtures: `seed_fixture`, `teardown_fixture`, `create_table`, `drop_table`, `run_script`, `export_queries`, `import_queries`.
+- Links: `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`.
+- Operations and cleanup: `dysflow_access_operations_list`, `dysflow_access_cleanup`, `list_access_operations`, `cleanup_access_operation`, `compact_repair`.
+- Forms and catalog: `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`, `generate_erd`.
+- Diagnostics: `dysflow_doctor`, `dysflow_query_execute`, `dysflow_vba_execute`.
+
+### VBA sync loop (CRITICAL)
+
+After editing any `*.bas` / `*.cls` / `*.frm` file on disk, the changes are NOT visible to Access until you run the loop:
+
+1. `import_all` (or `import_modules`) — load the disk changes into the binary.
+2. `compile_vba` — compile the freshly imported code in Access.
+3. `test_vba` (or `run_vba`) — run the focused test.
+
+Skipping any of these three will run outdated code and produce confusing failures.
+
+### Safe cleanup
+
+Never `Stop-Process -Name MSACCESS -Force`. Use `dysflow_access_operations_list` (or `list_access_operations`) then `dysflow_access_cleanup` (or `cleanup_access_operation`) with a real operation id and the diagnostics it returns.
+
+### E2E
+
+The MCP E2E entry point resets `DYSFLOW_HOME` so the runner is forced to use the test-runtime copy of `dysflow-access-runner.ps1` instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale production install. If you are running the E2E manually, you do not need to set `DYSFLOW_HOME` yourself.
