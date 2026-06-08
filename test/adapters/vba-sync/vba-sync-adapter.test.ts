@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  derivePsTimeoutMs,
+  MIN_PS_TIMEOUT_MS,
   resolveDefaultVbaManagerScriptPath,
   spawnVbaManager,
   type VbaManagerExecutor,
@@ -204,6 +206,8 @@ describe("VbaSyncAdapter Orchestrator", () => {
     // The executor layer (spawnPowerShellProcess) is the single authoritative timeout:
     // it owns the kill and sets timedOut=true in the result.  The adapter no longer
     // races the executor against a parallel timer — it simply maps timedOut:true → VBA_MANAGER_TIMEOUT.
+    // processTimeoutMs=12000 survives the absurdly-small clamp (>= 1000) and the MIN_PS_TIMEOUT_MS floor (5000).
+    // The adapter deducts preflightElapsedMs so the executor sees slightly less than 12000.
     const executor: VbaManagerExecutor = async (request) => {
       // Simulate executor timing out and killing the process itself
       return {
@@ -216,7 +220,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     };
     const service = new VbaSyncAdapter({
       executor,
-      processTimeoutMs: 50,
+      processTimeoutMs: 12_000,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -229,9 +233,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
       expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
       expect(result.error.retryable).toBe(true);
       // durationMs in the error message reflects the executor's authoritative timeout duration
-      expect(result.error.message).toContain("timed out after 50ms");
+      expect(result.error.message).toMatch(/timed out after \d+ms/);
     }
-    expect(result.durationMs).toBe(50);
+    expect(result.durationMs).toBeGreaterThan(10_000);
   });
 
   it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {
@@ -258,7 +262,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     }
   });
 
-  it("timeout: wall-clock budget caps PS timeout even when project config timeoutMs is larger", async () => {
+  it("timeout: project config timeoutMs is honored end-to-end without a 25s hard-cap (#485)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-orchestrator-"));
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(
@@ -293,10 +297,14 @@ describe("VbaSyncAdapter Orchestrator", () => {
     await service.execute("exists", { moduleName: "Module1" });
     await service.execute("compile_vba", {});
 
-    expect(capturedTimeouts[0]).toBeLessThanOrEqual(25_000);
-    expect(capturedTimeouts[1]).toBeLessThanOrEqual(25_000);
-    expect(capturedTimeouts[0]).toBeGreaterThanOrEqual(20_000);
-    expect(capturedTimeouts[1]).toBeGreaterThanOrEqual(20_000);
+    // The project config timeoutMs=180_000 must be honored; no 25s hard-cap.
+    // The captured timeout is effectiveTimeoutMs - preflightElapsedMs.
+    // With preflight typically taking <1s, the result should be ~180_000.
+    expect(capturedTimeouts[0]).toBeGreaterThanOrEqual(170_000);
+    expect(capturedTimeouts[1]).toBeGreaterThanOrEqual(170_000);
+    // Must NOT be capped at 25s
+    expect(capturedTimeouts[0]).toBeGreaterThan(25_000);
+    expect(capturedTimeouts[1]).toBeGreaterThan(25_000);
   });
 
   it("timeout: explicit per-call timeoutMs overrides project config timeout", async () => {
@@ -336,7 +344,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     expect(capturedTimeout).toBe(90_000);
   });
 
-  it("timeout: wall-clock budget caps PS timeout when service processTimeoutMs exceeds the budget", async () => {
+  it("timeout: VbaSyncAdapter processTimeoutMs is honored without a 25s hard-cap (#485)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-budget-orchestrator-"));
 
     let capturedTimeout = 0;
@@ -361,8 +369,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
 
     await service.execute("exists", { moduleName: "Module1" });
 
-    expect(capturedTimeout).toBeLessThanOrEqual(25_000);
-    expect(capturedTimeout).toBeGreaterThanOrEqual(20_000);
+    // processTimeoutMs=45_000 must be honored; no 25s hard-cap.
+    expect(capturedTimeout).toBeGreaterThan(25_000);
+    expect(capturedTimeout).toBeGreaterThanOrEqual(40_000);
   });
 
   it("-NonInteractive present in spawned args at correct position", async () => {
@@ -808,5 +817,41 @@ describe("VbaSyncAdapter Orchestrator", () => {
         data: { valid: true, name: "SpyForm", kind: "Form", controlCount: 0 },
       });
     });
+  });
+});
+
+describe("derivePsTimeoutMs", () => {
+  it("returns effectiveTimeoutMs minus preflightElapsedMs when result is >= MIN_PS_TIMEOUT_MS", () => {
+    // 600_000 (10 min project config) - 100ms preflight = 599_900
+    expect(derivePsTimeoutMs(600_000, 100)).toBe(599_900);
+  });
+
+  it("returns effectiveTimeoutMs minus preflightElapsedMs for a moderately large timeout", () => {
+    // 45_000 (service processTimeoutMs) - 500ms preflight = 44_500
+    expect(derivePsTimeoutMs(45_000, 500)).toBe(44_500);
+  });
+
+  it("returns MIN_PS_TIMEOUT_MS when effectiveTimeoutMs is absurdly small", () => {
+    expect(derivePsTimeoutMs(500, 0)).toBe(MIN_PS_TIMEOUT_MS);
+    expect(derivePsTimeoutMs(999, 0)).toBe(MIN_PS_TIMEOUT_MS);
+  });
+
+  it("returns MIN_PS_TIMEOUT_MS when effectiveTimeoutMs - preflightElapsedMs would be below floor", () => {
+    // 6_000 - 4_000 = 2_000, which is < MIN_PS_TIMEOUT_MS=5_000 -> floor applies
+    expect(derivePsTimeoutMs(6_000, 4_000)).toBe(MIN_PS_TIMEOUT_MS);
+  });
+
+  it("returns MIN_PS_TIMEOUT_MS when effectiveTimeoutMs equals preflightElapsedMs", () => {
+    expect(derivePsTimeoutMs(5_000, 5_000)).toBe(MIN_PS_TIMEOUT_MS);
+  });
+
+  it("returns MIN_PS_TIMEOUT_MS when preflightElapsedMs exceeds effectiveTimeoutMs", () => {
+    expect(derivePsTimeoutMs(3_000, 10_000)).toBe(MIN_PS_TIMEOUT_MS);
+  });
+
+  it("does NOT cap at 25_000 - project timeoutMs=600_000 must be honored", () => {
+    const result = derivePsTimeoutMs(600_000, 100);
+    expect(result).toBe(599_900);
+    expect(result).toBeGreaterThan(25_000);
   });
 });

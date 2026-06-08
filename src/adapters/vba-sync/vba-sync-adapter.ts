@@ -102,22 +102,25 @@ const VBA_MANAGER_EXTRA_KEYS = new Set([
 const TOOL_NOT_IMPLEMENTED_MESSAGE =
   "This tool is tracked for parity but is not implemented by this service yet.";
 
-const PROCESS_WALL_CLOCK_BUDGET_MS = 25_000;
 export const MIN_PS_TIMEOUT_MS = 5_000;
+const ABSURDLY_SMALL_TIMEOUT_MS = 1_000;
 
 /**
  * Derives the per-call PowerShell timeout (ms) for executeMappedTool.
  *
- * Contract: the result is at least MIN_PS_TIMEOUT_MS (5 s) AND at most
- * PROCESS_WALL_CLOCK_BUDGET_MS minus preflightElapsedMs. If the preflight
- * already consumed more than the budget, the max keeps the result at the
- * 5 s floor.
+ * Contract: the result is at least MIN_PS_TIMEOUT_MS (5 s). If effectiveTimeoutMs
+ * is absurdly small (< 1 s), it is clamped to MIN_PS_TIMEOUT_MS so the wrapper
+ * always has a meaningful budget for bookkeeping.
+ *
+ * The full effectiveTimeoutMs is available for the PowerShell spawn; the 25 s
+ * hard-cap that existed before (#485) has been removed — the project's timeoutMs
+ * is now honored end-to-end.
  */
 export function derivePsTimeoutMs(effectiveTimeoutMs: number, preflightElapsedMs: number): number {
-  return Math.max(
-    Math.min(MIN_PS_TIMEOUT_MS, effectiveTimeoutMs),
-    Math.min(effectiveTimeoutMs, PROCESS_WALL_CLOCK_BUDGET_MS) - preflightElapsedMs,
-  );
+  if (effectiveTimeoutMs < ABSURDLY_SMALL_TIMEOUT_MS) {
+    return MIN_PS_TIMEOUT_MS;
+  }
+  return Math.max(MIN_PS_TIMEOUT_MS, effectiveTimeoutMs - preflightElapsedMs);
 }
 
 export class VbaSyncAdapter implements VbaSyncPort {
