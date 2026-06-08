@@ -69,6 +69,40 @@ Param(
     [string]$OperationFile = ""
 )
 
+# Sentinel-guarantee trap. Any terminating error that escapes the per-action
+# try/catch (uncaught .NET exception, dot-source failure during script load,
+# external kill propagated as a terminating error, etc.) MUST still emit a
+# `DYSFLOW_RESULT <json>` line before the script exits. Without this, the
+# dysflow MCP runner surfaces a generic `VBA_MANAGER_INVALID_OUTPUT` with
+# zero diagnostic information and the operator has to attach a debugger to
+# find the cause. See issue #484.
+trap {
+    $trapErr = $_.Exception
+    $trapKind = if ($trapErr) { $trapErr.GetType().Name } else { "Unknown" }
+    $trapMsg = if ($trapErr) { $trapErr.Message } else { [string]$_ }
+    $trapLine = $null
+    try { $trapLine = $_.InvocationInfo.ScriptLineNumber } catch { }
+    $payload = [ordered]@{
+        ok = $false
+        error = [ordered]@{
+            code = "VBA_MANAGER_UNEXPECTED_EXIT"
+            message = "PowerShell terminating error: $trapMsg"
+        }
+        diagnostics = [ordered]@{
+            trap_kind = $trapKind
+        }
+    }
+    if ($null -ne $trapLine) { $payload.diagnostics["line"] = $trapLine }
+    try {
+        $json = ($payload | ConvertTo-Json -Compress -Depth 20) -replace "[\r\n]+"," "
+        Write-Output ("DYSFLOW_RESULT " + $json)
+    } catch {
+        # Last-resort fallback if the JSON serialization or Write-Output itself fails.
+        Write-Output ('DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_MANAGER_UNEXPECTED_EXIT","message":"trap failed to emit sentinel"}}')
+    }
+    exit 1
+}
+
 $ErrorActionPreference = "Stop"
 $script:QuietOutput = [bool]$Json
 
