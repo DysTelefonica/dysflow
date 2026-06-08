@@ -3,14 +3,6 @@ import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Match the integration config (`vitest.integration.config.ts`): force the
-// runner to use the test-runtime copy of `dysflow-access-runner.ps1` instead
-// of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
-// production install. Without this, the E2E silently routes PowerShell to
-// `%LOCALAPPDATA%\dysflow\app\scripts\...` and reports a generic
-// `RUNNER_INVALID_JSON` for every tool call.
-delete process.env.DYSFLOW_HOME;
-
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const projectId = "noconformidades-e2e";
@@ -22,6 +14,15 @@ const reportPath = join(tempRoot, "mcp-e2e-report.md");
 const cliCommand = process.env.DYSFLOW_E2E_COMMAND ?? join(process.env.LOCALAPPDATA ?? "", "dysflow", "bin", "dysflow.cmd");
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD;
+
+// Force the runner to use the test-runtime copy of `dysflow-access-runner.ps1`
+// instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
+// production install. `resolveDefaultRunnerScriptPath` returns
+// `${DYSFLOW_HOME}/app/scripts/dysflow-access-runner.ps1` when the env var is
+// set, and falls back to a relative path otherwise — and the E2E's cwd is
+// `E2E_testing/`, not the repo root, so the relative fallback would not find
+// the script. Set the env var explicitly to the repo-local test-runtime.
+process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
 
 if (!password) {
   console.error("Missing Access password. Set ACCESS_VBA_PASSWORD before running the MCP E2E suite.");
