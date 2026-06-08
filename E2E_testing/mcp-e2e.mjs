@@ -3,6 +3,14 @@ import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Match the integration config (`vitest.integration.config.ts`): force the
+// runner to use the test-runtime copy of `dysflow-access-runner.ps1` instead
+// of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
+// production install. Without this, the E2E silently routes PowerShell to
+// `%LOCALAPPDATA%\dysflow\app\scripts\...` and reports a generic
+// `RUNNER_INVALID_JSON` for every tool call.
+delete process.env.DYSFLOW_HOME;
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const projectId = "noconformidades-e2e";
