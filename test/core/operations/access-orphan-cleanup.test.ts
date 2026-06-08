@@ -40,7 +40,11 @@ function makeInspector(proc: OsProcessInfo | undefined): ProcessInspector {
 function makeKiller(): { killer: ProcessKiller; killed: number[] } {
   const killed: number[] = [];
   return {
-    killer: { kill: async (pid: number) => killed.push(pid) },
+    killer: {
+      kill: async (pid: number) => {
+        killed.push(pid);
+      },
+    },
     killed,
   };
 }
@@ -90,7 +94,7 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       name: "MSACCESS.EXE",
       startTime: "2026-05-28T10:00:00.000Z",
       commandLine: `MSACCESS.EXE "${ACCESS_PATH}"`,
-      mainWindowHandle: 0xABCDEF, // has a visible window
+      mainWindowHandle: 0xabcdef, // has a visible window
     };
     const svc = new AccessOrphanCleanupService({
       registry,
@@ -189,16 +193,15 @@ describe("AccessOrphanCleanupService — cleanupOrphan happy path", () => {
       expect(result.data.refused).toEqual([]);
       expect(result.data.syntheticOperationId).toMatch(/^orphan-12345-/);
       expect(result.data.errors).toEqual([]);
+      // Registry record updated to `cleaned`
+      const syntheticId = result.data.syntheticOperationId;
+      if (syntheticId) {
+        const rec = await registry.get(syntheticId);
+        // InMemoryRegistry purges `cleaned` records, so it may be undefined
+        expect(rec === undefined || rec.status === "cleaned").toBe(true);
+      }
     }
     expect(killed).toContain(12345);
-
-    // Registry record updated to `cleaned`
-    const syntheticId = result.data.syntheticOperationId;
-    if (syntheticId) {
-      const rec = await registry.get(syntheticId);
-      // InMemoryRegistry purges `cleaned` records, so it may be undefined
-      expect(rec === undefined || rec.status === "cleaned").toBe(true);
-    }
   });
 });
 
@@ -253,7 +256,7 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
       name: "MSACCESS.EXE",
       startTime: "2026-05-28T10:00:00.000Z",
       commandLine: `MSACCESS.EXE "${ACCESS_PATH}"`,
-      mainWindowHandle: 0xBEEF,
+      mainWindowHandle: 0xbeef,
     };
     const svc = new AccessOrphanCleanupService({
       registry,
@@ -361,32 +364,29 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
     expect(killed).toEqual([]);
   });
 
-  it.each([0, -1, -100, 0.5, NaN])(
-    "returns ORPHAN_CLEANUP_INVALID_PID for %s",
-    async (badPid) => {
-      const registry = new InMemoryAccessOperationRegistry();
-      const { killer, killed } = makeKiller();
-      const svc = new AccessOrphanCleanupService({
-        registry,
-        processScanner: makeScanner([]),
-        processInspector: makeInspector(undefined),
-        processKiller: killer,
-      });
+  it.each([0, -1, -100, 0.5, NaN])("returns ORPHAN_CLEANUP_INVALID_PID for %s", async (badPid) => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([]),
+      processInspector: makeInspector(undefined),
+      processKiller: killer,
+    });
 
-      const result = await svc.cleanupOrphan({
-        accessPath: ACCESS_PATH,
-        projectRoot: PROJECT_ROOT,
-        confirmPid: badPid as number,
-      });
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: badPid as number,
+    });
 
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error.code).toBe("ORPHAN_CLEANUP_INVALID_PID");
-        expect(result.error.message).toMatch(/positive safe integer/i);
-      }
-      expect(killed).toEqual([]);
-    },
-  );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_INVALID_PID");
+      expect(result.error.message).toMatch(/positive safe integer/i);
+    }
+    expect(killed).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -418,7 +418,7 @@ describe("AccessOrphanCleanupService — kill failure and registry handling", ()
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORPHAN_CLEANUP_KILL_FAILED");
- }
+    }
 
     // The record should remain at `cleanup_pending` (not be updated to `cleaned`).
     // InMemoryRegistry purges `cleaned` records, so check for `cleanup_pending`.
@@ -439,7 +439,6 @@ describe("AccessOrphanCleanupService — kill failure and registry handling", ()
     });
 
     // Freeze the registry to simulate write failure
-    const originalCreate = registry.create.bind(registry);
     vi.spyOn(registry, "create").mockImplementation(async () => {
       throw new Error("Disk full");
     });

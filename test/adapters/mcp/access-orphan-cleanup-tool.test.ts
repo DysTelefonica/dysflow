@@ -75,7 +75,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler returns success when service returns success and schema is valid", async () => {
     const fakeOrphan = new FakeOrphanCleanupService(
-      successResult([]),
+      [],
       successResult({
         killed: [12345],
         refused: [],
@@ -177,7 +177,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler propagates service failure result as McpToolResult with isError true", async () => {
     const fakeOrphan = new FakeOrphanCleanupService(
-      successResult([]),
+      [],
       failureResult(
         createDysflowError(
           "ORPHAN_CLEANUP_NOT_HEADLESS",

@@ -6,15 +6,15 @@ import {
 } from "../contracts/index.js";
 import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
 import type {
-  AccessOperationRegistry,
-  AccessOperationRecord,
-} from "./access-operation-registry.js";
-import type {
   OsProcessInfo,
   ProcessInspector,
   ProcessKiller,
   ProcessScanner,
 } from "./access-operation-cleanup.js";
+import type {
+  AccessOperationRecord,
+  AccessOperationRegistry,
+} from "./access-operation-registry.js";
 
 export type AccessOrphanCandidate = {
   pid: number;
@@ -28,7 +28,7 @@ export type AccessOrphanCleanupRequest = {
   projectRoot: string;
 };
 
-export type AccessOrphanCleanupConfirmRequest = AccessOrphanCleanupRequest& {
+export type AccessOrphanCleanupConfirmRequest = AccessOrphanCleanupRequest & {
   confirmPid: number;
 };
 
@@ -54,9 +54,7 @@ export class AccessOrphanCleanupService {
     this.clock = options.clock ?? (() => new Date());
   }
 
-  async listOrphans(
-    request: AccessOrphanCleanupRequest,
-  ): Promise<AccessOrphanCandidate[]> {
+  async listOrphans(request: AccessOrphanCleanupRequest): Promise<AccessOrphanCandidate[]> {
     let processes: OsProcessInfo[];
     try {
       processes = await this.options.processScanner.listProcesses();
@@ -130,10 +128,7 @@ export class AccessOrphanCleanupService {
 
     if (liveProcess === undefined) {
       return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_PID_GONE",
-          `PID ${confirmPid} is no longer running.`,
-        ),
+        createDysflowError("ORPHAN_CLEANUP_PID_GONE", `PID ${confirmPid} is no longer running.`),
       );
     }
 
