@@ -40,7 +40,6 @@ Param(
     [string]$Location = "Both",
 
     [Parameter()]
-    [ValidateSet("Auto", "Form", "Code")]
     [string]$ImportMode = "Auto",
 
     [Parameter()]
@@ -77,6 +76,7 @@ Param(
 # zero diagnostic information and the operator has to attach a debugger to
 # find the cause. See issue #484.
 trap {
+    if ($script:HasDysflowResultEmitted) { exit 1 }
     $trapErr = $_.Exception
     $trapKind = if ($trapErr) { $trapErr.GetType().Name } else { "Unknown" }
     $trapMsg = if ($trapErr) { $trapErr.Message } else { [string]$_ }
@@ -105,6 +105,7 @@ trap {
 
 $ErrorActionPreference = "Stop"
 $script:QuietOutput = [bool]$Json
+$script:HasDysflowResultEmitted = $false
 
 # Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
@@ -115,7 +116,8 @@ function Write-DysflowOperationMarker {
     [CmdletBinding()]
     Param(
         [string]$Status = "running",
-        [System.Nullable[int]]$AccessPid = $null
+        [AllowNull()]
+        [object]$AccessPid = $null
     )
 
     if ([string]::IsNullOrWhiteSpace($OperationFile)) { return }
@@ -194,6 +196,30 @@ function Write-DysflowResult {
     )
     $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
     Write-Output ("DYSFLOW_RESULT " + $json)
+    $script:HasDysflowResultEmitted = $true
+}
+
+function Resolve-ImportModeValue {
+    [CmdletBinding()]
+    Param(
+        [AllowNull()]
+        [string]$ImportMode
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ImportMode)) { return "Auto" }
+    if ($ImportMode -ieq "replace") { return "Auto" }
+    if ($ImportMode -ieq "Auto") { return "Auto" }
+    if ($ImportMode -ieq "Form") { return "Form" }
+    if ($ImportMode -ieq "Code") { return "Code" }
+
+    Write-DysflowResult -Result ([ordered]@{
+        ok = $false
+        error = [ordered]@{
+            code = "VBA_MANAGER_INVALID_IMPORT_MODE"
+            message = "Invalid ImportMode '$ImportMode'. Valid values are Auto, Form, Code, or alias replace."
+        }
+    }) -Depth 6
+    exit 1
 }
 
 function New-DaoDbEngine {
@@ -1349,7 +1375,7 @@ function Resolve-ImportFileForModule {
     Param(
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         [Parameter(Mandatory = $true)][string]$ModuleName,
-        [ValidateSet("Auto", "Form", "Code")][string]$ImportMode = "Auto"
+        [string]$ImportMode = "Auto"
     )
 
     $modulesPathText = [string]$ModulesPath
@@ -1893,7 +1919,7 @@ function Import-VbaModule {
         [Parameter(Mandatory = $true)][string]$ModuleName,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         $AccessApplication = $null,  # FIX: necesario para LoadFromText de formularios
-        [ValidateSet("Auto", "Form", "Code")][string]$ImportMode = "Auto"
+        [string]$ImportMode = "Auto"
     )
 
     $src = Resolve-ImportFileForModule -ModulesPath $ModulesPath -ModuleName $ModuleName -ImportMode $ImportMode
@@ -3082,7 +3108,6 @@ function Invoke-ImportAction {
             } catch {
                 $failedThisPass.Add($name) | Out-Null
                 $lastErrors[$name] = $_.Exception.Message
-                if (-not $useRetryImport) { throw }
             }
         }
 
@@ -3104,19 +3129,34 @@ function Invoke-ImportAction {
             }) | Out-Null
         }
     }
-    Write-DysflowResult -Result $moduleResults -Depth 4
-
     if ($pendingTargets.Count -gt 0) {
         $details = @($pendingTargets | ForEach-Object {
             if ($lastErrors.ContainsKey($_)) { "{0}: {1}" -f $_, $lastErrors[$_] } else { $_ }
         }) -join "; "
         $scopeLabel = if ($NormalizedModules.Count -eq 0) { "Import-all" } else { "Import" }
-        throw ("{0} no pudo completar algunos módulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details)
+        $errorMessage = "{0} no pudo completar algunos módulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details
+        Write-DysflowResult -Result ([ordered]@{
+            ok = $false
+            error = [ordered]@{
+                code = "VBA_IMPORT_FAILED"
+                message = $errorMessage
+            }
+            modules = @($moduleResults)
+        }) -Depth 6
+        return [pscustomobject]@{
+            CreatedComponentNames = @()
+            Total = [int]$total
+            HasErrors = $true
+            ErrorMessage = $errorMessage
+        }
     }
+
+    Write-DysflowResult -Result $moduleResults -Depth 4
 
     return [pscustomobject]@{
         CreatedComponentNames = @($createdComponentNames)
         Total = [int]$total
+        HasErrors = $false
     }
 }
 
@@ -3158,6 +3198,9 @@ try {
         }
     }
     $normalizedModules = @($inputModules | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($Action -eq "Import") {
+        $ImportMode = Resolve-ImportModeValue -ImportMode $ImportMode
+    }
 
     if ($Action -eq "Export") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
@@ -3166,6 +3209,7 @@ try {
     } elseif ($Action -eq "Import") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
         $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -Json:$Json
+        if ($importResult.HasErrors) { exit 1 }
         if ($importResult.CreatedComponentNames.Count -gt 0) {
             Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($importResult.CreatedComponentNames)
         }
@@ -3203,6 +3247,17 @@ try {
     } else {
         Invoke-FixEncodingAction -Session ([ref]$session) -ModulesPath $ModulesPath -NormalizedModules $normalizedModules -Location $Location -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -Json:$Json
     }
+} catch {
+    if (-not $script:HasDysflowResultEmitted) {
+        Write-DysflowResult -Result ([ordered]@{
+            ok = $false
+            error = [ordered]@{
+                code = "VBA_MANAGER_FAILED"
+                message = [string]$_.Exception.Message
+            }
+        }) -Depth 6
+    }
+    exit 1
 } finally {
     if ($session) {
         try { Close-AccessDatabase -Session $session -AccessPath $AccessPath -Password $Password } catch { Write-Debug "Diagnostics: $_" }

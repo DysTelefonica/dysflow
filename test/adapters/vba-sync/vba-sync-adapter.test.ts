@@ -439,7 +439,8 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const service = new VbaSyncAdapter({
       executor: async () => ({
         exitCode: 1,
-        stdout: "",
+        stdout:
+          'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_MANAGER_FAILED","message":"runner failed"}}',
         stderr: "bad password secret",
         durationMs: 3,
         timedOut: false,
@@ -455,6 +456,154 @@ describe("VbaSyncAdapter Orchestrator", () => {
       expect(result.error.message).toContain("[REDACTED]");
       expect(result.error.message).not.toContain("secret");
     }
+  });
+
+  it("surfaces structured non-zero runner results instead of treating them as invalid output", async () => {
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 1,
+        stdout:
+          'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_IMPORT_FAILED","message":"Import failed for Module1"}}',
+        stderr: "runner stderr detail",
+        durationMs: 4,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("import_modules", { moduleNames: ["Module1"] });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected structured failure");
+    expect(result.error.code).toBe("VBA_IMPORT_FAILED");
+    expect(result.error.message).toContain("Import failed for Module1");
+    expect(result.error.message).toContain("runner stderr detail");
+  });
+
+  describe("import runner parse-failure contract", () => {
+    const stderr = "runner stderr detail";
+    const importTools = [
+      {
+        toolName: "import_modules",
+        params: {
+          moduleNames: ["Test_IndicadoresCaracterizacion", "ModuloCacheIndicadoresIssue18"],
+          importMode: "Auto",
+          compile: false,
+        },
+      },
+      {
+        toolName: "import_all",
+        params: {
+          importMode: "Auto",
+          compile: false,
+        },
+      },
+    ];
+    const parseFailureOutputs = [
+      { name: "exitCode 0 + empty stdout", exitCode: 0, stdout: "" },
+      {
+        name: "exitCode 0 + stdout with text but no sentinel",
+        exitCode: 0,
+        stdout: "Import completed but no sentinel was emitted",
+      },
+      {
+        name: "exitCode 0 + duplicate DYSFLOW_RESULT lines",
+        exitCode: 0,
+        stdout: ['DYSFLOW_RESULT {"ok":true}', 'DYSFLOW_RESULT {"ok":false}'].join("\n"),
+      },
+      {
+        name: "exitCode 0 + malformed JSON after DYSFLOW_RESULT",
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT not-valid-json",
+      },
+      { name: "exitCode 1 + empty stdout", exitCode: 1, stdout: "" },
+      {
+        name: "exitCode 1 + stdout with text but no sentinel",
+        exitCode: 1,
+        stdout: "PowerShell host exited before writing the sentinel",
+      },
+      {
+        name: "exitCode 1 + duplicate DYSFLOW_RESULT lines",
+        exitCode: 1,
+        stdout: ['DYSFLOW_RESULT {"ok":true}', 'DYSFLOW_RESULT {"ok":false}'].join("\n"),
+      },
+      {
+        name: "exitCode 1 + malformed JSON after DYSFLOW_RESULT",
+        exitCode: 1,
+        stdout: "DYSFLOW_RESULT not-valid-json",
+      },
+    ];
+    const matrix = importTools.flatMap(({ toolName, params }) =>
+      parseFailureOutputs.map((runnerOutput) => ({ toolName, params, ...runnerOutput })),
+    );
+
+    it.each(matrix)("$toolName returns structured runner failure for $name", async ({
+      toolName,
+      params,
+      exitCode,
+      stdout,
+    }) => {
+      const service = new VbaSyncAdapter({
+        executor: async () => ({
+          exitCode,
+          stdout,
+          stderr,
+          durationMs: 4,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: "C:/repo/src",
+        env: {},
+      });
+
+      const result = await service.execute(toolName, params);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected runner protocol failure");
+      expect(result.error.code).not.toBe("VBA_MANAGER_INVALID_OUTPUT");
+      expect(result.error.code).toBe("VBA_MANAGER_UNEXPECTED_EXIT");
+      expect(result.error.details).toMatchObject({
+        exitCode,
+        stdout,
+        stderr,
+        parseError: expect.objectContaining({ message: expect.any(String) }),
+      });
+    });
+  });
+
+  it("preserves stdout and stderr separately in sanitized runner failure details", async () => {
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 1,
+        stdout:
+          'diagnostic secret on stdout\nDYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_IMPORT_FAILED","message":"Import failed"}}',
+        stderr: "diagnostic secret on stderr",
+        durationMs: 4,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
+    });
+
+    const result = await service.execute("import_modules", { moduleNames: ["Module1"] });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected structured failure");
+    expect(result.error.message).toContain("diagnostic [REDACTED] on stderr");
+    expect(result.error.message).not.toContain("diagnostic [REDACTED] on stdout");
+    expect(result.error.details).toMatchObject({
+      exitCode: 1,
+      stdout:
+        'diagnostic [REDACTED] on stdout\nDYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_IMPORT_FAILED","message":"Import failed"}}',
+      stderr: "diagnostic [REDACTED] on stderr",
+    });
+    expect(JSON.stringify(result.error.details)).not.toContain("secret");
   });
 
   it("resolves installed script path from DYSFLOW_HOME", () => {
@@ -802,6 +951,62 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const result = await service.execute("exists", { moduleName: "TempModule" });
 
     expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_INVALID_OUTPUT" } });
+  });
+
+  it("non-import tools map non-zero malformed manager output to VBA_MANAGER_UNEXPECTED_EXIT", async () => {
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 1,
+        stdout: "PowerShell exited before writing DYSFLOW_RESULT",
+        stderr: "manager failed",
+        durationMs: 2,
+        timedOut: false,
+      }),
+    });
+
+    const result = await service.execute("exists", { moduleName: "TempModule" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_MANAGER_UNEXPECTED_EXIT" } });
+  });
+
+  it("wraps successful manager output with import diagnostics only for import tools", async () => {
+    const cases = [
+      { toolName: "import_modules" as const, params: { moduleNames: ["Module1"] }, wrapped: true },
+      { toolName: "import_all" as const, params: {}, wrapped: true },
+      { toolName: "exists" as const, params: { moduleName: "Module1" }, wrapped: false },
+      { toolName: "compile_vba" as const, params: {}, wrapped: false },
+    ];
+
+    for (const { toolName, params, wrapped } of cases) {
+      const service = new VbaSyncAdapter({
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: "C:/repo/src",
+        env: {},
+        executor: async () => ({
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 2,
+          timedOut: false,
+        }),
+      });
+
+      const result = await service.execute(toolName, params);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(`expected ${toolName} success`);
+      if (wrapped) {
+        expect(result.data).toMatchObject({
+          operation: toolName,
+          willModifyAccess: true,
+          result: { ok: true },
+        });
+      } else {
+        expect(result.data).toEqual({ ok: true });
+      }
+    }
   });
 
   describe("delegation to form service and comparison modules", () => {

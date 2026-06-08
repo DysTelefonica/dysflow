@@ -27,9 +27,16 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
     "Import",
     false,
     (input) => stringArray(input.moduleNames),
-    (input) => ({ importMode: stringValue(input.importMode) }),
+    (input) => ({ importMode: normalizeImportMode(stringValue(input.importMode)) }),
   ),
-  import_all: mapping("Import"),
+  import_all: mapping(
+    "Import",
+    false,
+    () => [],
+    (input) => ({
+      importMode: normalizeImportMode(stringValue(input.importMode)),
+    }),
+  ),
   list_objects: mapping("List-Objects", true),
   exists: mapping("Exists", true, (input) => {
     const moduleName = stringValue(input.moduleName) || stringValue(input.name);
@@ -172,10 +179,15 @@ export class VbaModulesAdapter {
       );
     }
 
+    const effectiveParams = {
+      ...params,
+      importMode: normalizeImportMode(stringValue(params.importMode)),
+    };
+
     return successResult(
       buildImportPlanResult({
         toolName,
-        params,
+        params: effectiveParams,
         target: target.data,
         modulesPlanned,
         warnings,
@@ -183,6 +195,11 @@ export class VbaModulesAdapter {
       }),
     );
   }
+}
+
+function normalizeImportMode(importMode: string | undefined): string | undefined {
+  if (importMode === undefined) return undefined;
+  return importMode.toLowerCase() === "replace" ? "Auto" : importMode;
 }
 
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {

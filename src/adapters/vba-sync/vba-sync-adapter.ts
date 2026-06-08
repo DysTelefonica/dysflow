@@ -288,20 +288,16 @@ export class VbaSyncAdapter implements VbaSyncPort {
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
-    if (result.exitCode !== 0) {
-      return failureResult(
-        createDysflowError(
-          "VBA_MANAGER_FAILED",
-          `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`,
-        ),
-        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
-      );
-    }
-
     let parsedOutput: unknown;
     try {
       parsedOutput = parseOutput(result.stdout, secrets);
-    } catch {
+    } catch (error) {
+      if (result.exitCode !== 0 || isImportTool(toolName)) {
+        return failureResult(failureFromUnexpectedRunnerExit(toolName, result, error, secrets), {
+          diagnostics: preflightDiagnostics,
+          durationMs: result.durationMs,
+        });
+      }
       return failureResult(
         createDysflowError(
           "VBA_MANAGER_INVALID_OUTPUT",
@@ -309,6 +305,18 @@ export class VbaSyncAdapter implements VbaSyncPort {
         ),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
+    }
+    if (result.exitCode !== 0) {
+      const structuredFailure = failureFromStructuredRunnerResult(
+        toolName,
+        result,
+        parsedOutput,
+        secrets,
+      );
+      return failureResult(structuredFailure, {
+        diagnostics: preflightDiagnostics,
+        durationMs: result.durationMs,
+      });
     }
     if (toolName === "import_all" || toolName === "import_modules") {
       return successResult(
@@ -484,6 +492,10 @@ function buildTargetDiagnostics(
   };
 }
 
+function isImportTool(toolName: string): boolean {
+  return toolName === "import_all" || toolName === "import_modules";
+}
+
 /**
  * Strict sentinel-based output extractor (issue #440).
  * Result MUST be on a `DYSFLOW_RESULT <compact-json>` line.
@@ -492,6 +504,83 @@ function buildTargetDiagnostics(
  */
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
   return extractResultPayload(stdout, secrets);
+}
+
+function failureFromStructuredRunnerResult(
+  toolName: string,
+  result: VbaManagerExecutionResult,
+  parsedOutput: unknown,
+  secrets: readonly string[],
+) {
+  const outputDetails = buildRunnerFailureOutputDetails(result, secrets);
+  if (isRecord(parsedOutput) && parsedOutput.ok === false && isRecord(parsedOutput.error)) {
+    const code = stringValue(parsedOutput.error.code) ?? "VBA_MANAGER_FAILED";
+    const message =
+      stringValue(parsedOutput.error.message) ?? "VBA manager returned a failed result.";
+    const suffix =
+      outputDetails.displayOutput.trim().length > 0
+        ? ` Output: ${outputDetails.displayOutput}`
+        : "";
+    return createDysflowError(code, `${message}${suffix}`, { details: outputDetails.details });
+  }
+
+  return createDysflowError(
+    "VBA_MANAGER_FAILED",
+    `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${outputDetails.displayOutput}`,
+    { details: outputDetails.details },
+  );
+}
+
+function failureFromUnexpectedRunnerExit(
+  toolName: string,
+  result: VbaManagerExecutionResult,
+  parseError: unknown,
+  secrets: readonly string[],
+) {
+  const outputDetails = buildRunnerFailureOutputDetails(result, secrets);
+  const parseDetails = describeParseError(parseError);
+  return createDysflowError(
+    "VBA_MANAGER_UNEXPECTED_EXIT",
+    `${toolName} exited with code ${result.exitCode ?? "unknown"} before producing valid ${RESULT_MARKER.trim()} output. Output: ${outputDetails.displayOutput}`,
+    {
+      details: {
+        ...outputDetails.details,
+        parseError: parseDetails,
+      },
+    },
+  );
+}
+
+function describeParseError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+function buildRunnerFailureOutputDetails(
+  result: VbaManagerExecutionResult,
+  secrets: readonly string[],
+): { displayOutput: string; details: Record<string, unknown> } {
+  const stdout = sanitizeSecrets(result.stdout, secrets);
+  const stderr = sanitizeSecrets(result.stderr, secrets);
+  const displayOutput =
+    stderr.trim().length > 0 ? stderr : stdout.trim().length > 0 ? stdout : "No output.";
+
+  return {
+    displayOutput,
+    details: {
+      exitCode: result.exitCode,
+      stdout,
+      stderr,
+    },
+  };
 }
 
 async function readVbaManagerOperationMarker(

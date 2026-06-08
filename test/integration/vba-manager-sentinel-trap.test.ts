@@ -13,7 +13,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { platform } from "node:os";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -64,6 +65,10 @@ function parseDysflowResult(stdout: string): Record<string, unknown> | null {
     }
   }
   return null;
+}
+
+function dysflowResultLines(stdout: string): string[] {
+  return stdout.split(/\r?\n/).filter((line) => line.startsWith("DYSFLOW_RESULT "));
 }
 
 const skipReason = HAS_PWSH ? undefined : "pwsh is not available on this platform";
@@ -125,5 +130,73 @@ describe.skipIf(skipReason !== undefined)("dysflow-vba-manager.ps1 top-level tra
       `expected a DYSFLOW_RESULT sentinel on List-Objects failure. stdout was: ${result.stdout.slice(0, 500)}`,
     ).not.toBeNull();
     expect(sentinel?.ok).toBe(false);
+  });
+
+  it("validates ImportMode inside the script body so invalid modes emit one structured sentinel", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-invalid-import-mode-"));
+    const accessPath = join(root, "front.accdb");
+    const destinationRoot = join(root, "src");
+    await mkdir(destinationRoot, { recursive: true });
+    await writeFile(accessPath, "", "utf8");
+
+    const result = await runPwsh(
+      [
+        "-Action",
+        "Import",
+        "-AccessPath",
+        accessPath,
+        "-DestinationRoot",
+        destinationRoot,
+        "-ImportMode",
+        "NotAValidImportMode",
+        "-Json",
+      ],
+      { ACCESS_VBA_PASSWORD: "irrelevant" },
+    );
+
+    expect(result.exitCode).not.toBe(0);
+    const sentinelLines = dysflowResultLines(result.stdout);
+    expect(sentinelLines).toHaveLength(1);
+    const sentinel = parseDysflowResult(result.stdout);
+    expect(sentinel).toMatchObject({
+      ok: false,
+      error: { code: "VBA_MANAGER_INVALID_IMPORT_MODE" },
+    });
+  });
+
+  it("emits exactly one terminal structured sentinel when Import action reports module failures", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-failure-sentinel-"));
+    const accessPath = join(root, "front.accdb");
+    const destinationRoot = join(root, "src");
+    await mkdir(destinationRoot, { recursive: true });
+    await writeFile(accessPath, "", "utf8");
+
+    const result = await runPwsh(
+      [
+        "-Action",
+        "Import",
+        "-AccessPath",
+        accessPath,
+        "-DestinationRoot",
+        destinationRoot,
+        "-ModuleNamesJson",
+        '["DefinitelyMissingModule"]',
+        "-AllowStartupExecution",
+        "-Json",
+      ],
+      { ACCESS_VBA_PASSWORD: "irrelevant", DYSFLOW_MOCK_COM: "1" },
+    );
+
+    expect(result.exitCode).not.toBe(0);
+    const sentinelLines = dysflowResultLines(result.stdout);
+    expect(sentinelLines).toHaveLength(1);
+    const sentinel = parseDysflowResult(result.stdout);
+    expect(sentinel).toMatchObject({ ok: false });
+    expect(sentinel?.error).toEqual(
+      expect.objectContaining({
+        code: expect.any(String),
+        message: expect.any(String),
+      }),
+    );
   });
 });

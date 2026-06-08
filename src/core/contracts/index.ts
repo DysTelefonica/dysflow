@@ -12,6 +12,7 @@ export type DysflowError = {
   code: string;
   message: string;
   retryable: boolean;
+  details?: Record<string, unknown>;
 };
 
 /**
@@ -169,9 +170,14 @@ export function createDiagnostic(
 export function createDysflowError(
   code: string,
   message: string,
-  options: { retryable?: boolean } = {},
+  options: { retryable?: boolean; details?: Record<string, unknown> } = {},
 ): DysflowError {
-  return { code, message, retryable: options.retryable ?? false };
+  return {
+    code,
+    message,
+    retryable: options.retryable ?? false,
+    ...(options.details ? { details: options.details } : {}),
+  };
 }
 
 /**

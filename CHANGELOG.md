@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.27] - 2026-06-08
+
+### Fixed
+
+- **VBA import runner output contract**: Hardened `import_modules` and `import_all` so malformed, missing, duplicate, or interrupted `DYSFLOW_RESULT` output is reported as structured runner failure diagnostics instead of `VBA_MANAGER_INVALID_OUTPUT`. This preserves sanitized `exitCode`, `stdout`, `stderr`, and parse details for real Access/VBA failures.
+- **Import mode compatibility**: Normalized the `replace` import-mode alias to the runner's `Auto` mode and moved PowerShell import-mode validation inside the script body so invalid modes can emit structured `DYSFLOW_RESULT` errors.
+
+### Added
+
+- **MCP output-contract coverage**: Added table-driven tests for all import runner-output failure shapes and a registry-level MCP tool contract inventory so every registered tool belongs to exactly one output protocol group.
+
 ## [v1.2.26] - 2026-06-08
 
 ### Fixed

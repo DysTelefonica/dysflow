@@ -142,6 +142,57 @@ describe("VbaModulesAdapter", () => {
     ]);
   });
 
+  it("normalizes import_modules importMode=replace to the runner Auto mode", async () => {
+    let capturedImportMode: unknown;
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        capturedImportMode = request.extra.importMode;
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Variables Globales"],
+      importMode: "replace",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(capturedImportMode).toBe("Auto");
+  });
+
+  it("normalizes import_all importMode=replace to the runner Auto mode", async () => {
+    let capturedImportMode: unknown;
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        capturedImportMode = request.extra.importMode;
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("import_all", { importMode: "replace" });
+
+    expect(result.ok).toBe(true);
+    expect(capturedImportMode).toBe("Auto");
+  });
+
   it("dry-run import_all with mismatched projectId returns CONFIG_PROJECT_ID_MISMATCH", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-adapter-"));
     const staging = join(root, "staging");

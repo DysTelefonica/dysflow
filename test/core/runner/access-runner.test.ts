@@ -684,6 +684,44 @@ describe("AccessPowerShellRunner", () => {
     });
   });
 
+  it.each([
+    {
+      name: "malformed output",
+      stdout: "DYSFLOW_RESULT not-valid-json",
+    },
+    {
+      name: "valid structured sentinel failure",
+      stdout: 'DYSFLOW_RESULT {"ok":false,"error":{"code":"ACCESS_SCRIPT_FAILED"}}',
+    },
+  ])("maps non-zero PowerShell exit with $name to RUNNER_FAILED", async ({ stdout }) => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 3,
+      stdout,
+      stderr: "",
+      durationMs: 22,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "query", request: { sql: "SELECT * FROM Customers", mode: "read" } },
+      config,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "RUNNER_FAILED",
+        message: `PowerShell runner failed with exit code 3: ${stdout}`,
+      },
+      durationMs: 22,
+    });
+  });
+
   it("maps valid JSON that is not a record object to a typed runner failure", async () => {
     for (const nonObject of ["null", "42", '"string"', "[1,2,3]", "true"]) {
       const executor: PowerShellExecutor = async () => ({

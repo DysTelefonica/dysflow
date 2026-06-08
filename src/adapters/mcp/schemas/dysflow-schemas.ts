@@ -271,7 +271,12 @@ export const SCHEMA_PROPS = {
   } as JsonSchemaProperty,
   compile: { type: "boolean", description: "Compile before running." } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
-  importMode: { type: "string", description: "VBA import mode." } as JsonSchemaProperty,
+  importMode: {
+    type: "string",
+    enum: ["Auto", "Form", "Code", "replace"],
+    description:
+      "VBA import mode. The replace alias is normalized to Auto before invoking the runner.",
+  } as JsonSchemaProperty,
   mode: {
     type: "string",
     enum: ["read", "write"],
