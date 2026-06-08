@@ -778,6 +778,44 @@ describe("MCP tool registration over core services", () => {
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
     });
+
+    it("accepts lowercase importMode aliases before dispatching import tools", async () => {
+      const tools = createDysflowMcpTools({
+        ...makeServices(),
+        vbaSyncToolService: {
+          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+        },
+      });
+      const importModules = tools.find((tool) => tool.name === "import_modules");
+      expect(importModules).toBeDefined();
+      if (importModules === undefined) throw new Error("import_modules should be registered");
+
+      const result = await importModules.handler({
+        moduleNames: ["DysflowMcpE2EMissing"],
+        importMode: "code",
+        dryRun: true,
+        compile: false,
+      });
+
+      expect(result).toEqual({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              toolName: "import_modules",
+              input: {
+                moduleNames: ["DysflowMcpE2EMissing"],
+                importMode: "code",
+                dryRun: true,
+                compile: false,
+              },
+              ok: true,
+            }),
+          },
+        ],
+        isError: false,
+      });
+    });
   });
 
   it("translates core failures to safe MCP errors without leaking diagnostics, protocol details, or local paths", () => {

@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.2.28] - 2026-06-08
+
+### Fixed
+
+- **VBA import success sentinel emission**: Changed the PowerShell `DYSFLOW_RESULT` writer to bypass the success-output pipeline so `Import` actions still emit the sentinel when `Invoke-ImportAction` is assigned to `$importResult`. This fixes the real `import_modules` acceptance case where Access imported modules successfully but MCP saw no sentinel.
+- **Lowercase import mode aliases**: Accepted and normalized lowercase `auto`, `form`, and `code` import modes at the MCP/schema and adapter layers, matching the E2E suite and preserving the existing `replace` alias.
+
+### Verified
+
+- Real MCP E2E against safe `test-runtime`: `106 passed / 0 failed`.
+- Exact `00_NO_CONFORMIDADES_staging` acceptance import passed with structured OK response for `Test_IndicadoresCaracterizacion` and `ModuloCacheIndicadoresIssue18`, `importMode: Auto`, `compile: false`.
+
 ## [v1.2.27] - 2026-06-08
 
 ### Fixed

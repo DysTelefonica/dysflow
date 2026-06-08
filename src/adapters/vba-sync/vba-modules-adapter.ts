@@ -199,7 +199,17 @@ export class VbaModulesAdapter {
 
 function normalizeImportMode(importMode: string | undefined): string | undefined {
   if (importMode === undefined) return undefined;
-  return importMode.toLowerCase() === "replace" ? "Auto" : importMode;
+  switch (importMode.toLowerCase()) {
+    case "auto":
+    case "replace":
+      return "Auto";
+    case "form":
+      return "Form";
+    case "code":
+      return "Code";
+    default:
+      return importMode;
+  }
 }
 
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {

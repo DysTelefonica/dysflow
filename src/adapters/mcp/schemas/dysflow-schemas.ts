@@ -273,9 +273,9 @@ export const SCHEMA_PROPS = {
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: {
     type: "string",
-    enum: ["Auto", "Form", "Code", "replace"],
+    enum: ["Auto", "Form", "Code", "auto", "form", "code", "replace"],
     description:
-      "VBA import mode. The replace alias is normalized to Auto before invoking the runner.",
+      "VBA import mode. Lowercase aliases and replace are normalized before invoking the runner.",
   } as JsonSchemaProperty,
   mode: {
     type: "string",

@@ -142,7 +142,12 @@ describe("VbaModulesAdapter", () => {
     ]);
   });
 
-  it("normalizes import_modules importMode=replace to the runner Auto mode", async () => {
+  it.each([
+    ["replace", "Auto"],
+    ["auto", "Auto"],
+    ["form", "Form"],
+    ["code", "Code"],
+  ])("normalizes import_modules importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({
       executor: async (request) => {
@@ -162,14 +167,19 @@ describe("VbaModulesAdapter", () => {
 
     const result = await service.execute("import_modules", {
       moduleNames: ["Variables Globales"],
-      importMode: "replace",
+      importMode: inputMode,
     });
 
     expect(result.ok).toBe(true);
-    expect(capturedImportMode).toBe("Auto");
+    expect(capturedImportMode).toBe(expectedMode);
   });
 
-  it("normalizes import_all importMode=replace to the runner Auto mode", async () => {
+  it.each([
+    ["replace", "Auto"],
+    ["auto", "Auto"],
+    ["form", "Form"],
+    ["code", "Code"],
+  ])("normalizes import_all importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({
       executor: async (request) => {
@@ -187,10 +197,10 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("import_all", { importMode: "replace" });
+    const result = await service.execute("import_all", { importMode: inputMode });
 
     expect(result.ok).toBe(true);
-    expect(capturedImportMode).toBe("Auto");
+    expect(capturedImportMode).toBe(expectedMode);
   });
 
   it("dry-run import_all with mismatched projectId returns CONFIG_PROJECT_ID_MISMATCH", async () => {
