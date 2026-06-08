@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.25] - 2026-06-08
+
+### Fixed
+
+- **Surface underlying parse error in `RUNNER_INVALID_JSON` (#474)**: The catch block at `src/core/runner/access-runner.ts:290` no longer swallows the original `parseError`; the `RUNNER_INVALID_JSON` failure message now includes the underlying cause verbatim (e.g. `RunnerResultChannelError("No DYSFLOW_RESULT line in runner output")` or the `SyntaxError` from malformed JSON). A truncated, secret-scrubbed stdout preview (first 200 chars, sanitized via the existing `sanitizeSecrets`) is appended to the diagnostics array so operators can diagnose the root cause without adding temporary debug logs.
+
+### Chore
+
+- **Reset `DYSFLOW_HOME` in MCP E2E entry point (#475)**: `E2E_testing/mcp-e2e.mjs` now `delete process.env.DYSFLOW_HOME` at startup, matching the integration config (`vitest.integration.config.ts`). Prevents the runner from being silently routed to the stale production install at `%LOCALAPPDATA%\dysflow` when the host shell has `DYSFLOW_HOME` set.
+
 ## [v1.2.24] - 2026-06-07
 
 ### Security
