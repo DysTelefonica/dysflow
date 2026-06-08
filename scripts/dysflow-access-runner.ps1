@@ -732,6 +732,19 @@ function Compact-RepairDatabase {
     $targetPath = Resolve-SandboxedPath -RawPath $targetPath -RootPath $folder -Label "targetPath"
   }
 
+  # Resolve password: payload explicit > payload passwordEnv > env fallback
+  $compactPassword = [string]$Payload.backendPassword
+  if ([string]::IsNullOrWhiteSpace($compactPassword)) {
+    $compactPassword = [string]$Payload.password
+  }
+  if ([string]::IsNullOrWhiteSpace($compactPassword) -and -not [string]::IsNullOrWhiteSpace([string]$Payload.passwordEnv)) {
+    $envKey = [string]$Payload.passwordEnv
+    $compactPassword = [Environment]::GetEnvironmentVariable($envKey)
+  }
+  if ([string]::IsNullOrWhiteSpace($compactPassword)) {
+    $compactPassword = $BackendPassword
+  }
+
   if ($dryRun) {
     return [ordered]@{
       dryRun = $true
@@ -743,7 +756,11 @@ function Compact-RepairDatabase {
 
   $dbEngine = New-DaoDbEngine
   try {
-    $dbEngine.CompactDatabase($sourceFull, $targetPath)
+    if (-not [string]::IsNullOrWhiteSpace($compactPassword)) {
+      $dbEngine.CompactDatabase($sourceFull, $targetPath, ";PWD=$compactPassword")
+    } else {
+      $dbEngine.CompactDatabase($sourceFull, $targetPath)
+    }
     if (Test-Path -LiteralPath $targetPath) {
       Move-Item -LiteralPath $targetPath -Destination $sourceFull -Force
     }

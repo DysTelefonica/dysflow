@@ -34,6 +34,19 @@ function Get-MockDaoDbEngine {
         param([string]$DatabasePath, [bool]$options, [bool]$readOnly, [string]$connect)
         return Get-MockDatabase -DatabasePath $DatabasePath
     }
+    $mockEngine | Add-Member -MemberType ScriptMethod -Name CompactDatabase -Value {
+        param([string]$Source, [string]$Target, [string]$Connect)
+        # Mock simply copies source to target if both are set
+        if (-not [string]::IsNullOrWhiteSpace($Source) -and -not [string]::IsNullOrWhiteSpace($Target)) {
+            $mockDir = Split-Path -Parent $Target
+            if (-not (Test-Path -LiteralPath $mockDir)) {
+                New-Item -ItemType Directory -Path $mockDir -Force | Out-Null
+            }
+            if (Test-Path -LiteralPath $Source) {
+                Copy-Item -LiteralPath $Source -Destination $Target -Force
+            }
+        }
+    }
     return $mockEngine
 }
 
