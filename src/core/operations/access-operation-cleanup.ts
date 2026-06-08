@@ -15,6 +15,14 @@ export type OsProcessInfo = {
   /** ISO 8601 string; may be undefined when the OS query returned partial data (e.g. Get-Process fallback). */
   startTime?: string;
   commandLine?: string;
+  /**
+   * OS-reported window handle for the process's main window.
+   * `0` means the process has no visible window (headless / background-only).
+   * `undefined` means the information is not available (e.g. Get-Process fallback path
+   * does not expose MainWindowHandle — the caller must treat undefined as "unknown"
+   * and refuse to act on it as if it were headless).
+   */
+  mainWindowHandle?: number;
 };
 
 export type ProcessInspector = {

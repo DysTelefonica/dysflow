@@ -75,11 +75,14 @@ export function normalizeProcessList(stdout: string): OsProcessInfo[] {
     const creationDate = typeof p.CreationDate === "string" ? p.CreationDate : undefined;
     const commandLine = typeof p.CommandLine === "string" ? p.CommandLine : undefined;
     const startTime = creationDate ? parseCimDateTimeToIso(creationDate) : undefined;
+    const mainWindowHandle =
+      typeof p.MainWindowHandle === "number" ? p.MainWindowHandle : undefined;
     results.push({
       pid,
       name,
       startTime: startTime || undefined,
       commandLine: commandLine || undefined,
+      mainWindowHandle,
     });
   }
   return results;
@@ -97,7 +100,7 @@ export function normalizeProcessList(stdout: string): OsProcessInfo[] {
 function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string): string {
   return (
     `$job = Start-Job { Get-CimInstance Win32_Process -Filter "${filter}" | ` +
-    `Select-Object ProcessId,Name,CreationDate,CommandLine }; ` +
+    `Select-Object ProcessId,Name,CreationDate,CommandLine,MainWindowHandle }; ` +
     `$r = $null; ` +
     `if (Wait-Job $job -Timeout ${CIM_JOB_TIMEOUT_SEC}) { $r = Receive-Job $job }; ` +
     `Stop-Job $job; Remove-Job $job; ` +
@@ -106,7 +109,8 @@ function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string):
     `Select-Object @{n='ProcessId';e={$_.Id}},` +
     `@{n='Name';e={$_.Name}},` +
     `@{n='CreationDate';e={if ($_.StartTime) { $_.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }}},` +
-    `@{n='CommandLine';e={$null}} ` +
+    `@{n='CommandLine';e={$null}},` +
+    `@{n='MainWindowHandle';e={$null}} ` +
     `}; ` +
     `if ($r -ne $null) { $r | ConvertTo-Json -Compress } else { '' }`
   );
