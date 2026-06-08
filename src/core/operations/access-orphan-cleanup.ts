@@ -154,15 +154,22 @@ export class AccessOrphanCleanupService {
       );
     }
 
-    if (liveProcess.commandLine !== undefined) {
-      if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
-        return failureResult(
-          createDysflowError(
-            "ORPHAN_CLEANUP_PATH_MISMATCH",
-            `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-          ),
-        );
-      }
+    if (liveProcess.commandLine === undefined) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_PATH_UNVERIFIED",
+          `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
+        ),
+      );
+    }
+
+    if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_PATH_MISMATCH",
+          `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
+        ),
+      );
     }
 
     const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);

@@ -127,6 +127,22 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
     expect(orphans).toHaveLength(0);
   });
 
+  it("excludes a headless MSACCESS whose commandLine is unavailable", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345, commandLine: undefined });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(orphans).toHaveLength(0);
+  });
+
   it("excludes a PID that the registry marks as running (owned process)", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create(runningRecord(12345, PROJECT_ROOT));
@@ -307,6 +323,32 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
       expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_MISMATCH");
     }
     expect(killed).toEqual([]);
+  });
+
+  it("refuses a headless PID whose commandLine is unavailable because accessPath cannot be proven", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345, commandLine: undefined });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 12345,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_UNVERIFIED");
+      expect(result.error.message).toMatch(/command line.*unavailable.*cannot be proven/i);
+    }
+    expect(killed).toEqual([]);
+    expect(await registry.listRecent()).toEqual([]);
   });
 
   it("refuses a confirmed PID that is registry-owned by a running operation", async () => {
