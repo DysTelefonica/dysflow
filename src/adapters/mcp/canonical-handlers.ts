@@ -122,7 +122,12 @@ export async function handleMcpAccessOrphanCleanup(
   input: unknown,
   schema: JsonObjectSchema,
   services: DysflowMcpServices,
-  buildRequest: (input: unknown) => { accessPath: string; projectRoot: string; confirmPid: number },
+  buildRequest: (
+    input: unknown,
+  ) =>
+    | Promise<{ accessPath: string; projectRoot: string; confirmPid?: number } | McpToolResult>
+    | { accessPath: string; projectRoot: string; confirmPid?: number }
+    | McpToolResult,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) return invalidInput(validation);
@@ -137,7 +142,21 @@ export async function handleMcpAccessOrphanCleanup(
       isError: true,
     };
   }
+
+  const request = await buildRequest(input);
+  if (isMcpToolResult(request)) return request;
+
+  if (request.confirmPid === undefined) {
+    return translateCoreResultToMcpContent(
+      successResult(await services.orphanCleanupService.listOrphans(request)),
+    );
+  }
+
   return translateCoreResultToMcpContent(
-    await services.orphanCleanupService.cleanupOrphan(buildRequest(input)),
+    await services.orphanCleanupService.cleanupOrphan({
+      accessPath: request.accessPath,
+      projectRoot: request.projectRoot,
+      confirmPid: request.confirmPid,
+    }),
   );
 }

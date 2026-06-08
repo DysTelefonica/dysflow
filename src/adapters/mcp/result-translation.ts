@@ -86,6 +86,15 @@ export type DysflowMcpServices = {
 
 export type McpWriteAccessResolver = (input: unknown) => Promise<boolean>;
 
+export type McpAccessContext = {
+  accessPath: string;
+  projectRoot: string;
+};
+
+export type McpAccessContextResolver = (
+  input: unknown,
+) => Promise<OperationResult<McpAccessContext>>;
+
 export function translateCoreResultToMcpContent<TData>(
   result: OperationResult<TData>,
   secrets?: readonly string[],

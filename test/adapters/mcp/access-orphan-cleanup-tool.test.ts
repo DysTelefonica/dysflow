@@ -47,19 +47,30 @@ function makeBaseServices() {
   };
 }
 
+function resolveAccessContext(accessPath = "C:/project/app.accdb", projectRoot = process.cwd()) {
+  return async () => successResult({ accessPath, projectRoot });
+}
+
 describe("dysflow_access_force_cleanup_orphaned tool", () => {
   it("is registered with the correct name and schema", () => {
     const fakeOrphan = new FakeOrphanCleanupService();
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     expect(tool).toBeDefined();
     expect(tool?.inputSchema).toMatchObject({
       type: "object",
-      required: ["confirmPid"],
+      required: [],
       additionalProperties: false,
       properties: {
         projectId: { type: "string" },
@@ -83,10 +94,17 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         errors: [],
       }),
     );
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({
@@ -106,7 +124,14 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
   });
 
   it("handler returns ORPHAN_CLEANUP_NOT_CONFIGURED when orphanCleanupService is undefined", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      makeBaseServices() as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: 12345 });
@@ -115,27 +140,51 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
     expect(result?.content[0]?.text).toContain("ORPHAN_CLEANUP_NOT_CONFIGURED");
   });
 
-  it("handler returns invalidInput when confirmPid is missing", async () => {
-    const fakeOrphan = new FakeOrphanCleanupService();
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+  it("handler lists orphan candidates when confirmPid is missing", async () => {
+    const fakeOrphan = new FakeOrphanCleanupService([
+      {
+        pid: 12345,
+        accessPath: "C:/project/app.accdb",
+        startTime: "2026-06-08T10:00:00.000Z",
+        mainWindowHandle: 0,
+      },
+    ]);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
 
-    expect(result?.isError).toBe(true);
-    expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
-    expect(result?.content[0]?.text).toContain("confirmPid");
+    expect(result?.isError).toBe(false);
+    expect(result?.content[0]?.text).toContain("12345");
+    expect(fakeOrphan.listOrphansRequests).toEqual([
+      { accessPath: "C:/project/app.accdb", projectRoot: process.cwd() },
+    ]);
+    expect(fakeOrphan.cleanupOrphanRequests).toEqual([]);
   });
 
   it("handler returns invalidInput when confirmPid is zero", async () => {
     const fakeOrphan = new FakeOrphanCleanupService();
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: 0 });
@@ -146,10 +195,17 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler returns invalidInput when confirmPid is negative", async () => {
     const fakeOrphan = new FakeOrphanCleanupService();
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: -1 });
@@ -160,10 +216,17 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler returns invalidInput when confirmPid is not a number", async () => {
     const fakeOrphan = new FakeOrphanCleanupService();
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({
@@ -185,10 +248,17 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         ),
       ),
     );
-    const tools = createDysflowMcpTools({
-      ...makeBaseServices(),
-      orphanCleanupService: fakeOrphan,
-    } as DysflowMcpServices);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
 
     const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
     const result = await tool?.handler({
@@ -212,5 +282,32 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
     expect(result?.isError).toBe(true);
     expect(result?.content[0]?.text).toContain("ORPHAN_CLEANUP_PATH_UNRESOLVED");
+  });
+
+  it("handler uses resolved project config accessPath when accessPath is omitted", async () => {
+    const fakeOrphan = new FakeOrphanCleanupService();
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext("C:/repo/default.accdb", "C:/repo"),
+    );
+
+    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const result = await tool?.handler({ projectId: "dysflow", confirmPid: 12345 });
+
+    expect(result?.isError).toBe(false);
+    expect(fakeOrphan.cleanupOrphanRequests).toEqual([
+      {
+        accessPath: "C:/repo/default.accdb",
+        projectRoot: "C:/repo",
+        confirmPid: 12345,
+      },
+    ]);
   });
 });

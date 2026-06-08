@@ -309,6 +309,32 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
     expect(killed).toEqual([]);
   });
 
+  it("refuses a confirmed PID that is registry-owned by a running operation", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(runningRecord(12345, PROJECT_ROOT));
+    const { killer, killed } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345 });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 12345,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+      expect(result.error.message).toMatch(/running Dysflow Access operation/i);
+    }
+    expect(killed).toEqual([]);
+  });
+
   it("returns ORPHAN_CLEANUP_PID_GONE when inspector returns undefined", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     const { killer, killed } = makeKiller();

@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
-import { type DysflowError, failureResult } from "../../core/contracts/index.js";
+import { type DysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
@@ -77,6 +77,7 @@ export async function startMcpStdioAdapter(
     async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
     process.env,
     startupConfig?.allowedProcedures,
+    async (input) => resolveMcpAccessContextForInput(input, startupConfig),
   );
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
@@ -180,6 +181,27 @@ export async function resolveMcpWriteAccessForInput(
   }
   const configResult = await resolveConfigForInput(input, options, { preferProjectConfig: true });
   return configResult.ok ? configResult.data.allowWrites : false;
+}
+
+export async function resolveMcpAccessContextForInput(
+  input: unknown,
+  startupConfig?: DysflowConfig,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+) {
+  if (startupConfig !== undefined && inputTargetsConfig(input, startupConfig)) {
+    return successAccessContext(startupConfig, options.cwd);
+  }
+
+  const configResult = await resolveConfigForInput(input, options);
+  if (!configResult.ok) return configResult;
+  return successAccessContext(configResult.data, options.cwd);
+}
+
+function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
+  return successResult({
+    accessPath: config.accessDbPath,
+    projectRoot: config.projectRoot ?? cwd,
+  });
 }
 
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {

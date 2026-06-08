@@ -1,4 +1,9 @@
-import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
+import {
+  type AccessQueryRequest,
+  type AccessVbaRequest,
+  createDysflowError,
+  failureResult,
+} from "../../core/contracts/index.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
   handleMcpAccessCleanup,
@@ -30,6 +35,7 @@ import { invalidInput } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
+  McpAccessContextResolver,
   McpWriteAccessResolver,
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -70,6 +76,13 @@ export function createDysflowMcpTools(
   writeAccessResolver?: McpWriteAccessResolver,
   env: Record<string, string | undefined> = process.env,
   allowedProcedures?: readonly string[],
+  accessContextResolver: McpAccessContextResolver = async () =>
+    failureResult(
+      createDysflowError(
+        "ORPHAN_CLEANUP_PATH_UNRESOLVED",
+        "accessPath must be provided or .dysflow/project.json must declare one.",
+      ),
+    ),
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -134,37 +147,24 @@ export function createDysflowMcpTools(
     {
       name: "dysflow_access_force_cleanup_orphaned",
       description:
-        "Kill an orphaned headless MSACCESS process holding the project's accessPath. Requires explicit operator confirmation of the PID. Refuses to kill any process that is not headless or that does not hold the accessPath.",
+        "List orphaned headless MSACCESS processes holding the project's accessPath, or kill one only when confirmPid is explicitly provided. Refuses to kill any process that is not headless, does not hold the accessPath, or is owned by a running Dysflow operation.",
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
-      handler: async (input) => {
-        const validation = validateInput(input, ORPHAN_CLEANUP_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
-        const request = input as { projectId?: string; accessPath?: string; confirmPid: number };
-        if (!request.accessPath) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "ORPHAN_CLEANUP_PATH_UNRESOLVED: accessPath must be provided or .dysflow/project.json must declare one.",
-              },
-            ],
-            isError: true,
-          };
-        }
-        return handleMcpAccessOrphanCleanup(
+      handler: async (input) =>
+        handleMcpAccessOrphanCleanup(
           input,
           ORPHAN_CLEANUP_SCHEMA,
           services,
-          (_validatedInput) => {
-            // request is already validated; accessPath is confirmed non-null by the check above
+          async (validatedInput) => {
+            const request = validatedInput as { confirmPid?: number };
+            const context = await accessContextResolver(validatedInput);
+            if (!context.ok) return translateCoreResultToMcpContent(context);
+            if (request.confirmPid === undefined) return context.data;
             return {
-              accessPath: request.accessPath as string,
-              projectRoot: process.cwd(),
+              ...context.data,
               confirmPid: request.confirmPid,
             };
           },
-        );
-      },
+        ),
     },
   ];
 

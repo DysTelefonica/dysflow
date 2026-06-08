@@ -165,6 +165,17 @@ export class AccessOrphanCleanupService {
       }
     }
 
+    const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
+    if (!ownershipResult.ok) return failureResult(ownershipResult.error);
+    if (ownershipResult.owned) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_REGISTRY_OWNED",
+          `Refused to kill PID ${confirmPid}: it is currently owned by a running Dysflow Access operation.`,
+        ),
+      );
+    }
+
     const syntheticId = `orphan-${confirmPid}-${Date.now()}`;
     const now = this.clock().toISOString();
     try {
@@ -215,5 +226,34 @@ export class AccessOrphanCleanupService {
       syntheticOperationId: syntheticId,
       errors: [],
     });
+  }
+
+  private async isOwnedRunningPid(
+    pid: number,
+    projectRoot: string,
+  ): Promise<
+    { ok: true; owned: boolean } | { ok: false; error: ReturnType<typeof createDysflowError> }
+  > {
+    let registryRecords: AccessOperationRecord[];
+    try {
+      registryRecords = await this.options.registry.listRecent({ limit: 1000 });
+    } catch (error) {
+      return {
+        ok: false,
+        error: createDysflowError(
+          "ORPHAN_CLEANUP_REGISTRY_READ_FAILED",
+          `Failed to verify registry ownership for PID ${pid}: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      };
+    }
+
+    const normalizedProjectRoot = normalizePathForMatching(projectRoot);
+    const owned = registryRecords.some(
+      (record) =>
+        record.status === "running" &&
+        record.accessPid === pid &&
+        normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
+    );
+    return { ok: true, owned };
   }
 }

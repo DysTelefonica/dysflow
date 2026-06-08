@@ -383,7 +383,7 @@ export const HTTP_WRITE_QUERY_SCHEMA: JsonObjectSchema = {
 
 export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   type: "object",
-  required: ["confirmPid"],
+  required: [],
   additionalProperties: false,
   properties: {
     projectId: {
@@ -400,7 +400,7 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
       type: "number",
       minimum: 1,
       description:
-        "Explicit PID the operator confirms they want killed. The tool refuses if confirmPid is missing, zero, or negative. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath.",
+        "Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates. When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath.",
     },
   },
 };
