@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.26] - 2026-06-08
+
+### Fixed
+
+- **MCP E2E timeout handling (#485)**: Fixed the timeout path so long-running MCP tool calls fail predictably instead of leaving ambiguous runner state. The full MCP E2E release gate passed after the fix with all advertised tools available and no lingering Access processes.
+
+### Added
+
+- **Safe orphan headless MSACCESS cleanup (#486)**: Added a cleanup tool for orphaned headless `MSACCESS.EXE` processes with a list/confirm flow. The tool resolves `accessPath` from explicit input, project config, or defaults, refuses registry-owned PIDs, joins `Get-Process` and CIM data to identify `MainWindowHandle`, normalizes `IntPtr` values in JSON output, and refuses cleanup unless command-line evidence proves the target Access database.
+
 ## [v1.2.25] - 2026-06-08
 
 ### Fixed
