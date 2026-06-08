@@ -287,13 +287,32 @@ export class AccessPowerShellRunner implements AccessRunner {
               durationMs: execution.durationMs,
               operation: operationMetadata,
             });
-          } catch {
+          } catch (parseError) {
+            const underlyingMessage =
+              parseError instanceof Error ? parseError.message : String(parseError);
+            // Truncated, secret-scrubbed stdout preview for operator diagnostics (#474)
+            const rawPreview = execution.stdout.slice(0, 200);
+            const safePreview = sanitizeSecrets(rawPreview, secrets);
+            const stdoutPreviewDiags: Diagnostic[] =
+              safePreview.length > 0
+                ? [
+                    createDiagnostic(
+                      "warning",
+                      "powershell.stdout",
+                      `[stdout-preview] ${safePreview}`,
+                    ),
+                  ]
+                : [];
             return failureResult(
               createDysflowError(
                 "RUNNER_INVALID_JSON",
-                "PowerShell runner produced invalid JSON output.",
+                `PowerShell runner produced invalid JSON output: ${underlyingMessage}`,
               ),
-              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+              {
+                diagnostics: [...diagnostics, ...stdoutPreviewDiags],
+                durationMs: execution.durationMs,
+                operation: operationMetadata,
+              },
             );
           }
         },

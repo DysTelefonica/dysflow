@@ -734,7 +734,8 @@ describe("AccessPowerShellRunner", () => {
       ok: false,
       error: {
         code: "RUNNER_INVALID_JSON",
-        message: "PowerShell runner produced invalid JSON output.",
+        message:
+          "PowerShell runner produced invalid JSON output: No DYSFLOW_RESULT line in runner output",
       },
       durationMs: 44,
     });
@@ -879,6 +880,84 @@ describe("AccessPowerShellRunner", () => {
     );
 
     expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+  });
+
+  // --- issue #474: RUNNER_INVALID_JSON surfaces underlying parse error ---
+
+  it("RUNNER_INVALID_JSON message includes underlying RunnerResultChannelError for missing sentinel", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: '{"ok":true}', // missing DYSFLOW_RESULT line → RunnerResultChannelError
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+    expect(result.ok === false && result.error.message).toContain(
+      "No DYSFLOW_RESULT line in runner output",
+    );
+  });
+
+  it("RUNNER_INVALID_JSON message includes underlying SyntaxError for malformed JSON payload", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: "DYSFLOW_RESULT not-valid-json", // malformed JSON → SyntaxError
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+    expect(result.ok === false && result.error.message).toContain("Unexpected token");
+  });
+
+  it("RUNNER_INVALID_JSON diagnostics redact secrets in stdout preview", async () => {
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 0,
+      stdout: "WARNING: connecting password=super-secret\nDYSFLOW_RESULT null", // sentinel present but null → type error
+      stderr: "",
+      durationMs: 5,
+      timedOut: false,
+    });
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    const result = await runner.run(
+      { kind: "vba", request: { moduleName: "M", procedureName: "P" } },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "RUNNER_INVALID_JSON" } });
+    // stdout preview in diagnostics must be secret-scrubbed
+    const stdoutDiags = result.diagnostics?.filter((d) => d.source === "powershell.stdout") ?? [];
+    expect(stdoutDiags.length).toBeGreaterThan(0);
+    const preview = stdoutDiags[0]?.message;
+    expect(preview).not.toContain("super-secret");
+    expect(preview).toContain("[REDACTED]");
   });
 
   it("each runner gets its own isolated in-memory registry by default and does not share state", () => {
