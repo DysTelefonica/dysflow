@@ -6,15 +6,15 @@ import {
 } from "../contracts/index.js";
 import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
 import type {
-  AccessOperationRegistry,
-  AccessOperationRecord,
-} from "./access-operation-registry.js";
-import type {
   OsProcessInfo,
   ProcessInspector,
   ProcessKiller,
   ProcessScanner,
 } from "./access-operation-cleanup.js";
+import type {
+  AccessOperationRecord,
+  AccessOperationRegistry,
+} from "./access-operation-registry.js";
 
 export type AccessOrphanCandidate = {
   pid: number;
@@ -28,7 +28,7 @@ export type AccessOrphanCleanupRequest = {
   projectRoot: string;
 };
 
-export type AccessOrphanCleanupConfirmRequest = AccessOrphanCleanupRequest& {
+export type AccessOrphanCleanupConfirmRequest = AccessOrphanCleanupRequest & {
   confirmPid: number;
 };
 
@@ -54,9 +54,7 @@ export class AccessOrphanCleanupService {
     this.clock = options.clock ?? (() => new Date());
   }
 
-  async listOrphans(
-    request: AccessOrphanCleanupRequest,
-  ): Promise<AccessOrphanCandidate[]> {
+  async listOrphans(request: AccessOrphanCleanupRequest): Promise<AccessOrphanCandidate[]> {
     let processes: OsProcessInfo[];
     try {
       processes = await this.options.processScanner.listProcesses();
@@ -130,10 +128,7 @@ export class AccessOrphanCleanupService {
 
     if (liveProcess === undefined) {
       return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_PID_GONE",
-          `PID ${confirmPid} is no longer running.`,
-        ),
+        createDysflowError("ORPHAN_CLEANUP_PID_GONE", `PID ${confirmPid} is no longer running.`),
       );
     }
 
@@ -159,15 +154,33 @@ export class AccessOrphanCleanupService {
       );
     }
 
-    if (liveProcess.commandLine !== undefined) {
-      if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
-        return failureResult(
-          createDysflowError(
-            "ORPHAN_CLEANUP_PATH_MISMATCH",
-            `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-          ),
-        );
-      }
+    if (liveProcess.commandLine === undefined) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_PATH_UNVERIFIED",
+          `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
+        ),
+      );
+    }
+
+    if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_PATH_MISMATCH",
+          `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
+        ),
+      );
+    }
+
+    const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
+    if (!ownershipResult.ok) return failureResult(ownershipResult.error);
+    if (ownershipResult.owned) {
+      return failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_REGISTRY_OWNED",
+          `Refused to kill PID ${confirmPid}: it is currently owned by a running Dysflow Access operation.`,
+        ),
+      );
     }
 
     const syntheticId = `orphan-${confirmPid}-${Date.now()}`;
@@ -220,5 +233,34 @@ export class AccessOrphanCleanupService {
       syntheticOperationId: syntheticId,
       errors: [],
     });
+  }
+
+  private async isOwnedRunningPid(
+    pid: number,
+    projectRoot: string,
+  ): Promise<
+    { ok: true; owned: boolean } | { ok: false; error: ReturnType<typeof createDysflowError> }
+  > {
+    let registryRecords: AccessOperationRecord[];
+    try {
+      registryRecords = await this.options.registry.listRecent({ limit: 1000 });
+    } catch (error) {
+      return {
+        ok: false,
+        error: createDysflowError(
+          "ORPHAN_CLEANUP_REGISTRY_READ_FAILED",
+          `Failed to verify registry ownership for PID ${pid}: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      };
+    }
+
+    const normalizedProjectRoot = normalizePathForMatching(projectRoot);
+    const owned = registryRecords.some(
+      (record) =>
+        record.status === "running" &&
+        record.accessPid === pid &&
+        normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
+    );
+    return { ok: true, owned };
   }
 }

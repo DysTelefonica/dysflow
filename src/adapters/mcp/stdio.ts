@@ -5,9 +5,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
-import { type DysflowError, failureResult } from "../../core/contracts/index.js";
+import { type DysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
 import {
   WindowsMsAccessProcessInspector,
   WindowsMsAccessProcessScanner,
@@ -76,6 +77,7 @@ export async function startMcpStdioAdapter(
     async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
     process.env,
     startupConfig?.allowedProcedures,
+    async (input) => resolveMcpAccessContextForInput(input, startupConfig),
   );
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
@@ -181,6 +183,27 @@ export async function resolveMcpWriteAccessForInput(
   return configResult.ok ? configResult.data.allowWrites : false;
 }
 
+export async function resolveMcpAccessContextForInput(
+  input: unknown,
+  startupConfig?: DysflowConfig,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+) {
+  if (startupConfig !== undefined && inputTargetsConfig(input, startupConfig)) {
+    return successAccessContext(startupConfig, options.cwd);
+  }
+
+  const configResult = await resolveConfigForInput(input, options);
+  if (!configResult.ok) return configResult;
+  return successAccessContext(configResult.data, options.cwd);
+}
+
+function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
+  return successResult({
+    accessPath: config.accessDbPath,
+    projectRoot: config.projectRoot ?? cwd,
+  });
+}
+
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry(config);
   const runner = new AccessPowerShellRunner({ operationRegistry });
@@ -190,12 +213,19 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
     processKiller: new WindowsProcessKiller(),
     processScanner: new WindowsMsAccessProcessScanner(),
   });
+  const orphanCleanupService = new AccessOrphanCleanupService({
+    registry: operationRegistry,
+    processScanner: new WindowsMsAccessProcessScanner(),
+    processInspector: new WindowsMsAccessProcessInspector(),
+    processKiller: new WindowsProcessKiller(),
+  });
   return {
     vbaService: new AccessVbaService({ runner, config }),
     queryService: new AccessQueryService({ runner, config }),
     diagnosticsService: new AccessDiagnosticsService({ runner, config }),
     operationRegistry,
     cleanupService,
+    orphanCleanupService,
     vbaSyncToolService: new VbaSyncAdapter({
       operationRegistry,
       cleanupService,
@@ -260,6 +290,10 @@ export function createUnavailableServices(
         });
       },
     },
+    // Note: cleanupService and orphanCleanupService are NOT included in the
+    // unavailable surface — they are lazily resolved via the dynamic resolver
+    // (resolveService) which calls createConfiguredServices when config becomes
+    // available. This mirrors the pattern used for cleanupService.
     vbaSyncToolService: createUnavailableVbaSyncToolService(error, options),
   };
 }

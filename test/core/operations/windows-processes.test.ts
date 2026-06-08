@@ -113,6 +113,7 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
       Name: "MSACCESS.EXE",
       CreationDate: "20260518123456.000000+000",
       CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      MainWindowHandle: 0,
     });
     resolveExecFile(cimJson);
     const inspector = new WindowsMsAccessProcessInspector();
@@ -123,6 +124,72 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
     expect(result?.name).toBe("MSACCESS.EXE");
     expect(result?.startTime).toBe("2026-05-18T12:34:56.000Z");
     expect(result?.commandLine).toBe('MSACCESS.EXE "C:/data/app.accdb"');
+    expect(result?.mainWindowHandle).toBe(0);
+  });
+
+  it("normalizes the joined CIM plus Get-Process shape for a headless Access process", async () => {
+    const joinedJson = JSON.stringify({
+      ProcessId: 1234,
+      Name: "MSACCESS.EXE",
+      CreationDate: "20260518123456.000000+000",
+      CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      MainWindowHandle: 0,
+    });
+    resolveExecFile(joinedJson);
+    const inspector = new WindowsMsAccessProcessInspector();
+    const result = await inspector.getProcess(1234);
+
+    expect(result).toMatchObject({
+      pid: 1234,
+      name: "MSACCESS.EXE",
+      commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      mainWindowHandle: 0,
+    });
+  });
+
+  it("normalizes the joined CIM plus Get-Process shape for a visible Access process", async () => {
+    const joinedJson = JSON.stringify({
+      ProcessId: 1234,
+      Name: "MSACCESS.EXE",
+      CreationDate: "20260518123456.000000+000",
+      CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      MainWindowHandle: 48879,
+    });
+    resolveExecFile(joinedJson);
+    const inspector = new WindowsMsAccessProcessInspector();
+    const result = await inspector.getProcess(1234);
+
+    expect(result?.mainWindowHandle).toBe(48879);
+  });
+
+  it("keeps mainWindowHandle undefined only when the adapter output genuinely lacks it", async () => {
+    const unavailableJson = JSON.stringify({
+      ProcessId: 1234,
+      Name: "MSACCESS.EXE",
+      CreationDate: "20260518123456.000000+000",
+      CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+    });
+    resolveExecFile(unavailableJson);
+    const inspector = new WindowsMsAccessProcessInspector();
+    const result = await inspector.getProcess(1234);
+
+    expect(result?.mainWindowHandle).toBeUndefined();
+  });
+
+  it("builds a PID-scoped Get-Process fallback for getProcess", async () => {
+    resolveExecFile("  ");
+    const inspector = new WindowsMsAccessProcessInspector();
+    await inspector.getProcess(1234);
+
+    const lastCall = mockExecFile.mock.calls[mockExecFile.mock.calls.length - 1];
+    const args = lastCall?.[1] as string[];
+    const script = args[3];
+    expect(script).toContain('Get-Process -Name "MSACCESS"');
+    expect(script).toContain("Where-Object { $_.Id -eq 1234 }");
+    expect(script).toContain("$_.MainWindowHandle.ToInt64()");
+    expect(script).toContain(
+      "@{n='MainWindowHandle';e={if ($null -ne $_.MainWindowHandle) { $_.MainWindowHandle.ToInt64() } else { $null }}}",
+    );
   });
 
   it("returns OsProcessInfo with commandLine undefined when JSON has no CommandLine", async () => {
@@ -131,6 +198,7 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
       Name: "MSACCESS.EXE",
       CreationDate: "20260518123456.000000+000",
       // No CommandLine — fallback path from Get-Process
+      MainWindowHandle: 0,
     });
     resolveExecFile(partialJson);
     const inspector = new WindowsMsAccessProcessInspector();
@@ -140,6 +208,7 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
     expect(result?.commandLine).toBeUndefined();
     expect(result?.pid).toBe(1234);
     expect(result?.startTime).toBe("2026-05-18T12:34:56.000Z");
+    expect(result?.mainWindowHandle).toBe(0);
   });
 
   it("returns undefined when stdout is empty", async () => {
@@ -161,6 +230,7 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
       ProcessId: 1234,
       Name: "MSACCESS.EXE",
       // No CreationDate — Get-Process path; StartTime is a DateTime, not represented here
+      MainWindowHandle: 0,
     });
     resolveExecFile(partialJson);
     const inspector = new WindowsMsAccessProcessInspector();
@@ -171,6 +241,7 @@ describe("WindowsMsAccessProcessInspector — TS parsing behavior", () => {
     // startTime absent/empty should not throw — it can be undefined or empty string
     // but it must NOT throw or return undefined for the whole process info
     expect(result).toMatchObject({ pid: 1234, name: "MSACCESS.EXE" });
+    expect(result?.mainWindowHandle).toBe(0);
   });
 });
 
@@ -196,6 +267,7 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
       Name: "MSACCESS.EXE",
       CreationDate: "20260518120000.000000+000",
       CommandLine: 'MSACCESS.EXE "C:/data/other.accdb"',
+      MainWindowHandle: 0,
     });
     resolveExecFile(singleJson);
     const scanner = new WindowsMsAccessProcessScanner();
@@ -204,17 +276,24 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(1);
     expect(result[0]?.pid).toBe(5678);
+    expect(result[0]?.mainWindowHandle).toBe(0);
   });
 
   it("returns OsProcessInfo with commandLine undefined for each entry missing CommandLine", async () => {
     if (process.platform !== "win32") return;
     const arrayJson = JSON.stringify([
-      { ProcessId: 1111, Name: "MSACCESS.EXE", CreationDate: "20260518120000.000000+000" },
+      {
+        ProcessId: 1111,
+        Name: "MSACCESS.EXE",
+        CreationDate: "20260518120000.000000+000",
+        MainWindowHandle: 0,
+      },
       {
         ProcessId: 2222,
         Name: "MSACCESS.EXE",
         CreationDate: "20260518120100.000000+000",
         CommandLine: 'MSACCESS.EXE "C:/data/b.accdb"',
+        MainWindowHandle: 48879,
       },
     ]);
     resolveExecFile(arrayJson);
@@ -224,6 +303,8 @@ describe("WindowsMsAccessProcessScanner — TS parsing behavior", () => {
     expect(result.length).toBe(2);
     expect(result[0]?.commandLine).toBeUndefined();
     expect(result[1]?.commandLine).toBe('MSACCESS.EXE "C:/data/b.accdb"');
+    expect(result[0]?.mainWindowHandle).toBe(0);
+    expect(result[1]?.mainWindowHandle).toBe(48879);
   });
 });
 
@@ -247,6 +328,7 @@ describe("normalizeProcessList", () => {
       Name: "MSACCESS.EXE",
       CreationDate: "20260518123456.000000+000",
       CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      MainWindowHandle: 0,
     });
     expect(normalizeProcessList(json)).toEqual([
       {
@@ -254,6 +336,7 @@ describe("normalizeProcessList", () => {
         name: "MSACCESS.EXE",
         startTime: "2026-05-18T12:34:56.000Z",
         commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+        mainWindowHandle: 0,
       },
     ]);
   });
@@ -265,10 +348,12 @@ describe("normalizeProcessList", () => {
         Name: "MSACCESS.EXE",
         CreationDate: "20260518123456.000000+000",
         CommandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+        MainWindowHandle: 0,
       },
       {
         ProcessId: 5678,
         Name: "MSACCESS.EXE",
+        MainWindowHandle: 48879,
       },
     ]);
     expect(normalizeProcessList(json)).toEqual([
@@ -277,13 +362,73 @@ describe("normalizeProcessList", () => {
         name: "MSACCESS.EXE",
         startTime: "2026-05-18T12:34:56.000Z",
         commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+        mainWindowHandle: 0,
       },
       {
         pid: 5678,
         name: "MSACCESS.EXE",
         startTime: undefined,
         commandLine: undefined,
+        mainWindowHandle: 48879,
       },
+    ]);
+  });
+
+  it("normalizes actual IntPtr JSON object shapes for headless and visible windows", () => {
+    const json = JSON.stringify([
+      {
+        ProcessId: 1234,
+        Name: "MSACCESS.EXE",
+        MainWindowHandle: { value: 0 },
+      },
+      {
+        ProcessId: 5678,
+        Name: "MSACCESS.EXE",
+        MainWindowHandle: { Value: 48879 },
+      },
+    ]);
+
+    expect(normalizeProcessList(json)).toEqual([
+      {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: undefined,
+        commandLine: undefined,
+        mainWindowHandle: 0,
+      },
+      {
+        pid: 5678,
+        name: "MSACCESS.EXE",
+        startTime: undefined,
+        commandLine: undefined,
+        mainWindowHandle: 48879,
+      },
+    ]);
+  });
+
+  it("ignores unsafe MainWindowHandle object shapes", () => {
+    const json = JSON.stringify([
+      {
+        ProcessId: 1234,
+        Name: "MSACCESS.EXE",
+        MainWindowHandle: { value: Number.MAX_SAFE_INTEGER + 1 },
+      },
+      {
+        ProcessId: 5678,
+        Name: "MSACCESS.EXE",
+        MainWindowHandle: { Value: -1 },
+      },
+      {
+        ProcessId: 9012,
+        Name: "MSACCESS.EXE",
+        MainWindowHandle: { value: "48879" },
+      },
+    ]);
+
+    expect(normalizeProcessList(json).map((process) => process.mainWindowHandle)).toEqual([
+      undefined,
+      undefined,
+      undefined,
     ]);
   });
 
@@ -302,6 +447,7 @@ describe("normalizeProcessList", () => {
       {
         ProcessId: 1234,
         Name: "MSACCESS.EXE",
+        MainWindowHandle: 0,
       },
     ]);
     expect(normalizeProcessList(json)).toEqual([
@@ -310,6 +456,7 @@ describe("normalizeProcessList", () => {
         name: "MSACCESS.EXE",
         startTime: undefined,
         commandLine: undefined,
+        mainWindowHandle: 0,
       },
     ]);
   });

@@ -40,7 +40,11 @@ function makeInspector(proc: OsProcessInfo | undefined): ProcessInspector {
 function makeKiller(): { killer: ProcessKiller; killed: number[] } {
   const killed: number[] = [];
   return {
-    killer: { kill: async (pid: number) => killed.push(pid) },
+    killer: {
+      kill: async (pid: number) => {
+        killed.push(pid);
+      },
+    },
     killed,
   };
 }
@@ -90,7 +94,7 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       name: "MSACCESS.EXE",
       startTime: "2026-05-28T10:00:00.000Z",
       commandLine: `MSACCESS.EXE "${ACCESS_PATH}"`,
-      mainWindowHandle: 0xABCDEF, // has a visible window
+      mainWindowHandle: 0xabcdef, // has a visible window
     };
     const svc = new AccessOrphanCleanupService({
       registry,
@@ -115,6 +119,22 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       registry,
       processScanner: makeScanner([otherPathProc]),
       processInspector: makeInspector(otherPathProc),
+      processKiller: killer,
+    });
+
+    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(orphans).toHaveLength(0);
+  });
+
+  it("excludes a headless MSACCESS whose commandLine is unavailable", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345, commandLine: undefined });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
       processKiller: killer,
     });
 
@@ -189,16 +209,15 @@ describe("AccessOrphanCleanupService — cleanupOrphan happy path", () => {
       expect(result.data.refused).toEqual([]);
       expect(result.data.syntheticOperationId).toMatch(/^orphan-12345-/);
       expect(result.data.errors).toEqual([]);
+      // Registry record updated to `cleaned`
+      const syntheticId = result.data.syntheticOperationId;
+      if (syntheticId) {
+        const rec = await registry.get(syntheticId);
+        // InMemoryRegistry purges `cleaned` records, so it may be undefined
+        expect(rec === undefined || rec.status === "cleaned").toBe(true);
+      }
     }
     expect(killed).toContain(12345);
-
-    // Registry record updated to `cleaned`
-    const syntheticId = result.data.syntheticOperationId;
-    if (syntheticId) {
-      const rec = await registry.get(syntheticId);
-      // InMemoryRegistry purges `cleaned` records, so it may be undefined
-      expect(rec === undefined || rec.status === "cleaned").toBe(true);
-    }
   });
 });
 
@@ -253,7 +272,7 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
       name: "MSACCESS.EXE",
       startTime: "2026-05-28T10:00:00.000Z",
       commandLine: `MSACCESS.EXE "${ACCESS_PATH}"`,
-      mainWindowHandle: 0xBEEF,
+      mainWindowHandle: 0xbeef,
     };
     const svc = new AccessOrphanCleanupService({
       registry,
@@ -302,6 +321,58 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_MISMATCH");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  it("refuses a headless PID whose commandLine is unavailable because accessPath cannot be proven", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345, commandLine: undefined });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 12345,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_UNVERIFIED");
+      expect(result.error.message).toMatch(/command line.*unavailable.*cannot be proven/i);
+    }
+    expect(killed).toEqual([]);
+    expect(await registry.listRecent()).toEqual([]);
+  });
+
+  it("refuses a confirmed PID that is registry-owned by a running operation", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(runningRecord(12345, PROJECT_ROOT));
+    const { killer, killed } = makeKiller();
+    const proc = headlessMsAccess({ pid: 12345 });
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 12345,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+      expect(result.error.message).toMatch(/running Dysflow Access operation/i);
     }
     expect(killed).toEqual([]);
   });
@@ -361,32 +432,29 @@ describe("AccessOrphanCleanupService — cleanupOrphan refusal cases", () => {
     expect(killed).toEqual([]);
   });
 
-  it.each([0, -1, -100, 0.5, NaN])(
-    "returns ORPHAN_CLEANUP_INVALID_PID for %s",
-    async (badPid) => {
-      const registry = new InMemoryAccessOperationRegistry();
-      const { killer, killed } = makeKiller();
-      const svc = new AccessOrphanCleanupService({
-        registry,
-        processScanner: makeScanner([]),
-        processInspector: makeInspector(undefined),
-        processKiller: killer,
-      });
+  it.each([0, -1, -100, 0.5, NaN])("returns ORPHAN_CLEANUP_INVALID_PID for %s", async (badPid) => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([]),
+      processInspector: makeInspector(undefined),
+      processKiller: killer,
+    });
 
-      const result = await svc.cleanupOrphan({
-        accessPath: ACCESS_PATH,
-        projectRoot: PROJECT_ROOT,
-        confirmPid: badPid as number,
-      });
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: badPid as number,
+    });
 
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error.code).toBe("ORPHAN_CLEANUP_INVALID_PID");
-        expect(result.error.message).toMatch(/positive safe integer/i);
-      }
-      expect(killed).toEqual([]);
-    },
-  );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_INVALID_PID");
+      expect(result.error.message).toMatch(/positive safe integer/i);
+    }
+    expect(killed).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -418,7 +486,7 @@ describe("AccessOrphanCleanupService — kill failure and registry handling", ()
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORPHAN_CLEANUP_KILL_FAILED");
- }
+    }
 
     // The record should remain at `cleanup_pending` (not be updated to `cleaned`).
     // InMemoryRegistry purges `cleaned` records, so check for `cleanup_pending`.
@@ -439,7 +507,6 @@ describe("AccessOrphanCleanupService — kill failure and registry handling", ()
     });
 
     // Freeze the registry to simulate write failure
-    const originalCreate = registry.create.bind(registry);
     vi.spyOn(registry, "create").mockImplementation(async () => {
       throw new Error("Disk full");
     });

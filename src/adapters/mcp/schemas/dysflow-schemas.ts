@@ -380,3 +380,27 @@ export const HTTP_WRITE_QUERY_SCHEMA: JsonObjectSchema = {
     apply: SCHEMA_PROPS.apply,
   },
 };
+
+export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: [],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.",
+    },
+    accessPath: {
+      type: "string",
+      description:
+        "Frontend .accdb path to scan. Defaults to the accessDbPath declared in .dysflow/project.json when omitted.",
+    },
+    confirmPid: {
+      type: "number",
+      minimum: 1,
+      description:
+        "Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates. When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath.",
+    },
+  },
+};

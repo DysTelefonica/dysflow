@@ -1,8 +1,14 @@
-import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
+import {
+  type AccessQueryRequest,
+  type AccessVbaRequest,
+  createDysflowError,
+  failureResult,
+} from "../../core/contracts/index.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
   handleMcpAccessCleanup,
   handleMcpAccessOperationsList,
+  handleMcpAccessOrphanCleanup,
   handleMcpQueryExecute,
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
@@ -29,6 +35,7 @@ import { invalidInput } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
+  McpAccessContextResolver,
   McpWriteAccessResolver,
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -36,6 +43,7 @@ import {
   CLEANUP_SCHEMA,
   DOCTOR_SCHEMA,
   NO_INPUT_SCHEMA,
+  ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
   VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
@@ -46,7 +54,7 @@ import { validateInput } from "./validator.js";
 /**
  * Canonical modern Dysflow MCP tool names.
  * These names use underscore separators and are the authoritative source of truth
- * for the five modern tool identifiers advertised via tools/list.
+ * for the six modern tool identifiers advertised via tools/list.
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
@@ -55,6 +63,7 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_doctor",
   "dysflow_access_operations_list",
   "dysflow_access_cleanup",
+  "dysflow_access_force_cleanup_orphaned",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -67,6 +76,13 @@ export function createDysflowMcpTools(
   writeAccessResolver?: McpWriteAccessResolver,
   env: Record<string, string | undefined> = process.env,
   allowedProcedures?: readonly string[],
+  accessContextResolver: McpAccessContextResolver = async () =>
+    failureResult(
+      createDysflowError(
+        "ORPHAN_CLEANUP_PATH_UNRESOLVED",
+        "accessPath must be provided or .dysflow/project.json must declare one.",
+      ),
+    ),
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -126,6 +142,28 @@ export function createDysflowMcpTools(
           services,
           (validatedInput) =>
             validatedInput as { operationId: string; accessPath: string; force?: boolean },
+        ),
+    },
+    {
+      name: "dysflow_access_force_cleanup_orphaned",
+      description:
+        "List orphaned headless MSACCESS processes holding the project's accessPath, or kill one only when confirmPid is explicitly provided. Refuses to kill any process that is not headless, does not hold the accessPath, or is owned by a running Dysflow operation.",
+      inputSchema: ORPHAN_CLEANUP_SCHEMA,
+      handler: async (input) =>
+        handleMcpAccessOrphanCleanup(
+          input,
+          ORPHAN_CLEANUP_SCHEMA,
+          services,
+          async (validatedInput) => {
+            const request = validatedInput as { confirmPid?: number };
+            const context = await accessContextResolver(validatedInput);
+            if (!context.ok) return translateCoreResultToMcpContent(context);
+            if (request.confirmPid === undefined) return context.data;
+            return {
+              ...context.data,
+              confirmPid: request.confirmPid,
+            };
+          },
         ),
     },
   ];

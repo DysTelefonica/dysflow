@@ -46,11 +46,11 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // #405: these counts are the invariant for change 405-unify-mcp-tool-registration.
     // Any edit that moves one of these numbers MUST justify the change in that PR.
     // Expected breakdown: 45 dispatch names (DYSFLOW_MCP_TOOL_NAMES) -
-    //   2 hidden stubs (verify_binary, reconcile_binary) + 5 modern (dysflow_*) = 48 visible.
+    //   2 hidden stubs (verify_binary, reconcile_binary) + 6 modern (dysflow_*) = 49 visible.
     expect(toolCount).toBe(45);
     expect(stubCount).toBe(2);
-    expect(modernCount).toBe(5);
-    expect(visibleCount).toBe(48);
+    expect(modernCount).toBe(6);
+    expect(visibleCount).toBe(49);
   });
 
   it("verifies split-mode coverage explicitly", () => {

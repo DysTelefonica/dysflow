@@ -48,6 +48,21 @@ export function parseCimDateTimeToIso(value: string | null | undefined): string 
 /** PS-side CIM job timeout in seconds (shorter than the Node-level execFile timeout). */
 const CIM_JOB_TIMEOUT_SEC = 4;
 
+function normalizeMainWindowHandle(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  }
+  if (value === null || typeof value !== "object") {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const nestedValue = record.Value ?? record.value;
+  return typeof nestedValue === "number" && Number.isSafeInteger(nestedValue) && nestedValue >= 0
+    ? nestedValue
+    : undefined;
+}
+
 export function normalizeProcessList(stdout: string): OsProcessInfo[] {
   if (stdout.trim().length === 0) return [];
   let parsed: unknown;
@@ -75,8 +90,7 @@ export function normalizeProcessList(stdout: string): OsProcessInfo[] {
     const creationDate = typeof p.CreationDate === "string" ? p.CreationDate : undefined;
     const commandLine = typeof p.CommandLine === "string" ? p.CommandLine : undefined;
     const startTime = creationDate ? parseCimDateTimeToIso(creationDate) : undefined;
-    const mainWindowHandle =
-      typeof p.MainWindowHandle === "number" ? p.MainWindowHandle : undefined;
+    const mainWindowHandle = normalizeMainWindowHandle(p.MainWindowHandle);
     results.push({
       pid,
       name,
@@ -91,26 +105,43 @@ export function normalizeProcessList(stdout: string): OsProcessInfo[] {
 /**
  * Builds a PS 5.1-compatible script that:
  * 1. Runs the CIM query in a background job to bound WMI hangs.
- * 2. Falls back to Get-Process (Id + StartTime only, no CommandLine) when the job
- *    times out or fails.
- * 3. Emits a single-line JSON (possibly an array) via ConvertTo-Json -Compress.
+ * 2. Joins CIM metadata with Get-Process MainWindowHandle because Win32_Process
+ *    does not expose that property.
+ * 3. Falls back to Get-Process (Id + StartTime + MainWindowHandle only, no
+ *    CommandLine) when the job times out or fails.
+ * 4. Emits a single-line JSON (possibly an array) via ConvertTo-Json -Compress.
  *
  * The filter expression is injected by the caller (already-quoted PS literal).
  */
-function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string): string {
+function buildCimWithFallbackScript(
+  filter: string,
+  fallbackNameFilter: string,
+  fallbackProcessId?: number,
+): string {
+  const fallbackFilter =
+    fallbackProcessId === undefined ? `` : ` | Where-Object { $_.Id -eq ${fallbackProcessId} }`;
   return (
+    `$gp = @{}; ` +
+    `Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue${fallbackFilter} | ` +
+    `ForEach-Object { $gp[[int]$_.Id] = if ($null -ne $_.MainWindowHandle) { $_.MainWindowHandle.ToInt64() } else { $null } }; ` +
     `$job = Start-Job { Get-CimInstance Win32_Process -Filter "${filter}" | ` +
-    `Select-Object ProcessId,Name,CreationDate,CommandLine,MainWindowHandle }; ` +
+    `Select-Object ProcessId,Name,CreationDate,CommandLine }; ` +
     `$r = $null; ` +
     `if (Wait-Job $job -Timeout ${CIM_JOB_TIMEOUT_SEC}) { $r = Receive-Job $job }; ` +
     `Stop-Job $job; Remove-Job $job; ` +
-    `if ($r -eq $null) { ` +
+    `if ($r -ne $null) { ` +
+    `$r = $r | ForEach-Object { ` +
+    `$h = $null; if ($gp.ContainsKey([int]$_.ProcessId)) { $h = $gp[[int]$_.ProcessId] }; ` +
+    `[pscustomobject]@{ProcessId=$_.ProcessId;Name=$_.Name;CreationDate=$_.CreationDate;CommandLine=$_.CommandLine;MainWindowHandle=$h} ` +
+    `} ` +
+    `} else { ` +
     `$r = Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue | ` +
+    `Where-Object { ${fallbackProcessId === undefined ? `$true` : `$_.Id -eq ${fallbackProcessId}`} } | ` +
     `Select-Object @{n='ProcessId';e={$_.Id}},` +
     `@{n='Name';e={$_.Name}},` +
     `@{n='CreationDate';e={if ($_.StartTime) { $_.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmss.ffffff+000') } else { $null }}},` +
     `@{n='CommandLine';e={$null}},` +
-    `@{n='MainWindowHandle';e={$null}} ` +
+    `@{n='MainWindowHandle';e={if ($null -ne $_.MainWindowHandle) { $_.MainWindowHandle.ToInt64() } else { $null }}} ` +
     `}; ` +
     `if ($r -ne $null) { $r | ConvertTo-Json -Compress } else { '' }`
   );
@@ -118,7 +149,7 @@ function buildCimWithFallbackScript(filter: string, fallbackNameFilter: string):
 
 export class WindowsMsAccessProcessInspector implements ProcessInspector {
   async getProcess(pid: number): Promise<OsProcessInfo | undefined> {
-    const script = buildCimWithFallbackScript(`ProcessId=${pid}`, `MSACCESS`);
+    const script = buildCimWithFallbackScript(`ProcessId=${pid}`, `MSACCESS`, pid);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
