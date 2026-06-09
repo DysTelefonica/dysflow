@@ -1,5 +1,58 @@
 # Changelog
 
+## [v1.2.35] - 2026-06-09
+
+Fix for the user-reported issue #496 cascade: the user (via the IA mantenedora)
+reported that `dysflow.import_modules` with `importMode=Code` +
+`willModifyAccess=true` returned `VBA_MANAGER_SERIALIZATION_FAILED` instead
+of the real VBE error. Investigation surfaced three coordinated defects:
+
+1. The `Write-DysflowResult` writer in `dysflow-vba-manager.ps1` had a
+   generic `try/catch` that ate the underlying exception and emitted
+   a fallback `VBA_MANAGER_SERIALIZATION_FAILED` envelope, hiding the
+   real cause from the operator.
+2. The `Invoke-ImportAction` happy path passed a `List[object>` directly
+   to `Write-DysflowResult`. Under PowerShell 7.x, `ConvertTo-Json` on
+   a raw `List[object>` can hit `ArgumentException: Argument types do not
+   match`, which the fallback also swallows. The sad path was already
+   fixed in v1.2.30 to convert to `object[]` first; the happy path was
+   left untouched.
+3. The early read path in `dysflow-access-runner.ps1` (line ~1495)
+   opened the DAO database inside a try-block with NO catch. If the
+   target database did not exist, the exception escaped, no
+   `DYSFLOW_RESULT` was emitted, the script exited with `exitCode 0`,
+   and the TS adapter collapsed the response to the generic
+   `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`
+   message. The user saw the same generic error class as defect 1,
+   but for a different reason (read-path, not write-path).
+
+This release fixes all three and ships the contract + E2E coverage
+that locks the regression class in.
+
+### Fixed
+
+- **`Write-DysflowResult` writer in `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` now preserves the underlying exception** (dbaf585, 57b3e18). The `try/catch` captures `$script:LastSerializationError`, emits a `Write-Warning` on stderr with the exception text, and includes the captured exception in a `diagnostics[]` field of the fallback envelope (truncated to 4 KB to keep the sentinel line bounded). The fallback code is now a subclass (`VBA_MANAGER_SERIALIZATION_FAILED` / `RUNNER_SERIALIZATION_FAILED`) so callers can branch on which adapter dropped the payload.
+- **`Invoke-ImportAction` happy path converts `List[object>` to `object[]` before passing to `Write-DysflowResult`** (dbaf585), matching the sad-path pattern that was already in v1.2.30. The 100+-module import case is now serializable cleanly.
+- **VBE exception messages are coerced defensively to strings** (dbaf585). When the VBE raises a COM error (e.g. `0x800A09D5`), `.Exception.Message` may be a COM property reference rather than a string. The `try/catch` at `Invoke-ImportAction` line 3114 now coerces with `if -is [string] else [string]`, falling back to `"<empty VBE error>"` when the message is null.
+- **Early read path in `dysflow-access-runner.ps1` emits `DYSFLOW_RESULT` on DAO open failure** (5469126). A single `try/catch` wraps the DAO open and the 9 `Invoke-*Action` calls. If anything throws, the catch emits a structured envelope with `ok:false`, classifies the error as `ACCESS_OPEN_FAILED` (DAO open) or `ACCESS_QUERY_FAILED` (action), and includes the original exception text. `exitCode` is set to 1 so the TS adapter routes through `RUNNER_FAILED` (with stderr) instead of `RUNNER_INVALID_JSON`.
+
+### Added
+
+- **`src/core/contracts/result-writer.ts` port (bc62784)**. Pure TypeScript port that defines the observable contract any `Write-DysflowResult` implementation must satisfy: the payload-type whitelist, the `ok:false` fallback envelope shape with `diagnostics[]` and the `LastSerializationError:` prefix, the 4 KB truncation budget, and the `SERIALIZATION_FAILED` code prefix. The contract is the single source of truth for both the PS1 adapter and the spec suite; future refactors that change the contract break the spec first.
+- **`test/core/contracts/result-writer-contract.test.ts`** (bc62784). 15 vitest specs that pin the contract: payload type whitelist (string/number/boolean/null/array/plain object only), fallback envelope shape, truncation behavior, sentinel marker. If this suite fails, the contract itself has changed.
+- **Pester tests for `Invoke-ImportAction` behavior** (f83ae38). 11 tests in a new `Describe "Invoke-ImportAction — serialization contract (issue #496, regression for VBA_MANAGER_SERIALIZATION_FAILED)"` block. Uses an `Invoke-AndCaptureDysflowResult` helper that redirects `[Console]::Out` to a StringWriter around the call and parses the JSON envelope. Pins the happy path, sad path (VBE rejection, COM exception 0x800A09D5 simulation), edge cases (Unicode module name, empty VBE error, 100+ modules), and contract conformity.
+- **AST guard for `Write-DysflowResult` callsite types** (63028ff). New `Describe "Write-DysflowResult callsite type contract (issue #496)"` in `dysflow-access-runner-result-coverage.Tests.ps1`. Walks the AST of both PS1 scripts and asserts, for every `Write-DysflowResult` callsite, that the payload argument matches a JSON-serializable whitelist (`@(...)`, `[ordered]@{}`, plain `$_variable`, etc.) and never an excluded type (`List[object>`, `Dictionary[string,object]`, COM objects, bare `$null`). Catches the original `List[object>` regression at the AST level so it cannot be reintroduced.
+- **Comprehensive E2E coverage of all 49 MCP tools** (586f769). New `test/e2e/import-modules-regression.e2e.test.ts` exercises the full tool surface via the real JSON-RPC stdio protocol. Each tool gets at least a happy test; tools with a natural sad path get a sad test too. All assertions share a universal contract: the response must be JSON-parseable, must not contain the serialization fallback markers (`VBA_MANAGER_SERIALIZATION_FAILED`, `RUNNER_INVALID_JSON`), and must not be empty. Cost: ~5 minutes in CI. The suite is the criterion of acceptance for issue #496 — a future refactor that reintroduces the silent exception swallow, or a writer fallback that leaks to the MCP caller, fails here.
+
+### Verified
+
+- `pnpm test`: 86/86 files, 1145 passed / 3 skipped (was 86/86, 1129 passed before this release)
+- `pnpm lint`: clean (Biome, 170+ files)
+- `pnpm build`: tsc exit 0
+- Pester: 250+ passed / 0 failed / 4 skipped (was 256 passed before this release)
+- E2E: 49 tools covered, 69 test cases, all green against the real MCP server
+- Manual probe against `00-no-conformidades-staging-clean`: `import_modules` against the 2 modules that previously returned `VBA_MANAGER_SERIALIZATION_FAILED` now returns a structured envelope with the real VBE error; the same probe with a non-existent `databasePath` now returns the real Access "No se pudo encontrar el archivo" message instead of `RUNNER_INVALID_JSON`
+
 ## [v1.2.34] - 2026-06-09
 
 Clean-release tidy-up. No runtime behavior changes — repo hygiene, a regression
