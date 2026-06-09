@@ -1556,7 +1556,23 @@ if ($Operation -eq 'query') {
         $script:exitCode = 0; return
       }
     } catch {
-      [Console]::Error.WriteLine($_.Exception.Message)
+      # The DAO open OR one of the Invoke-*Action calls threw. The
+      # MCP caller must see the real Access error, not the generic
+      # "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line" that the TS
+      # adapter emits when stdout is empty. Issue #496 acceptance.
+      $errorMessage = $_.Exception.Message
+      $errorCode = if ($errorMessage -match 'Cannot open Access database|not found|locked|permission') {
+        'ACCESS_OPEN_FAILED'
+      } else {
+        'ACCESS_QUERY_FAILED'
+      }
+      Write-DysflowResult -Result ([ordered]@{
+        ok = $false
+        error = [ordered]@{
+          code = $errorCode
+          message = "Operation '${earlyAction}' failed on '${earlyTargetPath}': ${errorMessage}"
+        }
+      }) -Depth 6
       $script:exitCode = 1; return
     } finally {
       if ($null -ne $directDb) {
