@@ -1,7 +1,7 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
@@ -14,19 +14,38 @@ import {
 } from "../../../src/core/runner/access-runner.js";
 import { POWERSHELL_EXE } from "../../../src/core/runner/powershell-executor.js";
 
-const config: DysflowConfig = {
-  configSource: "explicit-request",
-  allowWrites: false,
-  accessDbPath: "C:/data/finance.accdb",
-  accessPassword: "super-secret",
-  backendPassword: "backend-secret",
-  timeoutMs: 1_500,
-  processTimeoutMs: 1_500,
-};
-
+// v1.2.32 regression: the runner now refuses to invoke the PowerShell
+// executor for query actions when the configured accessPath points at a
+// .accdb that does not exist on disk, returning CONFIG_TARGET_NOT_FOUND
+// instead of letting the runner throw and surface RUNNER_INVALID_JSON to
+// MCP callers. The shared config below points at a real temp file so the
+// pre-existing tests (which use a mocked executor and only care about
+// runner.run's own control flow) still pass the new existsSync check.
+let testTmpDir = "";
+let testAccessDbPath = "";
+let config: DysflowConfig;
 const noOpPreflight: AccessOperationPreflightCleanup = {
   cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
 };
+
+beforeAll(() => {
+  testTmpDir = mkdtempSync(join(tmpdir(), "dysflow-runner-suite-"));
+  testAccessDbPath = join(testTmpDir, "finance.accdb");
+  writeFileSync(testAccessDbPath, "");
+  config = {
+    configSource: "explicit-request",
+    allowWrites: false,
+    accessDbPath: testAccessDbPath,
+    accessPassword: "super-secret",
+    backendPassword: "backend-secret",
+    timeoutMs: 1_500,
+    processTimeoutMs: 1_500,
+  };
+});
+
+afterAll(() => {
+  if (testTmpDir) rmSync(testTmpDir, { recursive: true, force: true });
+});
 
 describe("AccessPowerShellRunner", () => {
   it("passes PowerShell command input as separated safe arguments", async () => {
@@ -69,7 +88,7 @@ describe("AccessPowerShellRunner", () => {
       ok: true,
       data: { returnValue: 42 },
       durationMs: 12,
-      operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
+      operation: { accessPath: testAccessDbPath, status: "pid_unknown" },
     });
     expect(calls).toEqual([
       {
@@ -83,7 +102,7 @@ describe("AccessPowerShellRunner", () => {
           "-File",
           "C:/tools/run access.ps1",
           "-AccessDbPath",
-          "C:/data/finance.accdb",
+          testAccessDbPath,
           "-Operation",
           "vba",
           "-PayloadJson",
@@ -455,7 +474,7 @@ describe("AccessPowerShellRunner", () => {
         destinationRootAbs: "C:/repo/project/src",
       }),
     ]);
-    expect(events).toEqual(["preflight:C:/data/finance.accdb:C:/repo/project", "create"]);
+    expect(events).toEqual([`preflight:${testAccessDbPath}:C:/repo/project`, "create"]);
   });
 
   it("continues and emits a diagnostic when preflight cleanup throws", async () => {
@@ -599,7 +618,7 @@ describe("AccessPowerShellRunner", () => {
         },
       ],
       durationMs: 1_501,
-      operation: { accessPath: "C:/data/finance.accdb", status: "timed_out" },
+      operation: { accessPath: testAccessDbPath, status: "timed_out" },
     });
   });
 
@@ -631,7 +650,7 @@ describe("AccessPowerShellRunner", () => {
       durationMs: 1_500,
       operation: {
         operationId: expect.stringMatching(/^dysflow-/),
-        accessPath: "C:/data/finance.accdb",
+        accessPath: testAccessDbPath,
         status: "timed_out",
       },
     });
@@ -641,7 +660,7 @@ describe("AccessPowerShellRunner", () => {
     const executor: PowerShellExecutor = async () => ({
       exitCode: 7,
       stdout: "",
-      stderr: "failed opening C:/data/finance.accdb with super-secret",
+      stderr: `failed opening ${testAccessDbPath} with super-secret`,
       durationMs: 33,
       timedOut: false,
     });
@@ -663,15 +682,14 @@ describe("AccessPowerShellRunner", () => {
       ok: false,
       error: {
         code: "RUNNER_FAILED",
-        message:
-          "PowerShell runner failed with exit code 7: failed opening C:/data/finance.accdb with [REDACTED]",
+        message: `PowerShell runner failed with exit code 7: failed opening ${testAccessDbPath} with [REDACTED]`,
         retryable: false,
       },
       diagnostics: [
         {
           level: "error",
           source: "powershell.stderr",
-          message: "failed opening C:/data/finance.accdb with [REDACTED]",
+          message: `failed opening ${testAccessDbPath} with [REDACTED]`,
         },
         {
           level: "warning",
@@ -680,7 +698,7 @@ describe("AccessPowerShellRunner", () => {
         },
       ],
       durationMs: 33,
-      operation: { accessPath: "C:/data/finance.accdb", status: "pid_unknown" },
+      operation: { accessPath: testAccessDbPath, status: "pid_unknown" },
     });
   });
 
@@ -1119,4 +1137,120 @@ describe("Cross-process lock for .accdb", () => {
       expect(isRunning).toBe(false);
     }
   }, 180_000);
+
+  // ------------------------------------------------------------------
+  // v1.2.32 regression: query actions must fail fast with a structured
+  // CONFIG_* error when the project config or the request cannot resolve
+  // a target Access database, instead of letting the PowerShell runner
+  // throw and the MCP caller see the opaque
+  // "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line".
+  // ------------------------------------------------------------------
+
+  it("query: returns CONFIG_MISSING_TARGET_PATH when neither the request nor the config resolves a target", async () => {
+    const calls: unknown[] = [];
+    const executor: PowerShellExecutor = async () => {
+      calls.push("executor_called");
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run access.ps1",
+    });
+    const result = await runner.run(
+      { kind: "query", request: { action: "list_tables", mode: "read", sql: "" } },
+      {
+        ...config,
+        // Both backendPath and accessPath point at the same nonexistent file
+        // so neither defaulting branch can rescue us. The runner must
+        // refuse to invoke the PowerShell executor.
+        accessDbPath: "C:/no/such/dir/missing.accdb",
+        backendPath: undefined,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("CONFIG_TARGET_NOT_FOUND");
+    expect(calls).toEqual([]); // executor MUST NOT be invoked
+  });
+
+  it("query: returns CONFIG_TARGET_NOT_FOUND when the configured accessPath does not exist on disk", async () => {
+    const calls: unknown[] = [];
+    const executor: PowerShellExecutor = async () => {
+      calls.push("executor_called");
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run access.ps1",
+    });
+    const result = await runner.run(
+      { kind: "query", request: { action: "list_tables", mode: "read", sql: "" } },
+      {
+        ...config,
+        accessDbPath: "C:/no/such/access.accdb",
+        backendPath: "C:/no/such/backend.accdb",
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("CONFIG_TARGET_NOT_FOUND");
+    expect(String(result.error.message)).toMatch(/accessPath/);
+    expect(calls).toEqual([]);
+  });
+
+  it("query: still works when accessPath exists on disk (happy path regression)", async () => {
+    // Use a real temp file so existsSync passes. We never open Access
+    // because the mocked executor returns the DYSFLOW_RESULT sentinel
+    // before the runner would touch the file.
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-test-"));
+    const fakeAccdb = join(dir, "fake.accdb");
+    writeFileSync(fakeAccdb, "");
+    try {
+      const calls: unknown[] = [];
+      const executor: PowerShellExecutor = async () => {
+        calls.push("executor_called");
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"tables":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      };
+      const runner = new AccessPowerShellRunner({
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        { kind: "query", request: { action: "list_tables", mode: "read", sql: "" } },
+        {
+          ...config,
+          accessDbPath: fakeAccdb,
+          backendPath: undefined,
+        },
+      );
+      expect(result.ok).toBe(true);
+      expect(calls.length).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

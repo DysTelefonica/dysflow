@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.2.32] - 2026-06-09
+
+### Fixed
+
+- **Query actions now fail fast with structured `CONFIG_TARGET_NOT_FOUND` / `CONFIG_MISSING_TARGET_PATH` errors instead of `RUNNER_INVALID_JSON`**: When a query action (`list_tables`, `get_schema`, `query_sql`, `count_rows`, `distinct_values`, `list_linked_tables`, `get_relationships`, `compare_backends`, `list_access_files`, etc.) was invoked from a project whose `.dysflow/project.json` had a missing/relative `accessPath` (e.g. `E2E_testing/Expedientes.accdb` when `E2E_testing` had no `Expedientes.accdb`) or whose `backendPath` did not exist on disk, the PowerShell runner used to throw "Access database not found" mid-execution, the MCP layer would lose the `DYSFLOW_RESULT` sentinel, and the caller only ever saw the opaque `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. v1.2.32 fails fast in `src/core/runner/access-runner.ts` with two structured errors before the PowerShell runner is even invoked: `CONFIG_MISSING_TARGET_PATH` when neither the request nor the project config can resolve a target (no `databasePath`, no `backendPath`, and no fallback to `config.accessDbPath`), and `CONFIG_TARGET_NOT_FOUND` when the resolved `config.accessDbPath` points at a `.accdb` that does not exist on disk. The runner now refuses to spawn the PowerShell process in both cases, so the failure is observable at the adapter boundary instead of buried in the runner. The fix also surfaces the real cause: a typo in `.dysflow/project.json`, a missing backend file, or a project opened from the wrong cwd. This is what the AI in the user's report was hitting on `00_NO_CONFORMIDADES_staging` (and what the AI reproduced against a stale `.dysflow/project.json` here on this PC); the user now sees `CONFIG_TARGET_NOT_FOUND: Configured accessPath does not exist on disk: [PATH]. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.` instead of the misleading `RUNNER_INVALID_JSON`.
+
+### Verified
+
+- `pnpm test`: 1116 passed / 3 skipped (82 files; +3 from the new `CONFIG_TARGET_NOT_FOUND` / `CONFIG_MISSING_TARGET_PATH` regression tests in `access-runner.test.ts`, several pre-existing tests updated to use a real temp `.accdb` instead of `C:/data/finance.accdb` so the new `existsSync` check passes)
+- `pnpm lint`: clean (Biome, 164 files)
+- `pnpm build`: tsc exit 0
+- Pester: 237 passed / 0 failed / 4 skipped
+- MCP E2E fresh against safe `test-runtime`: 106 passed / 0 failed (noconformidades-e2e happy path)
+- Manual MCP probe from a cwd with a broken `.dysflow/project.json`: now returns the structured `CONFIG_TARGET_NOT_FOUND` error instead of `RUNNER_INVALID_JSON`
+
 ## [v1.2.31] - 2026-06-09
 
 ### Added

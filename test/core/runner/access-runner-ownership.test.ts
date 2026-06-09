@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
@@ -7,13 +10,31 @@ import {
   type PowerShellExecutor,
 } from "../../../src/core/runner/access-runner.js";
 
-const config: DysflowConfig = {
-  configSource: "explicit-request",
-  allowWrites: false,
-  accessDbPath: "C:/data/app.accdb",
-  timeoutMs: 100,
-  processTimeoutMs: 100,
-};
+// v1.2.32: the runner refuses to invoke the PowerShell executor for
+// query actions when the configured accessPath does not exist on disk.
+// Point the shared config at a real temp file so the new existsSync
+// check passes and the existing ownership tests keep exercising the
+// ownership / registry / timeout behavior they were written for.
+let testTmpDir = "";
+let testAccessDbPath = "";
+let config: DysflowConfig;
+
+beforeAll(() => {
+  testTmpDir = mkdtempSync(join(tmpdir(), "dysflow-ownership-suite-"));
+  testAccessDbPath = join(testTmpDir, "app.accdb");
+  writeFileSync(testAccessDbPath, "");
+  config = {
+    configSource: "explicit-request",
+    allowWrites: false,
+    accessDbPath: testAccessDbPath,
+    timeoutMs: 100,
+    processTimeoutMs: 100,
+  };
+});
+
+afterAll(() => {
+  if (testTmpDir) rmSync(testTmpDir, { recursive: true, force: true });
+});
 
 const noOpPreflight: AccessOperationPreflightCleanup = {
   cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
@@ -26,7 +47,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       await options.onAccessProcessCaptured({
         pid: 4567,
         processStartTime: "2026-05-15T10:00:00.000Z",
-        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+        commandLine: `MSACCESS.EXE "${testAccessDbPath}"`,
       });
       await expect(registry.get("op-success")).resolves.toMatchObject({
         status: "running",
@@ -41,7 +62,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
         accessProcess: {
           pid: 4567,
           processStartTime: "2026-05-15T10:00:00.000Z",
-          commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+          commandLine: `MSACCESS.EXE "${testAccessDbPath}"`,
         },
       };
     };
@@ -61,7 +82,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       ok: true,
       operation: {
         operationId: "op-success",
-        accessPath: "C:/data/app.accdb",
+        accessPath: testAccessDbPath,
         accessPid: 4567,
         processStartTime: "2026-05-15T10:00:00.000Z",
         status: "completed",
