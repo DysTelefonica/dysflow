@@ -104,7 +104,7 @@ export const DIAGNOSTICS_MAX_LENGTH = 4096;
 export type SerializationFailedEnvelope = {
   ok: false;
   error: {
-    code: typeof SERIALIZATION_FAILED_CODE | `${string}_${SERIALIZATION_FAILED_CODE}`;
+    code: string;
     message: string;
   };
   diagnostics: [string, ...string[]];
