@@ -80,6 +80,14 @@
   duplicated/self-contradictory "HTTP → core-mapper" Dropped entry; fixed the stale "NEXT: #481"
   log line. **Campaign COMPLETE** — only the deferred mega-scripts epic (#494) and the deferred
   `processTimeoutMs` refactor (#493) remain. Ready for a clean release tag.
+- **2026-06-09**: Released **v1.2.34** (title==tag; tarball + SHA256SUMS attached; CI green on ubuntu
+  + Windows smoke).
+- **2026-06-09**: Follow-up #495 DONE (commit `19fe5fb`, test-only, lands in the next tag). Release
+  verification surfaced that `test/quality-gates/runtime-drift.test.ts` compared the dev vs installed
+  runner by RAW bytes, false-failing on a Windows dev box (CRLF working tree vs LF CI tarball) even
+  when content was byte-identical after normalization. Fixed to compare line-ending-normalized
+  CONTENT; added a focused normalization test. Full suite now 1130 passed / 3 skipped / 0 failed on
+  the dev box after `dysflow update` to v1.2.34.
 
 ---
 
