@@ -195,7 +195,7 @@ This is the part most teammates miss. `dysflow install` writes the runtime to `%
 
 ```powershell
 # 1. Confirm the installed runtime is the one opencode is actually calling.
-dysflow --version                              # should print e.g. 1.2.33
+dysflow --version                              # should print e.g. 1.2.34
 $runtime = "$env:LOCALAPPDATA\dysflow\bin\dysflow.cmd"
 Test-Path $runtime                             # must be True
 Get-FileHash $runtime -Algorithm SHA256         # pin this; if it ever changes, something rewrote your install

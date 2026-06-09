@@ -1,5 +1,27 @@
 # Changelog
 
+## [v1.2.34] - 2026-06-09
+
+Clean-release tidy-up. No runtime behavior changes — repo hygiene, a regression
+guard, and ledger accuracy. Closes the trivial items from the post-v1.2.33 fresh
+audit; the PowerShell mega-script restructure (#494) and the `processTimeoutMs`
+consolidation (#493) remain deferred and tracked.
+
+### Added
+
+- **Toolchain exact-pinning CI guard (#492)**: new `test/quality-gates/toolchain-pinning.test.ts` asserts every `dependencies`/`devDependencies` entry in `package.json` is exact-pinned (no caret/range), with `@types/node` as the single documented tilde exception. Fails loudly if a caret is reintroduced, enforcing the policy in `docs/dev/toolchain-pinning.md`.
+
+### Changed
+
+- **Repo hygiene (#490)**: removed the stray untracked `test-output-msg/` scratch directory and added a `.gitignore` rule so it cannot reappear in `git status`.
+- **Tech-debt ledger resync (#491)**: `docs/tech-debt/TRACKING.md` reconciled with remote reality — the 2026-06-07 board now marks #481/#482/#483 done (all closed COMPLETED on 2026-06-07), the duplicated/self-contradictory "HTTP → core-mapper" Dropped entry was removed, and the resumable 2026-06-09 campaign section was opened.
+
+### Verified
+
+- `pnpm test`: **1128 passed / 3 skipped / 1 dev-box-only failure** — the single failure is `runtime-drift.test.ts` comparing the dev `.ps1` hash against the locally installed runtime (out of sync on the dev box); it is `skipIf` the installed runtime is absent, so CI (ubuntu) skips it. No release impact.
+- `tsc -p tsconfig.json --noEmit` and `tsc -p tsconfig.test.json --noEmit`: exit 0.
+- `MCP_PROTOCOL_VERSION` unchanged (`2024-11-05`, reviewed 2026-06-07) — no adapter changes this release.
+
 ## [v1.2.33] - 2026-06-09
 
 ### Fixed
