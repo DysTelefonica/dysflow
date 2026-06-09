@@ -95,10 +95,10 @@ trap {
     if ($null -ne $trapLine) { $payload.diagnostics["line"] = $trapLine }
     try {
         $json = ($payload | ConvertTo-Json -Compress -Depth 20) -replace "[\r\n]+"," "
-        Write-Output ("DYSFLOW_RESULT " + $json)
+        [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
     } catch {
-        # Last-resort fallback if the JSON serialization or Write-Output itself fails.
-        Write-Output ('DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_MANAGER_UNEXPECTED_EXIT","message":"trap failed to emit sentinel"}}')
+        # Last-resort fallback if the JSON serialization or console write itself fails.
+        [Console]::Out.WriteLine('DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_MANAGER_UNEXPECTED_EXIT","message":"trap failed to emit sentinel"}}')
     }
     exit 1
 }

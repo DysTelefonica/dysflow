@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.2.29] - 2026-06-09
+
+### Fixed
+
+- **Access runner result sentinel emission**: Changed the Access/query PowerShell runner `DYSFLOW_RESULT` writer to bypass the PowerShell pipeline, preventing `query_sql`, `get_schema`, and other Access runner actions from losing the sentinel when action results are assigned before emission.
+- **Global PowerShell result-writer guard**: Added a test that covers every PowerShell script with `Write-DysflowResult`, requiring direct process stdout writes and forbidding `Write-Output` for protocol sentinel output.
+
+### Verified
+
+- Real MCP E2E against safe `test-runtime`: `106 passed / 0 failed`.
+- Fresh MCP acceptance for `query_sql` and `get_schema` against `00_NO_CONFORMIDADES_staging`: structured OK responses.
+
 ## [v1.2.28] - 2026-06-08
 
 ### Fixed

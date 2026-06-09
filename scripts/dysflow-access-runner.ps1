@@ -299,7 +299,7 @@ function Write-DysflowResult {
     [Parameter(Mandatory = $false)] [int] $Depth = 20
   )
   $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
-  Write-Output ("DYSFLOW_RESULT " + $json)
+  [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
 }
 
 function ConvertFrom-JsonCompat {
