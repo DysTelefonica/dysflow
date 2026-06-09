@@ -49,6 +49,25 @@ function sha256OfFile(path: string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/**
+ * Collapse CRLF (and lone CR) to LF so the comparison is over script CONTENT,
+ * not line-ending encoding. The dev working tree is CRLF on Windows (git
+ * autocrlf) while the release tarball is built on Linux CI (LF); a raw-byte
+ * hash would false-fail on that encoding delta even when the script is
+ * byte-identical after normalization (issue #495).
+ */
+function normalizeLineEndings(content: string): string {
+  return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function sha256OfContentNormalized(content: string): string {
+  return createHash("sha256").update(normalizeLineEndings(content), "utf8").digest("hex");
+}
+
+function sha256OfFileNormalized(path: string): string {
+  return sha256OfContentNormalized(readFileSync(path, "utf8"));
+}
+
 function readInstalledVersion(): string {
   const raw = readFileSync(INSTALLED_PACKAGE, "utf8");
   const m = raw.match(/"version"\s*:\s*"([^"]+)"/);
@@ -74,12 +93,15 @@ describe("runtime drift guards (CI required)", () => {
   it.skipIf(!installedRuntimeAvailable)(
     "dev scripts/dysflow-access-runner.ps1 hash matches the installed runtime copy (catches script drift between dev tree and published runtime)",
     () => {
-      const devHash = sha256OfFile(DEV_RUNNER);
-      const installedHash = sha256OfFile(INSTALLED_RUNNER);
+      // Compare CONTENT (line-ending normalized), not raw bytes: the dev tree
+      // is CRLF on Windows, the release tarball is LF from Linux CI (issue #495).
+      const devHash = sha256OfFileNormalized(DEV_RUNNER);
+      const installedHash = sha256OfFileNormalized(INSTALLED_RUNNER);
       expect(
         installedHash,
-        `Installed runtime runner hash ${installedHash} does not match dev runner hash ${devHash}. ` +
-          "The PowerShell runner that ships in the published runtime is out of sync with the dev tree. " +
+        `Installed runtime runner content-hash ${installedHash} does not match dev runner content-hash ${devHash}. ` +
+          "The PowerShell runner that ships in the published runtime is out of sync with the dev tree " +
+          "(content differs, not just line endings). " +
           "Re-run `pnpm test:e2e:mcp` after copying the dev scripts into the runtime, " +
           "or rebuild and re-publish the runtime tarball.",
       ).toBe(devHash);
@@ -119,6 +141,17 @@ describe("runtime drift guards (CI required)", () => {
     expect(isInstalledPath, `expected command to point at the installed runtime, got: ${cmd}`).toBe(
       true,
     );
+  });
+
+  it("normalizes line endings before hashing: identical content with CRLF vs LF hashes equal, different content differs (issue #495)", () => {
+    const lf = "line one\nline two\nline three\n";
+    const crlf = "line one\r\nline two\r\nline three\r\n";
+    const different = "line one\nline two\nCHANGED\n";
+
+    // Same content, different line endings → same content-hash.
+    expect(sha256OfContentNormalized(lf)).toBe(sha256OfContentNormalized(crlf));
+    // Real content drift → different hash (the guard must still catch this).
+    expect(sha256OfContentNormalized(lf)).not.toBe(sha256OfContentNormalized(different));
   });
 
   it("test-runtime/scripts/ is not used as the production MCP server entry (catches a different class of drift)", () => {
