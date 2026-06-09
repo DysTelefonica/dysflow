@@ -31,8 +31,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cliCommand =
-  process.env.DYSFLOW_E2E_COMMAND ??
-  join(repoRoot, "test-runtime", "bin", "dysflow.cmd");
+  process.env.DYSFLOW_E2E_COMMAND ?? join(repoRoot, "test-runtime", "bin", "dysflow.cmd");
 const fixtureFront = join(repoRoot, "E2E_testing", "NoConformidades.accdb");
 const fixtureBackend = join(repoRoot, "E2E_testing", "NoConformidades_Datos.accdb");
 
@@ -72,10 +71,7 @@ function hasAccessCom(): boolean {
 // this run. We pre-create it in beforeAll and tear it down in
 // afterAll. The path itself is computed at module load so the
 // test cases can be built with absolute paths.
-const workspaceRoot = join(
-  tmpdir(),
-  `dysflow-tool-e2e-${process.pid}-${Date.now()}`,
-);
+const workspaceRoot = join(tmpdir(), `dysflow-tool-e2e-${process.pid}-${Date.now()}`);
 
 function setupWorkspace(): void {
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
@@ -97,7 +93,7 @@ function setupWorkspace(): void {
     "utf8",
   );
   const goodModule = [
-    "Attribute VB_Name = \"TestGoodModule\"",
+    'Attribute VB_Name = "TestGoodModule"',
     "Option Compare Database",
     "Option Explicit",
     "",
@@ -107,7 +103,10 @@ function setupWorkspace(): void {
     "",
   ].join("\r\n");
   writeFileSync(join(workspaceRoot, "src", "modules", "TestGoodModule.bas"), goodModule);
-  const otherModule = goodModule.replace("TestGoodModule", "TestAnotherModule").replace("Always42", "AlsoOk").replace("    AlsoOk = 7", "    AlsoOk = 7");
+  const otherModule = goodModule
+    .replace("TestGoodModule", "TestAnotherModule")
+    .replace("Always42", "AlsoOk")
+    .replace("    AlsoOk = 7", "    AlsoOk = 7");
   writeFileSync(join(workspaceRoot, "src", "modules", "TestAnotherModule.bas"), otherModule);
 }
 
@@ -132,8 +131,7 @@ async function callMcp(
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
-        ACCESS_VBA_PASSWORD:
-          process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
+        ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
         DYSFLOW_ACCESS_PASSWORD:
           process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
         DYSFLOW_BACKEND_PASSWORD:
@@ -146,8 +144,16 @@ async function callMcp(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      try { child.stdin.end(); } catch { /* ignore */ }
-      try { child.kill(); } catch { /* ignore */ }
+      try {
+        child.stdin.end();
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
       resolveCall(r);
     };
     const timer = setTimeout(() => {
@@ -161,28 +167,50 @@ async function callMcp(
         const s = l.trim();
         if (!s) continue;
         try {
-          const m = JSON.parse(s) as { id: number; result?: { content: Array<{ type: string; text?: string }>; isError?: boolean }; error?: unknown };
+          const m = JSON.parse(s) as {
+            id: number;
+            result?: { content: Array<{ type: string; text?: string }>; isError?: boolean };
+            error?: unknown;
+          };
           if (m.id !== 3) continue;
           const text = m.result?.content?.map((c) => c.text ?? "").join("\n") ?? "";
           const isError = Boolean(m.error ?? m.result?.isError);
           finish({ ok: !isError, isError, text, timedOut: false });
           return;
-        } catch { /* keep reading */ }
+        } catch {
+          /* keep reading */
+        }
       }
     });
-    child.on("error", (e) => finish({ ok: false, isError: true, text: e.message, timedOut: false }));
+    child.on("error", (e) =>
+      finish({ ok: false, isError: true, text: e.message, timedOut: false }),
+    );
     child.on("close", () => {
       if (!settled) finish({ ok: false, isError: true, text: "MCP closed", timedOut: false });
     });
-    child.stdin.write(JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "tool-e2e", version: "1" } },
-    }) + "\n");
-    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }) + "\n");
-    child.stdin.write(JSON.stringify({
-      jsonrpc: "2.0", id: 3, method: "tools/call",
-      params: { name: toolName, arguments: args },
-    }) + "\n");
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "tool-e2e", version: "1" },
+        },
+      })}\n`,
+    );
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`,
+    );
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      })}\n`,
+    );
   });
 }
 
@@ -210,7 +238,12 @@ function buildToolCases(): ToolCase[] {
   const projectId = "dysflow-tool-e2e";
   const ctx = { projectId, accessPath: access, backendPath: backend };
   const cases: ToolCase[] = [];
-  const t = (tool: string, label: ToolCase["label"], args: Record<string, unknown>, timeoutMs = 30_000): ToolCase => ({ tool, label, args, timeoutMs });
+  const t = (
+    tool: string,
+    label: ToolCase["label"],
+    args: Record<string, unknown>,
+    timeoutMs = 30_000,
+  ): ToolCase => ({ tool, label, args, timeoutMs });
 
   // ----- Modern dysflow_* tools (6 tools, happy + sad where natural) -----
   cases.push(
@@ -219,7 +252,10 @@ function buildToolCases(): ToolCase[] {
     t("dysflow_query_execute", "happy", { projectId, sql: "SELECT 1 AS One", mode: "read" }),
     t("dysflow_query_execute", "sad", { projectId, sql: "", mode: "read" }),
     t("dysflow_access_operations_list", "happy", {}),
-    t("dysflow_access_cleanup", "happy", { operationId: "bogus-id-does-not-exist", accessPath: access }),
+    t("dysflow_access_cleanup", "happy", {
+      operationId: "bogus-id-does-not-exist",
+      accessPath: access,
+    }),
     t("dysflow_access_cleanup", "sad", { operationId: "../../../etc/passwd", accessPath: access }),
     t("dysflow_access_force_cleanup_orphaned", "happy", {}),
     t("dysflow_access_force_cleanup_orphaned", "sad", { confirmPid: -1 }),
@@ -227,11 +263,60 @@ function buildToolCases(): ToolCase[] {
 
   // ----- VBA-sync write path (the #496 fix surface) -----
   cases.push(
-    t("import_modules", "happy", { projectId, moduleNames: ["TestGoodModule"], importMode: "Code", dryRun: false, compile: false }, 60_000),
-    t("import_modules", "sad", { projectId, moduleNames: ["NoSuchModule_xyz_999"], importMode: "Code", dryRun: false, compile: false }, 60_000),
-    t("import_modules", "happy", { projectId, moduleNames: ["TestAnotherModule"], importMode: "Code", dryRun: true, compile: false }, 60_000),
-    t("import_all", "happy", { projectId, importMode: "Code", dryRun: true, compile: false }, 60_000),
-    t("import_all", "sad", { projectId, destinationRoot: join(workspaceRoot, "src", "no-such"), importMode: "Code", dryRun: false, compile: false }, 60_000),
+    t(
+      "import_modules",
+      "happy",
+      {
+        projectId,
+        moduleNames: ["TestGoodModule"],
+        importMode: "Code",
+        dryRun: false,
+        compile: false,
+      },
+      60_000,
+    ),
+    t(
+      "import_modules",
+      "sad",
+      {
+        projectId,
+        moduleNames: ["NoSuchModule_xyz_999"],
+        importMode: "Code",
+        dryRun: false,
+        compile: false,
+      },
+      60_000,
+    ),
+    t(
+      "import_modules",
+      "happy",
+      {
+        projectId,
+        moduleNames: ["TestAnotherModule"],
+        importMode: "Code",
+        dryRun: true,
+        compile: false,
+      },
+      60_000,
+    ),
+    t(
+      "import_all",
+      "happy",
+      { projectId, importMode: "Code", dryRun: true, compile: false },
+      60_000,
+    ),
+    t(
+      "import_all",
+      "sad",
+      {
+        projectId,
+        destinationRoot: join(workspaceRoot, "src", "no-such"),
+        importMode: "Code",
+        dryRun: false,
+        compile: false,
+      },
+      60_000,
+    ),
     t("export_modules", "happy", { projectId, moduleNames: ["TestGoodModule"] }, 60_000),
     t("export_modules", "sad", { projectId, moduleNames: ["NoSuchModule_xyz_999"] }, 60_000),
     t("export_all", "happy", { projectId }, 60_000),
@@ -244,7 +329,12 @@ function buildToolCases(): ToolCase[] {
     t("compile_vba", "sad", { projectId: "no-such-project" }, 60_000),
     t("fix_encoding", "happy", { projectId, location: "Source" }, 60_000),
     t("fix_encoding", "sad", { projectId, location: "InvalidLocation" }, 60_000),
-    t("generate_erd", "happy", { projectId, erdPath: join(workspaceRoot, "erd-output.txt") }, 60_000),
+    t(
+      "generate_erd",
+      "happy",
+      { projectId, erdPath: join(workspaceRoot, "erd-output.txt") },
+      60_000,
+    ),
     t("run_vba", "happy", { procedureName: "TestGoodModule.Always42", argsJson: "[]" }, 60_000),
     t("run_vba", "sad", { procedureName: "NoSuchModule.NoSuchSub", argsJson: "[]" }, 60_000),
     t("test_vba", "happy", { projectId, proceduresJson: "[]" }, 60_000),
@@ -254,11 +344,24 @@ function buildToolCases(): ToolCase[] {
   );
 
   // ----- Query read path (smoke per tool) -----
-  for (const tool of ["list_tables", "list_linked_tables", "get_schema", "count_rows", "distinct_values", "list_links", "get_relationships", "compare_backends", "list_access_files"]) {
+  for (const tool of [
+    "list_tables",
+    "list_linked_tables",
+    "get_schema",
+    "count_rows",
+    "distinct_values",
+    "list_links",
+    "get_relationships",
+    "compare_backends",
+    "list_access_files",
+  ]) {
     const args: Record<string, unknown> = { ...ctx };
     if (tool === "get_schema") args.tableName = "TbNoConformidades";
     if (tool === "count_rows") args.tableName = "TbNoConformidades";
-    if (tool === "distinct_values") { args.tableName = "TbNoConformidades"; args.columnName = "ESTADO"; }
+    if (tool === "distinct_values") {
+      args.tableName = "TbNoConformidades";
+      args.columnName = "ESTADO";
+    }
     cases.push(t(tool, "happy", args));
   }
   cases.push(
@@ -272,10 +375,20 @@ function buildToolCases(): ToolCase[] {
     t("query_sql", "happy", { ...ctx, sql: "SELECT COUNT(*) AS N FROM TbNoConformidades" }),
     t("query_sql", "sad", { ...ctx, sql: "" }),
     t("exec_sql", "happy", { ...ctx, sql: "SELECT 1 AS One", dryRun: true }),
-    t("exec_sql", "sad", { ...ctx, sql: "DROP TABLE TbNoConformidades", dryRun: false, apply: true }),
+    t("exec_sql", "sad", {
+      ...ctx,
+      sql: "DROP TABLE TbNoConformidades",
+      dryRun: false,
+      apply: true,
+    }),
     t("run_script", "happy", { ...ctx, scriptPath: "SELECT 1", dryRun: true }),
     t("run_script", "sad", { ...ctx, scriptPath: "", dryRun: true }),
-    t("create_table", "happy", { ...ctx, tableName: "ZZZ_E2E_Probe", definition: "ID Long, Name Text(50)", dryRun: true }),
+    t("create_table", "happy", {
+      ...ctx,
+      tableName: "ZZZ_E2E_Probe",
+      definition: "ID Long, Name Text(50)",
+      dryRun: true,
+    }),
     t("drop_table", "happy", { ...ctx, tableName: "ZZZ_E2E_NonExistent", dryRun: true }),
     t("seed_fixture", "happy", { ...ctx, tableName: "TbNoConformidades", rows: [], dryRun: true }),
     t("teardown_fixture", "happy", { ...ctx, tableName: "TbNoConformidades", dryRun: true }),
@@ -294,16 +407,43 @@ function buildToolCases(): ToolCase[] {
     t("list_access_operations", "happy", {}),
     t("cleanup_access_operation", "happy", { operationId: "bogus", accessPath: access }),
     t("cleanup_access_operation", "sad", { operationId: "../bad", accessPath: access }),
-    t("dysflow_vba_execute", "happy", { projectId, moduleName: "TestGoodModule", procedureName: "Always42" }, 60_000),
+    t(
+      "dysflow_vba_execute",
+      "happy",
+      { projectId, moduleName: "TestGoodModule", procedureName: "Always42" },
+      60_000,
+    ),
     t("dysflow_vba_execute", "sad", { projectId, procedureName: "NoSuchSub" }, 60_000),
   );
 
   // ----- Forms/ERD -----
   cases.push(
-    t("validate_form_spec", "happy", { spec: { name: "Form_E2E_Probe", kind: "Form", controls: [] } }),
-    t("generate_form", "happy", { name: "Form_E2E_Probe", kind: "Form", spec: { name: "Form_E2E_Probe", kind: "Form", controls: [] }, dryRun: true }, 60_000),
-    t("catalog_add_control", "happy", { catalogPath: join(workspaceRoot, "catalog.json"), controlName: "ProbeControl", controlType: "Button", spec: {} }),
-    t("harvest_form_catalog", "happy", { catalogPath: join(workspaceRoot, "harvest.json") }, 60_000),
+    t("validate_form_spec", "happy", {
+      spec: { name: "Form_E2E_Probe", kind: "Form", controls: [] },
+    }),
+    t(
+      "generate_form",
+      "happy",
+      {
+        name: "Form_E2E_Probe",
+        kind: "Form",
+        spec: { name: "Form_E2E_Probe", kind: "Form", controls: [] },
+        dryRun: true,
+      },
+      60_000,
+    ),
+    t("catalog_add_control", "happy", {
+      catalogPath: join(workspaceRoot, "catalog.json"),
+      controlName: "ProbeControl",
+      controlType: "Button",
+      spec: {},
+    }),
+    t(
+      "harvest_form_catalog",
+      "happy",
+      { catalogPath: join(workspaceRoot, "harvest.json") },
+      60_000,
+    ),
   );
 
   return cases;
@@ -311,18 +451,29 @@ function buildToolCases(): ToolCase[] {
 
 const allCases = buildToolCases();
 
-describe.skipIf(!canRunE2e)("dysflow MCP tool surface (all 49 tools, issue #496 acceptance)", () => {
-  beforeAll(() => {
-    setupWorkspace();
-  });
-  afterAll(() => {
-    try { rmSync(workspaceRoot, { recursive: true, force: true }); } catch { /* ignore */ }
-  });
+describe.skipIf(!canRunE2e)(
+  "dysflow MCP tool surface (all 49 tools, issue #496 acceptance)",
+  () => {
+    beforeAll(() => {
+      setupWorkspace();
+    });
+    afterAll(() => {
+      try {
+        rmSync(workspaceRoot, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    });
 
-  for (const c of allCases) {
-    it(`${c.tool} (${c.label})`, async () => {
-      const r = await callMcp(c.tool, c.args, { timeoutMs: c.timeoutMs });
-      assertUniversalContract(r);
-    }, c.timeoutMs + 30_000);
-  }
-});
+    for (const c of allCases) {
+      it(
+        `${c.tool} (${c.label})`,
+        async () => {
+          const r = await callMcp(c.tool, c.args, { timeoutMs: c.timeoutMs });
+          assertUniversalContract(r);
+        },
+        c.timeoutMs + 30_000,
+      );
+    }
+  },
+);
