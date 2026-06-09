@@ -1,4 +1,4 @@
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
+﻿[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory = $true, Position = 0)]
@@ -194,8 +194,14 @@ function Write-DysflowResult {
         [Parameter(Mandatory = $true)] [object] $Result,
         [Parameter(Mandatory = $false)] [int] $Depth = 20
     )
-    $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
-    [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
+    try {
+        $payload = @($Result)
+        $json = ($payload | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
+        [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
+    } catch {
+        $fallback = '{"ok":false,"error":{"code":"VBA_MANAGER_SERIALIZATION_FAILED","message":"Write-DysflowResult could not serialize the result payload."}}'
+        [Console]::Out.WriteLine("DYSFLOW_RESULT " + $fallback)
+    }
     $script:HasDysflowResultEmitted = $true
 }
 
@@ -3134,14 +3140,15 @@ function Invoke-ImportAction {
             if ($lastErrors.ContainsKey($_)) { "{0}: {1}" -f $_, $lastErrors[$_] } else { $_ }
         }) -join "; "
         $scopeLabel = if ($NormalizedModules.Count -eq 0) { "Import-all" } else { "Import" }
-        $errorMessage = "{0} no pudo completar algunos módulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details
+        $errorMessage = "{0} no pudo completar algunos modulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details
+        $modulesArray = @($moduleResults.ToArray())
         Write-DysflowResult -Result ([ordered]@{
             ok = $false
             error = [ordered]@{
                 code = "VBA_IMPORT_FAILED"
                 message = $errorMessage
             }
-            modules = @($moduleResults)
+            modules = $modulesArray
         }) -Depth 6
         return [pscustomobject]@{
             CreatedComponentNames = @()

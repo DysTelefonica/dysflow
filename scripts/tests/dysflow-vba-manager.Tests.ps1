@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+﻿#Requires -Modules Pester
 <#
 .SYNOPSIS
     Pester tests for dysflow-vba-manager.ps1 COM cleanup paths and helper functions.
@@ -1598,12 +1598,19 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         Invoke-Expression $fnAst.Extent.Text
 
         function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
-        function script:Write-Host { param([string]$Object) $script:HostMessages.Add($Object) }
+        # Mock Write-DysflowResult so we can capture the structured payload the action emits.
+        # The real function writes the DYSFLOW_RESULT sentinel via [Console]::Out.WriteLine,
+        # which Pester cannot intercept; capturing the parameter is the only reliable seam.
+        function script:Write-DysflowResult {
+            param([Parameter(Mandatory = $true)] [object] $Result,
+                  [Parameter(Mandatory = $false)] [int] $Depth = 20)
+            $script:DysflowResults.Add($Result)
+        }
     }
 
     BeforeEach {
         $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
-        $script:HostMessages = [System.Collections.Generic.List[string]]::new()
+        $script:DysflowResults = [System.Collections.Generic.List[object]]::new()
         $script:ImportCalls = [System.Collections.Generic.List[object]]::new()
         $script:ResolveCalls = [System.Collections.Generic.List[object]]::new()
         $script:ImportResult = $null
@@ -1668,28 +1675,40 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         $result.Total | Should -Be 2
     }
 
-    It "throws consolidated all-failure detail and writes per-module DYSFLOW_RESULT" {
+    It "writes consolidated all-failure DYSFLOW_RESULT and returns HasErrors" {
         $script:FailOn = @{
             Module1 = @("first module error", "first module error", "first module error")
             Module2 = @("second module error", "second module error", "second module error")
         }
 
+        $result = $null
         $thrown = $null
         try {
-            Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Module1", "Module2") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Module1", "Module2") -ModulesPath "C:\fake\modules" -ImportMode "Auto"
         } catch { $thrown = $_ }
 
-        $thrown | Should -Not -BeNullOrEmpty
-        $thrown.Exception.Message | Should -Match "no pudo completar algunos"
-        $thrown.Exception.Message | Should -Match "Module1: first module error"
-        $thrown.Exception.Message | Should -Match "Module2: second module error"
-        $script:HostMessages.Count | Should -Be 1
-        $script:HostMessages[0] | Should -Match "^DYSFLOW_RESULT "
-        $results = ConvertFrom-Json ($script:HostMessages[0] -replace "^DYSFLOW_RESULT ", "")
-        ($results | Where-Object { $_.module -eq "Module1" }).status | Should -Be "error"
-        ($results | Where-Object { $_.module -eq "Module1" }).error | Should -Be "first module error"
-        ($results | Where-Object { $_.module -eq "Module2" }).status | Should -Be "error"
-        ($results | Where-Object { $_.module -eq "Module2" }).error | Should -Be "second module error"
+        # Contract: action reports the failure via the DYSFLOW_RESULT sentinel and returns,
+        # it does NOT throw. The runner observes the sentinel and decides the exit code.
+        $thrown | Should -BeNullOrEmpty
+        $result | Should -Not -BeNullOrEmpty
+        $result.HasErrors | Should -Be $true
+        $result.Total | Should -Be 2
+        $result.ErrorMessage | Should -Match "no pudo completar algunos"
+        $result.ErrorMessage | Should -Match "Module1: first module error"
+        $result.ErrorMessage | Should -Match "Module2: second module error"
+
+        $script:DysflowResults.Count | Should -Be 1
+        $payload = $script:DysflowResults[0]
+        $payload.ok | Should -Be $false
+        $payload.error.code | Should -Be "VBA_IMPORT_FAILED"
+        $payload.error.message | Should -Match "no pudo completar algunos"
+        $payload.error.message | Should -Match "Module1: first module error"
+        $payload.error.message | Should -Match "Module2: second module error"
+        @($payload.modules).Count | Should -Be 2
+        ($payload.modules | Where-Object { $_.module -eq "Module1" }).status | Should -Be "error"
+        ($payload.modules | Where-Object { $_.module -eq "Module1" }).error | Should -Be "first module error"
+        ($payload.modules | Where-Object { $_.module -eq "Module2" }).status | Should -Be "error"
+        ($payload.modules | Where-Object { $_.module -eq "Module2" }).error | Should -Be "second module error"
     }
 
     It "returns an empty CreatedComponentNames list when no component is created" {

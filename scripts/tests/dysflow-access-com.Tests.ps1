@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+﻿#Requires -Modules Pester
 #Requires -Version 5.1
 <#
 .SYNOPSIS

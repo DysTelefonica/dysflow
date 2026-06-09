@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.2.30] - 2026-06-09
+
+### Fixed
+
+- **`Invoke-ImportAction` all-failure payload serialization**: The vba-manager's `Invoke-ImportAction` builds a `[ordered]@{}` DYSFLOW_RESULT payload that contained `modules = @($moduleResults)` where `$moduleResults` is a `List[object]`. Under PowerShell 7.x (the version the Windows CI smoke job runs on), wrapping a `List[object]` with `@()` and binding it inside an `OrderedDictionary` triggers `System.ArgumentException: Argument types do not match` before the function can emit its sentinel, so all-failure imports surfaced as opaque Pester failures. The action now converts the list to a plain `object[]` first and the `Write-DysflowResult` writer wraps its payload in `@($Result)` plus a `try/catch` that emits a structured `VBA_MANAGER_SERIALIZATION_FAILED` fallback if serialization ever fails again, so a malformed payload can never again take down the sentinel path.
+- **All-failure Pester test contract**: The "throws consolidated all-failure detail" Pester test in `scripts/tests/dysflow-vba-manager.Tests.ps1` described a contract the action never had — it assumed `Invoke-ImportAction` would `throw` a Spanish-language `Exception.Message` and that the sentinel would be captured via a `Write-Host` mock. The real action reports failure via the `DYSFLOW_RESULT` sentinel and returns with `HasErrors = $true`; the test now mocks `Write-DysflowResult` (the only reliable seam under pwsh) and asserts the actual contract: no exception is thrown, the returned object has `HasErrors = $true` and the expected `ErrorMessage`, and the captured payload has `ok = $false`, `error.code = "VBA_IMPORT_FAILED"`, the expected `error.message`, and per-module `status`/`error` fields.
+- **PowerShell script encoding hardening**: The vba-manager / access-runner / access-com / and their Pester test scripts were saved without a UTF-8 BOM, so PowerShell 7.x (the CI smoke runner) read non-ASCII template strings through the active Windows code page instead of UTF-8. Added the UTF-8 BOM to each of them so the same script behaves the same way under pwsh 5.1, 7.x, and any future PowerShell host.
+- **All-failure template string**: Replaced the non-ASCII `ó` in `"no pudo completar algunos módulos tras"` with the ASCII `modulos`. The Pester test only matches the `"no pudo completar algunos"` prefix, so the user-visible message is functionally equivalent and the contract is now portable across encodings.
+
+### Verified
+
+- `pnpm test`: 1113 passed / 3 skipped (82 files)
+- `pnpm lint`: clean (Biome, 164 files)
+- `pnpm build`: tsc exit 0
+- Pester (PowerShell smoke job): 208 passed / 0 failed / 4 skipped (matches the CI job that was previously failing with "Argument types do not match" on the all-failure Pester test)
+
 ## [v1.2.29] - 2026-06-09
 
 ### Fixed
@@ -11,6 +27,8 @@
 
 - Real MCP E2E against safe `test-runtime`: `106 passed / 0 failed`.
 - Fresh MCP acceptance for `query_sql` and `get_schema` against `00_NO_CONFORMIDADES_staging`: structured OK responses.
+
+> **Note**: v1.2.29 was published but the Windows PowerShell/Access smoke CI job failed on a pre-existing Pester contract bug (`Invoke-ImportAction` was expected to throw but the code never did, and the sentinel writer could not serialize a `List[object>` payload on PowerShell 7.x). v1.2.30 supersedes it with the fix.
 
 ## [v1.2.28] - 2026-06-08
 
