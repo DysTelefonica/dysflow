@@ -3,10 +3,8 @@
 .access-vba-skill/
 .dysflow/runtime/
 
-openspec/
 *.laccdb
 *.ldb
 
-opencode.json
-
 *.accdb
+

@@ -1,0 +1,88 @@
+project: no_conformidades
+display_name: No Conformidades
+initialized: 2026-06-05
+persistence_mode: hybrid
+execution_mode: auto
+target_branch: staging
+artifact_store: both
+chained_pr_strategy: force-chained
+review_budget_lines: 400
+
+context:
+  - Microsoft Access/VBA application for Telefónica no-conformidades management.
+  - Source-control workflow exports Access objects to src/ and imports them back through Dysflow MCP.
+  - Frontend database: NoConformidades.accdb.
+  - Backend database: NoConformidades_Datos.accdb.
+  - Safe Dysflow projectId: 00-no-conformidades-staging-clean.
+  - The user compiles manually in Access VBE; automation must not call compile_vba.
+  - Documentation outside the main repo lives under C:\00repos\documentacion\OPENSPEC\00_No_Conformidades.
+
+testing:
+  strict_tdd: true
+  detected: 2026-06-05
+  runner:
+    framework: Dysflow MCP VBA manifest runner
+    primary_command: "dysflow.test_vba with projectId=00-no-conformidades-staging-clean and testsPath=<manifest>"
+    sequential_script: "pwsh -File scripts/run-vba-tests-sequential.ps1"
+    compile_policy: "Manual only: user compiles in Access VBE -> Debug -> Compile after imports. Do not call compile_vba."
+  layers:
+    unit:
+      available: true
+      tool: VBA atomic procedures in tests/*.json manifests
+    integration:
+      available: true
+      tool: Dysflow MCP against local Access frontend/backend with explicit fixtures
+    e2e:
+      available: true
+      tool: tests/tests.vba.e2e.json and tests/tests.vba.cache-e2e.json
+  coverage:
+    available: false
+    command: null
+  quality:
+    linter:
+      available: false
+      command: null
+    type_checker:
+      available: false
+      command: null
+    formatter:
+      available: false
+      command: null
+  manifests:
+    - path: tests/tests.vba.json
+      tests: 81
+    - path: tests/tests.vba.audit-gestion-helper.json
+      tests: 5
+    - path: tests/tests.vba.cache-acar.json
+      tests: 3
+    - path: tests/tests.vba.cache-e2e.json
+      tests: 7
+    - path: tests/tests.vba.cache-materialized.json
+      tests: 13
+    - path: tests/tests.vba.cache-readiness.json
+      tests: 4
+    - path: tests/tests.vba.cache-warmup.json
+      tests: 1
+    - path: tests/tests.vba.e2e.json
+      tests: 1
+    - path: tests/tests.vba.form-helper.json
+      tests: 9
+    - path: tests/tests.vba.form-helper-canary.json
+      tests: 1
+    - path: tests/tests.vba.form-helper-ensure.json
+      tests: 1
+    - path: tests/tests.vba.indicator-fast-counts.json
+      tests: 5
+    - path: tests/tests.vba.listado-helper.json
+      tests: 5
+    - path: tests/tests.vba.smoke.json
+      tests: 0
+
+phase_rules:
+  propose: "Create change proposal before implementation unless the user explicitly asks for exploratory context only."
+  spec: "Write delta requirements and concrete scenarios before design/apply."
+  design: "Capture Access/VBA sync, schema, fixture, and form dual-file implications."
+  tasks: "Keep work units reviewable under 400 changed lines when possible."
+  apply: "Use strict TDD where manifests support it; import edited VBA with Dysflow MCP only, then wait for user manual compile before tests."
+  verify: "Run applicable Dysflow VBA manifests sequentially; never run parallel Access operations against the same database."
+  archive: "Record implementation commits and Access sync evidence before archiving."
