@@ -298,8 +298,33 @@ function Write-DysflowResult {
     [Parameter(Mandatory = $true)] [object] $Result,
     [Parameter(Mandatory = $false)] [int] $Depth = 20
   )
-  $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
-  [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
+  try {
+    $json = ($Result | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
+    [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
+  } catch {
+    # Sentinel contract (issue #440): we MUST still emit a DYSFLOW_RESULT line so the
+    # MCP layer does not collapse the whole action to RUNNER_INVALID_JSON. Operator
+    # needs the original cause to diagnose the failure (issue #496), so we:
+    #   1. capture the original exception into $script:LastSerializationError
+    #   2. emit a Write-Warning on stderr with the exception text
+    #   3. include the captured exception in a `diagnostics` field of the fallback
+    $script:LastSerializationError = if ($_.Exception) { $_.Exception.ToString() } else { "$_" }
+    Write-Warning ("Write-DysflowResult could not serialize the result payload: " + $script:LastSerializationError)
+    $diagTruncated = $script:LastSerializationError
+    if ($null -ne $diagTruncated -and $diagTruncated.Length -gt 4096) {
+      $diagTruncated = $diagTruncated.Substring(0, 4096) + "...[truncated]"
+    }
+    $fallback = @{
+      ok = $false
+      error = [ordered]@{
+        code = "RUNNER_SERIALIZATION_FAILED"
+        message = "Write-DysflowResult could not serialize the result payload."
+      }
+      diagnostics = @("LastSerializationError: " + $diagTruncated)
+    } | ConvertTo-Json -Compress -Depth 6
+    [Console]::Out.WriteLine("DYSFLOW_RESULT " + $fallback)
+  }
+  $script:HasDysflowResultEmitted = $true
 }
 
 function ConvertFrom-JsonCompat {

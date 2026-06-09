@@ -199,7 +199,27 @@ function Write-DysflowResult {
         $json = ($payload | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
         [Console]::Out.WriteLine("DYSFLOW_RESULT " + $json)
     } catch {
-        $fallback = '{"ok":false,"error":{"code":"VBA_MANAGER_SERIALIZATION_FAILED","message":"Write-DysflowResult could not serialize the result payload."}}'
+        # Sentinel contract (issue #440): we MUST still emit a DYSFLOW_RESULT line so the
+        # MCP layer does not collapse the whole action to RUNNER_INVALID_JSON. But the
+        # operator needs the original cause to diagnose the failure (issue #496), so we
+        # also:
+        #   1. capture the original exception into $script:LastSerializationError for tests
+        #   2. emit a Write-Warning on stderr with the exception text
+        #   3. include the captured exception in a `diagnostics` field of the fallback
+        $script:LastSerializationError = if ($_.Exception) { $_.Exception.ToString() } else { "$_" }
+        Write-Warning ("Write-DysflowResult could not serialize the result payload: " + $script:LastSerializationError)
+        $diagTruncated = $script:LastSerializationError
+        if ($null -ne $diagTruncated -and $diagTruncated.Length -gt 4096) {
+            $diagTruncated = $diagTruncated.Substring(0, 4096) + "...[truncated]"
+        }
+        $fallback = @{
+            ok = $false
+            error = [ordered]@{
+                code = "VBA_MANAGER_SERIALIZATION_FAILED"
+                message = "Write-DysflowResult could not serialize the result payload."
+            }
+            diagnostics = @("LastSerializationError: " + $diagTruncated)
+        } | ConvertTo-Json -Compress -Depth 6
         [Console]::Out.WriteLine("DYSFLOW_RESULT " + $fallback)
     }
     $script:HasDysflowResultEmitted = $true
@@ -2936,7 +2956,7 @@ function Invoke-DeleteAction {
             }) | Out-Null
         }
     }
-    Write-DysflowResult -Result $moduleResults -Depth 4
+    Write-DysflowResult -Result (@($moduleResults.ToArray())) -Depth 4
     $failedDeletes = @($moduleResults | Where-Object { $_.status -eq "error" })
     if ($failedDeletes.Count -gt 0) {
         throw ("Delete no pudo completar {0}/{1} objeto(s): {2}" -f $failedDeletes.Count, $NormalizedModules.Count, (($failedDeletes | ForEach-Object { "{0}: {1}" -f $_.module, $_.error }) -join "; "))
@@ -3113,7 +3133,14 @@ function Invoke-ImportAction {
                 if ($lastErrors.ContainsKey($name)) { $lastErrors.Remove($name) }
             } catch {
                 $failedThisPass.Add($name) | Out-Null
-                $lastErrors[$name] = $_.Exception.Message
+                # Coerce $_.Exception.Message defensively to a string (issue #496). When
+                # the VBE raises a COM error (e.g. 0x800A09D5), .Exception.Message can be
+                # a COM property reference rather than a plain string, which later breaks
+                # ConvertTo-Json inside Write-DysflowResult.
+                $rawMessage = $_.Exception.Message
+                $lastErrors[$name] = if ($null -eq $rawMessage) { "<empty VBE error>" }
+                                    elseif ($rawMessage -is [string]) { $rawMessage }
+                                    else { [string]$rawMessage }
             }
         }
 
@@ -3158,7 +3185,7 @@ function Invoke-ImportAction {
         }
     }
 
-    Write-DysflowResult -Result $moduleResults -Depth 4
+    Write-DysflowResult -Result (@($moduleResults.ToArray())) -Depth 4
 
     return [pscustomobject]@{
         CreatedComponentNames = @($createdComponentNames)
