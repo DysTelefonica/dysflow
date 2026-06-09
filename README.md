@@ -189,6 +189,37 @@ Expose the `bin` path:
 C:\Users\<user>\AppData\Local\dysflow\bin
 ```
 
+### After install: verify the MCP wiring
+
+This is the part most teammates miss. `dysflow install` writes the runtime to `%LOCALAPPDATA%\dysflow`, but **opencode's MCP wiring is a separate file** and it can silently keep pointing at a stale in-tree binary, a `test-runtime`, or a path that no longer exists. Run these three checks the first time you set up a new machine, and re-run them if a Dysflow tool starts returning `RUNNER_INVALID_JSON`, `CONFIG_TARGET_NOT_FOUND`, or a single-tenant result that looks like the wrong database.
+
+```powershell
+# 1. Confirm the installed runtime is the one opencode is actually calling.
+dysflow --version                              # should print e.g. 1.2.33
+$runtime = "$env:LOCALAPPDATA\dysflow\bin\dysflow.cmd"
+Test-Path $runtime                             # must be True
+Get-FileHash $runtime -Algorithm SHA256         # pin this; if it ever changes, something rewrote your install
+
+# 2. Confirm ~/.config/opencode/opencode.json points the dysflow MCP at the installed runtime,
+#    NOT at <repo>/test-runtime/bin/dysflow.cmd or any path inside a dev worktree.
+$cfg = Get-Content "$env:USERPROFILE\.config\opencode\opencode.json" -Raw | ConvertFrom-Json
+$cmd = $cfg.mcp.dysflow.command[0]
+if ($cmd -like "*\test-runtime\*" -or $cmd -like "*\Proyectos\dysflow\bin\*") {
+  Write-Warning "opencode is wired to a dev/test runtime: $cmd"
+  Write-Warning "Re-run: dysflow install --agents opencode --no-tui  (it will rewrite the wiring for you)"
+}
+
+# 3. Force opencode to reconnect to the MCP server, then sanity-check with one read-only tool.
+#    In opencode, type /mcp and confirm the dysflow server is listed and connected.
+#    Then call:
+#       dysflow_list_tables  (with projectId matching your .dysflow/project.json id)
+#    You should see the full backend table list, NOT a 2-table frontend stub.
+```
+
+If step 2 reports a warning, run `dysflow install --agents opencode --no-tui` once and re-run the three checks. The `--no-tui` flag is the same installer used by `dysflow update` for OpenCode wiring, so it is safe to re-run on a working install; it only rewrites the `opencode.json` `mcp.dysflow.command` entry and the `C:\Users\<user>\AppData\Local\dysflow` install path.
+
+> Common failure mode: a teammate keeps the dev repo at `C:\Proyectos\dysflow` open in another tab, runs `pnpm install -g .` from there "to test a fix", and the global dysflow command on `PATH` starts pointing at a binary inside the dev worktree. After committing the fix, run `dysflow update` (or reinstall from the release tarball) and re-verify step 2.
+
 ---
 
 ## Configuration
