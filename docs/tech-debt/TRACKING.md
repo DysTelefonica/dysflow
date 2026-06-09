@@ -20,13 +20,66 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-07 — New campaign OPENED: tech-debt cleanup from the v1.2.23 post-release review (issues #476-#483). 8 issues, ordered by severity. **#476, #477, #478, #479, #480 DONE** (security, lock extraction, swallowed I/O, timeout formula, docs anchors). Currently in flight: #481 (TRACKING.md sync).
+`Last updated`: 2026-06-09 — New campaign OPENED: **clean-release tidy-up** (post-v1.2.33 fresh audit). 3 trivial chores to close (#490 junk, #491 ledger sync, #492 toolchain guard) + 2 deferred issues documented (#493 processTimeoutMs, #494 mega-scripts epic). Goal: ship a clean release that leaves **only** the mega-scripts restructure pending. See "Active campaign (2026-06-09)" below for the live board. NOTE: the 2026-06-07 board further down is STALE (#481/#482/#483 are no longer open on GitHub — only #487 is open); reconciling it is part of #491.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
+
+---
+
+## Active campaign (2026-06-09) — Clean-release tidy-up
+
+> Source: post-v1.2.33 fresh code audit. Every remaining non-trivial item from the audit was
+> verified against live code. Most of the v1.2.18 audit (4 criticals + much debt) is already
+> CLOSED. What remains splits into 3 trivial chores (this campaign) and 2 deferred items.
+>
+> **Owner directive (2026-06-09)**: "dejar todo lo demás perfecto, lo que no es muy difícil...
+> al final una release limpia solo a falta de reestructurar los mega scripts." One task per issue,
+> all issues filed first, then closed one by one, ending in a clean release tag.
+
+### Execution settings (decided 2026-06-09)
+
+- **Execution mode**: `auto` — close the 3 chores back-to-back.
+- **Delivery**: direct commits to `main` (standing directive across prior campaigns; only `main`
+  exists). One commit per issue with `Closes #NNN`. Full local gate green before each push.
+- **Strict TDD**: ON for #492 (test-only); #490/#491 are config/docs (no production logic).
+- **Local testing**: build to `test-runtime/` only. NEVER touch `%LOCALAPPDATA%\dysflow`.
+- **Release gate**: all 3 chores closed AND `pnpm test` + `tsc --noEmit` (both configs) + biome
+  clean before the tag. Tag title MUST equal the tag name exactly.
+
+### Status board
+
+| Order | Issue | Title | Severity | Status | Notes |
+|-------|-------|-------|----------|--------|-------|
+| 1 | [#490](https://github.com/DysTelefonica/dysflow/issues/490) | chore(repo): ignore + remove local junk (`test-output-msg/`) | low | `done` ✅ | commit `aed4359` (`.gitignore` only) |
+| 2 | [#492](https://github.com/DysTelefonica/dysflow/issues/492) | test(quality-gates): lock toolchain exact-pinning | low | `done` ✅ | commit `7c3c9fc` (`test/quality-gates/toolchain-pinning.test.ts`) |
+| 3 | [#491](https://github.com/DysTelefonica/dysflow/issues/491) | chore(docs): resync `TRACKING.md` ledger with remote reality | low | `done` ✅ | this commit — finalizes this board |
+
+### Deferred (filed, documented, NOT in this campaign)
+
+| Issue | Title | Why deferred |
+|-------|-------|--------------|
+| [#493](https://github.com/DysTelefonica/dysflow/issues/493) | refactor(core): collapse `processTimeoutMs` into single authoritative timeout | NOT trivial — read downstream in execution path (`execution-target.ts:83-84`, `vba-sync-adapter.ts:225`); medium refactor w/ behavior risk |
+| [#494](https://github.com/DysTelefonica/dysflow/issues/494) | refactor(scripts): split the two PowerShell mega-scripts (epic) | The deliberately-excluded epic (3272 + 1922 LOC); high blast radius on the TS↔PS contract |
+
+### Progress log
+
+- **2026-06-09**: Campaign opened from the post-v1.2.33 fresh audit. 5 issues filed (#490-#494):
+  3 actionable chores + 2 deferred. Order to close: #490 → #492 → #491 (docs sync last so it
+  captures the final state).
+- **2026-06-09**: #490 DONE (commit `aed4359`). Removed the stray untracked `test-output-msg/`
+  scratch dir and added a `.gitignore` rule. Commit staged `.gitignore` only.
+- **2026-06-09**: #492 DONE (commit `7c3c9fc`). New CI guard
+  `test/quality-gates/toolchain-pinning.test.ts` (3 tests) asserts every dependency/devDependency
+  is exact-pinned, `@types/node` the only allowed tilde range. Green; biome + tsc (test config) clean.
+- **2026-06-09**: #491 DONE (this commit). Reconciled the lagging ledger with remote reality: the
+  2026-06-07 board now marks #481/#482/#483 `done` (all closed COMPLETED 2026-06-07); removed the
+  duplicated/self-contradictory "HTTP → core-mapper" Dropped entry; fixed the stale "NEXT: #481"
+  log line. **Campaign COMPLETE** — only the deferred mega-scripts epic (#494) and the deferred
+  `processTimeoutMs` refactor (#493) remain. Ready for a clean release tag.
 
 ---
 
@@ -43,13 +96,9 @@
 | 1 | [#432](https://github.com/DysTelefonica/dysflow/issues/432) | fix(mcp): input validator ignores numeric bounds (timeoutMs/limit/top) | medium | `done` ✅ (main) | `432-validator-numeric-bounds` |
 | 2 | [#433](https://github.com/DysTelefonica/dysflow/issues/433) | refactor(mcp): parity-registry single source of truth (status vs HIDDEN_STUB_TOOL_NAMES) | low | `done` ✅ (main) | `433-parity-registry-sot` |
 
-### Dropped (investigated, NOT real debt)
-
-- **HTTP → core-mapper convergence**: resolved by campaign #420 — HTTP's `/query/read` and
-  `/query/write` already use `buildQueryReadRequest` / `buildWriteFixtureRequest` from
-  `src/core/mapping/access-query-request-mapper.ts` (see `src/adapters/http/server.ts:12-15,232-234,265-267`).
-  This entry was kept as "Dropped" for months and would mislead future readers into
-  re-doing the work. Removed in the 2026-06-07 tech-debt cleanup (#481).
+> The "HTTP → core-mapper convergence" Dropped entry that used to live here was a duplicate of the
+> canonical one in the 2026-06-07 campaign below; removed during the #491 ledger resync (2026-06-09)
+> to end the contradiction.
 
 ### Progress log
 
@@ -370,9 +419,12 @@ This ledger is the human-readable index; the artifact store holds the detailed p
 | 3 | [#478](https://github.com/DysTelefonica/dysflow/issues/478) | fix(core): surface swallowed state/config I/O errors in diagnostics | medium | `done` ✅ | `478-swallowed-io` |
 | 4 | [#479](https://github.com/DysTelefonica/dysflow/issues/479) | refactor(vba-sync): document or extract cryptic executeMappedTool timeout formula | low | `done` ✅ | `479-timeout-formula` |
 | 5 | [#480](https://github.com/DysTelefonica/dysflow/issues/480) | chore(docs): replace stale security doc line refs with symbol anchors | low | `done` ✅ | `480-docs-anchors` |
-| 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `todo` | `481-tracking-sync` |
-| 7 | [#482](https://github.com/DysTelefonica/dysflow/issues/482) | chore(deps): pin fresh-major toolchain (TS ^6, Vite ^6, Vitest ^4) or document policy | low/med | `todo` | `482-toolchain-pin` |
-| 8 | [#483](https://github.com/DysTelefonica/dysflow/issues/483) | chore(repo): ignore and clean local root junk (NVIDIA Corporation/) | low | `todo` | `483-nvidia-junk` |
+| 6 | [#481](https://github.com/DysTelefonica/dysflow/issues/481) | chore(docs): keep TRACKING.md in sync with live code (HTTP→mapper claim is stale) | low | `done` ✅ (closed COMPLETED 2026-06-07) | `481-tracking-sync` |
+| 7 | [#482](https://github.com/DysTelefonica/dysflow/issues/482) | chore(deps): pin fresh-major toolchain (TS ^6, Vite ^6, Vitest ^4) or document policy | low/med | `done` ✅ (closed COMPLETED 2026-06-07; see `docs/dev/toolchain-pinning.md`) | `482-toolchain-pin` |
+| 8 | [#483](https://github.com/DysTelefonica/dysflow/issues/483) | chore(repo): ignore and clean local root junk (NVIDIA Corporation/) | low | `done` ✅ (closed COMPLETED 2026-06-07; `.gitignore` has `/NVIDIA Corporation/`) | `483-nvidia-junk` |
+
+> Board reconciled with remote on 2026-06-09 (#491): all three were already CLOSED as COMPLETED on
+> GitHub on 2026-06-07; the ledger had lagged and still showed them `todo`.
 
 Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-open` → `done`.
 
@@ -381,8 +433,8 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
 - **HTTP → core-mapper convergence** (claim 8 of the report): `#420` already converged HTTP query
   read/write onto `buildQueryReadRequest` / `buildWriteFixtureRequest` from
   `src/core/mapping/access-query-request-mapper.ts`. The report's claim was based on pre-#420 code.
-  Evidence: `src/adapters/http/server.ts:12-15,232-234,265-267`. **#481 is NOT reopening this** —
-  it is the doc cleanup, not a code change.
+  Evidence: `src/adapters/http/server.ts:12-15,232-234,265-267`. #481 (closed COMPLETED 2026-06-07)
+  did the doc cleanup only; it did not reopen this code work.
 - **"43 silent catch blocks" as a blanket issue**: the count (28 bare + 43 with binding + 25
   promise) is correct but the framing is wrong. Most are legitimate best-effort cleanup. The 7
   sites that hide real I/O errors are filed as **#478 (focussed)**.
@@ -406,8 +458,9 @@ Status legend: `todo` → `planning` → `in-progress` → `verifying` → `pr-o
   `spawnVbaManager` in vba-sync-adapter.ts. New regression test
   `test/docs/security-doc-anchors.test.ts` asserts no `file:line` refs to
   internal TypeScript source positions remain in `docs/security/`. 1018
-  passed, 3 skipped. **NEXT: #481** — remove the stale "HTTP → core-mapper"
-  Dropped entry.
+  passed, 3 skipped.
+- **2026-06-07**: #481, #482, #483 closed COMPLETED (ledger updated retroactively on 2026-06-09
+  during the #491 resync — see the 2026-06-09 campaign at the top of this file).
 - **2026-06-07**: #479 (timeout formula) DONE. Extracted
   `derivePsTimeoutMs(effectiveTimeoutMs, preflightElapsedMs)` to module scope
   in `src/adapters/vba-sync/vba-sync-adapter.ts`. The `5_000` literal is now
