@@ -190,7 +190,7 @@ export function buildSerializationFailedEnvelope(
 ): SerializationFailedEnvelope {
   const truncated =
     originalExceptionText.length > DIAGNOSTICS_MAX_LENGTH
-      ? originalExceptionText.substring(0, DIAGNOSTICS_MAX_LENGTH) + "...[truncated]"
+      ? `${originalExceptionText.substring(0, DIAGNOSTICS_MAX_LENGTH)}...[truncated]`
       : originalExceptionText;
   return {
     ok: false,

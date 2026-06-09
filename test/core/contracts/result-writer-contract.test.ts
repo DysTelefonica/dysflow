@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSerializationFailedEnvelope,
   DIAGNOSTICS_MAX_LENGTH,
   DIAGNOSTICS_PREFIX,
   PAYLOAD_TYPE_WHITELIST,
   RESULT_MARKER,
   SERIALIZATION_FAILED_CODE,
-  buildSerializationFailedEnvelope,
   whyPayloadTypeIsNotWhitelisted,
 } from "../../../src/core/contracts/index";
 
@@ -104,7 +104,9 @@ describe("Write-DysflowResult contract (issue #496)", () => {
       );
       expect(envelope.ok).toBe(false);
       expect(envelope.error.code).toBe("VBA_MANAGER_SERIALIZATION_FAILED");
-      expect(envelope.error.message).toBe("Write-DysflowResult could not serialize the result payload.");
+      expect(envelope.error.message).toBe(
+        "Write-DysflowResult could not serialize the result payload.",
+      );
       expect(envelope.diagnostics.length).toBeGreaterThan(0);
       expect(envelope.diagnostics[0]).toMatch(/^LastSerializationError: /);
       expect(envelope.diagnostics[0]).toContain("Argument types do not match");
@@ -116,7 +118,10 @@ describe("Write-DysflowResult contract (issue #496)", () => {
         "VBA_MANAGER_SERIALIZATION_FAILED",
         longText,
       );
-      const first = envelope.diagnostics[0]!;
+      const first = envelope.diagnostics[0];
+      if (first === undefined) {
+        throw new Error("diagnostics[0] must be defined per the contract");
+      }
       // Prefix + truncated text + suffix must not exceed the budget
       // by more than the prefix length and the suffix overhead.
       expect(first.length).toBeLessThanOrEqual(
@@ -144,10 +149,7 @@ describe("Write-DysflowResult contract (issue #496)", () => {
     it("never produces an empty diagnostics array (the contract that prevents silent failures)", () => {
       // Empty string after the prefix would still be a contract violation:
       // the operator would have nothing to grep for. Pin the predicate.
-      const envelope = buildSerializationFailedEnvelope(
-        "VBA_MANAGER_SERIALIZATION_FAILED",
-        "",
-      );
+      const envelope = buildSerializationFailedEnvelope("VBA_MANAGER_SERIALIZATION_FAILED", "");
       expect(envelope.diagnostics[0]).toBe(`${DIAGNOSTICS_PREFIX}`);
       // The prefix alone is acceptable as a "no original text" signal,
       // but the field is non-empty so the AST guard can assert on it.
@@ -159,10 +161,7 @@ describe("Write-DysflowResult contract (issue #496)", () => {
     it("the fallback envelope is always an object (never a bare string or array)", () => {
       // Mirrors the production ConvertTo-Json -Compress output:
       // the writer wraps everything in {ok, error, diagnostics}.
-      const envelope = buildSerializationFailedEnvelope(
-        "VBA_MANAGER_SERIALIZATION_FAILED",
-        "x",
-      );
+      const envelope = buildSerializationFailedEnvelope("VBA_MANAGER_SERIALIZATION_FAILED", "x");
       expect(typeof envelope).toBe("object");
       expect(Array.isArray(envelope)).toBe(false);
       expect(typeof envelope.ok).toBe("boolean");

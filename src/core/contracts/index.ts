@@ -164,18 +164,18 @@ export function createDiagnostic(
   return { level, source, message };
 }
 
+export type {
+  PayloadType,
+  SerializationFailedEnvelope,
+} from "./result-writer.js";
 export {
+  buildSerializationFailedEnvelope,
+  DIAGNOSTICS_MAX_LENGTH,
+  DIAGNOSTICS_PREFIX,
+  PAYLOAD_TYPE_WHITELIST,
   RESULT_MARKER,
   SERIALIZATION_FAILED_CODE,
-  DIAGNOSTICS_PREFIX,
-  DIAGNOSTICS_MAX_LENGTH,
-  PAYLOAD_TYPE_WHITELIST,
-  buildSerializationFailedEnvelope,
   whyPayloadTypeIsNotWhitelisted,
-} from "./result-writer.js";
-export type {
-  SerializationFailedEnvelope,
-  PayloadType,
 } from "./result-writer.js";
 
 /**
