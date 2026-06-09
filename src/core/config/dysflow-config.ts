@@ -442,21 +442,37 @@ async function findRepoProjectConfigPathAsync(
   | { found: "compat" | "standard"; path: string }
   | { found: "ambiguous"; paths: [string, string] }
 > {
-  const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-  const compat = resolve(cwd, OLD_PROJECT_CONFIG_PATH);
-  const standardExists = await pathExists(standard);
-  const compatExists = await pathExists(compat);
+  // Walk up the directory tree from cwd looking for .dysflow/project.json
+  // (or the legacy dysflow.project.json). This matches the behavior of
+  // git discovering .git/, npm discovering package.json, etc. The MCP
+  // server's process cwd is not always the project cwd (it can be the
+  // cwd of the opencode/Claude host that spawned it), so a single-level
+  // lookup misses the project and the runner silently falls back to the
+  // CurrentDb (frontend), which is the bug issue 18 reproduced.
+  let dir = resolve(cwd);
+  const visited: string[] = [];
+  while (true) {
+    visited.push(dir);
+    const standard = resolve(dir, DEFAULT_PROJECT_CONFIG_PATH);
+    const compat = resolve(dir, OLD_PROJECT_CONFIG_PATH);
+    const standardExists = await pathExists(standard);
+    const compatExists = await pathExists(compat);
 
-  if (standardExists && compatExists) {
-    return { found: "ambiguous", paths: [standard, compat] };
+    if (standardExists && compatExists) {
+      return { found: "ambiguous", paths: [standard, compat] };
+    }
+    if (standardExists) {
+      return { found: "standard", path: standard };
+    }
+    if (compatExists) {
+      return { found: "compat", path: compat };
+    }
+    const parent = dirname(dir);
+    if (parent === dir || visited.length > 64) {
+      return { found: "none" };
+    }
+    dir = parent;
   }
-  if (standardExists) {
-    return { found: "standard", path: standard };
-  }
-  if (compatExists) {
-    return { found: "compat", path: compat };
-  }
-  return { found: "none" };
 }
 
 async function pathExists(candidate: string): Promise<boolean> {
@@ -474,21 +490,37 @@ function findRepoProjectConfigPath(
   | { found: "none" }
   | { found: "compat" | "standard"; path: string }
   | { found: "ambiguous"; paths: [string, string] } {
-  const standard = resolve(cwd, DEFAULT_PROJECT_CONFIG_PATH);
-  const compat = resolve(cwd, OLD_PROJECT_CONFIG_PATH);
-  const standardExists = existsSync(standard);
-  const compatExists = existsSync(compat);
+  // Walk up the directory tree from cwd looking for .dysflow/project.json
+  // (or the legacy dysflow.project.json). This matches the behavior of
+  // git discovering .git/, npm discovering package.json, etc. The MCP
+  // server's process cwd is not always the project cwd (it can be the
+  // cwd of the opencode/Claude host that spawned it), so a single-level
+  // lookup misses the project and the runner silently falls back to the
+  // CurrentDb (frontend), which is the bug issue 18 reproduced.
+  let dir = resolve(cwd);
+  const visited: string[] = [];
+  while (true) {
+    visited.push(dir);
+    const standard = resolve(dir, DEFAULT_PROJECT_CONFIG_PATH);
+    const compat = resolve(dir, OLD_PROJECT_CONFIG_PATH);
+    const standardExists = existsSync(standard);
+    const compatExists = existsSync(compat);
 
-  if (standardExists && compatExists) {
-    return { found: "ambiguous", paths: [standard, compat] };
+    if (standardExists && compatExists) {
+      return { found: "ambiguous", paths: [standard, compat] };
+    }
+    if (standardExists) {
+      return { found: "standard", path: standard };
+    }
+    if (compatExists) {
+      return { found: "compat", path: compat };
+    }
+    const parent = dirname(dir);
+    if (parent === dir || visited.length > 64) {
+      return { found: "none" };
+    }
+    dir = parent;
   }
-  if (standardExists) {
-    return { found: "standard", path: standard };
-  }
-  if (compatExists) {
-    return { found: "compat", path: compat };
-  }
-  return { found: "none" };
 }
 
 function resolveTimeout(explicitTimeoutMs: number | undefined): number {
@@ -526,3 +558,16 @@ function resolveHttpTokenEnv(config: DysflowProjectConfig): string | undefined {
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
   return values.find((value) => value !== undefined);
 }
+
+/**
+ * Exported ONLY for the test suite `dysflow-config-discovery.test.ts`.
+ * The MCP server's process cwd is not always the project cwd (it can
+ * be the cwd of the opencode/Claude host that spawned it), so
+ * `findRepoProjectConfigPath` walks up the directory tree looking
+ * for `.dysflow/project.json` (or the legacy `dysflow.project.json`).
+ * Issue 18 caught a class of bugs where the runner silently fell
+ * back to the frontend's CurrentDb and returned only the two local
+ * tables instead of the backend's 40+. These tests lock the
+ * walk-up behavior down.
+ */
+export const findRepoProjectConfigPathForTesting = findRepoProjectConfigPath;

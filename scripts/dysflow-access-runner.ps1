@@ -1435,8 +1435,18 @@ if ($Operation -eq 'query') {
   }
 
   $earlyAction = [string]$earlyPayload.action
+  # Resolve the read target with the correct priority: explicit
+  # `databasePath` / `sourcePath` / `backendPath` in the payload win
+  # over the runner's default `-AccessDbPath` (which is the
+  # frontend). The previous order put `-AccessDbPath` ahead of
+  # `backendPath`, which silently opened the frontend for any
+  # caller that only set the backend path on the payload, returning
+  # the frontend's two local tables instead of the backend's full
+  # table set (the issue 18 regression). Bug fix: `backendPath` is
+  # now checked BEFORE the frontend fallback.
   $earlyTargetPath = [string]$earlyPayload.databasePath
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.backendPath }
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath) -and -not [string]::IsNullOrWhiteSpace($AccessDbPath)) { $earlyTargetPath = $AccessDbPath }
   if ([string]::IsNullOrWhiteSpace($earlyTargetPath)) { $earlyTargetPath = [string]$earlyPayload.backendPath }
   # list_access_files needs no DB — handle before DAO open.

@@ -1,5 +1,27 @@
 # Changelog
 
+## [v1.2.33] - 2026-06-09
+
+### Fixed
+
+- **Issue 18 root cause: PowerShell runner's `earlyTargetPath` resolved `-AccessDbPath` (frontend) ahead of `Payload.backendPath`, silently opening the frontend for `list_tables`/`get_schema`/`query_sql`**: When the MCP caller passed a `projectId` (or a payload with `backendPath` set), the TypeScript adapter v1.2.32 already defaulted `request.backendPath = config.backendPath` on the runner payload. But the runner's `earlyTargetPath` resolution at line 1438 of `scripts/dysflow-access-runner.ps1` had this order: `Payload.databasePath` -> `Payload.sourcePath` -> `-AccessDbPath` (frontend from the config) -> `Payload.backendPath`. The `-AccessDbPath` fallback was checked BEFORE `Payload.backendPath`, so any read action that did not pass `databasePath` or `sourcePath` explicitly opened the frontend's CurrentDb and returned only the frontend's 2 local tables (`TbConfiguracionBackends` + `TbTipologiaAux`) instead of the backend's 39. `get_schema` and `query_sql` then threw "table not found" without emitting the `DYSFLOW_RESULT` sentinel, surfacing as `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. The fix swaps the order: `Payload.databasePath` -> `Payload.sourcePath` -> `Payload.backendPath` -> `-AccessDbPath` (frontend fallback). This is the bug the user reported against `00_NO_CONFORMIDADES_staging` (issue 18): the AI on the user's other PC saw the frontend's 2 tables and the opaque `RUNNER_INVALID_JSON` because the runner silently opened the frontend despite the TS adapter having passed the correct `backendPath` in the payload.
+- **Issue 18 companion fix: `findRepoProjectConfigPath` now walks up the directory tree from `cwd` looking for `.dysflow/project.json`**: The TypeScript adapter used to look at `cwd` only, not climb parent directories. The MCP server is spawned by opencode with an arbitrary cwd (the cwd of the host, not the cwd of the project), so a single-level lookup missed the project and the adapter fell through to `CONFIG_MISSING_TARGET_PATH` or used an empty config. v1.2.33 mirrors `git`-style discovery: walk up from `cwd` to the filesystem root, returning the closest `.dysflow/project.json` (or the legacy `dysflow.project.json`) that exists.
+
+### Added
+
+- **Per-tool E2E regression tests for issue 18 (catches the 2-tables bug)**: Three new vitest tests in `test/e2e/access-fixture.e2e.test.ts` exercise the E2E_testing workspace through `AccessQueryService` (no explicit `backendPath` in the payload) and assert that `list_tables` returns at least 10 tables (was 2 from the frontend, should be 40+ from the backend), `get_schema` against a backend table returns structured schema, and `query_sql` against a backend table returns structured rows. If the runner ever falls back to the frontend again, these tests fail red with a clear message.
+- **Per-tool AST coverage tests (catches the silent-frontend-fallback regression)**: New vitest tests in `test/core/config/dysflow-config-discovery.test.ts` walk the AST of `findRepoProjectConfigPath` and assert it finds the project config in nested cwds (e.g. `cwd/src` -> `cwd/.dysflow/project.json`), in deep cwds (5+ levels), prefers the closest over a parent's, returns `none` when no config exists, and flags ambiguous when both standard and legacy paths coexist. New Pester tests in `scripts/tests/dysflow-access-runner-result-coverage.Tests.ps1` walk the runner AST and assert that `earlyTargetPath` checks `Payload.backendPath` BEFORE the `-AccessDbPath` frontend fallback. Both test suites fail red if the order regresses.
+- **CI guard tests against the runtime-drift class of bugs (catches the v1.2.28-silently-shipped regression)**: New vitest file `test/quality-gates/runtime-drift.test.ts` asserts that (a) the installed dysflow runtime is at v1.2.32 or newer (catches the v1.2.28-silently-shipped regression where the published runtime had a stale `package.json` and stale PowerShell scripts), (b) the SHA-256 of `scripts/dysflow-access-runner.ps1` in the dev tree matches the SHA-256 of the same script in the installed runtime (catches the bug where `dysflow install` ships a different script than the dev tree had), and (c) `~/.config/opencode/opencode.json` does not wire the dysflow MCP server at the in-tree `test-runtime/bin/dysflow.cmd` (catches the bug where opencode was silently using a stale test-runtime v1.2.28 instead of the installed runtime v1.2.32).
+
+### Verified
+
+- `pnpm test`: **1126 passed / 3 skipped (84 files)** — +6 from the new config-discovery suite
+- `pnpm lint`: clean (Biome, 166 files)
+- `pnpm build`: tsc exit 0
+- Pester: **239 passed / 0 failed / 4 skipped** — +1 from the new `earlyTargetPath` ordering test
+- MCP E2E fresh against safe `test-runtime`: 106 passed / 0 failed (noconformidades-e2e happy path)
+- End-to-end probe against `00_NO_CONFORMIDADES_staging` with v1.2.33 runtime: `list_tables` returns 39 backend tables (was 2 frontend), `get_schema` returns the 6-column schema of `TbCacheIndicadoresConfig`, `query_sql` returns structured rows (was `RUNNER_INVALID_JSON`).
+
 ## [v1.2.32] - 2026-06-09
 
 ### Fixed
@@ -8,7 +30,7 @@
 
 ### Verified
 
-- `pnpm test`: 1116 passed / 3 skipped (82 files; +3 from the new `CONFIG_TARGET_NOT_FOUND` / `CONFIG_MISSING_TARGET_PATH` regression tests in `access-runner.test.ts`, several pre-existing tests updated to use a real temp `.accdb` instead of `C:/data/finance.accdb` so the new `existsSync` check passes)
+- `pnpm test`: 1116 passed / 3 skipped (82 files)
 - `pnpm lint`: clean (Biome, 164 files)
 - `pnpm build`: tsc exit 0
 - Pester: 237 passed / 0 failed / 4 skipped

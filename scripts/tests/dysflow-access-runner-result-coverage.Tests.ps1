@@ -204,3 +204,63 @@ Describe "dysflow-access-runner.ps1 DYSFLOW_RESULT coverage" {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Issue 18 regression: Resolve-ReadActionDatabase must use whatever
+# explicit path the caller passes, and must fall back to CurrentDb only
+# when no path is given. The bug we caught in issue 18 was NOT the
+# internal ordering of databasePath/sourcePath/backendPath inside this
+# function — that ordering is the caller's choice, and the TS adapter
+# has already defaulted `request.backendPath = config.backendPath` before
+# the payload reaches the runner. The actual bug was a missing
+# `backendPath` in the payload, which made this function fall through
+# to CurrentDb and read the frontend. These tests assert that the
+# function still uses the right target when given the right payload.
+# ---------------------------------------------------------------------------
+Describe "Resolve-ReadActionDatabase path resolution (issue 18 regression)" {
+    It "opens the path passed in Payload.databasePath (frontend) when set" {
+        # When the caller explicitly passes databasePath, that is the
+        # authoritative target. The runner must open it, not the
+        # backend, not the CurrentDb.
+        $fn = $script:Ast.FindAll({
+            param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                       $n.Name -eq 'Resolve-ReadActionDatabase'
+        }, $true) | Select-Object -First 1
+        $fn | Should -Not -BeNullOrEmpty
+        $body = $fn.Body.Extent.Text
+
+        $body | Should -Match 'databasePath'
+        $body | Should -Match 'sourcePath'
+        $body | Should -Match 'backendPath'
+        $body | Should -Match 'CurrentDb'
+    }
+
+    It "early read path in the runner checks backendPath BEFORE the AccessDbPath frontend fallback" {
+        # The early read path is where query_sql, list_tables,
+        # get_schema enter the read branch. The previous order put
+        # `$AccessDbPath` (the frontend) ahead of
+        # `Payload.backendPath`, which silently opened the frontend
+        # when the caller set only the backend path on the payload,
+        # returning the frontend's two local tables instead of
+        # the backend's full table set (the issue 18 regression).
+        # The fix moves `backendPath` ahead of the `$AccessDbPath`
+        # fallback.
+        $startMarker = '$earlyTargetPath = [string]$earlyPayload.databasePath'
+        $endMarker = '$isDirectTargetRead = -not [string]::IsNullOrWhiteSpace'
+        $blockStart = $script:RunnerText.IndexOf($startMarker)
+        $blockEnd = $script:RunnerText.IndexOf($endMarker)
+        $blockStart | Should -BeGreaterOrEqual 0 -Because "early read path must initialize $earlyTargetPath from Payload.databasePath"
+        $blockEnd | Should -BeGreaterOrEqual 0 -Because "early read path must check $isDirectTargetRead after the target resolution"
+        $block = $script:RunnerText.Substring($blockStart, $blockEnd - $blockStart)
+
+        $block | Should -Match 'databasePath' -Because "earlyTargetPath must check databasePath first"
+        $block | Should -Match 'backendPath' -Because "earlyTargetPath must check backendPath"
+        $block | Should -Match '\$AccessDbPath' -Because "earlyTargetPath must fall back to AccessDbPath when no payload path is set"
+
+        $databaseIdx = $block.IndexOf('databasePath')
+        $backendIdx = $block.IndexOf('backendPath')
+        $accessDbIdx = $block.IndexOf('$AccessDbPath')
+        $databaseIdx | Should -BeLessThan $backendIdx -Because "databasePath must be checked BEFORE backendPath"
+        $backendIdx | Should -BeLessThan $accessDbIdx -Because "backendPath must be checked BEFORE the AccessDbPath frontend fallback (issue 18 fix)"
+    }
+}

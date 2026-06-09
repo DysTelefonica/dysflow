@@ -214,4 +214,131 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       workspace.cleanup();
     }
   }, 60_000);
+
+  // ------------------------------------------------------------------
+  // v1.2.32 regression: the runner must default to the project's
+  // configured backendPath when the request omits it. Without this
+  // defaulting, list_tables silently reads the frontend (which has
+  // only two local tables), get_schema and query_sql throw without
+  // emitting the DYSFLOW_RESULT sentinel, and the MCP caller only
+  // sees the opaque "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line".
+  // These tests reproduce the exact symptoms the user reported in
+  // issue 18 against the 00-no-conformidades-staging-clean project
+  // on a setup that looked identical to a working environment.
+  // ------------------------------------------------------------------
+
+  it("list_tables with project cwd and no explicit backendPath reads the backend (regression: must NOT return only the 2 frontend tables)", async () => {
+    const workspace = createAccessFixtureWorkspace();
+    try {
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: { ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? "dpddpd" },
+      });
+      expect(config.ok).toBe(true);
+      if (!config.ok) throw new Error(config.error.message);
+
+      const runner = new AccessPowerShellRunner({
+        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
+      });
+      const queryService = new AccessQueryService({ runner, config: config.data });
+
+      // Caller passes ONLY the project cwd. The request has no
+      // backendPath and no databasePath. The runner MUST default
+      // to config.backendPath and return the backend tables. If
+      // the runner silently falls back to the frontend, this
+      // returns the 2 local tables (TbConfiguracionBackends,
+      // TbTipologiaAux) and the test fails with a clear message.
+      const result = await queryService.execute({
+        sql: "",
+        mode: "read",
+        action: "list_tables",
+      });
+
+      expect(result.ok, JSON.stringify(result)).toBe(true);
+      if (!result.ok) throw new Error(`list_tables failed: ${result.error.message}`);
+      const tables = result.data.tables ?? [];
+      // The fixture backend has 40+ tables. The frontend has 2. We
+      // require at least 10 to be confident we're reading the
+      // backend, not the frontend.
+      expect(tables.length).toBeGreaterThanOrEqual(10);
+      // The 2 frontend-only tables MUST NOT be the only result.
+      const onlyFrontend =
+        tables.length === 2 &&
+        tables.includes("TbConfiguracionBackends") &&
+        tables.includes("TbTipologiaAux");
+      expect(onlyFrontend).toBe(false);
+    } finally {
+      workspace.cleanup();
+    }
+  }, 60_000);
+
+  it("get_schema with project cwd and no explicit backendPath returns structured DYSFLOW_RESULT (regression: must NOT return RUNNER_INVALID_JSON)", async () => {
+    const workspace = createAccessFixtureWorkspace();
+    try {
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: { ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? "dpddpd" },
+      });
+      expect(config.ok).toBe(true);
+      if (!config.ok) throw new Error(config.error.message);
+
+      const runner = new AccessPowerShellRunner({
+        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
+      });
+      const queryService = new AccessQueryService({ runner, config: config.data });
+
+      // Use a table that exists in the backend fixture. If the
+      // runner correctly resolves the backend, this returns the
+      // schema array. If it falls back to the frontend (where the
+      // table does NOT exist), the runner throws "table not
+      // found" mid-execution and the MCP caller surfaces
+      // RUNNER_INVALID_JSON.
+      const result = await queryService.execute({
+        sql: "",
+        mode: "read",
+        action: "get_schema",
+        tableName: "TbNoConformidades",
+      });
+
+      expect(result.ok, JSON.stringify(result)).toBe(true);
+      if (!result.ok) throw new Error(`get_schema failed: ${result.error.message}`);
+      const schema = (result.data.schema ?? []) as Array<{ name: string }>;
+      expect(schema.length).toBeGreaterThan(0);
+      // The schema should have a primary key column.
+      const hasIdColumn = schema.some((c) => /^ID/i.test(c.name));
+      expect(hasIdColumn).toBe(true);
+    } finally {
+      workspace.cleanup();
+    }
+  }, 60_000);
+
+  it("query_sql against a backend table returns structured rows (regression: must NOT return RUNNER_INVALID_JSON)", async () => {
+    const workspace = createAccessFixtureWorkspace();
+    try {
+      const config = loadDysflowConfig({
+        cwd: workspace.root,
+        env: { ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? "dpddpd" },
+      });
+      expect(config.ok).toBe(true);
+      if (!config.ok) throw new Error(config.error.message);
+
+      const runner = new AccessPowerShellRunner({
+        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
+      });
+      const queryService = new AccessQueryService({ runner, config: config.data });
+
+      const result = await queryService.execute({
+        sql: "SELECT TOP 1 * FROM TbNoConformidades",
+        mode: "read",
+        action: "query_sql",
+      });
+
+      expect(result.ok, JSON.stringify(result)).toBe(true);
+      if (!result.ok) throw new Error(`query_sql failed: ${result.error.message}`);
+      const rows = result.data.rows ?? [];
+      expect(rows.length).toBe(1);
+    } finally {
+      workspace.cleanup();
+    }
+  }, 60_000);
 });
