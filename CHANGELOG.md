@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.2.31] - 2026-06-09
+
+### Added
+
+- **Per-tool DYSFLOW_RESULT coverage test (regression guard)**: New Pester suite `scripts/tests/dysflow-access-runner-result-coverage.Tests.ps1` walks the AST of `dysflow-access-runner.ps1` and asserts, for every advertised SQL / schema / fixture / links / compact action (`query_sql`, `get_schema`, `list_tables`, `count_rows`, `distinct_values`, `list_linked_tables`, `list_links`, `get_relationships`, `compare_backends`, `list_access_files`, `exec_sql`, `run_script`, `create_table`, `drop_table`, `seed_fixture`, `teardown_fixture`, `link_tables`, `relink_tables`, `unlink_table`, `relink_directory`, `localize_backend_links`, `compact_repair`, `export_queries`, `import_queries`), that (a) the action is referenced in the runner, (b) a `Write-DysflowResult -Result` call exists on its success path, and (c) the writer uses `[Console]::Out.WriteLine` and never `Write-Output`. The suite also asserts that no `Write-DysflowResult -Result` call passes a `$null`, empty array, or empty `[ordered]@{}` payload, and that no `Write-Output "DYSFLOW_RESULT ..."` pattern has snuck back in. This is the missing guard that should have caught the v1.2.29 SQL path regression before it shipped: the user-reported broken action set (`get_schema`, `query_sql`, `exec_sql`, `count_rows`, `distinct_values`, `list_tables`, `list_linked_tables`, `get_relationships`, `run_script`, `seed_fixture`, `teardown_fixture`, `create_table`, `drop_table`, `link_tables`, `relink_tables`, `unlink_tables`, `compact_repair`, `compare_backends`) is locked down action-by-action. If a future refactor breaks the sentinel emission on any of these tools, this suite will fail red before the change can ship.
+
+### Fixed
+
+- **dysflow-mock-com.ps1: `Add-Member` collisions on `ArrayList` builtin members**: The mock COM module tried to add `Item`, `Append`, and `Delete` ScriptMethods to a `[System.Collections.ArrayList]`, which already has those members built-in. PowerShell refused the second addition with `Cannot add a member with the name "Item" because a member with that name already exists`, breaking any code path that tried to load the mock under pwsh 7.x. Added `-Force` to the three `Add-Member` calls so the overrides stick. No behavior change for callers; this unblocks the mock for both CI and local runs.
+
+### Verified
+
+- `pnpm test`: 1113 passed / 3 skipped (82 files)
+- `pnpm lint`: clean (Biome, 164 files)
+- `pnpm build`: tsc exit 0
+- Pester: **237 passed / 0 failed / 4 skipped** (was 208, +29 from the new coverage suite)
+- MCP E2E fresh against safe `test-runtime`: 106 passed / 0 failed
+- Fresh MCP acceptance for every action in the user's reported broken list: structured OK responses
+
 ## [v1.2.30] - 2026-06-09
 
 ### Fixed

@@ -139,18 +139,18 @@ function Get-MockDatabase {
     Add-Member -InputObject $tableDefs -MemberType ScriptMethod -Name Item -Value {
         param($name)
         return $this | Where-Object { $_.Name -eq $name } | Select-Object -First 1
-    }
+    } -Force
     Add-Member -InputObject $tableDefs -MemberType ScriptMethod -Name Append -Value {
         param($td)
         $this.Add($td) | Out-Null
-    }
+    } -Force
     Add-Member -InputObject $tableDefs -MemberType ScriptMethod -Name Delete -Value {
         param($name)
         $matched = $this | Where-Object { $_.Name -eq $name }
         if ($matched) {
             $this.Remove($matched) | Out-Null
         }
-    }
+    } -Force
 
     # 4. Build QueryDefs collection
     $queryDefs = [System.Collections.ArrayList]::new()
@@ -164,7 +164,7 @@ function Get-MockDatabase {
     Add-Member -InputObject $queryDefs -MemberType ScriptMethod -Name Item -Value {
         param($name)
         return $this | Where-Object { $_.Name -eq $name } | Select-Object -First 1
-    }
+    } -Force
 
     # 5. Build Relations collection
     $relations = [System.Collections.ArrayList]::new()
