@@ -164,6 +164,20 @@ export function createDiagnostic(
   return { level, source, message };
 }
 
+export {
+  RESULT_MARKER,
+  SERIALIZATION_FAILED_CODE,
+  DIAGNOSTICS_PREFIX,
+  DIAGNOSTICS_MAX_LENGTH,
+  PAYLOAD_TYPE_WHITELIST,
+  buildSerializationFailedEnvelope,
+  whyPayloadTypeIsNotWhitelisted,
+} from "./result-writer.js";
+export type {
+  SerializationFailedEnvelope,
+  PayloadType,
+} from "./result-writer.js";
+
 /**
  * Creates a normalized Dysflow error for failed operation results.
  */
