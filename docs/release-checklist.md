@@ -5,24 +5,26 @@ to make manual maintenance decisions auditable and visible in CI.
 
 ## MCP protocol compatibility
 
-Because `MCP_PROTOCOL_VERSION` in `src/adapters/mcp/stdio.ts` is a manual
-constant (Dysflow runs a hand-written JSON-RPC adapter, not the SDK's protocol
-stack), every release must explicitly revalidate it:
+Dysflow's MCP server runs on the official `@modelcontextprotocol/sdk`, which
+owns the `initialize` handshake and protocol-version negotiation.
+`MCP_PROTOCOL_VERSION` in `src/adapters/mcp/stdio.ts` is **derived** from the
+SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION` (it is not hand-pinned), so it
+cannot drift from what the server actually negotiates. On any release that
+upgrades the SDK, revalidate:
 
-- [ ] `MCP_PROTOCOL_VERSION` matches the latest stable MCP protocol revision
-  the project intends to speak. Cross-check against
-  <https://modelcontextprotocol.io/specification>.
+- [ ] `MCP_PROTOCOL_VERSION` / `MCP_PROTOCOL_VERSION_LATEST_SUPPORTED` still
+  reflect the SDK's negotiated/latest versions after the bump. Cross-check
+  against <https://modelcontextprotocol.io/specification>.
 - [ ] `MCP_PROTOCOL_VERSION_REVIEW` in `src/adapters/mcp/stdio.ts` was updated
-  in the same commit as any change to `MCP_PROTOCOL_VERSION`:
+  in the same commit as any SDK/protocol change:
   - `version` equals `MCP_PROTOCOL_VERSION`
   - `reviewedAt` reflects the date of the last cross-check
   - `specRef` cites the upstream MCP spec revision
 - [ ] Any new MCP capabilities introduced by the spec revision are reflected in
   the `capabilities` object exposed during `initialize`.
-- [ ] The hand-written JSON-RPC adapter still satisfies the runtime guards
-  listed in `docs/testing/mcp-protocol-maintenance.md` (numeric/string ids,
-  notifications with no `id`, explicit `id: null`, `-32601` for unsupported
-  methods).
+- [ ] The runtime still satisfies the JSON-RPC guards listed in
+  `docs/testing/mcp-protocol-maintenance.md` (numeric/string ids, notifications
+  with no `id`, explicit `id: null`, `-32601` for unsupported methods).
 
 Reference: `docs/testing/mcp-protocol-maintenance.md`.
 
