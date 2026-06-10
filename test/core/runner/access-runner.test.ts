@@ -369,6 +369,46 @@ describe("AccessPowerShellRunner", () => {
     expect(firstCall.env).toMatchObject({ DYSFLOW_BACKEND_PASSWORD: "per-request-secret" });
   });
 
+  it("uses the injected fileExists port to detect a missing configured accessPath (issue #499)", async () => {
+    let executorCalls = 0;
+    const executor: PowerShellExecutor = async () => {
+      executorCalls += 1;
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"rows":[]}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+
+    // The configured accessDbPath points at a REAL temp file, but the injected
+    // port reports it missing — proving the runner consults the port, not the
+    // real filesystem, and never reaches the executor.
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+      fileExists: () => false,
+    });
+
+    const result = await runner.run(
+      {
+        kind: "query",
+        request: {
+          sql: "SELECT 1",
+          mode: "read",
+          action: "query_sql",
+          databasePath: "C:/data/whatever.accdb",
+        },
+      },
+      config,
+    );
+
+    expect(result).toMatchObject({ ok: false, error: { code: "CONFIG_TARGET_NOT_FOUND" } });
+    expect(executorCalls).toBe(0);
+  });
+
   // Routing behavior (dryRun, path precedence, Owned, ReadOnly) is proven by
   // behavioral Pester tests in scripts/tests/dysflow-access-runner.Tests.ps1
   // (Resolve-WriteActionDatabase, Resolve-ReadActionDatabase,

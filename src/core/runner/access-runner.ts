@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
 import {
@@ -118,6 +119,13 @@ export type AccessRunner = {
     options?: AccessRunnerRunOptions,
   ): Promise<OperationResult<TData>>;
 };
+/**
+ * Filesystem existence port. Injected so the domain never reaches `node:fs`
+ * directly (issue #499) — keeping the runner testable at the port, per the
+ * repo's hexagonal rule. Defaults to a `node:fs` adapter in production.
+ */
+export type FileExistsChecker = (path: string) => boolean;
+
 export type AccessPowerShellRunnerOptions = {
   executor?: PowerShellExecutor;
   scriptPath?: string;
@@ -126,6 +134,7 @@ export type AccessPowerShellRunnerOptions = {
   operationIdFactory?: () => string;
   clock?: () => string;
   lockAcquireTimeoutMs?: number;
+  fileExists?: FileExistsChecker;
 };
 
 export class AccessPowerShellRunner implements AccessRunner {
@@ -136,6 +145,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   private readonly operationIdFactory: () => string;
   private readonly clock: () => string;
   private readonly lockAcquireTimeoutMs: number;
+  private readonly fileExists: FileExistsChecker;
 
   constructor(options: AccessPowerShellRunnerOptions = {}) {
     this.executor = options.executor ?? spawnPowerShell;
@@ -153,6 +163,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.lockAcquireTimeoutMs = options.lockAcquireTimeoutMs ?? 30_000;
+    this.fileExists = options.fileExists ?? ((path) => existsSync(path));
   }
 
   async run<TData = unknown>(
@@ -237,8 +248,7 @@ export class AccessPowerShellRunner implements AccessRunner {
               // structured CONFIG_TARGET_NOT_FOUND so the caller can
               // tell config from a real Access failure.
               if (typeof config.accessDbPath === "string" && config.accessDbPath.length > 0) {
-                const fs = await import("node:fs");
-                if (!fs.existsSync(config.accessDbPath)) {
+                if (!this.fileExists(config.accessDbPath)) {
                   return failureResult(
                     createDysflowError(
                       "CONFIG_TARGET_NOT_FOUND",
