@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it } from "vitest";
 import {
   createUnavailableServices,
@@ -443,8 +444,10 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
   });
 
-  it("declares the targeted MCP protocol version as a named maintenance constant", () => {
-    expect(MCP_PROTOCOL_VERSION).toBe("2024-11-05");
+  it("derives the targeted MCP protocol version from the SDK's negotiated default", () => {
+    // The SDK owns protocol negotiation; the marker must reflect what the
+    // server actually negotiates, not a hand-maintained string that drifts.
+    expect(MCP_PROTOCOL_VERSION).toBe(DEFAULT_NEGOTIATED_PROTOCOL_VERSION);
   });
 
   it("keeps the protocol version review marker synchronized with MCP_PROTOCOL_VERSION", () => {

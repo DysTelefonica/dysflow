@@ -1,27 +1,47 @@
 # MCP protocol maintenance
 
-Dysflow uses a small hand-written JSON-RPC-over-stdio MCP runtime instead of the official MCP SDK. This is intentional for the current product slice: the server only exposes tools, keeps the adapter thin, and avoids SDK version churn while the core services stabilize.
+Dysflow's stdio MCP server is built on the official `@modelcontextprotocol/sdk`
+(`McpServer` + `StdioServerTransport`), wired in `src/adapters/mcp/stdio.ts`.
+The SDK owns the `initialize` handshake, protocol-version negotiation, and
+JSON-RPC framing. The only hand-written transport piece is `SizeLimitTransform`,
+a byte guard placed in front of stdin to reject oversized request lines.
+
+> Historical note: an earlier slice used a hand-written JSON-RPC-over-stdio
+> runtime. That migration to the SDK has already happened; this document
+> describes the current SDK-based runtime.
 
 ## Target protocol
 
-The targeted MCP protocol version is declared in `src/adapters/mcp/stdio.ts` as `MCP_PROTOCOL_VERSION`.
+`src/adapters/mcp/stdio.ts` exposes `MCP_PROTOCOL_VERSION` as a maintenance
+marker. It is **derived** from the SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION`
+(and `MCP_PROTOCOL_VERSION_LATEST_SUPPORTED` mirrors the SDK's
+`LATEST_PROTOCOL_VERSION`). Because the SDK performs negotiation, the marker is
+not hand-set — deriving it guarantees it reflects what the server actually
+negotiates and cannot silently drift.
 
-When changing it:
+The `MCP_PROTOCOL_VERSION_REVIEW` object records the date the upstream spec was
+last cross-checked and the spec revision that justifies the current target.
 
-1. read the upstream MCP protocol changelog;
-2. update `MCP_PROTOCOL_VERSION`;
+When the SDK is upgraded (which may change the negotiated/latest versions):
+
+1. read the upstream MCP protocol changelog for the new revision;
+2. update `MCP_PROTOCOL_VERSION_REVIEW` (`reviewedAt`, `specRef`) in the same
+   change — `version` tracks `MCP_PROTOCOL_VERSION` automatically;
 3. add or adjust runtime tests for any changed initialize/tools behavior;
 4. keep unsupported capabilities absent from `capabilities` until implemented.
 
 ## JSON-RPC compatibility guards
 
-Runtime tests must cover:
+The SDK transport handles JSON-RPC framing, but runtime tests still assert the
+observable contract:
 
 - normal requests with numeric/string ids;
 - notifications with no `id`, which produce no response;
 - explicit `id: null`, which is treated as a request id and receives a response;
 - unsupported methods returning JSON-RPC `-32601`.
 
-## Non-goal
+## Future work
 
-This note does not require migrating to the MCP SDK. A future migration should be a separate approved design change.
+Adopting newer protocol features (for example `structuredContent` on tool
+results) is a separate, feature-level change and should be proposed and
+designed on its own.
