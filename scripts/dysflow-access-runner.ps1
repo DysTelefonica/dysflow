@@ -15,6 +15,12 @@ $ErrorActionPreference = 'Stop'
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
 . (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
 
+# Pin a deterministic culture before any Access/DAO/COM work so SQL date
+# literals, decimal and list separators do not depend on the host's Windows
+# regional settings. CurrentUICulture is left untouched (error messages stay in
+# the OS language).
+Set-DysflowThreadCulture
+
 # Script-scoped variables for tracking exit code, child process PID, and canonical session.
 # Return-based script exits ensure the finally block is always executed.
 $script:exitCode = 0

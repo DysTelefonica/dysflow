@@ -59,6 +59,28 @@ if ($env:DYSFLOW_MOCK_COM -eq '1') {
 }
 
 # ---------------------------------------------------------------------------
+# Deterministic thread culture
+# ---------------------------------------------------------------------------
+
+# Pin the executing thread's CurrentCulture so Microsoft Access / DAO / COM
+# behaves identically regardless of the host's Windows regional settings.
+# Access is locale-sensitive: SQL date literals (#mm/dd/yyyy# vs #dd/mm/yyyy#),
+# decimal separators (. vs ,) and list separators vary by culture, which on a
+# non-en-US host can silently coerce or reject values.
+#
+# IMPORTANT: this sets CurrentCulture only — it deliberately does NOT touch
+# CurrentUICulture, so COM/Access error messages stay in the OS UI language
+# (callers and tests rely on those native-language messages).
+function Set-DysflowThreadCulture {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $false)][string]$Culture = 'en-US'
+    )
+    [System.Threading.Thread]::CurrentThread.CurrentCulture =
+        [System.Globalization.CultureInfo]::GetCultureInfo($Culture)
+}
+
+# ---------------------------------------------------------------------------
 # Win32 PID-from-hWnd helper
 # ---------------------------------------------------------------------------
 

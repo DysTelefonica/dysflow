@@ -112,6 +112,12 @@ $script:HasDysflowResultEmitted = $false
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
 . (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
 
+# Pin a deterministic culture before any Access/DAO/COM work so SQL date
+# literals, decimal and list separators do not depend on the host's Windows
+# regional settings. CurrentUICulture is left untouched (error messages stay in
+# the OS language).
+Set-DysflowThreadCulture
+
 function Write-DysflowOperationMarker {
     [CmdletBinding()]
     Param(
