@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.2.38] - 2026-06-10
+
+### Runner / Culture (#507)
+
+- Pinned the executing thread's `CurrentCulture` to `en-US` in both PowerShell scripts (`dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1`) before invoking any Access/DAO COM objects. This guarantees deterministic behavior for SQL date literals, decimal formats, and list separators regardless of the host's Windows regional settings.
+- Left `CurrentUICulture` untouched so that COM/Access error messages continue to be generated in the host's OS UI language (such as Spanish), preserving backward compatibility for tests and callers that assert on native-language error strings.
+
+### Refactor / Timeouts (#493)
+
+- Collapsed the redundant `processTimeoutMs` configuration property into the single authoritative `timeoutMs` across all core and adapter layers.
+- Updated documentation and tests to remove any vestigial references to the retired timeout property.
+
 ## [v1.2.37] - 2026-06-10
 
 ### Docs (#505)
