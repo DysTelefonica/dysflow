@@ -431,6 +431,25 @@ export class AccessPowerShellRunner implements AccessRunner {
   }
 }
 
+/**
+ * Secret-bearing request fields that must NEVER be serialized into the
+ * `-PayloadJson` command-line argument (issue #498). Windows exposes a
+ * process's command line to any local process via Win32_Process.CommandLine,
+ * so these values are forwarded out-of-band through the child environment
+ * (see {@link buildPowerShellEnvironment} → DYSFLOW_BACKEND_PASSWORD). The
+ * PowerShell runner reads them from `$BackendPassword`/`$AccessPassword`,
+ * which are sourced from env, so stripping them here is behavior-preserving.
+ */
+const PAYLOAD_SECRET_FIELDS = ["backendPassword", "accessPassword", "password"] as const;
+
+function stripPayloadSecrets(request: object): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = { ...(request as Record<string, unknown>) };
+  for (const field of PAYLOAD_SECRET_FIELDS) {
+    delete sanitized[field];
+  }
+  return sanitized;
+}
+
 function buildPowerShellArguments(
   scriptPath: string,
   operation: AccessRunnerOperation,
@@ -449,7 +468,7 @@ function buildPowerShellArguments(
     "-Operation",
     operation.kind,
     "-PayloadJson",
-    JSON.stringify(operation.request),
+    JSON.stringify(stripPayloadSecrets(operation.request)),
     "-OperationId",
     operationId,
   ];

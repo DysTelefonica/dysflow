@@ -317,6 +317,58 @@ describe("AccessPowerShellRunner", () => {
     expect(payload).not.toHaveProperty("backendPath");
   });
 
+  it("never serializes backendPassword into PowerShell command-line arguments (issue #498)", async () => {
+    const calls: {
+      args: readonly string[];
+      env?: Record<string, string | undefined>;
+    }[] = [];
+    const executor: PowerShellExecutor = async (_cmd, args, options) => {
+      calls.push({ args, env: options.env });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"rows":[]}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      };
+    };
+
+    const runner = new AccessPowerShellRunner({
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    await runner.run(
+      {
+        kind: "query",
+        request: {
+          sql: "SELECT 1",
+          mode: "read",
+          action: "compact_repair",
+          backendPath: "C:/data/backend.accdb",
+          backendPassword: "per-request-secret",
+        },
+      },
+      { ...config, accessPassword: undefined, backendPassword: undefined },
+    );
+
+    const firstCall = calls[0];
+    if (!firstCall) throw new Error("Expected call");
+
+    // The secret must NEVER appear anywhere in the spawned process arguments,
+    // because Windows exposes Win32_Process.CommandLine to other local processes.
+    expect(firstCall.args.join(" ")).not.toContain("per-request-secret");
+
+    const payloadArgIndex = firstCall.args.indexOf("-PayloadJson");
+    const payloadArg = payloadArgIndex >= 0 ? firstCall.args[payloadArgIndex + 1] : undefined;
+    const payload = payloadArg ? (JSON.parse(payloadArg) as Record<string, unknown>) : undefined;
+    expect(payload).not.toHaveProperty("backendPassword");
+
+    // But it MUST still reach the child process through the env channel.
+    expect(firstCall.env).toMatchObject({ DYSFLOW_BACKEND_PASSWORD: "per-request-secret" });
+  });
+
   // Routing behavior (dryRun, path precedence, Owned, ReadOnly) is proven by
   // behavioral Pester tests in scripts/tests/dysflow-access-runner.Tests.ps1
   // (Resolve-WriteActionDatabase, Resolve-ReadActionDatabase,
