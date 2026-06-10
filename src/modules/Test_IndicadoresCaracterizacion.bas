@@ -1149,10 +1149,27 @@ Private Sub CacheMaterializado_InsertFixtureRow( _
                         Optional ByVal p_CacheId As Long = 1 _
                     )
     Dim rs As DAO.Recordset
+    Dim dominio As String
+    Dim configId As Long
+
+    dominio = IIf(p_CacheId = 1, "PROYECTO", "AUDITORIA")
+
+    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio='" & dominio & "' AND Activo=True", dbOpenSnapshot)
+    If rs.EOF Then
+        rs.Close
+        Set rs = Nothing
+        configId = 1
+    Else
+        configId = CLng(Nz(rs.Fields("IDCacheConfig").value, 1))
+        rs.Close
+        Set rs = Nothing
+    End If
 
     Set rs = p_Db.OpenRecordset("TbCacheIndicadoresProyectoDetalle", dbOpenDynaset)
     rs.AddNew
     rs!IDCacheIndicadorProyecto = p_CacheId
+    rs!IDCacheConfig = configId
+    rs!Dominio = dominio
     rs!Bucket = p_Bucket
     rs!TipoFila = p_TipoFila
     rs!IDEntidad = p_IDEntidad
@@ -1169,8 +1186,25 @@ Private Sub CacheMaterializado_InsertHeader(ByVal p_Db As DAO.Database)
 End Sub
 
 Private Sub CacheMaterializado_InsertHeaderEstado(ByVal p_Db As DAO.Database, ByVal p_Estado As String, Optional ByVal p_CacheId As Long = 1)
+    Dim dominio As String
+    Dim configId As Long
+    Dim rs As DAO.Recordset
+
+    dominio = IIf(p_CacheId = 1, "PROYECTO", "AUDITORIA")
+
+    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio='" & dominio & "' AND Activo=True", dbOpenSnapshot)
+    If rs.EOF Then
+        rs.Close
+        Set rs = Nothing
+        configId = 1
+    Else
+        configId = CLng(Nz(rs.Fields("IDCacheConfig").value, 1))
+        rs.Close
+        Set rs = Nothing
+    End If
+
     p_Db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=" & CStr(p_CacheId), dbFailOnError
-    p_Db.Execute "INSERT INTO TbCacheIndicadoresProyectoHeader (IDCacheIndicadorProyecto, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & CStr(p_CacheId) & ", Now(), 'TEST', " & TestHelper.SqlText(p_Estado) & ")", dbFailOnError
+    p_Db.Execute "INSERT INTO TbCacheIndicadoresProyectoHeader (IDCacheIndicadorProyecto, IDCacheConfig, Dominio, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & CStr(p_CacheId) & ", " & CStr(configId) & ", '" & dominio & "', Now(), 'TEST', " & TestHelper.SqlText(p_Estado) & ")", dbFailOnError
 End Sub
 
 Private Function CacheMaterializado_TestUsuario(ByVal p_Nombre As String) As usuario
