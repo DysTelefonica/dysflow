@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.37] - 2026-06-10
+
+### Docs (#505)
+
+- Aligned `docs/release-checklist.md` with the SDK-based MCP runtime. The
+  "MCP protocol compatibility" section still described a hand-written JSON-RPC
+  adapter and a manually-pinned `MCP_PROTOCOL_VERSION`; both were corrected in
+  v1.2.36 (#501) for the other protocol docs, and this completes the set. The
+  checklist now reflects that the server runs on `@modelcontextprotocol/sdk` and
+  that the version marker is derived from the SDK. Docs-only, no runtime change.
+
 ## [v1.2.36] - 2026-06-10
 
 Hardening and maintenance pass from a code-quality review of the MCP runtime.
