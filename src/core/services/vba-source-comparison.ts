@@ -56,7 +56,7 @@ export type VbaExecutionTarget = {
   accessPath?: string;
   destinationRoot: string;
   projectRoot?: string;
-  processTimeoutMs?: number;
+  timeoutMs?: number;
 };
 
 export type VbaExecutionRequest = {
@@ -110,7 +110,7 @@ export async function compareSourceAgainstBinary(
   const effectiveTimeoutMs =
     typeof params.timeoutMs === "number" && params.timeoutMs > 0
       ? params.timeoutMs
-      : (target.data.processTimeoutMs ?? 30000);
+      : (target.data.timeoutMs ?? 30000);
   try {
     const request = {
       scriptPath: ctx.scriptPath,

@@ -241,7 +241,7 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
     vbaSyncToolService: new VbaSyncAdapter({
       operationRegistry,
       cleanupService,
-      processTimeoutMs: config.processTimeoutMs,
+      timeoutMs: config.timeoutMs,
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,
       accessPassword: config.accessPassword,
@@ -358,7 +358,6 @@ function resolvedConfigCacheKey(config: DysflowConfig): string {
     optionalPathIdentity(config.projectRoot),
     config.projectId ?? null,
     config.timeoutMs,
-    config.processTimeoutMs,
     config.accessPassword ?? null,
     config.backendPassword ?? null,
     config.accessPasswordEnv ?? null,

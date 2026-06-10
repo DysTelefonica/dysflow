@@ -94,7 +94,6 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
         accessPassword: "access-secret",
         backendPassword: "backend-secret",
         timeoutMs: 15_000,
-        processTimeoutMs: 15_000,
       });
     } finally {
       ws.cleanup();

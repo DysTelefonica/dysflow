@@ -12,7 +12,6 @@ const config: DysflowConfig = {
   allowWrites: false,
   accessDbPath: "C:/data/test.accdb",
   timeoutMs: 1_500,
-  processTimeoutMs: 1_500,
 };
 
 const noOpPreflight: AccessOperationPreflightCleanup = {

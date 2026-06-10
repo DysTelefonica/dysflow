@@ -20,7 +20,7 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-09 — New campaign OPENED: **clean-release tidy-up** (post-v1.2.33 fresh audit). 3 trivial chores to close (#490 junk, #491 ledger sync, #492 toolchain guard) + 2 deferred issues documented (#493 processTimeoutMs, #494 mega-scripts epic). Goal: ship a clean release that leaves **only** the mega-scripts restructure pending. See "Active campaign (2026-06-09)" below for the live board. NOTE: the 2026-06-07 board further down is STALE (#481/#482/#483 are no longer open on GitHub — only #487 is open); reconciling it is part of #491.
+`Last updated`: 2026-06-10 — Campaign updated: **clean-release tidy-up** post-v1.2.33 fresh audit. Collapsed `processTimeoutMs` into `timeoutMs` (#493) in the `refactor/493-collapse-process-timeout` branch. Only the mega-scripts restructure epic (#494) remains deferred. See "Active campaign (2026-06-09)" below.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
@@ -57,16 +57,17 @@
 | 1 | [#490](https://github.com/DysTelefonica/dysflow/issues/490) | chore(repo): ignore + remove local junk (`test-output-msg/`) | low | `done` ✅ | commit `aed4359` (`.gitignore` only) |
 | 2 | [#492](https://github.com/DysTelefonica/dysflow/issues/492) | test(quality-gates): lock toolchain exact-pinning | low | `done` ✅ | commit `7c3c9fc` (`test/quality-gates/toolchain-pinning.test.ts`) |
 | 3 | [#491](https://github.com/DysTelefonica/dysflow/issues/491) | chore(docs): resync `TRACKING.md` ledger with remote reality | low | `done` ✅ | this commit — finalizes this board |
+| 4 | [#493](https://github.com/DysTelefonica/dysflow/issues/493) | refactor(core): collapse `processTimeoutMs` into single authoritative timeout | medium | `done` ✅ | collapsed processTimeoutMs into timeoutMs |
 
 ### Deferred (filed, documented, NOT in this campaign)
 
 | Issue | Title | Why deferred |
 |-------|-------|--------------|
-| [#493](https://github.com/DysTelefonica/dysflow/issues/493) | refactor(core): collapse `processTimeoutMs` into single authoritative timeout | NOT trivial — read downstream in execution path (`execution-target.ts:83-84`, `vba-sync-adapter.ts:225`); medium refactor w/ behavior risk |
 | [#494](https://github.com/DysTelefonica/dysflow/issues/494) | refactor(scripts): split the two PowerShell mega-scripts (epic) | The deliberately-excluded epic (3272 + 1922 LOC); high blast radius on the TS↔PS contract |
 
 ### Progress log
 
+- **2026-06-10**: #493 DONE. Collapsed `processTimeoutMs` into `timeoutMs` across all core and adapter layers, including `VbaSyncAdapter`, `resolveExecutionTarget`, and `DysflowConfig`, and updated the documentation.
 - **2026-06-09**: Campaign opened from the post-v1.2.33 fresh audit. 5 issues filed (#490-#494):
   3 actionable chores + 2 deferred. Order to close: #490 → #492 → #491 (docs sync last so it
   captures the final state).

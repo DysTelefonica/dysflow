@@ -97,7 +97,6 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
         allowWrites: false,
         accessDbPath: dbPath,
         timeoutMs: 10_000,
-        processTimeoutMs: 10_000,
       },
     );
 
@@ -183,7 +182,6 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
         allowWrites: false,
         accessDbPath: dbPath,
         timeoutMs: 5_000,
-        processTimeoutMs: 5_000,
       },
     );
 
@@ -206,7 +204,6 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
         allowWrites: false,
         accessDbPath: dbPath,
         timeoutMs: 5_000,
-        processTimeoutMs: 5_000,
       },
     );
     expect(secondResult.ok).toBe(true);

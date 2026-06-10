@@ -51,11 +51,6 @@ export type DysflowConfig = {
   projectId?: string;
   /** The configuration-level execution timeout. */
   timeoutMs: number;
-  /**
-   * The wall-clock process timeout. Currently consolidated to and identical with timeoutMs
-   * as separate internal vs external timeout limits are not distinguished.
-   */
-  processTimeoutMs: number;
   accessPassword?: string;
   backendPassword?: string;
   accessPasswordEnv?: string;
@@ -179,7 +174,6 @@ export function redactDysflowConfig(config: DysflowConfig): RedactedDysflowConfi
     projectRoot: config.projectRoot,
     projectId: config.projectId,
     timeoutMs: config.timeoutMs,
-    processTimeoutMs: config.processTimeoutMs,
     accessPasswordEnv: config.accessPasswordEnv,
     backendPasswordEnv: config.backendPasswordEnv,
     configPath: config.configPath,
@@ -210,7 +204,6 @@ function buildExplicitConfig(
     projectRoot: stringValue(input.projectRoot) ?? cwd,
     projectId: stringValue(input.projectId) ?? stringValue(input.contextId),
     timeoutMs,
-    processTimeoutMs: timeoutMs,
     accessPassword: resolvePassword(
       input.accessPassword,
       env.DYSFLOW_ACCESS_PASSWORD ?? env[ALT_ACCESS_PASSWORD_ENV],
@@ -298,7 +291,6 @@ function buildProjectConfig(
     projectRoot,
     projectId: projectIdOverride ?? stringValue(raw.id),
     timeoutMs,
-    processTimeoutMs: timeoutMs,
     accessPassword,
     backendPassword,
     accessPasswordEnv,

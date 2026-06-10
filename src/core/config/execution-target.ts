@@ -7,7 +7,7 @@ export type ExecutionTargetContext = {
   cwd: string;
   accessPath?: string;
   destinationRoot?: string;
-  processTimeoutMs?: number;
+  timeoutMs?: number;
 };
 
 export type ExecutionTarget = Pick<
@@ -19,7 +19,6 @@ export type ExecutionTarget = Pick<
   | "projectId"
   | "configSource"
   | "timeoutMs"
-  | "processTimeoutMs"
 > & { accessPath?: string; destinationRoot: string };
 
 export async function resolveExecutionTarget(
@@ -80,7 +79,6 @@ export async function resolveExecutionTarget(
     destinationRoot,
     projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
     projectId: undefined,
-    timeoutMs: context.processTimeoutMs ?? 30000,
-    processTimeoutMs: context.processTimeoutMs ?? 30000,
+    timeoutMs: context.timeoutMs ?? 30000,
   });
 }

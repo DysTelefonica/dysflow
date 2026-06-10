@@ -206,7 +206,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     // The executor layer (spawnPowerShellProcess) is the single authoritative timeout:
     // it owns the kill and sets timedOut=true in the result.  The adapter no longer
     // races the executor against a parallel timer — it simply maps timedOut:true → VBA_MANAGER_TIMEOUT.
-    // processTimeoutMs=12000 survives the absurdly-small clamp (>= 1000) and the MIN_PS_TIMEOUT_MS floor (5000).
+    // timeoutMs=12000 survives the absurdly-small clamp (>= 1000) and the MIN_PS_TIMEOUT_MS floor (5000).
     // The adapter deducts preflightElapsedMs so the executor sees slightly less than 12000.
     const executor: VbaManagerExecutor = async (request) => {
       // Simulate executor timing out and killing the process itself
@@ -220,7 +220,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     };
     const service = new VbaSyncAdapter({
       executor,
-      processTimeoutMs: 12_000,
+      timeoutMs: 12_000,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
       env: {},
@@ -344,7 +344,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     expect(capturedTimeout).toBe(90_000);
   });
 
-  it("timeout: VbaSyncAdapter processTimeoutMs is honored without a 25s hard-cap (#485)", async () => {
+  it("timeout: VbaSyncAdapter timeoutMs is honored without a 25s hard-cap (#485)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-timeout-budget-orchestrator-"));
 
     let capturedTimeout = 0;
@@ -362,14 +362,14 @@ describe("VbaSyncAdapter Orchestrator", () => {
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
-      processTimeoutMs: 45_000,
+      timeoutMs: 45_000,
       cwd: root,
       env: {},
     });
 
     await service.execute("exists", { moduleName: "Module1" });
 
-    // processTimeoutMs=45_000 must be honored; no 25s hard-cap.
+    // timeoutMs=45_000 must be honored; no 25s hard-cap.
     expect(capturedTimeout).toBeGreaterThan(25_000);
     expect(capturedTimeout).toBeGreaterThanOrEqual(40_000);
   });
@@ -1032,7 +1032,7 @@ describe("derivePsTimeoutMs", () => {
   });
 
   it("returns effectiveTimeoutMs minus preflightElapsedMs for a moderately large timeout", () => {
-    // 45_000 (service processTimeoutMs) - 500ms preflight = 44_500
+    // 45_000 (service timeoutMs) - 500ms preflight = 44_500
     expect(derivePsTimeoutMs(45_000, 500)).toBe(44_500);
   });
 

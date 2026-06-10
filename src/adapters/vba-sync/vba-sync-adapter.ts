@@ -89,7 +89,7 @@ export type VbaSyncAdapterOptions = {
   accessPath?: string;
   destinationRoot?: string;
   accessPassword?: string;
-  processTimeoutMs?: number;
+  timeoutMs?: number;
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
@@ -131,7 +131,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
   public readonly accessPath?: string;
   public readonly destinationRoot?: string;
   public readonly accessPassword?: string;
-  public readonly processTimeoutMs: number;
+  public readonly timeoutMs: number;
 
   private readonly operationsAdapter: VbaOperationsAdapter;
   private readonly operationRegistry?: AccessOperationRegistry;
@@ -148,7 +148,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.destinationRoot = stringValue(options.destinationRoot);
     this.accessPassword =
       stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
-    this.processTimeoutMs = options.processTimeoutMs ?? 30_000;
+    this.timeoutMs = options.timeoutMs ?? 30_000;
     this.operationRegistry = options.operationRegistry;
 
     // Sub-adapters instantiation delegating orchestrator context
@@ -222,7 +222,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     const password = this.accessPassword;
     const explicitTimeoutMs =
       typeof params.timeoutMs === "number" && params.timeoutMs > 0 ? params.timeoutMs : undefined;
-    const effectiveTimeoutMs = explicitTimeoutMs ?? target.data.processTimeoutMs;
+    const effectiveTimeoutMs = explicitTimeoutMs ?? target.data.timeoutMs;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
@@ -400,7 +400,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       cwd: this.cwd,
       accessPath: this.accessPath,
       destinationRoot: this.destinationRoot,
-      processTimeoutMs: this.processTimeoutMs,
+      timeoutMs: this.timeoutMs,
     });
   }
 

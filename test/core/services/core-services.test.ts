@@ -111,7 +111,6 @@ const config = {
   allowWrites: false,
   accessDbPath: "C:/data/app.accdb",
   timeoutMs: 2_000,
-  processTimeoutMs: 2_000,
 } satisfies DysflowConfig;
 
 class FakeRunner implements AccessRunner {

@@ -7,7 +7,7 @@ describe("resolveExecutionTarget", () => {
     cwd: "C:/my-project",
     accessPath: "C:/my-project/db.accdb",
     destinationRoot: "C:/my-project/dest",
-    processTimeoutMs: 15000,
+    timeoutMs: 15000,
   };
 
   it("returns explicit overrides if specified", async () => {

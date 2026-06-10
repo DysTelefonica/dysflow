@@ -30,7 +30,6 @@ const config: DysflowConfig = {
   accessDbPath: "C:/data/app.accdb",
   accessPassword: SECRET,
   timeoutMs: 1_500,
-  processTimeoutMs: 1_500,
 };
 
 const noOpPreflight: AccessOperationPreflightCleanup = {
@@ -120,7 +119,6 @@ describe("AccessPowerShellRunner — marker payload sanitization (#417)", () => 
       allowWrites: false,
       accessDbPath: "C:/data/app.accdb",
       timeoutMs: 1_500,
-      processTimeoutMs: 1_500,
     };
 
     const capturedUpdates: Array<{ commandLine?: string }> = [];

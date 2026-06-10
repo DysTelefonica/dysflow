@@ -28,7 +28,6 @@ beforeAll(() => {
     allowWrites: false,
     accessDbPath: testAccessDbPath,
     timeoutMs: 100,
-    processTimeoutMs: 100,
   };
 });
 

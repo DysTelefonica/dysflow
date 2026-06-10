@@ -55,7 +55,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", processTimeoutMs: 1000 },
+        data: { destinationRoot: "/src", timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -88,7 +88,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", processTimeoutMs: 1000 },
+        data: { destinationRoot: "/src", timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -122,7 +122,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", processTimeoutMs: 1000 },
+        data: { destinationRoot: "/src", timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -157,7 +157,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", processTimeoutMs: 5000 },
+        data: { destinationRoot: "/src", timeoutMs: 5000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -193,7 +193,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, processTimeoutMs: 1000 },
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -381,7 +381,7 @@ describe("vba-source-comparison", () => {
         data: {
           destinationRoot: sourceRoot,
           accessPath: "some.accdb",
-          processTimeoutMs: 1000,
+          timeoutMs: 1000,
         },
         diagnostics: [],
         durationMs: 0,
@@ -442,7 +442,7 @@ describe("vba-source-comparison", () => {
         data: {
           destinationRoot: sourceRoot,
           accessPath: "some.accdb",
-          processTimeoutMs: 1000,
+          timeoutMs: 1000,
         },
         diagnostics: [],
         durationMs: 0,

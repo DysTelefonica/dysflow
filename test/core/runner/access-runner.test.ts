@@ -39,7 +39,6 @@ beforeAll(() => {
     accessPassword: "super-secret",
     backendPassword: "backend-secret",
     timeoutMs: 1_500,
-    processTimeoutMs: 1_500,
   };
 });
 
@@ -1209,7 +1208,6 @@ describe("Cross-process lock for .accdb", () => {
         accessPassword:
           process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? "",
         timeoutMs: 180_000,
-        processTimeoutMs: 180_000,
       },
     );
     // eslint-disable-next-line no-console

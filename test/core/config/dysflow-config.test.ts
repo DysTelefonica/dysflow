@@ -79,7 +79,6 @@ describe("dysflow configuration", () => {
         accessDbPath: "C:/data/app.accdb",
         backendPath: undefined,
         timeoutMs: 45_000,
-        processTimeoutMs: 45_000,
         accessPassword: "super-secret",
         backendPassword: undefined,
         projectId: undefined,
@@ -96,7 +95,6 @@ describe("dysflow configuration", () => {
       accessDbPath: "C:/data/app.accdb",
       allowWrites: false,
       timeoutMs: 45_000,
-      processTimeoutMs: 45_000,
       accessPassword: "[REDACTED]",
       configSource: "explicit-request",
     });
@@ -383,7 +381,6 @@ describe("dysflow configuration", () => {
         destinationRoot: resolve(e2eRoot, "src"),
         projectRoot: e2eRoot,
         timeoutMs: 90_000,
-        processTimeoutMs: 90_000,
         accessPassword: "front-secret",
         backendPassword: "backend-secret",
       });

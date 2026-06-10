@@ -37,9 +37,9 @@ MCP startup must not write product logs to stdout. Stdout belongs to the stdio p
 
 1. **Explicit per-call `timeoutMs`** — the caller passes `timeoutMs` in the tool params (e.g. from MCP input). Takes precedence over everything.
 2. **Project config `timeoutMs`** — loaded from `.dysflow/project.json` via `loadDysflowConfig`. This is the primary mechanism for repos with slow VBA test suites (e.g. `"timeoutMs": 180000`).
-3. **Service-level `processTimeoutMs`** — the value passed to `VbaSyncAdapter` at construction (default 30 000 ms). Used when no project config is resolved.
+3. **Service-level `timeoutMs`** — the value passed to `VbaSyncAdapter` at construction (default 30 000 ms). Used when no project config is resolved.
 
-The MCP startup timeout is only a fallback. Once `resolveExecutionTarget` loads a real project config, `processTimeoutMs` from that config governs the call.
+The MCP startup timeout is only a fallback. Once `resolveExecutionTarget` loads a real project config, `timeoutMs` from that config governs the call.
 
 ```jsonc
 // .dysflow/project.json
