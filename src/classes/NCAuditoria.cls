@@ -754,9 +754,12 @@ End Property
 
 
 
-Public Property Get DatosGeneralesOK() As EnumSino
-    
-    
+Public Function DatosGeneralesOK( _
+                                Optional p_MenosCef As EnumSino = EnumSino.No, _
+                                Optional ByRef p_Error As String _
+                                ) As EnumSino
+
+
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
@@ -764,55 +767,65 @@ Public Property Get DatosGeneralesOK() As EnumSino
         If .Tipo = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
         If .RequiereAccionCorrectiva = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
         If .Descripcion = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
         If .CAUSARAIZ = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
-        
-        
+
+
         If .PuntoNorma = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
         If .RESPONSABLEIMPLANTACION = "" Then
             m_eDatosGeneralesOK = EnumSino.No
             DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
+            Exit Function
         End If
-        
-        If .RequiereControlEficacia = "" Then
-            m_eDatosGeneralesOK = EnumSino.No
-            DatosGeneralesOK = m_eDatosGeneralesOK
-            Exit Property
-        
+
+        If p_MenosCef <> EnumSino.Sí Then
+            If .RequiereControlEficacia = "" Then
+                m_eDatosGeneralesOK = EnumSino.No
+                DatosGeneralesOK = m_eDatosGeneralesOK
+                Exit Function
+
+            End If
+
+            If .RequiereControlEficacia = "Sí" Then
+                If .ControlEficacia = "" Or .FechaPrevistaControlEficacia = "" Then
+                    m_eDatosGeneralesOK = EnumSino.No
+                    DatosGeneralesOK = m_eDatosGeneralesOK
+                    Exit Function
+                End If
+            End If
         End If
-        
-        
+
+
     End With
     m_eDatosGeneralesOK = EnumSino.Sí
     DatosGeneralesOK = m_eDatosGeneralesOK
-    Exit Property
+    Exit Function
 errores:
     If Err.Number <> 1000 Then
         m_Error = "El método NCAuditoria.DatosGeneralesOK  ha devuelto el error: " & vbNewLine & Err.Description
     End If
     Me.Error = m_Error
 
-End Property
+End Function
 Public Property Get EficaciaOK() As EnumSino
     
     
@@ -1463,5 +1476,6 @@ errores:
         p_Error = "El método NCAuditoria.SetPropiedad ha devuelto el error:" & vbNewLine & Err.Description
     End If
 End Function
+
 
 
