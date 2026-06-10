@@ -419,6 +419,66 @@
       "procedure": "Test_Form_Fallback_NoLogFailure_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "legacy-ui-fallback", "fallback", "resilient"]
+    },
+    {
+      "name": "Issue18 SincronizarNC Proyecto inserta detalle",
+      "procedure": "Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "proyecto", "sync"]
+    },
+    {
+      "name": "Issue18 SincronizarNC Auditoria inserta detalle",
+      "procedure": "Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "auditoria", "sync"]
+    },
+    {
+      "name": "Issue18 ResolverNC desde AC Proyecto",
+      "procedure": "Test_Issue18_ResolverNCDesdeAC_Proyecto_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "resolver", "ac", "proyecto"]
+    },
+    {
+      "name": "Issue18 ResolverNC desde AC Auditoria",
+      "procedure": "Test_Issue18_ResolverNCDesdeAC_Auditoria_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "resolver", "ac", "auditoria"]
+    },
+    {
+      "name": "Issue18 ResolverNC desde AR Proyecto",
+      "procedure": "Test_Issue18_ResolverNCDesdeAR_Proyecto_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "resolver", "ar", "proyecto"]
+    },
+    {
+      "name": "Issue18 ReconstruirTodo idempotent",
+      "procedure": "Test_Issue18_ReconstruirTodo_Idempotent_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "rebuild", "idempotent"]
+    },
+    {
+      "name": "Issue18 CargarBucket Proyecto filtra por responsable",
+      "procedure": "Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "bucket", "read-api", "proyecto"]
+    },
+    {
+      "name": "Issue18 CargarDetalle Proyecto filtra dominio",
+      "procedure": "Test_Issue18_CargarDetalle_Proyecto_FiltraDominio_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "detalle", "read-api", "proyecto"]
+    },
+    {
+      "name": "Issue18 cache global dos responsables dos dominios",
+      "procedure": "Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "global", "multi-responsable", "multi-dominio"]
+    },
+    {
+      "name": "Issue18 detalle completo campos UI requeridos",
+      "procedure": "Test_Issue18_DetalleCompleto_CamposRequeridosUI_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "detalle", "ui-contract"]
     }
   ]
 }
