@@ -3,7 +3,12 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  DEFAULT_NEGOTIATED_PROTOCOL_VERSION,
+  LATEST_PROTOCOL_VERSION,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
@@ -33,10 +38,17 @@ import type { McpToolContext } from "./types.js";
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 
-// MCP protocol version this server implements.
-// Check https://spec.modelcontextprotocol.io for newer versions.
-// To upgrade: update PROTOCOL_VERSION (re-exported as MCP_PROTOCOL_VERSION) and verify tool schema compatibility.
-export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
+// MCP protocol version this server targets.
+//
+// Protocol negotiation is owned by the official SDK (McpServer +
+// StdioServerTransport handle the initialize handshake). This constant is a
+// maintenance marker that MUST reflect what the SDK actually negotiates, so it
+// is DERIVED from the SDK's own `DEFAULT_NEGOTIATED_PROTOCOL_VERSION` rather
+// than hand-maintained — that way it can never silently drift from reality.
+// The SDK additionally supports up to `LATEST_PROTOCOL_VERSION`.
+// Check https://spec.modelcontextprotocol.io for newer revisions.
+export const MCP_PROTOCOL_VERSION = DEFAULT_NEGOTIATED_PROTOCOL_VERSION;
+export const MCP_PROTOCOL_VERSION_LATEST_SUPPORTED = LATEST_PROTOCOL_VERSION;
 
 /**
  * Maintenance marker for the targeted MCP protocol version.
@@ -52,9 +64,9 @@ export const MCP_PROTOCOL_VERSION = "2024-11-05" as const;
  * hand-written JSON-RPC adapter policy.
  */
 export const MCP_PROTOCOL_VERSION_REVIEW = {
-  version: "2024-11-05",
-  reviewedAt: "2026-06-07",
-  specRef: "https://modelcontextprotocol.io/specification/2024-11-05",
+  version: MCP_PROTOCOL_VERSION,
+  reviewedAt: "2026-06-10",
+  specRef: "https://modelcontextprotocol.io/specification/2025-03-26",
 } as const;
 
 export { DEFAULT_MAX_REQUEST_BYTES };
