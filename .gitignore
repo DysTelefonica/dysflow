@@ -8,3 +8,6 @@
 
 *.accdb
 
+# Local backend/frontend config (may contain credentials)
+backends.json
+
