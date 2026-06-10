@@ -1,5 +1,49 @@
 # Changelog
 
+## [v1.2.36] - 2026-06-10
+
+Hardening and maintenance pass from a code-quality review of the MCP runtime.
+
+### Security (#498)
+
+- The backend database password could be exposed on the spawned PowerShell
+  process command line: `buildPowerShellArguments` serialized the entire query
+  request (including `backendPassword`) into the `-PayloadJson` argument, and on
+  Windows a process command line is readable by any local process via
+  `Win32_Process.CommandLine`. Secret-bearing fields (`backendPassword`,
+  `accessPassword`, `password`) are now stripped from the payload before
+  serialization. The password still reaches the child process out-of-band via
+  `DYSFLOW_BACKEND_PASSWORD`, so behavior is preserved.
+
+### Architecture (#499)
+
+- `AccessPowerShellRunner.run()` reached the filesystem directly
+  (`await import("node:fs")` + `existsSync`) from the domain, contradicting the
+  hexagonal rule that `core` stays I/O-free and is tested at the ports. The
+  existence check now goes through an injectable `FileExistsChecker` port
+  (defaulting to a `node:fs` adapter).
+
+### Maintenance (#501)
+
+- `MCP_PROTOCOL_VERSION` was a stale hand-pinned `2024-11-05` marker, but the
+  server runs on the official `@modelcontextprotocol/sdk`, which already
+  negotiates `2025-03-26` by default and supports up to `2025-11-25`. The marker
+  is now derived from the SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION` (with
+  `MCP_PROTOCOL_VERSION_LATEST_SUPPORTED` exposed) so it reflects reality and
+  cannot drift. The protocol docs, which still described a hand-rolled
+  no-SDK runtime, were corrected. No runtime behavior change — the SDK owns
+  negotiation.
+
+### Evaluated and declined (#500)
+
+- A proposal to migrate MCP input validation to Zod was investigated and
+  **closed without changes**: an audit proved the existing validator already
+  enforces every constraint the current schemas use (string enums, types,
+  numeric bounds, `additionalProperties`). The only unsupported constructs
+  (numeric enums, integer distinction, `oneOf`/`anyOf`) are unused, so a
+  migration would have added a dependency and ~700 lines for zero behavior
+  change. Revisit if a future schema needs those constructs.
+
 ## [v1.2.35] - 2026-06-09
 
 Fix for the user-reported issue #496 cascade: the user (via the IA mantenedora)
