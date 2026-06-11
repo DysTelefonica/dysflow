@@ -24,14 +24,14 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { sanitizeSecrets } from "../../core/utils/index.js";
-import type { JsonObjectSchema } from "../mcp/schemas/dysflow-schemas.js";
 import {
   CLEANUP_SCHEMA,
   HTTP_QUERY_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
   HTTP_WRITE_QUERY_SCHEMA,
-} from "../mcp/schemas.js";
-import { validateInput } from "../mcp/validator.js";
+  type JsonObjectSchema,
+  validateInput,
+} from "../../shared/validation/index.js";
 import { createHttpServices } from "./http-services-factory.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";

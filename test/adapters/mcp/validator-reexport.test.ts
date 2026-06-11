@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { JsonObjectSchema } from "../../../src/shared/validation";
 import { validateInput } from "../../../src/adapters/mcp/validator.js";
+import type { JsonObjectSchema } from "../../../src/shared/validation";
 import { validateInput as sharedValidateInput } from "../../../src/shared/validation";
 
 // Contract guard: the MCP validator module must keep exporting the same

@@ -48,7 +48,10 @@ describe("validateInput — schema validation and error shape", () => {
   });
 
   it("rejects additional properties when additionalProperties is false", () => {
-    const result = validateInput({ name: "test", count: 5, extra: "not allowed" }, schemaWithRequired);
+    const result = validateInput(
+      { name: "test", count: 5, extra: "not allowed" },
+      schemaWithRequired,
+    );
     expect(result).toBe("extra is not allowed.");
   });
 });

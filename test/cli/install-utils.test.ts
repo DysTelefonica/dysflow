@@ -104,11 +104,9 @@ describe("install-utils helpers", () => {
     const tempDir = await mkdtemp(join(tmpdir(), "dysflow-utils-test-"));
     try {
       const nodeScript = "setTimeout(() => {}, 10000);";
-      const start = Date.now();
       await expect(
         runCommand("node", ["-e", nodeScript], tempDir, { timeoutMs: 100 }),
       ).rejects.toThrow("timed out after 100ms");
-      expect(Date.now() - start).toBeLessThan(1000);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

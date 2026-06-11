@@ -14,6 +14,12 @@ CLI / MCP stdio / HTTP
 
 `src/core/**` MUST NOT import MCP or HTTP adapters. Core returns protocol-neutral `OperationResult` values with typed errors, diagnostics, data, and duration. Adapters translate that result at the boundary: MCP returns text content blocks, the HTTP adapter returns JSON/status codes, and the CLI prints human-readable summaries.
 
+## Adapter-to-adapter boundary
+
+Adapters MUST NOT import from sibling adapters for shared request validation, schema atoms, or protocol-neutral helpers. Use `src/shared/**` for protocol-neutral shared kernels, or move domain behavior into `src/core/**` when it is part of the product model.
+
+The shared validation kernel lives in `src/shared/validation/**` so the HTTP and MCP adapters can reuse the same request schemas and `validateInput()` behavior without a lateral HTTP -> MCP or MCP -> HTTP dependency.
+
 ## MCP stdio adapter
 
 The MCP adapter registers tools over core services:
