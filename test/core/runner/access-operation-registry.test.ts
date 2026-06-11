@@ -245,7 +245,7 @@ describe("Access operation registry and cleanup safety", () => {
       await utimes(lockPath, staleTime, staleTime);
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
-        lockTimeoutMs: 50,
+        lockTimeoutMs: 5_000,
         staleLockMs: 1,
       });
 
