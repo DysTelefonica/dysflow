@@ -191,6 +191,10 @@ async function routeRequest(
     if (!handleValidation(body.data, CLEANUP_SCHEMA, context, response)) {
       return;
     }
+    if (body.data.force === true && !context.writesEnabled) {
+      sendWritesDisabled(response);
+      return;
+    }
     const cleanupService = context.services.cleanupService;
     if (cleanupService === undefined) {
       sendOperationResult(

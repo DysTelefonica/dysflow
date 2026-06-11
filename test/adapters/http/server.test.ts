@@ -619,6 +619,123 @@ describe("Dysflow HTTP adapter", () => {
     });
   });
 
+  it("POST /access/cleanup rejects force cleanup when writes are disabled without calling cleanupService", async () => {
+    const cleanupCalls: Array<{ operationId: string; accessPath: string; force?: boolean }> = [];
+    const fakeCleanupService = {
+      cleanup: async (request: { operationId: string; accessPath: string; force?: boolean }) => {
+        cleanupCalls.push(request);
+        return successResult({
+          status: "cleaned" as const,
+          accessPid: 9999,
+          operationId: request.operationId,
+        });
+      },
+    };
+    const services = createFakeServices({ cleanupService: fakeCleanupService });
+    const server = await startTestServer({ services, writesEnabled: false });
+
+    const response = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationId: "op-force-disabled",
+        accessPath: "C:/db/front.accdb",
+        force: true,
+      }),
+    });
+
+    expect(response.response.status).toBe(403);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: "HTTP_WRITES_DISABLED",
+        message:
+          "Write routes are disabled. Start dysflow serve with --enable-writes to allow them.",
+        retryable: false,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
+    expect(cleanupCalls).toEqual([]);
+  });
+
+  it("POST /access/cleanup allows force cleanup to reach cleanupService when writes are enabled", async () => {
+    const cleanupCalls: Array<{ operationId: string; accessPath: string; force?: boolean }> = [];
+    const fakeCleanupService = {
+      cleanup: async (request: { operationId: string; accessPath: string; force?: boolean }) => {
+        cleanupCalls.push(request);
+        return successResult({
+          status: "cleaned" as const,
+          accessPid: 9999,
+          operationId: request.operationId,
+        });
+      },
+    };
+    const services = createFakeServices({ cleanupService: fakeCleanupService });
+    const server = await startTestServer({ services, writesEnabled: true });
+
+    const response = await readJson<{ ok: true; data: { operationId: string; status: string } }>(
+      `${server.url}/access/cleanup`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op-force-enabled",
+          accessPath: "C:/db/front.accdb",
+          force: true,
+        }),
+      },
+    );
+
+    expect(response.response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data).toMatchObject({
+      operationId: "op-force-enabled",
+      status: "cleaned",
+    });
+    expect(cleanupCalls).toEqual([
+      { operationId: "op-force-enabled", accessPath: "C:/db/front.accdb", force: true },
+    ]);
+  });
+
+  it("POST /access/cleanup allows non-force cleanup to reach cleanupService when writes are disabled", async () => {
+    const cleanupCalls: Array<{ operationId: string; accessPath: string; force?: boolean }> = [];
+    const fakeCleanupService = {
+      cleanup: async (request: { operationId: string; accessPath: string; force?: boolean }) => {
+        cleanupCalls.push(request);
+        return successResult({
+          status: "cleaned" as const,
+          accessPid: 9999,
+          operationId: request.operationId,
+        });
+      },
+    };
+    const services = createFakeServices({ cleanupService: fakeCleanupService });
+    const server = await startTestServer({ services, writesEnabled: false });
+
+    const absentForce = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: "op-non-force-absent", accessPath: "C:/db/front.accdb" }),
+    });
+    const falseForce = await readJson<HttpErrorBody>(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationId: "op-non-force-false",
+        accessPath: "C:/db/front.accdb",
+        force: false,
+      }),
+    });
+
+    expect(absentForce.response.status).toBe(200);
+    expect(falseForce.response.status).toBe(200);
+    expect(cleanupCalls).toEqual([
+      { operationId: "op-non-force-absent", accessPath: "C:/db/front.accdb", force: false },
+      { operationId: "op-non-force-false", accessPath: "C:/db/front.accdb", force: false },
+    ]);
+  });
+
   it("POST /access/cleanup returns SERVICE_UNAVAILABLE 500 when cleanupService is absent", async () => {
     const services = createFakeServices({ cleanupService: undefined });
     const server = await startTestServer({ services });

@@ -103,6 +103,7 @@ Refusal examples include:
 - Read tools are default/explicit `mode: "read"`.
 - Write-like operations pass through guarded request paths.
 - `dryRun`-style safety is preserved across all write-capable tools.
+- Access cleanup is write-gated only for `force: true`; non-force cleanup remains allowed so terminal or failed Dysflow-owned operations can pass through the normal eligibility checks even when writes are disabled.
 
 ### 4) VBA procedure allowlist
 
@@ -623,6 +624,8 @@ Defaults:
 **Bearer token auth**: set `httpToken` in `.dysflow/project.json` to require `Authorization: Bearer <token>` on every request. Requests without a valid token return `401`. When `httpToken` is absent, all requests pass through (default).
 
 **Procedure allowlist**: `allowedProcedures` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
+
+**Cleanup write gate**: `POST /access/cleanup` matches MCP behavior. Only `force: true` requires `--enable-writes`; non-force cleanup is still allowed to reach core eligibility checks while writes are disabled.
 
 See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 
