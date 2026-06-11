@@ -11,3 +11,6 @@
 # Local backend/frontend config (may contain credentials)
 backends.json
 
+# Dysflow/opencode runtime config (regenerated locally; may contain hardcoded passwords)
+opencode.json
+
