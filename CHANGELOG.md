@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.40] - 2026-06-11
+
+### MCP
+
+- Aligned the legacy `cleanup_access_operation` MCP alias with the modern cleanup tool by requiring `accessPath` at schema validation time, preventing empty-path cleanup requests from reaching the cleanup service.
+- Corrected README MCP inventory and protocol documentation to match the current SDK-backed runtime: 49 visible tools, 51 registered tools including 2 hidden compatibility stubs, and SDK-derived protocol negotiation.
+
 ## [v1.2.39] - 2026-06-11
 
 ### MCP Safety
