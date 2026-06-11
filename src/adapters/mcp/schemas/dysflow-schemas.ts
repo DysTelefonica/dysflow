@@ -17,21 +17,17 @@ export type {
   JsonSchemaPrimitiveType,
   JsonSchemaProperty,
 } from "../../../shared/validation/index.js";
-
 // Re-exports — shared atoms.
-export {
-  ACCESS_OVERRIDE,
-  CTX_PROPS,
-  SCHEMA_PROPS,
-  STRICT_CTX,
-} from "../../../shared/validation/index.js";
-
 // Re-exports — HTTP request schemas.
 export {
+  ACCESS_OVERRIDE,
   CLEANUP_SCHEMA,
+  CTX_PROPS,
   HTTP_QUERY_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
   HTTP_WRITE_QUERY_SCHEMA,
+  SCHEMA_PROPS,
+  STRICT_CTX,
 } from "../../../shared/validation/index.js";
 
 // Local MCP tool schemas (no HTTP counterpart; stay in the adapter).

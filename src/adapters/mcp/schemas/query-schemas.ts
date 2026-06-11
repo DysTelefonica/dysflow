@@ -1,6 +1,5 @@
 // Schemas for the 24 query/access tools (QUERY_TOOL_NAMES).
 
-import type { QueryToolName } from "../mcp-tool-registry.js";
 import {
   ACCESS_OVERRIDE,
   CTX_PROPS,
@@ -8,6 +7,7 @@ import {
   type JsonSchemaProperty,
   SCHEMA_PROPS,
 } from "../../../shared/validation/index.js";
+import type { QueryToolName } from "../mcp-tool-registry.js";
 
 const WRITE_TARGET_OVERRIDE = {
   ...ACCESS_OVERRIDE,

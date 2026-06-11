@@ -1,6 +1,5 @@
 // Schemas for the 21 VBA sync tools (VBA_SYNC_TOOL_NAMES).
 
-import type { VbaSyncToolName } from "../mcp-tool-registry.js";
 import {
   ACCESS_OVERRIDE,
   CTX_PROPS,
@@ -8,6 +7,7 @@ import {
   SCHEMA_PROPS,
   STRICT_CTX,
 } from "../../../shared/validation/index.js";
+import type { VbaSyncToolName } from "../mcp-tool-registry.js";
 
 export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = {
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },

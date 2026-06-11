@@ -5,8 +5,8 @@
 // adapter can import them through the shared validation kernel without
 // crossing the adapter-to-adapter boundary.
 
-import type { JsonObjectSchema } from "./schemas.js";
 import { SCHEMA_PROPS } from "./schema-props.js";
+import type { JsonObjectSchema } from "./schemas.js";
 
 export const CLEANUP_SCHEMA: JsonObjectSchema = {
   type: "object",

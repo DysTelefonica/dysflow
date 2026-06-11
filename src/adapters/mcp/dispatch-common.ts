@@ -1,12 +1,12 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
+import { validateInput } from "../../shared/validation/validator.js";
 import {
   type McpToolResult,
   type McpWriteAccessResolver,
   translateCoreResultToMcpContent,
 } from "./result-translation.js";
 import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
-import { validateInput } from "../../shared/validation/validator.js";
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
