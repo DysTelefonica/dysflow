@@ -308,6 +308,7 @@ Public Function Cache_Indicadores_CargarBucket( _
     ) As String
     Dim logs As Collection
     Dim conteos As Scripting.Dictionary
+    Dim lastCountLabel As String
 
     Set logs = New Collection
     On Error GoTo errores
@@ -328,31 +329,101 @@ Public Function Cache_Indicadores_CargarBucket( _
     conteos.CompareMode = TextCompare
 
     If p_Dominio = "PROYECTO" Then
+        lastCountLabel = "PROYECTO/TareasPteReplanificarTotal"
         conteos("TareasPteReplanificarTotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_TAR_PROY_PTE_REPLAN, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/TareasPteReplanificarUsuario"
         conteos("TareasPteReplanificarUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_TAR_PROY_PTE_REPLAN, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCRegistradasTotal"
         conteos("NCRegistradasTotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_REGISTRADAS, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCRegistradasUsuario"
         conteos("NCRegistradasUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_REGISTRADAS, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCAccionesSinTareasTotal"
         conteos("NCAccionesSinTareasTotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_SIN_TAREAS, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCAccionesSinTareasUsuario"
         conteos("NCAccionesSinTareasUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_SIN_TAREAS, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCPteCETotal"
         conteos("NCPteCETotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_PTE_CE, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCPteCEUsuario"
         conteos("NCPteCEUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_PTE_CE, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCCECaducadaTotal"
         conteos("NCCECaducadaTotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_CE_CADUCADA, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCCECaducadaUsuario"
         conteos("NCCECaducadaUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_CE_CADUCADA, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCCENoConformeTotal"
         conteos("NCCENoConformeTotal") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_CE_NO_CONFORME, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "PROYECTO/NCCENoConformeUsuario"
         conteos("NCCENoConformeUsuario") = CountBucket(p_Db, CACHE_PROYECTO_ID, BUCKET_NC_PROY_CE_NO_CONFORME, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
     ElseIf p_Dominio = "AUDITORIA" Then
+        lastCountLabel = "AUDITORIA/TareasPteReplanificarTotal"
         conteos("TareasPteReplanificarTotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_TAR_AUD_PTE_REPLAN, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/TareasPteReplanificarUsuario"
         conteos("TareasPteReplanificarUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_TAR_AUD_PTE_REPLAN, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCRegistradasTotal"
         conteos("NCRegistradasTotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_REGISTRADAS, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCRegistradasUsuario"
         conteos("NCRegistradasUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_REGISTRADAS, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCAccionesSinTareasTotal"
         conteos("NCAccionesSinTareasTotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_SIN_TAREAS, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCAccionesSinTareasUsuario"
         conteos("NCAccionesSinTareasUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_SIN_TAREAS, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCPteCETotal"
         conteos("NCPteCETotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_PTE_CE, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCPteCEUsuario"
         conteos("NCPteCEUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_PTE_CE, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCCECaducadaTotal"
         conteos("NCCECaducadaTotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_CE_CADUCADA, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCCECaducadaUsuario"
         conteos("NCCECaducadaUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_CE_CADUCADA, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCCENoConformeTotal"
         conteos("NCCENoConformeTotal") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_CE_NO_CONFORME, "", p_Error)
+        If p_Error <> "" Then GoTo conteo_err
+
+        lastCountLabel = "AUDITORIA/NCCENoConformeUsuario"
         conteos("NCCENoConformeUsuario") = CountBucket(p_Db, CACHE_AUDITORIA_ID, BUCKET_NC_AUD_CE_NO_CONFORME, p_Usuario.Nombre, p_Error)
+        If p_Error <> "" Then GoTo conteo_err
     Else
         p_Error = "Cache_Indicadores_CargarBucket: dominio no reconhecido: " & p_Dominio
         Cache_Indicadores_CargarBucket = TestHelper.BuildJsonFail(p_Error, logs)
@@ -361,6 +432,11 @@ Public Function Cache_Indicadores_CargarBucket( _
 
     TestHelper.AddLog logs, "Cache_Indicadores_CargarBucket(" & p_Dominio & ", " & p_Usuario.Nombre & ") returned counts"
     Cache_Indicadores_CargarBucket = TestHelper.BuildJsonOk(logs, conteos)
+    Exit Function
+
+conteo_err:
+    TestHelper.AddLog logs, "Cache_Indicadores_CargarBucket: failed during count for " & lastCountLabel & " -> " & p_Error
+    Cache_Indicadores_CargarBucket = TestHelper.BuildJsonFail(p_Error, logs)
     Exit Function
 
 errores:
@@ -408,8 +484,10 @@ Public Function Cache_Indicadores_CargarDetalle( _
           "FROM " & CACHE_DETALLE & _
           " WHERE IDCacheIndicadorProyecto=" & CStr(cacheId) & _
           " AND Bucket=" & SqlText(p_Bucket)
-    If Not p_Usuario Is Nothing And Len(p_Usuario.Nombre) > 0 Then
-        sql = sql & " AND ResponsableCalidad=" & SqlText(p_Usuario.Nombre)
+    If Not p_Usuario Is Nothing Then
+        If Len(p_Usuario.Nombre) > 0 Then
+            sql = sql & " AND ResponsableCalidad=" & SqlText(p_Usuario.Nombre)
+        End If
     End If
 
     Set rs = p_Db.OpenRecordset(sql, dbOpenSnapshot)
@@ -456,6 +534,9 @@ Private Function SyncNC_Proyecto( _
     snapFecha = Now()
     p_Ws.BeginTrans
 
+    Call EnsureIncrementalHeader(p_Db, cacheId, configId, DOMINIO_PROYECTO, p_IDNoConformidad, p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+
     ' Delete existing detail rows for this NC in Proyecto domain
     p_Db.Execute "DELETE FROM " & CACHE_DETALLE & _
                   " WHERE IDCacheIndicadorProyecto=" & CStr(cacheId) & _
@@ -467,8 +548,11 @@ Private Function SyncNC_Proyecto( _
 
     ' Update header sync metadata
     p_Db.Execute "UPDATE " & CACHE_HEADER & _
-                  " SET FechaSincronizacion=Now(), Estado='OK', " & _
+                  " SET IDCacheConfig=" & CStr(configId) & ", " & _
+                  " Dominio=" & SqlText(DOMINIO_PROYECTO) & ", " & _
+                  " FechaSincronizacion=Now(), Estado='OK', " & _
                   " MotivoSincronizacion='INCIDENTAL', " & _
+                  " VersionRegla='1.0', " & _
                   " IDNoConformidadUltimaSync=" & CStr(p_IDNoConformidad) & ", " & _
                   " OperadorSync=" & SqlText(getNombreUsuarioConectado()) & ", " & _
                   " ErrorUltimaSincronizacion=Null " & _
@@ -509,6 +593,9 @@ Private Function SyncNC_Auditoria( _
     snapFecha = Now()
     p_Ws.BeginTrans
 
+    Call EnsureIncrementalHeader(p_Db, cacheId, configId, DOMINIO_AUDITORIA, p_IDNoConformidad, p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+
     ' Delete existing detail rows for this NC in Auditoria domain
     p_Db.Execute "DELETE FROM " & CACHE_DETALLE & _
                   " WHERE IDCacheIndicadorProyecto=" & CStr(cacheId) & _
@@ -520,8 +607,11 @@ Private Function SyncNC_Auditoria( _
 
     ' Update header sync metadata
     p_Db.Execute "UPDATE " & CACHE_HEADER & _
-                  " SET FechaSincronizacion=Now(), Estado='OK', " & _
+                  " SET IDCacheConfig=" & CStr(configId) & ", " & _
+                  " Dominio=" & SqlText(DOMINIO_AUDITORIA) & ", " & _
+                  " FechaSincronizacion=Now(), Estado='OK', " & _
                   " MotivoSincronizacion='INCIDENTAL', " & _
+                  " VersionRegla='1.0', " & _
                   " IDNoConformidadUltimaSync=" & CStr(p_IDNoConformidad) & ", " & _
                   " OperadorSync=" & SqlText(getNombreUsuarioConectado()) & ", " & _
                   " ErrorUltimaSincronizacion=Null " & _
@@ -539,6 +629,49 @@ errores:
     p_Error = "SyncNC_Auditoria: " & Err.Description
     SyncNC_Auditoria = False
 End Function
+
+Private Sub EnsureIncrementalHeader( _
+        ByVal p_Db As DAO.Database, _
+        ByVal p_CacheId As Long, _
+        ByVal p_ConfigId As Long, _
+        ByVal p_Dominio As String, _
+        ByVal p_IDNoConformidad As Long, _
+        Optional ByRef p_Error As String = "" _
+    )
+    On Error GoTo errores
+    If p_Error <> "" Then Exit Sub
+
+    p_Db.Execute "UPDATE " & CACHE_HEADER & _
+                 " SET IDCacheConfig=" & CStr(p_ConfigId) & ", " & _
+                 " Dominio=" & SqlText(p_Dominio) & ", " & _
+                 " FechaSincronizacion=Now(), " & _
+                 " UsuarioSincronizacion=" & SqlText(getNombreUsuarioConectado()) & ", " & _
+                 " Estado='SYNCING', " & _
+                 " MotivoSincronizacion='INCIDENTAL', " & _
+                 " VersionRegla='1.0', " & _
+                 " IDNoConformidadUltimaSync=" & CStr(p_IDNoConformidad) & ", " & _
+                 " OperadorSync=" & SqlText(getNombreUsuarioConectado()) & ", " & _
+                 " ErrorUltimaSincronizacion=Null " & _
+                 " WHERE IDCacheIndicadorProyecto=" & CStr(p_CacheId), dbFailOnError
+
+    If p_Db.RecordsAffected = 0 Then
+        p_Db.Execute "INSERT INTO " & CACHE_HEADER & _
+                     " (IDCacheIndicadorProyecto, IDCacheConfig, Dominio, FechaSincronizacion, " & _
+                     " UsuarioSincronizacion, Estado, MotivoSincronizacion, VersionRegla, " & _
+                     " IDNoConformidadUltimaSync, OperadorSync, ErrorUltimaSincronizacion) VALUES (" & _
+                     CStr(p_CacheId) & ", " & _
+                     CStr(p_ConfigId) & ", " & _
+                     SqlText(p_Dominio) & ", Now(), " & _
+                     SqlText(getNombreUsuarioConectado()) & ", " & _
+                     "'SYNCING', 'INCIDENTAL', '1.0', " & _
+                     CStr(p_IDNoConformidad) & ", " & _
+                     SqlText(getNombreUsuarioConectado()) & ", Null)", dbFailOnError
+    End If
+    Exit Sub
+
+errores:
+    p_Error = "EnsureIncrementalHeader: " & Err.Description
+End Sub
 
 ' ============================================================
 ' PRIVATE — Full domain rebuild

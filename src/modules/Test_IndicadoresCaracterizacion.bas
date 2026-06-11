@@ -2,6 +2,8 @@ Attribute VB_Name = "Test_IndicadoresCaracterizacion"
 Option Compare Database
 Option Explicit
 
+Private m_CacheMaterializadoConfigSnapshots As Scripting.Dictionary
+
 Public Function Test_Indicadores_Calcular_MixedDataset_Atomic() As String
     Dim logs As Collection
     Dim assertError As String
@@ -719,6 +721,7 @@ Private Sub CacheMaterializado_Cleanup(ByRef p_Logs As Collection, ByRef p_Asser
     Else
         TestHelper.AddLog p_Logs, "Cleanup materialized indicator cache OK"
     End If
+    Call CacheMaterializado_ConfigCleanup(db, "PROYECTO", p_Logs, p_AssertError)
 End Sub
 
 Private Sub CacheMaterializadoAuditoria_Cleanup(ByRef p_Logs As Collection, ByRef p_AssertError As String)
@@ -744,6 +747,7 @@ Private Sub CacheMaterializadoAuditoria_Cleanup(ByRef p_Logs As Collection, ByRe
     Else
         TestHelper.AddLog p_Logs, "Cleanup auditoria materialized indicator cache OK"
     End If
+    Call CacheMaterializado_ConfigCleanup(db, "AUDITORIA", p_Logs, p_AssertError)
 End Sub
 
 Private Function CacheMaterializado_SchemaExiste(ByVal p_Db As DAO.Database, Optional ByRef p_Error As String) As Boolean
@@ -1152,18 +1156,8 @@ Private Sub CacheMaterializado_InsertFixtureRow( _
     Dim dominio As String
     Dim configId As Long
 
-    dominio = IIf(p_CacheId = 1, "PROYECTO", "AUDITORIA")
-
-    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio='" & dominio & "' AND Activo=True", dbOpenSnapshot)
-    If rs.EOF Then
-        rs.Close
-        Set rs = Nothing
-        configId = 1
-    Else
-        configId = CLng(Nz(rs.Fields("IDCacheConfig").value, 1))
-        rs.Close
-        Set rs = Nothing
-    End If
+    dominio = CacheMaterializado_DominioForCacheId(p_CacheId)
+    configId = CacheMaterializado_EnsureConfigId(p_Db, dominio)
 
     Set rs = p_Db.OpenRecordset("TbCacheIndicadoresProyectoDetalle", dbOpenDynaset)
     rs.AddNew
@@ -1176,10 +1170,130 @@ Private Sub CacheMaterializado_InsertFixtureRow( _
     rs!IDNoConformidad = p_IDEntidad
     rs!ResponsableCalidad = p_Responsable
     rs!FechaSnapshot = Now()
+    rs!FechaActualizacionEntidad = Now()
     rs.Update
     rs.Close
     Set rs = Nothing
 End Sub
+
+Private Function CacheMaterializado_DominioForCacheId(ByVal p_CacheId As Long) As String
+    If p_CacheId = 1 Then
+        CacheMaterializado_DominioForCacheId = "PROYECTO"
+    Else
+        CacheMaterializado_DominioForCacheId = "AUDITORIA"
+    End If
+End Function
+
+Private Function CacheMaterializado_TestConfigIdForDominio(ByVal p_Dominio As String) As Long
+    If p_Dominio = "PROYECTO" Then
+        CacheMaterializado_TestConfigIdForDominio = 990901
+    Else
+        CacheMaterializado_TestConfigIdForDominio = 990902
+    End If
+End Function
+
+Private Function CacheMaterializado_ConfigSnapshots() As Scripting.Dictionary
+    If m_CacheMaterializadoConfigSnapshots Is Nothing Then
+        Set m_CacheMaterializadoConfigSnapshots = New Scripting.Dictionary
+        m_CacheMaterializadoConfigSnapshots.CompareMode = TextCompare
+    End If
+    Set CacheMaterializado_ConfigSnapshots = m_CacheMaterializadoConfigSnapshots
+End Function
+
+Private Function CacheMaterializado_SqlValue(ByVal p_Value As Variant, ByVal p_IsText As Boolean) As String
+    If IsNull(p_Value) Then
+        CacheMaterializado_SqlValue = "NULL"
+    ElseIf IsDate(p_Value) And Not p_IsText Then
+        CacheMaterializado_SqlValue = "#" & Format$(CDate(p_Value), "yyyy-mm-dd hh:nn:ss") & "#"
+    ElseIf p_IsText Then
+        CacheMaterializado_SqlValue = TestHelper.SqlText(CStr(p_Value))
+    ElseIf VarType(p_Value) = vbBoolean Then
+        CacheMaterializado_SqlValue = IIf(CBool(p_Value), "True", "False")
+    Else
+        CacheMaterializado_SqlValue = CStr(p_Value)
+    End If
+End Function
+
+Private Sub CacheMaterializado_SnapshotConfigRow(ByVal p_Db As DAO.Database, ByVal p_Dominio As String)
+    Dim snapshots As Scripting.Dictionary
+    Dim snapshot As Scripting.Dictionary
+    Dim rs As DAO.Recordset
+
+    Set snapshots = CacheMaterializado_ConfigSnapshots()
+    If snapshots.Exists(p_Dominio) Then Exit Sub
+
+    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig, Dominio, Activo, VersionRegla, FechaConfiguracion, UsuarioConfiguracion FROM TbCacheIndicadoresConfig WHERE Dominio=" & TestHelper.SqlText(p_Dominio), dbOpenSnapshot)
+    If Not rs.EOF Then
+        Set snapshot = New Scripting.Dictionary
+        snapshot.CompareMode = TextCompare
+        snapshot("IDCacheConfig") = rs.Fields("IDCacheConfig").Value
+        snapshot("Dominio") = rs.Fields("Dominio").Value
+        snapshot("Activo") = rs.Fields("Activo").Value
+        snapshot("VersionRegla") = rs.Fields("VersionRegla").Value
+        snapshot("FechaConfiguracion") = rs.Fields("FechaConfiguracion").Value
+        snapshot("UsuarioConfiguracion") = rs.Fields("UsuarioConfiguracion").Value
+        snapshots.Add p_Dominio, snapshot
+    End If
+    rs.Close
+    Set rs = Nothing
+End Sub
+
+Private Sub CacheMaterializado_RestoreConfigRow(ByVal p_Db As DAO.Database, ByVal p_Dominio As String)
+    Dim snapshots As Scripting.Dictionary
+    Dim snapshot As Scripting.Dictionary
+    Dim sql As String
+
+    Set snapshots = CacheMaterializado_ConfigSnapshots()
+    If Not snapshots.Exists(p_Dominio) Then Exit Sub
+
+    Set snapshot = snapshots(p_Dominio)
+
+    sql = "UPDATE TbCacheIndicadoresConfig SET " & _
+          "Activo=" & CacheMaterializado_SqlValue(snapshot("Activo"), False) & ", " & _
+          "VersionRegla=" & CacheMaterializado_SqlValue(snapshot("VersionRegla"), True) & ", " & _
+          "FechaConfiguracion=" & CacheMaterializado_SqlValue(snapshot("FechaConfiguracion"), False) & ", " & _
+          "UsuarioConfiguracion=" & CacheMaterializado_SqlValue(snapshot("UsuarioConfiguracion"), True) & " " & _
+          "WHERE IDCacheConfig=" & CStr(snapshot("IDCacheConfig")) & " AND Dominio=" & CacheMaterializado_SqlValue(snapshot("Dominio"), True)
+    p_Db.Execute sql, dbFailOnError
+    snapshots.Remove p_Dominio
+End Sub
+
+Private Sub CacheMaterializado_ConfigCleanup(ByVal p_Db As DAO.Database, ByVal p_Dominio As String, ByRef p_Logs As Collection, ByRef p_AssertError As String)
+    On Error GoTo cleanupError
+
+    p_Db.Execute "DELETE FROM TbCacheIndicadoresConfig WHERE IDCacheConfig=" & CStr(CacheMaterializado_TestConfigIdForDominio(p_Dominio)) & " AND Dominio=" & TestHelper.SqlText(p_Dominio) & " AND VersionRegla='TEST-ISSUE18' AND UsuarioConfiguracion='TEST'", dbFailOnError
+    Call CacheMaterializado_RestoreConfigRow(p_Db, p_Dominio)
+    TestHelper.AddLog p_Logs, "Teardown cache config " & p_Dominio & ": restored snapshot or removed deterministic test row"
+    Exit Sub
+
+cleanupError:
+    TestHelper.AddLog p_Logs, "Teardown cache config " & p_Dominio & " failed: " & Err.Description
+    If p_AssertError = "" Then p_AssertError = "Teardown cache config " & p_Dominio & " failed: " & Err.Description
+End Sub
+
+Private Function CacheMaterializado_EnsureConfigId(ByVal p_Db As DAO.Database, ByVal p_Dominio As String) As Long
+    Dim rs As DAO.Recordset
+    Dim configId As Long
+    Dim existingConfigId As Long
+
+    configId = CacheMaterializado_TestConfigIdForDominio(p_Dominio)
+
+    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio=" & TestHelper.SqlText(p_Dominio), dbOpenSnapshot)
+    If Not rs.EOF Then
+        existingConfigId = CLng(rs.Fields("IDCacheConfig").Value)
+        If existingConfigId <> configId Then Call CacheMaterializado_SnapshotConfigRow(p_Db, p_Dominio)
+        rs.Close
+        Set rs = Nothing
+        p_Db.Execute "UPDATE TbCacheIndicadoresConfig SET Activo=True, VersionRegla='TEST-ISSUE18', FechaConfiguracion=Now(), UsuarioConfiguracion='TEST' WHERE Dominio=" & TestHelper.SqlText(p_Dominio) & " AND IDCacheConfig=" & CStr(existingConfigId), dbFailOnError
+        CacheMaterializado_EnsureConfigId = existingConfigId
+        Exit Function
+    End If
+    rs.Close
+    Set rs = Nothing
+
+    p_Db.Execute "INSERT INTO TbCacheIndicadoresConfig (IDCacheConfig, Dominio, Activo, VersionRegla, FechaConfiguracion, UsuarioConfiguracion) VALUES (" & CStr(configId) & ", " & TestHelper.SqlText(p_Dominio) & ", True, 'TEST-ISSUE18', Now(), 'TEST')", dbFailOnError
+    CacheMaterializado_EnsureConfigId = configId
+End Function
 
 Private Sub CacheMaterializado_InsertHeader(ByVal p_Db As DAO.Database)
     CacheMaterializado_InsertHeaderEstado p_Db, "OK"
@@ -1188,20 +1302,9 @@ End Sub
 Private Sub CacheMaterializado_InsertHeaderEstado(ByVal p_Db As DAO.Database, ByVal p_Estado As String, Optional ByVal p_CacheId As Long = 1)
     Dim dominio As String
     Dim configId As Long
-    Dim rs As DAO.Recordset
 
-    dominio = IIf(p_CacheId = 1, "PROYECTO", "AUDITORIA")
-
-    Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio='" & dominio & "' AND Activo=True", dbOpenSnapshot)
-    If rs.EOF Then
-        rs.Close
-        Set rs = Nothing
-        configId = 1
-    Else
-        configId = CLng(Nz(rs.Fields("IDCacheConfig").value, 1))
-        rs.Close
-        Set rs = Nothing
-    End If
+    dominio = CacheMaterializado_DominioForCacheId(p_CacheId)
+    configId = CacheMaterializado_EnsureConfigId(p_Db, dominio)
 
     p_Db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=" & CStr(p_CacheId), dbFailOnError
     p_Db.Execute "INSERT INTO TbCacheIndicadoresProyectoHeader (IDCacheIndicadorProyecto, IDCacheConfig, Dominio, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & CStr(p_CacheId) & ", " & CStr(configId) & ", '" & dominio & "', Now(), 'TEST', " & TestHelper.SqlText(p_Estado) & ")", dbFailOnError
@@ -1929,6 +2032,7 @@ Public Function Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNego
     Dim sinTareasRows As Long
     Dim pteCERows As Long
     Dim ceCaducadaRows As Long
+    Dim auditConfigId As Long
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
@@ -1947,6 +2051,9 @@ Public Function Test_CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNego
     If Not CacheMaterializado_RequireSchema(db, logs, assertError) Then GoTo finalizar
     If Not CacheMaterializado_RequireAuditoriaBusinessSchema(db, logs, assertError) Then GoTo finalizar
 
+    auditConfigId = CacheMaterializado_EnsureConfigId(db, "AUDITORIA")
+    Call TestHelper.AssertTrue(auditConfigId > 0, "Arrange: Auditoria cache config fixture exists before full sync", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
     Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
     Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
     Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992301, "QA User", 1)
@@ -2778,6 +2885,9 @@ Public Function Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic() As S
     Dim db As DAO.Database
     Dim syncResult As String
     Dim detailCount As Long
+    Dim configId As Long
+    Dim headerCount As Long
+    Dim validHeaderCount As Long
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
@@ -2794,6 +2904,7 @@ Public Function Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic() As S
     If Not Issue18_RequireProyectoSourceSchema(db, logs, assertError) Then GoTo finalizar
 
     Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    configId = CacheMaterializado_EnsureConfigId(db, "PROYECTO")
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=992001", dbFailOnError
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1", dbFailOnError
 
@@ -2806,6 +2917,18 @@ Public Function Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic() As S
         "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
         "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001")
     Call TestHelper.AssertTrue(detailCount > 0, "Assert: at least one detail row must exist for synced NC", logs, assertError)
+
+    headerCount = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader " & _
+        "WHERE IDCacheIndicadorProyecto=1")
+    validHeaderCount = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader " & _
+        "WHERE IDCacheIndicadorProyecto=1 " & _
+        "AND IDCacheConfig=" & CStr(configId) & " " & _
+        "AND Dominio='PROYECTO' " & _
+        "AND Estado='OK'")
+    Call TestHelper.AssertTrue(headerCount = 1, "Assert: Proyecto sync must leave exactly one header row", logs, assertError)
+    Call TestHelper.AssertTrue(validHeaderCount = 1, "Assert: Proyecto sync must upsert one OK header with active config and domain", logs, assertError)
 
 finalizar:
     If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
@@ -2837,6 +2960,9 @@ Public Function Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic() As 
     Dim db As DAO.Database
     Dim syncResult As String
     Dim detailCount As Long
+    Dim configId As Long
+    Dim headerCount As Long
+    Dim validHeaderCount As Long
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
@@ -2853,6 +2979,7 @@ Public Function Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic() As 
     If Not Issue18_RequireAuditoriaSourceSchema(db, logs, assertError) Then GoTo finalizar
 
     Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
+    configId = CacheMaterializado_EnsureConfigId(db, "AUDITORIA")
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=992202", dbFailOnError
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2", dbFailOnError
 
@@ -2865,6 +2992,18 @@ Public Function Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic() As 
         "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
         "WHERE IDCacheIndicadorProyecto=2 AND IDNoConformidad=992202")
     Call TestHelper.AssertTrue(detailCount > 0, "Assert: at least one detail row must exist for synced Auditoria NC", logs, assertError)
+
+    headerCount = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader " & _
+        "WHERE IDCacheIndicadorProyecto=2")
+    validHeaderCount = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader " & _
+        "WHERE IDCacheIndicadorProyecto=2 " & _
+        "AND IDCacheConfig=" & CStr(configId) & " " & _
+        "AND Dominio='AUDITORIA' " & _
+        "AND Estado='OK'")
+    Call TestHelper.AssertTrue(headerCount = 1, "Assert: Auditoria sync must leave exactly one header row", logs, assertError)
+    Call TestHelper.AssertTrue(validHeaderCount = 1, "Assert: Auditoria sync must upsert one OK header with active config and domain", logs, assertError)
 
 finalizar:
     If Not db Is Nothing Then Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
@@ -3040,6 +3179,8 @@ Public Function Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic() As
     Dim db As DAO.Database
     Dim bucketResult As String
     Dim usr As usuario
+    Dim parsedResult As Object
+    Dim conteos As Object
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
@@ -3054,6 +3195,9 @@ Public Function Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic() As
     If assertError <> "" Then GoTo finalizar
     If Not Issue18_RequireCacheDDL(db, logs, assertError) Then GoTo finalizar
 
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
     Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
     Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 993401, "QA_User_Wu2", 1)
     Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 993402, "Otro_User_Wu2", 1)
@@ -3062,8 +3206,17 @@ Public Function Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic() As
 
     bucketResult = Cache_Indicadores_CargarBucket(db, usr, "PROYECTO", pError)
 
-    Call TestHelper.AssertTrue(pError = "", "Act: cargar bucket must not report error", logs, assertError)
+    Call TestHelper.AssertTrue(pError = "", "Act: cargar bucket must not report error: " & pError, logs, assertError)
     Call TestHelper.AssertTrue(Not bucketResult = "", "Act: cargar bucket must return JSON string", logs, assertError)
+    If assertError = "" Then
+        Set parsedResult = JsonConverter.ParseJson(bucketResult)
+        Call TestHelper.AssertTrue(CBool(parsedResult("ok")) = True, "Assert: cargar bucket JSON result is ok", logs, assertError)
+    End If
+    If assertError = "" Then
+        Set conteos = parsedResult("value")
+        Call TestHelper.AssertTrue(CLng(Nz(conteos("NCRegistradasTotal"), -1)) = 2, "Assert: total registered Proyecto NC count includes both fixture rows", logs, assertError)
+        Call TestHelper.AssertTrue(CLng(Nz(conteos("NCRegistradasUsuario"), -1)) = 1, "Assert: responsible filter includes only QA_User_Wu2 fixture row", logs, assertError)
+    End If
 
 finalizar:
     Call CacheMaterializado_Cleanup(logs, assertError)

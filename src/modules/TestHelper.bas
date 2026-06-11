@@ -212,6 +212,8 @@ Public Function TestPass(ByRef p_Logs As Collection, Optional ByVal p_Value As V
     m_Payload("logs") = CollectionToArray(p_Logs)
     If IsMissing(p_Value) Then
         m_Payload("value") = Null
+    ElseIf IsObject(p_Value) Then
+        Set m_Payload("value") = p_Value
     Else
         m_Payload("value") = p_Value
     End If
