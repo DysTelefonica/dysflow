@@ -271,7 +271,7 @@ export class AccessPowerShellRunner implements AccessRunner {
             accessPid: null,
             processStartTime: null,
             status: "starting",
-            metadata: finalOperation.request as Record<string, unknown>,
+            metadata: stripPayloadSecrets(finalOperation.request),
             updatedAt: this.clock(),
           });
 

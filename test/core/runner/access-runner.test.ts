@@ -5,6 +5,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
+  type CreateAccessOperationRecord,
+  InMemoryAccessOperationRegistry,
+} from "../../../src/core/operations/access-operation-registry.js";
+import {
   AccessPowerShellRunner,
   CROSS_PROCESS_LOCK_STALE_MS,
   getCrossProcessLockPath,
@@ -366,6 +370,54 @@ describe("AccessPowerShellRunner", () => {
 
     // But it MUST still reach the child process through the env channel.
     expect(firstCall.env).toMatchObject({ DYSFLOW_BACKEND_PASSWORD: "per-request-secret" });
+  });
+
+  it("never stores request secrets in operation registry metadata", async () => {
+    const createdRecords: CreateAccessOperationRecord[] = [];
+    const registry = new InMemoryAccessOperationRegistry();
+    const originalCreate = registry.create.bind(registry);
+    registry.create = async (record) => {
+      createdRecords.push(record);
+      return originalCreate(record);
+    };
+    const executor: PowerShellExecutor = async () => ({
+      exitCode: 1,
+      stdout: "",
+      stderr: "boom",
+      durationMs: 5,
+      timedOut: false,
+    });
+
+    const runner = new AccessPowerShellRunner({
+      executor,
+      operationRegistry: registry,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+    });
+
+    await runner.run(
+      {
+        kind: "query",
+        request: {
+          sql: "SELECT 1",
+          mode: "read",
+          action: "compact_repair",
+          backendPath: "C:/data/backend.accdb",
+          backendPassword: "per-request-secret",
+        },
+      },
+      { ...config, accessPassword: undefined, backendPassword: undefined },
+    );
+
+    expect(createdRecords).toHaveLength(1);
+    expect(createdRecords[0]?.metadata).toMatchObject({
+      sql: "SELECT 1",
+      mode: "read",
+      action: "compact_repair",
+      backendPath: "C:/data/backend.accdb",
+    });
+    expect(createdRecords[0]?.metadata).not.toHaveProperty("backendPassword");
+    expect(JSON.stringify(createdRecords[0]?.metadata)).not.toContain("per-request-secret");
   });
 
   it("uses the injected fileExists port to detect a missing configured accessPath (issue #499)", async () => {

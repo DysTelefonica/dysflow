@@ -555,6 +555,10 @@ function Export-QueryDefinitions {
 
 function Import-QueryDefinitions {
   param($Database, $Payload)
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) {
+    $dryRun = [bool]$Payload.dryRun
+  }
   $definitions = @()
   $basePath = [string]$Payload.rootPath
   if ([string]::IsNullOrWhiteSpace($basePath)) {
@@ -580,6 +584,14 @@ function Import-QueryDefinitions {
     if ([string]::IsNullOrWhiteSpace($name)) { throw "Each query definition requires a name." }
     if ([string]::IsNullOrWhiteSpace($sql)) { throw "Each query definition requires sql." }
 
+    if ($dryRun) {
+      [void]$imported.Add([ordered]@{
+        name = $name
+        sql = $sql
+      })
+      continue
+    }
+
     try {
       $queryDef = $Database.QueryDefs.Item($name)
       $queryDef.SQL = $sql
@@ -593,7 +605,8 @@ function Import-QueryDefinitions {
   }
 
   return [ordered]@{
-    imported = $imported.Count
+    dryRun = $dryRun
+    imported = if ($dryRun) { 0 } else { $imported.Count }
     queries = $imported
   }
 }
@@ -706,6 +719,10 @@ function Update-LinkTables {
 
 function Remove-LinkTable {
   param($Database, $Payload)
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) {
+    $dryRun = [bool]$Payload.dryRun
+  }
   $tableNames = @(Resolve-LinkTargetNames -Database $Database -Payload $Payload)
   if ($tableNames.Count -eq 0) {
     if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for unlink_table." }
@@ -720,12 +737,15 @@ function Remove-LinkTable {
     if ([string]::IsNullOrWhiteSpace([string]$table.Connect)) {
       throw "Table $tableName is not linked."
     }
-    $Database.TableDefs.Delete([string]$tableName)
+    if (-not $dryRun) {
+      $Database.TableDefs.Delete([string]$tableName)
+    }
     [void]$removed.Add([string]$tableName)
     try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($table) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
   }
 
   return [ordered]@{
+    dryRun = $dryRun
     unlinkedTables = $removed
   }
 }

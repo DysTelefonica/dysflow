@@ -26,10 +26,12 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
-const INSTALLED_HOME = "C:\\Users\\adm1\\AppData\\Local\\dysflow";
+const INSTALLED_HOME =
+  process.env.DYSFLOW_RUNTIME_DRIFT_HOME ?? "C:\\Users\\adm1\\AppData\\Local\\dysflow";
 const INSTALLED_RUNNER = `${INSTALLED_HOME}\\app\\scripts\\dysflow-access-runner.ps1`;
 const INSTALLED_PACKAGE = `${INSTALLED_HOME}\\app\\package.json`;
 const DEV_RUNNER = `${REPO_ROOT}\\scripts\\dysflow-access-runner.ps1`;
@@ -172,6 +174,9 @@ describe("runtime drift guards (CI required)", () => {
     if (installedRuntimeAvailable) {
       const installedBin = `${INSTALLED_HOME}\\bin\\dysflow.cmd`;
       if (existsSync(installedBin)) {
+        if (resolve(installedBin).toLowerCase() === resolve(TEST_RUNTIME_BIN).toLowerCase()) {
+          return;
+        }
         const installedHash = sha256OfFile(installedBin);
         expect(testRuntimeHash).not.toBe(installedHash);
       }

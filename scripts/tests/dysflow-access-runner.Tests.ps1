@@ -978,6 +978,84 @@ Describe "Invoke-QuerySqlReadAction — behavioral (issue #380)" {
     }
 }
 
+Describe "Access query write dry-run contract — behavioral" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        foreach ($name in @('Remove-LinkTable', 'Import-QueryDefinitions')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $name },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$name not found in $($script:RunnerPath)" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
+    }
+
+    It "unlink_table with dryRun=true reports the plan without deleting TableDefs" {
+        $script:DeletedTables = [System.Collections.ArrayList]::new()
+        function script:Resolve-LinkTargetNames {
+            param($Database, $Payload)
+            return @([string]$Payload.tableName)
+        }
+        $table = [PSCustomObject]@{ Name = "LinkedPeople"; Connect = ";DATABASE=C:\backend.accdb" }
+        $tableDefs = [PSCustomObject]@{}
+        $tableDefs | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($Name)
+            return $script:FakeLinkedTable
+        }
+        $tableDefs | Add-Member -MemberType ScriptMethod -Name "Delete" -Value {
+            param($Name)
+            [void]$script:DeletedTables.Add($Name)
+        }
+        $script:FakeLinkedTable = $table
+        $database = [PSCustomObject]@{ TableDefs = $tableDefs }
+
+        $result = Remove-LinkTable -Database $database -Payload ([PSCustomObject]@{
+            action = "unlink_table"
+            tableName = "LinkedPeople"
+            dryRun = $true
+        })
+
+        $script:DeletedTables.Count | Should -Be 0
+        $result.dryRun | Should -Be $true
+        $result.unlinkedTables.Count | Should -Be 1
+        $result.unlinkedTables[0] | Should -Be "LinkedPeople"
+    }
+
+    It "import_queries with dryRun=true reports definitions without creating or updating QueryDefs" {
+        $script:AccessDbPath = "C:\frontend.accdb"
+        $script:CreatedQueries = [System.Collections.ArrayList]::new()
+        $script:UpdatedSql = [System.Collections.ArrayList]::new()
+        $queryDefs = [PSCustomObject]@{}
+        $queryDefs | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($Name)
+            throw "Query should not be loaded for dryRun=true"
+        }
+        $database = [PSCustomObject]@{ QueryDefs = $queryDefs }
+        $database | Add-Member -MemberType ScriptMethod -Name "CreateQueryDef" -Value {
+            param($Name, $Sql)
+            [void]$script:CreatedQueries.Add([ordered]@{ name = $Name; sql = $Sql })
+            return [PSCustomObject]@{ Name = $Name; SQL = $Sql }
+        }
+
+        $result = Import-QueryDefinitions -Database $database -Payload ([PSCustomObject]@{
+            queryDefinitions = @([PSCustomObject]@{ name = "q_people"; sql = "SELECT * FROM People" })
+            dryRun = $true
+        })
+
+        $script:CreatedQueries.Count | Should -Be 0
+        $result.dryRun | Should -Be $true
+        $result.imported | Should -Be 0
+        $result.queries.Count | Should -Be 1
+        $result.queries[0].name | Should -Be "q_people"
+    }
+}
+
 Describe "Invoke-ListTablesAction — behavioral (issue #380)" {
     BeforeAll {
         $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"

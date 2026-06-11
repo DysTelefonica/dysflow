@@ -264,7 +264,7 @@ async function routeRequest(
     }
     sendOperationResult(
       response,
-      await context.services.queryService.execute(buildWriteFixtureRequest("query_sql", body.data)),
+      await context.services.queryService.execute(buildWriteFixtureRequest("exec_sql", body.data)),
     );
     return;
   }

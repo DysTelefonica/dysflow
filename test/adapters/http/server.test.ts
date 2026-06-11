@@ -456,7 +456,12 @@ describe("Dysflow HTTP adapter", () => {
     expect(writeQuery.response.status).toBe(200);
     expect(vba.response.status).toBe(200);
     expect(services.calls.queries).toMatchObject([
-      { sql: "UPDATE People SET name='Ada' WHERE id=1", mode: "write", dryRun: true },
+      {
+        action: "exec_sql",
+        sql: "UPDATE People SET name='Ada' WHERE id=1",
+        mode: "write",
+        dryRun: true,
+      },
     ]);
     expect(services.calls.vba).toEqual([
       { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] },
@@ -470,6 +475,7 @@ describe("Dysflow HTTP adapter", () => {
     });
     expect(writeQueryApply.response.status).toBe(200);
     expect(services.calls.queries[1]).toMatchObject({
+      action: "exec_sql",
       sql: "UPDATE People SET name='Ada' WHERE id=1",
       mode: "write",
       dryRun: false,
@@ -483,6 +489,7 @@ describe("Dysflow HTTP adapter", () => {
     });
     expect(writeQueryDryRunFalse.response.status).toBe(200);
     expect(services.calls.queries[2]).toMatchObject({
+      action: "exec_sql",
       sql: "UPDATE People SET name='Ada' WHERE id=1",
       mode: "write",
       dryRun: false,
