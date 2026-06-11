@@ -7,7 +7,7 @@ import {
   type JsonObjectSchema,
   type JsonSchemaProperty,
   SCHEMA_PROPS,
-} from "./dysflow-schemas.js";
+} from "../../../shared/validation/index.js";
 
 const WRITE_TARGET_OVERRIDE = {
   ...ACCESS_OVERRIDE,

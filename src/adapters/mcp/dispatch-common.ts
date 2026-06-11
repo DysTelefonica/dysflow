@@ -6,7 +6,7 @@ import {
   translateCoreResultToMcpContent,
 } from "./result-translation.js";
 import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
-import { validateInput } from "./validator.js";
+import { validateInput } from "../../shared/validation/validator.js";
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 

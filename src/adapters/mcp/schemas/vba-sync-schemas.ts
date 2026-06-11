@@ -7,7 +7,7 @@ import {
   type JsonObjectSchema,
   SCHEMA_PROPS,
   STRICT_CTX,
-} from "./dysflow-schemas.js";
+} from "../../../shared/validation/index.js";
 
 export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = {
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
