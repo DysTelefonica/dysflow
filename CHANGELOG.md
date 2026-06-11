@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.2.41] - 2026-06-11
+
+### MCP
+
+- Exposed `verify_binary` and `reconcile_binary` as fully implemented, visible MCP tools (previously hidden compatibility stubs). The MCP surface is now **51 visible tools with zero hidden tools**, enforced as a policy by an invariant test that fails if any tool is ever hidden again. (#510)
+- Gated destructive `force: true` cleanup behind the MCP write-gate: `cleanup_access_operation` and `dysflow_access_cleanup` now return `MCP_WRITES_DISABLED` for `force: true` when writes are disabled, without reaching the cleanup service. Non-`force` cleanup (terminal/failed Dysflow-owned operations) is unchanged. (#509)
+- Updated the README MCP inventory and protocol documentation to reflect 51 visible tools and the cleanup write-gate.
+
 ## [v1.2.40] - 2026-06-11
 
 ### MCP
