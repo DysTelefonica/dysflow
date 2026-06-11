@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.2.39] - 2026-06-11
+
+### MCP Safety
+
+- Enforced the dry-run contract for HTTP write queries by routing `/query/write` through the `exec_sql` write action instead of the read-oriented `query_sql` action.
+- Added dry-run behavior to `import_queries` and `unlink_table`, so their default safe mode validates and reports the plan without mutating Access objects.
+- Redacted request secrets from access operation registry metadata, preventing `backendPassword` and related secret fields from being persisted in runtime operation records.
+- Allowed the runtime-drift guard to target an isolated `test-runtime` via `DYSFLOW_RUNTIME_DRIFT_HOME`, keeping release validation aligned with the no-production-runtime rule.
+
 ## [v1.2.38] - 2026-06-10
 
 ### Runner / Culture (#507)
