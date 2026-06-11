@@ -2,9 +2,9 @@
 
 **Mode**: Strict TDD
 **Artifact store**: OpenSpec + Engram
-**Delivery**: force-chained / first autonomous slice only
-**Current slice**: Phase 1 - Schema and RED Tests
-**Status**: blocked_manual_compile_required after Dysflow import
+**Delivery**: force-chained / staging-targeted work-unit slices
+**Current slice**: Phase 2 implementation evidence refresh; Phase 3/runtime hooks still pending
+**Status**: apply_in_progress; archive_blocked_pending_tasks_and_verify_report
 
 ## Previously completed progress preserved
 
@@ -126,8 +126,50 @@
 ## Remaining / next slice
 
 - wu1 (Phase 1 + Phase 2 DDL + helper) is COMPLETE and verified GREEN. Ready to commit to `staging` with traceability.
-- Issue #18 stays OPEN until the full SDD is delivered: shared backend cache + immediate per-NC sync hooks (Phase 2.1-2.7, Phase 3, Phase 4).
-- Phase 2.1: rework `src/modules/ModuloCacheIndicadores.bas` for transactional per-NC sync (next autonomous slice).
-- Phase 3: immediate sync hooks after NC/AC/AR writes.
-- Phase 4: cross-domain non-regression tests and Access manual UI validation.
+- Issue #18 stays OPEN until the full SDD is delivered: explicit unrelated-NC preservation evidence, immediate per-NC sync hooks, runtime cache-read paths, cross-domain non-regression, and archive traceability.
+- Phase 2 remaining: task 2.7 needs an explicit assertion that incremental sync refreshes only the affected NC and preserves unrelated NC rows.
+- Phase 3 remaining: immediate sync hooks after NC/AC/AR/tarea writes and runtime form/cache-read paths.
+- Phase 4 remaining: full Proyecto/Auditoría runtime scenarios and cross-domain non-regression; Access manual compile/test evidence for current 2.x/4.x work is already recorded below.
 - The migration helper is the production deliverable for issue #18; production backends will use `MigracionIssue18_Aplicar(<prodPath>, <prodPwd>)` with the explicit path and password.
+
+## Artifact-only refresh on 2026-06-11
+
+No VBA/source code was edited for this refresh. No Access operations, imports, compiles, or tests were run during this artifact-only update.
+
+### Current task progress
+
+- Before this artifact refresh: 31 total tasks, 10 complete, 21 pending.
+- After this artifact refresh: 31 total tasks, 19 complete, 12 pending.
+- Newly marked complete from existing implementation and recent verification evidence: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 4.4, 4.5, 4.6.
+- Explicitly left pending because current evidence does not fully close the original scope: 2.7, 3.1-3.6, 4.1-4.3, 5.1-5.2.
+
+### Recent verification evidence now attached to this SDD
+
+- Focused Issue18 tests: 14/14 pass.
+- `tests/tests.vba.indicadores-caracterizacion.json`: 46/46 pass.
+- Full `tests/tests.vba.json`: 80/80 pass.
+- User manually compiled after Dysflow imports; no `compile_vba` was used.
+
+### Implementation commits and reachability
+
+| Commit | Work unit | SDD tasks | Verification | Access sync | Reachable from `staging` |
+|---|---|---|---|---|---|
+| `b7eaa86` | `feat(issue-18): add shared cache config table and idempotent migration helper` | 1.1-1.5, 2.0-2.0.4 | Issue #18 RED-to-GREEN schema/migration evidence; helper idempotency verified. | Dysflow imports recorded; user manually compiled; no `compile_vba`. | Yes |
+| `7f7d15f` | `docs(issue-18): document wu1 migration helper and pending phases` | 2.0-2.0.4 documentation/evidence | Documentation-only trace of wu1 migration/helper state. | N/A. | Yes |
+| `276e2bc` | `feat(issue-18): ModuloCacheIndicadoresIssue18 — per-NC sync, AC/AR resolvers, full rebuild, read/filter API` | 2.1-2.4 | Focused Issue18 14/14, indicadores-caracterizacion 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `c80f7bb` | `fix(issue-18): test helpers InsertHeaderEstado and InsertFixtureRow set required IDCacheConfig and Dominio` | 2.1, 2.5, 2.6 test support | Focused Issue18 14/14, indicadores-caracterizacion 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `457eae1` | `test(issue-18): add indicadores-caracterizacion test plan` | 4.4 | `tests/tests.vba.indicadores-caracterizacion.json`: 46/46 pass. | N/A for artifact itself; source tests imported before execution; user manually compiled. | No - branch-only/current branch, not in `staging`. |
+| `53a0e03` | `feat(issue-18): add PHASE 2.1-2.7 tests + extend main test plan` | 2.1-2.6, 4.4, 4.6 | Focused Issue18 14/14, indicadores-caracterizacion 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `5db9ba3` | `fix(issue-45): NCAuditoria.DatosGeneralesOK supports p_MenosCef bypass` | External Issue #45 follow-up, not an `indicator-issues-cleanup` SDD task | Full manifest 80/80 pass. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `834d0de` | `fix(issue-18): persist cache metadata in indicators` | 2.1-2.6, 4.4-4.6 support | Focused Issue18 14/14, indicadores-caracterizacion 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+
+### Archive readiness
+
+Archive remains blocked. Reasons:
+
+1. `verify-report` is still missing for `openspec/changes/indicator-issues-cleanup`.
+2. Not every task checkbox is complete: 12 tasks remain pending.
+3. Several implementation commits and the current local fixes are not reachable from `staging`; only `b7eaa86` and `7f7d15f` are currently reachable from `staging`.
+4. Runtime hook/form-read scope remains pending: Phase 3 tasks are not proven by the current focused Issue18/API evidence.
+
+Next recommended SDD phase: continue `apply` for the remaining scoped tasks, then create `verify-report` only after the pending tasks are genuinely implemented and tested.

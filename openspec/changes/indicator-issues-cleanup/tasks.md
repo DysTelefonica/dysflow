@@ -8,13 +8,26 @@
 | 400-line budget risk | High if single PR; Medium with slices |
 | Chained PRs recommended | Yes |
 | Suggested split | PR1 schema/domain tests -> PR2 incremental sync/read API -> PR3 immediate hooks/runtime for both domains -> PR4 evidence/cleanup |
-| Delivery strategy | auto-forecast |
-| Chain strategy | pending |
+| Delivery strategy | force-chained |
+| Chain strategy | staging-targeted work-unit slices |
 
-Decision needed before apply: Yes
+Decision needed before apply: No - user selected auto execution with force-chained delivery and 400-line review budget.
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: staging-targeted work-unit slices
 400-line budget risk: High
+
+## Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync | Reachable from `staging` |
+|---|---|---|---|---|---|
+| `b7eaa86` | `feat(issue-18): add shared cache config table and idempotent migration helper` | 1.1-1.5, 2.0-2.0.4 | Issue #18 RED-to-GREEN schema/migration evidence; helper idempotency verified. | Dysflow imports recorded; user manually compiled; no `compile_vba`. | Yes |
+| `7f7d15f` | `docs(issue-18): document wu1 migration helper and pending phases` | 2.0-2.0.4 documentation/evidence | Documentation-only trace of wu1 migration/helper state. | N/A. | Yes |
+| `276e2bc` | `feat(issue-18): ModuloCacheIndicadoresIssue18 — per-NC sync, AC/AR resolvers, full rebuild, read/filter API` | 2.1-2.4 | Recent evidence: focused Issue18 tests 14/14, indicadores-caracterizacion manifest 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `c80f7bb` | `fix(issue-18): test helpers InsertHeaderEstado and InsertFixtureRow set required IDCacheConfig and Dominio` | 2.1, 2.5, 2.6 test support | Recent evidence: focused Issue18 tests 14/14, indicadores-caracterizacion manifest 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `457eae1` | `test(issue-18): add indicadores-caracterizacion test plan` | 4.4 | `tests/tests.vba.indicadores-caracterizacion.json`: 46/46 pass. | N/A for artifact itself; source tests imported before execution; user manually compiled. | No - branch-only/current branch, not in `staging`. |
+| `53a0e03` | `feat(issue-18): add PHASE 2.1-2.7 tests + extend main test plan` | 2.1-2.6, 4.4, 4.6 | Recent evidence: focused Issue18 tests 14/14, indicadores-caracterizacion manifest 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `5db9ba3` | `fix(issue-45): NCAuditoria.DatosGeneralesOK supports p_MenosCef bypass` | External Issue #45 follow-up, not an `indicator-issues-cleanup` SDD task | Covered by full manifest evidence: 80/80 pass. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
+| `834d0de` | `fix(issue-18): persist cache metadata in indicators` | 2.1-2.6, 4.4-4.6 support | Recent evidence: focused Issue18 tests 14/14, indicadores-caracterizacion manifest 46/46, full manifest 80/80. | Imported before verification; user manually compiled; no `compile_vba`. | No - branch-only/current branch, not in `staging`. |
 
 ### Suggested Work Units
 
@@ -40,13 +53,14 @@ Chain strategy: pending
 - [x] 2.0.2 `MigracionIssue18_Aplicar()` ran twice: first run applied 9 changes (4 field_required_fixed + 5 index_created); second run applied 3 index_recreated for legacy field lists.
 - [x] 2.0.3 Re-ran the 4 RED tests `issue-18` / `indicator-cache` / `wu1` and got 4/4 GREEN. No regressions on 4 pre-existing `cache-sync` tests.
 - [x] 2.0.4 `MigracionIssue18_Estado()` confirms `changeCount=0, value=no_changes_needed` (idempotency verified).
-- [ ] 2.1 Rework `src/modules/ModuloCacheIndicadores.bas` to synchronize shared backend cache rows transactionally for one affected `IDNoConformidad`.
-- [ ] 2.2 Add AC -> NC and AR/task -> AC -> NC resolution helpers so downstream mutations synchronize only the affected NC.
-- [ ] 2.3 Add explicit full rebuild operation for bootstrap, repair, and global indicator rule/configuration changes only.
-- [ ] 2.4 Add read/filter API returning bucket counts and detail rows from cache tables filtered by connected user/responsible/domain.
-- [ ] 2.5 Test global shared cache with two responsibles and both domains: one cache dataset, filtered user views, exact row/cardinality assertions.
-- [ ] 2.6 Test cache is detail-complete for required Proyecto and Auditoría bucket UI fields, not counts-only.
+- [x] 2.1 Rework cache API to synchronize shared backend cache rows transactionally for one affected `IDNoConformidad` (`ModuloCacheIndicadoresIssue18.bas`, verified by focused Issue18 14/14 and full 80/80 evidence).
+- [x] 2.2 Add AC -> NC and AR/task -> AC -> NC resolution helpers so downstream mutations synchronize only the affected NC (helpers cover Proyecto/Auditoría AC and AR chains; verified by focused Issue18 evidence).
+- [x] 2.3 Add explicit full rebuild operation for bootstrap, repair, and global indicator rule/configuration changes only (idempotent rebuild test is green).
+- [x] 2.4 Add read/filter API returning bucket counts and detail rows from cache tables filtered by connected user/responsible/domain (bucket/detail API tests are green).
+- [x] 2.5 Test global shared cache with two responsibles and both domains: one cache dataset, filtered user views, exact row/cardinality assertions.
+- [x] 2.6 Test cache is detail-complete for required Proyecto and Auditoría bucket UI fields, not counts-only.
 - [ ] 2.7 Test incremental sync refreshes only the affected NC and preserves unrelated NC rows.
+  - Pending scope: current green tests prove per-NC insert/header behavior and shared-domain filtering, but this task still needs an explicit unrelated-NC preservation assertion before archive.
 
 ## Phase 3: Immediate Sync Hooks and Runtime Path
 
@@ -62,9 +76,9 @@ Chain strategy: pending
 - [ ] 4.1 Add Proyecto scenarios covering NC/AC/AR/tarea incremental sync, bucket reads, detail reads, and runtime filtering.
 - [ ] 4.2 Add Auditoría scenarios covering NC/AC/AR/tarea incremental sync, bucket reads, detail reads, and runtime filtering.
 - [ ] 4.3 Add cross-domain non-regression tests: Proyecto sync preserves Auditoría rows/filters, and Auditoría sync preserves Proyecto rows/filters.
-- [ ] 4.4 Update `tests/tests.vba.json` with atomic tests only; keep aggregators out of the main manifest.
-- [ ] 4.5 Import later with Dysflow MCP only, then stop: user manually compiles in Access VBE -> Debug -> Compile.
-- [ ] 4.6 After user compile, run strict VBA tests and attach evidence before closing issue #18 or related PRs.
+- [x] 4.4 Update `tests/tests.vba.json` with atomic tests only; keep aggregators out of the main manifest.
+- [x] 4.5 Import later with Dysflow MCP only, then stop: user manually compiles in Access VBE -> Debug -> Compile.
+- [x] 4.6 After user compile, run strict VBA tests and attach evidence before closing issue #18 or related PRs (focused Issue18 14/14, indicadores-caracterizacion 46/46, full manifest 80/80).
 
 ## Cleanup Policy
 
