@@ -179,7 +179,7 @@ async function record(area, tool, args = {}, options = {}) {
 const list = await record("protocol", "tools/list");
 let advertised = [];
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
-rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 49, expected: "49 tools", ms: 0, summary: `advertised=${advertised.length}` });
+rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 51, expected: "51 tools", ms: 0, summary: `advertised=${advertised.length}` });
 
 await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
 await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });

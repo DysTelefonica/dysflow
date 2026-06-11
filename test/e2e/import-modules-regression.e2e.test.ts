@@ -4,7 +4,7 @@ delete process.env.DYSFLOW_HOME;
  * Comprehensive E2E suite for the dysflow MCP tool surface.
  *
  * Acceptance criterion for the v1.2.34 release (issue #496) and every
- * subsequent release: each of the 49 MCP tools must respond correctly
+ * subsequent release: each of the 51 MCP tools must respond correctly
  * when invoked through the same JSON-RPC stdio protocol that a real
  * opencode client uses in production.
  *
@@ -341,6 +341,15 @@ function buildToolCases(): ToolCase[] {
     t("test_vba", "sad", { projectId, proceduresJson: "not-valid-json" }, 60_000),
     t("verify_code", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
     t("verify_code", "sad", { projectId, moduleNames: [] }, 60_000),
+    t("verify_binary", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
+    t("verify_binary", "sad", { projectId, moduleNames: [] }, 60_000),
+    t(
+      "reconcile_binary",
+      "happy",
+      { projectId, moduleNames: ["TestGoodModule"], diff: true },
+      60_000,
+    ),
+    t("reconcile_binary", "sad", { projectId, moduleNames: [] }, 60_000),
   );
 
   // ----- Query read path (smoke per tool) -----
@@ -452,7 +461,7 @@ function buildToolCases(): ToolCase[] {
 const allCases = buildToolCases();
 
 describe.skipIf(!canRunE2e)(
-  "dysflow MCP tool surface (all 49 tools, issue #496 acceptance)",
+  "dysflow MCP tool surface (all 51 tools, issue #496 acceptance)",
   () => {
     beforeAll(() => {
       setupWorkspace();

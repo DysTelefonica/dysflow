@@ -1,14 +1,18 @@
 /**
- * Invariant test: stub/hidden state MUST have exactly one source of truth.
+ * Policy test: ZERO hidden tools, permanently.
  *
- * The parity registry (`tool-parity-registry.ts`) is that source. The set of
- * tools marked `status: "pending"` MUST equal the set of tools that dispatch
- * marks `hidden: true` in the registered tool list, and MUST equal the result
- * of `isHiddenStubTool` / `pendingToolNames()`.
+ * The user policy (#510 + explicit directive) is that no MCP tool may be hidden.
+ * Hidden state still derives from a single source of truth — the parity registry
+ * (`tool-parity-registry.ts`), preserving #433 — but that derived set MUST always
+ * be empty:
  *
- * This test locks the invariant established by #433 so the two lists can never
- * silently diverge again. It works at the public port (registered tool objects
- * + exported registry helpers), not at implementation internals.
+ *   - `pendingToolNames()` is empty,
+ *   - no registered tool has `hidden === true`,
+ *   - tools/list projects every registered tool.
+ *
+ * This stays a real CI gate: re-introducing a hidden/pending tool turns it red.
+ * It works at the public port (registered tool objects + exported registry
+ * helpers), not at implementation internals.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -35,73 +39,32 @@ class FakeDiagnosticsService {
   }
 }
 
-describe("stub/hidden invariant — registry is the single source of truth (#433)", () => {
+describe("zero-hidden-tools policy — registry is the single source of truth (#433, #510)", () => {
   const services = {
     vbaService: new FakeVbaService(),
     queryService: new FakeQueryService(),
     diagnosticsService: new FakeDiagnosticsService(),
   };
 
-  it("pendingToolNames() returns only verify_binary and reconcile_binary", () => {
-    const pending = pendingToolNames();
-    expect(pending.size).toBe(2);
-    expect(pending.has("verify_binary")).toBe(true);
-    expect(pending.has("reconcile_binary")).toBe(true);
+  it("pendingToolNames() is empty — no tool may be pending", () => {
+    expect([...pendingToolNames()]).toEqual([]);
   });
 
-  it("isHiddenStubTool matches pendingToolNames for every tool", () => {
-    const pending = pendingToolNames();
+  it("no registry entry has status 'pending' and isHiddenStubTool is false for every tool", () => {
     for (const entry of TOOL_PARITY_REGISTRY) {
-      expect(isHiddenStubTool(entry.name)).toBe(pending.has(entry.name));
+      expect(entry.status, `${entry.name} must be implemented`).toBe("implemented");
+      expect(isHiddenStubTool(entry.name), `${entry.name} must not be a hidden stub`).toBe(false);
     }
   });
 
-  it("dispatch hidden flags equal the registry pending set — no manual list can diverge", () => {
+  it("no registered tool is hidden — tools/list projects every tool", () => {
     const tools = createDysflowMcpTools(services, true);
-    const pending = pendingToolNames();
 
-    // Every tool the registry marks pending MUST be hidden in the registered list.
-    for (const name of pending) {
-      const tool = tools.find((t) => t.name === name);
-      expect(tool, `${name} must be registered`).toBeDefined();
-      expect(tool?.hidden, `${name} must be hidden (registry says pending)`).toBe(true);
-    }
+    const hidden = tools.filter((t) => t.hidden === true).map((t) => t.name);
+    expect(hidden, "no registered tool may be hidden").toEqual([]);
 
-    // Every hidden tool in the registered list MUST be pending in the registry.
-    const hiddenInDispatch = tools.filter((t) => t.hidden === true).map((t) => t.name);
-
-    expect(hiddenInDispatch.sort()).toEqual([...pending].sort());
-  });
-
-  it("direct stub call still returns TOOL_NOT_IMPLEMENTED when vbaSyncToolService is configured", async () => {
-    const stubCalls: string[] = [];
-    const tools = createDysflowMcpTools(
-      {
-        ...services,
-        vbaSyncToolService: {
-          execute: async (toolName) => {
-            stubCalls.push(toolName);
-            return {
-              ok: false,
-              error: {
-                code: "TOOL_NOT_IMPLEMENTED" as const,
-                message: "not implemented",
-                retryable: false,
-              },
-              diagnostics: [],
-              durationMs: 0,
-            };
-          },
-        },
-      },
-      true,
-    );
-
-    for (const name of pendingToolNames()) {
-      const tool = tools.find((t) => t.name === name);
-      expect(tool, `${name} must still be registered for direct calls`).toBeDefined();
-      const result = await tool?.handler({});
-      expect(result?.isError, `${name} direct call must return an error`).toBe(true);
-    }
+    // Every registered tool is visible (the tools/list projection includes them all).
+    const visible = tools.filter((t) => t.hidden !== true);
+    expect(visible.length).toBe(tools.length);
   });
 });

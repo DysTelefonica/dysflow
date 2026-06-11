@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**49 visible MCP tools · Windows / Node 20+**
+**51 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -29,7 +29,7 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 49 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 51 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -508,7 +508,7 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
   - `operationId` (string, **required**): Handle ID of the operation to clean.
   - `accessPath` (string, **required**): Database file path associated with the target operation.
-  - `force` (boolean, optional): Terminate immediately.
+  - `force` (boolean, optional): Terminate immediately. Requires writes to be enabled (`MCP_WRITES_DISABLED` is returned when writes are off); non-force cleanup is always allowed.
 
 ---
 
@@ -527,9 +527,11 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `timeoutMs` (number, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`test_vba`**: Execute VBA unit tests.
   - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
-* **`verify_code` / `verify_binary`**: Perform structural checks comparing disk modules and database binaries.
+* **`verify_code`**: Perform structural checks comparing disk modules and database binaries.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`reconcile_binary`**: Produce a reconciliation plan comparing binary state against disk source.
+* **`verify_binary`**: Dry-run comparison of the VBA source tree against the Access binary export, reporting matched, different, and missing modules with optional diffs. Never mutates Access.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`reconcile_binary`**: Dry-run reconciliation plan that reuses the `verify_binary` report and returns `applied: false` with a recommendation. Never mutates Access.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`delete_module`**: Delete a module from the VBA project.
   - Parameters: `moduleName` (string, optional), `timeoutMs` (number, optional)
@@ -600,7 +602,6 @@ Custom behaviors layered on top of the SDK (preserved from the previous hand-rol
 
 - Tool handler exceptions are absorbed into `{ isError: true }` results — they never propagate as JSON-RPC `-32603` internal errors.
 - Error messages have Windows/UNC/POSIX paths scrubbed before reaching the client.
-- Hidden tools are callable via `tools/call` but invisible in `tools/list`.
 - A 1 MiB per-line size guard (`SizeLimitTransform`) sits between `process.stdin` and the SDK transport.
 
 ---
@@ -750,7 +751,7 @@ Useful references:
 - `src/core/**` remains protocol-agnostic and returns normalized `OperationResult`.
 - Adapters translate protocol-specific formats at boundaries only.
 - Tool parity is tracked in `src/adapters/mcp/tool-parity-registry.ts`; the tool registry lives in `src/adapters/mcp/mcp-tool-registry.ts`.
-- The MCP adapter uses `@modelcontextprotocol/sdk` — protocol mechanics are SDK-managed. Custom behaviors (error absorption, path sanitization, hidden tools, size guard) live in `stdio-wrappers.ts` and `stdio-size-guard.ts`.
+- The MCP adapter uses `@modelcontextprotocol/sdk` — protocol mechanics are SDK-managed. Custom behaviors (error absorption, path sanitization, size guard) live in `stdio-wrappers.ts` and `stdio-size-guard.ts`.
 
 ---
 

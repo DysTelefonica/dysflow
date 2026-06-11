@@ -71,18 +71,25 @@ export function buildAliasTools(
       description: "Alias for safe Access operation cleanup.",
       inputSchema: cleanupSchema,
       handler: async (input) =>
-        handleMcpAccessCleanup(input, cleanupSchema, services, (validatedInput) => {
-          const request = validatedInput as {
-            operationId: string;
-            accessPath: string;
-            force?: boolean;
-          };
-          return {
-            operationId: request.operationId,
-            accessPath: request.accessPath,
-            force: request.force,
-          };
-        }),
+        handleMcpAccessCleanup(
+          input,
+          cleanupSchema,
+          services,
+          writesEnabled,
+          writeAccessResolver,
+          (validatedInput) => {
+            const request = validatedInput as {
+              operationId: string;
+              accessPath: string;
+              force?: boolean;
+            };
+            return {
+              operationId: request.operationId,
+              accessPath: request.accessPath,
+              force: request.force,
+            };
+          },
+        ),
     },
     {
       name: "run_vba",

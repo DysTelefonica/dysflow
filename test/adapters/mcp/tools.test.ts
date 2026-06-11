@@ -570,8 +570,12 @@ describe("MCP tool registration over core services", () => {
     }
   });
 
-  describe("stub tool visibility (#175)", () => {
-    const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code"] as const;
+  describe("verify/reconcile tool visibility (#175, #510)", () => {
+    const IMPLEMENTED_VERIFY_TOOL_NAMES = [
+      "verify_code",
+      "verify_binary",
+      "reconcile_binary",
+    ] as const;
 
     function makeServices() {
       return {
@@ -581,7 +585,7 @@ describe("MCP tool registration over core services", () => {
       };
     }
 
-    it("marks stub (not-implemented) tools as hidden so they are excluded from tools/list projection", () => {
+    it("keeps verify/reconcile tools visible in the tools/list projection now that they are implemented", () => {
       const tools = createDysflowMcpTools(makeServices());
       for (const implemented of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const tool = tools.find((t) => t.name === implemented);
@@ -1423,6 +1427,115 @@ describe("AccessOperationRegistry explicit injection", () => {
     });
     expect(cleanupRequests).toEqual([]);
   });
+
+  function makeCleanupServices(cleanupRequests: unknown[]): DysflowMcpServices {
+    return {
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      cleanupService: {
+        cleanup: async (request) => {
+          cleanupRequests.push(request);
+          return successResult({
+            operationId: "op-test-mcp",
+            accessPid: null,
+            status: "cleaned" as const,
+          });
+        },
+      },
+    };
+  }
+
+  for (const toolName of ["cleanup_access_operation", "dysflow_access_cleanup"] as const) {
+    it(`${toolName} with force:true is refused when writes are disabled and does not reach cleanup service`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      expect(cleanupTool).toBeDefined();
+      const result = await cleanupTool?.handler({
+        operationId: "op-test-mcp",
+        accessPath: "C:/data/app.accdb",
+        force: true,
+      });
+
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toMatch(/^MCP_WRITES_DISABLED: /);
+      expect(cleanupRequests).toEqual([]);
+    });
+
+    it(`${toolName} with force:true is refused when the write resolver returns false`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(
+        makeCleanupServices(cleanupRequests),
+        false,
+        async () => false,
+      );
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      const result = await cleanupTool?.handler({
+        operationId: "op-test-mcp",
+        accessPath: "C:/data/app.accdb",
+        force: true,
+      });
+
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toMatch(/^MCP_WRITES_DISABLED: /);
+      expect(cleanupRequests).toEqual([]);
+    });
+
+    it(`${toolName} with force:true proceeds to cleanup service when writes are enabled`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), true);
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      const result = await cleanupTool?.handler({
+        operationId: "op-test-mcp",
+        accessPath: "C:/data/app.accdb",
+        force: true,
+      });
+
+      expect(result?.isError).toBe(false);
+      expect(cleanupRequests).toEqual([
+        { operationId: "op-test-mcp", accessPath: "C:/data/app.accdb", force: true },
+      ]);
+    });
+
+    it(`${toolName} with force:true proceeds when the write resolver returns true`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(
+        makeCleanupServices(cleanupRequests),
+        false,
+        async () => true,
+      );
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      const result = await cleanupTool?.handler({
+        operationId: "op-test-mcp",
+        accessPath: "C:/data/app.accdb",
+        force: true,
+      });
+
+      expect(result?.isError).toBe(false);
+      expect(cleanupRequests).toHaveLength(1);
+    });
+
+    it(`${toolName} without force proceeds even when writes are disabled (safe recovery path)`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      const result = await cleanupTool?.handler({
+        operationId: "op-test-mcp",
+        accessPath: "C:/data/app.accdb",
+      });
+
+      expect(result?.isError).toBe(false);
+      expect(cleanupRequests).toEqual([
+        { operationId: "op-test-mcp", accessPath: "C:/data/app.accdb", force: undefined },
+      ]);
+    });
+  }
 
   it("dysflow_access_operations_list and list_access_operations list operations from the injected registry", async () => {
     const registry = new InMemoryAccessOperationRegistry();

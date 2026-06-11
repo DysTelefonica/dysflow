@@ -140,6 +140,8 @@ export function createDysflowMcpTools(
           input,
           CLEANUP_SCHEMA,
           services,
+          writesEnabled,
+          writeAccessResolver,
           (validatedInput) =>
             validatedInput as { operationId: string; accessPath: string; force?: boolean },
         ),

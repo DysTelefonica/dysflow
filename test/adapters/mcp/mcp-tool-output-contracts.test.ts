@@ -144,7 +144,9 @@ describe("MCP tool output contract inventory", () => {
 
   it("translates cleanup service output for modern and alias cleanup tools through the same MCP contract", async () => {
     const cleanupService = new FakeCleanupService();
-    const tools = createDysflowMcpTools(makeServices(cleanupService));
+    // force:true cleanup is gated behind the MCP write-gate (#509); enable writes so this
+    // contract test exercises the translation path rather than the write-disabled refusal.
+    const tools = createDysflowMcpTools(makeServices(cleanupService), true);
     const cleanupInput = {
       operationId: "op-cleanup-contract",
       accessPath: "C:/data/app.accdb",

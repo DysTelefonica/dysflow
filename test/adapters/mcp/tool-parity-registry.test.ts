@@ -58,12 +58,10 @@ describe("tool-parity-registry implementedToolNames contract", () => {
     }
   });
 
-  it("keeps hidden stub tools as pending in the registry", () => {
-    const registryByName = new Map(TOOL_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
-
-    for (const name of pendingToolNames()) {
-      const entry = registryByName.get(name);
-      expect(entry?.status, `${name} is a hidden stub and should remain "pending"`).toBe("pending");
+  it("has no pending tools — zero-hidden-tools policy (#510)", () => {
+    expect([...pendingToolNames()]).toEqual([]);
+    for (const entry of TOOL_PARITY_REGISTRY) {
+      expect(entry.status, `${entry.name} must be implemented`).toBe("implemented");
     }
   });
 });

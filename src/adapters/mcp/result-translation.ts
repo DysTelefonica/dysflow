@@ -36,9 +36,10 @@ export type DysflowMcpTool = {
   description: string;
   inputSchema?: JsonObjectSchema;
   /**
-   * When true, this tool is excluded from the tools/list MCP projection.
-   * The handler remains callable via tools/call for backwards compatibility.
-   * Used for stub tools that always return TOOL_NOT_IMPLEMENTED.
+   * When true, this tool is excluded from the tools/list MCP projection while its
+   * handler stays callable via tools/call. Per the zero-hidden-tools policy (#510),
+   * no registered tool currently sets this; it is retained only as the mechanism a
+   * future pending/stub tool would use, derived from the parity registry (#433).
    */
   hidden?: boolean;
   handler(input: unknown, context?: McpToolContext): Promise<McpToolResult>;

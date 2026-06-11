@@ -72,10 +72,11 @@ describe("Dysflow MCP tool parity inventory", () => {
         "seed_fixture",
       ]),
     );
-    expect(pending.length).toBe(2);
-    expect(pending.map((entry) => entry.name)).toEqual(
-      expect.arrayContaining(["verify_binary", "reconcile_binary"]),
-    );
+    // Zero-hidden-tools policy (#510): verify_binary and reconcile_binary are now
+    // implemented and visible, so no tool remains pending.
+    expect(pending.length).toBe(0);
+    expect(getToolDefinition("verify_binary")).toMatchObject({ status: "implemented" });
+    expect(getToolDefinition("reconcile_binary")).toMatchObject({ status: "implemented" });
     expect(getToolDefinition("query_sql")).toMatchObject({
       name: "query_sql",
       slice: "query",
