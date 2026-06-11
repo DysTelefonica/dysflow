@@ -449,10 +449,45 @@ End Sub
 ' Orquestador de refresh de caches para el form de gestión de proyecto.
 ' Llama RebuildNCProyectoListadoCache(0); True=éxito, False=p_Error poblado.
 ' Espejo de RefreshNCAuditoriaGestionCaches.
+' SDD: form-fncproyecto-cache-invalidation R2.
 Public Sub RefreshNCProyectoGestionCaches(Optional ByRef p_Error As String)
-    ' STUB — RED hasta implementación completa en Slice 2
-    p_Error = "Stub: RefreshNCProyectoGestionCaches no implementada"
+    On Error GoTo errores
+    p_Error = ""
+
+    If Not TableExists(NOMBRE_TABLA_LISTADO) Then
+        LogFallback "Cache refresh skipped: TbCacheListadoNC not available"
+        Exit Sub
+    End If
+
+    If Not RebuildNCProyectoListadoCache(0, p_Error) Then
+        Err.Raise 1000
+    End If
+    Exit Sub
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método RefreshNCProyectoGestionCaches ha devuelto el error: " & Err.Description
+    End If
 End Sub
+
+' Espejo de TableExists en NCAuditoriaGestionListadoHelper.bas:357.
+' Verifica la existencia de la tabla contra el backend activo (getdb()).
+' Necesario para que RefreshNCProyectoGestionCaches pueda consultar TbCacheListadoNC
+' sin asumir que el schema readiness ya corrió en este turno.
+Private Function TableExists(ByVal p_TableName As String) As Boolean
+    Dim tdf As DAO.TableDef
+
+    On Error GoTo errores
+    For Each tdf In getdb().TableDefs
+        If StrComp(tdf.Name, p_TableName, vbTextCompare) = 0 Then
+            TableExists = True
+            Exit Function
+        End If
+    Next tdf
+    Exit Function
+errores:
+    TableExists = False
+End Function
 
 Private Function SafeFallbackUser() As String
     On Error Resume Next

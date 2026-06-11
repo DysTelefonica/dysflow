@@ -2587,6 +2587,22 @@ Public Property Set ColTipos(ByVal objNewValue As Variant)
     Set m_objColTipos = objNewValue
 
 End Property
+
+' SDD: form-fncproyecto-cache-invalidation R3 — encapsulacion del reset
+' de las 6 colecciones de combos del lado proyecto.
+' Nulifica las vars Private para forzar lazy-init en el proximo Property Get.
+' Sin Property Let/Get/Set publicos nuevos (AD-4). NO toca ColAuditorias /
+' ColNCsAuditoria (dominio audit; siguen siendo nulificados por el handler
+' audit via los Property Set existentes).
+Public Sub InvalidateCombosCache()
+    Set m_objColNCsProyecto = Nothing
+    Set m_ObjColJuridicasDistintas = Nothing
+    Set m_objColTipos = Nothing
+    Set m_objColJefesProyecto = Nothing
+    Set m_objColUsuariosCalidad = Nothing
+    Set m_ObjColEstadosNC = Nothing
+End Sub
+
 Public Property Get ColAuditorias() As Scripting.Dictionary
     
     On Error GoTo errores
