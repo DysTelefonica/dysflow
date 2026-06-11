@@ -99,7 +99,11 @@ The original `design.md` and `tasks.md` (Tasks 2.4) call for T6 and T7 to valida
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | `356f185` | Slice 1: helpers RED | T1-T5 RED stubs | `dysflow.test_vba filter=slice1` not yet run (RED) | pending import + manual compile |
-| `<docs>` | docs: add change artifacts + apply-progress (Slice 2) | n/a (planning) | n/a | n/a |
-| `<feat>` | Slice 2: implement rebuild/refresh/invalidate (Tasks 2.1-2.3) | T1-T3 expected GREEN; T6/T7 deferred | `dysflow.test_vba filter=slice2` pending user compile | import `CacheNCProyecto`, `NCProyectoGestionListadoHelper`, `Entorno`, `Test_NCProyectoGestionListadoHelper` + manual compile |
+| `4849cf8` | Slice 2 feat: implement rebuild/refresh/invalidate (Tasks 2.1-2.3) | T1-T3 expected GREEN; T6/T7 deferred | `dysflow.test_vba filter=slice2` pending user compile | import `CacheNCProyecto`, `NCProyectoGestionListadoHelper`, `Entorno`, `Test_NCProyectoGestionListadoHelper` + manual compile |
+| `b85ebab` | docs: add change artifacts + apply-progress (Slice 2) | n/a (planning) | n/a | n/a |
 | `<future>` | Slice 3: handler + T8/T9 + T11 observable | T4, T5, T8, T9, T11 GREEN | `dysflow.test_vba filter=slice3` | import `Form_FormNCProyectoGestion` + manual compile |
 | `<future>` | Slice 4: audit rename + T10 | T10 GREEN; no audit regression | `dysflow.test_vba filter=slice4` | import `Form_FormNCAuditoriaGestion` + manual compile |
+
+### Note on commit message accuracy
+
+`4849cf8` body says "Tests: slice2 (T1-T3, T6-T7) should turn GREEN after manual compile." The T6/T7 mention is forward-looking and slightly inaccurate because T6/T7 were never written. The actual deferral is captured in this `apply-progress.md` (see "T6/T7 deferral — rationale" above). T1-T3 will turn GREEN as expected once the user compiles and runs `dysflow.test_vba filter=slice2`. The discrepancy is acknowledged but not amended; the project rule is "no amend", and the truth lives in this artifact.
