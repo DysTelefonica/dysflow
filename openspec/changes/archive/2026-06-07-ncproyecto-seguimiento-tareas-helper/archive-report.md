@@ -41,9 +41,15 @@ The SDD change `ncproyecto-seguimiento-tareas-helper` was archived after the com
 
 ## Implementation Commits
 
-| Commit | Work unit | SDD tasks | Verification | Access sync |
-|---|---|---|---|---|
-| Not available in current worktree | `ncproyecto-seguimiento-tareas-helper` implementation is present as uncommitted/untracked worktree changes during archive execution. | R1-R10, G1-G3, V1-V5, VG1-VG2 | `verify-report.md` records PASS WITH WARNINGS and 9/9 Dysflow `test_vba` after user manual compile. | Modules imported before verification per apply evidence; user manually compiled; archive executor ran no Access operation. |
+| Commit | Work unit | SDD tasks | Verification | Access sync | Reachable from `staging` |
+|---|---|---|---|---|---|
+| `aa1ef79` | `feat(issue-55): add project seguimiento tareas helper` (re-anchored 2026-06-11: archive originally recorded "Not available in current worktree", but the implementation commit was already in `staging` at archive time; commit body carries the SDD/issue/test/access trace) | R1-R10, G1-G3, V1-V5, VG1-VG2 | `verify-report.md` records PASS WITH WARNINGS and 9/9 Dysflow `test_vba` after user manual compile. | Modules imported before verification per apply evidence; user manually compiled; archive executor ran no Access operation. | Yes (`git merge-base --is-ancestor aa1ef79 origin/staging` exit 0) |
+
+### Re-anchoring notes (2026-06-11)
+
+- Original `Implementation Commits` row reported the commit as "Not available in current worktree" because the archive executor ran with an uncommitted/untracked worktree state at the time.
+- Re-verified on 2026-06-11: commit `aa1ef79` exists in git history, is reachable from `origin/staging`, and its body already contains the SDD/issue/test/access trace. No source code change is required.
+- The original archive verdict (PASS WITH WARNINGS), runtime evidence (9/9 Dysflow `test_vba` after user manual compile), and warnings carried forward remain unchanged.
 
 ## Access Runtime Boundary
 
