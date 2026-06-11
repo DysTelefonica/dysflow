@@ -446,6 +446,14 @@ Private Sub LogFallback(ByVal p_Detalle As String)
     getdb().Execute SQL, dbFailOnError
 End Sub
 
+' Orquestador de refresh de caches para el form de gestión de proyecto.
+' Llama RebuildNCProyectoListadoCache(0); True=éxito, False=p_Error poblado.
+' Espejo de RefreshNCAuditoriaGestionCaches.
+Public Sub RefreshNCProyectoGestionCaches(Optional ByRef p_Error As String)
+    ' STUB — RED hasta implementación completa en Slice 2
+    p_Error = "Stub: RefreshNCProyectoGestionCaches no implementada"
+End Sub
+
 Private Function SafeFallbackUser() As String
     On Error Resume Next
 

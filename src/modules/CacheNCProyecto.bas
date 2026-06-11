@@ -2261,6 +2261,17 @@ errores:
     SincronizarCache = False
 End Function
 
+' Rebuild completo o incremental del cache de listado de NCs de proyecto.
+' ForceInvalidation=0: DELETE + regen full; =1: solo stale regen.
+' Espejo de RebuildNCAuditoriaListadoCache.
+Public Function RebuildNCProyectoListadoCache( _
+    Optional ByVal p_ForceInvalidation As Long = 0, _
+    Optional ByRef p_Error As String _
+) As Boolean
+    ' STUB — RED hasta implementación completa en Slice 2
+    RebuildNCProyectoListadoCache = False
+End Function
+
 ' Reconstruye completamente la cache de listado de estados desde la fuente real.
 ' Uso desde ventana de inmediato:
 '   Dim e As String: ? CacheNCProyecto.ReconstruirListadoEstados(e): ? e

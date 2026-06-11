@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Proyecto gestion helper cache off no-op",
+      "procedure": "Test_ProyectoGestionHelper_CacheOff_NoOp_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "red", "cache-off"]
+    },
+    {
+      "name": "Proyecto listado cache rebuild force full delete and regen",
+      "procedure": "Test_ProyectoListadoCache_RebuildForceFull_DeleteAndRegen_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "red", "rebuild-full"]
+    },
+    {
+      "name": "Proyecto listado cache rebuild force stale only stale regen",
+      "procedure": "Test_ProyectoListadoCache_RebuildForceStale_OnlyStaleRegen_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "red", "rebuild-stale"]
+    },
+    {
+      "name": "Proyecto gestion helper refresh cache true on success",
+      "procedure": "Test_ProyectoGestionHelper_RefreshCache_TrueOnSuccess_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "red", "orchestrator"]
+    },
+    {
+      "name": "Proyecto gestion helper refresh cache false on error",
+      "procedure": "Test_ProyectoGestionHelper_RefreshCache_FalseOnError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "red", "orchestrator-error"]
+    }
+  ]
+}
