@@ -21,6 +21,14 @@ describe("MCP_TOOL_SCHEMAS parity (#200)", () => {
     expect(MCP_TOOL_SCHEMAS.query_sql).toBeDefined();
     expect(MCP_TOOL_SCHEMAS.cleanup_access_operation).toBeDefined();
   });
+
+  it("cleanup_access_operation requires the same accessPath proof as the modern cleanup tool", () => {
+    expect(MCP_TOOL_SCHEMAS.cleanup_access_operation?.required).toEqual([
+      "operationId",
+      "accessPath",
+    ]);
+    expect(CLEANUP_SCHEMA.required).toEqual(["operationId", "accessPath"]);
+  });
 });
 
 describe("HTTP validation schemas", () => {

@@ -1395,6 +1395,35 @@ describe("registration invariants — duplicate names throw (#405)", () => {
 });
 
 describe("AccessOperationRegistry explicit injection", () => {
+  it("cleanup_access_operation rejects missing accessPath before reaching cleanup service", async () => {
+    const cleanupRequests: unknown[] = [];
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      cleanupService: {
+        cleanup: async (request) => {
+          cleanupRequests.push(request);
+          return successResult({
+            operationId: "op-test-mcp",
+            accessPid: null,
+            status: "cleaned" as const,
+          });
+        },
+      },
+    });
+
+    const aliasCleanupTool = tools.find((t) => t.name === "cleanup_access_operation");
+    expect(aliasCleanupTool).toBeDefined();
+    const result = await aliasCleanupTool?.handler({ operationId: "op-test-mcp" });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "MCP_INPUT_INVALID: accessPath is required." }],
+      isError: true,
+    });
+    expect(cleanupRequests).toEqual([]);
+  });
+
   it("dysflow_access_operations_list and list_access_operations list operations from the injected registry", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({

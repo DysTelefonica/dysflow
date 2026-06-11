@@ -74,12 +74,12 @@ export function buildAliasTools(
         handleMcpAccessCleanup(input, cleanupSchema, services, (validatedInput) => {
           const request = validatedInput as {
             operationId: string;
-            accessPath?: string;
+            accessPath: string;
             force?: boolean;
           };
           return {
             operationId: request.operationId,
-            accessPath: request.accessPath ?? "",
+            accessPath: request.accessPath,
             force: request.force,
           };
         }),

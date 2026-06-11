@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**48 MCP tools · Windows / Node 20+**
+**49 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -29,7 +29,7 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 48 MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 49 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -594,7 +594,7 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 
 ### MCP protocol and maintenance
 
-The MCP stdio adapter uses `@modelcontextprotocol/sdk` v1.29.0. Protocol version negotiation, framing, and spec compliance are handled by the SDK. The server announces `protocolVersion: "2024-11-05"` during `initialize`.
+The MCP stdio adapter uses `@modelcontextprotocol/sdk` v1.29.0. Protocol version negotiation, framing, and spec compliance are handled by the SDK. The server currently derives its default negotiated protocol version from the SDK (`2025-03-26` with this pinned SDK), and the SDK supports up to `2025-11-25`.
 
 Custom behaviors layered on top of the SDK (preserved from the previous hand-rolled adapter):
 

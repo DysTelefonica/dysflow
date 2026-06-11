@@ -13,7 +13,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
   cleanup_access_operation: {
     type: "object",
-    required: ["operationId"],
+    required: ["operationId", "accessPath"],
     additionalProperties: false,
     properties: {
       operationId: SCHEMA_PROPS.operationId,
