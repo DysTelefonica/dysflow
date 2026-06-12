@@ -4,8 +4,11 @@ import {
   DIAGNOSTICS_MAX_LENGTH,
   DIAGNOSTICS_PREFIX,
   PAYLOAD_TYPE_WHITELIST,
+  PayloadTypeSchema,
   RESULT_MARKER,
+  ResultEnvelopeSchema,
   SERIALIZATION_FAILED_CODE,
+  SerializationFailedEnvelopeSchema,
   whyPayloadTypeIsNotWhitelisted,
 } from "../../../src/core/contracts/index";
 
@@ -85,6 +88,17 @@ describe("Write-DysflowResult contract (issue #496)", () => {
         "[hashtable]",
       ]);
     });
+
+    it("exposes a schema that accepts exactly the public whitelist labels", () => {
+      expect(PayloadTypeSchema.options).toEqual([...PAYLOAD_TYPE_WHITELIST]);
+
+      for (const payloadType of PAYLOAD_TYPE_WHITELIST) {
+        expect(PayloadTypeSchema.safeParse(payloadType).success).toBe(true);
+      }
+
+      expect(PayloadTypeSchema.safeParse("Date").success).toBe(false);
+      expect(PayloadTypeSchema.safeParse("List<object>").success).toBe(false);
+    });
   });
 
   describe("sentinel contract (issue #440)", () => {
@@ -154,6 +168,72 @@ describe("Write-DysflowResult contract (issue #496)", () => {
       // The prefix alone is acceptable as a "no original text" signal,
       // but the field is non-empty so the AST guard can assert on it.
       expect(envelope.diagnostics[0]?.length).toBeGreaterThan(0);
+    });
+
+    it("validates helper-built serialization failure envelopes through the schema", () => {
+      const envelope = buildSerializationFailedEnvelope(
+        "RUNNER_SERIALIZATION_FAILED",
+        "System.InvalidOperationException: writer drifted",
+      );
+
+      expect(SerializationFailedEnvelopeSchema.parse(envelope)).toEqual(envelope);
+      expect(ResultEnvelopeSchema.parse(envelope)).toEqual(envelope);
+    });
+
+    it("rejects invalid serialization failure envelope drift", () => {
+      expect(
+        SerializationFailedEnvelopeSchema.safeParse({
+          ok: true,
+          error: {
+            code: "RUNNER_SERIALIZATION_FAILED",
+            message: "wrong ok literal",
+          },
+          diagnostics: ["LastSerializationError: x"],
+        }).success,
+      ).toBe(false);
+
+      expect(
+        SerializationFailedEnvelopeSchema.safeParse({
+          ok: false,
+          error: {
+            code: "RUNNER_SERIALIZATION_FAILED",
+            message: "missing diagnostics",
+          },
+        }).success,
+      ).toBe(false);
+
+      expect(
+        SerializationFailedEnvelopeSchema.safeParse({
+          ok: false,
+          error: {
+            code: "RUNNER_OTHER_ERROR",
+            message: "not a serialization failure",
+          },
+          diagnostics: ["LastSerializationError: x"],
+        }).success,
+      ).toBe(false);
+    });
+  });
+
+  describe("result envelope schema (parsed payload after the sentinel marker)", () => {
+    it("accepts loose success envelopes without constraining polymorphic data", () => {
+      const successEnvelope = {
+        ok: true,
+        data: {
+          table: "TbExample",
+          rows: [{ id: 1 }, { id: 2 }],
+        },
+      };
+
+      expect(ResultEnvelopeSchema.parse(successEnvelope)).toEqual(successEnvelope);
+    });
+
+    it("rejects result envelope drift outside the declared success or fallback branches", () => {
+      expect(ResultEnvelopeSchema.safeParse({ ok: true }).success).toBe(false);
+      expect(ResultEnvelopeSchema.safeParse({ ok: false, data: "wrong branch" }).success).toBe(
+        false,
+      );
+      expect(ResultEnvelopeSchema.safeParse({ data: "missing ok" }).success).toBe(false);
     });
   });
 

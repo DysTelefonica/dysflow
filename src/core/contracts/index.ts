@@ -209,8 +209,11 @@ export {
   DIAGNOSTICS_MAX_LENGTH,
   DIAGNOSTICS_PREFIX,
   PAYLOAD_TYPE_WHITELIST,
+  PayloadTypeSchema,
   RESULT_MARKER,
+  ResultEnvelopeSchema,
   SERIALIZATION_FAILED_CODE,
+  SerializationFailedEnvelopeSchema,
   whyPayloadTypeIsNotWhitelisted,
 } from "./result-writer.js";
 

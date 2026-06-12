@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * TS↔PowerShell payload contract for the `Write-DysflowResult` writer (issue #496).
  *
@@ -136,6 +138,41 @@ export const PAYLOAD_TYPE_WHITELIST = [
   "[hashtable]",
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPE_WHITELIST)[number];
+
+/**
+ * Declarative schema for the public payload type labels accepted by the
+ * Write-DysflowResult contract. This mirrors PAYLOAD_TYPE_WHITELIST exactly;
+ * it does not replace the JavaScript value predicate below.
+ */
+export const PayloadTypeSchema = z.enum(PAYLOAD_TYPE_WHITELIST);
+
+/**
+ * Declarative schema for serialization-failed fallback envelopes. This is an
+ * additive contract boundary for tests and future CI drift checks, not a
+ * runtime validation gate.
+ */
+export const SerializationFailedEnvelopeSchema = z.object({
+  ok: z.literal(false),
+  error: z.object({
+    code: z.string().refine((code) => code.endsWith(SERIALIZATION_FAILED_CODE), {
+      message: `error.code must end with ${SERIALIZATION_FAILED_CODE}`,
+    }),
+    message: z.string(),
+  }),
+  diagnostics: z.array(z.string()).min(1),
+});
+
+/**
+ * Declarative schema for parsed result envelopes after the DYSFLOW_RESULT marker
+ * is stripped. The success payload intentionally remains polymorphic.
+ */
+export const ResultEnvelopeSchema = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    data: z.unknown(),
+  }),
+  SerializationFailedEnvelopeSchema,
+]);
 
 /**
  * Pure helper used by the spec suite to assert that a given
