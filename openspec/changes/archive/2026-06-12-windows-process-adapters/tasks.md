@@ -50,4 +50,5 @@ Chain strategy: stacked-to-main
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| Not committed | Windows process adapter relocation | 1.1-4.2 | `pnpm vitest run test/adapters/process/windows-processes.test.ts`; `pnpm vitest run test/adapters/process/windows-processes.test.ts test/architecture/core-boundary.test.ts`; `pnpm lint`; `pnpm test` (94 files, 1231 tests passed, 3 skipped); `pnpm build` | N/A — TypeScript-only change |
+| `7e538bd` | Stabilize install fixture | 4.1-4.2 | `pnpm vitest run test/cli/install.test.ts -t "installs runtime to requested path and configures selected agents"`; `pnpm vitest run test/cli/install.test.ts`; `pnpm test`; `pnpm lint` | N/A — TypeScript-only change |
+| `0e3917f` | Windows process adapter relocation | 1.1-4.2 | `pnpm vitest run test/adapters/process/windows-processes.test.ts`; `pnpm vitest run test/adapters/process/windows-processes.test.ts test/architecture/core-boundary.test.ts`; `pnpm lint`; `pnpm test` (94 files, 1231 tests passed, 3 skipped); `pnpm build` | N/A — TypeScript-only change |
