@@ -47,4 +47,4 @@ Chain strategy: pending
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| Not committed | Add result-writer Zod schemas and contract tests | 1.1, 1.2, 2.1, 2.2, 2.3, 3.1, 3.2, 4.1 | `pnpm vitest run test/core/contracts/result-writer-contract.test.ts`; `pnpm test`; `pnpm build`; `pnpm lint` | N/A |
+| `da38586` | Add result-writer Zod schemas and contract tests | 1.1, 1.2, 2.1, 2.2, 2.3, 3.1, 3.2, 4.1 | `pnpm vitest run test/core/contracts/result-writer-contract.test.ts`; `pnpm test`; `pnpm build`; `pnpm lint` | N/A |

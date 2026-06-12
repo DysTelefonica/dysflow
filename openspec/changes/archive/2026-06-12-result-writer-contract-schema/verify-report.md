@@ -132,7 +132,7 @@ None.
 
 ## Risks / Notes
 
-- Implementation is intentionally uncommitted per instruction; update the SDD implementation commits table with the real SHA after commit.
+- Implementation commit trace was updated post-commit with `da38586`; see tasks/apply-progress for the recorded SHA.
 - Access/VBA binary sync is not applicable for this TypeScript-only contract/schema change.
 
 ## Verdict
