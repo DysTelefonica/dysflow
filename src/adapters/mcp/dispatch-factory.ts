@@ -68,10 +68,11 @@ export function createDispatchTool(
             ],
           };
         case "query-maintenance": {
-          const queryMode = getToolDefinition(name).queryMode ?? "write";
+          // route.queryMode is the single source of truth (narrowed to "read" | "write"
+          // by the query-maintenance branch). No second lookup, no "write" fallback.
           const maintenanceRequest = buildMaintenanceRequest(
             queryActionFor(name),
-            queryMode,
+            route.queryMode,
             input,
             (key) => env[key],
           );

@@ -7,26 +7,11 @@ import {
 export type ParitySlice = "vba-sync" | "query";
 export type ParityStatus = "implemented" | "pending";
 
-export type QueryMode = "read" | "write";
-
 export type ParityToolDefinition = {
   name: DysflowMcpToolName;
   slice: ParitySlice;
   status: ParityStatus;
   description: string;
-  queryMode?: QueryMode;
-};
-
-const maintenanceQueryModes: Partial<Record<DysflowMcpToolName, QueryMode>> = {
-  list_links: "read",
-  export_queries: "read",
-  link_tables: "write",
-  relink_tables: "write",
-  localize_backend_links: "write",
-  unlink_table: "write",
-  import_queries: "write",
-  compact_repair: "write",
-  relink_directory: "write",
 };
 
 const implementedToolNames = new Set<DysflowMcpToolName>([
@@ -106,7 +91,6 @@ export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP
       slice,
       status,
       description: buildDescription(name, slice, status),
-      queryMode: maintenanceQueryModes[name],
     };
   },
 );
