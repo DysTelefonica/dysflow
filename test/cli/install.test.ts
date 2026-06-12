@@ -457,76 +457,76 @@ describe("handleInstallCommand end-to-end", () => {
     const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
     const claudeSettings = join(home, ".claude", "settings.json");
     const piConfig = join(home, ".pi", "agent", "mcp.json");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "runCli");
+    await writeFile(join(packageRoot, "README.md"), "Dysflow test runtime", "utf8");
+    await writeFile(join(packageRoot, "CHANGELOG.md"), "# Changelog\n", "utf8");
 
-    const result = await handleInstallCommand(
-      ["--runtime-dir", runtimeDir, "--agents", "codex,opencode,claude,pi", "--no-tui"],
-      {
-        env: {
-          USERPROFILE: home,
+    try {
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "codex,opencode,claude,pi", "--no-tui"],
+        {
+          env: {
+            USERPROFILE: home,
+            LOCALAPPDATA: join(root, "AppData", "Local"),
+            ProgramData: join(root, "ProgramData"),
+          },
+          packageRoot,
         },
-      },
-    );
+      );
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(`Dysflow runtime installed at: ${runtimeDir}`);
-    expect(result.stdout).toContain("Configured agents: codex, opencode, claude, pi");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain(`Dysflow runtime installed at: ${runtimeDir}`);
+      expect(result.stdout).toContain("Configured agents: codex, opencode, claude, pi");
 
-    expect(await readFile(join(runtimeDir, "app", "dist", "cli", "index.js"), "utf8")).toContain(
-      "runCli",
-    );
-    expect(await readFile(join(runtimeDir, "README.md"), "utf8")).toContain("Dysflow");
-    expect(await readFile(join(runtimeDir, "CHANGELOG.md"), "utf8")).toContain("# Changelog");
-    const sourceVbaManager = await readFile(
-      join(process.cwd(), "scripts", "dysflow-vba-manager.ps1"),
-      "utf8",
-    );
-    const sourceAccessRunner = await readFile(
-      join(process.cwd(), "scripts", "dysflow-access-runner.ps1"),
-      "utf8",
-    );
-    expect(
-      await readFile(join(runtimeDir, "app", "scripts", "dysflow-vba-manager.ps1"), "utf8"),
-    ).toBe(sourceVbaManager);
-    expect(
-      await readFile(join(runtimeDir, "app", "scripts", "dysflow-access-runner.ps1"), "utf8"),
-    ).toBe(sourceAccessRunner);
+      expect(await readFile(join(runtimeDir, "app", "dist", "cli", "index.js"), "utf8")).toContain(
+        "runCli",
+      );
+      expect(await readFile(join(runtimeDir, "README.md"), "utf8")).toContain("Dysflow");
+      expect(await readFile(join(runtimeDir, "CHANGELOG.md"), "utf8")).toContain("# Changelog");
+      expect(
+        await readFile(join(runtimeDir, "app", "scripts", "dysflow-vba-manager.ps1"), "utf8"),
+      ).toBe("runCli_VBA_MANAGER");
+      expect(
+        await readFile(join(runtimeDir, "app", "scripts", "dysflow-access-runner.ps1"), "utf8"),
+      ).toBe("runCli_ACCESS_RUNNER");
 
-    const codexContent = await readFile(codexConfig, "utf8");
-    const expectedCmd = join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
-    expect(codexContent).toContain("[mcp_servers.dysflow]");
-    expect(codexContent).toContain(`command = '${expectedCmd}'`);
+      const codexContent = await readFile(codexConfig, "utf8");
+      const expectedCmd = join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
+      expect(codexContent).toContain("[mcp_servers.dysflow]");
+      expect(codexContent).toContain(`command = '${expectedCmd}'`);
 
-    const opencode = await readJson(opencodeConfig);
-    const opencodeMcp = opencode.mcp as Record<string, unknown>;
-    const opencodeDysflow = opencodeMcp.dysflow as Record<string, unknown>;
-    expect(opencodeDysflow.enabled).toBe(true);
-    expect(opencodeDysflow.type).toBe("local");
-    expect(opencodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
-    expectRuntimeLauncherCommand(opencodeDysflow.command);
-    expect(opencodeDysflow).not.toHaveProperty("args");
+      const opencode = await readJson(opencodeConfig);
+      const opencodeMcp = opencode.mcp as Record<string, unknown>;
+      const opencodeDysflow = opencodeMcp.dysflow as Record<string, unknown>;
+      expect(opencodeDysflow.enabled).toBe(true);
+      expect(opencodeDysflow.type).toBe("local");
+      expect(opencodeDysflow.command).toEqual(expectedOpenCodeCommand(runtimeDir));
+      expectRuntimeLauncherCommand(opencodeDysflow.command);
+      expect(opencodeDysflow).not.toHaveProperty("args");
 
-    const claude = await readJson(claudeSettings);
-    const claudeMcpServers = claude.mcpServers as Record<string, unknown>;
-    const claudeDysflow = claudeMcpServers.dysflow as Record<string, unknown>;
-    expect(claudeDysflow.command).toBe(expectedCmd);
-    expect(claudeDysflow.args).toEqual(["mcp"]);
+      const claude = await readJson(claudeSettings);
+      const claudeMcpServers = claude.mcpServers as Record<string, unknown>;
+      const claudeDysflow = claudeMcpServers.dysflow as Record<string, unknown>;
+      expect(claudeDysflow.command).toBe(expectedCmd);
+      expect(claudeDysflow.args).toEqual(["mcp"]);
 
-    const pi = await readJson(piConfig);
-    const piMcpServers = pi.mcpServers as Record<string, unknown>;
-    const piDysflow = piMcpServers.dysflow as Record<string, unknown>;
-    expect(piDysflow.command).toBe(expectedCmd);
-    expect(piDysflow.args).toEqual(["mcp"]);
+      const pi = await readJson(piConfig);
+      const piMcpServers = pi.mcpServers as Record<string, unknown>;
+      const piDysflow = piMcpServers.dysflow as Record<string, unknown>;
+      expect(piDysflow.command).toBe(expectedCmd);
+      expect(piDysflow.args).toEqual(["mcp"]);
 
-    const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
-    expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
-    // Verify Node pnpm path is prepended so pnpm install works during update
-    expect(cmdLauncher).toContain("%ProgramFiles%\\nodejs;%PATH%");
-    const ps1Launcher = await readFile(join(runtimeDir, "bin", "dysflow.ps1"), "utf8");
-    expect(ps1Launcher).toContain(`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`);
-    expect(ps1Launcher).toContain("$env:ProgramFiles\\nodejs;$env:PATH");
-    expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
-
-    await rm(root, { recursive: true, force: true });
+      const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
+      expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
+      // Verify Node pnpm path is prepended so pnpm install works during update
+      expect(cmdLauncher).toContain("%ProgramFiles%\\nodejs;%PATH%");
+      const ps1Launcher = await readFile(join(runtimeDir, "bin", "dysflow.ps1"), "utf8");
+      expect(ps1Launcher).toContain(`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`);
+      expect(ps1Launcher).toContain("$env:ProgramFiles\\nodejs;$env:PATH");
+      expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("escapes launcher paths for cmd and PowerShell string contexts", async () => {
