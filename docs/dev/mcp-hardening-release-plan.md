@@ -211,9 +211,9 @@ Verified as real but judged not worth blocking the release. Leave them unless as
 - [x] #522 + #523 approved (`status:approved`)
 - [x] doc + code PRs merged to `main` — **#524** (docs, closes #522) and **#525** (refactor, closes #523)
 - [x] `pnpm test` + `pnpm run lint` green; CI "Quality gates" green on both PRs
-- [ ] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/` — **final gate, still pending**, needs Windows + Access + `ACCESS_VBA_PASSWORD` (#523 does not touch the VBA/Access path)
-- [ ] `docs/release-checklist.md` walked
-- [ ] Release tagged (title == tag)
+- [x] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/` — final gate checked
+- [x] `docs/release-checklist.md` walked
+- [x] Release tagged (title == tag)
 
 ---
 

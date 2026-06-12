@@ -20,13 +20,38 @@
 6. Cross-check reality with `gh issue list --state open` and engram (`mem_search "tech-debt"`),
    which are the authoritative remote state if this file ever lags.
 
-`Last updated`: 2026-06-10 — Campaign updated: **clean-release tidy-up** post-v1.2.33 fresh audit. Collapsed `processTimeoutMs` into `timeoutMs` (#493) in the `refactor/493-collapse-process-timeout` branch. Only the mega-scripts restructure epic (#494) remains deferred. See "Active campaign (2026-06-09)" below.
+`Last updated`: 2026-06-12 — Campaign updated: **Concurrency & Telemetry Hardening** post-v1.2.43. Released **v1.2.44** (closes concurrent lock eviction race and chunk-boundary parser bugs). Refactored queryMode and documented VBA write-gate design decision in **v1.2.43**. See "Active campaign (2026-06-12)" below.
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
+
+---
+
+## Active campaign (2026-06-12) — Concurrency & Telemetry Hardening
+
+> Source: deep code review and concurrency audit. Discovered a TOCTOU race in cross-process lock eviction on Windows (directory `rename` is not exclusive on Windows APIs) and a stream chunk fragmentation issue in real-time `onStderr` parsing (marker lines split across chunks).
+>
+> Deliverables:
+> - eviction claim via `mkdir` (exclusive EEXIST on Windows)
+> - stderr stream line buffering
+> - queryMode single source of truth (#523) and VBA write-gate documentation (#522) from the previous pass
+
+### Status board
+
+| Order | Issue | Title | Severity | Status | Notes |
+|-------|-------|-------|----------|--------|-------|
+| 1 | [#522](https://github.com/DysTelefonica/dysflow/issues/522) | docs(security): document MCP vs HTTP VBA write-gate asymmetry | low | `done` ✅ | documented in `docs/security/adapter-write-gates.md` |
+| 2 | [#523](https://github.com/DysTelefonica/dysflow/issues/523) | refactor(mcp): collapse queryMode to a single source of truth | medium | `done` ✅ | collapsed queryMode to `MCP_TOOL_ROUTES` |
+| 3 | [Lock Race] | fix(core): evict stale lock atomically on Windows via mkdir claim | high | `done` ✅ | Eviction claims via `mkdir` to prevent double-eviction races |
+| 4 | [Stream Chunk] | fix(runner): buffer stderr chunks to prevent partial marker JSON parse failures | medium | `done` ✅ | Line buffering in `default-executor.ts` |
+
+### Progress log
+
+- **2026-06-12**: Released **v1.2.44** containing the atomic lock eviction and stderr buffering fixes. All 1242 tests passing locally, linter clean, release published on GitHub.
+- **2026-06-12**: Released **v1.2.43** containing the queryMode refactoring and VBA write-gate documentation changes.
 
 ---
 
