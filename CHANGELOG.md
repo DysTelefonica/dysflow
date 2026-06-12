@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.45] - 2026-06-12
+
+### Refactor
+
+- Decoupled `VbaSourceComparison` service from Node.js OS filesystem APIs by introducing the `ComparisonFileSystemPort` port. Added a corresponding mock test verifying comparison logic purely in memory. (#527)
+- Decoupled `cross-process-lock` module from Node.js OS filesystem APIs by introducing the `LockFileSystemPort` port. Added a corresponding mock test verifying locking and eviction behavior purely in memory. (#528)
+
 ## [v1.2.44] - 2026-06-12
 
 ### Fixed
