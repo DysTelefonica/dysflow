@@ -116,7 +116,9 @@ export async function compareSourceAgainstBinary(
   if (!strict.ok) return strict;
 
   const sourceRoot = target.data.destinationRoot;
-  const tempExportRoot = await fileSystem.mkdtemp(resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"));
+  const tempExportRoot = await fileSystem.mkdtemp(
+    resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"),
+  );
   const password = ctx.accessPassword;
   const effectiveTimeoutMs =
     typeof params.timeoutMs === "number" && params.timeoutMs > 0

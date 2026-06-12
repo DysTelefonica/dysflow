@@ -12,9 +12,9 @@ import {
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
 import {
+  type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
   planReconcileBinary,
-  type ComparisonFileSystemPort,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
@@ -122,7 +122,12 @@ export class VbaModulesAdapter {
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
     if (toolName === "verify_code" || toolName === "verify_binary") {
-      return compareSourceAgainstBinary(toolName, params, this.getComparisonContext(), nodeComparisonFileSystem);
+      return compareSourceAgainstBinary(
+        toolName,
+        params,
+        this.getComparisonContext(),
+        nodeComparisonFileSystem,
+      );
     }
     if (toolName === "reconcile_binary") {
       return planReconcileBinary(params, this.getComparisonContext(), nodeComparisonFileSystem);

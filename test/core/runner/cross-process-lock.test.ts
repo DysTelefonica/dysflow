@@ -8,14 +8,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  acquireCrossProcessAccessLock,
   CROSS_PROCESS_LOCK_STALE_MS,
   evictStaleLock,
   getCrossProcessLockPath,
+  type LockFileSystemPort,
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
   startLockHeartbeat,
-  acquireCrossProcessAccessLock,
-  type LockFileSystemPort,
 } from "../../../src/core/runner/cross-process-lock.js";
 
 describe("cross-process-lock module API", () => {
@@ -269,7 +269,7 @@ describe("cross-process-lock module API", () => {
         const file = virtualFiles.get(path);
         return file ? { mtimeMs: file.mtimeMs } : null;
       },
-      utimes: async (path, atime, mtime) => {
+      utimes: async (path, _atime, mtime) => {
         const file = virtualFiles.get(path);
         if (file) file.mtimeMs = mtime.getTime();
       },

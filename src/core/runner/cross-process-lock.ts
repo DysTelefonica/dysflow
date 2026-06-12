@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdir as nodeMkdir, rm as nodeRm, stat as nodeStat, utimes as nodeUtimes, writeFile as nodeWriteFile } from "node:fs/promises";
+import {
+  mkdir as nodeMkdir,
+  rm as nodeRm,
+  stat as nodeStat,
+  utimes as nodeUtimes,
+  writeFile as nodeWriteFile,
+} from "node:fs/promises";
 import { tmpdir as nodeTmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -214,7 +220,12 @@ export async function runWithAccessExecutionLock<T>(
 
   const lockPath = getCrossProcessLockPath(key, fileSystem);
   await fileSystem.mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
-  const releaseCrossProcessLock = await acquireCrossProcessAccessLock(lockPath, timeoutMs, 50, fileSystem);
+  const releaseCrossProcessLock = await acquireCrossProcessAccessLock(
+    lockPath,
+    timeoutMs,
+    50,
+    fileSystem,
+  );
   const stopHeartbeat = startLockHeartbeat(lockPath, undefined, fileSystem);
   try {
     return await work();
