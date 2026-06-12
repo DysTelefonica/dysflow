@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { startDysflowHttpServer } from "../../src/adapters/http/server";
+import { createDefaultPowerShellExecutor } from "../../src/adapters/powershell/default-executor.js";
 import { loadDysflowConfig } from "../../src/core/config/dysflow-config";
 import { AccessPowerShellRunner } from "../../src/core/runner/access-runner";
 import { AccessDiagnosticsService } from "../../src/core/services/diagnostics-service";
@@ -72,6 +73,13 @@ function createAccessFixtureWorkspace(): { root: string; cleanup(): void } {
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
+function createAccessFixtureRunner(): AccessPowerShellRunner {
+  return new AccessPowerShellRunner({
+    executor: createDefaultPowerShellExecutor(),
+    scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
+  });
+}
+
 afterEach(async () => {
   await Promise.all(
     startedServers.splice(0).map(
@@ -98,9 +106,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const queryService = new AccessQueryService({ runner, config: config.data });
 
       const result = await queryService.execute({
@@ -137,9 +143,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const queryService = new AccessQueryService({ runner, config: config.data });
 
       const result = await queryService.execute({
@@ -174,9 +178,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const server = await startDysflowHttpServer({
         host: "127.0.0.1",
         port: 0,
@@ -237,9 +239,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const queryService = new AccessQueryService({ runner, config: config.data });
 
       // Caller passes ONLY the project cwd. The request has no
@@ -282,9 +282,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const queryService = new AccessQueryService({ runner, config: config.data });
 
       // Use a table that exists in the backend fixture. If the
@@ -322,9 +320,7 @@ describe.skipIf(!canRunAccessE2e)("Access fixture E2E", () => {
       expect(config.ok).toBe(true);
       if (!config.ok) throw new Error(config.error.message);
 
-      const runner = new AccessPowerShellRunner({
-        scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
-      });
+      const runner = createAccessFixtureRunner();
       const queryService = new AccessQueryService({ runner, config: config.data });
 
       const result = await queryService.execute({

@@ -8,7 +8,7 @@ vi.mock("node:child_process", () => ({
 import {
   POWERSHELL_SYSTEM_ENV_KEYS,
   spawnPowerShellProcess,
-} from "../../../src/core/runner/powershell-executor.js";
+} from "../../../src/adapters/powershell/default-executor.js";
 
 const originalSystemRoot = process.env.SystemRoot;
 

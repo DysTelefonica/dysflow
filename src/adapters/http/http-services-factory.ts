@@ -14,6 +14,7 @@ import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
+import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import type { DysflowHttpServices } from "./server.js";
 
 export async function createHttpServices(
@@ -29,7 +30,10 @@ export async function createHttpServices(
   }
 
   const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
-  const runner = new AccessPowerShellRunner({ operationRegistry });
+  const runner = new AccessPowerShellRunner({
+    executor: createDefaultPowerShellExecutor(),
+    operationRegistry,
+  });
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
     queryService: new AccessQueryService({ runner, config: configResult.data }),

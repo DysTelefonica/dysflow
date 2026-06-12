@@ -49,6 +49,42 @@ export type VbaSyncPort = {
   execute(toolName: string, input: unknown): Promise<OperationResult<unknown>>;
 };
 
+export type AccessProcessOwnership = {
+  pid: number;
+  processStartTime: string | null;
+  commandLine?: string | null;
+};
+
+export type AccessRunnerProgressCallback = (
+  percent: number,
+  total?: number,
+  message?: string,
+) => void;
+
+export type PowerShellExecutionResult = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  timedOut: boolean;
+  accessProcess?: AccessProcessOwnership;
+};
+
+export type PowerShellExecutorOptions = {
+  timeoutMs: number;
+  operationId: string;
+  accessPath: string;
+  env?: Record<string, string | undefined>;
+  onAccessProcessCaptured(process: AccessProcessOwnership): Promise<void>;
+  onProgress?: AccessRunnerProgressCallback;
+};
+
+export type PowerShellExecutor = (
+  command: string,
+  args: readonly string[],
+  options: PowerShellExecutorOptions,
+) => Promise<PowerShellExecutionResult>;
+
 export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;
