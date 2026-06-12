@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.2.42] - 2026-06-12
+
+### Architecture / Contracts
+
+- Extracted shared HTTP/MCP validation contracts into `src/shared/validation`, preserving MCP compatibility through re-export shims and rewiring the HTTP adapter to consume shared validation directly. (#512)
+- Aligned HTTP `/access/cleanup` with the MCP cleanup write-gate: only `force: true` cleanup requires writes; non-force cleanup remains available for terminal/failed Dysflow-owned operations. (#511)
+- Introduced a formal `PowerShellExecutor` core contract and moved the default PowerShell process executor into the adapter layer. (#513)
+- Moved concrete Windows process inspector/killer/scanner implementations into `src/adapters/process`, leaving core with pure parsing helpers and injected ports. (#514)
+- Added exact-pinned Zod schemas for the TS/PowerShell result-writer contract without changing runtime behavior. (#515)
+
+### Maintenance
+
+- Stabilized brittle full-suite timing/fixture tests uncovered during the cleanup train.
+- Closed the remaining deferred issues for the PowerShell mega-script split and future breaking MCP rename as out of scope for this release train. (#487, #494, #497)
+
 ## [v1.2.41] - 2026-06-11
 
 ### MCP
