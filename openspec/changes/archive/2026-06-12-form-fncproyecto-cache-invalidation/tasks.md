@@ -136,27 +136,27 @@ Public Function RebuildNCProyectoListadoCache( _
     Dim transactionStarted As Boolean
     Dim idNC As String
     Dim errReg As String
-    
+
     On Error GoTo EH
     p_Error = ""
     RebuildNCProyectoListadoCache = False
     transactionStarted = False
-    
+
     Set db = getdb()
     Set wrk = DBEngine.Workspaces(0)
-    
+
     ' Ensure schema
     EnsureCacheSchemaReadiness p_Error
-    
+
     ' Guard: cache disabled → no-op
     If Not IsCacheEnabled() Then
         RebuildNCProyectoListadoCache = True
         Exit Function
     End If
-    
+
     wrk.BeginTrans
     transactionStarted = True
-    
+
     If p_ForceInvalidation = 0 Then
         ' Full delete + regen
         db.Execute "DELETE FROM "& NOMBRE_TABLA_LISTADO, dbFailOnError
@@ -187,7 +187,7 @@ Public Function RebuildNCProyectoListadoCache( _
         Loop
         rs.Close
     End If
-    
+
     wrk.CommitTrans
     transactionStarted = False
     RebuildNCProyectoListadoCache = True
@@ -223,12 +223,12 @@ End Function
 Public Sub RefreshNCProyectoGestionCaches(Optional ByRef p_Error As String)
     On Error GoTo errores
     p_Error = ""
-    
+
     If Not TableExists(NOMBRE_TABLA_LISTADO) Then
         LogFallback "Cache refresh skipped: TbCacheListadoNC not available"
         Exit Sub
     End If
-    
+
     If Not RebuildNCProyectoListadoCache(0, p_Error) Then
         Err.Raise 1000
     End If

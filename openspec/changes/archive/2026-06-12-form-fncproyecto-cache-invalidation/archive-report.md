@@ -1,10 +1,10 @@
 # Archive Report: form-fncproyecto-cache-invalidation
 
-**Change**: `form-fncproyecto-cache-invalidation`  
-**Project**: `no_conformidades`  
-**ProjectId**: `00-no-conformidades-staging-clean`  
-**Archived**: 2026-06-12  
-**Verdict**: PASS WITH WARNINGS — refreshed after critical Slice 4 binding fix  
+**Change**: `form-fncproyecto-cache-invalidation`
+**Project**: `no_conformidades`
+**ProjectId**: `00-no-conformidades-staging-clean`
+**Archived**: 2026-06-12
+**Verdict**: PASS WITH WARNINGS — refreshed after critical Slice 4 binding fix
 **Mode**: hybrid (`openspec` filesystem + Engram archive report; in-place archive per user request)
 
 ## Summary
