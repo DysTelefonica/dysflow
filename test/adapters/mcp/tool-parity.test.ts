@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/dispatch-routes";
 import {
   DYSFLOW_MCP_TOOL_NAMES,
   QUERY_TOOL_NAMES,
@@ -341,11 +342,33 @@ describe("Dysflow MCP tool parity inventory", () => {
     ]);
   });
 
-  it("declares maintenance query access modes in the parity registry", () => {
-    expect(getToolDefinition("list_links")).toMatchObject({ queryMode: "read" });
-    expect(getToolDefinition("export_queries")).toMatchObject({ queryMode: "read" });
-    expect(getToolDefinition("link_tables")).toMatchObject({ queryMode: "write" });
-    expect(getToolDefinition("compact_repair")).toMatchObject({ queryMode: "write" });
+  it("builds maintenance requests with the mode declared in MCP_TOOL_ROUTES (single source of truth)", async () => {
+    const maintenanceRoutes = Object.entries(MCP_TOOL_ROUTES).filter(
+      ([, route]) => route.kind === "query-maintenance",
+    );
+    expect(maintenanceRoutes.length).toBeGreaterThan(0);
+
+    for (const [name, route] of maintenanceRoutes) {
+      if (route.kind !== "query-maintenance") continue;
+      const query = new FakeQueryService();
+      const tools = createDysflowMcpTools(
+        {
+          vbaService: new FakeVbaService(),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(),
+        },
+        // writes enabled so write-mode maintenance tools are not gated before building the request
+        true,
+      );
+      const tool = tools.find((entry) => entry.name === name);
+      expect(tool, `${name} must be registered`).toBeDefined();
+      await tool?.handler({});
+      expect(query.requests, `${name} should reach the query service`).toHaveLength(1);
+      expect(
+        (query.requests[0] as { mode?: string }).mode,
+        `${name} request mode must match its route table entry`,
+      ).toBe(route.queryMode);
+    }
   });
 
   it("dispatches maintenance query tools to the configured query service", async () => {
