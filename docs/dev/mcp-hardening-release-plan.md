@@ -204,12 +204,29 @@ Verified as real but judged not worth blocking the release. Leave them unless as
 ## 8. Progress checklist (update as you go)
 
 - [x] #522 RESOLVED as by-design — no code; documented in `docs/security/adapter-write-gates.md`
-- [ ] #522 reclassified on GitHub (bug → documentation) + doc PR merged
-- [ ] #523 approved (`status:approved`)
-- [ ] #523 tests RED written
-- [ ] #523 implemented, tests GREEN
-- [ ] #523 PR opened, reviewed, merged
-- [ ] `pnpm test` + `pnpm run lint` green on main
-- [ ] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/`
+- [x] #522 reclassified on GitHub (bug → documentation) — done; doc PR still to open/merge
+- [x] #523 behavior test written (characterizes request mode for all 9 maintenance tools)
+- [x] #523 implemented, GREEN — full suite **1236 passed**, `tsc` clean, `biome` clean
+- [x] #523 fresh-context review: **SHIP** (zero behavior change, no dead refs, sound test)
+- [ ] #523 approved (`status:approved`) — awaiting maintainer
+- [ ] doc + #523 PRs opened, reviewed, merged
+- [x] `pnpm test` + `pnpm run lint` green on the `refactor/mcp-querymode-single-source` branch
+- [ ] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/` — final gate, needs Windows + Access + `ACCESS_VBA_PASSWORD` (not run here; #523 does not touch the VBA/Access path)
 - [ ] `docs/release-checklist.md` walked
 - [ ] Release tagged (title == tag)
+
+---
+
+## 9. Branch / commit log (where the work actually lives)
+
+Nothing pushed yet (repo convention: issues need `status:approved` before a PR).
+Two local branches off `main`:
+
+| Branch | Commit | Contents | Issue |
+|--------|--------|----------|-------|
+| `docs/mcp-vba-write-gate-decision` | `baaa83f` | `docs/security/adapter-write-gates.md` + this plan | #522 (docs) |
+| `refactor/mcp-querymode-single-source` | `815f2f0` | `dispatch-factory.ts`, `tool-parity-registry.ts`, `tool-parity.test.ts` | #523 (code) |
+
+To continue: get `status:approved` on both issues, open the two PRs (docs first or
+in parallel — they are independent), then walk §5 and §7. The only environment-bound
+step left is the real MCP E2E (§5.4), which must run on a Windows host with Access.
