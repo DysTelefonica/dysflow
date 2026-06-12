@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.44] - 2026-06-12
+
+### Fixed
+
+- Resolved a critical race condition in cross-process locking (`evictStaleLock`) under concurrent execution on Windows: swapped `rename` (which is not exclusive on Windows) for `mkdir` (which atomically returns `EEXIST`).
+- Fixed a chunk-boundary buffer fragment bug in the PowerShell executor (`onStderr`): added a line buffer to accumulate partial data chunks before parsing the `DYSFLOW_ACCESS_PROCESS` PID marker and `DYSFLOW_PROGRESS` telemetries.
+
 ## [v1.2.43] - 2026-06-12
 
 ### Refactor
