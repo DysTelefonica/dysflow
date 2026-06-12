@@ -14,11 +14,6 @@ import { type DysflowError, failureResult, successResult } from "../../core/cont
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
-import {
-  WindowsMsAccessProcessInspector,
-  WindowsMsAccessProcessScanner,
-  WindowsProcessKiller,
-} from "../../core/operations/windows-processes.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
@@ -26,6 +21,12 @@ import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
+import {
+  createWindowsAccessOperationPreflightCleanup,
+  WindowsMsAccessProcessInspector,
+  WindowsMsAccessProcessScanner,
+  WindowsProcessKiller,
+} from "../process/windows-processes.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
@@ -222,6 +223,7 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
     operationRegistry,
+    preflightCleanup: createWindowsAccessOperationPreflightCleanup({ registry: operationRegistry }),
   });
   const cleanupService = new AccessOperationCleanupService({
     registry: operationRegistry,

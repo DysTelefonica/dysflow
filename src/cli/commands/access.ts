@@ -1,5 +1,7 @@
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
+import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
 import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
+import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { handleRelinkDirectoryCommand } from "./access/relink-directory.js";
@@ -41,7 +43,14 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
       return handleRelinkDirectoryCommand(rest, context);
     }
 
-    const runner = new AccessPowerShellRunner({ executor: createDefaultPowerShellExecutor() });
+    const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
+    const runner = new AccessPowerShellRunner({
+      executor: createDefaultPowerShellExecutor(),
+      operationRegistry,
+      preflightCleanup: createWindowsAccessOperationPreflightCleanup({
+        registry: operationRegistry,
+      }),
+    });
     const service = new AccessQueryService({ runner, config: configResult.data });
     return handleRelinkDirectoryCommand(rest, context, { service });
   }

@@ -5,16 +5,17 @@ import {
   createInMemoryAccessOperationRegistry,
   createProjectAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
-import {
-  WindowsMsAccessProcessInspector,
-  WindowsMsAccessProcessScanner,
-  WindowsProcessKiller,
-} from "../../core/operations/windows-processes.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
+import {
+  createWindowsAccessOperationPreflightCleanup,
+  WindowsMsAccessProcessInspector,
+  WindowsMsAccessProcessScanner,
+  WindowsProcessKiller,
+} from "../process/windows-processes.js";
 import type { DysflowHttpServices } from "./server.js";
 
 export async function createHttpServices(
@@ -33,6 +34,9 @@ export async function createHttpServices(
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
     operationRegistry,
+    preflightCleanup: createWindowsAccessOperationPreflightCleanup({
+      registry: operationRegistry,
+    }),
   });
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
