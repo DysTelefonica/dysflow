@@ -16,6 +16,23 @@ Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
 
+## Task Checklist
+
+- [x] 1.1 Create `src/modules/Test_NCProyectoGestionListadoHelper.bas` and `tests/tests.vba.proyecto-gestion-helper.json` for RED coverage. *(Historical Slice 1 setup is present; later slice2/slice3/slice4 focused runs verified the resulting test module/manifest path after user manual compile.)*
+- [x] 1.2 Add stub `RebuildNCProyectoListadoCache` to `src/modules/CacheNCProyecto.bas` with the Slice 1 false-return contract. *(Historical RED stub was superseded by the Slice 2 implementation verified by T1-T3 GREEN.)*
+- [x] 1.3 Add stub `RefreshNCProyectoGestionCaches` to `src/modules/NCProyectoGestionListadoHelper.bas` with the Slice 1 no-op contract. *(Historical RED stub was superseded by the Slice 2/3 implementation verified by T4/T5 GREEN.)*
+- [x] 2.1 Implement `RebuildNCProyectoListadoCache` in `src/modules/CacheNCProyecto.bas`.
+- [x] 2.2 Implement `RefreshNCProyectoGestionCaches` in `src/modules/NCProyectoGestionListadoHelper.bas`.
+- [x] 2.3 Add `InvalidateCombosCache` to `src/classes/Entorno.cls`.
+- [x] 2.4 Make T1-T3 GREEN and close T6/T7 intent through Slice 3 observable no-UI helper coverage. *(No direct T6/T7 tests were written; the original private-member assertions were intentionally rejected. Acceptance is satisfied by T1-T3 GREEN after user manual compile plus Slice 3 T8 helper-seam coverage proving `InvalidateCombosCache` is invoked and observable through `EntornoInvalidated=True`.)*
+- [x] 3.1 Rewrite `ComandoActualizarLista_Click` in `src/forms/Form_FormNCProyectoGestion.cls`.
+- [x] 3.2 Make T4, T5, T8, T9 GREEN.
+- [x] 4.1 Rename the audit handler in `src/forms/Form_FormNCAuditoriaGestion.cls`.
+- [x] 4.2 Rename the audit control and embedded form code in `src/forms/Form_FormNCAuditoriaGestion.form.txt` so `[Event Procedure]` resolves to `ComandoActualizarLista_Click`.
+- [x] 4.3 Strengthen T10 to reject stale `.form.txt` handler/error text and require the renamed control/mapping. *(Runtime verification is stale after the critical review fix; re-import form + module, user manual compile, and rerun `filter=slice4` before claiming GREEN.)*
+
+Current slice status: Source implementation tasks are complete, but Slice 4 verification/archive evidence is stale after the critical review fix. Historical Slice 1 RED/stub entries are closed because their artifacts were superseded and verified by later focused GREEN slices. Task 2.4 is closed truthfully without claiming direct T6/T7 tests exist: the T6/T7 private-member approach was superseded by Slice 3 observable no-UI helper coverage.
+
 ### Suggested Work Units
 
 | Unit | Goal | Likely PR | Notes |
@@ -261,9 +278,13 @@ PR label: chained-pr-3/4
 - **Dependencias**: Tasks 2.1, 2.2, 2.3
 - **AC**: Handler compila, sigue secuencia exacta del spec R4
 
-**Código a insertar** (reemplaza líneas 446-451):
+**No-UI correction (2026-06-12)**: Slice 3 orchestration now has a UI-free helper seam (`PrepareNCProyectoGestionRefresh`) in `NCProyectoGestionListadoHelper.bas`. The form handler must call that helper and keep only UI adapter concerns (`Hourglass`/`DoEvents`, `EstablecerCombos`, `lblEstado`, list refresh, cleanup/re-raise). T8/T9 must test the helper seam directly; no `DoCmd.OpenForm`, `Forms(...)`, form controls, or UI dialogs.
+
+**Código actualizado por la corrección no-UI** (reemplaza líneas 446-451):
 ```vb
 Public Sub ComandoActualizarLista_Click()
+    Dim refreshResult As Scripting.Dictionary
+
     On Error GoTo errores
 
     VBA.DoEvents
@@ -271,14 +292,15 @@ Public Sub ComandoActualizarLista_Click()
     VBA.DoEvents
     m_Error = ""
 
-    RefreshNCProyectoGestionCaches p_Error:=m_Error
+    Set refreshResult = PrepareNCProyectoGestionRefresh(m_ObjEntorno, m_Error)
+    If refreshResult Is Nothing Then Err.Raise 1000
+    If Not CBool(refreshResult("Success")) Then Err.Raise 1000
+
+    EstablecerCombos m_Error
     If m_Error <> "" Then Err.Raise 1000
 
-    m_ObjEntorno.InvalidateCombosCache
-    EstablecerCombos
-
     With Me.lblEstado
-        .Caption = "Cache recargado"
+        .Caption = CStr(refreshResult("FeedbackCaption"))
         .Visible = True
     End With
 
@@ -296,29 +318,27 @@ errores:
     If Err.Number <> 1000 Then
         m_Error = "Al ComandoActualizarLista_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
         CorreoAlAdministrador m_Error
-        pregunta = MsgBox(m_Error, vbCritical, "Error")
-    Else
-        pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
+    Err.Raise Err.Number, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
 End Sub
 ```
 
 ### Task 3.2: Hacer T4, T5, T8, T9 GREEN
 - **Qué**: Handler implementado → tests de secuencia y error pasan
 - **Dependencias**: Task 3.1
-- **AC**: T4 (Refresh éxito), T5 (Refresh error → Err.Raise), T8 (happy path con feedback lblEstado), T9 (Refresh falla → cleanup + Hourglass False) todos verdes
+- **AC**: T4 (Refresh éxito), T5 (Refresh error → p_Error), T8 (helper no-UI happy path), T9 (helper no-UI refresh failure) todos verdes después de import + compilación manual + focused tests.
 
-**Detalle de assertions T8**:
-- Arrange: form abierto, 5 NCs seed marker `FNCP-T8`, `lblEstado.Visible = False`
-- Act: `Forms("Form_FormNCProyectoGestion").ComandoActualizarLista_Click`
-- Assert: `RefreshNCProyectoGestionCaches` OK; `m_ObjEntorno.ColNCsProyecto.Count > 0`; `lblEstado.Caption = "Cache recargado"`; `lblEstado.Visible = False` post-handler; `TbCacheListadoNC` con 5 filas
-- Teardown: borrar NCs + cache por marker
+**Detalle de assertions T8 (no-UI helper seam)**:
+- Arrange: 5 NCs seed marker `FNCP-T8`, `TbCacheListadoNC` schema ready, `Entorno` seam object.
+- Act: `PrepareNCProyectoGestionRefresh(entorno, errMsg)`.
+- Assert: result `Success=True`, `CacheRefreshed=True`, `EntornoInvalidated=True`, `FeedbackCaption="Cache recargado"`; `TbCacheListadoNC` has 5 deterministic fixture rows.
+- Teardown: borrar NCs + cache por marker.
 
-**Detalle de assertions T9**:
-- Arrange: `DROP TABLE TbCacheListadoNC` en sandbox, form abierto
-- Act: llamada al handler
-- Assert: `Err.Number = 1000` propagado; `lblEstado.Visible` sin cambios; `Hourglass = False`
-- Teardown: (no requiere teardown)
+**Detalle de assertions T9 (no-UI helper seam)**:
+- Arrange: `DROP TABLE TbCacheListadoNC` in sandbox, `Entorno` seam object.
+- Act: `PrepareNCProyectoGestionRefresh(entorno, errMsg)`.
+- Assert: result `Success=False`, `CacheRefreshed=False`, `EntornoInvalidated=False`, `FailedStep="RefreshNCProyectoGestionCaches"`, `errMsg` mentions `TbCacheListadoNC`.
+- Teardown: restore cache schema; no form/UI cleanup needed.
 
 ---
 
@@ -341,21 +361,21 @@ PR label: chained-pr-4/4
 - `OldString`: `m_Error = "Al ComandoActualizar_Click se ha producido`
 - `NewString`: `m_Error = "Al ComandoActualizarLista_Click se ha producido`
 
-### Task 4.2: Verificar mapeo de evento en Form_FormNCAuditoriaGestion.form.txt
-- **Archivo**: `src/forms/Form_FormNCAuditoriaGestion.form.txt` (SOLO VERIFICACIÓN, no edición)
-- **Qué**: Verificar que línea539 usa `OnClick ="[Event Procedure]"` — Access resuelve por convención `<ControlName>_Click`; el rename en cls es suficiente
-- **Ubicación**: Línea 539
-- **AC**: `OnClick ="[Event Procedure]"` presente; control `Name ="ComandoActualizar"` NO se renombra (fuera de scope R6)
+### Task 4.2: Renombrar control y código embebido en Form_FormNCAuditoriaGestion.form.txt
+- **Archivo**: `src/forms/Form_FormNCAuditoriaGestion.form.txt` (modificado)
+- **Qué**: Renombrar el control `Name ="ComandoActualizar"` a `Name ="ComandoActualizarLista"` y actualizar el código embebido para que la firma y el mensaje de error usen `ComandoActualizarLista_Click`.
+- **Ubicación**: bloque del CommandButton de actualización y sección de código embebido del formulario.
+- **AC**: `Name ="ComandoActualizarLista"` y `OnClick ="[Event Procedure]"` quedan juntos en el control; no queda `Private Sub ComandoActualizar_Click()` ni el texto de error viejo en `.form.txt`.
 
-### Task 4.3: Hacer T10 GREEN
-- **Qué**: Test de rename sin regresión pasa
+### Task 4.3: Fortalecer T10 para contrato `.cls` + `.form.txt`
+- **Qué**: Test de rename sin regresión falla si vuelve el handler/error viejo embebido, si queda el control viejo, o si falta el mapping `[Event Procedure]` cerca del control renombrado.
 - **Dependencias**: Task 4.1
-- **AC**: T10 pasa; `ComandoActualizar_Click` ya NO existe en el módulo; `ComandoActualizarLista_Click` existe; test audit previo (`Test_AuditListadoHelper_CacheOn_SourceContract_RED`) sigue verde
+- **AC**: T10 pasa después de re-importar `Form_FormNCAuditoriaGestion` y `Test_NCProyectoGestionListadoHelper`, compilación manual del usuario, y `dysflow.test_vba ... filter=slice4`; `ComandoActualizar_Click` ya NO existe en `.cls` ni `.form.txt`; `ComandoActualizarLista_Click` existe en ambos; test audit previo (`Test_AuditListadoHelper_CacheOn_SourceContract_RED`) sigue presente.
 
 **Detalle de assertions T10**:
-- Arrange: form audit abierto con backend consistente
-- Act: verificar que `ComandoActualizar_Click` no existe; verificar que `ComandoActualizarLista_Click` existe; disparar click programático
-- Assert: símbolo viejo no existe; símbolo nuevo existe y es disparable; form responde sin regresión
+- Arrange: inspeccionar artefactos exportados `.cls` y `.form.txt` sin abrir UI.
+- Act: verificar que `ComandoActualizar_Click` no existe; verificar que `ComandoActualizarLista_Click` existe; verificar que el control renombrado conserva `OnClick ="[Event Procedure]"`.
+- Assert: símbolo viejo/texto viejo no existe en `.cls` ni `.form.txt`; símbolo nuevo/texto nuevo existe en ambos; form artifact mantiene binding consistente.
 - Teardown: (ninguno)
 
 ---
@@ -421,7 +441,8 @@ git merge-base --is-ancestor <sha-PR4> staging
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |--------|-----------|-----------|--------------|-------------|
-| `<sha>` | Slice 1: helpers RED | T1-T5 RED stubs | `dysflow.test_vba` slice1 RED | `import_modules` + compilación manual |
-| `<sha>` | Slice 2: Entorno + GREEN | T1-T3,T6-T7 GREEN | `dysflow.test_vba` slice2 GREEN | `import_modules` + compilación manual |
-| `<sha>` | Slice 3: handler GREEN | T4-T5,T8-T9 GREEN | `dysflow.test_vba` slice3 GREEN | `import_modules` + compilación manual |
-| `<sha>` | Slice 4: audit rename | T10 GREEN | `dysflow.test_vba` slice4 GREEN | `import_modules` + compilación manual |
+| `356f185` | Slice 1: helpers RED | T1-T5 RED stubs | Historical RED setup; later superseded by GREEN slices | Historical import/manual compile evidence retained in apply artifacts |
+| `4849cf8` | Slice 2: initial Entorno/cache helper implementation | T1-T3; T6/T7 intent later superseded | Historical Slice 2 setup; later completed by `b2eb8a1` | `CacheNCProyecto`, `NCProyectoGestionListadoHelper`, `Entorno`, `Test_NCProyectoGestionListadoHelper` import/manual compile evidence retained |
+| `b85ebab` | docs: add change artifacts + Slice 2 apply-progress | n/a (documentation) | n/a | n/a |
+| `38a8e9b` | docs: anchor apply-progress to real SHAs + T6/T7 deferral note | n/a (documentation) | n/a | n/a |
+| `b2eb8a1` | Slice 2 blocker fixes + Slice 3 no-UI helper seam + Slice 4 audit binding fix | T1-T5, T8-T10; T6/T7 intent superseded by observable helper-seam coverage | `dysflow.test_vba testsPath=tests/tests.vba.proyecto-gestion-helper.json filter=slice2` 3/3 GREEN; `filter=slice3` 4/4 GREEN; `filter=slice4` T10 GREEN after user manual compiles; no full manifest run claimed | Imported `CacheNCProyecto`, `NCProyectoGestionListadoHelper`, `Form_FormNCProyectoGestion`, `Form_FormNCAuditoriaGestion`, `Test_NCProyectoGestionListadoHelper`; user manually compiled in Access VBE |
