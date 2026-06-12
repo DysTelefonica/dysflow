@@ -456,7 +456,8 @@ Public Sub RefreshNCProyectoGestionCaches(Optional ByRef p_Error As String)
 
     If Not TableExists(NOMBRE_TABLA_LISTADO) Then
         LogFallback "Cache refresh skipped: TbCacheListadoNC not available"
-        Exit Sub
+        p_Error = "TbCacheListadoNC not available"
+        Err.Raise 1000
     End If
 
     If Not RebuildNCProyectoListadoCache(0, p_Error) Then
@@ -469,6 +470,77 @@ errores:
         p_Error = "El método RefreshNCProyectoGestionCaches ha devuelto el error: " & Err.Description
     End If
 End Sub
+
+' UI-free refresh orchestration seam for Form_FormNCProyectoGestion.
+' Performs the cache rebuild and environment combo-cache invalidation without
+' touching forms, controls, DoCmd, dialogs, or UI state.
+' SDD: form-fncproyecto-cache-invalidation Slice 3 no-UI correction.
+Public Function PrepareNCProyectoGestionRefresh( _
+    Optional ByVal p_Entorno As Entorno = Nothing, _
+    Optional ByRef p_Error As String _
+    ) As Scripting.Dictionary
+
+    Dim result As Scripting.Dictionary
+    Dim entornoObjetivo As Entorno
+
+    On Error GoTo errores
+
+    p_Error = ""
+    Set result = New Scripting.Dictionary
+    result.CompareMode = TextCompare
+    result.Add "Success", False
+    result.Add "CacheRefreshed", False
+    result.Add "EntornoInvalidated", False
+    result.Add "FeedbackCaption", "Cache recargado"
+    result.Add "FailedStep", ""
+
+    RefreshNCProyectoGestionCaches p_Error:=p_Error
+    If p_Error <> "" Then
+        result("FailedStep") = "RefreshNCProyectoGestionCaches"
+        Set PrepareNCProyectoGestionRefresh = result
+        Exit Function
+    End If
+    result("CacheRefreshed") = True
+
+    If p_Entorno Is Nothing Then
+        If m_ObjEntorno Is Nothing Then
+            p_Error = "m_ObjEntorno not available"
+            result("FailedStep") = "InvalidateCombosCache"
+            Set PrepareNCProyectoGestionRefresh = result
+            Exit Function
+        Else
+            Set entornoObjetivo = m_ObjEntorno
+        End If
+    Else
+        Set entornoObjetivo = p_Entorno
+    End If
+
+    entornoObjetivo.InvalidateCombosCache
+    result("EntornoInvalidated") = True
+    result("Success") = True
+
+    Set PrepareNCProyectoGestionRefresh = result
+    Exit Function
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método PrepareNCProyectoGestionRefresh ha devuelto el error: " & Err.Description
+    End If
+    If result Is Nothing Then
+        Set result = New Scripting.Dictionary
+        result.CompareMode = TextCompare
+        result.Add "Success", False
+        result.Add "CacheRefreshed", False
+        result.Add "EntornoInvalidated", False
+        result.Add "FeedbackCaption", "Cache recargado"
+    End If
+    If Not result.Exists("FailedStep") Then
+        result.Add "FailedStep", "PrepareNCProyectoGestionRefresh"
+    ElseIf result("FailedStep") = "" Then
+        result("FailedStep") = "PrepareNCProyectoGestionRefresh"
+    End If
+    Set PrepareNCProyectoGestionRefresh = result
+End Function
 
 ' Espejo de TableExists en NCAuditoriaGestionListadoHelper.bas:357.
 ' Verifica la existencia de la tabla contra el backend activo (getdb()).

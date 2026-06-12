@@ -2313,10 +2313,10 @@ Public Function RebuildNCProyectoListadoCache( _
     End If
 
     Set rs = db.OpenRecordset( _
-        "SELECT ID FROM TbNoConformidades WHERE Nz(Borrado,False)=False ORDER BY ID", _
+        "SELECT IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado,False)=False ORDER BY IDNoConformidad", _
         dbOpenSnapshot)
     Do While Not rs.EOF
-        idNC = CStr(rs!ID)
+        idNC = CStr(rs!IDNoConformidad)
         If Not RegenerarRegistro(idNC, errReg) Then
             p_Error = "RegenerarRegistro(" & idNC & "): " & errReg
             rs.Close

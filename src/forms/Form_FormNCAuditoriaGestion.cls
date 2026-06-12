@@ -15,7 +15,7 @@ Private Sub Auditoria_Change()
     ActualizarLista
 End Sub
 
-Private Sub ComandoActualizar_Click()
+Private Sub ComandoActualizarLista_Click()
     VBA.DoEvents
     DoCmd.Hourglass True
     VBA.DoEvents
@@ -38,7 +38,7 @@ Private Sub ComandoActualizar_Click()
 errores:
     DoCmd.Hourglass False
     If Err.Number <> 1000 Then
-        m_Error = "Al ComandoActualizar_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        m_Error = "Al ComandoActualizarLista_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
         CorreoAlAdministrador m_Error
         pregunta = MsgBox(m_Error, vbCritical, "Error")
     Else
