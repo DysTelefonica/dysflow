@@ -19,18 +19,19 @@ the gates differ.
 | Operation | HTTP | MCP | Why |
 |-----------|------|-----|-----|
 | SQL writes (`exec_sql`, fixtures, maintenance writes) | gated on `writesEnabled` | gated on `writesEnabled` / write resolver | Same on both — destructive SQL is always gated. |
-| `force` cleanup | gated | gated (`src/adapters/mcp/canonical-handlers.ts:122-127`) | Destructive escalation, gated on both. |
-| **VBA execution** (`/vba/execute`, `dysflow_vba_execute`, `run_vba`) | gated on `writesEnabled` (`server.ts:276-280`) | **controlled by the `allowedProcedures` allowlist, NOT the write-gate** | See below. |
+| `force` cleanup | gated | gated (the `force` branch of `handleMcpAccessCleanup` in `canonical-handlers.ts`) | Destructive escalation, gated on both. |
+| **VBA execution** (`/vba/execute`, `dysflow_vba_execute`, `run_vba`) | gated on `writesEnabled` (the `POST /vba/execute` handler in `server.ts`) | **controlled by the `allowedProcedures` allowlist, NOT the write-gate** (`handleMcpVbaExecute` in `canonical-handlers.ts` takes no `writesEnabled`) | See below. |
 
 ## Why VBA on MCP is allowlist-controlled, not write-gated
 
 On MCP, the control for VBA is the `allowedProcedures` allowlist. This is intentional
 and is locked by tests:
 
-- `test/adapters/mcp/tools.test.ts:1109-1223` — the allowlist is the gate: a procedure
-  not in the list is blocked; one in the list runs; an empty/unset list runs.
-- VBA executes under the default (writes-disabled) MCP configuration in many tests
-  (`tools.test.ts:112-117`, `:199-236`, `:522-555`, `:1052-1068`, `:1091-1106`).
+- The `allowedProcedures` describe blocks in `test/adapters/mcp/tools.test.ts` lock the
+  allowlist as the gate: a procedure not in the list is blocked; one in the list runs;
+  an empty/unset list runs.
+- VBA executes under the default (writes-disabled) MCP configuration across many of the
+  modern-tool and `run_vba` tests in that same file.
 
 The rationale: a stdio MCP server is launched by a trusted parent process. The operator
 who wires `dysflow mcp` into their client is the same operator who controls what runs.
