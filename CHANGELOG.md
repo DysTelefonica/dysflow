@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.2.43] - 2026-06-12
+
+### Refactor
+
+- Collapsed `queryMode` for query-maintenance MCP tools to a single source of truth (the `MCP_TOOL_ROUTES` route table), removing the duplicate `maintenanceQueryModes` table, the `ParityToolDefinition.queryMode` field, the `QueryMode` type, and the `?? "write"` fallback footgun in the dispatch factory. Replaced an implementation-coupled registry assertion with a behavior test covering all 9 maintenance tools. No behavior change. (#523)
+
+### Documentation
+
+- Documented the MCP vs HTTP VBA write-gate asymmetry as a deliberate design decision rather than a defect: HTTP is a network surface (bearer-token auth) so it blanket-gates VBA, while MCP is stdio spawned by a trusted parent and controls VBA via the `allowedProcedures` allowlist. Added `docs/security/adapter-write-gates.md`. (#522)
+
+### Validation
+
+- Verified against the real MCP E2E suite (`E2E_testing/mcp-e2e.mjs`) — all 45 tools pass against a live Access frontend/backend with clean process accounting.
+
 ## [v1.2.42] - 2026-06-12
 
 ### Architecture / Contracts
