@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
@@ -40,7 +41,7 @@ async function createDiagnosticsService(
   }
 
   return new AccessDiagnosticsService({
-    runner: new AccessPowerShellRunner(),
+    runner: new AccessPowerShellRunner({ executor: createDefaultPowerShellExecutor() }),
     config: configResult.data,
   });
 }

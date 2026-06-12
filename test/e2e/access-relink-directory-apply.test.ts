@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createDefaultPowerShellExecutor } from "../../src/adapters/powershell/default-executor.js";
 import { handleRelinkDirectoryCommand } from "../../src/cli/commands/access/relink-directory.js";
 import { loadDysflowConfig } from "../../src/core/config/dysflow-config.js";
 import type { OperationResult, RelinkDirectoryReport } from "../../src/core/contracts/index.js";
@@ -135,7 +136,10 @@ function psTableExists(dbPath: string, tableName: string): boolean {
 function makeService(rootPath: string): AccessQueryService {
   const cfg = loadDysflowConfig({ accessDbPath: rootPath });
   if (!cfg.ok) throw new Error(`loadDysflowConfig failed: ${cfg.error.message}`);
-  return new AccessQueryService({ runner: new AccessPowerShellRunner(), config: cfg.data });
+  return new AccessQueryService({
+    runner: new AccessPowerShellRunner({ executor: createDefaultPowerShellExecutor() }),
+    config: cfg.data,
+  });
 }
 
 // ---------------------------------------------------------------------------

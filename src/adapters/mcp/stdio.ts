@@ -25,6 +25,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
+import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
@@ -218,7 +219,10 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
 
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry(config);
-  const runner = new AccessPowerShellRunner({ operationRegistry });
+  const runner = new AccessPowerShellRunner({
+    executor: createDefaultPowerShellExecutor(),
+    operationRegistry,
+  });
   const cleanupService = new AccessOperationCleanupService({
     registry: operationRegistry,
     processInspector: new WindowsMsAccessProcessInspector(),

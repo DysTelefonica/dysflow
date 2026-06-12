@@ -1,3 +1,4 @@
+import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { loadDysflowConfig } from "../../core/config/dysflow-config.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
@@ -40,7 +41,7 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
       return handleRelinkDirectoryCommand(rest, context);
     }
 
-    const runner = new AccessPowerShellRunner();
+    const runner = new AccessPowerShellRunner({ executor: createDefaultPowerShellExecutor() });
     const service = new AccessQueryService({ runner, config: configResult.data });
     return handleRelinkDirectoryCommand(rest, context, { service });
   }

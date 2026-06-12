@@ -1,6 +1,13 @@
 import { existsSync } from "node:fs";
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import type { AccessQueryRequest, AccessVbaRequest, Diagnostic } from "../contracts/index.js";
+import type {
+  AccessQueryRequest,
+  AccessRunnerProgressCallback,
+  AccessVbaRequest,
+  Diagnostic,
+  PowerShellExecutionResult,
+  PowerShellExecutor,
+} from "../contracts/index.js";
 import {
   createDiagnostic,
   createDysflowError,
@@ -26,8 +33,14 @@ import {
   WindowsProcessKiller,
 } from "../operations/windows-processes.js";
 import { isRecord, sanitizeSecrets } from "../utils/index.js";
-import { POWERSHELL_EXE, spawnPowerShellProcess } from "./powershell-executor.js";
 
+export type {
+  AccessProcessOwnership,
+  AccessRunnerProgressCallback,
+  PowerShellExecutionResult,
+  PowerShellExecutor,
+  PowerShellExecutorOptions,
+} from "../contracts/index.js";
 export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 import {
@@ -61,8 +74,6 @@ export function ensureResultShape<TData>(
 }
 
 const DEFAULT_RUNNER_SCRIPT_PATH = "scripts/dysflow-access-runner.ps1";
-const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
-const PROGRESS_MARKER = "DYSFLOW_PROGRESS ";
 
 // Import and re-export the result channel contract so existing consumers of access-runner.ts
 // continue to work without changes (backward-compat re-exports).
@@ -80,37 +91,6 @@ export type AccessRunnerOperation =
   | { kind: "query"; request: AccessQueryRequest }
   | { kind: "diagnostics"; request: AccessDiagnosticsRequest };
 
-export type AccessProcessOwnership = {
-  pid: number;
-  processStartTime: string | null;
-  commandLine?: string | null;
-};
-export type PowerShellExecutionResult = {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  durationMs: number;
-  timedOut: boolean;
-  accessProcess?: AccessProcessOwnership;
-};
-export type PowerShellExecutorOptions = {
-  timeoutMs: number;
-  operationId: string;
-  accessPath: string;
-  env?: Record<string, string | undefined>;
-  onAccessProcessCaptured(process: AccessProcessOwnership): Promise<void>;
-  onProgress?: AccessRunnerProgressCallback;
-};
-export type PowerShellExecutor = (
-  command: string,
-  args: readonly string[],
-  options: PowerShellExecutorOptions,
-) => Promise<PowerShellExecutionResult>;
-export type AccessRunnerProgressCallback = (
-  percent: number,
-  total?: number,
-  message?: string,
-) => void;
 export type AccessRunnerRunOptions = { onProgress?: AccessRunnerProgressCallback };
 export type AccessRunner = {
   run<TData = unknown>(
@@ -127,7 +107,7 @@ export type AccessRunner = {
 export type FileExistsChecker = (path: string) => boolean;
 
 export type AccessPowerShellRunnerOptions = {
-  executor?: PowerShellExecutor;
+  executor: PowerShellExecutor;
   scriptPath?: string;
   operationRegistry?: AccessOperationRegistry;
   preflightCleanup?: AccessOperationPreflightCleanup;
@@ -147,8 +127,8 @@ export class AccessPowerShellRunner implements AccessRunner {
   private readonly lockAcquireTimeoutMs: number;
   private readonly fileExists: FileExistsChecker;
 
-  constructor(options: AccessPowerShellRunnerOptions = {}) {
-    this.executor = options.executor ?? spawnPowerShell;
+  constructor(options: AccessPowerShellRunnerOptions) {
+    this.executor = options.executor;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
     this.operationRegistry = resolveAccessOperationRegistry(options.operationRegistry);
     this.preflightCleanup =
@@ -287,7 +267,7 @@ export class AccessPowerShellRunner implements AccessRunner {
 
           const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
           const execution = await this.executor(
-            POWERSHELL_EXE,
+            "powershell.exe",
             buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
             {
               timeoutMs: config.timeoutMs,
@@ -571,23 +551,6 @@ type AccessProcessMarker = {
   commandLine?: string | null;
 };
 
-/**
- * TS↔PowerShell marker contract for PROGRESS lines.
- *
- * The PowerShell child script emits one line of the form:
- *   DYSFLOW_PROGRESS {"percent":<0-100>,"total"?:<number>,"message"?:<string>}
- *
- * Required fields: percent (0–100 number).
- * Optional fields: total (integer), message (human-readable string).
- *
- * Progress is best-effort telemetry — malformed lines are silently swallowed.
- */
-type ProgressMarker = {
-  percent: number;
-  total?: number;
-  message?: string;
-};
-
 export function isAccessProcessMarker(value: unknown): value is AccessProcessMarker {
   return (
     isRecord(value) &&
@@ -600,53 +563,3 @@ export function isAccessProcessMarker(value: unknown): value is AccessProcessMar
       typeof value.commandLine === "string")
   );
 }
-
-function isProgressMarker(value: unknown): value is ProgressMarker {
-  return isRecord(value) && typeof value.percent === "number";
-}
-
-const spawnPowerShell: PowerShellExecutor = (command, args, options) => {
-  const captureTasks: Promise<void>[] = [];
-  let stderr = "";
-  return spawnPowerShellProcess({
-    command,
-    args,
-    timeoutMs: options.timeoutMs,
-    env: options.env,
-    onStderr: (text) => {
-      const nonMarkerLines: string[] = [];
-      for (const line of text.split(/\r?\n/)) {
-        if (line.startsWith(ACCESS_PROCESS_MARKER)) {
-          try {
-            const parsed: unknown = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length));
-            if (isAccessProcessMarker(parsed)) {
-              captureTasks.push(options.onAccessProcessCaptured(parsed));
-            } else {
-              nonMarkerLines.push(line);
-            }
-          } catch {
-            nonMarkerLines.push(line);
-          }
-          continue;
-        }
-        if (line.startsWith(PROGRESS_MARKER)) {
-          try {
-            const data: unknown = JSON.parse(line.slice(PROGRESS_MARKER.length));
-            if (isProgressMarker(data)) {
-              options.onProgress?.(data.percent, data.total, data.message);
-            }
-          } catch {
-            // swallow malformed progress lines — progress is best-effort telemetry
-          }
-          continue;
-        }
-        nonMarkerLines.push(line);
-      }
-      const nonMarkerText = nonMarkerLines.filter((line) => line.length > 0).join("\n");
-      if (nonMarkerText.length > 0) stderr += nonMarkerText;
-    },
-  }).then(async (result) => {
-    await Promise.allSettled(captureTasks);
-    return { ...result, stderr };
-  });
-};

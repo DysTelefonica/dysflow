@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDefaultPowerShellExecutor } from "../../../src/adapters/powershell/default-executor.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
@@ -16,7 +17,6 @@ import {
   resolveDefaultRunnerScriptPath,
   sanitizePowerShellOutput,
 } from "../../../src/core/runner/access-runner.js";
-import { POWERSHELL_EXE } from "../../../src/core/runner/powershell-executor.js";
 
 // v1.2.32 regression: the runner now refuses to invoke the PowerShell
 // executor for query actions when the configured accessPath points at a
@@ -95,7 +95,7 @@ describe("AccessPowerShellRunner", () => {
     });
     expect(calls).toEqual([
       {
-        command: POWERSHELL_EXE,
+        command: "powershell.exe",
         timeoutMs: 1_500,
         args: [
           "-NoProfile",
@@ -1250,6 +1250,7 @@ describe("Cross-process lock for .accdb", () => {
     // AGENTS.md: "Never modify the production runtime at %LOCALAPPDATA%\dysflow" — tests must
     // not inadvertently use it either.
     const runner = new AccessPowerShellRunner({
+      executor: createDefaultPowerShellExecutor(),
       scriptPath: join(process.cwd(), "scripts/dysflow-access-runner.ps1"),
     });
     const result = await runner.run(
