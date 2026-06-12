@@ -17,7 +17,6 @@ import {
 } from "../contracts/index.js";
 import {
   type AccessOperationPreflightCleanup,
-  AccessOperationPreflightCleanupService,
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
 import {
@@ -27,11 +26,6 @@ import {
   resolveAccessOperationRegistry,
   toOperationMetadata,
 } from "../operations/access-operation-registry.js";
-import {
-  WindowsMsAccessProcessInspector,
-  WindowsMsAccessProcessScanner,
-  WindowsProcessKiller,
-} from "../operations/windows-processes.js";
 import { isRecord, sanitizeSecrets } from "../utils/index.js";
 
 export type {
@@ -117,6 +111,12 @@ export type AccessPowerShellRunnerOptions = {
   fileExists?: FileExistsChecker;
 };
 
+const noopPreflightCleanup: AccessOperationPreflightCleanup = {
+  async cleanup() {
+    return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+  },
+};
+
 export class AccessPowerShellRunner implements AccessRunner {
   private readonly executor: PowerShellExecutor;
   private readonly scriptPath: string;
@@ -131,15 +131,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.executor = options.executor;
     this.scriptPath = options.scriptPath ?? resolveDefaultRunnerScriptPath();
     this.operationRegistry = resolveAccessOperationRegistry(options.operationRegistry);
-    this.preflightCleanup =
-      options.preflightCleanup ??
-      new AccessOperationPreflightCleanupService({
-        registry: this.operationRegistry,
-        processInspector: new WindowsMsAccessProcessInspector(),
-        processKiller: new WindowsProcessKiller(),
-        processScanner: new WindowsMsAccessProcessScanner(),
-        clock: options.clock,
-      });
+    this.preflightCleanup = options.preflightCleanup ?? noopPreflightCleanup;
     this.operationIdFactory = options.operationIdFactory ?? createAccessOperationId;
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.lockAcquireTimeoutMs = options.lockAcquireTimeoutMs ?? 30_000;

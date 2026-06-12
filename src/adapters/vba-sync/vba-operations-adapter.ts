@@ -114,7 +114,7 @@ export class VbaOperationsAdapter {
     projectRoot: string,
   ): Promise<AccessOperationPreflightCleanup> {
     const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } =
-      await import("../../core/operations/windows-processes.js");
+      await import("../process/windows-processes.js");
     return new AccessOperationPreflightCleanupService({
       registry: createProjectAccessOperationRegistry({ projectRoot }),
       processInspector: new WindowsMsAccessProcessInspector(),

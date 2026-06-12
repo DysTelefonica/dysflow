@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 const mockExecFile = vi.fn();
@@ -6,13 +8,41 @@ vi.mock("node:child_process", () => ({
 }));
 
 import {
-  normalizeProcessList,
-  PROCESS_INSPECTOR_TIMEOUT_MS,
-  parseCimDateTimeToIso,
   WindowsMsAccessProcessInspector,
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
+} from "../../../src/adapters/process/windows-processes";
+import {
+  normalizeProcessList,
+  PROCESS_INSPECTOR_TIMEOUT_MS,
+  parseCimDateTimeToIso,
 } from "../../../src/core/operations/windows-processes";
+
+describe("Windows process adapter boundary", () => {
+  it("keeps concrete child_process ownership in the adapter module", () => {
+    const adapterSource = readFileSync(
+      resolve(process.cwd(), "src/adapters/process/windows-processes.ts"),
+      "utf8",
+    );
+
+    expect(adapterSource).toContain('from "node:child_process"');
+    expect(adapterSource).toContain("class WindowsMsAccessProcessInspector");
+    expect(adapterSource).toContain("class WindowsProcessKiller");
+    expect(adapterSource).toContain("class WindowsMsAccessProcessScanner");
+  });
+
+  it("rejects node:child_process ownership in the core process helpers", () => {
+    const coreSource = readFileSync(
+      resolve(process.cwd(), "src/core/operations/windows-processes.ts"),
+      "utf8",
+    );
+
+    expect(coreSource).not.toMatch(/from\s+["']node:child_process["']/);
+    expect(coreSource).not.toContain("class WindowsMsAccessProcessInspector");
+    expect(coreSource).not.toContain("class WindowsProcessKiller");
+    expect(coreSource).not.toContain("class WindowsMsAccessProcessScanner");
+  });
+});
 
 describe("parseCimDateTimeToIso", () => {
   it("converts a DMTF CIM datetime string to ISO 8601 UTC", () => {

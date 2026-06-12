@@ -2,8 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
+import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
 import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
+import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import {
   type AccessDiagnosticsResult,
@@ -40,8 +42,15 @@ async function createDiagnosticsService(
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }
 
+  const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
   return new AccessDiagnosticsService({
-    runner: new AccessPowerShellRunner({ executor: createDefaultPowerShellExecutor() }),
+    runner: new AccessPowerShellRunner({
+      executor: createDefaultPowerShellExecutor(),
+      operationRegistry,
+      preflightCleanup: createWindowsAccessOperationPreflightCleanup({
+        registry: operationRegistry,
+      }),
+    }),
     config: configResult.data,
   });
 }
