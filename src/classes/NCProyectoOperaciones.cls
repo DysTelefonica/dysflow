@@ -587,6 +587,11 @@ Public Function RegistrarDatosUnicos( _
     End If
     rcdDatos.Close
     Set rcdDatos = Nothing
+
+    SincronizarIndicadoresIssue18NC Me.nc.IDNoConformidad, p_Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     
     Exit Function
     
@@ -715,6 +720,11 @@ Public Function RegistrarAltaDatosUnicosConVinculoNC( _
      
     rcdDatos.Close
     Set rcdDatos = Nothing
+
+    SincronizarIndicadoresIssue18NC Me.nc.IDNoConformidad, p_Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     
     Exit Function
     
@@ -830,6 +840,11 @@ Public Function RegistrarCambiosDatosUnicosConVinculoNC( _
      
     rcdDatos.Close
     Set rcdDatos = Nothing
+
+    SincronizarIndicadoresIssue18NC Me.nc.IDNoConformidad, p_Error
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
     
     Exit Function
     
@@ -838,6 +853,34 @@ errores:
         p_Error = "El método NCProyectoOperaciones.RegistrarCambiosDatosUnicosConVinculoNC ha devuelto el error: " & Err.Description
     End If
 End Function
+
+Private Sub SincronizarIndicadoresIssue18NC( _
+        ByVal p_IDNoConformidad As String, _
+        Optional ByRef p_Error As String _
+    )
+
+    Dim indicatorSyncErr As String
+
+    On Error GoTo errores
+    p_Error = ""
+
+    If Not IsNumeric(p_IDNoConformidad) Then
+        Exit Sub
+    End If
+
+    Cache_Indicadores_SincronizarNC CLng(p_IDNoConformidad), indicatorSyncErr
+    If indicatorSyncErr <> "" Then
+        p_Error = "NCProyectoOperaciones.SincronizarIndicadoresIssue18NC: " & indicatorSyncErr
+        Err.Raise 1000
+    End If
+
+    Exit Sub
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "NCProyectoOperaciones.SincronizarIndicadoresIssue18NC: " & Err.Description
+    End If
+End Sub
 
 Public Function Eliminar( _
                             Optional ByVal p_SinDejarRastro As EnumSino = EnumSino.No, _

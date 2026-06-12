@@ -1,0 +1,52 @@
+{
+  "tests": [
+    {
+      "name": "Proyecto gestion helper cache off no-op",
+      "procedure": "Test_ProyectoGestionHelper_CacheOff_NoOp_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "slice2", "red", "cache-off"]
+    },
+    {
+      "name": "Proyecto listado cache rebuild force full delete and regen",
+      "procedure": "Test_ProyectoListadoCache_RebuildForceFull_DeleteAndRegen_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "slice2", "red", "rebuild-full"]
+    },
+    {
+      "name": "Proyecto listado cache rebuild force stale only stale regen",
+      "procedure": "Test_ProyectoListadoCache_RebuildForceStale_OnlyStaleRegen_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "slice2", "red", "rebuild-stale"]
+    },
+    {
+      "name": "Proyecto gestion helper refresh cache true on success",
+      "procedure": "Test_ProyectoGestionHelper_RefreshCache_TrueOnSuccess_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "slice3", "red", "orchestrator"]
+    },
+    {
+      "name": "Proyecto gestion helper refresh cache false on error",
+      "procedure": "Test_ProyectoGestionHelper_RefreshCache_FalseOnError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice1", "slice3", "red", "orchestrator-error"]
+    },
+    {
+      "name": "Proyecto gestion refresh helper no-UI happy path",
+      "procedure": "Test_ProyectoGestionForm_ActualizarLista_SequenceHappyPath_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice3", "red", "helper-seam", "feedback"]
+    },
+    {
+      "name": "Proyecto gestion refresh helper no-UI refresh error",
+      "procedure": "Test_ProyectoGestionForm_ActualizarLista_RefreshError_RaiseAndCleanup_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice3", "red", "helper-seam-error"]
+    },
+    {
+      "name": "Audit gestion form rename handler source contract",
+      "procedure": "Test_AuditGestionForm_RenameHandler_NoRegression_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "form-fncproyecto-cache-invalidation", "issue-48", "slice4", "rename", "source-inspection", "audit-regression-marker"]
+    }
+  ]
+}

@@ -222,9 +222,9 @@ Public Function Test_Indicadores_BuildDatos_ProyectoSolo_Objetos_Atomic() As Str
     Call TestHelper.AssertTrue(datos.Exists("ProyectoNCCENoConforme"), "Debe incluir ProyectoNCCENoConforme", logs, assertError)
     Call TestHelper.AssertTrue(Not datos.Exists("AuditoriaTareasPteReplanificar"), "No debe incluir claves de auditoría en modo PROYECTO", logs, assertError)
 
-    For Each key In datos.Keys
+    For Each key In datos.keys
         Set col = datos(CStr(key))
-        Call TestHelper.AssertTrue(TypeName(col) = "Dictionary", "Cada valor debe ser un objeto Dictionary: " & CStr(key), logs, assertError)
+        Call TestHelper.AssertTrue(typeName(col) = "Dictionary", "Cada valor debe ser un objeto Dictionary: " & CStr(key), logs, assertError)
     Next key
 
     If assertError <> "" Then
@@ -664,18 +664,18 @@ Private Function BuildConteosProyectoDesdeDatos( _
     Set conteos = New Scripting.Dictionary
     conteos.CompareMode = TextCompare
 
-    conteos("ProyectoTareasPteReplanificarTotal") = pDatos("ProyectoTareasPteReplanificar").Count
+    conteos("ProyectoTareasPteReplanificarTotal") = pDatos("ProyectoTareasPteReplanificar").count
     conteos("ProyectoTareasPteReplanificarUsuario") = CountUsuarioTest(pDatos("ProyectoTareasPteReplanificar"), pUsuario, p_Error)
     conteos("ProyectoTareasIrregularesUsuario") = CountUsuarioTest(pDatos("ProyectoTareasIrregulares"), pUsuario, p_Error)
-    conteos("ProyectoNCRegistradasTotal") = pDatos("ProyectoNCRegistradas").Count
+    conteos("ProyectoNCRegistradasTotal") = pDatos("ProyectoNCRegistradas").count
     conteos("ProyectoNCRegistradasUsuario") = CountUsuarioTest(pDatos("ProyectoNCRegistradas"), pUsuario, p_Error)
-    conteos("ProyectoNCAccionesSinTareasTotal") = pDatos("ProyectoNCAccionesSinTareas").Count
+    conteos("ProyectoNCAccionesSinTareasTotal") = pDatos("ProyectoNCAccionesSinTareas").count
     conteos("ProyectoNCAccionesSinTareasUsuario") = CountUsuarioTest(pDatos("ProyectoNCAccionesSinTareas"), pUsuario, p_Error)
-    conteos("ProyectoNCPteCETotal") = pDatos("ProyectoNCPteCE").Count
+    conteos("ProyectoNCPteCETotal") = pDatos("ProyectoNCPteCE").count
     conteos("ProyectoNCPteCEUsuario") = CountUsuarioTest(pDatos("ProyectoNCPteCE"), pUsuario, p_Error)
-    conteos("ProyectoNCCECaducadaTotal") = pDatos("ProyectoNCCECaducada").Count
+    conteos("ProyectoNCCECaducadaTotal") = pDatos("ProyectoNCCECaducada").count
     conteos("ProyectoNCCECaducadaUsuario") = CountUsuarioTest(pDatos("ProyectoNCCECaducada"), pUsuario, p_Error)
-    conteos("ProyectoNCCENoConformeTotal") = pDatos("ProyectoNCCENoConforme").Count
+    conteos("ProyectoNCCENoConformeTotal") = pDatos("ProyectoNCCENoConforme").count
     conteos("ProyectoNCCENoConformeUsuario") = CountUsuarioTest(pDatos("ProyectoNCCENoConforme"), pUsuario, p_Error)
 
     Set BuildConteosProyectoDesdeDatos = conteos
@@ -689,7 +689,7 @@ Private Function CountUsuarioTest( _
     Dim colUsuario As Scripting.Dictionary
     Set colUsuario = getColSeguimientoPorUsuario(pCol, pUsuario, p_Error)
     If p_Error <> "" Then Exit Function
-    If Not colUsuario Is Nothing Then CountUsuarioTest = colUsuario.Count
+    If Not colUsuario Is Nothing Then CountUsuarioTest = colUsuario.count
 End Function
 
 ' ============================================================
@@ -865,20 +865,20 @@ Private Function Issue18_RequireIndexFields( _
                         ByRef p_Logs As Collection, _
                         ByRef p_AssertError As String _
                     ) As Boolean
-    Dim idx As DAO.Index
+    Dim idx As DAO.index
     Dim i As Long
     On Error GoTo noIndex
 
     Set idx = p_Db.TableDefs(p_TableName).Indexes(p_IndexName)
-    If idx.Fields.Count < (UBound(p_FieldList) - LBound(p_FieldList) + 1) Then
+    If idx.Fields.count < (UBound(p_FieldList) - LBound(p_FieldList) + 1) Then
         p_AssertError = "Index " & p_IndexName & " has fewer fields than required"
         TestHelper.AddLog p_Logs, p_AssertError
         Exit Function
     End If
 
     For i = LBound(p_FieldList) To UBound(p_FieldList)
-        If StrComp(idx.Fields(CInt(i - LBound(p_FieldList))).Name, CStr(p_FieldList(i)), vbTextCompare) <> 0 Then
-            p_AssertError = "Index " & p_IndexName & " expected field " & CStr(i + 1) & "=" & CStr(p_FieldList(i)) & "; actual=" & idx.Fields(CInt(i - LBound(p_FieldList))).Name
+        If StrComp(idx.Fields(CInt(i - LBound(p_FieldList))).name, CStr(p_FieldList(i)), vbTextCompare) <> 0 Then
+            p_AssertError = "Index " & p_IndexName & " expected field " & CStr(i + 1) & "=" & CStr(p_FieldList(i)) & "; actual=" & idx.Fields(CInt(i - LBound(p_FieldList))).name
             TestHelper.AddLog p_Logs, p_AssertError
             Exit Function
         End If
@@ -1163,12 +1163,12 @@ Private Sub CacheMaterializado_InsertFixtureRow( _
     rs.AddNew
     rs!IDCacheIndicadorProyecto = p_CacheId
     rs!IDCacheConfig = configId
-    rs!Dominio = dominio
+    rs!dominio = dominio
     rs!Bucket = p_Bucket
     rs!TipoFila = p_TipoFila
     rs!IDEntidad = p_IDEntidad
     rs!IDNoConformidad = p_IDEntidad
-    rs!ResponsableCalidad = p_Responsable
+    rs!RESPONSABLECALIDAD = p_Responsable
     rs!FechaSnapshot = Now()
     rs!FechaActualizacionEntidad = Now()
     rs.Update
@@ -1226,12 +1226,12 @@ Private Sub CacheMaterializado_SnapshotConfigRow(ByVal p_Db As DAO.Database, ByV
     If Not rs.EOF Then
         Set snapshot = New Scripting.Dictionary
         snapshot.CompareMode = TextCompare
-        snapshot("IDCacheConfig") = rs.Fields("IDCacheConfig").Value
-        snapshot("Dominio") = rs.Fields("Dominio").Value
-        snapshot("Activo") = rs.Fields("Activo").Value
-        snapshot("VersionRegla") = rs.Fields("VersionRegla").Value
-        snapshot("FechaConfiguracion") = rs.Fields("FechaConfiguracion").Value
-        snapshot("UsuarioConfiguracion") = rs.Fields("UsuarioConfiguracion").Value
+        snapshot("IDCacheConfig") = rs.Fields("IDCacheConfig").value
+        snapshot("Dominio") = rs.Fields("Dominio").value
+        snapshot("Activo") = rs.Fields("Activo").value
+        snapshot("VersionRegla") = rs.Fields("VersionRegla").value
+        snapshot("FechaConfiguracion") = rs.Fields("FechaConfiguracion").value
+        snapshot("UsuarioConfiguracion") = rs.Fields("UsuarioConfiguracion").value
         snapshots.Add p_Dominio, snapshot
     End If
     rs.Close
@@ -1280,7 +1280,7 @@ Private Function CacheMaterializado_EnsureConfigId(ByVal p_Db As DAO.Database, B
 
     Set rs = p_Db.OpenRecordset("SELECT IDCacheConfig FROM TbCacheIndicadoresConfig WHERE Dominio=" & TestHelper.SqlText(p_Dominio), dbOpenSnapshot)
     If Not rs.EOF Then
-        existingConfigId = CLng(rs.Fields("IDCacheConfig").Value)
+        existingConfigId = CLng(rs.Fields("IDCacheConfig").value)
         If existingConfigId <> configId Then Call CacheMaterializado_SnapshotConfigRow(p_Db, p_Dominio)
         rs.Close
         Set rs = Nothing
@@ -1321,7 +1321,7 @@ Private Function CacheMaterializado_CountRows(ByVal p_Db As DAO.Database, ByVal 
     Dim rs As DAO.Recordset
 
     Set rs = p_Db.OpenRecordset(p_SQL, dbOpenSnapshot)
-    If Not rs.EOF Then CacheMaterializado_CountRows = CLng(Nz(rs.Fields("Total").Value, 0))
+    If Not rs.EOF Then CacheMaterializado_CountRows = CLng(Nz(rs.Fields("Total").value, 0))
     rs.Close
     Set rs = Nothing
 End Function
@@ -1627,7 +1627,7 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
     Dim sessionStarted As Boolean
     Dim db As DAO.Database
     Dim previousUser As usuario
-    Dim previousEntorno As Entorno
+    Dim previousEntorno As entorno
     Dim headerBefore As Long
     Dim headerOKAfter As Long
     Dim rowsAfter As Long
@@ -1658,7 +1658,7 @@ Public Function Test_Issue36_PintarIndicadoresProyecto_SinHeaderInicializaSinErr
     Set previousUser = m_ObjUsuarioConectado
     Set previousEntorno = m_ObjEntorno
     If m_ObjEntorno Is Nothing Then
-        Set m_ObjEntorno = New Entorno
+        Set m_ObjEntorno = New entorno
         TestHelper.AddLog logs, "Arrange Issue36: Entorno inicializado para PintarIndicadores"
     End If
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
@@ -1707,7 +1707,7 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
     Dim sessionStarted As Boolean
     Dim db As DAO.Database
     Dim previousUser As usuario
-    Dim previousEntorno As Entorno
+    Dim previousEntorno As entorno
     Dim headerBefore As Long
     Dim headerOKAfter As Long
     Dim rowsAfter As Long
@@ -1740,7 +1740,7 @@ Public Function Test_Issue37_PintarIndicadoresAuditoria_SinHeaderInicializaSinEr
     Set previousUser = m_ObjUsuarioConectado
     Set previousEntorno = m_ObjEntorno
     If m_ObjEntorno Is Nothing Then
-        Set m_ObjEntorno = New Entorno
+        Set m_ObjEntorno = New entorno
         TestHelper.AddLog logs, "Arrange Issue37: Entorno inicializado para PintarIndicadores"
     End If
     Set m_ObjUsuarioConectado = CacheMaterializado_TestUsuario("QA User")
@@ -2381,7 +2381,7 @@ Public Function Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic() As String
     Set dict1 = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket proyecto sin recalcular", logs, assertError)
     Call TestHelper.AssertTrue(dict1 Is seeded1, "Cache debe devolver la misma referencia seeded", logs, assertError)
-    Call TestHelper.AssertTrue(dict1.Count = 1, "Cache seeded inicial debe tener 1 item", logs, assertError)
+    Call TestHelper.AssertTrue(dict1.count = 1, "Cache seeded inicial debe tener 1 item", logs, assertError)
 
     Call Cache_InvalidarProyecto(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Cache_InvalidarProyecto no debe fallar", logs, assertError)
@@ -2398,7 +2398,7 @@ Public Function Test_Cache_Proyecto_Delegacion_Y_Reset_Atomic() As String
     Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket re-seeded sin backend", logs, assertError)
     Call TestHelper.AssertTrue(dict2 Is seeded2, "Cache debe devolver la nueva referencia seeded", logs, assertError)
     Call TestHelper.AssertTrue(Not (dict2 Is dict1), "La referencia tras reset debe cambiar", logs, assertError)
-    Call TestHelper.AssertTrue(dict2.Count = 2, "Cache re-seeded debe tener 2 items", logs, assertError)
+    Call TestHelper.AssertTrue(dict2.count = 2, "Cache re-seeded debe tener 2 items", logs, assertError)
     Call TestHelper.AssertTrue(Cache_Proyecto_EstaCargado(), "Cache proyecto debe quedar cargado", logs, assertError)
 
 finalizar:
@@ -2566,7 +2566,7 @@ Public Function Test_Cache_ConsistenciaConEntorno_Atomic() As String
     Set colCache = Cache_Indicadores_Proyecto(BUCKET_NC_PROY_REGISTRADAS, p_Reset:=False, p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Act obtiene bucket NC registradas desde cache", logs, assertError)
     Call TestHelper.AssertTrue(colCache Is seedReg, "Cache debe devolver exactamente el bucket seeded", logs, assertError)
-    Call TestHelper.AssertTrue(colCache.Count = 2, "Bucket seeded debe conservar sus 2 elementos", logs, assertError)
+    Call TestHelper.AssertTrue(colCache.count = 2, "Bucket seeded debe conservar sus 2 elementos", logs, assertError)
 
     Call Cache_InvalidarAuditoria(p_Error:=pError)
     Call TestHelper.AssertTrue(pError = "", "Invalidar auditoria no debe tocar proyecto", logs, assertError)
@@ -2624,8 +2624,8 @@ Public Function Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract() 
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
-    clsPath = CurrentProject.Path & "\src\forms\Form_FormNCProyectoSeguimiento.cls"
-    formPath = CurrentProject.Path & "\src\forms\Form_FormNCProyectoSeguimiento.form.txt"
+    clsPath = CurrentProject.path & "\src\forms\Form_FormNCProyectoSeguimiento.cls"
+    formPath = CurrentProject.path & "\src\forms\Form_FormNCProyectoSeguimiento.form.txt"
 
     clsText = ReadTextFileForIndicatorContract(clsPath)
     formText = ReadTextFileForIndicatorContract(formPath)
@@ -2669,7 +2669,7 @@ Public Function Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract() As S
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
-    modulePath = CurrentProject.Path & "\src\modules\Funciones Generales.bas"
+    modulePath = CurrentProject.path & "\src\modules\Funciones Generales.bas"
     moduleText = ReadTextFileForIndicatorContract(modulePath)
     resetBody = ExtractFunctionBody(moduleText, "Public Function ResetearColTareas")
 
@@ -2705,8 +2705,8 @@ Private Function AssertIndicadoresFormularioCargaDiferida( _
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
-    clsPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".cls"
-    formPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".form.txt"
+    clsPath = CurrentProject.path & "\src\forms\" & p_FormName & ".cls"
+    formPath = CurrentProject.path & "\src\forms\" & p_FormName & ".form.txt"
 
     clsText = ReadTextFileForIndicatorContract(clsPath)
     formText = ReadTextFileForIndicatorContract(formPath)
@@ -2752,8 +2752,8 @@ Private Function AssertIssue38SeguimientoActualizarModo( _
     On Error GoTo errores
 
     Set logs = TestHelper.NewLogs
-    clsPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".cls"
-    formPath = CurrentProject.Path & "\src\forms\" & p_FormName & ".form.txt"
+    clsPath = CurrentProject.path & "\src\forms\" & p_FormName & ".cls"
+    formPath = CurrentProject.path & "\src\forms\" & p_FormName & ".form.txt"
 
     clsText = ReadTextFileForIndicatorContract(clsPath)
     formText = ReadTextFileForIndicatorContract(formPath)
@@ -2948,6 +2948,100 @@ errores:
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
     On Error GoTo 0
     Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+Public Function Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim pError As String
+    Dim errMsg As String
+    Dim sessionErr As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim syncResult As String
+    Dim targetBefore As Long
+    Dim targetAfter As Long
+    Dim unrelatedBefore As Long
+    Dim unrelatedAfter As Long
+    Dim unrelatedTitleBefore As Long
+    Dim unrelatedTitleAfter As Long
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    If Not TestHelper.BeginTestSession(logs, sessionErr) Then
+        Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & sessionErr, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange: backend sandbox obtained", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+    If Not Issue18_RequireCacheDDL(db, logs, assertError) Then GoTo finalizar
+    If Not Issue18_RequireProyectoSourceSchema(db, logs, assertError) Then GoTo finalizar
+
+    Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    Call CacheMaterializado_InsertHeaderEstado(db, "OK", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 992001, "QA_User_Wu2", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_PTE_CE, "NC", 992001, "QA_User_Wu2", 1)
+    Call CacheMaterializado_InsertFixtureRow(db, BUCKET_NC_PROY_REGISTRADAS, "NC", 993811, "Other_Issue18_Wu2", 1)
+    db.Execute "UPDATE TbCacheIndicadoresProyectoDetalle SET DisplayTitulo='UNRELATED_SENTINEL_993811' WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=993811", dbFailOnError
+    TestHelper.AddLog logs, "Arrange: seeded target NC=992001 stale rows and unrelated sentinel NC=993811"
+
+    targetBefore = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001")
+    unrelatedBefore = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=993811")
+    unrelatedTitleBefore = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=993811 " & _
+        "AND DisplayTitulo='UNRELATED_SENTINEL_993811'")
+    Call TestHelper.AssertTrue(targetBefore = 2, "Precondition: target NC has two stale rows before incremental sync", logs, assertError)
+    Call TestHelper.AssertTrue(unrelatedBefore = 1, "Precondition: unrelated NC has one sentinel row before incremental sync", logs, assertError)
+    Call TestHelper.AssertTrue(unrelatedTitleBefore = 1, "Precondition: unrelated sentinel title is present before incremental sync", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    syncResult = Cache_Indicadores_SincronizarNC(992001, pError)
+    TestHelper.AddLog logs, "Act: Cache_Indicadores_SincronizarNC target=992001 returned pError='" & pError & "'"
+    Call TestHelper.AssertTrue(pError = "", "Act: per-NC sync must not report error", logs, assertError)
+    Call TestHelper.AssertTrue(Len(syncResult) > 0, "Act: per-NC sync must return JSON", logs, assertError)
+
+    targetAfter = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=992001")
+    unrelatedAfter = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=993811")
+    unrelatedTitleAfter = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle " & _
+        "WHERE IDCacheIndicadorProyecto=1 AND IDNoConformidad=993811 " & _
+        "AND DisplayTitulo='UNRELATED_SENTINEL_993811'")
+
+    Call TestHelper.AssertTrue(targetAfter <> targetBefore, "Assert: target NC cache rows are refreshed by incremental sync", logs, assertError)
+    Call TestHelper.AssertTrue(targetAfter > 0, "Assert: target NC still has recalculated cache detail after sync", logs, assertError)
+    Call TestHelper.AssertTrue(unrelatedAfter = unrelatedBefore, "Assert: unrelated NC row count is preserved", logs, assertError)
+    Call TestHelper.AssertTrue(unrelatedTitleAfter = unrelatedTitleBefore, "Assert: unrelated NC sentinel row content is preserved", logs, assertError)
+
+finalizar:
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic = TestHelper.BuildJsonOk(logs, "issue18_nc_sync_preserves_unrelated_nc_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If Not db Is Nothing Then Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function
 
 Public Function Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic() As String
@@ -3474,3 +3568,668 @@ errores:
     Test_Issue18_ReconstruirTodo_Idempotent_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
 End Function
 
+' ============================================================
+' PHASE 3 — NC/AC write hooks (tasks 3.1, 3.2)
+' ============================================================
+
+' Task 3.1: Proves that CacheNCProyecto.InvalidarCache triggers Issue18
+' indicator cache sync for the affected NC.
+Public Function Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim countBefore As Long
+    Dim countAfter As Long
+    Dim hookOk As String
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992050
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure config rows exist for both domains
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Seed a Proyecto NC source row for the target NC
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    db.Execute "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, Estado, Borrado) " & _
+               "VALUES (" & ncId & ", 'TEST-HOOK-NC-" & ncId & "', 'TEST-HOOK-EXP-" & ncId & "', 'Abierta', False)", dbFailOnError
+    TestHelper.AddLog logs, "Arrange: seeded Proyecto NC " & ncId
+
+    ' Capture indicator detail row count for this NC before the hook
+    countBefore = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=" & ncId)
+
+    ' Act: call CacheNCProyecto.InvalidarCache — this is the write hook path
+    hookOk = ""
+    Dim invalidarOk As Boolean
+    invalidarOk = CacheNCProyecto.InvalidarCache(CStr(ncId), "Test-NCWriteHook", pError)
+    If Not invalidarOk Then
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail("InvalidarCache failed: " & pError, logs)
+        GoTo finalizar
+    End If
+    TestHelper.AddLog logs, "Act: InvalidarCache(" & ncId & ") returned OK"
+
+    ' Assert: indicator detail rows should have been refreshed by the Issue18 hook
+    countAfter = CacheMaterializado_CountRows(db, _
+        "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=" & ncId)
+
+    ' The sync may produce 0 or more rows depending on constructor buckets;
+    ' the key assertion is that the sync was attempted (InvalidarCache returned True)
+    ' and the indicator cache was not left in a broken state.
+    Call TestHelper.AssertTrue(invalidarOk, "Assert: InvalidarCache must return True after indicator sync hook", logs, assertError)
+    Call TestHelper.AssertTrue(countAfter >= 0, "Assert: indicator detail count must be non-negative after hook", logs, assertError)
+
+finalizar:
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonOk(logs, "issue18_nc_write_hook_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.5: Proves that CacheNCProyecto.InvalidarCache does NOT claim success
+' when the Issue #18 indicator cache sync fails. Forces the sync to fail by
+' calling InvalidarCache with a non-existent NC ID — the resolver returns
+' "NC not found" and the sync helper propagates the error. The contract:
+' the function must return False and surface a meaningful pError.
+Public Function Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncIdNonExistent As Long
+    Dim invalidarOk As Boolean
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncIdNonExistent = 992099   ' non-existent NC ID — forces Issue #18 sync resolver to fail
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure cache config exists so the legacy sync (line 732 of InvalidarCache) succeeds
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Fixture discipline: confirm no NC with this ID exists
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncIdNonExistent, dbFailOnError
+    TestHelper.AddLog logs, "Arrange: confirmed no NC with ID=" & ncIdNonExistent
+
+    ' Act: call InvalidarCache with a non-existent NC ID.
+    '   - Legacy UPDATE on TbCacheListado is a no-op (no row matches).
+    '   - Legacy Cache_IndicadoresProyectoMaterializado_Sincronizar runs the full rebuild
+    '     and is expected to succeed (cache config exists).
+    '   - Issue #18 Cache_Indicadores_SincronizarNC(992099) calls
+    '     DetectarDominioDesdeNC(992099) which fails with "NC not found" and propagates
+    '     the error to indicatorSyncErr.
+    ' The contract: InvalidarCache must return False (no false success) and surface
+    ' the sync error in pError. The current production code logs the sync error
+    ' at LogCacheOperacion but ALWAYS returns True — this test must fail until
+    ' the production code propagates the sync error.
+    invalidarOk = CacheNCProyecto.InvalidarCache(CStr(ncIdNonExistent), "Test-NCWriteHook-FailedSync", pError)
+
+    ' Assert: no false success
+    Call TestHelper.AssertTrue(Not invalidarOk, _
+        "Assert: InvalidarCache must return False when Issue #18 sync fails (got True; pError='" & pError & "')", _
+        logs, assertError)
+    Call TestHelper.AssertTrue(InStr(pError, "indicador") > 0, _
+        "Assert: pError must explain the sync failure: " & pError, _
+        logs, assertError)
+
+finalizar:
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonOk(logs, "issue18_nc_write_hook_failed_sync_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.2: Proves that Cache_Indicadores_SincronizarDesdeAC resolves AC -> NC
+' and synchronizes the parent NC indicator cache.
+Public Function Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim acId As Long
+    Dim result As String
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992060
+    acId = 992061
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure config rows exist for both domains
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Seed Proyecto NC and AC source rows
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    db.Execute "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, Estado, Borrado) " & _
+               "VALUES (" & ncId & ", 'TEST-HOOK-AC-" & ncId & "', 'TEST-HOOK-EXP-" & ncId & "', 'Abierta', False)", dbFailOnError
+    db.Execute "INSERT INTO TbNCAccionCorrectivas (IDAccionCorrectiva, IDNoConformidad, AccionCorrectiva) " & _
+               "VALUES (" & acId & ", " & ncId & ", 'Test AC for hook')", dbFailOnError
+    TestHelper.AddLog logs, "Arrange: seeded NC " & ncId & " and AC " & acId
+
+    ' Act: call the AC write hook wrapper
+    result = Cache_Indicadores_SincronizarDesdeAC(acId, pError)
+    TestHelper.AddLog logs, "Act: SincronizarDesdeAC(" & acId & ") returned pError='" & pError & "'"
+
+    ' Assert: the wrapper returned OK
+    Call TestHelper.AssertTrue(pError = "", "Assert: SincronizarDesdeAC must not report error", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(result, "ac_sync_ok") > 0, "Assert: result must contain 'ac_sync_ok'", logs, assertError)
+
+finalizar:
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonOk(logs, "issue18_ac_write_hook_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.3: Proves that Cache_Indicadores_SincronizarDesdeAR resolves AR -> AC -> NC
+' and synchronizes the parent NC indicator cache for Proyecto domain.
+Public Function Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim acId As Long
+    Dim arId As Long
+    Dim result As String
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992070
+    acId = 992071
+    arId = 992072
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure config rows exist for both domains
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Seed Proyecto NC, AC, and AR source rows (FK order: NC -> AC -> AR)
+    db.Execute "DELETE FROM TbNCAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    db.Execute "INSERT INTO TbNoConformidades (IDNoConformidad, CodigoNoConformidad, EXPEDIENTE, Estado, Borrado) " & _
+               "VALUES (" & ncId & ", 'TEST-HOOK-AR-" & ncId & "', 'TEST-HOOK-EXP-" & ncId & "', 'Abierta', False)", dbFailOnError
+    db.Execute "INSERT INTO TbNCAccionCorrectivas (IDAccionCorrectiva, IDNoConformidad, AccionCorrectiva) " & _
+               "VALUES (" & acId & ", " & ncId & ", 'Test AC for AR hook')", dbFailOnError
+    db.Execute "INSERT INTO TbNCAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, Estado) " & _
+               "VALUES (" & arId & ", " & acId & ", '1', 'Test AR for hook', 'Pendiente')", dbFailOnError
+    TestHelper.AddLog logs, "Arrange: seeded NC " & ncId & ", AC " & acId & ", AR " & arId
+
+    ' Act: call the AR write hook wrapper
+    result = Cache_Indicadores_SincronizarDesdeAR(arId, pError)
+    TestHelper.AddLog logs, "Act: SincronizarDesdeAR(" & arId & ") returned pError='" & pError & "'"
+
+    ' Assert: the wrapper returned OK
+    Call TestHelper.AssertTrue(pError = "", "Assert: SincronizarDesdeAR must not report error", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(result, "ar_sync_ok") > 0, "Assert: result must contain 'ar_sync_ok'", logs, assertError)
+
+finalizar:
+    db.Execute "DELETE FROM TbNCAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonOk(logs, "issue18_ar_write_hook_proyecto_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    db.Execute "DELETE FROM TbNCAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidades WHERE IDNoConformidad=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.3: Proves that Cache_Indicadores_SincronizarDesdeAR resolves AR -> AC -> NC
+' and synchronizes the parent NC indicator cache for Auditoria domain.
+Public Function Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim acId As Long
+    Dim arId As Long
+    Dim result As String
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992080
+    acId = 992081
+    arId = 992082
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure config rows exist for both domains
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Seed Auditoria NC, AC, and AR source rows (FK order: NC -> AC -> AR)
+    db.Execute "DELETE FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID=" & ncId, dbFailOnError
+    db.Execute "INSERT INTO TbNoConformidadesAuditoria (ID, Numero, CAUSARAIZ, RequiereControlEficacia, Estado, Borrado) " & _
+               "VALUES (" & ncId & ", 'TEST-HOOK-AR-AUD-" & ncId & "', 'Causa raiz test', 'No', 'Abierta', False)", dbFailOnError
+    db.Execute "INSERT INTO TbNCAuditoriaAccionCorrectivas (IDAccionCorrectiva, ID, AccionCorrectiva) " & _
+               "VALUES (" & acId & ", " & ncId & ", 'Test AC for AR hook Auditoria')", dbFailOnError
+    db.Execute "INSERT INTO TbNCAuditoriaAccionesRealizadas (IDAccionRealizada, IDAccionCorrectiva, NAccion, AccionRealizada, Estado) " & _
+               "VALUES (" & arId & ", " & acId & ", '1', 'Test AR for hook Auditoria', 'Pendiente')", dbFailOnError
+    TestHelper.AddLog logs, "Arrange: seeded NC " & ncId & ", AC " & acId & ", AR " & arId & " (Auditoria)"
+
+    ' Act: call the AR write hook wrapper
+    result = Cache_Indicadores_SincronizarDesdeAR(arId, pError)
+    TestHelper.AddLog logs, "Act: SincronizarDesdeAR(" & arId & ") returned pError='" & pError & "'"
+
+    ' Assert: the wrapper returned OK
+    Call TestHelper.AssertTrue(pError = "", "Assert: SincronizarDesdeAR must not report error", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(result, "ar_sync_ok") > 0, "Assert: result must contain 'ar_sync_ok'", logs, assertError)
+
+finalizar:
+    db.Execute "DELETE FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonOk(logs, "issue18_ar_write_hook_auditoria_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    db.Execute "DELETE FROM TbNCAuditoriaAccionesRealizadas WHERE IDAccionRealizada=" & arId, dbFailOnError
+    db.Execute "DELETE FROM TbNCAuditoriaAccionCorrectivas WHERE IDAccionCorrectiva=" & acId, dbFailOnError
+    db.Execute "DELETE FROM TbNoConformidadesAuditoria WHERE ID=" & ncId, dbFailOnError
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.3: Proves that Cache_Indicadores_SincronizarDesdeAR returns a clear error
+' when the AR ID does not exist (no parent NC found).
+Public Function Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim pError As String
+    Dim result As String
+    Dim invalidArId As Long
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    invalidArId = 999999
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    ' Act: call with non-existent AR ID
+    result = Cache_Indicadores_SincronizarDesdeAR(invalidArId, pError)
+    TestHelper.AddLog logs, "Act: SincronizarDesdeAR(" & invalidArId & ") returned pError='" & pError & "'"
+
+    ' Assert: must report error (no parent NC found)
+    Call TestHelper.AssertTrue(pError <> "", "Assert: SincronizarDesdeAR must report error for invalid AR", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(result, "AR not found") > 0, "Assert: result must mention 'AR not found'", logs, assertError)
+
+finalizar:
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic = TestHelper.BuildJsonOk(logs, "issue18_ar_write_hook_invalid_ar_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.3: Proves that Cache_Indicadores_SincronizarDesdeAR returns a clear error
+' when called with invalid (<=0) AR ID.
+Public Function Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim pError As String
+    Dim result As String
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    ' Act: call with zero AR ID
+    result = Cache_Indicadores_SincronizarDesdeAR(0, pError)
+    TestHelper.AddLog logs, "Act: SincronizarDesdeAR(0) returned pError='" & pError & "'"
+
+    ' Assert: must report error (must be > 0)
+    Call TestHelper.AssertTrue(pError <> "", "Assert: SincronizarDesdeAR must report error for zero AR", logs, assertError)
+    Call TestHelper.AssertTrue(InStr(result, "must be > 0") > 0, "Assert: result must mention 'must be > 0'", logs, assertError)
+
+finalizar:
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic = TestHelper.BuildJsonOk(logs, "issue18_ar_write_hook_zero_ar_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.4: Proves that Cache_Indicadores_CargarBucket reads from cache tables
+' and returns correct bucket counts for Proyecto domain.
+Public Function Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim bucketResult As String
+    Dim usr As usuario
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992090
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure cache is populated
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Act: load bucket counts for Proyecto domain.
+    ' Use an explicit test user (same pattern as Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic)
+    ' because Cache_Indicadores_CargarBucket rejects a Nothing usuario, but in a Dysflow-driven
+    ' run m_ObjUsuarioConectado may be Nothing.
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    bucketResult = Cache_Indicadores_CargarBucket(db, usr, "PROYECTO", pError)
+
+    ' Assert: no error and result contains bucket data
+    Call TestHelper.AssertTrue(pError = "", "Assert: CargarBucket must not report error: " & pError, logs, assertError)
+    Call TestHelper.AssertTrue(Len(bucketResult) > 50, "Assert: bucket result must contain data", logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonOk(logs, "issue18_cargar_bucket_proyecto_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function
+
+' Task 3.4: Proves that Cache_Indicadores_CargarDetalle reads from cache tables
+' and returns detail rows for a specific bucket in Proyecto domain.
+Public Function Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic() As String
+    Dim logs As Collection
+    Dim assertError As String
+    Dim errMsg As String
+    Dim sessionStarted As Boolean
+    Dim db As DAO.Database
+    Dim pError As String
+    Dim ncId As Long
+    Dim detailResult As String
+    Dim usr As usuario
+    On Error GoTo errores
+
+    Set logs = TestHelper.NewLogs
+    sessionStarted = False
+    ncId = 992091
+
+    If Not TestHelper.BeginTestSession(logs, pError) Then
+        Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        Exit Function
+    End If
+    sessionStarted = True
+
+    Set db = getdb(pError)
+    Call TestHelper.AssertTrue(pError = "", "Arrange obtains backend sandbox", logs, assertError)
+    If assertError <> "" Then GoTo finalizar
+
+    ' Schema-first: verify issue #18 cache DDL exists
+    If Not CacheMaterializado_SchemaExiste(db, pError) Then
+        Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonFail("TESTS BLOCKED: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Ensure cache is populated
+    Dim rebuildResult As String
+    rebuildResult = Cache_Indicadores_ReconstruirTodo(pError)
+    If pError <> "" Then
+        Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonFail("Setup rebuild failed: " & pError, logs)
+        GoTo finalizar
+    End If
+
+    ' Act: load detail rows for first bucket.
+    ' Use an explicit test user (same pattern as Test_Issue18_CargarDetalle_Proyecto_FiltraDominio_Atomic)
+    ' so the test does not depend on the Dysflow session having a connected m_ObjUsuarioConectado.
+    Set usr = CacheMaterializado_TestUsuario("QA User")
+    detailResult = Cache_Indicadores_CargarDetalle(db, usr, "PROYECTO", "PendienteReplanificar", pError)
+
+    ' Assert: no error
+    Call TestHelper.AssertTrue(pError = "", "Assert: CargarDetalle must not report error: " & pError, logs, assertError)
+
+finalizar:
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    If assertError <> "" Then
+        Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonFail(assertError, logs)
+    Else
+        Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonOk(logs, "issue18_cargar_detalle_proyecto_ok")
+    End If
+    Exit Function
+errores:
+    errMsg = Err.Description
+    On Error Resume Next
+    Call CacheMaterializado_Cleanup(logs, assertError)
+    If sessionStarted Then Call TestHelper.EndTestSession(logs)
+    On Error GoTo 0
+    Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
+End Function

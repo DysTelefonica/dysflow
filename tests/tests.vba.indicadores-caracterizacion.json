@@ -37,6 +37,7 @@
     { "name": "Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract", "procedure": "Test_Issue38_SeguimientoAuditoria_ActualizarModoAuditoria_Contract", "expect": { "ok": true } },
     { "name": "Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract", "procedure": "Test_Issue38_ResetearColTareas_LimpiaAuditoriaCE_Contract", "expect": { "ok": true } },
     { "name": "Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic", "procedure": "Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic", "procedure": "Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic", "expect": { "ok": true } },
     { "name": "Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic", "procedure": "Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic", "expect": { "ok": true } },
     { "name": "Issue18_ResolverNCDesdeAC_Proyecto_Atomic", "procedure": "Test_Issue18_ResolverNCDesdeAC_Proyecto_Atomic", "expect": { "ok": true } },
     { "name": "Issue18_ResolverNCDesdeAC_Auditoria_Atomic", "procedure": "Test_Issue18_ResolverNCDesdeAC_Auditoria_Atomic", "expect": { "ok": true } },
@@ -45,6 +46,14 @@
     { "name": "Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic", "procedure": "Test_Issue18_CargarBucket_Proyecto_FiltraResponsable_Atomic", "expect": { "ok": true } },
     { "name": "Issue18_CargarDetalle_Proyecto_FiltraDominio_Atomic", "procedure": "Test_Issue18_CargarDetalle_Proyecto_FiltraDominio_Atomic", "expect": { "ok": true } },
     { "name": "Issue18_GlobalCache_DosResponsables_DosDominios_Atomic", "procedure": "Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic", "expect": { "ok": true } },
-    { "name": "Issue18_DetalleCompleto_CamposRequeridosUI_Atomic", "procedure": "Test_Issue18_DetalleCompleto_CamposRequeridosUI_Atomic", "expect": { "ok": true } }
+    { "name": "Issue18_DetalleCompleto_CamposRequeridosUI_Atomic", "procedure": "Test_Issue18_DetalleCompleto_CamposRequeridosUI_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic", "procedure": "Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic", "procedure": "Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic", "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic", "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic", "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic", "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic", "procedure": "Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic", "expect": { "ok": true } },
+    { "name": "Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic", "procedure": "Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic", "expect": { "ok": true } }
   ]
 }

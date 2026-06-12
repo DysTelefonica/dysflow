@@ -128,6 +128,7 @@ Public Function Registrar( _
     Dim m_EstadoNCAlInicio As EnumEstadoNC
     Dim m_EstadoNCAlFinal As EnumEstadoNC
     Dim blnReplanificado As Boolean
+    Dim indicatorSyncErr As String
     On Error GoTo errores
     p_Error = ""
     If Me.AR.AC.nc.NCProyectoAsociada Is Nothing Then
@@ -299,7 +300,15 @@ Public Function Registrar( _
         Set rcdDatos = Nothing
         ' --- INTEGRACIÓN CACHÉ LISTADO ---
         MarcarListadoStalePorAccion .AC.IDNoConformidad, p_Error
-        ' -------------------------------
+        ' --- INTEGRACIÓN CACHÉ INDICADORES ISSUE #18 ---
+        If IsNumeric(.IDAccionRealizada) Then
+            Cache_Indicadores_SincronizarDesdeAR CLng(.IDAccionRealizada), indicatorSyncErr
+            If indicatorSyncErr <> "" Then
+                p_Error = "ARProyectoOperaciones.Registrar no pudo sincronizar indicadores desde AR: " & indicatorSyncErr
+                Err.Raise 1000
+            End If
+        End If
+        ' ------------------------------------------------
         If Me.AR.AC.nc.NCProyectoAsociada Is Nothing Then
             ActualizarDatosACProyecto Me.AR.AC, p_Error
             If p_Error <> "" Then
@@ -345,6 +354,7 @@ Public Function Eliminar(Optional ByRef p_Error As String) As String
     
     
     Dim m_SQL As String
+    Dim indicatorSyncErr As String
     
     On Error GoTo errores
     With Me.AR
@@ -354,7 +364,15 @@ Public Function Eliminar(Optional ByRef p_Error As String) As String
         getdb().Execute m_SQL
         ' --- INTEGRACIÓN CACHÉ LISTADO ---
         MarcarListadoStalePorAccion .AC.IDNoConformidad, p_Error
-        ' -------------------------------
+        ' --- INTEGRACIÓN CACHÉ INDICADORES ISSUE #18 ---
+        If IsNumeric(.IDAccionRealizada) Then
+            Cache_Indicadores_SincronizarDesdeAR CLng(.IDAccionRealizada), indicatorSyncErr
+            If indicatorSyncErr <> "" Then
+                p_Error = "ARProyectoOperaciones.Eliminar no pudo sincronizar indicadores desde AR: " & indicatorSyncErr
+                Err.Raise 1000
+            End If
+        End If
+        ' ------------------------------------------------
         Set .AC.ARs = Nothing
         ActualizarDatosACProyecto .AC, p_Error
         If p_Error <> "" Then
@@ -501,6 +519,7 @@ Public Function Replanificar( _
     Dim m_RepOP As ReplanificacionesProyectoOperaciones
     Dim m_Rep As ReplanificacionesProyecto
     Dim m_FechaPrevAlInicio As String
+    Dim indicatorSyncErr As String
     On Error GoTo errores
    
     
@@ -534,6 +553,15 @@ Public Function Replanificar( _
                 Err.Raise 1000
             End If
         End With
+        ' --- INTEGRACIÓN CACHÉ INDICADORES ISSUE #18 ---
+        If IsNumeric(.IDAccionRealizada) Then
+            Cache_Indicadores_SincronizarDesdeAR CLng(.IDAccionRealizada), indicatorSyncErr
+            If indicatorSyncErr <> "" Then
+                p_Error = "ARProyectoOperaciones.Replanificar no pudo sincronizar indicadores desde AR: " & indicatorSyncErr
+                Err.Raise 1000
+            End If
+        End If
+        ' ------------------------------------------------
         
     End With
     m_ObjNCProyectoActiva.EstadoGrabar

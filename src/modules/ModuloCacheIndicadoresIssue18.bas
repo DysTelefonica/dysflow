@@ -171,6 +171,124 @@ errores:
     Set rs = Nothing
 End Function
 
+' Convenience wrapper for AC write hooks (task 3.2).
+' Resolves AC -> parent NC and synchronizes only that NC's indicator cache.
+' Returns JSON string.
+Public Function Cache_Indicadores_SincronizarDesdeAC( _
+        ByVal p_IDAccionCorrectiva As Long, _
+        Optional ByRef p_Error As String = "" _
+    ) As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim parentNcId As Long
+
+    Set logs = New Collection
+    On Error GoTo errores
+    p_Error = ""
+
+    If p_IDAccionCorrectiva <= 0 Then
+        p_Error = "Cache_Indicadores_SincronizarDesdeAC: IDAccionCorrectiva must be > 0"
+        Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(p_Error)
+    If p_Error <> "" Or db Is Nothing Then
+        Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail("getdb failed: " & p_Error, logs)
+        Exit Function
+    End If
+
+    parentNcId = Cache_Indicadores_ResolverNCDesdeAC(db, p_IDAccionCorrectiva, p_Error)
+    If p_Error <> "" Then
+        Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+    If parentNcId <= 0 Then
+        p_Error = "Cache_Indicadores_SincronizarDesdeAC: no parent NC found for AC " & p_IDAccionCorrectiva
+        Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    TestHelper.AddLog logs, "Resolved AC " & p_IDAccionCorrectiva & " -> NC " & parentNcId
+
+    Dim syncResult As String
+    syncResult = Cache_Indicadores_SincronizarNC(parentNcId, p_Error)
+    If p_Error <> "" Then
+        Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    TestHelper.AddLog logs, "Cache_Indicadores_SincronizarDesdeAC(" & p_IDAccionCorrectiva & ") OK"
+    Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonOk(logs, "ac_sync_ok")
+    Set db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "Cache_Indicadores_SincronizarDesdeAC: " & Err.Description
+    Cache_Indicadores_SincronizarDesdeAC = TestHelper.BuildJsonFail(p_Error, logs)
+    On Error Resume Next
+    Set db = Nothing
+End Function
+
+' Convenience wrapper for AR/tarea write hooks (task 3.3).
+' Resolves AR -> AC -> parent NC and synchronizes only that NC's indicator cache.
+' Returns JSON string.
+Public Function Cache_Indicadores_SincronizarDesdeAR( _
+        ByVal p_IDAccionRealizada As Long, _
+        Optional ByRef p_Error As String = "" _
+    ) As String
+    Dim logs As Collection
+    Dim db As DAO.Database
+    Dim parentNcId As Long
+
+    Set logs = New Collection
+    On Error GoTo errores
+    p_Error = ""
+
+    If p_IDAccionRealizada <= 0 Then
+        p_Error = "Cache_Indicadores_SincronizarDesdeAR: IDAccionRealizada must be > 0"
+        Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    Set db = getdb(p_Error)
+    If p_Error <> "" Or db Is Nothing Then
+        Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail("getdb failed: " & p_Error, logs)
+        Exit Function
+    End If
+
+    parentNcId = Cache_Indicadores_ResolverNCDesdeAR(db, p_IDAccionRealizada, p_Error)
+    If p_Error <> "" Then
+        Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+    If parentNcId <= 0 Then
+        p_Error = "Cache_Indicadores_SincronizarDesdeAR: no parent NC found for AR " & p_IDAccionRealizada
+        Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    TestHelper.AddLog logs, "Resolved AR " & p_IDAccionRealizada & " -> NC " & parentNcId
+
+    Dim syncResult As String
+    syncResult = Cache_Indicadores_SincronizarNC(parentNcId, p_Error)
+    If p_Error <> "" Then
+        Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail(p_Error, logs)
+        Exit Function
+    End If
+
+    TestHelper.AddLog logs, "Cache_Indicadores_SincronizarDesdeAR(" & p_IDAccionRealizada & ") OK"
+    Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonOk(logs, "ar_sync_ok")
+    Set db = Nothing
+    Exit Function
+
+errores:
+    p_Error = "Cache_Indicadores_SincronizarDesdeAR: " & Err.Description
+    Cache_Indicadores_SincronizarDesdeAR = TestHelper.BuildJsonFail(p_Error, logs)
+    On Error Resume Next
+    Set db = Nothing
+End Function
+
 ' ============================================================
 ' PUBLIC API — AR/tarea -> AC -> NC resolution helpers
 ' ============================================================

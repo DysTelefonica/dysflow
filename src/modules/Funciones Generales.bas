@@ -114,6 +114,8 @@ Public Function PintarIndicadores( _
     Dim m_AuditoriaSyncError As String
     Dim m_ProyectoSyncOk As Boolean
     Dim m_AuditoriaSyncOk As Boolean
+    Dim m_ProyectoCacheAttempted As Boolean
+    Dim m_AuditoriaCacheAttempted As Boolean
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -145,6 +147,7 @@ Public Function PintarIndicadores( _
 
     If m_IncluirProyecto Then
         If m_ModoNormalizado = "PROYECTO" Then
+            m_ProyectoCacheAttempted = True
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-materialized-cache-start", m_TelemetriaError)
             Set m_ConteosProyectoCache = Cache_IndicadoresProyectoMaterializado_CargarConteos(m_Usuario, m_ProyectoCacheError)
             m_ProyectoCachePath = (m_ProyectoCacheError = "" And Not m_ConteosProyectoCache Is Nothing)
@@ -162,14 +165,14 @@ Public Function PintarIndicadores( _
                     Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-materialized-cache-after-sync", m_ProyectoCachePath, m_TelemetriaError)
                 End If
 
-                If Not m_ProyectoCachePath Then
+        If Not m_ProyectoCachePath And Not m_ProyectoCacheAttempted Then
                     Set m_ConteosProyectoCache = Nothing
                     Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-legacy-fallback", True, m_TelemetriaError)
                 End If
             End If
         End If
 
-        If Not m_ProyectoCachePath Then
+        If Not m_ProyectoCachePath And Not m_ProyectoCacheAttempted Then
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
             Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
             Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
@@ -184,6 +187,7 @@ Public Function PintarIndicadores( _
 
     If m_IncluirAuditoria Then
         If m_ModoNormalizado = "AUDITORIA" Then
+            m_AuditoriaCacheAttempted = True
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-materialized-cache-start", m_TelemetriaError)
             Set m_ConteosAuditoriaCache = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(m_Usuario, m_AuditoriaCacheError)
             m_AuditoriaCachePath = (m_AuditoriaCacheError = "" And Not m_ConteosAuditoriaCache Is Nothing)
@@ -208,7 +212,7 @@ Public Function PintarIndicadores( _
             End If
         End If
 
-        If Not m_AuditoriaCachePath Then
+        If Not m_AuditoriaCachePath And Not m_AuditoriaCacheAttempted Then
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-start", m_TelemetriaError)
             Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
             Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas

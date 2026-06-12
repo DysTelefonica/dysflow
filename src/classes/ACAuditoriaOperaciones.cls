@@ -115,6 +115,7 @@ Public Function Registrar( _
     Dim m_SQL As String
     Dim m_MotivoNoOK As String
     Dim m_EstadoNCAlInicio As EnumEstadoNC
+    Dim indicatorSyncErr As String
     
     On Error GoTo errores
     m_MotivoNoOK = MotivoNoOK(p_ObjACAlInicio, p_Error)
@@ -219,8 +220,18 @@ Public Function Registrar( _
             End If
         
         End If
+        If p_Error <> "" Then
+            Err.Raise 1000
+        End If
         rcdDatos.Close
         Set rcdDatos = Nothing
+        If IsNumeric(.IdAccionCorrectiva) Then
+            Cache_Indicadores_SincronizarDesdeAC CLng(.IdAccionCorrectiva), indicatorSyncErr
+            If indicatorSyncErr <> "" Then
+                p_Error = "ACAuditoriaOperaciones.Registrar no pudo sincronizar indicadores desde AC: " & indicatorSyncErr
+                Err.Raise 1000
+            End If
+        End If
         ActualizarDatosCalculados p_Error
         If p_Error <> "" Then
             Err.Raise 1000

@@ -427,6 +427,12 @@
       "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "proyecto", "sync"]
     },
     {
+      "name": "Issue18 SincronizarNC Proyecto preserva NC no afectada",
+      "procedure": "Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "proyecto", "sync", "incremental-scope"]
+    },
+    {
       "name": "Issue18 SincronizarNC Auditoria inserta detalle",
       "procedure": "Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic",
       "expect": { "ok": true },
@@ -479,6 +485,54 @@
       "procedure": "Test_Issue18_DetalleCompleto_CamposRequeridosUI_Atomic",
       "expect": { "ok": true },
       "tags": ["atomic", "indicator-cache", "issue-18", "wu2", "detalle", "ui-contract"]
+    },
+    {
+      "name": "Issue18 NC write hook sincroniza cache indicador",
+      "procedure": "Test_Issue18_NCWriteHook_InvalidarCacheSyncsIndicatorCache_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "nc", "proyecto"]
+    },
+    {
+      "name": "Issue18 AC write hook resuelve NC y sincroniza",
+      "procedure": "Test_Issue18_ACWriteHook_SincronizarDesdeAC_ResolvesAndSyncs_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "ac", "proyecto"]
+    },
+    {
+      "name": "Issue18 AR write hook resuelve NC y sincroniza (Proyecto)",
+      "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_Proyecto_ResolvesAndSyncs_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "ar", "proyecto"]
+    },
+    {
+      "name": "Issue18 AR write hook resuelve NC y sincroniza (Auditoria)",
+      "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_Auditoria_ResolvesAndSyncs_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "ar", "auditoria"]
+    },
+    {
+      "name": "Issue18 AR write hook AR invalido devuelve error",
+      "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_InvalidAR_ReturnsError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "ar", "error"]
+    },
+    {
+      "name": "Issue18 AR write hook AR cero devuelve error",
+      "procedure": "Test_Issue18_ARWriteHook_SincronizarDesdeAR_ZeroAR_ReturnsError_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu3", "hook", "ar", "error"]
+    },
+    {
+      "name": "Issue18 CargarBucket Proyecto retorna conteos desde cache",
+      "procedure": "Test_Issue18_CargarBucket_Proyecto_ReturnsCacheCounts_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu4", "read", "proyecto"]
+    },
+    {
+      "name": "Issue18 CargarDetalle Proyecto retorna filas desde cache",
+      "procedure": "Test_Issue18_CargarDetalle_Proyecto_ReturnsDetailRows_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "indicator-cache", "issue-18", "wu4", "read", "proyecto"]
     }
   ]
 }

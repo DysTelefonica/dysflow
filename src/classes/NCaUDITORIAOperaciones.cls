@@ -118,6 +118,7 @@ Public Function RegistrarDatosUnicos( _
     Dim m_MotivoDatosUnicosNoOK As String
     Dim m_EstadoAlInicio As String
     Dim m_EstadoAlFinal As String
+    Dim indicatorSyncErr As String
     
     
     On Error GoTo errores
@@ -251,6 +252,14 @@ Public Function RegistrarDatosUnicos( _
         rcdDatos.Update
         RegistrarLogAuditoria "Edición de NC de Auditoría", , Me.nc, p_ObjNCAlInicio, p_Error
         If p_Error <> "" Then
+            Err.Raise 1000
+        End If
+
+    End If
+    If IsNumeric(Me.nc.id) Then
+        Cache_Indicadores_SincronizarNC CLng(Me.nc.id), indicatorSyncErr
+        If indicatorSyncErr <> "" Then
+            p_Error = "NCAuditoriaOperaciones.RegistrarDatosUnicos no pudo sincronizar indicadores: " & indicatorSyncErr
             Err.Raise 1000
         End If
     End If

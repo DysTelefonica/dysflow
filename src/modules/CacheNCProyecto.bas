@@ -734,7 +734,26 @@ Public Function InvalidarCache( _
         InvalidarCache = False
         Exit Function
     End If
-    
+
+    ' Issue #18 hook: after legacy listado sync, synchronize the shared backend
+    ' indicator cache for the affected NC.
+    ' Phase 3.5: propagate the Issue #18 sync error instead of returning True
+    ' unconditionally. The indicator cache is the source of truth for runtime
+    ' reads; a silent sync failure would leave the UI showing stale data while
+    ' the caller believes the cache is in sync. Better to surface the error so
+    ' the caller can retry or take action.
+    If IsNumeric(p_IDNC) Then
+        Dim indicatorSyncErr As String
+        Cache_Indicadores_SincronizarNC CLng(p_IDNC), indicatorSyncErr
+        If indicatorSyncErr <> "" Then
+            LogCacheOperacion p_IDNC, "Invalidar-IndicadorSync", _
+                "Issue18 indicator sync failed: " & indicatorSyncErr, usuario, False
+            p_Error = "CacheNCProyecto.InvalidarCache no pudo sincronizar indicadores (Issue #18): " & indicatorSyncErr
+            InvalidarCache = False
+            Exit Function
+        End If
+    End If
+
     InvalidarCache = True
     Exit Function
     
@@ -2259,6 +2278,96 @@ errores:
     If Not rsFuente Is Nothing Then rsFuente.Close: Set rsFuente = Nothing
     If Not rsCache Is Nothing Then rsCache.Close: Set rsCache = Nothing
     SincronizarCache = False
+End Function
+
+' Rebuild completo o incremental del cache de listado de NCs de proyecto.
+' ForceInvalidation=0: DELETE + regen full; =1: solo stale regen.
+' Espejo de RebuildNCAuditoriaListadoCache.
+' SDD: form-fncproyecto-cache-invalidation R1 — guard IsCacheEnabled per AD-1/AD-4.
+Public Function RebuildNCProyectoListadoCache( _
+    Optional ByVal p_ForceInvalidation As Long = 0, _
+    Optional ByRef p_Error As String _
+) As Boolean
+    Dim db As DAO.Database
+    Dim wrk As DAO.Workspace
+    Dim rs As DAO.Recordset
+    Dim transactionStarted As Boolean
+    Dim idNC As String
+    Dim errReg As String
+    Dim ensureErr As String
+
+    On Error GoTo EH
+    p_Error = ""
+    RebuildNCProyectoListadoCache = False
+    transactionStarted = False
+
+    ' Ensure schema readiness (creates TbCacheListadoNC + TbConfiguracion if missing).
+    If Not EnsureCacheSchemaReadiness(ensureErr) Then
+        p_Error = "RebuildNCProyectoListadoCache: schema readiness failed: " & ensureErr
+        Exit Function
+    End If
+
+    ' AD-4 guard: cache disabled -> no-op (cumple R1 escenario cache-off).
+    ' Diverge del audit (que no chequea flag) por convención de proyecto.
+    If Not IsCacheEnabled() Then
+        RebuildNCProyectoListadoCache = True
+        Exit Function
+    End If
+
+    Set db = getdb()
+    Set wrk = DBEngine.Workspaces(0)
+
+    wrk.BeginTrans
+    transactionStarted = True
+
+    If p_ForceInvalidation = 0 Then
+        ' Full delete + regen: limpia toda la cache de listado antes de regenerar.
+        db.Execute "DELETE FROM " & NOMBRE_TABLA_LISTADO, dbFailOnError
+    Else
+        ' Stale-only: marca stale y regenera solo esas (sigue iterando todos
+        ' los IDs de TbNoConformidades; RegenerarRegistro deja la fila valida
+        ' re-escrita con mismo ID — el caller decide si filtra por ID).
+        db.Execute "UPDATE " & NOMBRE_TABLA_LISTADO & _
+            " SET CacheValida=False, FechaCache=Now() WHERE CacheValida=False", dbFailOnError
+    End If
+
+    Set rs = db.OpenRecordset( _
+        "SELECT IDNoConformidad FROM TbNoConformidades WHERE Nz(Borrado,False)=False ORDER BY IDNoConformidad", _
+        dbOpenSnapshot)
+    Do While Not rs.EOF
+        idNC = CStr(rs!IDNoConformidad)
+        If Not RegenerarRegistro(idNC, errReg) Then
+            p_Error = "RegenerarRegistro(" & idNC & "): " & errReg
+            rs.Close
+            Set rs = Nothing
+            GoTo RollbackRebuild
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set rs = Nothing
+
+    wrk.CommitTrans
+    transactionStarted = False
+    RebuildNCProyectoListadoCache = True
+    Exit Function
+
+CleanExit:
+    On Error Resume Next
+    If transactionStarted Then wrk.Rollback
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Set wrk = Nothing
+    Set db = Nothing
+    Exit Function
+
+RollbackRebuild:
+    p_Error = "RebuildNCProyectoListadoCache: " & p_Error
+    GoTo CleanExit
+
+EH:
+    p_Error = "RebuildNCProyectoListadoCache: " & Err.Description
+    GoTo CleanExit
 End Function
 
 ' Reconstruye completamente la cache de listado de estados desde la fuente real.
