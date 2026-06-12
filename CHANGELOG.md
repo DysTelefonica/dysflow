@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.46] - 2026-06-12
+
+### Fixed
+
+- Fixed `verify_binary` and `reconcile_binary` failing with `VBA_MANAGER_FAILED` ("...`NormalizedModules` ... matriz vacía") on any populated database when called without `moduleNames`. The PowerShell `Invoke-ExportAction` declared `NormalizedModules` as a mandatory `[string[]]` without `[AllowEmptyCollection()]`, so an empty array (the "verify the whole project" signal) was rejected at parameter-binding time before the export-all branch could run. Added `[AllowEmptyCollection()]` to match the Import/Delete/Fix-Encoding actions. Covered by a new Pester test for the export-all branch and an MCP-stdio E2E regression asserting both tools succeed with no `moduleNames`.
+
 ## [v1.2.45] - 2026-06-12
 
 ### Refactor
