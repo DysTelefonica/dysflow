@@ -6,6 +6,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import {
+  createDefaultPowerShellExecutor,
   POWERSHELL_SYSTEM_ENV_KEYS,
   spawnPowerShellProcess,
 } from "../../../src/adapters/powershell/default-executor.js";
@@ -503,6 +504,107 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     expect(kill).toHaveBeenCalledTimes(1);
     expect(settled).toBe(true);
     await expect(resultPromise).resolves.toMatchObject({ timedOut: true });
+  });
+});
+
+describe("createDefaultPowerShellExecutor — stderr marker chunk-boundary handling", () => {
+  type StderrDataCb = (chunk: Buffer) => void;
+  type CloseCb = (code: number) => void;
+
+  /**
+   * Mock a child whose stderr emits caller-controlled chunks and whose close event
+   * is fired manually, so a test can split a marker line across chunk boundaries.
+   */
+  const installControllableChild = (): {
+    emitStderr: (text: string) => void;
+    close: (code?: number) => void;
+  } => {
+    let stderrCb: StderrDataCb | undefined;
+    let closeCb: CloseCb | undefined;
+    mockSpawn.mockImplementation(() => ({
+      pid: 4321,
+      stdout: { on: vi.fn() },
+      stderr: {
+        on: (event: string, cb: StderrDataCb) => {
+          if (event === "data") stderrCb = cb;
+        },
+      },
+      on: (event: string, cb: CloseCb) => {
+        if (event === "close") closeCb = cb;
+      },
+      kill: vi.fn(),
+    }));
+    return {
+      emitStderr: (text: string) => stderrCb?.(Buffer.from(text, "utf8")),
+      close: (code = 0) => closeCb?.(code),
+    };
+  };
+
+  it("captures an access-process marker even when the line is split across two chunks", async () => {
+    const child = installControllableChild();
+    const captured: unknown[] = [];
+    const executor = createDefaultPowerShellExecutor();
+
+    const resultPromise = executor("powershell.exe", ["-Command", "x"], {
+      timeoutMs: 5_000,
+      operationId: "op-chunk",
+      accessPath: "C:/demo.accdb",
+      onAccessProcessCaptured: async (proc) => {
+        captured.push(proc);
+      },
+    });
+
+    // The marker JSON is split right in the middle — the first chunk alone is invalid JSON.
+    child.emitStderr('DYSFLOW_ACCESS_PROCESS {"pid":9876,"proce');
+    child.emitStderr('ssStartTime":"2026-06-12T00:00:00.000Z","commandLine":"MSACCESS.EXE x"}\n');
+    child.close(0);
+
+    await resultPromise;
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({ pid: 9876, commandLine: "MSACCESS.EXE x" });
+  });
+
+  it("captures a marker that arrives without a trailing newline before the stream ends", async () => {
+    const child = installControllableChild();
+    const captured: unknown[] = [];
+    const executor = createDefaultPowerShellExecutor();
+
+    const resultPromise = executor("powershell.exe", ["-Command", "x"], {
+      timeoutMs: 5_000,
+      operationId: "op-flush",
+      accessPath: "C:/demo.accdb",
+      onAccessProcessCaptured: async (proc) => {
+        captured.push(proc);
+      },
+    });
+
+    child.emitStderr('DYSFLOW_ACCESS_PROCESS {"pid":5555,');
+    child.emitStderr('"processStartTime":null}');
+    child.close(0);
+
+    await resultPromise;
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({ pid: 5555, processStartTime: null });
+  });
+
+  it("keeps genuine (non-marker) stderr content in the result", async () => {
+    const child = installControllableChild();
+    const executor = createDefaultPowerShellExecutor();
+
+    const resultPromise = executor("powershell.exe", ["-Command", "x"], {
+      timeoutMs: 5_000,
+      operationId: "op-stderr",
+      accessPath: "C:/demo.accdb",
+      onAccessProcessCaptured: async () => undefined,
+    });
+
+    child.emitStderr("boom: something failed\n");
+    child.close(1);
+
+    const result = await resultPromise;
+    expect(result.stderr).toContain("boom: something failed");
   });
 });
 

@@ -160,44 +160,62 @@ export function createDefaultPowerShellExecutor(): PowerShellExecutor {
   return (command, args, options): Promise<PowerShellExecutionResult> => {
     const captureTasks: Promise<void>[] = [];
     let stderr = "";
+
+    // Node emits stderr in arbitrary-sized chunks, so a single marker line can be split
+    // across two `data` events. Buffer the stream and only parse whole lines (terminated
+    // by `\n`); carry any partial trailing line into the next chunk. Without this, a
+    // marker fragmented at a chunk boundary fails to parse and the captured PID is lost.
+    let pending = "";
+
+    const processLine = (rawLine: string): void => {
+      const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+      if (line.startsWith(ACCESS_PROCESS_MARKER)) {
+        try {
+          const parsed: unknown = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length));
+          if (isAccessProcessMarker(parsed)) {
+            captureTasks.push(options.onAccessProcessCaptured(parsed));
+            return;
+          }
+        } catch {
+          // Fall through: surface the unparseable line as ordinary stderr.
+        }
+        if (line.length > 0) stderr += line;
+        return;
+      }
+      if (line.startsWith(PROGRESS_MARKER)) {
+        try {
+          const data: unknown = JSON.parse(line.slice(PROGRESS_MARKER.length));
+          if (isProgressMarker(data)) {
+            options.onProgress?.(data.percent, data.total, data.message);
+          }
+        } catch {
+          // Progress is best-effort telemetry; malformed progress is ignored.
+        }
+        return;
+      }
+      if (line.length > 0) stderr += line;
+    };
+
     return spawnPowerShellProcess({
       command,
       args,
       timeoutMs: options.timeoutMs,
       env: options.env,
       onStderr: (text) => {
-        const nonMarkerLines: string[] = [];
-        for (const line of text.split(/\r?\n/)) {
-          if (line.startsWith(ACCESS_PROCESS_MARKER)) {
-            try {
-              const parsed: unknown = JSON.parse(line.slice(ACCESS_PROCESS_MARKER.length));
-              if (isAccessProcessMarker(parsed)) {
-                captureTasks.push(options.onAccessProcessCaptured(parsed));
-              } else {
-                nonMarkerLines.push(line);
-              }
-            } catch {
-              nonMarkerLines.push(line);
-            }
-            continue;
-          }
-          if (line.startsWith(PROGRESS_MARKER)) {
-            try {
-              const data: unknown = JSON.parse(line.slice(PROGRESS_MARKER.length));
-              if (isProgressMarker(data)) {
-                options.onProgress?.(data.percent, data.total, data.message);
-              }
-            } catch {
-              // Progress is best-effort telemetry; malformed progress is ignored.
-            }
-            continue;
-          }
-          nonMarkerLines.push(line);
+        pending += text;
+        let newlineIndex = pending.indexOf("\n");
+        while (newlineIndex !== -1) {
+          processLine(pending.slice(0, newlineIndex));
+          pending = pending.slice(newlineIndex + 1);
+          newlineIndex = pending.indexOf("\n");
         }
-        const nonMarkerText = nonMarkerLines.filter((line) => line.length > 0).join("\n");
-        if (nonMarkerText.length > 0) stderr += nonMarkerText;
       },
     }).then(async (result) => {
+      // Flush a trailing marker/line that never received its newline before the stream ended.
+      if (pending.length > 0) {
+        processLine(pending);
+        pending = "";
+      }
       await Promise.allSettled(captureTasks);
       return { ...result, stderr };
     });

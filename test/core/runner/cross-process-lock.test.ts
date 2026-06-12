@@ -3,10 +3,13 @@
  *
  * Validates the injectability of the in-process serialized lock map.
  */
+import { mkdir, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  CROSS_PROCESS_LOCK_STALE_MS,
+  evictStaleLock,
   getCrossProcessLockPath,
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
@@ -178,6 +181,63 @@ describe("cross-process-lock module API", () => {
       expect(typeof handle).toBe("object");
       ac.abort();
       clearInterval(handle);
+    });
+  });
+
+  describe("evictStaleLock — atomic claim (race-free stale eviction)", () => {
+    const created: string[] = [];
+
+    afterEach(async () => {
+      for (const path of created.splice(0)) {
+        await rm(path, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    const makeStaleLockDir = async (label: string): Promise<string> => {
+      const lockPath = join(tmpdir(), "dysflow-locks-test", `${label}-${process.pid}.lock`);
+      created.push(lockPath);
+      await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      await mkdir(lockPath, { recursive: true });
+      // Backdate mtime well past the stale threshold so it is unambiguously stale.
+      const past = new Date(Date.now() - (CROSS_PROCESS_LOCK_STALE_MS + 60_000));
+      await utimes(lockPath, past, past);
+      return lockPath;
+    };
+
+    it("lets exactly ONE of two concurrent evictors claim the same stale lock", async () => {
+      const lockPath = await makeStaleLockDir("concurrent-evict");
+
+      // Both run in-flight; the kernel serializes the rename so only one source rename
+      // can succeed. The other observes the directory already gone. This is the property
+      // that prevents two processes from both deleting a freshly re-created lock.
+      const results = await Promise.all([
+        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS),
+        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS),
+      ]);
+
+      expect(results.filter(Boolean)).toHaveLength(1);
+      // After a successful eviction the stale directory must be gone.
+      await expect(stat(lockPath)).rejects.toThrow();
+    });
+
+    it("does NOT evict a fresh (non-stale) lock", async () => {
+      const lockPath = join(tmpdir(), "dysflow-locks-test", `fresh-${process.pid}.lock`);
+      created.push(lockPath);
+      await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      await mkdir(lockPath, { recursive: true });
+
+      const evicted = await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS);
+
+      expect(evicted).toBe(false);
+      // The live lock must survive.
+      await expect(stat(lockPath)).resolves.toBeDefined();
+    });
+
+    it("returns false when the lock directory does not exist", async () => {
+      const lockPath = join(tmpdir(), "dysflow-locks-test", `absent-${process.pid}.lock`);
+      await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+
+      await expect(evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS)).resolves.toBe(false);
     });
   });
 

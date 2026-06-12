@@ -28,6 +28,47 @@ export function getCrossProcessLockPath(accessPath: string): string {
 }
 
 /**
+ * Atomically claim and remove a stale lock directory.
+ *
+ * A naive `stat`-then-`rm` is a TOCTOU race: two acquirers can both see the lock as
+ * stale and both `rm` it, with the second deletion wiping out a *fresh* lock the first
+ * acquirer just created — breaking mutual exclusion. `rename` is not a usable exclusion
+ * primitive here either: on Windows two concurrent directory renames of the same source
+ * can BOTH succeed (verified empirically). The only directory operation that is reliably
+ * atomic-exclusive on Windows is `mkdir` — which is exactly what lock acquisition uses.
+ *
+ * So eviction takes a sibling claim directory via `mkdir`: exactly one concurrent caller
+ * wins (the rest get `EEXIST`), and only the winner removes the stale lock and then its
+ * own claim. This guarantees a single evictor, so no one can delete a fresh lock created
+ * by a different acquirer.
+ *
+ * @returns `true` when this call evicted the stale lock, `false` otherwise (lock missing,
+ *          not stale, or already being evicted by another acquirer).
+ */
+export async function evictStaleLock(lockPath: string, staleMs: number): Promise<boolean> {
+  const info = await stat(lockPath).catch(() => null);
+  if (info === null || Date.now() - info.mtimeMs <= staleMs) return false;
+
+  const claimPath = `${lockPath}.evicting`;
+  try {
+    await mkdir(claimPath, { recursive: false });
+  } catch {
+    // EEXIST (or any failure): another acquirer already owns the eviction. Back off.
+    return false;
+  }
+  try {
+    // Re-check under the claim: the lock may have been refreshed since the first stat.
+    const current = await stat(lockPath).catch(() => null);
+    if (current !== null && Date.now() - current.mtimeMs > staleMs) {
+      await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+    }
+  } finally {
+    await rm(claimPath, { recursive: true, force: true }).catch(() => {});
+  }
+  return true;
+}
+
+/**
  * Poll a lock directory until acquired, or throw `RunnerLockTimeoutError`.
  * If the existing lock is older than CROSS_PROCESS_LOCK_STALE_MS it is considered
  * stale and evicted so a new acquirer can take over.
@@ -51,11 +92,8 @@ export async function acquireCrossProcessAccessLock(
       };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      const info = await stat(lockPath).catch(() => null);
-      if (info !== null && Date.now() - info.mtimeMs > CROSS_PROCESS_LOCK_STALE_MS) {
-        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
-        continue;
-      }
+      // Stale lock: claim-and-retry. Fresh lock: back off and poll again.
+      if (await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS)) continue;
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
   }
