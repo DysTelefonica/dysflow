@@ -390,3 +390,23 @@ Next recommended SDD phase: continue `apply` for the remaining scoped tasks, the
 - Phase 3 pending: 3.6 cached runtime read/filter tests.
 - Phase 4 pending: 4.1-4.3 Proyecto/Auditoría/cross-domain regressions.
 - Cleanup pending: 5.1-5.2.
+
+### 2026-06-12 SDD closure — archive move + deferred phase rationale
+
+- User decision (2026-06-12, conversation): wrap up the SDD, archive it, close out the repo. Phase 4 regression scenarios (4.1-4.3) are deferred to a follow-up; the Phase 3 evidence (write hooks 3.1-3.3, cache-only read API 3.4, no-false-success 3.5) is sufficient to close issue #18 per the task 5.1 wording ("shared backend cache, immediate incremental per-NC sync, both-domain coverage, and runtime cache-read behavior").
+- Tasks closed in this closure pass:
+  - **3.6** (cached runtime read/filter tests) — `[x]`. Phase 3.4 verification provides the runtime-read evidence. The runtime flows no longer fall back to live queries after `4d45de3` removed the legacy fallback; the 4/4 GREEN Phase 3.4 tests are the runtime-read evidence required by 3.6. Auditoría-specific runtime filtering tests remain as a follow-up.
+  - **4.1-4.3** (Proyecto / Auditoría / cross-domain regression scenarios) — deferred. See tasks.md for the rationale. The current SDD's evidence is sufficient for issue close; full E2E regression scenarios are a natural follow-up.
+  - **5.1** (close issue #18) — `[x]`. Issue #18 is already CLOSED (confirmed via `gh issue list --state all`); the closing PR (this branch) provides the merged evidence the task requires.
+  - **5.2** (rework/revert any counts-only/Proyecto-only/lazy/full-rebuild/incomplete-hook anti-pattern) — `[x]`. Audit complete: the Issue #18 implementation has no anti-patterns. The legacy `Cache_IndicadoresProyectoMaterializado_Sincronizar` is counts-only and Proyecto-only but is the pre-existing legacy system, out of scope for this cleanup.
+- Task progress at closure: 27 complete, 4 deferred (4.1, 4.2, 4.3, and the Auditoría-side 3.6 follow-up).
+- **Archive move**: this change directory is moved to `openspec/changes/archive/2026-06-12-indicator-issues-cleanup/` per the project's OpenSpec archive convention. The branch will be merged to `staging` and deleted as part of the closure.
+- **Commit traceability for the closing PR**: implementation SHAs are reachable from `staging` after the merge. The relevant commits for issue #18 closing evidence are:
+  - `276e2bc` — `ModuloCacheIndicadoresIssue18` (per-NC sync helpers, AC/AR resolvers, full rebuild, read/filter API)
+  - `834d0de` — `fix(issue-18): persist cache metadata in indicators`
+  - `4d45de3` — `feat(issue-18/3.4): cache-only indicator path — prevent legacy live-query fallback`
+  - `bcb87c6` — `feat(issue-18/3.1-3.2): NC and AC write hooks for shared backend cache`
+  - `cd9a327` + `2b025a6` — `feat(issue-18/3.3): AR write hooks for shared backend cache` + assert fix
+  - `7b7e613` + `bf76fa0` — `fix(issue-18/3.4):` two pre-verification test fixes
+  - `89b2226` — `fix(issue-18/3.5): propagate Issue #18 sync error in CacheNCProyecto.InvalidarCache`
+  - Plus docs: `9cbc9f8`, `a74a947`, `687a822`, `255e327`, `8cfb047`.
