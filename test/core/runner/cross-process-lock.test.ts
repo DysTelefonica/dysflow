@@ -14,6 +14,8 @@ import {
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
   startLockHeartbeat,
+  acquireCrossProcessAccessLock,
+  type LockFileSystemPort,
 } from "../../../src/core/runner/cross-process-lock.js";
 
 describe("cross-process-lock module API", () => {
@@ -250,5 +252,38 @@ describe("cross-process-lock module API", () => {
       expect(error.lockPath).toBe("/some/path.lock");
       expect(error.timeoutMs).toBe(5000);
     });
+  });
+
+  it("supports in-memory LockFileSystemPort mock without touching physical disk", async () => {
+    const virtualFiles = new Map<string, { mtimeMs: number; data?: string; isDir?: boolean }>();
+
+    const mockFs: LockFileSystemPort = {
+      mkdir: async (path) => {
+        virtualFiles.set(path, { mtimeMs: Date.now(), isDir: true });
+        return path;
+      },
+      rm: async (path) => {
+        virtualFiles.delete(path);
+      },
+      stat: async (path) => {
+        const file = virtualFiles.get(path);
+        return file ? { mtimeMs: file.mtimeMs } : null;
+      },
+      utimes: async (path, atime, mtime) => {
+        const file = virtualFiles.get(path);
+        if (file) file.mtimeMs = mtime.getTime();
+      },
+      writeFile: async (path, data) => {
+        virtualFiles.set(path, { mtimeMs: Date.now(), data, isDir: false });
+      },
+      tmpdir: () => "vtmp",
+    };
+
+    const lockPath = getCrossProcessLockPath("virtual.accdb", mockFs);
+    const release = await acquireCrossProcessAccessLock(lockPath, 1000, 50, mockFs);
+    expect(virtualFiles.has(lockPath)).toBe(true);
+
+    await release();
+    expect(virtualFiles.has(lockPath)).toBe(false);
   });
 });

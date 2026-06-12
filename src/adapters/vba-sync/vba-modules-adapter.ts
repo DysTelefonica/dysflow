@@ -1,4 +1,5 @@
-import { readdir, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { extname, parse, resolve } from "node:path";
 import {
   createDysflowError,
@@ -13,9 +14,18 @@ import {
 import {
   compareSourceAgainstBinary,
   planReconcileBinary,
+  type ComparisonFileSystemPort,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
+
+const nodeComparisonFileSystem: ComparisonFileSystemPort = {
+  mkdtemp: (prefix) => mkdtemp(prefix),
+  readdir: (path) => readdir(path, { withFileTypes: true }),
+  readFile: (path, encoding) => readFile(path, encoding),
+  rm: (path, options) => rm(path, options),
+  tmpdir: () => tmpdir(),
+};
 
 const MODULE_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
@@ -112,10 +122,10 @@ export class VbaModulesAdapter {
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
     if (toolName === "verify_code" || toolName === "verify_binary") {
-      return compareSourceAgainstBinary(toolName, params, this.getComparisonContext());
+      return compareSourceAgainstBinary(toolName, params, this.getComparisonContext(), nodeComparisonFileSystem);
     }
     if (toolName === "reconcile_binary") {
-      return planReconcileBinary(params, this.getComparisonContext());
+      return planReconcileBinary(params, this.getComparisonContext(), nodeComparisonFileSystem);
     }
 
     if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {

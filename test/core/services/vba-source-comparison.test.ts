@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,7 +8,17 @@ import {
   compareVbaSourceTrees,
   planReconcileBinary,
   type VbaExecutionRequest,
+  type ComparisonFileSystemPort,
 } from "../../../src/core/services/vba-source-comparison";
+
+const testFileSystem: ComparisonFileSystemPort = {
+  mkdtemp: (prefix) => mkdtemp(prefix),
+  readdir: (path) => readdir(path, { withFileTypes: true }),
+  readFile: (path, encoding) => readFile(path, encoding),
+  rm: (path, options) => rm(path, options),
+  tmpdir: () => tmpdir(),
+};
+
 
 describe("vba-source-comparison", () => {
   // --- compareSourceAgainstBinary error branches ---
@@ -46,7 +56,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx);
+    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
   });
 
@@ -79,7 +89,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx);
+    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
   });
 
@@ -112,7 +122,7 @@ describe("vba-source-comparison", () => {
         timedOut: true,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx);
+    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
   });
@@ -146,7 +156,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx);
+    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_FAILED");
   });
@@ -179,7 +189,7 @@ describe("vba-source-comparison", () => {
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
       },
     };
-    await compareSourceAgainstBinary("verify_code", { timeoutMs: 9999 }, ctx);
+    await compareSourceAgainstBinary("verify_code", { timeoutMs: 9999 }, ctx, testFileSystem);
     expect(capturedTimeoutMs).toBe(9999);
   });
 
@@ -216,7 +226,7 @@ describe("vba-source-comparison", () => {
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
       },
     };
-    const result = await planReconcileBinary({}, ctx);
+    const result = await planReconcileBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.ok).toBe(false);
@@ -235,7 +245,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(sourceRoot, "Mod1.bas"), "content", "utf8");
     // bin is empty — Mod1 missing in binary
 
-    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], false);
+    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], false, testFileSystem);
     expect(comparison.missingInBinary).toHaveLength(1);
     expect(comparison.missingInBinary[0]?.moduleName).toBe("Mod1");
     expect(comparison.diffs).toBeUndefined(); // includeDiffs=false
@@ -250,7 +260,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(sourceRoot, "Mod1.bas"), "source", "utf8");
     await writeFile(join(binaryRoot, "Mod1.bas"), "binary", "utf8");
 
-    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], false);
+    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], false, testFileSystem);
     expect(comparison.different).toHaveLength(1);
     expect(comparison.diffs).toBeUndefined();
   });
@@ -262,7 +272,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(sourceRoot, "Mod1.bas"), "content1", "utf8");
     await writeFile(join(sourceRoot, "Mod2.bas"), "content2", "utf8");
 
-    const files = await collectVbaSourceFiles(sourceRoot, new Set(["mod1"]));
+    const files = await collectVbaSourceFiles(sourceRoot, new Set(["mod1"]), testFileSystem);
     expect(files).toHaveLength(1);
     expect(files[0]?.moduleName).toBe("Mod1");
   });
@@ -277,7 +287,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(srcDir, "FormMod.frm"), "content", "utf8");
     await writeFile(join(srcDir, "NotVba.txt"), "content", "utf8"); // skipped
 
-    const files = await collectVbaSourceFiles(srcDir, new Set());
+    const files = await collectVbaSourceFiles(srcDir, new Set(), testFileSystem);
     expect(files.map((f) => f.fileType).sort()).toEqual(["cls", "frm"]);
   });
 
@@ -288,7 +298,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(srcDir, "MyForm.form.txt"), "content", "utf8");
     await writeFile(join(srcDir, "MyReport.report.txt"), "content", "utf8");
 
-    const files = await collectVbaSourceFiles(srcDir, new Set());
+    const files = await collectVbaSourceFiles(srcDir, new Set(), testFileSystem);
     const types = files.map((f) => f.fileType).sort();
     expect(types).toContain("form.txt");
     expect(types).toContain("report.txt");
@@ -305,7 +315,7 @@ describe("vba-source-comparison", () => {
     await mkdir(subDir, { recursive: true });
     await writeFile(join(subDir, "DeepMod.bas"), "content", "utf8");
 
-    const files = await collectVbaSourceFiles(srcDir, new Set());
+    const files = await collectVbaSourceFiles(srcDir, new Set(), testFileSystem);
     expect(files).toHaveLength(1);
     expect(files[0]?.moduleName).toBe("DeepMod");
   });
@@ -328,7 +338,7 @@ describe("vba-source-comparison", () => {
     await writeFile(join(src, "Mod.bas"), "line1\nline2", "utf8");
     await writeFile(join(bin, "Mod.bas"), "line1\nline2\nline3", "utf8"); // bin has extra line
 
-    const comparison = await compareVbaSourceTrees(src, bin, [], true);
+    const comparison = await compareVbaSourceTrees(src, bin, [], true, testFileSystem);
     expect(comparison.different).toHaveLength(1);
     expect(comparison.diffs?.[0]?.binarySnippet).toContain("line3");
   });
@@ -346,14 +356,14 @@ describe("vba-source-comparison", () => {
     await writeFile(join(sourceRoot, "modules", "Mod2.bas"), "source content", "utf8");
     await writeFile(join(binaryRoot, "modules", "Mod2.bas"), "binary content", "utf8");
 
-    const collected = await collectVbaSourceFiles(sourceRoot, new Set());
+    const collected = await collectVbaSourceFiles(sourceRoot, new Set(), testFileSystem);
     expect(collected).toHaveLength(2);
     expect(collected[0]).toMatchObject({
       moduleName: "Mod1",
       fileType: "bas",
     });
 
-    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], true);
+    const comparison = await compareVbaSourceTrees(sourceRoot, binaryRoot, [], true, testFileSystem);
     expect(comparison.ok).toBe(false);
     expect(comparison.matched).toHaveLength(1);
     expect(comparison.matched[0]?.moduleName).toBe("Mod1");
@@ -413,7 +423,7 @@ describe("vba-source-comparison", () => {
       },
     };
 
-    const result = await compareSourceAgainstBinary("verify_code", { diff: false }, ctx);
+    const result = await compareSourceAgainstBinary("verify_code", { diff: false }, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
@@ -473,7 +483,7 @@ describe("vba-source-comparison", () => {
       },
     };
 
-    const result = await planReconcileBinary({ diff: false }, ctx);
+    const result = await planReconcileBinary({ diff: false }, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
@@ -482,5 +492,29 @@ describe("vba-source-comparison", () => {
         recommendation: expect.stringContaining("already match"),
       });
     }
+  });
+
+  it("supports in-memory fileSystem mock without touching OS filesystem", async () => {
+    const memoryFiles: Record<string, string> = {
+      "src/Mod1.bas": "content1",
+      "bin/Mod1.bas": "content1",
+    };
+
+    const mockFs: ComparisonFileSystemPort = {
+      mkdtemp: async () => "temp",
+      readdir: async (path) => {
+        if (path === "src") return [{ name: "Mod1.bas", isDirectory: () => false, isFile: () => true }];
+        if (path === "bin") return [{ name: "Mod1.bas", isDirectory: () => false, isFile: () => true }];
+        return [];
+      },
+      readFile: async (path) => memoryFiles[path] || "",
+      rm: async () => {},
+      tmpdir: () => "tmp",
+    };
+
+    const comparison = await compareVbaSourceTrees("src", "bin", [], true, mockFs);
+    expect(comparison.ok).toBe(true);
+    expect(comparison.matched).toHaveLength(1);
+    expect(comparison.matched[0]?.moduleName).toBe("Mod1");
   });
 });

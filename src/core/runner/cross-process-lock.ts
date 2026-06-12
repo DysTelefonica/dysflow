@@ -1,13 +1,6 @@
-/**
- * Cross-process and in-process lock primitives for the Access runner.
- *
- * These symbols were extracted from `access-runner.ts` (issue #477).
- * The module is pure domain — no adapter imports.
- */
-
 import { createHash } from "node:crypto";
-import { mkdir, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir as nodeMkdir, rm as nodeRm, stat as nodeStat, utimes as nodeUtimes, writeFile as nodeWriteFile } from "node:fs/promises";
+import { tmpdir as nodeTmpdir } from "node:os";
 import { join } from "node:path";
 
 export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
@@ -22,9 +15,37 @@ export class RunnerLockTimeoutError extends Error {
   }
 }
 
-export function getCrossProcessLockPath(accessPath: string): string {
+export interface LockFileSystemPort {
+  mkdir(path: string, options?: { recursive: boolean }): Promise<string | undefined>;
+  rm(path: string, options?: { recursive: boolean; force: boolean }): Promise<void>;
+  stat(path: string): Promise<{ mtimeMs: number } | null>;
+  utimes(path: string, atime: Date, mtime: Date): Promise<void>;
+  writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
+  tmpdir(): string;
+}
+
+const defaultFileSystem: LockFileSystemPort = {
+  mkdir: (path, options) => nodeMkdir(path, options),
+  rm: (path, options) => nodeRm(path, options),
+  stat: async (path) => {
+    try {
+      const s = await nodeStat(path);
+      return { mtimeMs: s.mtimeMs };
+    } catch {
+      return null;
+    }
+  },
+  utimes: (path, atime, mtime) => nodeUtimes(path, atime, mtime),
+  writeFile: (path, data, encoding) => nodeWriteFile(path, data, encoding),
+  tmpdir: () => nodeTmpdir(),
+};
+
+export function getCrossProcessLockPath(
+  accessPath: string,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
+): string {
   const hash = createHash("sha256").update(accessPath.toLowerCase()).digest("hex").slice(0, 16);
-  return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
+  return join(fileSystem.tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
 /**
@@ -45,25 +66,29 @@ export function getCrossProcessLockPath(accessPath: string): string {
  * @returns `true` when this call evicted the stale lock, `false` otherwise (lock missing,
  *          not stale, or already being evicted by another acquirer).
  */
-export async function evictStaleLock(lockPath: string, staleMs: number): Promise<boolean> {
-  const info = await stat(lockPath).catch(() => null);
+export async function evictStaleLock(
+  lockPath: string,
+  staleMs: number,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
+): Promise<boolean> {
+  const info = await fileSystem.stat(lockPath);
   if (info === null || Date.now() - info.mtimeMs <= staleMs) return false;
 
   const claimPath = `${lockPath}.evicting`;
   try {
-    await mkdir(claimPath, { recursive: false });
+    await fileSystem.mkdir(claimPath, { recursive: false });
   } catch {
     // EEXIST (or any failure): another acquirer already owns the eviction. Back off.
     return false;
   }
   try {
     // Re-check under the claim: the lock may have been refreshed since the first stat.
-    const current = await stat(lockPath).catch(() => null);
+    const current = await fileSystem.stat(lockPath);
     if (current !== null && Date.now() - current.mtimeMs > staleMs) {
-      await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      await fileSystem.rm(lockPath, { recursive: true, force: true }).catch(() => {});
     }
   } finally {
-    await rm(claimPath, { recursive: true, force: true }).catch(() => {});
+    await fileSystem.rm(claimPath, { recursive: true, force: true }).catch(() => {});
   }
   return true;
 }
@@ -79,29 +104,33 @@ export async function acquireCrossProcessAccessLock(
   lockPath: string,
   timeoutMs: number,
   sleepMs = 50,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
 ): Promise<() => Promise<void>> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      await mkdir(lockPath, { recursive: false });
+      await fileSystem.mkdir(lockPath, { recursive: false });
       // Write owner identity so a future acquirer can log who held the lock.
       const owner = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
-      await writeFile(join(lockPath, "owner.json"), owner, "utf8").catch(() => {});
+      await fileSystem.writeFile(join(lockPath, "owner.json"), owner, "utf8").catch(() => {});
       return async () => {
-        await releaseCrossProcessAccessLock(lockPath);
+        await releaseCrossProcessAccessLock(lockPath, fileSystem);
       };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
       // Stale lock: claim-and-retry. Fresh lock: back off and poll again.
-      if (await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS)) continue;
+      if (await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)) continue;
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
   }
   throw new RunnerLockTimeoutError(lockPath, timeoutMs);
 }
 
-export async function releaseCrossProcessAccessLock(lockPath: string): Promise<void> {
-  await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+export async function releaseCrossProcessAccessLock(
+  lockPath: string,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
+): Promise<void> {
+  await fileSystem.rm(lockPath, { recursive: true, force: true }).catch(() => {});
 }
 
 /**
@@ -113,11 +142,15 @@ export async function releaseCrossProcessAccessLock(lockPath: string): Promise<v
  * otherwise callers must invoke the returned cleanup function to stop the interval.
  * The returned handle allows callers to call `unref()` when needed.
  */
-export function startLockHeartbeat(lockPath: string, stopSignal?: AbortSignal): NodeJS.Timeout {
+export function startLockHeartbeat(
+  lockPath: string,
+  stopSignal?: AbortSignal,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
+): NodeJS.Timeout {
   const intervalMs = CROSS_PROCESS_LOCK_STALE_MS / 2;
   const handle = setInterval(() => {
     const now = new Date();
-    utimes(lockPath, now, now).catch(() => {
+    fileSystem.utimes(lockPath, now, now).catch(() => {
       // Swallow — if the dir is gone the lock has already been released.
     });
   }, intervalMs);
@@ -164,6 +197,7 @@ export async function runWithAccessExecutionLock<T>(
   work: () => T | Promise<T>,
   timeoutMs: number,
   lockState: Map<string, Promise<void>> = defaultAccessExecutionLocks,
+  fileSystem: LockFileSystemPort = defaultFileSystem,
 ): Promise<T> {
   const normalizedKey = key.toLowerCase();
   const previous = lockState.get(normalizedKey) ?? Promise.resolve();
@@ -178,10 +212,10 @@ export async function runWithAccessExecutionLock<T>(
 
   await previous;
 
-  const lockPath = getCrossProcessLockPath(key);
-  await mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
-  const releaseCrossProcessLock = await acquireCrossProcessAccessLock(lockPath, timeoutMs);
-  const stopHeartbeat = startLockHeartbeat(lockPath);
+  const lockPath = getCrossProcessLockPath(key, fileSystem);
+  await fileSystem.mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
+  const releaseCrossProcessLock = await acquireCrossProcessAccessLock(lockPath, timeoutMs, 50, fileSystem);
+  const stopHeartbeat = startLockHeartbeat(lockPath, undefined, fileSystem);
   try {
     return await work();
   } finally {

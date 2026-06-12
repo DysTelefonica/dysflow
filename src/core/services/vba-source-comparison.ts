@@ -1,6 +1,3 @@
-import type { Dirent } from "node:fs";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { extname, parse, relative, resolve } from "node:path";
 import {
   createDysflowError,
@@ -13,7 +10,6 @@ import {
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
-import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export type VbaSourceComparisonFile = {
   moduleName: string;
@@ -94,10 +90,25 @@ export type VbaComparisonContext = {
   runVbaManager(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
 };
 
+export interface ComparisonFileSystemEntry {
+  name: string;
+  isDirectory(): boolean;
+  isFile(): boolean;
+}
+
+export interface ComparisonFileSystemPort {
+  mkdtemp(prefix: string): Promise<string>;
+  readdir(path: string): Promise<readonly ComparisonFileSystemEntry[]>;
+  readFile(path: string, encoding: "utf8"): Promise<string>;
+  rm(path: string, options: { recursive: boolean; force: boolean }): Promise<void>;
+  tmpdir(): string;
+}
+
 export async function compareSourceAgainstBinary(
   toolName: "verify_code" | "verify_binary",
   params: Record<string, unknown>,
   ctx: VbaComparisonContext,
+  fileSystem: ComparisonFileSystemPort,
 ): Promise<OperationResult<VbaVerifyResult>> {
   const target = await ctx.resolveExecutionTarget(params);
   if (!target.ok) return target;
@@ -105,7 +116,7 @@ export async function compareSourceAgainstBinary(
   if (!strict.ok) return strict;
 
   const sourceRoot = target.data.destinationRoot;
-  const tempExportRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-verify-"));
+  const tempExportRoot = await fileSystem.mkdtemp(resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"));
   const password = ctx.accessPassword;
   const effectiveTimeoutMs =
     typeof params.timeoutMs === "number" && params.timeoutMs > 0
@@ -158,21 +169,25 @@ export async function compareSourceAgainstBinary(
       tempExportRoot,
       stringArray(params.moduleNames),
       truthy(params.diff),
+      fileSystem,
     );
     return successResult(
       { operation: toolName, ...comparison },
       { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
     );
   } finally {
-    await rm(tempExportRoot, { recursive: true, force: true });
+    await fileSystem.rm(tempExportRoot, { recursive: true, force: true });
   }
 }
+
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export async function planReconcileBinary(
   params: Record<string, unknown>,
   ctx: VbaComparisonContext,
+  fileSystem: ComparisonFileSystemPort,
 ): Promise<OperationResult<VbaReconcilePlanResult>> {
-  const comparison = await compareSourceAgainstBinary("verify_code", params, ctx);
+  const comparison = await compareSourceAgainstBinary("verify_code", params, ctx, fileSystem);
   if (!comparison.ok) return comparison;
   return successResult(
     {
@@ -199,10 +214,11 @@ export async function compareVbaSourceTrees(
   binaryExportRoot: string,
   moduleNames: readonly string[],
   includeDiffs: boolean,
+  fileSystem: ComparisonFileSystemPort,
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
-  const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter);
-  const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter);
+  const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
+  const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter, fileSystem);
   const sourceByKey = new Map(sourceFiles.map((file) => [comparisonKey(file), file]));
   const binaryByKey = new Map(binaryFiles.map((file) => [comparisonKey(file), file]));
   const matched: VbaSourceComparisonEntry[] = [];
@@ -219,8 +235,8 @@ export async function compareVbaSourceTrees(
     }
 
     const [sourceText, binaryText] = await Promise.all([
-      readFile(sourceFile.path, "utf8"),
-      readFile(binaryFile.path, "utf8"),
+      fileSystem.readFile(sourceFile.path, "utf8"),
+      fileSystem.readFile(binaryFile.path, "utf8"),
     ]);
     const entry = toComparisonEntry(sourceFile, binaryFile);
     if (sourceText === binaryText) {
@@ -257,12 +273,13 @@ export async function compareVbaSourceTrees(
 export async function collectVbaSourceFiles(
   root: string,
   moduleFilter: ReadonlySet<string>,
+  fileSystem: ComparisonFileSystemPort,
 ): Promise<VbaSourceComparisonFile[]> {
   const files: VbaSourceComparisonFile[] = [];
   async function visit(directory: string): Promise<void> {
-    let entries: Dirent[];
+    let entries: readonly ComparisonFileSystemEntry[];
     try {
-      entries = await readdir(directory, { withFileTypes: true });
+      entries = await fileSystem.readdir(directory);
     } catch (err) {
       if (isMissingPathError(err)) {
         entries = [];
