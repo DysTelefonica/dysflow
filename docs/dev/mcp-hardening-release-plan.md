@@ -208,25 +208,24 @@ Verified as real but judged not worth blocking the release. Leave them unless as
 - [x] #523 behavior test written (characterizes request mode for all 9 maintenance tools)
 - [x] #523 implemented, GREEN — full suite **1236 passed**, `tsc` clean, `biome` clean
 - [x] #523 fresh-context review: **SHIP** (zero behavior change, no dead refs, sound test)
-- [ ] #523 approved (`status:approved`) — awaiting maintainer
-- [ ] doc + #523 PRs opened, reviewed, merged
-- [x] `pnpm test` + `pnpm run lint` green on the `refactor/mcp-querymode-single-source` branch
-- [ ] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/` — final gate, needs Windows + Access + `ACCESS_VBA_PASSWORD` (not run here; #523 does not touch the VBA/Access path)
+- [x] #522 + #523 approved (`status:approved`)
+- [x] doc + code PRs merged to `main` — **#524** (docs, closes #522) and **#525** (refactor, closes #523)
+- [x] `pnpm test` + `pnpm run lint` green; CI "Quality gates" green on both PRs
+- [ ] `node E2E_testing/mcp-e2e.mjs` green against `test-runtime/` — **final gate, still pending**, needs Windows + Access + `ACCESS_VBA_PASSWORD` (#523 does not touch the VBA/Access path)
 - [ ] `docs/release-checklist.md` walked
 - [ ] Release tagged (title == tag)
 
 ---
 
-## 9. Branch / commit log (where the work actually lives)
+## 9. Merge log (where the work landed)
 
-Nothing pushed yet (repo convention: issues need `status:approved` before a PR).
-Two local branches off `main`:
+Both changes are **merged to `main`**:
 
-| Branch | Commit | Contents | Issue |
-|--------|--------|----------|-------|
-| `docs/mcp-vba-write-gate-decision` | `baaa83f` | `docs/security/adapter-write-gates.md` + this plan | #522 (docs) |
-| `refactor/mcp-querymode-single-source` | `815f2f0` | `dispatch-factory.ts`, `tool-parity-registry.ts`, `tool-parity.test.ts` | #523 (code) |
+| PR | Issue | Contents |
+|----|-------|----------|
+| [#524](https://github.com/DysTelefonica/dysflow/pull/524) | #522 (docs) | `docs/security/adapter-write-gates.md` + this plan |
+| [#525](https://github.com/DysTelefonica/dysflow/pull/525) | #523 (code) | `dispatch-factory.ts`, `tool-parity-registry.ts`, `tool-parity.test.ts` |
 
-To continue: get `status:approved` on both issues, open the two PRs (docs first or
-in parallel — they are independent), then walk §5 and §7. The only environment-bound
-step left is the real MCP E2E (§5.4), which must run on a Windows host with Access.
+**Only the release is left.** To continue: walk §5 (run the real MCP E2E on a Windows
+host with Access — the one environment-bound gate) and §7 (bump version, tag, release
+with title == tag). Everything else for this hardening pass is done.
