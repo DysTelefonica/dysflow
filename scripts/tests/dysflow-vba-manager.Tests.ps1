@@ -710,6 +710,57 @@ Describe "Invoke-ExportAction — behavioral (decompose S1)" {
         }
     }
 
+    Context "export-all — empty NormalizedModules exports every component (regression: empty-array binding)" {
+        # Regression for the verify_binary / reconcile_binary VBA_MANAGER_FAILED bug:
+        # the function body has an explicit else-branch that exports ALL components when
+        # the list is empty, but the parameter declaration must accept an empty collection.
+        # Without [AllowEmptyCollection()], PowerShell rejects the bind before the body runs
+        # ("...porque es una matriz vacía"), which is exactly what verify export hit.
+        BeforeEach {
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:ExportedModules.Add($ModuleName)
+            }
+
+            # Every component is exportable in the all-components path.
+            function script:Get-ComponentExtension { param($Component, $ModuleName) return ".bas" }
+
+            # Fake VBProject whose .Item(index) yields a component with a Name.
+            $fakeComponents = [PSCustomObject]@{ Count = 3 }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                return [PSCustomObject]@{ Name = "Component$nameOrIndex" }
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+            $fakeVbProject | Add-Member -MemberType NoteProperty -Name "VBComponents" -Value $fakeComponents -Force
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "accepts an empty NormalizedModules array without an argument-binding error" {
+            { Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @() `
+                -ModulesPath "C:\fake\modules" } | Should -Not -Throw
+        }
+
+        It "exports every component in the VBProject when NormalizedModules is empty" {
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @() `
+                -ModulesPath "C:\fake\modules"
+
+            $script:ExportedModules.Count | Should -Be 3
+            $script:ExportedModules | Should -Contain "Component1"
+            $script:ExportedModules | Should -Contain "Component2"
+            $script:ExportedModules | Should -Contain "Component3"
+        }
+    }
+
     Context "exception propagation — Export-VbaModule failure aborts the action" {
         # Behavioral contract: Invoke-ExportAction is a pure refactor of the original
         # inline Export arm. The original arm had NO per-module try/catch; an exception

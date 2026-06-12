@@ -2781,7 +2781,9 @@ function Invoke-ExportAction {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)]$Session,
-        [Parameter(Mandatory = $true)][string[]]$NormalizedModules,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$NormalizedModules,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         [switch]$Json
     )

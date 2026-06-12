@@ -342,14 +342,16 @@ function buildToolCases(): ToolCase[] {
     t("verify_code", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
     t("verify_code", "sad", { projectId, moduleNames: [] }, 60_000),
     t("verify_binary", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
-    t("verify_binary", "sad", { projectId, moduleNames: [] }, 60_000),
     t(
       "reconcile_binary",
       "happy",
       { projectId, moduleNames: ["TestGoodModule"], diff: true },
       60_000,
     ),
-    t("reconcile_binary", "sad", { projectId, moduleNames: [] }, 60_000),
+    // Whole-project (no moduleNames) cases are exercised by the dedicated
+    // regression block below with stronger assertions than the universal
+    // contract, because empty moduleNames means "verify everything" — a happy
+    // path, not a sad one.
   );
 
   // ----- Query read path (smoke per tool) -----
@@ -484,5 +486,44 @@ describe.skipIf(!canRunE2e)(
         c.timeoutMs + 30_000,
       );
     }
+
+    // ----- Whole-project verify/reconcile regression -----
+    // A consumer reported VBA_MANAGER_FAILED ("...NormalizedModules ... matriz
+    // vacía") when calling verify_binary on a populated database without
+    // moduleNames. Root cause: the PowerShell Export action rejected an empty
+    // NormalizedModules array at parameter-binding time, before its export-all
+    // branch could run. Omitting moduleNames must verify the ENTIRE project and
+    // succeed (drift is data, not an error), never surface the empty-array bind
+    // failure. These assert ok === true — stronger than the universal contract,
+    // which a VBA_MANAGER_FAILED response would otherwise satisfy.
+    const projectId = "dysflow-tool-e2e";
+    const assertWholeProjectOk = (r: McpToolResponse): void => {
+      assertUniversalContract(r);
+      expect(r.text).not.toMatch(/VBA_MANAGER_FAILED/);
+      expect(r.text).not.toMatch(/NormalizedModules|matriz vac|empty array/i);
+      expect(r.ok).toBe(true);
+    };
+
+    it(
+      "verify_binary verifies the whole project when no moduleNames are given",
+      async () => {
+        const r = await callMcp("verify_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
+        assertWholeProjectOk(r);
+      },
+      90_000,
+    );
+
+    it(
+      "reconcile_binary reconciles the whole project when no moduleNames are given",
+      async () => {
+        const r = await callMcp(
+          "reconcile_binary",
+          { projectId, diff: true },
+          { timeoutMs: 60_000 },
+        );
+        assertWholeProjectOk(r);
+      },
+      90_000,
+    );
   },
 );
