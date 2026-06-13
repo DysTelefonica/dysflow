@@ -518,7 +518,7 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 #### 1. VBA Lifecycle & Testing
 * **`export_modules`**: Export VBA source code modules to disk.
   - Parameters: `moduleNames` (array, optional), `filter` (string, optional), `destinationRoot` (string, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional), `expectedAccessPath`/`expectedProjectRoot`/`expectedDestinationRoot` (string, optional)
-* **`export_all`**: Export all VBA modules from the database.
+* **`export_all`**: Export all VBA modules (including code-less forms and reports visual layouts) and saved queries from the database.
   - Parameters: `filter` (string, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`import_modules`**: Import VBA source modules from disk.
   - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
