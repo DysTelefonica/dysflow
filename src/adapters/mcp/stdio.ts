@@ -308,11 +308,16 @@ export function createUnavailableServices(
         });
       },
     },
-    // Note: cleanupService and orphanCleanupService are NOT included in the
-    // unavailable surface — they are lazily resolved via the dynamic resolver
-    // (resolveService) which calls createConfiguredServices when config becomes
-    // available. This mirrors the pattern used for cleanupService.
-    vbaSyncToolService: createUnavailableVbaSyncToolService(error, options),
+    vbaSyncToolService: {
+      execute: async (toolName, input) => {
+        const dynamicServices = await resolveService(input);
+        if (dynamicServices !== undefined && dynamicServices.vbaSyncToolService !== undefined) {
+          return dynamicServices.vbaSyncToolService.execute(toolName, input);
+        }
+        const fallbackService = createUnavailableVbaSyncToolService(error, options);
+        return fallbackService.execute(toolName, input);
+      },
+    },
   };
 }
 
@@ -329,7 +334,9 @@ async function resolveConfigForInput(
     env: options.env,
     projectId: stringOrUndefined(params.projectId),
     contextId: stringOrUndefined(params.contextId),
-    accessDbPath: preferProjectConfig ? undefined : stringOrUndefined(params.accessPath),
+    accessDbPath: preferProjectConfig
+      ? undefined
+      : stringOrUndefined(params.accessPath ?? params.databasePath ?? params.accessDbPath),
     backendPath: preferProjectConfig ? undefined : stringOrUndefined(params.backendPath),
     destinationRoot: stringOrUndefined(params.destinationRoot),
     projectRoot,

@@ -464,4 +464,89 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
   it("is at most 1 MiB to prevent memory amplification on slow consumers", () => {
     expect(DEFAULT_MAX_REQUEST_BYTES).toBeLessThanOrEqual(1024 * 1024);
   });
+
+  it("resolves vbaSyncToolService dynamically when accessPath is passed explicitly", async () => {
+    const tempDbPath = resolve("test-runtime/temp-db-sync.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(tempDbPath, "", "utf8");
+
+    let serviceFactoryCalledWithConfig = false;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: "C:/missing",
+        env: {},
+        serviceFactory: (config) => {
+          if (config.accessDbPath === resolve(tempDbPath)) {
+            serviceFactoryCalledWithConfig = true;
+          }
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+            vbaSyncToolService: {
+              execute: async (toolName) => {
+                return successResult({ toolRun: toolName });
+              },
+            },
+          };
+        },
+      },
+    );
+
+    const result = await services.vbaSyncToolService?.execute("export_modules", {
+      accessPath: tempDbPath,
+    });
+
+    expect(result?.ok).toBe(true);
+    expect(serviceFactoryCalledWithConfig).toBe(true);
+    expect(result).toMatchObject({ ok: true, data: { toolRun: "export_modules" } });
+  });
+
+  it("resolves queryService dynamically when databasePath is passed in adapted request", async () => {
+    const tempDbPath = resolve("test-runtime/temp-db-query.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(tempDbPath, "", "utf8");
+
+    let serviceFactoryCalledWithConfig = false;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: "C:/missing",
+        env: {},
+        serviceFactory: (config) => {
+          if (config.accessDbPath === resolve(tempDbPath)) {
+            serviceFactoryCalledWithConfig = true;
+          }
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: {
+              execute: async (request) => {
+                return successResult({ sqlRun: request.sql });
+              },
+            },
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    const result = await services.queryService.execute({
+      databasePath: tempDbPath,
+      sql: "SELECT * FROM Table",
+      mode: "read",
+    } as unknown as Parameters<typeof services.queryService.execute>[0]);
+
+    expect(result.ok).toBe(true);
+    expect(serviceFactoryCalledWithConfig).toBe(true);
+    expect(result).toMatchObject({ ok: true, data: { sqlRun: "SELECT * FROM Table" } });
+  });
 });
