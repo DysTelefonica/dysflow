@@ -752,6 +752,149 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect((result.classifierRules ?? "").length).toBeGreaterThan(0);
   });
 
+  // ---- T04d: top-level dysflowVersion must match runtimeDiagnostics.dysflowVersion ----
+
+  it("top-level dysflowVersion matches runtimeDiagnostics.dysflowVersion and package.json", async () => {
+    const fs = makeSemanticFs({
+      "src/Mod.bas": "Sub Foo()\nEnd Sub",
+      "bin/Mod.bas": "Sub Foo()\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    // Top-level dysflowVersion must be present and non-deprecated
+    expect(typeof result.dysflowVersion).toBe("string");
+    expect(result.dysflowVersion).not.toBe("0.0.0");
+    expect(result.dysflowVersion).toMatch(/^\d+\.\d+\.\d+/);
+
+    // Must be consistent with runtimeDiagnostics.dysflowVersion
+    expect(result.runtimeDiagnostics).toBeDefined();
+    expect(result.runtimeDiagnostics?.dysflowVersion).toBe(result.dysflowVersion);
+  });
+
+  // ---- T10: runtimeDiagnostics object is present in verify/reconcile results ----
+
+  it("compareVbaSourceTrees result includes runtimeDiagnostics with required diagnostic fields", async () => {
+    const fs = makeSemanticFs({
+      "src/Mod.bas": "Sub Foo()\nEnd Sub",
+      "bin/Mod.bas": "Sub Foo()\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    // runtimeDiagnostics must be present as an object
+    expect(result).toHaveProperty("runtimeDiagnostics");
+    expect(result.runtimeDiagnostics).toBeDefined();
+    expect(typeof result.runtimeDiagnostics).toBe("object");
+
+    const rd = result.runtimeDiagnostics as {
+      dysflowVersion?: string;
+      adapterVersion?: string;
+      runtimeType?: string;
+      runtimePath?: string;
+      buildTimestamp?: string;
+      executablePath?: string;
+      codePath?: string;
+      buildIdentifier?: string;
+    };
+
+    // dysflowVersion: already tested above but must be in runtimeDiagnostics too
+    expect(rd).toHaveProperty("dysflowVersion");
+    expect(typeof rd.dysflowVersion).toBe("string");
+    expect(rd.dysflowVersion).toMatch(/^\d+\.\d+\.\d+/);
+
+    // adapterVersion: version of the MCP/server package that produced the result
+    expect(rd).toHaveProperty("adapterVersion");
+    expect(typeof rd.adapterVersion).toBe("string");
+
+    // runtimeType: one of "cli" | "mcp-stdio" | "shared-core"
+    expect(rd).toHaveProperty("runtimeType");
+    expect(["cli", "mcp-stdio", "shared-core"]).toContain(rd.runtimeType);
+
+    // runtimePath: absolute path to the executable or process being used
+    expect(rd).toHaveProperty("runtimePath");
+    expect(typeof rd.runtimePath === "string" && rd.runtimePath.length > 0).toBe(true);
+
+    // buildTimestamp: ISO-8601 timestamp of when the runtime was built.
+    // Absent in local dev builds unless SOURCE_EPOCH is injected at build time.
+    expect(rd).toHaveProperty("buildTimestamp");
+    // buildTimestamp is optional — it may be a string or undefined depending on build env
+    expect(rd.buildTimestamp === undefined || typeof rd.buildTimestamp === "string").toBe(true);
+
+    // Additive fields (GAP #3): executablePath, codePath, buildIdentifier
+    expect(rd).toHaveProperty("executablePath");
+    expect(typeof rd.executablePath === "string" && rd.executablePath.length > 0).toBe(true);
+
+    expect(rd).toHaveProperty("codePath");
+    expect(["cli", "mcp-stdio", "shared-core"]).toContain(rd.codePath);
+
+    expect(rd).toHaveProperty("buildIdentifier");
+    expect(rd.buildIdentifier === undefined || typeof rd.buildIdentifier === "string").toBe(true);
+  });
+
+  it("verify result runtimeDiagnostics is preserved through JSON round-trip", async () => {
+    const fs = makeSemanticFs({
+      "src/Mod.bas": "Sub Foo()\nEnd Sub",
+      "bin/Mod.bas": "Sub Foo()\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+    const json = JSON.stringify(result);
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+
+    expect(parsed).toHaveProperty("runtimeDiagnostics");
+    const rd = parsed.runtimeDiagnostics as Record<string, unknown> | undefined;
+    expect(typeof rd).toBe("object");
+    expect(rd).toHaveProperty("dysflowVersion");
+    expect(rd).toHaveProperty("runtimeType");
+    expect(rd).toHaveProperty("runtimePath");
+  });
+
+  it("planReconcileBinary result also carries runtimeDiagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-recon-diag-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Mod.bas"), "source content", "utf8");
+
+    const ctx = {
+      scriptPath: "mock.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { destinationRoot: string }) => {
+        const destMod = join(req.destinationRoot, "modules");
+        await mkdir(destMod, { recursive: true });
+        await writeFile(join(destMod, "Mod.bas"), "binary content", "utf8");
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
+      },
+    };
+
+    const reconcileResult = await planReconcileBinary({}, ctx, testFileSystem);
+    expect(reconcileResult.ok).toBe(true);
+    if (reconcileResult.ok) {
+      expect(reconcileResult.data).toHaveProperty("runtimeDiagnostics");
+      expect(typeof reconcileResult.data.runtimeDiagnostics).toBe("object");
+      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("dysflowVersion");
+      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("runtimeType");
+      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("runtimePath");
+    }
+  });
+
   // ---- T05: strict mode restores byte-exact behavior ----
 
   it("strict mode: attribute-only diff ends up in different (not nonActionableDifferent)", async () => {

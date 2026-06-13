@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.54] - 2026-06-13
+
+### Added
+
+- `verify_code`, `verify_binary`, and `reconcile_binary` now expose `runtimeDiagnostics` in their result, providing the real runtime MCP version, adapter version, runtime type/code path, runtime path, Node executable path, build timestamp, and build identifier when available — enabling consumers to confirm which runtime actually produced a given diff rather than relying on a potentially stale cached binary.
+
+### Fixed
+
+- Top-level `dysflowVersion` in `verify_code`/`verify_binary`/`reconcile_binary` results now correctly reflects the actual runtime/package version instead of falling back to `0.0.0`.
+
 ## [v1.2.53] - 2026-06-13
 
 ### Added

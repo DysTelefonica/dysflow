@@ -10,7 +10,7 @@ import {
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
-import { readPackageVersionNear } from "../utils/package-info.js";
+import { buildRuntimeDiagnostics, type RuntimeDiagnostics } from "../utils/runtime-info.js";
 import {
   classifyVbaPair,
   SEMANTIC_CLASSIFIER_RULES,
@@ -19,7 +19,8 @@ import {
 } from "./vba-semantic-classifier.js";
 
 /** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
-const DYSFLOW_VERSION = readPackageVersionNear(import.meta.url);
+// DYSFLOW_VERSION is now embedded in RuntimeDiagnostics via buildRuntimeDiagnostics()
+// and resolved to the real package version at build time.
 
 export type VbaSourceComparisonFile = {
   moduleName: string;
@@ -74,6 +75,11 @@ export type VbaVerifyResult = {
   dysflowVersion?: string;
   /** Fingerprint of the active semantic-classification rule set. */
   classifierRules?: string;
+  /**
+   * Ambient runtime diagnostics — which Dysflow binary is running, through which
+   * interface (CLI / MCP stdio / shared-core), and when it was built.
+   */
+  runtimeDiagnostics?: RuntimeDiagnostics;
 };
 
 export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
@@ -238,6 +244,7 @@ export async function planReconcileBinary(
       sourceRoot: comparison.data.sourceRoot,
       dysflowVersion: comparison.data.dysflowVersion,
       classifierRules: comparison.data.classifierRules,
+      runtimeDiagnostics: comparison.data.runtimeDiagnostics,
       matched: comparison.data.matched,
       different: comparison.data.different,
       missingInSource: comparison.data.missingInSource,
@@ -387,13 +394,17 @@ export async function compareVbaSourceTrees(
   const hasFunctionalDifferences =
     actionableDifferent.length > 0 || missingInSource.length > 0 || missingInBinary.length > 0;
 
+  // Resolve real version once so top-level dysflowVersion and runtimeDiagnostics agree
+  const runtimeDiagnostics = buildRuntimeDiagnostics();
+
   return {
     ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
     dryRun: true,
     willModifyAccess: false,
     sourceRoot,
-    dysflowVersion: DYSFLOW_VERSION,
+    dysflowVersion: runtimeDiagnostics.dysflowVersion,
     classifierRules: SEMANTIC_CLASSIFIER_RULES,
+    runtimeDiagnostics,
     matched: sortComparisonEntries(matched),
     different: sortComparisonEntries(different),
     missingInSource: sortComparisonEntries(missingInSource),
