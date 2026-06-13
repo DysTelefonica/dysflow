@@ -971,3 +971,131 @@ describe("encodingOnly — lossy out-of-codepage replacement", () => {
     expect(functional).toContain(result.classification);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T13 — leading BOM / mojibake-BOM artifact
+// ---------------------------------------------------------------------------
+
+describe("encodingOnly — leading BOM / mojibake-BOM artifact", () => {
+  it("classifies a leading '?' mojibake-BOM before Attribute VB_Name as non-actionable", () => {
+    const src =
+      '?Attribute VB_Name = "FuncionesGenerales"\nOption Explicit\nPublic Sub Run()\nEnd Sub';
+    const bin =
+      'Attribute VB_Name = "FuncionesGenerales"\nOption Explicit\nPublic Sub Run()\nEnd Sub';
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("encodingOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("classifies a real U+FEFF BOM before VERSION as non-actionable", () => {
+    const src = "﻿VERSION 1.0 CLASS\nBEGIN\nEND\nOption Explicit";
+    const bin = "VERSION 1.0 CLASS\nBEGIN\nEND\nOption Explicit";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("keeps a real VB_Name VALUE change actionable even when a BOM is also present", () => {
+    // BOM differs AND the VB_Name value differs — the value change must win.
+    const src =
+      '?Attribute VB_Name = "MigracionIssue18"\nOption Explicit\nPublic Sub Run()\nEnd Sub';
+    const bin =
+      'Attribute VB_Name = "ModuloMigracionIssue18"\nOption Explicit\nPublic Sub Run()\nEnd Sub';
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+  });
+
+  it("resolves case-only diff to caseOnly once a leading BOM is stripped", () => {
+    // Source carries a BOM AND uses different identifier casing — after BOM strip,
+    // the only remaining difference is casing.
+    const src =
+      '?Attribute VB_Name = "Mod"\nOption Explicit\nPublic Sub Run()\n  Me.lblX.Caption = "T"\nEnd Sub';
+    const bin =
+      'Attribute VB_Name = "Mod"\nOption Explicit\nPublic Sub Run()\n  Me.lblX.caption = "T"\nEnd Sub';
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("caseOnly");
+    expect(result.actionable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T14 — form serialization NotDefault / toggle value equivalence
+// ---------------------------------------------------------------------------
+
+describe("formSerializationOnly — NotDefault toggle equivalence", () => {
+  it("treats `Visible = NotDefault` vs `Visible =0` as formSerializationOnly", () => {
+    const src = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Visible =0\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Visible = NotDefault\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("keeps a real non-toggle property value change actionable", () => {
+    // Width is a real numeric property — a change is functional.
+    const src = `Version =21\nBegin Form\n    Width =9070\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Width =5000\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+    expect(result.actionable).toBe(true);
+  });
+
+  it("keeps a distinct enum value vs NotDefault actionable", () => {
+    // `=2` is a specific non-toggle value; only NotDefault/0/-1 collapse.
+    const src = `Version =21\nBegin Form\n    SomeEnum =2\nEnd`;
+    const bin = `Version =21\nBegin Form\n    SomeEnum = NotDefault\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+});

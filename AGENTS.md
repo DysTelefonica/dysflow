@@ -49,9 +49,17 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   runtime-visible. Never fold the whole line blindly.
 - **Lossy encoding (`►` → `?`) is `encodingOnly` outside string literals only.** A glyph change
   inside a quoted string stays functional.
+- **A leading BOM / mojibake-BOM (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is stripped**
+  before comparison — it is never functional. But a `VB_Name` VALUE change (e.g. `MigracionIssue18`
+  vs `ModuloMigracionIssue18`) MUST stay actionable; only the leading marker is stripped, never the
+  name itself.
 - **Form serialization noise is a LOCKED allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
   `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `NameMap` and
   `GUID` are functional — do not strip them. Unknown keys are retained (functional).
+- **Toggle-property serialization is equivalent**: `Visible =0` ≡ `Visible = NotDefault` ≡
+  `Visible =-1`. Access only serializes a non-default value, so the written value is always the same
+  and only its `NotDefault`/`0`/`-1` representation varies. This collapse is value-token scoped — a
+  non-toggle value (`Width =9070`, `SomeEnum =2`) stays exact and functional.
 - **Strict mode (`strict: true`) bypasses every noise bucket** and does byte/text-exact comparison.
 - Per-module `diff: true` entries expose `classification`, `reason`, `isActionable`,
   `recommendedAction`, and unique-line counts — these are the consumer contract; keep them additive.

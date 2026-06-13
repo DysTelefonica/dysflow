@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.2.51] - 2026-06-13
+
+### Fixed
+
+- Further reduced false positives in the VBA semantic classifier's `actionableDifferent` bucket:
+  - **Leading BOM / mojibake-BOM** (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is now stripped before comparison and classified `encodingOnly`. This also unblocked downstream `caseOnly` detection for files whose only real difference was identifier casing but that carried a BOM on the source side. A `VB_Name` **value** change (e.g. `MigracionIssue18` vs `ModuloMigracionIssue18`) still stays actionable — only the leading marker is stripped.
+  - **`.form.txt` toggle-property serialization equivalence**: `Visible =0` ≡ `Visible = NotDefault` ≡ `Visible =-1` now classify as `formSerializationOnly`. Access only serializes a non-default value, so the written value is always the same and only its `NotDefault`/`0`/`-1` representation varies; a genuine change surfaces as a line present-vs-absent and stays functional. Non-toggle values (`Width =9070`, `SomeEnum =2`) remain exact.
+
 ## [v1.2.50] - 2026-06-13
 
 ### Fixed

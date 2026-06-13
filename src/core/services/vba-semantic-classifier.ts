@@ -434,8 +434,61 @@ function neutralizeLineOutsideStrings(line: string): string {
 function applyStructuralStrips(wsNorm: string, fileType: string): string {
   let t = wsNorm;
   if (CODE_FILE_TYPES.has(fileType)) t = stripAttributeLines(t, fileType);
-  if (FORM_FILE_TYPES.has(fileType)) t = stripFormSerializationNoise(t, fileType);
+  if (FORM_FILE_TYPES.has(fileType)) {
+    t = stripFormSerializationNoise(t, fileType);
+    t = normalizeFormPropertyValues(t, fileType);
+  }
   return t;
+}
+
+/**
+ * Strips a leading byte-order-mark or its mojibake remnants from the start of a
+ * VBA file.
+ *
+ * Access exports occasionally carry a BOM that the on-disk source lacks (or vice
+ * versa). A real BOM (U+FEFF), a replacement char (U+FFFD), the UTF-8 BOM read as
+ * Latin-1 (`ï»¿`), or a lone `?` that mojibake left in its place all appear at
+ * byte 0 — never as a functional change. The lone-`?` case is stripped only when
+ * it precedes a known leading VBA token, since real VBA never starts with `?`.
+ */
+export function stripLeadingBom(text: string): string {
+  return text
+    .replace(/^﻿/, "")
+    .replace(/^�/, "")
+    .replace(/^ï»¿/, "")
+    .replace(/^\?(?=Attribute |VERSION |Version |Option |Begin )/, "");
+}
+
+/** Sentinel for collapsed form toggle values. U+241F is a non-printing symbol. */
+const FORM_TOGGLE_SENTINEL = "␟";
+
+/**
+ * Canonicalizes form/report toggle-property values so Access serialization
+ * variants compare equal.
+ *
+ * Access writes a property only when it differs from its default, so a written
+ * boolean/toggle value is always the single non-default value — represented
+ * either as the symbolic token `NotDefault` or as the literal `0`/`-1` depending
+ * on the export. A genuine change surfaces as a line being present vs absent, not
+ * as token-vs-value, so collapsing these equivalent representations to one
+ * sentinel cannot hide a real change. Non-toggle values (e.g. `Width =9070`,
+ * `SomeEnum =2`) are left exact and stay functional.
+ *
+ * No-op for non-form file types.
+ */
+export function normalizeFormPropertyValues(text: string, fileType: string): string {
+  if (!FORM_FILE_TYPES.has(fileType)) {
+    return text; // no-op for non-form file types
+  }
+  return text
+    .split("\n")
+    .map((line) =>
+      line.replace(
+        /^(\s*)([A-Za-z_]\w*)\s*=\s*(?:NotDefault|0|-1)\s*$/,
+        `$1$2 =${FORM_TOGGLE_SENTINEL}`,
+      ),
+    )
+    .join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -634,12 +687,24 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   }
 
   // -------------------------------------------------------------------------
+  // Step 1.5: strip a leading BOM / mojibake-BOM artifact, then re-check.
+  // A BOM that exists on one side only is never a functional change. If it was
+  // the sole difference, classify as encoding; otherwise carry the cleaned text
+  // forward so it does not pollute later steps (e.g. break caseOnly detection).
+  // -------------------------------------------------------------------------
+  const srcText = stripLeadingBom(sourceText);
+  const binText = stripLeadingBom(binaryText);
+  if ((srcText !== sourceText || binText !== binaryText) && srcText === binText) {
+    return nonActionable("encodingOnly", "texts differ only in a leading BOM/encoding artifact");
+  }
+
+  // -------------------------------------------------------------------------
   // Step 2: whitespaceOnly — normalize line endings and trailing whitespace
   // -------------------------------------------------------------------------
   const normalizeWs = (t: string) => normalizeTrailingWhitespace(normalizeLineEndings(t));
 
-  const srcNormWs = normalizeWs(sourceText);
-  const binNormWs = normalizeWs(binaryText);
+  const srcNormWs = normalizeWs(srcText);
+  const binNormWs = normalizeWs(binText);
 
   if (srcNormWs === binNormWs) {
     return nonActionable(
@@ -664,13 +729,19 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // Step 4: formSerializationOnly — strip form/report noise sections
   // -------------------------------------------------------------------------
   if (FORM_FILE_TYPES.has(fileType)) {
-    const srcNormForm = stripFormSerializationNoise(srcNormWs, fileType);
-    const binNormForm = stripFormSerializationNoise(binNormWs, fileType);
+    const srcNormForm = normalizeFormPropertyValues(
+      stripFormSerializationNoise(srcNormWs, fileType),
+      fileType,
+    );
+    const binNormForm = normalizeFormPropertyValues(
+      stripFormSerializationNoise(binNormWs, fileType),
+      fileType,
+    );
 
     if (srcNormForm === binNormForm) {
       return nonActionable(
         "formSerializationOnly",
-        "texts differ only in form serialization noise (Checksum, PrtDevMode, RecSrcDt, etc.)",
+        "texts differ only in form serialization noise (Checksum, PrtDevMode, RecSrcDt, NotDefault toggles, etc.)",
       );
     }
   }
@@ -696,7 +767,7 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // Step 5: encodingOnly — mojibake normalization with safety guards
   // -------------------------------------------------------------------------
   // Only attempt if neither side contains U+FFFD (replacement char)
-  if (!sourceText.includes("�") && !binaryText.includes("�")) {
+  if (!srcText.includes("�") && !binText.includes("�")) {
     const repairedSrc = repairMojibake(srcNormWs, sourceBytes);
     const repairedBin = repairMojibake(binNormWs, binaryBytes);
 
@@ -739,14 +810,14 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     binFull = stripAttributeLines(binFull, fileType);
   }
 
-  // Apply form noise stripping for form types
+  // Apply form noise stripping + toggle-value canonicalization for form types
   if (FORM_FILE_TYPES.has(fileType)) {
-    srcFull = stripFormSerializationNoise(srcFull, fileType);
-    binFull = stripFormSerializationNoise(binFull, fileType);
+    srcFull = normalizeFormPropertyValues(stripFormSerializationNoise(srcFull, fileType), fileType);
+    binFull = normalizeFormPropertyValues(stripFormSerializationNoise(binFull, fileType), fileType);
   }
 
   // Apply mojibake repair if safe (no FFFD)
-  if (!sourceText.includes("�") && !binaryText.includes("�")) {
+  if (!srcText.includes("�") && !binText.includes("�")) {
     const repairedSrc = repairMojibake(srcFull, sourceBytes);
     const repairedBin = repairMojibake(binFull, binaryBytes);
     // Only apply if it doesn't produce FFFD
