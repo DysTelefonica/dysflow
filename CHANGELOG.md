@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.48] - 2026-06-13
+
+### Added
+
+- Added support for full MS Access reports export and layout tracking. `export_all` now automatically scans for Reports and exports both their visual layout definitions (`src/reports/*.report.txt`) and their code-behind class modules (`src/reports/*.cls`) when they have `HasModule = True`.
+- Added support for saved queries export. `export_all` now automatically exports all saved queries (excluding system and temporary queries) using the active DAO connection to `src/queries/<SanitizedName>.sql` and maintains a JSON-based query registry at `src/queries/queries.json`.
+- Added classification and resolver logic in `ComponentResolver` (`src/core/mapping/component-resolver.ts`) to correctly distinguish Reports from Forms using COM reflection (type 100 VBA components) and map them to their corresponding directories.
+- capturing `SaveAsText` COM exceptions individually in `Invoke-ExportAction` as structured warnings in the JSON output, preventing a single object failure from halting the entire bulk export process.
+- Added support in `Invoke-ImportAction` (`import_all`) to scan and import `*.report.txt` files correctly alongside forms, classes, and modules.
+
 ## [v1.2.47] - 2026-06-13
 
 ### Fixed
