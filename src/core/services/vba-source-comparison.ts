@@ -10,11 +10,16 @@ import {
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
+import { readPackageVersionNear } from "../utils/package-info.js";
 import {
   classifyVbaPair,
+  SEMANTIC_CLASSIFIER_RULES,
   type VbaComparisonMode,
   type VbaSemanticCategory,
 } from "./vba-semantic-classifier.js";
+
+/** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
+const DYSFLOW_VERSION = readPackageVersionNear(import.meta.url);
 
 export type VbaSourceComparisonFile = {
   moduleName: string;
@@ -65,6 +70,10 @@ export type VbaVerifyResult = {
   nonActionableDifferent?: readonly VbaSourceComparisonEntry[];
   hasFunctionalDifferences?: boolean;
   actionableOk?: boolean;
+  /** Runtime package version that produced this result (e.g. "1.2.53"). */
+  dysflowVersion?: string;
+  /** Fingerprint of the active semantic-classification rule set. */
+  classifierRules?: string;
 };
 
 export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
@@ -227,6 +236,8 @@ export async function planReconcileBinary(
       dryRun: comparison.data.dryRun,
       willModifyAccess: comparison.data.willModifyAccess,
       sourceRoot: comparison.data.sourceRoot,
+      dysflowVersion: comparison.data.dysflowVersion,
+      classifierRules: comparison.data.classifierRules,
       matched: comparison.data.matched,
       different: comparison.data.different,
       missingInSource: comparison.data.missingInSource,
@@ -381,6 +392,8 @@ export async function compareVbaSourceTrees(
     dryRun: true,
     willModifyAccess: false,
     sourceRoot,
+    dysflowVersion: DYSFLOW_VERSION,
+    classifierRules: SEMANTIC_CLASSIFIER_RULES,
     matched: sortComparisonEntries(matched),
     different: sortComparisonEntries(different),
     missingInSource: sortComparisonEntries(missingInSource),

@@ -736,6 +736,22 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(nonActionable).toHaveProperty("recommendedAction", "no_action");
   });
 
+  // ---- T04c: runtime/version metadata for MCP diagnosis ----
+
+  it("verify result carries dysflowVersion and classifierRules metadata", async () => {
+    const fs = makeSemanticFs({
+      "src/Mod.bas": "Sub Foo()\nEnd Sub",
+      "bin/Mod.bas": "Sub Foo()\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    expect(typeof result.dysflowVersion).toBe("string");
+    expect(result.dysflowVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(typeof result.classifierRules).toBe("string");
+    expect((result.classifierRules ?? "").length).toBeGreaterThan(0);
+  });
+
   // ---- T05: strict mode restores byte-exact behavior ----
 
   it("strict mode: attribute-only diff ends up in different (not nonActionableDifferent)", async () => {

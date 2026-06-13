@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.53] - 2026-06-13
+
+### Added
+
+- `verify_code`, `verify_binary`, and `reconcile_binary` now return `dysflowVersion` (the runtime package version that produced the result) and `classifierRules` (a fingerprint of the active semantic-classification rule set, e.g. `2026-06-13.r3-module-header`). This lets a consumer confirm *which* version classified a diff via MCP — distinguishing "the running MCP server is still on an old cached build" from "the fix is loaded but does not cover this case". Bump `classifierRules` whenever the classification rules change.
+
 ## [v1.2.52] - 2026-06-13
 
 ### Fixed

@@ -15,6 +15,14 @@
 
 export type VbaComparisonMode = "semantic" | "strict";
 
+/**
+ * Fingerprint of the active semantic-classification rule set. Surfaced in the
+ * verify/reconcile result so a consumer can tell which rules produced a given
+ * classification — distinct from the package version. BUMP THIS whenever the
+ * classification rules change (new category, new normalizer, changed precedence).
+ */
+export const SEMANTIC_CLASSIFIER_RULES = "2026-06-13.r3-module-header";
+
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
   | "whitespaceOnly" // differ only by CRLF/LF/trailing-ws/blank lines
