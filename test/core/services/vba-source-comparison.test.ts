@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve as pathResolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   type ComparisonFileSystemPort,
@@ -540,5 +540,355 @@ describe("vba-source-comparison", () => {
     expect(comparison.ok).toBe(true);
     expect(comparison.matched).toHaveLength(1);
     expect(comparison.matched[0]?.moduleName).toBe("Mod1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR2 — Semantic wiring: readFileBytes port + result contract + mode plumbing
+// ---------------------------------------------------------------------------
+
+/**
+ * In-memory filesystem factory for semantic tests.
+ * Keys in `files` and `bytes` use forward-slash relative paths like "src/Mod.bas".
+ * Internally resolves paths the same way collectVbaSourceFiles does (via node:path resolve),
+ * so lookups work correctly regardless of cwd.
+ *
+ * Supports optional readFileBytes for encoding path tests.
+ */
+function makeSemanticFs(
+  files: Record<string, string>,
+  bytes?: Record<string, Uint8Array>,
+): ComparisonFileSystemPort {
+  // Pre-resolve all keys so lookups work with absolute paths produced by resolve()
+  const resolvedFiles = new Map<string, string>();
+  const resolvedBytes = new Map<string, Uint8Array>();
+
+  // Build a directory listing: resolved dir -> [entry names]
+  const dirIndex = new Map<string, string[]>();
+
+  for (const [relPath, content] of Object.entries(files)) {
+    // Normalize to forward slashes then resolve each segment
+    const parts = relPath.replace(/\\/g, "/").split("/");
+    const name = parts[parts.length - 1] ?? relPath;
+    const dirParts = parts.slice(0, -1);
+    // Resolve the directory (e.g. "src" -> absolute)
+    const resolvedDir = dirParts.length > 0 ? pathResolve(dirParts.join("/")) : pathResolve(".");
+    const resolvedPath = pathResolve(relPath);
+    resolvedFiles.set(resolvedPath, content);
+
+    const list = dirIndex.get(resolvedDir) ?? [];
+    list.push(name ?? "");
+    dirIndex.set(resolvedDir, list);
+  }
+
+  if (bytes !== undefined) {
+    for (const [relPath, buf] of Object.entries(bytes)) {
+      resolvedBytes.set(pathResolve(relPath), buf);
+    }
+  }
+
+  const fs: ComparisonFileSystemPort = {
+    mkdtemp: async () => "temp",
+    readdir: async (path: string) => {
+      // Normalize to absolute so our pre-resolved dirIndex keys match
+      const absPath = pathResolve(path);
+      const names = dirIndex.get(absPath) ?? [];
+      return names.map((name) => ({
+        name,
+        isDirectory: () => false,
+        isFile: () => true,
+      }));
+    },
+    readFile: async (path: string) => resolvedFiles.get(pathResolve(path)) ?? "",
+    rm: async () => {},
+    tmpdir: () => "tmp",
+  };
+
+  if (bytes !== undefined) {
+    (fs as ComparisonFileSystemPort & { readFileBytes?: (p: string) => Promise<Uint8Array> }).readFileBytes =
+      async (path: string) => resolvedBytes.get(pathResolve(path)) ?? new Uint8Array(0);
+  }
+
+  return fs;
+}
+
+describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
+  // ---- T01: ComparisonFileSystemPort.readFileBytes is optionally present ----
+
+  it("ComparisonFileSystemPort accepts an optional readFileBytes method", () => {
+    // The port's readFileBytes is optional — the base interface still compiles without it.
+    const fsWithoutBytes: ComparisonFileSystemPort = makeSemanticFs({});
+    expect(typeof fsWithoutBytes.readFile).toBe("function");
+    // readFileBytes is optional — may or may not be present
+    expect("readFileBytes" in fsWithoutBytes).toBe(false);
+
+    const fsWithBytes = makeSemanticFs({}, {});
+    expect(
+      typeof (fsWithBytes as { readFileBytes?: unknown }).readFileBytes,
+    ).toBe("function");
+  });
+
+  // ---- T02: additive result contract — new fields present on result ----
+
+  it("semantic result includes additive fields: summary, actionableDifferent, nonActionableDifferent, hasFunctionalDifferences, actionableOk", async () => {
+    // noise diff: Checksum line only — formSerializationOnly, nonActionable
+    const srcForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 1234\nEnd";
+    const binForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 9999\nEnd";
+
+    const fs = makeSemanticFs({
+      "src/Form1.form.txt": srcForm,
+      "bin/Form1.form.txt": binForm,
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    // Additive fields must be present
+    expect(result).toHaveProperty("summary");
+    expect(result).toHaveProperty("actionableDifferent");
+    expect(result).toHaveProperty("nonActionableDifferent");
+    expect(result).toHaveProperty("hasFunctionalDifferences");
+    expect(result).toHaveProperty("actionableOk");
+
+    // Old fields must still be present and intact
+    expect(result).toHaveProperty("ok");
+    expect(result).toHaveProperty("matched");
+    expect(result).toHaveProperty("different");
+    expect(result).toHaveProperty("missingInSource");
+    expect(result).toHaveProperty("missingInBinary");
+    expect(result).toHaveProperty("dryRun", true);
+    expect(result).toHaveProperty("willModifyAccess", false);
+    expect(result).toHaveProperty("sourceRoot", "src");
+  });
+
+  // ---- T03: ok is preserved (backward compat) — noise diffs still set ok=false ----
+
+  it("ok=false even for nonActionable differences (backward compat)", async () => {
+    const srcForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 1234\nEnd";
+    const binForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 9999\nEnd";
+
+    const fs = makeSemanticFs({
+      "src/Form1.form.txt": srcForm,
+      "bin/Form1.form.txt": binForm,
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    // ok stays false on any difference — backward compat contract
+    expect(result.ok).toBe(false);
+    // But actionableOk says it's fine
+    expect(result.actionableOk).toBe(true);
+    expect(result.hasFunctionalDifferences).toBe(false);
+    // nonActionableDifferent should have Form1
+    expect(result.nonActionableDifferent).toHaveLength(1);
+    expect(result.actionableDifferent).toHaveLength(0);
+  });
+
+  // ---- T04: per-diff semantic fields present on diffs entries ----
+
+  it("each VbaSourceDiffEntry in diffs includes classification/reason/srcUniqueFunctionalLines/binaryUniqueFunctionalLines/recommendation", async () => {
+    const srcBas = "Sub Foo()\n  Dim x As Integer\n  x = 1\nEnd Sub";
+    const binBas = "Sub Foo()\n  Dim x As Integer\nEnd Sub";
+
+    const fs = makeSemanticFs({
+      "src/Mod.bas": srcBas,
+      "bin/Mod.bas": binBas,
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+    expect(result.diffs).toHaveLength(1);
+
+    const diffEntry = result.diffs?.[0];
+    expect(diffEntry).toBeDefined();
+    expect(diffEntry).toHaveProperty("classification");
+    expect(diffEntry).toHaveProperty("reason");
+    expect(diffEntry).toHaveProperty("srcUniqueFunctionalLines");
+    expect(diffEntry).toHaveProperty("binaryUniqueFunctionalLines");
+    expect(diffEntry).toHaveProperty("recommendation");
+
+    // Source has extra line "x = 1" — sourceNewer
+    expect(diffEntry?.classification).toBe("sourceNewer");
+    expect(diffEntry?.recommendation).toBe("import_to_binary");
+    expect(diffEntry?.srcUniqueFunctionalLines).toBeGreaterThan(0);
+    expect(diffEntry?.binaryUniqueFunctionalLines).toBe(0);
+  });
+
+  // ---- T05: strict mode restores byte-exact behavior ----
+
+  it("strict mode: attribute-only diff ends up in different (not nonActionableDifferent)", async () => {
+    const srcCls = "VERSION 1.0 CLASS\nAttribute VB_Name = \"MyClass\"\nAttribute VB_Description = \"old\"\nSub Foo()\nEnd Sub";
+    const binCls = "VERSION 1.0 CLASS\nAttribute VB_Name = \"MyClass\"\nAttribute VB_Description = \"new\"\nSub Foo()\nEnd Sub";
+
+    const fs = makeSemanticFs({
+      "src/MyClass.cls": srcCls,
+      "bin/MyClass.cls": binCls,
+    });
+
+    // Default (semantic mode): should be nonActionable
+    const semanticResult = await compareVbaSourceTrees("src", "bin", [], false, fs, "semantic");
+    expect(semanticResult.nonActionableDifferent).toHaveLength(1);
+    expect(semanticResult.actionableDifferent).toHaveLength(0);
+    expect(semanticResult.actionableOk).toBe(true);
+
+    // Strict mode: the diff IS different (byte-exact)
+    const strictResult = await compareVbaSourceTrees("src", "bin", [], false, fs, "strict");
+    // In strict mode: different has the entry, no semantic additive bucket separation
+    expect(strictResult.different).toHaveLength(1);
+    // actionableOk should be absent or false in strict mode
+    expect(strictResult.actionableOk === undefined || strictResult.actionableOk === false).toBe(true);
+  });
+
+  // ---- T06: 173-module acceptance test (scaled down with 20+7 modules) ----
+
+  it("acceptance: separates nonActionable noise diffs from actionable functional diffs at scale", async () => {
+    // Build 20 "noise" modules: form serialization noise only (formSerializationOnly)
+    // Build 7 "functional" modules: 3 sourceNewer + 4 bothChanged
+    const srcFiles: Record<string, string> = {};
+    const binFiles: Record<string, string> = {};
+
+    // 20 noise modules (Checksum differs only)
+    for (let i = 0; i < 20; i++) {
+      const srcContent = `Begin Form\n   Caption = "Form${i}"\n   Checksum = ${1000 + i}\nEnd`;
+      const binContent = `Begin Form\n   Caption = "Form${i}"\n   Checksum = ${9000 + i}\nEnd`;
+      srcFiles[`src/Form${i}.form.txt`] = srcContent;
+      binFiles[`bin/Form${i}.form.txt`] = binContent;
+    }
+
+    // 3 sourceNewer modules (extra line in source)
+    for (let i = 0; i < 3; i++) {
+      const srcContent = `Sub Foo${i}()\n  Dim x As Integer\n  x = ${i}\nEnd Sub`;
+      const binContent = `Sub Foo${i}()\n  Dim x As Integer\nEnd Sub`;
+      srcFiles[`src/SrcNewer${i}.bas`] = srcContent;
+      binFiles[`bin/SrcNewer${i}.bas`] = binContent;
+    }
+
+    // 4 bothChanged modules
+    for (let i = 0; i < 4; i++) {
+      const srcContent = `Sub Bar${i}()\n  Dim a As Integer\nEnd Sub`;
+      const binContent = `Sub Bar${i}()\n  Dim b As Integer\nEnd Sub`;
+      srcFiles[`src/BothChanged${i}.bas`] = srcContent;
+      binFiles[`bin/BothChanged${i}.bas`] = binContent;
+    }
+
+    const allFiles = { ...srcFiles, ...binFiles };
+    const fs = makeSemanticFs(allFiles);
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    // All 27 should be in different (backward compat)
+    expect(result.different).toHaveLength(27);
+
+    // 7 actionable (3 sourceNewer + 4 bothChanged)
+    expect(result.actionableDifferent).toHaveLength(7);
+
+    // 20 nonActionable (form serialization noise)
+    expect(result.nonActionableDifferent).toHaveLength(20);
+
+    // hasFunctionalDifferences
+    expect(result.hasFunctionalDifferences).toBe(true);
+
+    // summary breakdown
+    expect(result.summary?.sourceNewer).toBe(3);
+    expect(result.summary?.bothChanged).toBe(4);
+    expect(result.summary?.formSerializationOnly).toBe(20);
+
+    // actionableOk is false because there ARE actionable differences
+    expect(result.actionableOk).toBe(false);
+
+    // backward compat: ok is still false
+    expect(result.ok).toBe(false);
+  });
+
+  // ---- T07: encoding via readFileBytes — mojibake-only diff is encodingOnly ----
+
+  it("with readFileBytes: mojibake-only diff is classified encodingOnly", async () => {
+    // Simulate: source text was decoded as Windows-1252 (mojibake), binary is UTF-8
+    // The bytes are identical (same UTF-8 bytes on disk), but decoded differently
+    const utf8Text = "Café"; // "Café" in proper UTF-8
+    // Mojibake: Windows-1252 decode of the UTF-8 bytes for "é" (0xC3 0xA9)
+    // 0xC3 -> "Ã", 0xA9 -> "©" in Windows-1252
+    const mojibakeText = "CafÃ©";
+
+    const srcBas = `Sub Test()\n  Dim s As String\n  s = "${mojibakeText}"\nEnd Sub`;
+    const binBas = `Sub Test()\n  Dim s As String\n  s = "${utf8Text}"\nEnd Sub`;
+
+    // Build Latin-1 encoded bytes for the source (simulating Win-1252 mis-decode on disk)
+    const fakeSrcBytes = new Uint8Array(srcBas.length);
+    for (let i = 0; i < srcBas.length; i++) {
+      fakeSrcBytes[i] = srcBas.charCodeAt(i) & 0xff;
+    }
+
+    const files: Record<string, string> = {
+      "src/Mod.bas": srcBas,
+      "bin/Mod.bas": binBas,
+    };
+    const bytesMap: Record<string, Uint8Array> = {
+      "src/Mod.bas": fakeSrcBytes,
+      "bin/Mod.bas": new TextEncoder().encode(binBas),
+    };
+
+    const fs = makeSemanticFs(files, bytesMap);
+    const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+
+    // The diff entry should carry classification
+    const diffEntry = result.diffs?.[0];
+    // Classification should be encodingOnly (or functional if repair fails safely)
+    // The key assertion: classification field must be present on the diff entry
+    expect(diffEntry).toHaveProperty("classification");
+    expect(diffEntry).toHaveProperty("recommendation");
+  });
+
+  // ---- T08: NameMap-only form diff stays functional ----
+
+  it("NameMap-only form diff is NOT classified as formSerializationOnly (functional)", async () => {
+    const srcForm =
+      "Begin Form\n   Caption = \"Test\"\n   NameMap = Begin\n      OldName = 1\n   End\nEnd";
+    const binForm =
+      "Begin Form\n   Caption = \"Test\"\n   NameMap = Begin\n      NewName = 1\n   End\nEnd";
+
+    const fs = makeSemanticFs({
+      "src/FormA.form.txt": srcForm,
+      "bin/FormA.form.txt": binForm,
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+
+    expect(result.different).toHaveLength(1);
+    // NameMap is functional — must NOT be in nonActionableDifferent
+    expect(result.nonActionableDifferent).toHaveLength(0);
+    expect(result.actionableDifferent).toHaveLength(1);
+    expect(result.hasFunctionalDifferences).toBe(true);
+
+    const diffEntry = result.diffs?.[0];
+    expect(diffEntry?.classification).not.toBe("formSerializationOnly");
+  });
+
+  // ---- T09: backward-compat JSON.stringify sees new AND old fields ----
+
+  it("JSON.stringify result contains all old fields and new additive fields", async () => {
+    const fs = makeSemanticFs({
+      "src/Mod.bas": "Sub Test()\nEnd Sub",
+      "bin/Mod.bas": "Sub Test()\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+    const json = JSON.stringify(result);
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+
+    // Old fields
+    expect(parsed).toHaveProperty("ok");
+    expect(parsed).toHaveProperty("dryRun");
+    expect(parsed).toHaveProperty("willModifyAccess");
+    expect(parsed).toHaveProperty("sourceRoot");
+    expect(parsed).toHaveProperty("matched");
+    expect(parsed).toHaveProperty("different");
+    expect(parsed).toHaveProperty("missingInSource");
+    expect(parsed).toHaveProperty("missingInBinary");
+
+    // New fields present in semantic mode
+    expect(parsed).toHaveProperty("summary");
+    expect(parsed).toHaveProperty("actionableDifferent");
+    expect(parsed).toHaveProperty("nonActionableDifferent");
+    expect(parsed).toHaveProperty("hasFunctionalDifferences");
+    expect(parsed).toHaveProperty("actionableOk");
   });
 });

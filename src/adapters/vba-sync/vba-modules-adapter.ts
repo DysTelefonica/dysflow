@@ -23,6 +23,10 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
   readdir: (path) => readdir(path, { withFileTypes: true }),
   readFile: (path, encoding) => readFile(path, encoding),
+  readFileBytes: async (path) => {
+    const buf = await readFile(path);
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  },
   rm: (path, options) => rm(path, options),
   tmpdir: () => tmpdir(),
 };

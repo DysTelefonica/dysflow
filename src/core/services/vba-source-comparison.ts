@@ -9,6 +9,11 @@ import {
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
+import {
+  type VbaComparisonMode,
+  type VbaSemanticCategory,
+  classifyVbaPair,
+} from "./vba-semantic-classifier.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
 
 export type VbaSourceComparisonFile = {
@@ -28,7 +33,16 @@ export type VbaSourceComparisonEntry = {
 export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
   sourceSnippet: string;
   binarySnippet: string;
+  // Additive semantic fields (present in semantic mode)
+  classification?: VbaSemanticCategory;
+  reason?: string;
+  srcUniqueFunctionalLines?: number;
+  binaryUniqueFunctionalLines?: number;
+  recommendation?: string;
 };
+
+/** Per-category count map present in semantic mode results. */
+export type VbaSemanticSummary = Partial<Record<VbaSemanticCategory, number>>;
 
 export type VbaVerifyResult = {
   operation: "verify_code" | "verify_binary";
@@ -41,10 +55,17 @@ export type VbaVerifyResult = {
   missingInSource: readonly VbaSourceComparisonEntry[];
   missingInBinary: readonly VbaSourceComparisonEntry[];
   diffs?: readonly VbaSourceDiffEntry[];
+  // Additive semantic fields (present in semantic mode, absent in strict mode)
+  summary?: VbaSemanticSummary;
+  actionableDifferent?: readonly VbaSourceComparisonEntry[];
+  nonActionableDifferent?: readonly VbaSourceComparisonEntry[];
+  hasFunctionalDifferences?: boolean;
+  actionableOk?: boolean;
 };
 
 export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
   operation: "reconcile_binary";
+  /** Human-readable overall recommendation for the reconcile action. */
   recommendation: string;
 };
 
@@ -100,6 +121,8 @@ export interface ComparisonFileSystemPort {
   mkdtemp(prefix: string): Promise<string>;
   readdir(path: string): Promise<readonly ComparisonFileSystemEntry[]>;
   readFile(path: string, encoding: "utf8"): Promise<string>;
+  /** Optional. When present, enables reliable encodingOnly detection via raw bytes. */
+  readFileBytes?(path: string): Promise<Uint8Array>;
   rm(path: string, options: { recursive: boolean; force: boolean }): Promise<void>;
   tmpdir(): string;
 }
@@ -166,12 +189,14 @@ export async function compareSourceAgainstBinary(
       );
     }
 
+    const comparisonMode: VbaComparisonMode = truthy(params.strict) ? "strict" : "semantic";
     const comparison = await compareVbaSourceTrees(
       sourceRoot,
       tempExportRoot,
       stringArray(params.moduleNames),
       truthy(params.diff),
       fileSystem,
+      comparisonMode,
     );
     return successResult(
       { operation: toolName, ...comparison },
@@ -203,6 +228,20 @@ export async function planReconcileBinary(
       missingInSource: comparison.data.missingInSource,
       missingInBinary: comparison.data.missingInBinary,
       diffs: comparison.data.diffs,
+      // Additive semantic fields (present in semantic mode)
+      ...(comparison.data.summary !== undefined ? { summary: comparison.data.summary } : {}),
+      ...(comparison.data.actionableDifferent !== undefined
+        ? { actionableDifferent: comparison.data.actionableDifferent }
+        : {}),
+      ...(comparison.data.nonActionableDifferent !== undefined
+        ? { nonActionableDifferent: comparison.data.nonActionableDifferent }
+        : {}),
+      ...(comparison.data.hasFunctionalDifferences !== undefined
+        ? { hasFunctionalDifferences: comparison.data.hasFunctionalDifferences }
+        : {}),
+      ...(comparison.data.actionableOk !== undefined
+        ? { actionableOk: comparison.data.actionableOk }
+        : {}),
       recommendation: comparison.data.ok
         ? "Source and Access binary exports already match; no reconciliation is needed."
         : "Dry-run only: review differences, then run an explicit import/export workflow if you want to reconcile.",
@@ -217,6 +256,7 @@ export async function compareVbaSourceTrees(
   moduleNames: readonly string[],
   includeDiffs: boolean,
   fileSystem: ComparisonFileSystemPort,
+  mode: VbaComparisonMode = "semantic",
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
   const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
@@ -228,6 +268,11 @@ export async function compareVbaSourceTrees(
   const missingInSource: VbaSourceComparisonEntry[] = [];
   const missingInBinary: VbaSourceComparisonEntry[] = [];
   const diffs: VbaSourceDiffEntry[] = [];
+
+  // Semantic mode accumulators
+  const actionableDifferent: VbaSourceComparisonEntry[] = [];
+  const nonActionableDifferent: VbaSourceComparisonEntry[] = [];
+  const semanticSummary: Record<string, number> = {};
 
   for (const [key, binaryFile] of binaryByKey) {
     const sourceFile = sourceByKey.get(key);
@@ -241,23 +286,89 @@ export async function compareVbaSourceTrees(
       fileSystem.readFile(binaryFile.path, "utf8"),
     ]);
     const entry = toComparisonEntry(sourceFile, binaryFile);
+
+    // --- Strict mode: byte-exact comparison (backward-compat behavior) ---
+    if (mode === "strict") {
+      if (sourceText === binaryText) {
+        matched.push(entry);
+      } else {
+        different.push(entry);
+        if (includeDiffs) {
+          diffs.push({
+            ...entry,
+            sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
+            binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
+          });
+        }
+      }
+      continue;
+    }
+
+    // --- Semantic mode: classify each differing pair ---
+    // Fast path: raw equality (no need to classify)
     if (sourceText === binaryText) {
       matched.push(entry);
+      continue;
+    }
+
+    // Read raw bytes if available (enables reliable encodingOnly detection)
+    const [sourceBytes, binaryBytes] = fileSystem.readFileBytes
+      ? await Promise.all([
+          fileSystem.readFileBytes(sourceFile.path),
+          fileSystem.readFileBytes(binaryFile.path),
+        ])
+      : [undefined, undefined];
+
+    const classification = classifyVbaPair({
+      sourceText,
+      binaryText,
+      sourceBytes,
+      binaryBytes,
+      fileType: sourceFile.fileType,
+      mode: "semantic",
+    });
+
+    // If classifier resolves to "matched" (e.g. normalization equalized), treat as matched
+    if (classification.classification === "matched") {
+      matched.push(entry);
+      continue;
+    }
+
+    // Add to different[] for backward compat
+    different.push(entry);
+
+    // Accumulate semantic summary
+    const cat = classification.classification;
+    semanticSummary[cat] = (semanticSummary[cat] ?? 0) + 1;
+
+    // Bucket into actionable / nonActionable
+    if (classification.actionable) {
+      actionableDifferent.push(entry);
     } else {
-      different.push(entry);
-      if (includeDiffs) {
-        diffs.push({
-          ...entry,
-          sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
-          binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
-        });
-      }
+      nonActionableDifferent.push(entry);
+    }
+
+    if (includeDiffs) {
+      diffs.push({
+        ...entry,
+        sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
+        binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
+        // Additive semantic fields
+        classification: classification.classification,
+        reason: classification.reason,
+        srcUniqueFunctionalLines: classification.srcUniqueFunctionalLines,
+        binaryUniqueFunctionalLines: classification.binaryUniqueFunctionalLines,
+        recommendation: classification.recommendation,
+      });
     }
   }
 
   for (const [key, sourceFile] of sourceByKey) {
     if (!binaryByKey.has(key)) missingInBinary.push(toComparisonEntry(sourceFile, undefined));
   }
+
+  const hasFunctionalDifferences =
+    actionableDifferent.length > 0 || missingInSource.length > 0 || missingInBinary.length > 0;
 
   return {
     ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
@@ -269,6 +380,16 @@ export async function compareVbaSourceTrees(
     missingInSource: sortComparisonEntries(missingInSource),
     missingInBinary: sortComparisonEntries(missingInBinary),
     ...(includeDiffs ? { diffs: sortDiffEntries(diffs) } : {}),
+    // Additive semantic fields (only in semantic mode)
+    ...(mode === "semantic"
+      ? {
+          summary: semanticSummary as VbaSemanticSummary,
+          actionableDifferent: sortComparisonEntries(actionableDifferent),
+          nonActionableDifferent: sortComparisonEntries(nonActionableDifferent),
+          hasFunctionalDifferences,
+          actionableOk: !hasFunctionalDifferences,
+        }
+      : {}),
   };
 }
 
