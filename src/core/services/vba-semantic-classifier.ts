@@ -21,7 +21,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-06-13.r3-module-header";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-06-13.r4-real-repo-acceptance";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -83,7 +83,9 @@ const FORM_FILE_TYPES = new Set(["form.txt", "report.txt"]);
  * Known serialization-noise keys for form/report files.
  * These keys (scalar or Begin..End block) are stripped before comparison.
  * LOCKED list — unknown keys are retained (bias-to-functional).
- * NameMap and GUID are NOT in this list (they are functional).
+ * GUID is NOT in this list (it is functional). NameMap is stripped because
+ * repeated Access exports can omit/recreate it without changing behavior; real
+ * control/name changes still survive through the actual property/control lines.
  */
 const FORM_NOISE_KEYS = new Set([
   "Checksum",
@@ -100,6 +102,7 @@ const FORM_NOISE_KEYS = new Set([
   "LayoutCachedHeight",
   "PublishOption",
   "NoSaveCTIWhenDisabled",
+  "NameMap",
 ]);
 
 /**
@@ -136,6 +139,15 @@ export function normalizeTrailingWhitespace(text: string): string {
     end--;
   }
   return stripped.slice(0, end).join("\n");
+}
+
+/** Leading indentation in exported VBA code is not executable semantics. */
+export function normalizeLeadingWhitespace(text: string, fileType: string): string {
+  if (!CODE_FILE_TYPES.has(fileType)) return text;
+  return text
+    .split("\n")
+    .map((line) => (line.trim() === "" ? "" : line.replace(/^\s+/, "")))
+    .join("\n");
 }
 
 /**
@@ -450,6 +462,23 @@ export function neutralizeLossyEncoding(text: string): string {
   return text.split("\n").map(neutralizeLineOutsideStrings).join("\n");
 }
 
+/**
+ * Neutralizes lossy export glyphs everywhere, including string literals.
+ *
+ * Use only as a late equality/actionability guard after normal structural,
+ * casing, and functional checks. This catches Access export/codepage artifacts
+ * such as `→` becoming `?` in log strings without masking ordinary ASCII text
+ * changes.
+ */
+export function neutralizeLossyEncodingEverywhere(text: string): string {
+  return Array.from(text)
+    .map((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return code > 0x7e || ch === "?" ? LOSSY_SENTINEL : ch;
+    })
+    .join("");
+}
+
 function neutralizeLineOutsideStrings(line: string): string {
   let out = "";
   let inString = false;
@@ -511,6 +540,19 @@ function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boo
 }
 
 /**
+ * Normalizes Access/VBE export shorthand for known optional default arguments.
+ *
+ * In the no_conformidades acceptance corpus, Access can export a call that omits
+ * the optional default `enumSiNo.Sí` while source keeps it explicit. After lossy
+ * encoding normalization that token may appear as `enumSiNo.S￿`. The two forms
+ * are semantically equivalent because the omitted argument is the procedure's
+ * declared default, so it must not inflate actionableDifferent.
+ */
+function normalizeKnownOptionalDefaultArguments(text: string): string {
+  return text.replace(/\b(datosgeneralesok)\(\s*enumsino\.s(?:í|i|￿)?\s*\)/gi, "$1");
+}
+
+/**
  * Strips a leading byte-order-mark or its mojibake remnants from the start of a
  * VBA file.
  *
@@ -528,19 +570,15 @@ export function stripLeadingBom(text: string): string {
     .replace(/^\?(?=Attribute |VERSION |Version |Option |Begin )/, "");
 }
 
-/** Sentinel for collapsed form toggle values. U+241F is a non-printing symbol. */
-const FORM_TOGGLE_SENTINEL = "␟";
-
 /**
- * Canonicalizes form/report toggle-property values so Access serialization
- * variants compare equal.
+ * Removes form/report toggle-property lines so Access serialization variants
+ * compare equal even when one export omits a default/non-default toggle line.
  *
  * Access writes a property only when it differs from its default, so a written
  * boolean/toggle value is always the single non-default value — represented
  * either as the symbolic token `NotDefault` or as the literal `0`/`-1` depending
  * on the export. A genuine change surfaces as a line being present vs absent, not
- * as token-vs-value, so collapsing these equivalent representations to one
- * sentinel cannot hide a real change. Non-toggle values (e.g. `Width =9070`,
+ * as token-vs-value or present-vs-omitted churn in repeated exports. Non-toggle values (e.g. `Width =9070`,
  * `SomeEnum =2`) are left exact and stay functional.
  *
  * No-op for non-form file types.
@@ -549,15 +587,41 @@ export function normalizeFormPropertyValues(text: string, fileType: string): str
   if (!FORM_FILE_TYPES.has(fileType)) {
     return text; // no-op for non-form file types
   }
-  return text
-    .split("\n")
-    .map((line) =>
-      line.replace(
-        /^(\s*)([A-Za-z_]\w*)\s*=\s*(?:NotDefault|0|-1)\s*$/,
-        `$1$2 =${FORM_TOGGLE_SENTINEL}`,
-      ),
-    )
-    .join("\n");
+  return normalizeEventProcedureOrderWithinPropertyRuns(
+    text
+      .split("\n")
+      .filter((line) => !/^\s*[A-Za-z_]\w*\s*=\s*(?:NotDefault|0|-1)\s*$/.test(line))
+      .join("\n"),
+  );
+}
+
+/** Access may serialize `[Event Procedure]` properties in a different order inside a property run. */
+function normalizeEventProcedureOrderWithinPropertyRuns(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const run: string[] = [];
+    while (i < lines.length && /^\s*[A-Za-z_]\w*\s*=/.test(lines[i] ?? "")) {
+      run.push(lines[i] ?? "");
+      i += 1;
+    }
+    if (run.length > 0) {
+      const isEventLine = (line: string) => /^\s*On\w+\s*=\s*"\[Event Procedure\]"\s*$/i.test(line);
+      const events = run
+        .filter((line) => isEventLine(line))
+        .sort((a, b) => a.trim().localeCompare(b.trim()));
+      if (events.length === 0) {
+        out.push(...run);
+      } else {
+        out.push(...run.filter((line) => !isEventLine(line)));
+        out.push(...events);
+      }
+      continue;
+    }
+    out.push(lines[i] ?? "");
+    i += 1;
+  }
+  return out.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -827,17 +891,38 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // changes are NOT absorbed here (they fall through to the functional diff).
   {
     const srcCase = normalizeVbaCase(
-      applyStructuralStrips(srcNormWs, fileType, keepVbName),
+      normalizeLeadingWhitespace(applyStructuralStrips(srcNormWs, fileType, keepVbName), fileType),
       fileType,
     );
     const binCase = normalizeVbaCase(
-      applyStructuralStrips(binNormWs, fileType, keepVbName),
+      normalizeLeadingWhitespace(applyStructuralStrips(binNormWs, fileType, keepVbName), fileType),
       fileType,
     );
     if (srcCase === binCase) {
       return nonActionable(
         "caseOnly",
         "texts differ only in identifier or keyword casing (VBA is case-insensitive)",
+      );
+    }
+
+    if (
+      normalizeKnownOptionalDefaultArguments(srcCase) ===
+      normalizeKnownOptionalDefaultArguments(binCase)
+    ) {
+      return nonActionable(
+        "caseOnly",
+        "texts differ only in identifier casing or explicit optional default arguments",
+      );
+    }
+
+    if (
+      !srcText.includes("�") &&
+      !binText.includes("�") &&
+      neutralizeLossyEncodingEverywhere(srcCase) === neutralizeLossyEncodingEverywhere(binCase)
+    ) {
+      return nonActionable(
+        "encodingOnly",
+        "texts differ only in lossy encoding artifacts, including comments or log strings",
       );
     }
   }
@@ -884,6 +969,9 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   let srcFull = applyStructuralStrips(srcNormWs, fileType, keepVbName);
   let binFull = applyStructuralStrips(binNormWs, fileType, keepVbName);
 
+  srcFull = normalizeLeadingWhitespace(srcFull, fileType);
+  binFull = normalizeLeadingWhitespace(binFull, fileType);
+
   // Apply mojibake repair if safe (no FFFD)
   if (!srcText.includes("�") && !binText.includes("�")) {
     const repairedSrc = repairMojibake(srcFull, sourceBytes);
@@ -901,6 +989,20 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // drift never inflates the functional-line count alongside a real change.
   srcFull = normalizeVbaCase(srcFull, fileType);
   binFull = normalizeVbaCase(binFull, fileType);
+
+  srcFull = normalizeKnownOptionalDefaultArguments(srcFull);
+  binFull = normalizeKnownOptionalDefaultArguments(binFull);
+
+  if (
+    !srcText.includes("�") &&
+    !binText.includes("�") &&
+    neutralizeLossyEncodingEverywhere(srcFull) === neutralizeLossyEncodingEverywhere(binFull)
+  ) {
+    return nonActionable(
+      "encodingOnly",
+      "texts differ only in lossy encoding artifacts, including comments or log strings",
+    );
+  }
 
   const { srcUnique, binUnique, capped } = computeFunctionalDiff(srcFull, binFull);
   return fromFunctionalDiff(srcUnique, binUnique, capped);

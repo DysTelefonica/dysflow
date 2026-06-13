@@ -77,6 +77,151 @@ describe("classifyVbaPair — type contract", () => {
   });
 });
 
+describe("classifyVbaPair — no_conformidades real-repo acceptance noise", () => {
+  it("treats Access NameMap/PublishOption/Checksum header churn as form serialization noise", () => {
+    const sourceText = `Version =21
+VersionRequired =20
+Checksum =-153375374
+Begin Form
+    RecordSelectors = NotDefault
+    GUID = Begin
+        0xcc94be5619d18d429d8a4deb6f887ecc
+    End
+    NameMap = Begin
+        0x0acc0e5500000000000000000000000000000000000000000c00000005000000
+    End
+    Caption ="Usuario conectado: Administrador"
+End`;
+    const binaryText = `Version =21
+VersionRequired =20
+PublishOption =1
+Checksum =-1351752617
+Begin Form
+    RecordSelectors = NotDefault
+    GUID = Begin
+        0xcc94be5619d18d429d8a4deb6f887ecc
+    End
+    Caption ="Usuario conectado: Administrador"
+End`;
+
+    const result = classifyVbaPair({
+      sourceText,
+      binaryText,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("treats explicit enumSiNo.Sí optional default argument as equivalent to omission", () => {
+    const sourceText = `Option Compare Database
+Option Explicit
+
+Private Sub Validar()
+    If m_ObjNCAuditoriaActiva.DatosGeneralesOK(enumSiNo.Sí) = enumSiNo.No Then
+        Exit Sub
+    End If
+End Sub`;
+    const binaryText = `Option Compare Database
+Option Explicit
+Private Sub Validar()
+    If m_ObjNCAuditoriaActiva.DatosGeneralesOK = enumSiNo.No Then
+        Exit Sub
+    End If
+End Sub`;
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "cls", mode: "semantic" });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("matched");
+    expect(result.reason).toContain("normalization resolved");
+  });
+
+  it("treats leading VBA indentation drift as non-actionable", () => {
+    const sourceText = `Option Compare Database
+Option Explicit
+     Public Sub Paint()
+      Me.Caption = "Demo"
+     End Sub`;
+    const binaryText = `Option Compare Database
+Option Explicit
+Public Sub Paint()
+Me.Caption = "Demo"
+End Sub`;
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "cls", mode: "semantic" });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("caseOnly");
+  });
+
+  it("treats omitted form toggle lines as serialization noise", () => {
+    const sourceText = `Begin Form
+    Caption ="Demo"
+    Visible = NotDefault
+    AllowEdits =0
+End`;
+    const binaryText = `Begin Form
+    Caption ="Demo"
+End`;
+
+    const result = classifyVbaPair({
+      sourceText,
+      binaryText,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("treats reordered form event procedure properties as serialization noise", () => {
+    const sourceText = `Begin Form
+    Caption ="Demo"
+    OnLoad ="[Event Procedure]"
+    OnTimer ="[Event Procedure]"
+    DatasheetFontName ="Arial"
+End`;
+    const binaryText = `Begin Form
+    Caption ="Demo"
+    DatasheetFontName ="Arial"
+    OnLoad ="[Event Procedure]"
+    OnTimer ="[Event Procedure]"
+End`;
+
+    const result = classifyVbaPair({
+      sourceText,
+      binaryText,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("treats lossy codepage glyph replacement inside log strings as encoding-only", () => {
+    const sourceText = `Option Compare Database
+Option Explicit
+Public Sub Cleanup()
+    TestHelper.AddLog p_Logs, "Cleanup fixture cache ID=" & p_IdNC & " (hijos→padre)"
+End Sub`;
+    const binaryText = `Option Compare Database
+Option Explicit
+Public Sub Cleanup()
+    TestHelper.AddLog p_Logs, "Cleanup fixture cache ID=" & p_IdNC & " (hijos?padre)"
+End Sub`;
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "bas", mode: "semantic" });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("encodingOnly");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // T02 — matched
 // ---------------------------------------------------------------------------
@@ -418,8 +563,8 @@ End`,
     expect(result.recommendation).toBe("no_action");
   });
 
-  it("does NOT classify NameMap difference as formSerializationOnly", () => {
-    // NameMap is functional — must NOT be stripped
+  it("classifies NameMap difference as formSerializationOnly", () => {
+    // Access exports can omit/recreate NameMap without changing behavior.
     const src = `${formBase.replace(
       "End",
       `    NameMap = Begin
@@ -442,9 +587,8 @@ End`,
       mode: "semantic",
     });
 
-    expect(result.classification).not.toBe("formSerializationOnly");
-    const hasUnique = result.srcUniqueFunctionalLines > 0 || result.binaryUniqueFunctionalLines > 0;
-    expect(hasUnique).toBe(true);
+    expect(result.classification).toBe("formSerializationOnly");
+    expect(result.actionable).toBe(false);
   });
 
   it("does NOT classify unknown Begin..End section as formSerializationOnly", () => {

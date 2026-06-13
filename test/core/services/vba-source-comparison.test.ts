@@ -1024,9 +1024,9 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(diffEntry).toHaveProperty("recommendation");
   });
 
-  // ---- T08: NameMap-only form diff stays functional ----
+  // ---- T08: NameMap-only form diff is Access serialization noise ----
 
-  it("NameMap-only form diff is NOT classified as formSerializationOnly (functional)", async () => {
+  it("NameMap-only form diff is classified as non-actionable serialization noise", async () => {
     const srcForm =
       'Begin Form\n   Caption = "Test"\n   NameMap = Begin\n      OldName = 1\n   End\nEnd';
     const binForm =
@@ -1040,13 +1040,12 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
 
     expect(result.different).toHaveLength(1);
-    // NameMap is functional — must NOT be in nonActionableDifferent
-    expect(result.nonActionableDifferent).toHaveLength(0);
-    expect(result.actionableDifferent).toHaveLength(1);
-    expect(result.hasFunctionalDifferences).toBe(true);
+    expect(result.nonActionableDifferent).toHaveLength(1);
+    expect(result.actionableDifferent).toHaveLength(0);
+    expect(result.hasFunctionalDifferences).toBe(false);
 
     const diffEntry = result.diffs?.[0];
-    expect(diffEntry?.classification).not.toBe("formSerializationOnly");
+    expect(diffEntry?.classification).toBe("formSerializationOnly");
   });
 
   // ---- T09: backward-compat JSON.stringify sees new AND old fields ----

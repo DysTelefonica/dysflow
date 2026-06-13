@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.2.55] - 2026-06-13
+
+### Fixed
+
+- Reduced `verify_binary`/`reconcile_binary` false positives in the VBA semantic classifier against the real `00_NO_CONFORMIDADES_staging` acceptance corpus: `actionableDifferent` now drops from 14 to 6 when comparing the current source tree to a fresh Access binary export, while the remaining actionable entries are real code/module-identity differences.
+- Classified additional Access export churn as non-actionable: `.form.txt` `NameMap`/toggle/property-event ordering noise, lossy codepage replacements in log/comment-like strings, leading VBA indentation drift, and explicit `enumSiNo.Sí` optional-default arguments exported as omitted defaults.
+- Bumped `classifierRules` to `2026-06-13.r4-real-repo-acceptance` so MCP consumers can distinguish this rule set from v1.2.54 diagnostics-only output.
+
 ## [v1.2.54] - 2026-06-13
 
 ### Added
