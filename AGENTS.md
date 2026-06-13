@@ -33,6 +33,29 @@ Commands:
 - Integration/E2E: `vitest.integration.config.ts` (`test/e2e/**`, `test/scripts-access-runner.test.ts`) — requires Windows + Access COM.
 - Real MCP E2E: `node E2E_testing/mcp-e2e.mjs` (requires `ACCESS_VBA_PASSWORD`).
 
+## VBA semantic diff — behavioral contract
+
+`verify_code` / `verify_binary` / `reconcile_binary` run in **semantic mode** by default. The job
+is to keep `actionableDifferent` honest: a consuming agent decides what to sync based on it, so
+non-functional noise must NEVER be reported as actionable. Full taxonomy lives in the README
+([Semantic diff classification](./README.md#semantic-diff-classification)); the core is
+`src/core/services/vba-semantic-classifier.ts`. Invariants — preserve them when editing:
+
+- **Bias to functional.** When in doubt, classify as actionable. Only collapse a difference to a
+  non-actionable category when you are certain it cannot change runtime behavior.
+- **Case is non-functional only outside strings/comments.** VBA is case-insensitive for
+  identifiers/keywords and the VBE re-cases them on import (`caseOnly`). Folding is **string-aware**:
+  string-literal and comment bodies are compared case-sensitively, because their content is
+  runtime-visible. Never fold the whole line blindly.
+- **Lossy encoding (`►` → `?`) is `encodingOnly` outside string literals only.** A glyph change
+  inside a quoted string stays functional.
+- **Form serialization noise is a LOCKED allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
+  `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `NameMap` and
+  `GUID` are functional — do not strip them. Unknown keys are retained (functional).
+- **Strict mode (`strict: true`) bypasses every noise bucket** and does byte/text-exact comparison.
+- Per-module `diff: true` entries expose `classification`, `reason`, `isActionable`,
+  `recommendedAction`, and unique-line counts — these are the consumer contract; keep them additive.
+
 ## Hard rules
 
 - **Never** build/install to or modify the production runtime at `%LOCALAPPDATA%\dysflow` or

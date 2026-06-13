@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.50] - 2026-06-13
+
+### Fixed
+
+- Fixed the VBA semantic classifier inflating `actionableDifferent` with non-functional differences (a real project reported 155 actionable but only ~6 were genuine). Added a `caseOnly` category: VBA identifier/keyword casing is folded **outside string literals and comments** (the VBE re-cases identifiers on import), so `Me.Name` vs `Me.name` is no longer actionable while runtime-visible string content stays functional. Extended `.form.txt` serialization noise keys with `LayoutCachedLeft/Top/Width/Height`, `PublishOption`, and `NoSaveCTIWhenDisabled`. Added lossy out-of-codepage detection so glyphs replaced by `?` on export (e.g. `►` → `?`) classify as `encodingOnly` outside string literals. Case-fold and lossy-neutralization are also applied in the functional diff so counts are not inflated when noise accompanies a real change.
+
+### Added
+
+- Added per-module `isActionable` and `recommendedAction` fields to `diff: true` comparison entries.
+
 ## [v1.2.49] - 2026-06-13
 
 ### Added

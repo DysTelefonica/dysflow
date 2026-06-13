@@ -19,8 +19,9 @@ export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
   | "whitespaceOnly" // differ only by CRLF/LF/trailing-ws/blank lines
   | "attributeOnly" // differ only by Attribute VB_* header lines (not VB_Name)
+  | "caseOnly" // differ only by identifier/keyword casing (VBA is case-insensitive)
   | "formSerializationOnly" // differ only by stripped form/report noise sections
-  | "encodingOnly" // differ only by encoding mojibake (normalize-and-recompare)
+  | "encodingOnly" // differ only by encoding mojibake or lossy out-of-codepage replacement
   | "sourceNewer" // functional change, only source has unique functional lines
   | "binaryNewer" // functional change, only binary has unique functional lines
   | "bothChanged"; // functional change on both sides
@@ -84,6 +85,13 @@ const FORM_NOISE_KEYS = new Set([
   "PrtDevNamesW",
   "PrtMip",
   "RecSrcDt",
+  // Layout cache and publish/CTI flags — IDE/runtime bookkeeping, never functional.
+  "LayoutCachedLeft",
+  "LayoutCachedTop",
+  "LayoutCachedWidth",
+  "LayoutCachedHeight",
+  "PublishOption",
+  "NoSaveCTIWhenDisabled",
 ]);
 
 /**
@@ -297,6 +305,137 @@ function repairMojibakerStringFallback(text: string): string {
     bytes[i] = text.charCodeAt(i) & 0xff;
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+/**
+ * Sentinel char for lossy-encoding neutralization. U+FFFF is a permanent
+ * non-character (never valid in well-formed text), so it cannot collide with
+ * real source content.
+ */
+const LOSSY_SENTINEL = "￿";
+
+/**
+ * Folds VBA casing for comparison, preserving runtime-visible content.
+ *
+ * VBA identifiers and keywords are case-insensitive — the VBE re-cases them
+ * project-wide on import, which is NEVER a functional change. But string-literal
+ * contents are case-SENSITIVE at runtime, and comment bodies are preserved
+ * verbatim (the VBE never re-cases them, so their case never drifts; keeping them
+ * intact biases toward functional). Everything OUTSIDE double-quoted string
+ * literals and `'` comments is lowercased; string and comment bodies are kept.
+ *
+ * No-op for file types that are neither VBA code nor form/report serialization.
+ */
+export function normalizeVbaCase(text: string, fileType: string): string {
+  if (!CODE_FILE_TYPES.has(fileType) && !FORM_FILE_TYPES.has(fileType)) {
+    return text; // no-op for unknown file types
+  }
+  return text
+    .split("\n")
+    .map((line) => foldLineOutsideStringsAndComments(line))
+    .join("\n");
+}
+
+/**
+ * Lowercases a single line outside of double-quoted string literals and `'`
+ * comments. Handles the VBA `""` escaped-quote sequence (stays inside the string).
+ */
+function foldLineOutsideStringsAndComments(line: string): string {
+  let out = "";
+  let inString = false;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i] ?? "";
+    if (inString) {
+      out += ch;
+      if (ch === '"') {
+        // VBA escapes a quote inside a string by doubling it ("").
+        if (line[i + 1] === '"') {
+          out += '"';
+          i += 2;
+          continue;
+        }
+        inString = false;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === "'") {
+      // Rest of the line is a comment — preserve verbatim.
+      out += line.slice(i);
+      break;
+    }
+    out += ch.toLowerCase();
+    i += 1;
+  }
+  return out;
+}
+
+/**
+ * Neutralizes lossy out-of-codepage replacement for comparison.
+ *
+ * When Access exports a module, characters outside the active ANSI code page are
+ * irreversibly replaced by "?" (U+003F). repairMojibake cannot undo this because
+ * the original byte is gone. To detect that two texts differ ONLY by such
+ * artifacts, every non-ASCII character and every "?" OUTSIDE a string literal is
+ * mapped to a single sentinel. String-literal bodies are preserved verbatim — a
+ * glyph change inside a string is runtime-visible and must stay functional,
+ * consistent with how casing is folded. All ASCII content outside strings is kept,
+ * so any real change in executable code survives.
+ */
+export function neutralizeLossyEncoding(text: string): string {
+  return text.split("\n").map(neutralizeLineOutsideStrings).join("\n");
+}
+
+function neutralizeLineOutsideStrings(line: string): string {
+  let out = "";
+  let inString = false;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i] ?? "";
+    if (inString) {
+      out += ch;
+      if (ch === '"') {
+        // VBA escapes a quote inside a string by doubling it ("").
+        if (line[i + 1] === '"') {
+          out += '"';
+          i += 2;
+          continue;
+        }
+        inString = false;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    const code = ch.codePointAt(0) ?? 0;
+    out += code > 0x7e || ch === "?" ? LOSSY_SENTINEL : ch;
+    i += 1;
+  }
+  return out;
+}
+
+/**
+ * Applies the file-type-appropriate structural strips (attribute lines for code,
+ * serialization noise for form/report) on top of already-whitespace-normalized
+ * text. Used to compose normalizers for the caseOnly check and the functional diff.
+ */
+function applyStructuralStrips(wsNorm: string, fileType: string): string {
+  let t = wsNorm;
+  if (CODE_FILE_TYPES.has(fileType)) t = stripAttributeLines(t, fileType);
+  if (FORM_FILE_TYPES.has(fileType)) t = stripFormSerializationNoise(t, fileType);
+  return t;
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +676,23 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   }
 
   // -------------------------------------------------------------------------
+  // Step 4.5: caseOnly — differ only by identifier/keyword casing
+  // -------------------------------------------------------------------------
+  // Compare after the structural strips above plus string-aware case folding.
+  // String-literal and comment bodies are preserved, so runtime-visible text
+  // changes are NOT absorbed here (they fall through to the functional diff).
+  {
+    const srcCase = normalizeVbaCase(applyStructuralStrips(srcNormWs, fileType), fileType);
+    const binCase = normalizeVbaCase(applyStructuralStrips(binNormWs, fileType), fileType);
+    if (srcCase === binCase) {
+      return nonActionable(
+        "caseOnly",
+        "texts differ only in identifier or keyword casing (VBA is case-insensitive)",
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Step 5: encodingOnly — mojibake normalization with safety guards
   // -------------------------------------------------------------------------
   // Only attempt if neither side contains U+FFFD (replacement char)
@@ -554,6 +710,19 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
           "texts differ only in encoding (mojibake repair resolved)",
         );
       }
+    }
+
+    // Lossy fallback: Access export replaced out-of-codepage glyphs with "?".
+    // This is irreversible, so mojibake repair cannot equalize the texts. If the
+    // only remaining differences are non-ASCII/"?" characters, treat as encoding.
+    const lossySrc = neutralizeLossyEncoding(srcNormWs);
+    const lossyBin = neutralizeLossyEncoding(binNormWs);
+    const lossyTouchedSomething = lossySrc !== srcNormWs || lossyBin !== binNormWs;
+    if (lossyTouchedSomething && lossySrc === lossyBin) {
+      return nonActionable(
+        "encodingOnly",
+        "texts differ only in lossy encoding artifacts (out-of-codepage glyphs replaced by '?')",
+      );
     }
   }
 
@@ -583,7 +752,16 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     // Only apply if it doesn't produce FFFD
     if (!repairedSrc.includes("�")) srcFull = repairedSrc;
     if (!repairedBin.includes("�")) binFull = repairedBin;
+
+    // Neutralize lossy out-of-codepage artifacts so they never count as functional.
+    srcFull = neutralizeLossyEncoding(srcFull);
+    binFull = neutralizeLossyEncoding(binFull);
   }
+
+  // Fold identifier/keyword casing (string + comment bodies preserved) so case
+  // drift never inflates the functional-line count alongside a real change.
+  srcFull = normalizeVbaCase(srcFull, fileType);
+  binFull = normalizeVbaCase(binFull, fileType);
 
   const { srcUnique, binUnique, capped } = computeFunctionalDiff(srcFull, binFull);
   return fromFunctionalDiff(srcUnique, binUnique, capped);

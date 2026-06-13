@@ -39,6 +39,10 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
   srcUniqueFunctionalLines?: number;
   binaryUniqueFunctionalLines?: number;
   recommendation?: string;
+  /** Whether this difference requires a sync action (true) or is noise (false). */
+  isActionable?: boolean;
+  /** Human-facing action key, mirrors recommendation (e.g. "no_action", "import_to_binary"). */
+  recommendedAction?: string;
 };
 
 /** Per-category count map present in semantic mode results. */
@@ -359,6 +363,8 @@ export async function compareVbaSourceTrees(
         srcUniqueFunctionalLines: classification.srcUniqueFunctionalLines,
         binaryUniqueFunctionalLines: classification.binaryUniqueFunctionalLines,
         recommendation: classification.recommendation,
+        isActionable: classification.actionable,
+        recommendedAction: classification.recommendation,
       });
     }
   }

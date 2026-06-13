@@ -712,6 +712,30 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(diffEntry?.binaryUniqueFunctionalLines).toBe(0);
   });
 
+  // ---- T04b: per-diff isActionable + recommendedAction fields ----
+
+  it("each VbaSourceDiffEntry carries isActionable and recommendedAction", async () => {
+    const fs = makeSemanticFs({
+      // actionable: source-newer
+      "src/Mod.bas": "Sub Foo()\n  x = 1\nEnd Sub",
+      "bin/Mod.bas": "Sub Foo()\nEnd Sub",
+      // non-actionable: case-only
+      "src/Cased.cls": "Option Explicit\nPublic Sub Run()\n  Me.NCProyecto = 1\nEnd Sub",
+      "bin/Cased.cls": "Option Explicit\nPublic Sub Run()\n  Me.ncProyecto = 1\nEnd Sub",
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+
+    const actionable = result.diffs?.find((d) => d.moduleName === "Mod");
+    expect(actionable).toHaveProperty("isActionable", true);
+    expect(actionable).toHaveProperty("recommendedAction", "import_to_binary");
+
+    const nonActionable = result.diffs?.find((d) => d.moduleName === "Cased");
+    expect(nonActionable?.classification).toBe("caseOnly");
+    expect(nonActionable).toHaveProperty("isActionable", false);
+    expect(nonActionable).toHaveProperty("recommendedAction", "no_action");
+  });
+
   // ---- T05: strict mode restores byte-exact behavior ----
 
   it("strict mode: attribute-only diff ends up in different (not nonActionableDifferent)", async () => {

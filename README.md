@@ -552,15 +552,16 @@ Each differing module is assigned one `classification`:
 | `matched` | No functional difference | No |
 | `whitespaceOnly` | Only line endings (CRLF/LF), trailing whitespace, trailing blank lines, or trivial indentation | No |
 | `attributeOnly` | Only `Attribute VB_*` header lines differ | No |
-| `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`) | No |
-| `encodingOnly` | Difference disappears after normalizing known encoding/mojibake artifacts | No |
+| `caseOnly` | Only identifier/keyword casing differs (`Me.Name` vs `Me.name`). VBA is case-insensitive and the VBE re-cases identifiers project-wide on import. String-literal and comment bodies are compared **case-sensitively**, so a runtime-visible text change is NOT absorbed here | No |
+| `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`) | No |
+| `encodingOnly` | Difference disappears after normalizing encoding/mojibake artifacts — including lossy out-of-codepage glyphs that Access export replaced with `?` (e.g. `►` → `?`). Applied **outside string literals only**, so a glyph change inside a quoted string stays functional | No |
 | `sourceNewer` | Functional lines unique to disk source | Yes → `import_to_binary` |
 | `binaryNewer` | Functional lines unique to the Access binary | Yes → `export_to_src` |
 | `bothChanged` | Both sides have unique functional lines | Yes → `manual_merge` |
 
-`NameMap` blocks in `.form.txt` are treated as **functional** (not serialization noise). Encoding normalization never collapses a genuine content change — if a real difference remains after normalization, the module stays functional.
+`NameMap` blocks in `.form.txt` are treated as **functional** (not serialization noise). Casing and encoding normalization never collapse a genuine content change: identifier casing is folded only outside string literals/comments, and lossy-encoding neutralization only outside string literals — so any runtime-visible difference still surfaces as functional.
 
-The result adds a `summary` (count per category), `actionableDifferent` / `nonActionableDifferent` lists, and a `hasFunctionalDifferences` / `actionableOk` signal so an automated consumer can decide what to act on without re-exporting and diffing the binary by hand. Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
+The result adds a `summary` (count per category), `actionableDifferent` / `nonActionableDifferent` lists, and a `hasFunctionalDifferences` / `actionableOk` signal so an automated consumer can decide what to act on without re-exporting and diffing the binary by hand. When `diff: true`, each per-module entry also carries `classification`, `reason`, `isActionable`, `recommendedAction` (mirrors `recommendation`), and the unique-line counts. Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
 
 #### 2. SQL Maintenance
 * **`query_sql`**: Read-only SQL query execution.

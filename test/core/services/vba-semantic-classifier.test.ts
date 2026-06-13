@@ -770,3 +770,204 @@ describe("line-move — LCS conservative choice", () => {
     expect(result.recommendation).toBe("manual_merge");
   });
 });
+
+// ---------------------------------------------------------------------------
+// T10 — caseOnly (VBA is case-insensitive for identifiers/keywords)
+// ---------------------------------------------------------------------------
+
+describe("caseOnly — identifier and keyword casing", () => {
+  it("classifies identifier-only case difference as caseOnly (non-actionable)", () => {
+    const src =
+      "Option Explicit\nPublic Function GetProyecto() As String\n    GetProyecto = NCProyecto.Name\nEnd Function";
+    const bin =
+      "Option Explicit\nPublic Function GetProyecto() As String\n    GetProyecto = ncProyecto.name\nEnd Function";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("caseOnly");
+    expect(result.recommendation).toBe("no_action");
+    expect(result.actionable).toBe(false);
+    expect(result.srcUniqueFunctionalLines).toBe(0);
+    expect(result.binaryUniqueFunctionalLines).toBe(0);
+  });
+
+  it("classifies keyword-only case difference as caseOnly", () => {
+    const src = "Option Explicit\nPublic Sub DoThing()\nEnd Sub";
+    const bin = "option explicit\npublic sub DoThing()\nend sub";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("caseOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("does NOT classify string-literal case difference as caseOnly (runtime-visible)", () => {
+    // String literal contents are case-SENSITIVE at runtime — a real change
+    const src = 'Option Explicit\nPublic Sub Show()\n    MsgBox "NotFound"\nEnd Sub';
+    const bin = 'Option Explicit\nPublic Sub Show()\n    MsgBox "notfound"\nEnd Sub';
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("caseOnly");
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+    expect(result.actionable).toBe(true);
+  });
+
+  it("does not inflate functional line count when case drift accompanies a real change", () => {
+    // Source has identifier case drift on one line AND a genuinely new method.
+    // Only the new method should count — case drift must not turn this into bothChanged.
+    const src = [
+      "Option Explicit",
+      "Public Function GetProyecto() As String",
+      "    GetProyecto = ncProyecto.name",
+      "End Function",
+      "",
+      "Public Sub Extra()",
+      "End Sub",
+    ].join("\n");
+    const bin = [
+      "Option Explicit",
+      "Public Function GetProyecto() As String",
+      "    GetProyecto = NCProyecto.Name",
+      "End Function",
+    ].join("\n");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("sourceNewer");
+    expect(result.binaryUniqueFunctionalLines).toBe(0);
+    expect(result.actionable).toBe(true);
+  });
+
+  it("does NOT apply case folding in strict mode", () => {
+    const src = "Option Explicit\nPublic Sub DoThing()\nEnd Sub";
+    const bin = "option explicit\npublic sub dothing()\nend sub";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "strict",
+    });
+
+    expect(result.classification).not.toBe("caseOnly");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T11 — additional form serialization noise keys
+// ---------------------------------------------------------------------------
+
+describe("formSerializationOnly — additional cached/layout noise keys", () => {
+  const formBase = `Version =21
+VersionRequired =20
+Begin Form
+    RecordSelectors = NotDefault
+    Width =9070
+    Caption ="Test Form"
+End`;
+
+  it("classifies LayoutCachedLeft/Top/Width/Height scalar differences as formSerializationOnly", () => {
+    const src = `Version =21\nLayoutCachedLeft =100\nLayoutCachedTop =200\nLayoutCachedWidth =300\nLayoutCachedHeight =400\nBegin Form\n    Width =9070\nEnd`;
+    const bin = `Version =21\nLayoutCachedLeft =111\nLayoutCachedTop =222\nLayoutCachedWidth =333\nLayoutCachedHeight =444\nBegin Form\n    Width =9070\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+    expect(result.recommendation).toBe("no_action");
+  });
+
+  it("classifies PublishOption scalar difference as formSerializationOnly", () => {
+    const src = `Version =21\nPublishOption =1\nBegin Form\n    Width =9070\nEnd`;
+    const bin = `Version =21\nPublishOption =0\nBegin Form\n    Width =9070\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("classifies NoSaveCTIWhenDisabled scalar difference as formSerializationOnly", () => {
+    const src = `${formBase.replace("End", "    NoSaveCTIWhenDisabled =1\nEnd")}`;
+    const bin = formBase;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T12 — lossy encoding (non-ASCII replaced by "?" during Access export)
+// ---------------------------------------------------------------------------
+
+describe("encodingOnly — lossy out-of-codepage replacement", () => {
+  it("classifies a comment glyph replaced by '?' as encodingOnly (non-actionable)", () => {
+    // Access export replaced the out-of-codepage glyph with "?" — irreversible loss
+    const src = "Option Explicit\n' Estado ► Activo\nPublic Sub DoThing()\nEnd Sub";
+    const bin = "Option Explicit\n' Estado ? Activo\nPublic Sub DoThing()\nEnd Sub";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("encodingOnly");
+    expect(result.recommendation).toBe("no_action");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("does NOT treat a real ASCII change as lossy encoding", () => {
+    // The differing characters are ASCII — must remain functional
+    const src = "Option Explicit\n' Version 1\nPublic Sub DoThing()\nEnd Sub";
+    const bin = "Option Explicit\n' Version 2\nPublic Sub DoThing()\nEnd Sub";
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("encodingOnly");
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+  });
+});
