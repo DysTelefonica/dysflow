@@ -53,6 +53,12 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   before comparison — it is never functional. But a `VB_Name` VALUE change (e.g. `MigracionIssue18`
   vs `ModuloMigracionIssue18`) MUST stay actionable; only the leading marker is stripped, never the
   name itself.
+- **Module/class header boilerplate is non-functional**: `Attribute VB_*` lines (in code modules
+  AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block
+  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: kept
+  functional ONLY when both sides name the module and the names differ (a real rename). A `.frm`
+  starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be
+  stripped; only `VERSION <num> CLASS` headers are.
 - **Form serialization noise is a LOCKED allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
   `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `NameMap` and
   `GUID` are functional — do not strip them. Unknown keys are retained (functional).

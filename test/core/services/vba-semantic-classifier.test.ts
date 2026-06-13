@@ -246,8 +246,9 @@ Public IDCambio As String`;
     expect(hasUnique).toBe(true);
   });
 
-  it("does NOT classify attributeOnly for form.txt files", () => {
-    // Attribute lines in a form.txt should NOT be filtered by the attribute normalizer
+  it("treats a form.txt CodeBehindForm Attribute VB_* diff as non-actional", () => {
+    // The embedded CodeBehindForm carries the same Attribute VB_* boilerplate as a
+    // code module; a non-VB_Name attribute change there is metadata, not functional.
     const src = `Version =21\nAttribute VB_Description = "old"\nBegin Form\n    Width =9070\nEnd`;
     const bin = `Version =21\nAttribute VB_Description = "new"\nBegin Form\n    Width =9070\nEnd`;
 
@@ -258,8 +259,7 @@ Public IDCambio As String`;
       mode: "semantic",
     });
 
-    // form.txt does not strip attribute lines, so this should be a functional diff
-    expect(result.classification).not.toBe("attributeOnly");
+    expect(result.actionable).toBe(false);
   });
 });
 
@@ -1093,6 +1093,75 @@ describe("formSerializationOnly — NotDefault toggle equivalence", () => {
       sourceText: src,
       binaryText: bin,
       fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T15 — module / class header boilerplate (present on one side only)
+// ---------------------------------------------------------------------------
+
+describe("module header boilerplate normalization", () => {
+  const codeBody = "Option Compare Database\nOption Explicit\n\nPublic Sub Run()\nEnd Sub";
+
+  it("treats a VERSION CLASS / BEGIN..END header present on one side as non-actionable", () => {
+    // Source carries the class header block; the binary export omits it. Same code.
+    const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\nAttribute VB_Name = "ModuloCacheIndicadores"\n${codeBody}`;
+    const bin = `Attribute VB_Name = "ModuloCacheIndicadores"\n${codeBody}`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("resolves to caseOnly when only a header and identifier casing differ", () => {
+    // Form code-behind: binary export has no header/attributes, source has the full
+    // header, and the only real difference is property casing (.Caption vs .caption).
+    const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\nAttribute VB_Name = "Form_FormX"\nOption Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.Caption = "Seguimiento #/#"\nEnd Sub`;
+    const bin = `Option Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.caption = "Seguimiento #/#"\nEnd Sub`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("caseOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("keeps a real VB_Name VALUE change actionable despite header normalization", () => {
+    const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\nAttribute VB_Name = "MigracionIssue18"\n${codeBody}`;
+    const bin = `Attribute VB_Name = "ModuloMigracionIssue18"\n${codeBody}`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+
+  it("does NOT strip a .frm VERSION/Begin control tree (Begin is functional there)", () => {
+    // A .frm form's `Begin ... End` is the control tree — a real change must stay functional.
+    const src = `VERSION 5.00\nBegin Form\n   Caption = "Old"\nEnd`;
+    const bin = `VERSION 5.00\nBegin Form\n   Caption = "New"\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "frm",
       mode: "semantic",
     });
 

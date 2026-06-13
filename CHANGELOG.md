@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.52] - 2026-06-13
+
+### Fixed
+
+- Normalized module/class header boilerplate in the VBA semantic classifier so it stops counting as a functional difference. An Access binary export may emit the `VERSION x.x CLASS` + `BEGIN…END` instancing block and the `Attribute VB_*` lines on one side only (notably form code-behind, where the export omits the whole header). These are now stripped for code modules **and** for the `CodeBehindForm` section embedded in `.form.txt`/`.report.txt`, resolving false-positive `sourceNewer`/`bothChanged` results (e.g. `ModuloCacheIndicadores.bas`) and unblocking `caseOnly` detection for form code-behind whose only real difference was property casing (e.g. `Form_Form0BDOpcionesAuditorias.cls`).
+- `VB_Name` is now treated as functional only when **both** sides name the module and the names differ (a real rename like `MigracionIssue18` vs `ModuloMigracionIssue18` stays actionable); a one-sided header presence is non-functional. `.frm` control trees (`VERSION 5.00` + `Begin…End`) are never stripped.
+
 ## [v1.2.51] - 2026-06-13
 
 ### Fixed

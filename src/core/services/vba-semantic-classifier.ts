@@ -4,8 +4,8 @@
  * Pure domain service. Zero adapter dependencies — no node:fs, no PowerShell, no COM.
  * Entry point: classifyVbaPair(input) -> SemanticClassification
  *
- * Implements the 8-category classification taxonomy for VBA module pairs:
- *   matched | whitespaceOnly | attributeOnly | formSerializationOnly |
+ * Implements the classification taxonomy for VBA module pairs:
+ *   matched | whitespaceOnly | attributeOnly | caseOnly | formSerializationOnly |
  *   encodingOnly | sourceNewer | binaryNewer | bothChanged
  */
 
@@ -136,19 +136,68 @@ export function normalizeTrailingWhitespace(text: string): string {
  * VB_Name is NOT stripped — a name change is a functional rename.
  * This normalizer is a no-op for form.txt and report.txt files.
  */
-export function stripAttributeLines(text: string, fileType: string): string {
-  if (!CODE_FILE_TYPES.has(fileType)) {
-    return text; // no-op for non-code file types
+export function stripAttributeLines(text: string, fileType: string, keepVbName = true): string {
+  // Applies to code modules AND to the CodeBehindForm section embedded in
+  // form/report serialization, which carries the same Attribute VB_* boilerplate.
+  if (!CODE_FILE_TYPES.has(fileType) && !FORM_FILE_TYPES.has(fileType)) {
+    return text; // no-op for unknown file types
   }
   const lines = text.split("\n");
   return lines
     .filter((line) => {
       const trimmed = line.trim();
       if (!trimmed.startsWith(VB_ATTR_PREFIX)) return true;
-      if (trimmed.startsWith(VB_NAME_ATTR_PREFIX)) return true; // VB_Name is functional
+      // VB_Name is kept only when both sides agree on it (a real rename stays
+      // functional); the caller passes keepVbName=false when it is non-functional
+      // header presence (one side simply omits the header).
+      if (trimmed.startsWith(VB_NAME_ATTR_PREFIX)) return keepVbName;
       return false;
     })
     .join("\n");
+}
+
+/**
+ * Reads the `Attribute VB_Name = "…"` value from a module/form text, or null.
+ * Used to decide whether a VB_Name difference is a real rename (both sides name
+ * the module, values differ) versus mere header presence (one side omits it).
+ */
+export function extractVbName(text: string): string | null {
+  const match = text.match(/^\s*Attribute VB_Name\s*=\s*"([^"]*)"/m);
+  return match ? (match[1] ?? null) : null;
+}
+
+/**
+ * Strips the leading `VERSION x.x CLASS` line and its following `BEGIN … END`
+ * block from a class-module export.
+ *
+ * This block (`MultiUse`, etc.) is instancing boilerplate that an Access binary
+ * export may emit on one side only. It is removed only when the text starts with
+ * `VERSION <num> CLASS` — a `.frm` form begins with `VERSION 5.00` and a control
+ * `Begin … End` tree, which is functional and must NOT be stripped.
+ */
+export function stripModuleHeader(text: string): string {
+  const lines = text.split("\n");
+  if (!/^VERSION\s+[\d.]+\s+CLASS$/i.test((lines[0] ?? "").trim())) {
+    return text; // not a class-module header — leave untouched
+  }
+  // Drop the VERSION line; if a BEGIN..END block follows, drop it too.
+  let i = 1;
+  if ((lines[i] ?? "").trim().toUpperCase() !== "BEGIN") {
+    return lines.slice(1).join("\n");
+  }
+  let depth = 0;
+  for (; i < lines.length; i++) {
+    const t = (lines[i] ?? "").trim().toUpperCase();
+    if (t === "BEGIN") depth++;
+    else if (t === "END") {
+      depth--;
+      if (depth === 0) {
+        i++;
+        break;
+      }
+    }
+  }
+  return lines.slice(i).join("\n");
 }
 
 /**
@@ -431,9 +480,21 @@ function neutralizeLineOutsideStrings(line: string): string {
  * serialization noise for form/report) on top of already-whitespace-normalized
  * text. Used to compose normalizers for the caseOnly check and the functional diff.
  */
-function applyStructuralStrips(wsNorm: string, fileType: string): string {
+/**
+ * Removes module/class header boilerplate: the `VERSION x.x CLASS` + `BEGIN..END`
+ * block (code modules only) and `Attribute VB_*` lines (code modules and the
+ * CodeBehindForm section of form/report files). VB_Name is preserved unless the
+ * caller marks it non-functional via keepVbName=false.
+ */
+function normalizeModuleHeaders(wsNorm: string, fileType: string, keepVbName: boolean): string {
   let t = wsNorm;
-  if (CODE_FILE_TYPES.has(fileType)) t = stripAttributeLines(t, fileType);
+  if (CODE_FILE_TYPES.has(fileType)) t = stripModuleHeader(t);
+  t = stripAttributeLines(t, fileType, keepVbName);
+  return t;
+}
+
+function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boolean): string {
+  let t = normalizeModuleHeaders(wsNorm, fileType, keepVbName);
   if (FORM_FILE_TYPES.has(fileType)) {
     t = stripFormSerializationNoise(t, fileType);
     t = normalizeFormPropertyValues(t, fileType);
@@ -713,30 +774,34 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     );
   }
 
+  // A VB_Name is functional only when both sides name the module and the names
+  // differ (a real rename). When one side simply omits the header, VB_Name
+  // presence is non-functional and is stripped along with the rest of the header.
+  const srcVbName = extractVbName(srcText);
+  const binVbName = extractVbName(binText);
+  const keepVbName = srcVbName !== null && binVbName !== null && srcVbName !== binVbName;
+
   // -------------------------------------------------------------------------
-  // Step 3: attributeOnly — strip VB_* attribute lines (code file types only)
+  // Step 3: attributeOnly — strip module/class header + Attribute VB_* lines
   // -------------------------------------------------------------------------
-  if (CODE_FILE_TYPES.has(fileType)) {
-    const srcNormAttr = stripAttributeLines(srcNormWs, fileType);
-    const binNormAttr = stripAttributeLines(binNormWs, fileType);
+  {
+    const srcNormAttr = normalizeModuleHeaders(srcNormWs, fileType, keepVbName);
+    const binNormAttr = normalizeModuleHeaders(binNormWs, fileType, keepVbName);
 
     if (srcNormAttr === binNormAttr) {
-      return nonActionable("attributeOnly", "texts differ only in Attribute VB_* header lines");
+      return nonActionable(
+        "attributeOnly",
+        "texts differ only in module header / Attribute VB_* lines",
+      );
     }
   }
 
   // -------------------------------------------------------------------------
-  // Step 4: formSerializationOnly — strip form/report noise sections
+  // Step 4: formSerializationOnly — strip form/report noise + toggle values
   // -------------------------------------------------------------------------
   if (FORM_FILE_TYPES.has(fileType)) {
-    const srcNormForm = normalizeFormPropertyValues(
-      stripFormSerializationNoise(srcNormWs, fileType),
-      fileType,
-    );
-    const binNormForm = normalizeFormPropertyValues(
-      stripFormSerializationNoise(binNormWs, fileType),
-      fileType,
-    );
+    const srcNormForm = applyStructuralStrips(srcNormWs, fileType, keepVbName);
+    const binNormForm = applyStructuralStrips(binNormWs, fileType, keepVbName);
 
     if (srcNormForm === binNormForm) {
       return nonActionable(
@@ -753,8 +818,14 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // String-literal and comment bodies are preserved, so runtime-visible text
   // changes are NOT absorbed here (they fall through to the functional diff).
   {
-    const srcCase = normalizeVbaCase(applyStructuralStrips(srcNormWs, fileType), fileType);
-    const binCase = normalizeVbaCase(applyStructuralStrips(binNormWs, fileType), fileType);
+    const srcCase = normalizeVbaCase(
+      applyStructuralStrips(srcNormWs, fileType, keepVbName),
+      fileType,
+    );
+    const binCase = normalizeVbaCase(
+      applyStructuralStrips(binNormWs, fileType, keepVbName),
+      fileType,
+    );
     if (srcCase === binCase) {
       return nonActionable(
         "caseOnly",
@@ -800,21 +871,10 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // -------------------------------------------------------------------------
   // Step 6: functional diff — apply all normalizers then run LCS differ
   // -------------------------------------------------------------------------
-  // Apply full normalization pipeline on the normalized-whitespace texts
-  let srcFull = srcNormWs;
-  let binFull = binNormWs;
-
-  // Apply attribute stripping for code types (already checked above but apply for diff context)
-  if (CODE_FILE_TYPES.has(fileType)) {
-    srcFull = stripAttributeLines(srcFull, fileType);
-    binFull = stripAttributeLines(binFull, fileType);
-  }
-
-  // Apply form noise stripping + toggle-value canonicalization for form types
-  if (FORM_FILE_TYPES.has(fileType)) {
-    srcFull = normalizeFormPropertyValues(stripFormSerializationNoise(srcFull, fileType), fileType);
-    binFull = normalizeFormPropertyValues(stripFormSerializationNoise(binFull, fileType), fileType);
-  }
+  // Apply full normalization pipeline on the normalized-whitespace texts:
+  // module/class header + Attribute strips, then form noise + toggle values.
+  let srcFull = applyStructuralStrips(srcNormWs, fileType, keepVbName);
+  let binFull = applyStructuralStrips(binNormWs, fileType, keepVbName);
 
   // Apply mojibake repair if safe (no FFFD)
   if (!srcText.includes("�") && !binText.includes("�")) {
