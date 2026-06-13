@@ -9,12 +9,12 @@ import {
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
 } from "../operations/access-operation-preflight.js";
+import { sanitizeSecrets, truthy } from "../utils/index.js";
 import {
+  classifyVbaPair,
   type VbaComparisonMode,
   type VbaSemanticCategory,
-  classifyVbaPair,
 } from "./vba-semantic-classifier.js";
-import { sanitizeSecrets, truthy } from "../utils/index.js";
 
 export type VbaSourceComparisonFile = {
   moduleName: string;

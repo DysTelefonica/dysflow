@@ -38,6 +38,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "generate_form",
     "catalog_add_control",
     "harvest_form_catalog",
+    "compare_module",
   ],
   accessRunnerQuery: [
     "query_sql",

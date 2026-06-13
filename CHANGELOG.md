@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.2.49] - 2026-06-13
+
+### Added
+
+- Added `compare_module` tool to VBA Modules Sync. This exposes a single-module semantic comparison API using the core classifier, returning classification (whitespaceOnly, attributeOnly, formSerializationOnly, sourceNewer, binaryNewer, bothChanged), recommendations, and functional diff indicators.
+- Added parity schemas, registry entries, and MCP verification tests for the new `compare_module` route.
+
+### Fixed
+
+- Fixed integration test discovery of Access database objects by mapping `list_objects` output category categories dynamically.
+- Fixed form noise injection matching in integration tests to be case-insensitive and support both CRLF and LF line endings.
+
 ## [v1.2.48] - 2026-06-13
 
 ### Added

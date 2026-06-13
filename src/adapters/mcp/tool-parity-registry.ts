@@ -45,6 +45,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "generate_form",
   "catalog_add_control",
   "harvest_form_catalog",
+  "compare_module",
   // query slice tools — routed to queryService
   "list_tables",
   "list_linked_tables",

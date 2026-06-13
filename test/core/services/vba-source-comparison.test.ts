@@ -605,8 +605,10 @@ function makeSemanticFs(
   };
 
   if (bytes !== undefined) {
-    (fs as ComparisonFileSystemPort & { readFileBytes?: (p: string) => Promise<Uint8Array> }).readFileBytes =
-      async (path: string) => resolvedBytes.get(pathResolve(path)) ?? new Uint8Array(0);
+    (
+      fs as ComparisonFileSystemPort & { readFileBytes?: (p: string) => Promise<Uint8Array> }
+    ).readFileBytes = async (path: string) =>
+      resolvedBytes.get(pathResolve(path)) ?? new Uint8Array(0);
   }
 
   return fs;
@@ -623,17 +625,15 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect("readFileBytes" in fsWithoutBytes).toBe(false);
 
     const fsWithBytes = makeSemanticFs({}, {});
-    expect(
-      typeof (fsWithBytes as { readFileBytes?: unknown }).readFileBytes,
-    ).toBe("function");
+    expect(typeof (fsWithBytes as { readFileBytes?: unknown }).readFileBytes).toBe("function");
   });
 
   // ---- T02: additive result contract — new fields present on result ----
 
   it("semantic result includes additive fields: summary, actionableDifferent, nonActionableDifferent, hasFunctionalDifferences, actionableOk", async () => {
     // noise diff: Checksum line only — formSerializationOnly, nonActionable
-    const srcForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 1234\nEnd";
-    const binForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 9999\nEnd";
+    const srcForm = 'Begin Form\n   Caption = "Test"\n   Checksum = 1234\nEnd';
+    const binForm = 'Begin Form\n   Caption = "Test"\n   Checksum = 9999\nEnd';
 
     const fs = makeSemanticFs({
       "src/Form1.form.txt": srcForm,
@@ -663,8 +663,8 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
   // ---- T03: ok is preserved (backward compat) — noise diffs still set ok=false ----
 
   it("ok=false even for nonActionable differences (backward compat)", async () => {
-    const srcForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 1234\nEnd";
-    const binForm = "Begin Form\n   Caption = \"Test\"\n   Checksum = 9999\nEnd";
+    const srcForm = 'Begin Form\n   Caption = "Test"\n   Checksum = 1234\nEnd';
+    const binForm = 'Begin Form\n   Caption = "Test"\n   Checksum = 9999\nEnd';
 
     const fs = makeSemanticFs({
       "src/Form1.form.txt": srcForm,
@@ -715,8 +715,10 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
   // ---- T05: strict mode restores byte-exact behavior ----
 
   it("strict mode: attribute-only diff ends up in different (not nonActionableDifferent)", async () => {
-    const srcCls = "VERSION 1.0 CLASS\nAttribute VB_Name = \"MyClass\"\nAttribute VB_Description = \"old\"\nSub Foo()\nEnd Sub";
-    const binCls = "VERSION 1.0 CLASS\nAttribute VB_Name = \"MyClass\"\nAttribute VB_Description = \"new\"\nSub Foo()\nEnd Sub";
+    const srcCls =
+      'VERSION 1.0 CLASS\nAttribute VB_Name = "MyClass"\nAttribute VB_Description = "old"\nSub Foo()\nEnd Sub';
+    const binCls =
+      'VERSION 1.0 CLASS\nAttribute VB_Name = "MyClass"\nAttribute VB_Description = "new"\nSub Foo()\nEnd Sub';
 
     const fs = makeSemanticFs({
       "src/MyClass.cls": srcCls,
@@ -734,7 +736,9 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     // In strict mode: different has the entry, no semantic additive bucket separation
     expect(strictResult.different).toHaveLength(1);
     // actionableOk should be absent or false in strict mode
-    expect(strictResult.actionableOk === undefined || strictResult.actionableOk === false).toBe(true);
+    expect(strictResult.actionableOk === undefined || strictResult.actionableOk === false).toBe(
+      true,
+    );
   });
 
   // ---- T06: 173-module acceptance test (scaled down with 20+7 modules) ----
@@ -841,9 +845,9 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
   it("NameMap-only form diff is NOT classified as formSerializationOnly (functional)", async () => {
     const srcForm =
-      "Begin Form\n   Caption = \"Test\"\n   NameMap = Begin\n      OldName = 1\n   End\nEnd";
+      'Begin Form\n   Caption = "Test"\n   NameMap = Begin\n      OldName = 1\n   End\nEnd';
     const binForm =
-      "Begin Form\n   Caption = \"Test\"\n   NameMap = Begin\n      NewName = 1\n   End\nEnd";
+      'Begin Form\n   Caption = "Test"\n   NameMap = Begin\n      NewName = 1\n   End\nEnd';
 
     const fs = makeSemanticFs({
       "src/FormA.form.txt": srcForm,
@@ -890,5 +894,77 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(parsed).toHaveProperty("nonActionableDifferent");
     expect(parsed).toHaveProperty("hasFunctionalDifferences");
     expect(parsed).toHaveProperty("actionableOk");
+  });
+
+  // ---- Demo controlled scenarios (Happy path, Sad path, Edge cases) ----
+
+  describe("demo controlled scenarios — happy, sad, edge cases", () => {
+    it("correctly flags happy path (identical), edge cases (whitespace, attributes), and sad paths (functional changes)", async () => {
+      const fs = makeSemanticFs({
+        // 1. Happy path: Identical module
+        "src/Happy.bas": 'Sub Hello()\n  MsgBox "World"\nEnd Sub',
+        "bin/Happy.bas": 'Sub Hello()\n  MsgBox "World"\nEnd Sub',
+
+        // 2. Edge case: Whitespace difference only
+        "src/EdgeSpace.bas": 'Sub Hello()\n  MsgBox "World"\nEnd Sub\n',
+        "bin/EdgeSpace.bas": 'Sub Hello()\r\n  MsgBox "World"\r\nEnd Sub',
+
+        // 3. Edge case: Attribute change only
+        "src/EdgeAttr.cls":
+          'VERSION 1.0 CLASS\r\nAttribute VB_Name = "EdgeAttr"\r\nAttribute VB_Description = "v2"\r\nSub Hello()\r\nEnd Sub',
+        "bin/EdgeAttr.cls":
+          'VERSION 1.0 CLASS\r\nAttribute VB_Name = "EdgeAttr"\r\nAttribute VB_Description = "v1"\r\nSub Hello()\r\nEnd Sub',
+
+        // 4. Sad path: Source has functional changes (new lines/functional code)
+        "src/SadSourceNewer.bas": 'Sub Hello()\n  MsgBox "Hello"\n  MsgBox "New"\nEnd Sub',
+        "bin/SadSourceNewer.bas": 'Sub Hello()\n  MsgBox "Hello"\nEnd Sub',
+
+        // 5. Sad path: Binary has functional changes (source is missing code)
+        "src/SadBinaryNewer.bas": "Sub Hello()\nEnd Sub",
+        "bin/SadBinaryNewer.bas": 'Sub Hello()\n  MsgBox "Hello"\nEnd Sub',
+
+        // 6. Sad path: Both sides changed conflicting lines
+        "src/SadBothChanged.bas": 'Sub Hello()\n  MsgBox "A"\nEnd Sub',
+        "bin/SadBothChanged.bas": 'Sub Hello()\n  MsgBox "B"\nEnd Sub',
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+
+      // Verify overall report indicators
+      expect(result.hasFunctionalDifferences).toBe(true);
+      expect(result.actionableOk).toBe(false);
+
+      // Find the specific diff entry for each file
+      const findDiff = (name: string) => result.diffs?.find((d) => d.moduleName === name);
+
+      // 1. Happy path (should be in matched, not in different/diffs)
+      expect(result.matched.map((m) => m.moduleName)).toContain("Happy");
+      expect(findDiff("Happy")).toBeUndefined();
+
+      // 2. Edge case: Whitespace only
+      const diffSpace = findDiff("EdgeSpace");
+      expect(diffSpace?.classification).toBe("whitespaceOnly");
+      expect(diffSpace?.recommendation).toBe("no_action");
+
+      // 3. Edge case: Attribute only
+      const diffAttr = findDiff("EdgeAttr");
+      expect(diffAttr?.classification).toBe("attributeOnly");
+      expect(diffAttr?.recommendation).toBe("no_action");
+
+      // 4. Sad path: Source newer
+      const diffSrcNewer = findDiff("SadSourceNewer");
+      expect(diffSrcNewer?.classification).toBe("sourceNewer");
+      expect(diffSrcNewer?.recommendation).toBe("import_to_binary");
+
+      // 5. Sad path: Binary newer
+      const diffBinNewer = findDiff("SadBinaryNewer");
+      expect(diffBinNewer?.classification).toBe("binaryNewer");
+      expect(diffBinNewer?.recommendation).toBe("export_to_src");
+
+      // 6. Sad path: Both changed
+      const diffBoth = findDiff("SadBothChanged");
+      expect(diffBoth?.classification).toBe("bothChanged");
+      expect(diffBoth?.recommendation).toBe("manual_merge");
+    });
   });
 });

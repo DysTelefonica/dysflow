@@ -20,6 +20,7 @@ export const VBA_SYNC_TOOL_NAMES = [
   "generate_form",
   "catalog_add_control",
   "harvest_form_catalog",
+  "compare_module",
 ] as const;
 
 export const QUERY_TOOL_NAMES = [

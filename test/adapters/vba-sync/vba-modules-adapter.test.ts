@@ -699,4 +699,37 @@ describe("VbaModulesAdapter", () => {
       },
     });
   });
+
+  it("import_all dry-run scans and discovers *.report.txt and *.form.txt files in reports/ and forms/ folders", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-scan-reports-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await mkdir(join(root, "src", "modules"), { recursive: true });
+    await mkdir(join(root, "src", "forms"), { recursive: true });
+    await mkdir(join(root, "src", "reports"), { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+
+    await writeFile(join(root, "src", "modules", "Entorno.bas"), "", "utf8");
+    await writeFile(join(root, "src", "forms", "Form_Main.form.txt"), "", "utf8");
+    await writeFile(join(root, "src", "reports", "Report_Invoice.report.txt"), "", "utf8");
+
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "cwd-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+
+    const result = await service.execute("import_all", { dryRun: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    expect(result.data).toMatchObject({
+      modulesPlanned: ["Entorno", "Form_Main", "Report_Invoice"],
+    });
+  });
 });
