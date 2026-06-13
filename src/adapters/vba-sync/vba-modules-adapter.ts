@@ -238,12 +238,21 @@ async function discoverImportModules(destinationRoot: string): Promise<string[]>
     resolve(destinationRoot, "modules"),
     resolve(destinationRoot, "classes"),
     resolve(destinationRoot, "forms"),
+    resolve(destinationRoot, "reports"),
   ]) {
     const entries = await readdir(folder).catch(() => []);
     for (const entry of entries) {
-      const extension = extname(entry).toLowerCase();
-      if (![".bas", ".cls", ".frm"].includes(extension)) continue;
-      modules.push(parse(entry).name);
+      const lower = entry.toLowerCase();
+      if (lower.endsWith(".form.txt")) {
+        modules.push(entry.slice(0, -".form.txt".length));
+      } else if (lower.endsWith(".report.txt")) {
+        modules.push(entry.slice(0, -".report.txt".length));
+      } else {
+        const extension = extname(entry).toLowerCase();
+        if ([".bas", ".cls", ".frm"].includes(extension)) {
+          modules.push(parse(entry).name);
+        }
+      }
     }
   }
   return Array.from(new Set(modules)).sort();

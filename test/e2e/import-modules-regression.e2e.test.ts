@@ -504,26 +504,14 @@ describe.skipIf(!canRunE2e)(
       expect(r.ok).toBe(true);
     };
 
-    it(
-      "verify_binary verifies the whole project when no moduleNames are given",
-      async () => {
-        const r = await callMcp("verify_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
-        assertWholeProjectOk(r);
-      },
-      90_000,
-    );
+    it("verify_binary verifies the whole project when no moduleNames are given", async () => {
+      const r = await callMcp("verify_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
+      assertWholeProjectOk(r);
+    }, 90_000);
 
-    it(
-      "reconcile_binary reconciles the whole project when no moduleNames are given",
-      async () => {
-        const r = await callMcp(
-          "reconcile_binary",
-          { projectId, diff: true },
-          { timeoutMs: 60_000 },
-        );
-        assertWholeProjectOk(r);
-      },
-      90_000,
-    );
+    it("reconcile_binary reconciles the whole project when no moduleNames are given", async () => {
+      const r = await callMcp("reconcile_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
+      assertWholeProjectOk(r);
+    }, 90_000);
   },
 );

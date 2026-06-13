@@ -530,7 +530,7 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
             vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
             queryService: {
               execute: async (request) => {
-                return successResult({ sqlRun: request.sql });
+                return successResult({ sqlRun: request.sql } as unknown as Record<string, unknown>);
               },
             },
             diagnosticsService: new FakeDiagnosticsService(),

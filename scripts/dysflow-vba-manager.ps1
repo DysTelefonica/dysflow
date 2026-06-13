@@ -1,4 +1,4 @@
-﻿[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory = $true, Position = 0)]
@@ -1274,28 +1274,46 @@ function Close-AccessDatabase {
 }
 
 function Get-ComponentFolder {
-    Param([Parameter(Mandatory = $true)]$Component, [string]$ModuleName)
+    Param($Component, [string]$ModuleName, $AccessApplication)
     $name = if ($ModuleName) { $ModuleName } else { $Component.Name }
     if ($name -match "^Form_|^frm") { return "forms" }
     if ($name -match "^Report_") { return "reports" }
-    $t = $Component.Type
-    if ($t -eq 1) { return "modules" }
-    if ($t -eq 2) { return "classes" }
-    if ($t -eq 100) { return "forms" }  # Document module sin prefijo claro: fallback conservador a forms
-    if ($t -eq 3) { return "forms" }
+    if ($AccessApplication) {
+        $info = Resolve-AccessObjectInfo -AccessApplication $AccessApplication -ModuleName $name
+        if ($info.Exists) {
+            if ($info.Kind -eq "Form") { return "forms" }
+            if ($info.Kind -eq "Report") { return "reports" }
+        }
+    }
+    if ($Component) {
+        $t = $Component.Type
+        if ($t -eq 1) { return "modules" }
+        if ($t -eq 2) { return "classes" }
+        if ($t -eq 100) { return "forms" }
+        if ($t -eq 3) { return "forms" }
+    }
     return $null
 }
 
 function Get-ComponentExtension {
-    Param([Parameter(Mandatory = $true)]$Component, [string]$ModuleName)
+    Param($Component, [string]$ModuleName, $AccessApplication)
     $name = if ($ModuleName) { $ModuleName } else { $Component.Name }
     if ($name -match "^Form_|^frm") { return ".form.txt" }
     if ($name -match "^Report_") { return ".report.txt" }
-    $t = $Component.Type
-    if ($t -eq 1) { return ".bas" }
-    if ($t -eq 2) { return ".cls" }
-    if ($t -eq 100) { return ".form.txt" }
-    if ($t -eq 3) { return ".form.txt" }
+    if ($AccessApplication) {
+        $info = Resolve-AccessObjectInfo -AccessApplication $AccessApplication -ModuleName $name
+        if ($info.Exists) {
+            if ($info.Kind -eq "Form") { return ".form.txt" }
+            if ($info.Kind -eq "Report") { return ".report.txt" }
+        }
+    }
+    if ($Component) {
+        $t = $Component.Type
+        if ($t -eq 1) { return ".bas" }
+        if ($t -eq 2) { return ".cls" }
+        if ($t -eq 100) { return ".form.txt" }
+        if ($t -eq 3) { return ".form.txt" }
+    }
     return $null
 }
 
@@ -1325,15 +1343,9 @@ function Export-VbaModule {
                 try { $component = $VbProject.VBComponents.Item($candidate); if ($component) { $actualName = $candidate } } catch { Write-Debug "Diagnostics: $_" }
             }
         }
-        if ($component) {
-            $type = [int]$component.Type
-        } else {
-            # No se encontro ni con ni sin prefijo
-            return
-        }
-        if ($type -ne 1 -and $type -ne 2 -and $type -ne 100 -and $type -ne 3) { return }
-        $ext = Get-ComponentExtension -Component $component -ModuleName $actualName
-        $folder = Get-ComponentFolder -Component $component -ModuleName $actualName
+
+        $ext = Get-ComponentExtension -Component $component -ModuleName $actualName -AccessApplication $AccessApplication
+        $folder = Get-ComponentFolder -Component $component -ModuleName $actualName -AccessApplication $AccessApplication
         if (-not $ext -or -not $folder) { return }
 
         $targetFolder = Join-Path -Path $ModulesPath -ChildPath $folder
@@ -1345,7 +1357,7 @@ function Export-VbaModule {
 
         # FIX: formularios/reportes usan SaveAsText para obtener UI + codigo completo
         # SaveAsText requiere el nombre del objeto Access SIN prefijo "Form_"/"Report_"
-        if ($type -eq 3 -or $type -eq 100) {
+        if ($ext -eq ".form.txt" -or $ext -eq ".report.txt") {
             $isReportDocument = ($actualName -match '^Report_') -or ($ext -ieq '.report.txt') -or ($folder -eq 'reports')
             $objectName = $actualName -replace '^(Form|Report)_', ''
             $objectType = if ($isReportDocument) { 3 } else { 2 } # acReport=3, acForm=2
@@ -1377,13 +1389,16 @@ function Export-VbaModule {
 
             Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
         } else {
+            if (-not $component) {
+                throw ("Componente no encontrado en VBProject para '{0}' y no es un documento Form/Report." -f $actualName)
+            }
             $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_export_{0}{1}" -f @([guid]::NewGuid().ToString("N"), $ext))
             $component.Export($tmp)
             Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
         }
 
         # Exportar tambien el codigo VBA como .cls para document modules (para diff y lectura rapida)
-        if ($actualName -match "^(Form|Report)_|^frm") {
+        if ($component -and ($actualName -match "^(Form|Report)_|^frm")) {
             $clsSubFolder = if ($actualName -match "^Report_") { "reports" } else { "forms" }
             $clsFolder = Join-Path -Path $ModulesPath -ChildPath $clsSubFolder
             if (-not (Test-Path -Path $clsFolder)) {
@@ -2793,7 +2808,7 @@ function Invoke-ExportAction {
     $targets = @()
     if ($NormalizedModules.Count -gt 0) {
         $targets = $NormalizedModules
-        # Validate every requested module exists in VBProject before exporting any
+        # Validate every requested module exists in VBProject or Access Forms/Reports before exporting any
         foreach ($requestedName in $targets) {
             $found = $false
             try {
@@ -2806,36 +2821,143 @@ function Invoke-ExportAction {
                 }
             }
             if (-not $found) {
+                # Check COM reflection if not in VBProject
+                $info = Resolve-AccessObjectInfo -AccessApplication $Session.AccessApplication -ModuleName $requestedName
+                if ($info.Exists) {
+                    $found = $true
+                }
+            }
+            if (-not $found) {
                 throw ("VBA_MODULE_NOT_FOUND: El modulo '{0}' no existe en el proyecto VBA." -f $requestedName)
             }
         }
     } else {
+        # Collect all standard modules and class modules from VBProject (type 1 and 2)
         for ($i = 1; $i -le $components.Count; $i++) {
             $c = $components.Item($i)
             try {
-                $ext = Get-ComponentExtension -Component $c -ModuleName $c.Name
-                if ($ext) { $targets += $c.Name }
+                $type = [int]$c.Type
+                if ($type -eq 1 -or $type -eq 2) {
+                    $targets += $c.Name
+                }
             } finally {
                 try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
             }
         }
+
+        # Collect all forms from CurrentProject.AllForms
+        $forms = @(Get-AccessObjectNames -AccessApplication $Session.AccessApplication -Kind Forms)
+        foreach ($fName in $forms) {
+            if ($fName -match '^Form_|^frm') {
+                $targets += $fName
+            } else {
+                $targets += "Form_" + $fName
+            }
+        }
+
+        # Collect all reports from CurrentProject.AllReports
+        $reports = @(Get-AccessObjectNames -AccessApplication $Session.AccessApplication -Kind Reports)
+        foreach ($rName in $reports) {
+            if ($rName -match '^Report_') {
+                $targets += $rName
+            } else {
+                $targets += "Report_" + $rName
+            }
+        }
+
         $targets = $targets | Sort-Object -Unique
+
+        # Ensure directories exist
+        foreach ($sub in @("forms", "reports", "modules", "classes")) {
+            $p = Join-Path -Path $ModulesPath -ChildPath $sub
+            if (-not (Test-Path -Path $p)) {
+                New-Item -Path $p -ItemType Directory -Force | Out-Null
+            }
+        }
     }
 
+    $warnings = @()
+    $exported = @()
     $total = $targets.Count
     $idx = 0
     foreach ($name in $targets) {
         $idx++
         Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
-        # FIX: pasar AccessApplication para que SaveAsText funcione en formularios
-        Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
+        try {
+            Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
+            $exported += $name
+        } catch {
+            $errMsg = $_.Exception.Message
+            Write-Status -Message ("WARN: No se pudo exportar '{0}': {1}" -f $name, $errMsg) -Color Yellow
+            $warnings += @{
+                module = $name
+                error = $errMsg
+                message = $errMsg
+            }
+        }
     }
+
+    if ($NormalizedModules.Count -eq 0) {
+        # Export saved queries using open DAO session
+        $db = $null
+        $queryDefs = $null
+        try {
+            $db = $Session.AccessApplication.CurrentDb()
+            if ($db) {
+                $queriesFolder = Join-Path -Path $ModulesPath -ChildPath "queries"
+                if (-not (Test-Path -Path $queriesFolder)) {
+                    New-Item -Path $queriesFolder -ItemType Directory -Force | Out-Null
+                }
+
+                $queryDefs = $db.QueryDefs
+                $queryList = @()
+                for ($i = 0; $i -lt $queryDefs.Count; $i++) {
+                    $q = $queryDefs.Item($i)
+                    try {
+                        $qName = $q.Name
+                        # Exclude system/temporary queries
+                        if ($qName -like '~*' -or $qName -like 'MSys*') {
+                            continue
+                        }
+
+                        $sqlText = $q.SQL
+                        $sanitizedName = $qName -replace '[^a-zA-Z0-9_-]', '_'
+                        $sqlFileName = "$sanitizedName.sql"
+                        $sqlFilePath = Join-Path -Path $queriesFolder -ChildPath $sqlFileName
+
+                        Write-Utf8NoBom -Path $sqlFilePath -Text $sqlText
+
+                        $queryList += [ordered]@{
+                            name = $qName
+                            file = "queries/$sqlFileName"
+                        }
+                    } finally {
+                        if ($q) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($q) | Out-Null } catch {} }
+                    }
+                }
+
+                # Write queries.json index
+                $jsonIndex = $queryList | ConvertTo-Json -Depth 6
+                $jsonIndexPath = Join-Path -Path $queriesFolder -ChildPath "queries.json"
+                Write-Utf8NoBom -Path $jsonIndexPath -Text $jsonIndex
+            }
+        } catch {
+            Write-Status -Message ("WARN: No se pudieron exportar queries a traves de DAO: {0}" -f $_.Exception.Message) -Color Yellow
+        } finally {
+            if ($queryDefs) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($queryDefs) | Out-Null } catch {} }
+            if ($db) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) | Out-Null } catch {} }
+        }
+    }
+
     $exportResult = @{
         ok = $true
-        exported = $targets
+        exported = $exported
+    }
+    if ($warnings.Count -gt 0) {
+        $exportResult["warnings"] = $warnings
     }
     Write-DysflowResult -Result $exportResult -Depth 4
-    Write-Status -Message ("OK Export completado ({0})" -f $total) -Color Green
+    Write-Status -Message ("OK Export completado ({0})" -f $exported.Count) -Color Green
 }
 
 function Invoke-ListObjectsAction {
@@ -3097,11 +3219,12 @@ function Invoke-ImportAction {
     if ($NormalizedModules.Count -gt 0) {
         $targets = $NormalizedModules
     } else {
-        # FIX: incluir *.form.txt y extraer nombre correctamente
+        # FIX: incluir *.form.txt y *.report.txt y extraer nombre correctamente
         $targets = @(Get-ChildItem -Path $ModulesPath -File -Recurse `
-            -Include "*.bas", "*.cls", "*.frm", "*.form.txt" -ErrorAction SilentlyContinue |
+            -Include "*.bas", "*.cls", "*.frm", "*.form.txt", "*.report.txt" -ErrorAction SilentlyContinue |
             ForEach-Object {
                 if ($_.Name -match '\.form\.txt$') { $_.Name -replace '\.form\.txt$', '' }
+                elseif ($_.Name -match '\.report\.txt$') { $_.Name -replace '\.report\.txt$', '' }
                 else { $_.BaseName }
             } | Sort-Object -Unique)
     }
