@@ -528,18 +528,39 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `timeoutMs` (number, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`test_vba`**: Execute VBA unit tests.
   - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
-* **`verify_code`**: Perform structural checks comparing disk modules and database binaries.
-  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`verify_binary`**: Dry-run comparison of the VBA source tree against the Access binary export, reporting matched, different, and missing modules with optional diffs. Never mutates Access.
-  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`reconcile_binary`**: Dry-run reconciliation plan that reuses the `verify_binary` report and returns `applied: false` with a recommendation. Never mutates Access.
-  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`verify_code`**: Dry-run structural comparison of disk modules against the database binary export. Uses semantic classification by default (see [Semantic diff classification](#semantic-diff-classification)) so non-functional noise is separated from actionable differences. Never mutates Access.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`verify_binary`**: Dry-run comparison of the VBA source tree against the Access binary export. By default classifies each differing module semantically — separating non-functional noise (line endings/whitespace, `Attribute VB_*` headers, `.form.txt` serialization metadata, encoding/mojibake) from actionable functional differences. Reports a per-category `summary`, `actionableDifferent`/`nonActionableDifferent` lists, a `hasFunctionalDifferences` / `actionableOk` signal, and per-diff `classification`, `reason`, and `recommendation`. Backward-compatible: still reports `matched`, `different`, and missing modules with optional diffs. Never mutates Access.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+* **`reconcile_binary`**: Dry-run reconciliation plan that reuses the `verify_binary` semantic report and returns `applied: false`. Each differing module carries a per-diff `recommendation` (`import_to_binary`, `export_to_src`, `manual_merge`, or `no_action`) plus a human-readable overall recommendation. Never mutates Access.
+  - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`delete_module`**: Delete a module from the VBA project.
   - Parameters: `moduleName` (string, optional), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
+
+#### Semantic diff classification
+
+`verify_code`, `verify_binary`, and `reconcile_binary` compare exported VBA/Form source against the disk tree. By default they run in **semantic mode**: each differing module is classified so that non-functional noise does not drown out the changes that actually need action. This avoids the common false-positive flood where dozens of modules report as "different" but only a handful require any work.
+
+Each differing module is assigned one `classification`:
+
+| Category | Meaning | Actionable |
+| --- | --- | --- |
+| `matched` | No functional difference | No |
+| `whitespaceOnly` | Only line endings (CRLF/LF), trailing whitespace, trailing blank lines, or trivial indentation | No |
+| `attributeOnly` | Only `Attribute VB_*` header lines differ | No |
+| `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`) | No |
+| `encodingOnly` | Difference disappears after normalizing known encoding/mojibake artifacts | No |
+| `sourceNewer` | Functional lines unique to disk source | Yes → `import_to_binary` |
+| `binaryNewer` | Functional lines unique to the Access binary | Yes → `export_to_src` |
+| `bothChanged` | Both sides have unique functional lines | Yes → `manual_merge` |
+
+`NameMap` blocks in `.form.txt` are treated as **functional** (not serialization noise). Encoding normalization never collapses a genuine content change — if a real difference remains after normalization, the module stays functional.
+
+The result adds a `summary` (count per category), `actionableDifferent` / `nonActionableDifferent` lists, and a `hasFunctionalDifferences` / `actionableOk` signal so an automated consumer can decide what to act on without re-exporting and diffing the binary by hand. Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
 
 #### 2. SQL Maintenance
 * **`query_sql`**: Read-only SQL query execution.
