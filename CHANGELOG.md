@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.47] - 2026-06-13
+
+### Fixed
+
+- Resolved an issue where some VBA/object export-family MCP calls (such as `export_modules`, `export_all`, and `export_queries`) would incorrectly return `CONFIG_MISSING_ACCESS_PATH` even when `accessPath` was passed explicitly. Fixed by making `vbaSyncToolService` try to resolve the configuration dynamically from the input before falling back to the static unavailable service representation, and updating `resolveConfigForInput` to fall back to `databasePath` or `accessDbPath` when `accessPath` is not explicitly defined in the adapted query request. (#530)
+
 ## [v1.2.46] - 2026-06-12
 
 ### Fixed
