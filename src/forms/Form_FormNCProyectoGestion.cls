@@ -1,10 +1,8 @@
 Option Compare Database
 Option Explicit
-
-
-Public Event NCSeleccinonada(p_NC As NCProyecto)
-Public m_NCSeleccionada As NCProyecto
-Private m_ColFiltrado As Collection
+Public Event NCSeleccinonada(p_NC As ncProyecto)
+Public m_NCSeleccionada As ncProyecto
+Private m_ColFiltrado As Scripting.Dictionary
 Private m_Expediente As Expediente
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
 
@@ -13,7 +11,7 @@ Private m_Error As String
 
 Private Sub cmdSalir_Click()
     On Error Resume Next
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 
@@ -30,9 +28,15 @@ Private Sub ComandoAltaVinculadas_Click()
         m_Error = "No tiene autorización para esa acción"
         Err.Raise 1000
     End If
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     Set m_ObjNCProyectoActivaPVinculada = m_NCSeleccionada
     If FormularioAbierto("FormNCProyectoGeneralConVinculoNC") Then
@@ -65,9 +69,15 @@ Private Sub ComandoEnviarCorreoElectronico_Click()
     VBA.DoEvents
     On Error GoTo errores
     m_Error = ""
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     Set m_ObjNCProyectoActiva = m_NCSeleccionada
     If FormularioAbierto("FormCorreo") Then
@@ -139,9 +149,15 @@ Private Sub ComandoNCProyectoHistorial_Click()
     VBA.DoEvents
     On Error GoTo errores
     m_Error = ""
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            'Err.Raise l000
+        End If
     End If
     m_mensaje = HTMHistorialProyecto(m_NCSeleccionada, m_Error)
     If m_Error <> "" Then
@@ -262,9 +278,15 @@ Private Sub ComandoEditar_Click()
     VBA.DoEvents
     
     m_Error = ""
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     Set m_ObjNCProyectoActiva = m_NCSeleccionada
     
@@ -301,14 +323,20 @@ Private Sub ComandoEliminar_Click()
         m_Error = "No tiene autorización para esa acción"
         Err.Raise 1000
     End If
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Seleccione un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
-    If Me.ComandoEliminar.Caption = "Eliminar" Then
+    If Me.ComandoEliminar.caption = "Eliminar" Then
         pregunta = MsgBox("¿Desea marcar como borrado la no conformidad de proyecto seleccionada?", vbExclamation + vbYesNo + vbDefaultButton2, "Borrado de NC")
         m_Motivo = Nz(InputBox("Introduzca el motivo para marcar como borrada la no conformidad", "Motivación"), "")
         
@@ -325,7 +353,7 @@ Private Sub ComandoEliminar_Click()
     Set m_NCOp = New NCProyectoOperaciones
     With m_NCOp
         Set .nc = m_NCSeleccionada
-        If Me.ComandoEliminar.Caption = "Eliminar" Then
+        If Me.ComandoEliminar.caption = "Eliminar" Then
             .nc.MotivoBorrado = m_Motivo
             .Eliminar EnumSino.No, m_Error
         Else
@@ -356,6 +384,9 @@ End Sub
 
 Private Sub ComandoInformeLista_Click()
     Dim m_Col As Scripting.Dictionary
+    Dim lst As ListBox
+    Dim m_NC As ncProyecto
+    Dim i As Long
     
     On Error GoTo errores
     VBA.DoEvents
@@ -363,16 +394,26 @@ Private Sub ComandoInformeLista_Click()
     VBA.DoEvents
     
    
-    If Me.ListaFiltrados.ListCount = 0 Then
+    Set lst = Me.ListaFiltrados
+    If lst.ListCount = 0 Then
         m_Error = "No hay elementos en la lista"
         Err.Raise 1000
     End If
-    Set m_Col = BuildNCProyectoGestionReportCollection( _
-                    p_ListedItems:=m_ColFiltrado, _
-                    p_Error:=m_Error)
-    If m_Error <> "" Then
-        Err.Raise 1000
-    End If
+    For i = 1 To lst.ListCount - 1
+        Set m_NC = constructor.getNCProyecto(p_IDNC:=lst.Column(0, i), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If Not m_NC Is Nothing Then
+            If m_Col Is Nothing Then
+                Set m_Col = New Scripting.Dictionary
+                m_Col.CompareMode = TextCompare
+            End If
+            If Not m_Col.Exists(CStr(m_NC.IDNoConformidad)) Then
+                m_Col.Add m_NC.IDNoConformidad, m_NC
+            End If
+        End If
+    Next
     If m_Col Is Nothing Then
         m_Error = "No hay elementos en la lista una vez tratados"
         Err.Raise 1000
@@ -444,59 +485,9 @@ End Sub
 
 
 Public Sub ComandoActualizarLista_Click()
-    Dim errorNumber As Long
-    Dim errorDescription As String
-    Dim refreshResult As Scripting.Dictionary
-
-    On Error GoTo errores
-    VBA.DoEvents
-    DoCmd.Hourglass True
-    VBA.DoEvents
-    m_Error = ""
-
-    Set refreshResult = PrepareNCProyectoGestionRefresh(m_ObjEntorno, m_Error)
-    If refreshResult Is Nothing Then
-        m_Error = "PrepareNCProyectoGestionRefresh did not return a result"
-        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
-    End If
-    If Not CBool(refreshResult("Success")) Then
-        If m_Error = "" Then m_Error = "PrepareNCProyectoGestionRefresh failed at " & CStr(refreshResult("FailedStep"))
-        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
-    End If
-
-    EstablecerCombos m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
-    End If
-
-    With Me.lblEstado
-        .Caption = CStr(refreshResult("FeedbackCaption"))
-        .Visible = True
-    End With
-
+    On Error Resume Next
     ActualizarDatosFiltrados
     ActualizarLista
-
-    Me.lblEstado.Visible = False
-SALIR:
-    VBA.DoEvents
-    DoCmd.Hourglass False
-    VBA.DoEvents
-    If errorNumber <> 0 Then
-        Err.Raise errorNumber, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", errorDescription
-    End If
-    Exit Sub
-
-errores:
-    errorNumber = Err.Number
-    If errorNumber <> 1000 Then
-        m_Error = "Al ComandoActualizarLista_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
-        CorreoAlAdministrador m_Error
-    ElseIf m_Error = "" Then
-        m_Error = Err.Description
-    End If
-    errorDescription = m_Error
-    Resume SALIR
     
 End Sub
 
@@ -510,9 +501,15 @@ Private Sub ComandoInforme_Click()
     VBA.DoEvents
     m_Error = ""
 
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Se ha de seleccionar un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     GenerarWordNoConformidades p_EsDeProyecto:=EnumSino.Sí, p_NC:=m_NCSeleccionada, p_Error:=m_Error
     If m_Error <> "" Then
@@ -838,7 +835,7 @@ Private Sub Form_Open(Cancel As Integer)
     VBA.DoEvents
     m_Error = ""
     Ajustar Me
-    Me.Caption = Me.lblTitulo1.Caption
+    Me.caption = Me.lblTitulo1.caption
     Me.lblEstado.Visible = False
     EstablecerDatos m_Error
     If m_Error <> "" Then
@@ -858,7 +855,7 @@ errores:
     Else
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 Public Function EstablecerDatos(Optional ByRef p_Error As String) As String
@@ -889,29 +886,154 @@ errores:
     End If
 
 End Function
-Public Function getNCsFiltrados(Optional ByRef p_Error As String) As Collection
-
+Public Function getNCsFiltrados(Optional ByRef p_Error As String) As Scripting.Dictionary
+    
+    Dim m_TodosParametrosBusquedaVacios As EnumSino
+    'Dim m_CasiTodosParametrosBusquedaVacios As EnumSino
+    Dim m_ID As Variant
+    Dim m_Col As Scripting.Dictionary
+    Dim m_NC As ncProyecto
+    Dim m_EnumEstado As EnumEstadoNC
+    Dim m_Estado As String
+    
+    Dim m_ColGoogle As Scripting.Dictionary
     On Error GoTo errores
-
-    Set getNCsFiltrados = GetNCsProyectoGestionFiltrados( _
-                            p_Codigo:=Nz(Me.ComboCodigo, ""), _
-                            p_IDExpediente:=CLng(Val(Nz(Me.IDExpediente, "0"))), _
-                            p_Juridica:=Nz(Me.ComboJuridica, ""), _
-                            p_IDTipo:=CLng(Val(Nz(Me.ComboTipo.Column(0), "0"))), _
-                            p_EstadoValor:=Nz(Me.EstadoNC, ""), _
-                            p_EstadoEnum:=CLng(Val(Nz(Me.EstadoNC.Column(1), "-1"))), _
-                            p_Descripcion:=Nz(Me.Descripcion, ""), _
-                            p_Notas:=Nz(Me.Notas, ""), _
-                            p_RequiereControlEficacia:=Nz(Me.ComboRequiereControlEficacia, ""), _
-                            p_ControlEficaciaRelleno:=Nz(Me.ComboControlEficaciaRelleno, ""), _
-                            p_RegistrosCerrados:=Nz(Me.ComboRegistrosCerrados, ""), _
-                            p_ResponsableTelefonica:=Nz(Me.ResponsableTelefonica, ""), _
-                            p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD, ""), _
-                            p_Google:=Nz(Me.Google, ""), _
-                            p_Error:=p_Error)
+    
+    m_TodosParametrosBusquedaVacios = TodosParametrosBusquedaVacios(p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
+'    If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
+'        Exit Function
+'    End If
+    m_EnumEstado = Nz(Me.EstadoNC.Column(1), -1)
+    If m_EnumEstado = 0 And Nz(Me.Google, "") <> "" Then
+        Me.EstadoNC = Null
+        
+    End If
+    If m_EnumEstado = 0 Then
+        Set m_Col = constructor.getNCsProyectoAbiertas(p_Error:=p_Error)
+    Else
+        If Nz(Me.Google, "") <> "" Then
+            Set m_Col = getNCsProyectoPorPalabraClave(p_PC:=Me.Google, p_Error:=p_Error)
+        Else
+            If Nz(Me.EstadoNC, "") = "Abiertas" Then
+                Set m_Col = constructor.getNCsProyectosTotalesParaAbiertas(p_Error:=p_Error)
+            Else
+                Set m_Col = constructor.getNCsProyectosTotales(p_Error:=p_Error)
+            End If
+            
+        End If
+    End If
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If m_Col Is Nothing Then
+        Exit Function
+    End If
+    
+    For Each m_ID In m_Col
+        Set m_NC = m_Col(m_ID)
+        If m_TodosParametrosBusquedaVacios = EnumSino.Sí Then
+        
+            GoTo relleno
+        
+        End If
+        With m_NC
+            'If .IDNoConformidad = "364" Then Stop
+            If Nz(Me.ComboCodigo, "") <> "" Then
+                If .CodigoNoConformidad <> Me.ComboCodigo Then
+                    GoTo siguiente
+                Else
+                    'Stop
+                End If
+            End If
+            If Nz(Me.IDExpediente, "") <> "" Then
+                If .IDExpediente <> Me.IDExpediente Then
+                    GoTo siguiente
+                End If
+            End If
+            
+            If Nz(Me.ComboJuridica, "") <> "" Then
+                If InStr(1, .JuridicaExp, Me.ComboJuridica) = 0 Then
+                    GoTo siguiente
+                End If
+            End If
+            
+            
+            If Nz(Me.ComboTipo.Column(0), "") <> "" Then
+                If .IDTipo <> Me.ComboTipo.Column(0) Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.Descripcion, "") <> "" Then
+                If InStr(1, .Descripcion, Me.Descripcion) = 0 Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.Notas, "") <> "" Then
+                If InStr(1, .Notas, Me.Notas) = 0 Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.ComboRequiereControlEficacia, "") <> "" Then
+                If .RequiereControlEficacia <> Me.ComboRequiereControlEficacia Then
+                    GoTo siguiente
+                End If
+            
+            End If
+            If Nz(Me.ComboControlEficaciaRelleno, "") = "Sí" Then
+                If .ControlEficacia = "" Then
+                    GoTo siguiente
+                End If
+            ElseIf Nz(Me.ComboControlEficaciaRelleno, "") = "No" Then
+                If .ControlEficacia <> "" Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.ComboRegistrosCerrados, "") = "Sí" Then
+                If Not IsDate(.FECHACIERRE) Then
+                    GoTo siguiente
+                End If
+            ElseIf Nz(Me.ComboRegistrosCerrados, "") = "No" Then
+                If IsDate(.FECHACIERRE) Then
+                    GoTo siguiente
+                End If
+            End If
+            If Nz(Me.ResponsableTelefonica, "") <> "" Then
+                If .ResponsableTelefonicaObj Is Nothing Then
+                    GoTo siguiente
+                Else
+                    If .ResponsableTelefonicaObj.Nombre <> Me.ResponsableTelefonica Then
+                        GoTo siguiente
+                    End If
+                End If
+                
+            End If
+            If Nz(Me.RESPONSABLECALIDAD, "") <> "" Then
+                If .RESPONSABLECALIDAD <> Me.RESPONSABLECALIDAD Then
+                     GoTo siguiente
+                End If
+                
+            End If
+            If Nz(Me.EstadoNC, "") <> "" And Nz(Me.EstadoNC, "") <> "Abiertas" Then
+                If .Estado <> m_ObjEntorno.ColEstadosNC(CStr(m_EnumEstado)) Then
+                    GoTo siguiente
+                End If
+            End If
+            
+        End With
+relleno:
+        If getNCsFiltrados Is Nothing Then
+            Set getNCsFiltrados = New Scripting.Dictionary
+            getNCsFiltrados.CompareMode = TextCompare
+        End If
+        If Not getNCsFiltrados.Exists(CStr(m_NC.IDNoConformidad)) Then
+            getNCsFiltrados.Add CStr(m_NC.IDNoConformidad), m_NC
+        End If
+siguiente:
+        Set m_NC = Nothing
+    Next
     Exit Function
 errores:
     If Err.Number <> 1000 Then
@@ -920,10 +1042,59 @@ errores:
     
 End Function
 
+Public Function TodosParametrosBusquedaVacios(Optional ByRef p_Error As String) As EnumSino
+
+    
+    
+    On Error GoTo errores
+    If Nz(Me.ComboCodigo, "") = "" And Nz(Me.IDExpediente, "") = "" And _
+                    Nz(Me.ComboJuridica, "") = "" And Nz(Me.ComboTipo, "") = "" And _
+                    Nz(Me.EstadoNC, "") = "" And Nz(Me.Descripcion, "") = "" And Nz(Me.Notas, "") = "" _
+                    And Nz(Me.ComboRequiereControlEficacia, "") = "" And Nz(Me.ComboControlEficaciaRelleno, "") = "" _
+                    And Nz(Me.RESPONSABLECALIDAD, "") = "" And Nz(Me.ComboRegistrosCerrados, "") = "" _
+                    And Nz(Me.ResponsableTelefonica, "") = "" And Nz(Me.Google, "") = "" Then
+        TodosParametrosBusquedaVacios = EnumSino.Sí
+    Else
+    
+        TodosParametrosBusquedaVacios = EnumSino.No
+    End If
+    
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método TodosParametrosBusquedaVacios ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    
+End Function
+
+Public Function CasiTodosParametrosBusquedaVacios(Optional ByRef p_Error As String) As EnumSino
+
+    
+    
+    On Error GoTo errores
+    If Nz(Me.ComboCodigo, "") = "" And Nz(Me.IDExpediente, "") = "" And _
+                    Nz(Me.ComboJuridica, "") = "" And Nz(Me.ComboTipo, "") = "" And _
+                    Nz(Me.Descripcion, "") = "" And Nz(Me.Notas, "") = "" And Nz(Me.ComboRequiereControlEficacia, "") = "" _
+                      And Nz(Me.ComboControlEficaciaRelleno, "") = "" And Nz(Me.ResponsableTelefonica, "") = "" _
+                      And Nz(Me.ComboRegistrosCerrados, "") = "" And Nz(Me.RESPONSABLECALIDAD, "") = "" Then
+        CasiTodosParametrosBusquedaVacios = EnumSino.Sí
+    Else
+    
+        CasiTodosParametrosBusquedaVacios = EnumSino.No
+    End If
+    
+    Exit Function
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método CasiTodosParametrosBusquedaVacios ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    
+End Function
+
 Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     
     Dim m_ID As Variant
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
    
     Dim m_IDNCPrevia As String
     Dim i As Long
@@ -971,7 +1142,7 @@ Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     If IsNumeric(m_IDNCPrevia) Then
         For i = 1 To Me.ListaFiltrados.ListCount - 1
             If Me.ListaFiltrados.Column(0, i) = m_IDNCPrevia Then
-                Me.ListaFiltrados.Selected(i) = True
+                Me.ListaFiltrados.selected(i) = True
                 ListaFiltrados_Click
                 VBA.DoEvents
                 DoCmd.Hourglass False
@@ -1024,7 +1195,7 @@ Private Sub ListaFiltrados_Click()
     Me.ComandoInforme.Enabled = False
     Me.ComandoNCProyectoHistorial.Enabled = False
     Me.ComandoAltaVinculadas.Enabled = False
-    Me.ComandoAltaVinculadas.Caption = "Alta NC Vinculada"
+    Me.ComandoAltaVinculadas.caption = "Alta NC Vinculada"
     Me.lblEstado.Visible = False
     If Nz(Me.ListaFiltrados.Column(0), "") = "" Then
         Set m_NCSeleccionada = Nothing
@@ -1033,9 +1204,18 @@ Private Sub ListaFiltrados_Click()
         VBA.DoEvents
         Exit Sub
     End If
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+    Else
+        If Me.ListaFiltrados.Column(0) <> m_NCSeleccionada.IDNoConformidad Then
+            Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+            If m_Error <> "" Then
+                Err.Raise 1000
+            End If
+        End If
     End If
     If m_NCSeleccionada Is Nothing Then
         VBA.DoEvents
@@ -1045,7 +1225,7 @@ Private Sub ListaFiltrados_Click()
     End If
      Me.ComandoInforme.Enabled = True
      Me.ComandoEditar.Enabled = True
-    Me.ComandoAltaVinculadas.Caption = "Alta NC vinculada a " & m_NCSeleccionada.CodigoNoConformidad
+    Me.ComandoAltaVinculadas.caption = "Alta NC vinculada a " & m_NCSeleccionada.CodigoNoConformidad
     If EsTecnico <> EnumSino.Sí Then
         Me.ComandoAltaVinculadas.Enabled = True
         
@@ -1060,16 +1240,16 @@ Private Sub ListaFiltrados_Click()
         Me.lblVinculado.Visible = False
     Else
         Me.lblVinculado.Visible = True
-        Me.lblVinculado.Caption = "Vinculada con la " & m_NCSeleccionada.NCProyectoAsociada.CodigoNoConformidad
+        Me.lblVinculado.caption = "Vinculada con la " & m_NCSeleccionada.NCProyectoAsociada.CodigoNoConformidad
     End If
     
    
     
     
     If m_NCSeleccionada.Estado = "BORRADA" Then
-        Me.ComandoEliminar.Caption = "Habilitar"
+        Me.ComandoEliminar.caption = "Habilitar"
     Else
-        Me.ComandoEliminar.Caption = "Eliminar"
+        Me.ComandoEliminar.caption = "Eliminar"
     End If
     
     
@@ -1116,7 +1296,7 @@ Public Function SeleccionarNC( _
     End If
     For i = 1 To lst.ListCount - 1
         If lst.Column(0, i) = m_ID Then
-            lst.Selected(i) = True
+            lst.selected(i) = True
             ListaFiltrados_Click
             Exit Function
         End If
@@ -1198,16 +1378,22 @@ End Sub
 
 Private Sub PieDelFormulario_DblClick(Cancel As Integer)
     Dim m_ID As String
-    Dim m_NCProyecto As NCProyecto
+    Dim m_NCProyecto As ncProyecto
     Dim m_mensaje As String
     On Error GoTo errores
     VBA.DoEvents
     DoCmd.Hourglass True
     VBA.DoEvents
     m_Error = ""
-    EnsureNCProyectoGestionSelected p_Error:=m_Error
-    If m_Error <> "" Then
-        Err.Raise 1000
+    If m_NCSeleccionada Is Nothing Then
+        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
+        If m_Error <> "" Then
+            Err.Raise 1000
+        End If
+        If m_NCSeleccionada Is Nothing Then
+            m_Error = "Se ha de seleccionar un elemento de la lista"
+            Err.Raise 1000
+        End If
     End If
     m_mensaje = HTMLNCProyecto(p_NC:=m_NCSeleccionada, p_ConAcciones:=EnumSino.Sí, p_Error:=m_Error)
     If m_Error <> "" Then
@@ -1257,11 +1443,12 @@ End Sub
 
 
 Private Function RellenarListaConCol( _
-                                    p_col As Collection, _
+                                    p_col As Scripting.Dictionary, _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim m_Item As Object
+    Dim m_NC As ncProyecto
+    Dim m_ID As Variant
     
     Dim lst As ListBox
     
@@ -1275,17 +1462,21 @@ Private Function RellenarListaConCol( _
     End If
     Set lst = Me.ListaFiltrados
     lst.RowSource = "IDNoconformidad;Código;Descripción;Exp.;Estado;FApertura;FCierre"
-    For Each m_Item In p_col
-        lst.AddItem BuildNCProyectoGestionListRow(m_Item, p_Error)
-        If p_Error <> "" Then
-            Err.Raise 1000
-        End If
-        Set m_Item = Nothing
+    For Each m_ID In p_col
+        Set m_NC = p_col(m_ID)
+        With m_NC
+            lst.AddItem .IDNoConformidad & ";" & .CodigoNoConformidad & ";" & _
+                        Replace(.Descripcion, ";", ":") & _
+                        ";" & Replace(.ExpedienteCalculadoTexto, ";", ":") & ";" & .Estado & ";" & _
+                        .FechaApertura & ";" & .FECHACIERRE
+        End With
+        
+        Set m_NC = Nothing
     Next
     
     
     If lst.ListCount > 1 Then
-        lst.Selected(1) = True
+        lst.selected(1) = True
         ListaFiltrados_Click
     End If
     Exit Function
@@ -1294,27 +1485,6 @@ errores:
         p_Error = "El método RellenarListaConCol ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
-
-Private Sub EnsureNCProyectoGestionSelected(Optional ByRef p_Error As String)
-    On Error GoTo errores
-
-    p_Error = ""
-    Set m_NCSeleccionada = ResolveNCProyectoGestionSelection( _
-                            p_Current:=m_NCSeleccionada, _
-                            p_SelectedID:=Nz(Me.ListaFiltrados.Column(0), ""), _
-                            p_Error:=p_Error)
-    If p_Error <> "" Then Err.Raise 1000
-    If m_NCSeleccionada Is Nothing Then
-        p_Error = "Seleccione un elemento de la lista"
-        Err.Raise 1000
-    End If
-    Exit Sub
-
-errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método EnsureNCProyectoGestionSelected ha devuelto el error: " & Err.Description
-    End If
-End Sub
 
 
 Private Function EstablecerCombos( _
@@ -1534,7 +1704,7 @@ Public Function ActualizarLineaLista( _
         m_IDLista = lst.Column(0, i)
         If m_ObjNCProyectoActiva.IDNoConformidad = m_IDLista Then
             
-            lst.Selected(i) = True
+            lst.selected(i) = True
             With m_ObjNCProyectoActiva
                 m_LineaAlFinal = .IDNoConformidad & ";" & .CodigoNoConformidad & ";" & _
                            Replace(.Descripcion, ";", ":") & _
@@ -1621,7 +1791,7 @@ Private Function ActualizarDatosFiltrados( _
                                             ) As String
    
     Dim m_ID As Variant
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim lst As ListBox
     Dim i As Long
     On Error GoTo errores

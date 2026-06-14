@@ -1,7 +1,7 @@
 Version =21
 VersionRequired =20
 PublishOption =1
-Checksum =1336952635
+Checksum =1408832782
 Begin Form
     AutoResize = NotDefault
     RecordSelectors = NotDefault
@@ -413,6 +413,7 @@ Begin Form
         0x0000000000000000000000000000000000000000
     End
     NoSaveCTIWhenDisabled =1
+    NoSaveCTIWhenDisabled =1
     Begin
         Begin Label
             BackStyle =0
@@ -604,7 +605,6 @@ Begin Form
                     GUID = Begin
                         0x4a0ab769cd39954685547521c5f4064f
                     End
-
                     LayoutCachedLeft =1969
                     LayoutCachedTop =240
                     LayoutCachedWidth =4210
@@ -731,7 +731,6 @@ Begin Form
                         0x0000ff070000fe030000fc010000fc010000ff070000ff070000ff070000e0ff ,
                         0x0000e0ff0000e0ff0000803f0000803f0000c07f0000e0ff0000f1ff0000
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =4320
                     LayoutCachedTop =240
@@ -790,7 +789,6 @@ Begin Form
                         0x5f7326b71a2cdff4973df30dfe0592f958c4feff03c0a9b259cdcdef7ab89b44 ,
                         0x922d28280000000049454e44ae426082
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =4628
                     LayoutCachedTop =240
@@ -847,7 +845,6 @@ Begin Form
                         0x9d4227f649adc22f69142fcdbaa73746feafff06936575e73fdf9b1800000000 ,
                         0x49454e44ae426082
                     End
-
                     LayoutCachedLeft =5001
                     LayoutCachedTop =240
                     LayoutCachedWidth =5318
@@ -878,7 +875,6 @@ Begin Form
                     GUID = Begin
                         0x4181e7959c6b7f44829843cb943c55db
                     End
-
                     LayoutCachedLeft =5499
                     LayoutCachedTop =240
                     LayoutCachedWidth =6165
@@ -909,7 +905,6 @@ Begin Form
                     GUID = Begin
                         0xd041af3c61a90f4d916c1a88b4a96af1
                     End
-
                     LayoutCachedLeft =7995
                     LayoutCachedTop =288
                     LayoutCachedWidth =12531
@@ -939,7 +934,6 @@ Begin Form
                     GUID = Begin
                         0xa8e83fd09f58cd4fae7a161a59a785a0
                     End
-
                     LayoutCachedLeft =1965
                     LayoutCachedTop =685
                     LayoutCachedWidth =6186
@@ -1001,7 +995,6 @@ Begin Form
                     GUID = Begin
                         0x5588ea81ed9cc54d84283d8811a0eaa5
                     End
-
                     LayoutCachedLeft =1965
                     LayoutCachedTop =1860
                     LayoutCachedWidth =12831
@@ -1064,7 +1057,6 @@ Begin Form
                     GUID = Begin
                         0xbdd85cecf5afbb4ea42837ebe2f9646a
                     End
-
                     LayoutCachedLeft =1965
                     LayoutCachedTop =2956
                     LayoutCachedWidth =12831
@@ -1145,7 +1137,6 @@ Begin Form
                     GUID = Begin
                         0x4aed03aa4fb6e54a80b53c48c29eccd2
                     End
-
                     LayoutCachedLeft =1999
                     LayoutCachedTop =6333
                     LayoutCachedWidth =3175
@@ -1178,7 +1169,6 @@ Begin Form
                     GUID = Begin
                         0xbaddb5e22ceb0646ad6b8d200f05c299
                     End
-
                     LayoutCachedLeft =5622
                     LayoutCachedTop =6333
                     LayoutCachedWidth =7878
@@ -1220,7 +1210,6 @@ Begin Form
                     Tag ="DATO;OBLIGATORIO"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =1999
                     LayoutCachedTop =5242
                     LayoutCachedWidth =3865
@@ -1385,7 +1374,6 @@ Begin Form
                         "z Sierra;VAS;Virginia Cabeza González;VCG;Yolanda Porras Borrajo;YPB"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =9354
                     LayoutCachedTop =5242
                     LayoutCachedWidth =12855
@@ -1618,7 +1606,6 @@ Begin Form
                     Tag ="DATO;OBLIGATORIO"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =2040
                     LayoutCachedTop =4705
                     LayoutCachedWidth =4926
@@ -1662,7 +1649,6 @@ Begin Form
                     Tag ="DATO;OBLIGATORIO"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =5622
                     LayoutCachedTop =5242
                     LayoutCachedWidth =8283
@@ -1737,7 +1723,6 @@ Begin Form
                     Tag ="DATO;OBLIGATORIO"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =3212
                     LayoutCachedTop =5767
                     LayoutCachedWidth =3908
@@ -1800,7 +1785,6 @@ Begin Form
                     GUID = Begin
                         0xed70c61b21f97847a32921139eaf5aa8
                     End
-
                     LayoutCachedLeft =11985
                     LayoutCachedTop =6240
                     LayoutCachedWidth =12870
@@ -1838,7 +1822,6 @@ Begin Form
                     GUID = Begin
                         0x2d9977365fac9d40a625c524ea7d336e
                     End
-
                     LayoutCachedLeft =9411
                     LayoutCachedTop =6333
                     LayoutCachedWidth =11682
@@ -1869,7 +1852,6 @@ Begin Form
                     GUID = Begin
                         0x46617acb742bc248b61e9b3c2631cf18
                     End
-
                     LayoutCachedLeft =1965
                     LayoutCachedTop =1335
                     LayoutCachedWidth =4101
@@ -1931,7 +1913,6 @@ Begin Form
                     GUID = Begin
                         0x09b81983c3ba2b42bdb51a3403b8d8c2
                     End
-
                     LayoutCachedLeft =5445
                     LayoutCachedTop =1338
                     LayoutCachedWidth =11976
@@ -2009,7 +1990,6 @@ Begin Form
                         0x9d4227f649adc22f69142fcdbaa73746feafff06936575e73fdf9b1800000000 ,
                         0x49454e44ae426082
                     End
-
                     LayoutCachedLeft =12140
                     LayoutCachedTop =1245
                     LayoutCachedWidth =12531
@@ -2068,7 +2048,6 @@ Begin Form
                     GUID = Begin
                         0x5ef7014deaad454d803e6e05fc674ace
                     End
-
                     LayoutCachedLeft =10551
                     LayoutCachedTop =5782
                     LayoutCachedWidth =12912
@@ -2099,7 +2078,6 @@ Begin Form
                     GUID = Begin
                         0xd4c9bba048e3434190cd23a9eadd0185
                     End
-
                     LayoutCachedLeft =4020
                     LayoutCachedTop =5760
                     LayoutCachedWidth =6405
@@ -2169,7 +2147,6 @@ Begin Form
                     GUID = Begin
                         0xb6ca168b49c8c946ae44867ed64e2a6a
                     End
-
                     LayoutCachedLeft =6405
                     LayoutCachedTop =4710
                     LayoutCachedWidth =8736
@@ -2230,7 +2207,6 @@ Begin Form
                     GUID = Begin
                         0xa709001635542d46a25faffa01bc7b5a
                     End
-
                     LayoutCachedLeft =10704
                     LayoutCachedTop =4710
                     LayoutCachedWidth =12855
@@ -2393,7 +2369,6 @@ Begin Form
                         "z Sierra;VAS;Virginia Cabeza González;VCG;Yolanda Porras Borrajo;YPB"
                     AllowValueListEdits =0
                     InheritValueList =0
-
                     LayoutCachedLeft =7995
                     LayoutCachedTop =685
                     LayoutCachedWidth =12531
@@ -2460,7 +2435,6 @@ Begin Form
                         0xb17d4affb17d4affb17d4affb17d4affb17d4affb17d4affb17d4affb17d4aff ,
                         0xb17d4affb17d4aff
                     End
-
                     LayoutCachedLeft =8900
                     LayoutCachedTop =4710
                     LayoutCachedWidth =9217
@@ -2489,7 +2463,6 @@ Begin Form
                     GUID = Begin
                         0xd4caa73fbcc2e443966a6c54d47f8d02
                     End
-
                     LayoutCachedLeft =6578
                     LayoutCachedTop =5767
                     LayoutCachedWidth =8663
@@ -2607,7 +2580,6 @@ Begin Form
                         0x791fa933aefd2d19ec0f0f54830ef265e9abbf70fcafe93f5522970ebddbbb7b ,
                         0x0000000049454e44ae426082
                     End
-
                     LayoutCachedLeft =8730
                     LayoutCachedTop =5674
                     LayoutCachedWidth =9121
@@ -2632,7 +2604,7 @@ Option Compare Database
 Option Explicit
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
 Attribute m_FormExpedientes.VB_VarHelpID = -1
-Private m_NCAsociada As NCProyecto
+Private m_NCAsociada As ncProyecto
 Private m_RiesgoAsociado As riesgo
 Private WithEvents m_FormMotivos As Form_FormMotivosNoRequiereControlEficacia
 Attribute m_FormMotivos.VB_VarHelpID = -1
@@ -3329,10 +3301,10 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                    Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
                     Me.ImagenMotivosNoCE.Visible = False
                 Else
-                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                    Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
                     Me.ImagenMotivosNoCE.Visible = True
                 End If
             Else
@@ -3423,10 +3395,10 @@ End Function
 Private Sub m_FormMotivos_MotivoRegistrado(m_Motivo As String)
     m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
     If m_Motivo <> "" Then
-        Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+        Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
         Me.ImagenMotivosNoCE.Visible = True
     Else
-        Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+        Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
         Me.ImagenMotivosNoCE.Visible = False
     End If
 End Sub
@@ -3491,10 +3463,10 @@ Private Sub RequiereControlEficacia_AfterUpdate()
             Me.ComandoVerNoRequiere.Enabled = True
             
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
                 Me.ImagenMotivosNoCE.Visible = False
             Else
-                Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
                 Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
@@ -3568,7 +3540,7 @@ Public Function RellenarDatosObjeto(Optional ByRef p_Error As String) As String
     For Each ctl In Me.Controls
         If InStr(1, Nz(ctl.Tag, ""), "DATO") <> 0 Then
             'Debug.Print ctl.Tag
-            m_ObjNCProyectoActiva.SetPropiedad ctl.Name, Nz(ctl.Value, ""), p_Error
+            m_ObjNCProyectoActiva.SetPropiedad ctl.name, Nz(ctl.value, ""), p_Error
             If p_Error <> "" Then
                 Err.Raise 1000
             End If
@@ -3841,10 +3813,10 @@ Private Sub ActualizarTextoRiesgosUI()
     
     ' En modo Alta, el CodRiesgosAsociados puede haber sido seteado manualmente en el popup
     ' o calculamos desde el diccionario de objetos
-    If Not m_ObjNCProyectoActiva.Riesgos Is Nothing Then
-        If m_ObjNCProyectoActiva.Riesgos.count > 0 Then
-            For Each vKey In m_ObjNCProyectoActiva.Riesgos.Keys
-                sCodigos = sCodigos & IIf(sCodigos = "", "", "|") & m_ObjNCProyectoActiva.Riesgos(vKey).CodigoRiesgo
+    If Not m_ObjNCProyectoActiva.riesgos Is Nothing Then
+        If m_ObjNCProyectoActiva.riesgos.count > 0 Then
+            For Each vKey In m_ObjNCProyectoActiva.riesgos.keys
+                sCodigos = sCodigos & IIf(sCodigos = "", "", "|") & m_ObjNCProyectoActiva.riesgos(vKey).CodigoRiesgo
             Next vKey
             Me.CodigoRiesgo = sCodigos
             Exit Sub

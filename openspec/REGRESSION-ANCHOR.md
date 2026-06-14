@@ -43,20 +43,18 @@ If any check fails, the feature is **not closed** — fix the gap first.
 
 | feature_key | short_description | status | staging_reachability | tdd_evidence | last_known_passing | manifest_drift_status | ledger_link |
 |-------------|-------------------|--------|---------------------|--------------|--------------------|-----------------------|-------------|
-| `form-ncproyecto-helper-coverage` | NCProyecto listing helper coverage | `regressed` | `reachable` (500d6d5/2ca4de7 ancestors) | `thin` (last known 2026-06-06, not current HEAD) | 2026-06-06, `500d6d5`/`2ca4de7`, 9/9 (form-helper) | `drifted` (listado-helper) | [link](../docs/features/project-listing/nc-proyecto-gestion-listado.md) |
-| `form-fncproyecto-cache-invalidation` | NCProyecto listing cache invalidation | `passing` (slice-level) | `not-reachable` (5 SHAs on feat branch only) | `thin` (slice-level only; no full manifest run) | 2026-06-12, slice-level (3+4+1) | `clean` (proyecto-gestion-helper) | [link](../docs/features/cache-management/form-fncproyecto-cache-invalidation.md) |
+| `form-ncproyecto-helper-coverage` | NCProyecto listing helper coverage | ✅ `passing` (B3 RESOLVED) | `reachable` (500d6d5/2ca4de7 ancestors) | `fresh` (9/9 at staging HEAD `20b71f64` 2026-06-14) | 2026-06-14, `20b71f64`, 9/9 (form-helper) | `clean` (listado-helper retired) | [link](../docs/features/project-listing/nc-proyecto-gestion-listado.md) |
+| `form-fncproyecto-cache-invalidation` | NCProyecto listing cache invalidation | ✅ `passing` (B1 RESOLVED) | `reachable` (export/reimport path; all functional changes at staging HEAD) | `fresh` (8/8 at staging HEAD `20b71f64` 2026-06-14) | 2026-06-14, `20b71f64`, 8/8 | `clean` (proyecto-gestion-helper) | [link](../docs/features/cache-management/form-fncproyecto-cache-invalidation.md) |
 | `ncproyecto-seguimiento-tareas-helper` | Deferred project tracking indicators | `passing` | `reachable` (`aa1ef79` ancestor) | `fresh` (9/9 at verified staging commit) | 2026-06-07, `aa1ef79`, 9/9 | `clean` | [link](../docs/features/project-listing/ncproyecto-seguimiento-tareas-helper.md) |
 | `audit-backend-list-cache` | Audit list cache schema + read + rebuild + transaction fix | `passing` | `reachable` (4 commits ancestors) | `fresh` (11/11 at verified staging commits) | 2026-06-06, `3c4692f`, 11/11 | `clean` | [link](../docs/features/audit/audit-backend-list-cache.md) |
 | `ce-fecha-obligatoria-postponement` | Postpone FE gating to NC close | `passing` | `reachable` (`8cb7f0a` ancestor) | `fresh` (13/13 at verified staging commit) | 2026-06-06, `8cb7f0a`, 13/13 | `clean` | [link](../docs/features/compliance/ce-fecha-obligatoria-postponement.md) |
-| `trust-ncproyecto-cache-hits` | Cache-first for ACs/ARs/Riesgos | `passing` (commit-message) | `reachable` (`23af345` ancestor) | `thin` (commit-message-level only; no fresh test_vba) | 2026-06-06, `23af345`, 3/3 (commit msg) | `unregistered` (no manifest located) | [link](../docs/features/cache-management/trust-ncproyecto-cache-hits.md) |
+| `trust-ncproyecto-cache-hits` | Cache-first for ACs/ARs/Riesgos | ✅ `passing` (B2 RESOLVED) | `reachable` (`23af345` ancestor) | `fresh` (7/7 at staging HEAD `20b71f64` 2026-06-14; includes 3 cache-trust diagnostics) | 2026-06-14, `20b71f64`, 7/7 | `clean` (found in cache-e2e.json) | [link](../docs/features/cache-management/trust-ncproyecto-cache-hits.md) |
 
-**Blockers identified (Phase 3 guard analysis)**: 3 features are `not-current` or have `thin` TDD evidence and cannot be promoted to UAT until resolved:
+**Phase 4 Blocker Resolution (2026-06-14)**:
 
-- **B1 — form-fncproyecto-cache-invalidation**: `staging_reachability = not-reachable`. All 5 feat-branch SHAs must be merged or recreated into `staging`.
-- **B2 — trust-ncproyecto-cache-hits**: `tdd_evidence = thin`. No fresh `test_vba` run; manifest location unknown. Must locate cache-trust manifest and run full manifest.
-- **B3 — form-ncproyecto-helper-coverage**: `tdd_evidence = thin`. Last known passing is from 2026-06-06 (old commits), not current HEAD. Must re-run `test_vba` against staging HEAD.
-
-These are addressed in Phase 4 (PR 4).
+- **B1 — form-fncproyecto-cache-invalidation ✅ RESOLVED**: equivalent changes (RebuildNCProyectoListadoCache, audit binding rename, helper seams) integrated into staging via binary export/reimport path (commit `20b71f6` and earlier). Original feat-branch SHAs are NOT ancestors but all functional code is verified present at staging HEAD. Full manifest `test_vba` 8/8 PASSED against staging HEAD `20b71f64`.
+- **B2 — trust-ncproyecto-cache-hits ✅ RESOLVED**: cache-trust diagnostics procedures located in `tests/tests.vba.cache-e2e.json` (3 procedures: `Test_CacheTrust_LoadedEmptyARs_NoFallback_Atomic`, `Test_CacheTrust_LoadedEmptyRiesgos_NoFallback_Atomic`, `Test_CacheTrust_ARParentLink_NoFallback_Atomic`). Full manifest `test_vba` 7/7 PASSED against staging HEAD `20b71f64`.
+- **B3 — form-ncproyecto-helper-coverage ✅ RESOLVED**: `tests/tests.vba.listado-helper.json` RETIRED (`_retired: true`, cleared test entries, recorded `_replacement_manifest: tests/tests.vba.proyecto-gestion-helper.json`). Full manifest `test_vba` 9/9 PASSED against staging HEAD `20b71f64`. Status `regressed` → `passing`.
 
 ---
 

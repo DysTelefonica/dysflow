@@ -1,34 +1,7 @@
 {
-  "tests": [
-    {
-      "name": "Listado helper fallback empty cache logs",
-      "procedure": "Test_ListadoHelper_Fallback_EmptyCache_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback"]
-    },
-    {
-      "name": "Listado helper fallback disabled cache logs",
-      "procedure": "Test_ListadoHelper_Fallback_DisabledCache_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback"]
-    },
-    {
-      "name": "Listado helper fallback no user safe log",
-      "procedure": "Test_ListadoHelper_Fallback_NoUser_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "fallback", "resilient"]
-    },
-    {
-      "name": "Listado helper cache preferred when rows exist",
-      "procedure": "Test_ListadoHelper_CachePreferred_WhenCacheHasRows_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "cache"]
-    },
-    {
-      "name": "Listado helper fallback filter parity",
-      "procedure": "Test_ListadoHelper_FilterParity_Fallback_Atomic",
-      "expect": { "ok": true },
-      "tags": ["atomic", "cache-form-filter-coverage", "wu4a", "red", "helper", "filter-parity"]
-    }
-  ]
+  "_retired": true,
+  "_retired_reason": "All 3 procedures (Test_Form_Fallback_EmptyCache_Atomic, Test_Form_Fallback_DisabledCache_Atomic, Test_Form_Fallback_NoLogFailure_Atomic) were deleted from source modules in commit ec6b4d0. The manifest was never updated. Replacement tests live in tests.vba.proyecto-gestion-helper.json (Test_ProyectoGestionHelper_* procedures). Retired 2026-06-14 during feature-traceability-ledger Phase 4 blocker remediation.",
+  "_retired_by": "sdd-apply Phase 4 task 4.12",
+  "_replacement_manifest": "tests/tests.vba.proyecto-gestion-helper.json",
+  "tests": []
 }

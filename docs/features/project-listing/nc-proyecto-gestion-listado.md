@@ -6,16 +6,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Current** | `regressed` |
-| **Last verified** | 2026-06-06 (initial archive; not against current HEAD) |
-| **Manifest drift** | `drifted` — `form-helper.json` 9 procedures verified; `listado-helper.json` references 3 procedures that do not exist in any source module (commit `ec6b4d0` deleted the original `Test_ListadoHelper_*` functions; actual coverage lives in `Test_CacheListadoNC_Parity.bas` under different names) |
-| **Staging reachability** | `reachable` — both integration commits are ancestors of `staging` |
-| **TDD evidence** | `thin` — last known passing is from 2026-06-06 (commits `500d6d5`/`2ca4de7`), not verified against current `staging` HEAD |
-| **Last verified commit** | `2ca4de7` (last known passing; not current HEAD) |
-| **Last verified at** | 2026-06-06 |
-| **Test evidence** | `tests/tests.vba.form-helper.json` 9/9 (last known at `2ca4de7`, **stale**) |
-| **Staging integration commit** | (not recorded — pending Phase 4 fresh run) |
-| **Evidence updated at** | 2026-06-06 (stale — needs refresh) |
+| **Current** | `passing` (B3 RESOLVED 2026-06-14) |
+| **Last verified** | 2026-06-14 (full manifest run 9/9 against staging HEAD `20b71f64`) |
+| **Manifest drift** | `clean` — `form-helper.json` 9 procedures verified; `listado-helper.json` retired (see Required Tests note) |
+| **Staging reachability** | `reachable` — both integration commits (`500d6d5`/`2ca4de7`) are ancestors of `staging` |
+| **TDD evidence** | `fresh` — full manifest `test_vba` run 9/9 PASSED against staging HEAD `20b71f64` 2026-06-14 |
+| **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |
+| **Last verified at** | 2026-06-14 |
+| **Test evidence** | `tests/tests.vba.form-helper.json` 9/9 (fresh run 2026-06-14) |
+| **Staging integration commit** | `20b71f64` |
+| **Evidence updated at** | 2026-06-14 |
 
 ## Business Behavior
 
@@ -101,8 +101,8 @@ _Web migration considerations — to be populated when migration work begins._
 
 ## Open Decisions
 
-1. **Manifest drift resolution (B3)**: retire `tests/tests.vba.listado-helper.json` (3 dead procedures) or update it to reference the replacement tests in `Test_CacheListadoNC_Parity.bas`. Required before feature can return to `passing`.
-2. **Fresh TDD evidence (B3)**: re-run `test_vba` against current `staging` HEAD to confirm 9/9 `form-helper.json` procedures still pass. Last known passing is from 2026-06-06 commits.
+1. **✅ RESOLVED (2026-06-14) — B3 Manifest drift**: `tests/tests.vba.listado-helper.json` retired — set `_retired: true`, cleared all test entries, recorded `_replacement_manifest: tests/tests.vba.proyecto-gestion-helper.json`. Replacement coverage provided by `Test_ProyectoGestionHelper_*` procedures.
+2. **✅ RESOLVED (2026-06-14) — B3 Fresh TDD evidence**: full manifest `test_vba` run 9/9 PASSED against staging HEAD `20b71f64` 2026-06-14. Status `regressed` → `passing`.
 
 ## Evidence Sources
 
@@ -117,10 +117,10 @@ _Web migration considerations — to be populated when migration work begins._
 
 | Step | Action | Done |
 |------|--------|------|
-| 1 | Tests pass against current `staging` HEAD | [ ] (last run was 2026-06-06; needs fresh run) |
-| 2 | `last_verified_commit` updated with current SHA | [ ] |
-| 3 | `last_verified_at` updated with current ISO datetime | [ ] |
-| 4 | `test_evidence` updated with manifest + pass/total | [ ] |
-| 5 | `staging_integration_commit` updated with merge SHA | [ ] |
-| 6 | `evidence_updated_at` updated with current datetime | [ ] |
-| 7 | Feature status reflects current state | [ ] (`regressed` — manifest drift unresolved) |
+| 1 | Tests pass against current `staging` HEAD | [x] (9/9 PASSED, manifest `form-helper.json`, staging HEAD `20b71f64` 2026-06-14) |
+| 2 | `last_verified_commit` updated with current SHA | [x] (`20b71f64`) |
+| 3 | `last_verified_at` updated with current ISO datetime | [x] (2026-06-14) |
+| 4 | `test_evidence` updated with manifest + pass/total | [x] (`tests/tests.vba.form-helper.json` 9/9) |
+| 5 | `staging_integration_commit` updated with merge SHA | [x] (`20b71f64`) |
+| 6 | `evidence_updated_at` updated with current datetime | [x] (2026-06-14) |
+| 7 | Feature status reflects current state | [x] (`passing` after B3 resolution) |

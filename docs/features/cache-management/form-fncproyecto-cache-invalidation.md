@@ -6,16 +6,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Current** | `not-current` (B1 blocker: not reachable from `staging`) |
-| **Last verified** | 2026-06-12 (slice-level: Slice 2 3/3, Slice 3 4/4, Slice 4 1/1) — **not against current `staging` HEAD** |
+| **Current** | `passing` (B1 RESOLVED 2026-06-14) |
+| **Last verified** | 2026-06-14 (full manifest run 8/8 against staging HEAD `20b71f64`) |
 | **Manifest drift** | `clean` (for `proyecto-gestion-helper.json`) |
-| **Staging reachability** | `not-reachable` — all 5 implementation SHAs are on `feat/form-fncproyecto-cache-invalidation` only; no merge or recreation has happened on `staging` |
-| **TDD evidence** | `thin` — slice-level evidence only; **no full manifest `test_vba` run** has been recorded against any `staging` HEAD |
-| **Last verified commit** | (none on `staging`; slice-level evidence is from `b2eb8a1` on feat branch) |
-| **Last verified at** | 2026-06-12 |
-| **Test evidence** | Slice 2 3/3 + Slice 3 4/4 + Slice 4 1/1 (commit-message-level, not a full manifest run) |
-| **Staging integration commit** | (none — feat branch not yet merged) |
-| **Evidence updated at** | 2026-06-12 (stale — needs full run against `staging` HEAD) |
+| **Staging reachability** | `reachable` — all functional changes present in staging HEAD via export/reimport path; original feat-branch SHAs are NOT ancestors but equivalent code is verified (see Integration Commits) |
+| **TDD evidence** | `fresh` — full manifest `test_vba` run 8/8 PASSED against staging HEAD `20b71f64` 2026-06-14 |
+| **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |
+| **Last verified at** | 2026-06-14 |
+| **Test evidence** | `tests/tests.vba.proyecto-gestion-helper.json` 8/8 (fresh run 2026-06-14) |
+| **Staging integration commit** | `20b71f64` (export/reimport path; all functional changes verified present) |
+| **Evidence updated at** | 2026-06-14 |
 
 ## Business Behavior
 
@@ -94,9 +94,9 @@ _Web migration considerations — to be populated when migration work begins._
 
 ## Open Decisions
 
-1. **B1 — Staging reachability**: feat branch not yet merged to staging. All 5 implementation SHAs are reachable only from the feature branch. Resolution: merge feat branch to staging (or recreate on staging) and re-verify.
-2. **B1 — Full manifest run**: only slice-level evidence is recorded. Full manifest `test_vba` run needed against `staging` HEAD once reachable.
-3. **Spec wording drift**: R2 signature wording (`As Boolean` vs `As String`) remains inconsistent across artifacts.
+1. **✅ RESOLVED (2026-06-14) — B1 Staging reachability**: all functional changes present in staging HEAD via export/reimport path. Original feat-branch SHAs are NOT ancestors but all equivalent code (RebuildNCProyectoListadoCache, audit binding rename, helper seams) is verified present. Full manifest `test_vba` 8/8 PASSED against staging HEAD `20b71f64`.
+2. **✅ RESOLVED (2026-06-14) — B1 Full manifest run**: 8/8 PASSED against staging HEAD `20b71f64` 2026-06-14.
+3. **Spec wording drift**: R2 signature wording (`As Boolean` vs `As String`) remains inconsistent across artifacts (deferred, non-blocking).
 
 ## Evidence Sources
 
@@ -110,10 +110,18 @@ _Web migration considerations — to be populated when migration work begins._
 
 | Step | Action | Done |
 |------|--------|------|
-| 1 | Tests pass against current `staging` HEAD | [ ] (B1: feat branch not yet merged; needs full manifest run after merge) |
-| 2 | `last_verified_commit` updated with current SHA | [ ] |
-| 3 | `last_verified_at` updated with current ISO datetime | [ ] |
-| 4 | `test_evidence` updated with manifest + pass/total | [ ] |
-| 5 | `staging_integration_commit` updated with merge SHA | [ ] |
-| 6 | `evidence_updated_at` updated with current datetime | [ ] |
-| 7 | Feature status reflects current state | [ ] (`not-current` until B1 resolved) |
+| 1 | Tests pass against current `staging` HEAD | [x] (8/8 PASSED, manifest `proyecto-gestion-helper.json`, staging HEAD `20b71f64` 2026-06-14) |
+| 2 | `last_verified_commit` updated with current SHA | [x] (`20b71f64`) |
+| 3 | `last_verified_at` updated with current ISO datetime | [x] (2026-06-14) |
+| 4 | `test_evidence` updated with manifest + pass/total | [x] (`tests/tests.vba.proyecto-gestion-helper.json` 8/8) |
+| 5 | `staging_integration_commit` updated with merge SHA | [x] (`20b71f64`; export/reimport path) |
+| 6 | `evidence_updated_at` updated with current datetime | [x] (2026-06-14) |
+| 7 | Feature status reflects current state | [x] (`passing` after B1 resolution) |
+
+### Phase 4 Resolution Path (executed 2026-06-14)
+
+1. Export equivalent changes from binary to src (commit `20b71f6` and earlier).
+2. Verify `RebuildNCProyectoListadoCache` exists in `CacheNCProyecto.bas` at staging HEAD.
+3. Verify `tests/tests.vba.proyecto-gestion-helper.json` is tracked at staging HEAD.
+4. Run full manifest `test_vba` against staging HEAD — 8/8 PASSED.
+5. Update Status section with fresh evidence; status `not-current` → `passing`.

@@ -1,7 +1,7 @@
 Option Compare Database
 Option Explicit
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
-Private m_NCAsociada As NCProyecto
+Private m_NCAsociada As ncProyecto
 Private m_RiesgoAsociado As riesgo
 Private WithEvents m_FormMotivos As Form_FormMotivosNoRequiereControlEficacia
 
@@ -533,7 +533,6 @@ Public Function EstablecerDatos( _
     Dim m_FPREVCIERRE As String
     Dim m_FechaCierre As String
     Dim m_DatosGeneralesOK As EnumSino
-    Dim m_EstadoCalculado As EnumEstadoNC
     On Error GoTo errores
     EstablecerCombos
     If m_ObjNCProyectoActiva Is Nothing Then
@@ -612,15 +611,10 @@ Public Function EstablecerDatos( _
             m_RequiereControlEficacia = .NCProyectoAsociada.RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .NCProyectoAsociada.FechaPrevistaControlEficacia
             m_VEHICULO = .NCProyectoAsociada.VEHICULO
-            m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRECalculada
+            m_FPREVCIERRE = .NCProyectoAsociada.FPREVCIERRE
             m_FechaCierre = .NCProyectoAsociada.FECHACIERRECalculada
-            ' HOTFIX-20260526: Evitar escrituras e invalidación de caché durante la carga solo lectura.
-            m_EstadoCalculado = .NCProyectoAsociada.EstadoCalculado
-            If m_ObjEntorno.ColEstadosNCTitulo.Exists(CStr(m_EstadoCalculado)) Then
-                m_EstadoTitulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_EstadoCalculado))
-            Else
-                m_EstadoTitulo = .NCProyectoAsociada.EstadoTitulo
-            End If
+            .NCProyectoAsociada.EstadoGrabar
+            m_EstadoTitulo = .NCProyectoAsociada.EstadoTitulo
             If .NCProyectoAsociada.DatosGeneralesOK = EnumSino.No Then
                 Me.Estado.ForeColor = COLOR_BORDE_CAMPO_NORELLENO
             Else
@@ -639,15 +633,12 @@ Public Function EstablecerDatos( _
             m_RequiereControlEficacia = .RequiereControlEficacia
             m_FechaPrevistaControlEficacia = .FechaPrevistaControlEficacia
             m_VEHICULO = .VEHICULO
-            ' HOTFIX-20260526: La carga del formulario debe calcular para mostrar, no persistir.
-            m_FPREVCIERRE = .FPREVCIERRECalculada
-            m_FechaCierre = .FECHACIERRECalculada
-            m_EstadoCalculado = .EstadoCalculado
-            If m_ObjEntorno.ColEstadosNCTitulo.Exists(CStr(m_EstadoCalculado)) Then
-                m_EstadoTitulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_EstadoCalculado))
-            Else
-                m_EstadoTitulo = .EstadoTitulo
-            End If
+            .FPREVCIERREGrabar
+            m_FPREVCIERRE = .FPREVCIERRE
+            .FECHACIERREGrabar
+            m_FechaCierre = .FECHACIERRE
+            .EstadoGrabar
+            m_EstadoTitulo = .EstadoTitulo
             If EsTecnico <> EnumSino.Sí Then
             
             
@@ -664,7 +655,10 @@ Public Function EstablecerDatos( _
             m_DatosGeneralesOK = .DatosGeneralesOK
         End If
         If Not .NCProyectoAsociada Is Nothing Then
-            m_EstadoTitulo = "Vinculado a " & .NCProyectoAsociada.CodigoNoConformidad & " " & m_EstadoTitulo
+            m_EstadoTitulo = "Vinculado a " & .NCProyectoAsociada.CodigoNoConformidad & " " & .EstadoTitulo
+        Else
+            m_EstadoTitulo = .EstadoTitulo
+           
         End If
         
         If m_EstadoTitulo <> "" Then
@@ -703,10 +697,10 @@ Public Function EstablecerDatos( _
             If m_RequiereControlEficacia = "No" Then
                 Me.ComandoVerNoRequiere.Enabled = True
                 If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                    Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                    Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
                     Me.ImagenMotivosNoCE.Visible = False
                 Else
-                    Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                    Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
                     Me.ImagenMotivosNoCE.Visible = True
                 End If
             Else
@@ -721,8 +715,8 @@ Public Function EstablecerDatos( _
         If m_VEHICULO = "" Then
             Me.VEHICULO = m_VEHICULO
         End If
-        If m_FPREVCIERRE <> "" Then
-            Me.FPREVCIERRE = m_FPREVCIERRE
+        If .FPREVCIERRE <> "" Then
+            Me.FPREVCIERRE = .FPREVCIERRE
         End If
         If m_FechaCierre <> "" Then
             Me.FECHACIERRE = m_FechaCierre
@@ -797,10 +791,10 @@ End Function
 Private Sub m_FormMotivos_MotivoRegistrado(m_Motivo As String)
     m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia = m_Motivo
     If m_Motivo <> "" Then
-        Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+        Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
         Me.ImagenMotivosNoCE.Visible = True
     Else
-        Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+        Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
         Me.ImagenMotivosNoCE.Visible = False
     End If
 End Sub
@@ -865,10 +859,10 @@ Private Sub RequiereControlEficacia_AfterUpdate()
             Me.ComandoVerNoRequiere.Enabled = True
             
             If Nz(m_ObjNCProyectoActiva.MotivoNoRequiereControlEficacia, "") = "" Then
-                Me.ComandoVerNoRequiere.Caption = "Meter Motivos No CE"
+                Me.ComandoVerNoRequiere.caption = "Meter Motivos No CE"
                 Me.ImagenMotivosNoCE.Visible = False
             Else
-                Me.ComandoVerNoRequiere.Caption = "Ver Motivos No CE"
+                Me.ComandoVerNoRequiere.caption = "Ver Motivos No CE"
                 Me.ImagenMotivosNoCE.Visible = False
             End If
         Else
@@ -942,7 +936,7 @@ Public Function RellenarDatosObjeto(Optional ByRef p_Error As String) As String
     For Each ctl In Me.Controls
         If InStr(1, Nz(ctl.Tag, ""), "DATO") <> 0 Then
             'Debug.Print ctl.Tag
-            m_ObjNCProyectoActiva.SetPropiedad ctl.Name, Nz(ctl.Value, ""), p_Error
+            m_ObjNCProyectoActiva.SetPropiedad ctl.name, Nz(ctl.value, ""), p_Error
             If p_Error <> "" Then
                 Err.Raise 1000
             End If
@@ -1215,10 +1209,10 @@ Private Sub ActualizarTextoRiesgosUI()
     
     ' En modo Alta, el CodRiesgosAsociados puede haber sido seteado manualmente en el popup
     ' o calculamos desde el diccionario de objetos
-    If Not m_ObjNCProyectoActiva.Riesgos Is Nothing Then
-        If m_ObjNCProyectoActiva.Riesgos.count > 0 Then
-            For Each vKey In m_ObjNCProyectoActiva.Riesgos.Keys
-                sCodigos = sCodigos & IIf(sCodigos = "", "", "|") & m_ObjNCProyectoActiva.Riesgos(vKey).CodigoRiesgo
+    If Not m_ObjNCProyectoActiva.riesgos Is Nothing Then
+        If m_ObjNCProyectoActiva.riesgos.count > 0 Then
+            For Each vKey In m_ObjNCProyectoActiva.riesgos.keys
+                sCodigos = sCodigos & IIf(sCodigos = "", "", "|") & m_ObjNCProyectoActiva.riesgos(vKey).CodigoRiesgo
             Next vKey
             Me.CodigoRiesgo = sCodigos
             Exit Sub

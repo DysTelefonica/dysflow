@@ -1,8 +1,5 @@
 Option Compare Database
 Option Explicit
-
-
-
 Public m_ARProyectoSeleccionado As ARProyecto
 
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
@@ -123,7 +120,7 @@ Private Sub ComandoExportarAExcel_Click()
         m_Tipo = "irregulares"
     
     End If
-    Set lbl = Me.Parent.Controls("lblEstado")
+    Set lbl = Me.parent.Controls("lblEstado")
     Avance "Exportando a excel"
     m_URL = TareasAExcel(p_col:=m_ColFiltradoTareasNCProyectos, p_Tipo:=m_Tipo, p_Error:=m_Error)
     If m_Error <> "" Then
@@ -319,7 +316,7 @@ errores:
     Else
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 Private Function EstablecerCombos( _
@@ -386,17 +383,14 @@ Public Function Filtrar( _
     Me.ComandoVerDetalle.Enabled = False
     Me.ComandoExportarAExcel.Enabled = False
     Set lst = Me.ListaFiltrados
-    Me.lblListaDeResultados.Caption = "Registros filtrados (0)"
+    Me.lblListaDeResultados.caption = "Registros filtrados (0)"
     
     lst.RowSource = "IDAccionRealizada;NºTRA;Tarea;Responsable;Estado;F.prev.cierre;Tipo NC"
    
-     
-    Set m_ColFiltradoTareasNCProyectos = ApplySeguimientoTareasHelperFilters( _
-                            p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD.Column(0), ""), _
-                            p_Responsable:=Nz(Me.Responsable.Column(0), ""), _
-                            p_Estado:=Nz(Me.Estado.Column(0), ""), _
-                            p_IDExpediente:=Nz(Me.IDExpediente, ""), _
-                            p_Error:=p_Error)
+    
+    Set m_ColFiltradoTareasNCProyectos = constructor.getARsDeProyectoBusqueda(p_ResponsableCalidad:=Nz(Me.RESPONSABLECALIDAD.Column(0), ""), _
+                            p_Responsable:=Nz(Me.Responsable.Column(0), ""), p_IDExpediente:=Nz(Me.IDExpediente, ""), _
+                            p_Estado:=Nz(Me.Estado.Column(0), ""), p_Error:=p_Error)
     If p_Error <> "" Then
         Err.Raise 1000
     End If
@@ -416,8 +410,8 @@ Public Function Filtrar( _
             Set m_ARProyecto = Nothing
         End With
     Next
-    Me.lblListaDeResultados.Caption = "Registros filtrados (" & lst.ListCount - 1 & ")"
-    lst.Selected(1) = True
+    Me.lblListaDeResultados.caption = "Registros filtrados (" & lst.ListCount - 1 & ")"
+    lst.selected(1) = True
     ListaFiltrados_Click
     
     
@@ -427,23 +421,6 @@ errores:
     If Err.Number <> 1000 Then
         p_Error = "El método Filtrar ha devuelto el error: " & vbNewLine & Err.Description
     End If
-End Function
-
-Private Function ApplySeguimientoTareasHelperFilters( _
-                        Optional ByVal p_ResponsableCalidad As String = "", _
-                        Optional ByVal p_Responsable As String = "", _
-                        Optional ByVal p_Estado As String = "", _
-                        Optional ByVal p_IDExpediente As String = "", _
-                        Optional ByRef p_Error As String _
-                        ) As Scripting.Dictionary
-
-    Set ApplySeguimientoTareasHelperFilters = NCProyectoSeguimientoTareasListadoHelper.ApplySeguimientoTareasFormFilters( _
-                                                p_FormFilteredTareas:=m_ColFiltradoTareasNCProyectos, _
-                                                p_ResponsableCalidad:=p_ResponsableCalidad, _
-                                                p_Responsable:=p_Responsable, _
-                                                p_Estado:=p_Estado, _
-                                                p_IDExpediente:=p_IDExpediente, _
-                                                p_Error:=p_Error)
 End Function
 
 Private Sub ListaFiltrados_Click()
@@ -615,4 +592,3 @@ errores:
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
 End Sub
-

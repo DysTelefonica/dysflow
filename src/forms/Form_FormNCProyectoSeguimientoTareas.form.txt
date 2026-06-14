@@ -1,6 +1,7 @@
 Version =21
 VersionRequired =20
-Checksum =1450550732
+PublishOption =1
+Checksum =527306141
 Begin Form
     RecordSelectors = NotDefault
     MaxButton = NotDefault
@@ -708,6 +709,7 @@ Begin Form
         0x0000000000000000000000000000000000000000
     End
     NoSaveCTIWhenDisabled =1
+    NoSaveCTIWhenDisabled =1
     Begin
         Begin Label
             BackStyle =0
@@ -894,7 +896,6 @@ Begin Form
                         "| prueba prueba 3;Manuel María Fernández Gaspar;PENDIENTE DE REPLANIFICAR;18/04/"
                         "2025;3;Avería"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =300
                     LayoutCachedTop =1815
                     LayoutCachedWidth =16320
@@ -984,7 +985,6 @@ Begin Form
                     AfterUpdate ="[Event Procedure]"
                     FontName ="Segoe UI"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =2670
                     LayoutCachedTop =195
                     LayoutCachedWidth =6246
@@ -1044,7 +1044,6 @@ Begin Form
                     AfterUpdate ="[Event Procedure]"
                     FontName ="Segoe UI"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =9420
                     LayoutCachedTop =195
                     LayoutCachedWidth =15936
@@ -1077,7 +1076,6 @@ Begin Form
                         0x336e53dedcc8fe4aada072d1ce809ca7
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =15074
                     LayoutCachedTop =6240
                     LayoutCachedWidth =16320
@@ -1266,7 +1264,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =6345
                     LayoutCachedTop =225
                     LayoutCachedWidth =6662
@@ -1449,7 +1446,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =16048
                     LayoutCachedTop =225
@@ -1653,7 +1649,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =6345
                     LayoutCachedTop =810
                     LayoutCachedWidth =6662
@@ -1714,7 +1709,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="DATO"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =2670
                     LayoutCachedTop =793
                     LayoutCachedWidth =6246
@@ -1751,7 +1745,6 @@ Begin Form
                         0x6177e197caedf644a131c6b9266c06f3
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =9405
                     LayoutCachedTop =795
                     LayoutCachedWidth =10566
@@ -1821,7 +1814,6 @@ Begin Form
                         0x0000ff070000fe030000fc010000fc010000ff070000ff070000ff070000e0ff ,
                         0x0000e0ff0000e0ff0000803f0000803f0000c07f0000e0ff0000f1ff0000
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =10676
                     LayoutCachedTop =795
@@ -1886,7 +1878,6 @@ Begin Form
                         0x5f7326b71a2cdff4973df30dfe0592f958c4feff03c0a9b259cdcdef7ab89b44 ,
                         0x922d28280000000049454e44ae426082
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =10984
                     LayoutCachedTop =795
@@ -1949,7 +1940,6 @@ Begin Form
                         0x9d4227f649adc22f69142fcdbaa73746feafff06936575e73fdf9b1800000000 ,
                         0x49454e44ae426082
                     End
-
                     LayoutCachedLeft =11357
                     LayoutCachedTop =795
                     LayoutCachedWidth =11674
@@ -2009,7 +1999,6 @@ Begin Form
                         0x290943186f18dc4e823302a23d00a9c1
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =11855
                     LayoutCachedTop =795
                     LayoutCachedWidth =12356
@@ -2043,7 +2032,6 @@ Begin Form
                         0x3ed316ff2a92404dbe4baf980743eda7
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =12465
                     LayoutCachedTop =793
                     LayoutCachedWidth =15936
@@ -2214,7 +2202,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =16048
                     LayoutCachedTop =793
@@ -2278,7 +2265,6 @@ Begin Form
                         0xa6ba38a0eb2bfb42b93ba92ea2c482e0
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =13209
                     LayoutCachedTop =6240
                     LayoutCachedWidth =14455
@@ -2318,9 +2304,6 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
-
-
-
 Public m_ARProyectoSeleccionado As ARProyecto
 
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
@@ -2442,7 +2425,7 @@ Private Sub ComandoExportarAExcel_Click()
         m_Tipo = "irregulares"
     
     End If
-    Set lbl = Me.Parent.Controls("lblEstado")
+    Set lbl = Me.parent.Controls("lblEstado")
     Avance "Exportando a excel"
     m_URL = TareasAExcel(p_col:=m_ColFiltradoTareasNCProyectos, p_Tipo:=m_Tipo, p_Error:=m_Error)
     If m_Error <> "" Then
@@ -2638,7 +2621,7 @@ errores:
     Else
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 Private Function EstablecerCombos( _
@@ -2705,7 +2688,7 @@ Public Function Filtrar( _
     Me.ComandoVerDetalle.Enabled = False
     Me.ComandoExportarAExcel.Enabled = False
     Set lst = Me.ListaFiltrados
-    Me.lblListaDeResultados.Caption = "Registros filtrados (0)"
+    Me.lblListaDeResultados.caption = "Registros filtrados (0)"
     
     lst.RowSource = "IDAccionRealizada;NºTRA;Tarea;Responsable;Estado;F.prev.cierre;Tipo NC"
    
@@ -2732,8 +2715,8 @@ Public Function Filtrar( _
             Set m_ARProyecto = Nothing
         End With
     Next
-    Me.lblListaDeResultados.Caption = "Registros filtrados (" & lst.ListCount - 1 & ")"
-    lst.Selected(1) = True
+    Me.lblListaDeResultados.caption = "Registros filtrados (" & lst.ListCount - 1 & ")"
+    lst.selected(1) = True
     ListaFiltrados_Click
     
     

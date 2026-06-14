@@ -1,6 +1,7 @@
 Version =21
 VersionRequired =20
-Checksum =1881573172
+PublishOption =1
+Checksum =-1154703207
 Begin Form
     AutoResize = NotDefault
     RecordSelectors = NotDefault
@@ -403,6 +404,7 @@ Begin Form
         0x00000000
     End
     NoSaveCTIWhenDisabled =1
+    NoSaveCTIWhenDisabled =1
     Begin
         Begin Label
             BackStyle =0
@@ -560,7 +562,6 @@ Begin Form
                         0x9d4227f649adc22f69142fcdbaa73746feafff06936575e73fdf9b1800000000 ,
                         0x49454e44ae426082
                     End
-
                     LayoutCachedLeft =16142
                     LayoutCachedTop =45
                     LayoutCachedWidth =16760
@@ -785,7 +786,6 @@ Begin Form
                         "s de las 10+10…;8X8 (0024/21);ENEJECUCION;30/01/2023;'';328;NC0104;Una de las ra"
                         "dios prestadas a RFE está averiada.;8X8 (0024/21);ENEJECUCION;24/11/2022;''"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =435
                     LayoutCachedTop =3000
                     LayoutCachedWidth =16705
@@ -895,7 +895,6 @@ Begin Form
                         "OB0085;OB0084;OB0083;OB0080;OB0077;OB0076;OB0075;OB0124;OB0123;OB0078;OB0118;OB0"
                         "070;NC0052"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1890
                     LayoutCachedTop =283
                     LayoutCachedWidth =3941
@@ -1069,7 +1068,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =4143
                     LayoutCachedTop =261
                     LayoutCachedWidth =4440
@@ -1112,7 +1110,6 @@ Begin Form
                         0xe03ca3aa65b14c40877eb532b0a23ab9
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =435
                     LayoutCachedTop =6506
                     LayoutCachedWidth =1365
@@ -1161,7 +1158,6 @@ Begin Form
                         0x7e6c9ce500b59546841c5da02a901f9a
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1796
                     LayoutCachedTop =6519
                     LayoutCachedWidth =2726
@@ -1210,7 +1206,6 @@ Begin Form
                         0xf63cb691d060f743a7ac3fad4ac6c210
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =14475
                     LayoutCachedTop =6506
                     LayoutCachedWidth =15422
@@ -1400,7 +1395,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =10185
                     LayoutCachedTop =255
                     LayoutCachedWidth =10482
@@ -1453,7 +1447,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =11567
                     LayoutCachedTop =283
                     LayoutCachedWidth =16316
@@ -1627,7 +1620,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =16423
                     LayoutCachedTop =265
                     LayoutCachedWidth =16720
@@ -1683,7 +1675,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =5786
                     LayoutCachedTop =729
                     LayoutCachedWidth =9992
@@ -1857,7 +1848,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =10185
                     LayoutCachedTop =701
                     LayoutCachedWidth =10482
@@ -1914,7 +1904,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =11567
                     LayoutCachedTop =739
                     LayoutCachedWidth =16316
@@ -2088,7 +2077,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =16423
                     LayoutCachedTop =711
                     LayoutCachedWidth =16720
@@ -2134,7 +2122,6 @@ Begin Form
                         0x8186d517f07f5b47bc492ca26abf5f9a
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1890
                     LayoutCachedTop =1183
                     LayoutCachedWidth =9985
@@ -2170,7 +2157,6 @@ Begin Form
                         0xd4718490734c9f4892c752672f21d171
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1890
                     LayoutCachedTop =1628
                     LayoutCachedWidth =16300
@@ -2344,7 +2330,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =10185
                     LayoutCachedTop =1155
                     LayoutCachedWidth =10482
@@ -2528,7 +2513,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =16423
                     LayoutCachedTop =1600
                     LayoutCachedWidth =16720
@@ -2571,7 +2555,6 @@ Begin Form
                         0x9e5ebbae58e16948b36a5b3559970954
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =15655
                     LayoutCachedTop =6506
                     LayoutCachedWidth =16705
@@ -2630,7 +2613,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =7143
                     LayoutCachedTop =2040
                     LayoutCachedWidth =9134
@@ -2804,7 +2786,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =9305
                     LayoutCachedTop =2055
                     LayoutCachedWidth =9602
@@ -2988,7 +2969,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =4143
                     LayoutCachedTop =2055
                     LayoutCachedWidth =4440
@@ -3041,7 +3021,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =2910
                     LayoutCachedTop =2055
                     LayoutCachedWidth =4031
@@ -3294,7 +3273,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1890
                     LayoutCachedTop =729
                     LayoutCachedWidth =3941
@@ -3468,7 +3446,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =4143
                     LayoutCachedTop =701
                     LayoutCachedWidth =4440
@@ -3521,7 +3498,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =11567
                     LayoutCachedTop =2499
                     LayoutCachedWidth =15806
@@ -3695,7 +3671,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =15885
                     LayoutCachedTop =2505
                     LayoutCachedWidth =16182
@@ -3785,7 +3760,6 @@ Begin Form
                     FontName ="Segoe UI"
                     Tag ="BUSQUEDA"
                     GridlineColor =10921638
-
                     LayoutCachedLeft =1890
                     LayoutCachedTop =2523
                     LayoutCachedWidth =5826
@@ -3959,7 +3933,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =5910
                     LayoutCachedTop =2523
                     LayoutCachedWidth =6207
@@ -4026,7 +3999,6 @@ Begin Form
                         0x80edd8a4ee74014eba8041f60c8be50e
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =5805
                     LayoutCachedTop =255
                     LayoutCachedWidth =8046
@@ -4097,7 +4069,6 @@ Begin Form
                         0x0000ff070000fe030000fc010000fc010000ff070000ff070000ff070000e0ff ,
                         0x0000e0ff0000e0ff0000803f0000803f0000c07f0000e0ff0000f1ff0000
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =8156
                     LayoutCachedTop =255
@@ -4162,7 +4133,6 @@ Begin Form
                         0x5f7326b71a2cdff4973df30dfe0592f958c4feff03c0a9b259cdcdef7ab89b44 ,
                         0x922d28280000000049454e44ae426082
                     End
-
                     CursorOnHover =1
                     LayoutCachedLeft =8464
                     LayoutCachedTop =255
@@ -4225,7 +4195,6 @@ Begin Form
                         0x9d4227f649adc22f69142fcdbaa73746feafff06936575e73fdf9b1800000000 ,
                         0x49454e44ae426082
                     End
-
                     LayoutCachedLeft =8837
                     LayoutCachedTop =255
                     LayoutCachedWidth =9154
@@ -4285,7 +4254,6 @@ Begin Form
                         0x86f4b9b2a4e55c46921ea356b25c71af
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =9335
                     LayoutCachedTop =255
                     LayoutCachedWidth =10001
@@ -4316,7 +4284,6 @@ Begin Form
                         0x3820dfa3d6d96a4a809fbe9f5a5abf3f
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =3157
                     LayoutCachedTop =6525
                     LayoutCachedWidth =4087
@@ -4389,7 +4356,6 @@ Begin Form
                         0x2c693b7aa6d7794b93d38aedc3cd46e3
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =11567
                     LayoutCachedTop =2040
                     LayoutCachedWidth =16316
@@ -4562,7 +4528,6 @@ Begin Form
                         0xfffcf001fffce007fffce007fffcc067fffc807ffffc007ffffc00fffffc00ff ,
                         0xfffc01fffffc01fffffc03fffffcc7fffffc
                     End
-
                     LayoutCachedLeft =16423
                     LayoutCachedTop =2017
                     LayoutCachedWidth =16720
@@ -4604,7 +4569,6 @@ Begin Form
                         0x41b9da5cea9ba440a904544ac34a41d1
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =12915
                     LayoutCachedTop =6510
                     LayoutCachedWidth =14295
@@ -4674,7 +4638,6 @@ Begin Form
                         0xd2c4cf71c9d6754884fe89006d8316a2
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =4705
                     LayoutCachedTop =6525
                     LayoutCachedWidth =7585
@@ -4735,7 +4698,6 @@ Begin Form
                         0x3166fe1b0015b84493cf8f2182c0d1b2
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =16423
                     LayoutCachedTop =2505
                     LayoutCachedWidth =16720
@@ -4802,7 +4764,6 @@ Begin Form
                         0x82ab3031486d37458120772ee0573a71
                     End
                     GridlineColor =10921638
-
                     LayoutCachedLeft =14115
                     LayoutCachedTop =173
                     LayoutCachedWidth =15960
@@ -4898,7 +4859,6 @@ Begin Form
                         0xa74226a696e59fd30817f466a08a2cb72054021528252882d08fd00bfc86e117 ,
                         0x2cedcc904e5e904923e93fbb2014d2251d42230000000049454e44ae426082
                     End
-
                     LayoutCachedLeft =16142
                     LayoutCachedWidth =16720
                     LayoutCachedHeight =578
@@ -4966,10 +4926,8 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
-
-
-Public Event NCSeleccinonada(p_NC As NCProyecto)
-Public m_NCSeleccionada As NCProyecto
+Public Event NCSeleccinonada(p_NC As ncProyecto)
+Public m_NCSeleccionada As ncProyecto
 Private m_ColFiltrado As Scripting.Dictionary
 Private m_Expediente As Expediente
 Private WithEvents m_FormExpedientes As Form_FormExpedientesBusqueda
@@ -4980,7 +4938,7 @@ Private m_Error As String
 
 Private Sub cmdSalir_Click()
     On Error Resume Next
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 
@@ -5305,7 +5263,7 @@ Private Sub ComandoEliminar_Click()
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
-    If Me.ComandoEliminar.Caption = "Eliminar" Then
+    If Me.ComandoEliminar.caption = "Eliminar" Then
         pregunta = MsgBox("¿Desea marcar como borrado la no conformidad de proyecto seleccionada?", vbExclamation + vbYesNo + vbDefaultButton2, "Borrado de NC")
         m_Motivo = Nz(InputBox("Introduzca el motivo para marcar como borrada la no conformidad", "Motivación"), "")
         
@@ -5322,7 +5280,7 @@ Private Sub ComandoEliminar_Click()
     Set m_NCOp = New NCProyectoOperaciones
     With m_NCOp
         Set .nc = m_NCSeleccionada
-        If Me.ComandoEliminar.Caption = "Eliminar" Then
+        If Me.ComandoEliminar.caption = "Eliminar" Then
             .nc.MotivoBorrado = m_Motivo
             .Eliminar EnumSino.No, m_Error
         Else
@@ -5354,7 +5312,7 @@ End Sub
 Private Sub ComandoInformeLista_Click()
     Dim m_Col As Scripting.Dictionary
     Dim lst As ListBox
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim i As Long
     
     On Error GoTo errores
@@ -5804,7 +5762,7 @@ Private Sub Form_Open(Cancel As Integer)
     VBA.DoEvents
     m_Error = ""
     Ajustar Me
-    Me.Caption = Me.lblTitulo1.Caption
+    Me.caption = Me.lblTitulo1.caption
     Me.lblEstado.Visible = False
     EstablecerDatos m_Error
     If m_Error <> "" Then
@@ -5824,7 +5782,7 @@ errores:
     Else
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 Public Function EstablecerDatos(Optional ByRef p_Error As String) As String
@@ -5861,7 +5819,7 @@ Public Function getNCsFiltrados(Optional ByRef p_Error As String) As Scripting.D
     'Dim m_CasiTodosParametrosBusquedaVacios As EnumSino
     Dim m_ID As Variant
     Dim m_Col As Scripting.Dictionary
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim m_EnumEstado As EnumEstadoNC
     Dim m_Estado As String
     
@@ -6063,7 +6021,7 @@ End Function
 Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     
     Dim m_ID As Variant
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
    
     Dim m_IDNCPrevia As String
     Dim i As Long
@@ -6111,7 +6069,7 @@ Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     If IsNumeric(m_IDNCPrevia) Then
         For i = 1 To Me.ListaFiltrados.ListCount - 1
             If Me.ListaFiltrados.Column(0, i) = m_IDNCPrevia Then
-                Me.ListaFiltrados.Selected(i) = True
+                Me.ListaFiltrados.selected(i) = True
                 ListaFiltrados_Click
                 VBA.DoEvents
                 DoCmd.Hourglass False
@@ -6164,7 +6122,7 @@ Private Sub ListaFiltrados_Click()
     Me.ComandoInforme.Enabled = False
     Me.ComandoNCProyectoHistorial.Enabled = False
     Me.ComandoAltaVinculadas.Enabled = False
-    Me.ComandoAltaVinculadas.Caption = "Alta NC Vinculada"
+    Me.ComandoAltaVinculadas.caption = "Alta NC Vinculada"
     Me.lblEstado.Visible = False
     If Nz(Me.ListaFiltrados.Column(0), "") = "" Then
         Set m_NCSeleccionada = Nothing
@@ -6194,7 +6152,7 @@ Private Sub ListaFiltrados_Click()
     End If
      Me.ComandoInforme.Enabled = True
      Me.ComandoEditar.Enabled = True
-    Me.ComandoAltaVinculadas.Caption = "Alta NC vinculada a " & m_NCSeleccionada.CodigoNoConformidad
+    Me.ComandoAltaVinculadas.caption = "Alta NC vinculada a " & m_NCSeleccionada.CodigoNoConformidad
     If EsTecnico <> EnumSino.Sí Then
         Me.ComandoAltaVinculadas.Enabled = True
         
@@ -6209,16 +6167,16 @@ Private Sub ListaFiltrados_Click()
         Me.lblVinculado.Visible = False
     Else
         Me.lblVinculado.Visible = True
-        Me.lblVinculado.Caption = "Vinculada con la " & m_NCSeleccionada.NCProyectoAsociada.CodigoNoConformidad
+        Me.lblVinculado.caption = "Vinculada con la " & m_NCSeleccionada.NCProyectoAsociada.CodigoNoConformidad
     End If
     
    
     
     
     If m_NCSeleccionada.Estado = "BORRADA" Then
-        Me.ComandoEliminar.Caption = "Habilitar"
+        Me.ComandoEliminar.caption = "Habilitar"
     Else
-        Me.ComandoEliminar.Caption = "Eliminar"
+        Me.ComandoEliminar.caption = "Eliminar"
     End If
     
     
@@ -6265,7 +6223,7 @@ Public Function SeleccionarNC( _
     End If
     For i = 1 To lst.ListCount - 1
         If lst.Column(0, i) = m_ID Then
-            lst.Selected(i) = True
+            lst.selected(i) = True
             ListaFiltrados_Click
             Exit Function
         End If
@@ -6347,7 +6305,7 @@ End Sub
 
 Private Sub PieDelFormulario_DblClick(Cancel As Integer)
     Dim m_ID As String
-    Dim m_NCProyecto As NCProyecto
+    Dim m_NCProyecto As ncProyecto
     Dim m_mensaje As String
     On Error GoTo errores
     VBA.DoEvents
@@ -6416,7 +6374,7 @@ Private Function RellenarListaConCol( _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim m_ID As Variant
     
     Dim lst As ListBox
@@ -6445,7 +6403,7 @@ Private Function RellenarListaConCol( _
     
     
     If lst.ListCount > 1 Then
-        lst.Selected(1) = True
+        lst.selected(1) = True
         ListaFiltrados_Click
     End If
     Exit Function
@@ -6673,7 +6631,7 @@ Public Function ActualizarLineaLista( _
         m_IDLista = lst.Column(0, i)
         If m_ObjNCProyectoActiva.IDNoConformidad = m_IDLista Then
             
-            lst.Selected(i) = True
+            lst.selected(i) = True
             With m_ObjNCProyectoActiva
                 m_LineaAlFinal = .IDNoConformidad & ";" & .CodigoNoConformidad & ";" & _
                            Replace(.Descripcion, ";", ":") & _
@@ -6760,7 +6718,7 @@ Private Function ActualizarDatosFiltrados( _
                                             ) As String
    
     Dim m_ID As Variant
-    Dim m_NC As NCProyecto
+    Dim m_NC As ncProyecto
     Dim lst As ListBox
     Dim i As Long
     On Error GoTo errores
