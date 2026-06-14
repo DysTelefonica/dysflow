@@ -7,8 +7,15 @@
 | Field | Value |
 |-------|-------|
 | **Current** | `regressed` |
-| **Last verified** | 2026-06-06 (initial archive) |
+| **Last verified** | 2026-06-06 (initial archive; not against current HEAD) |
 | **Manifest drift** | `drifted` — `form-helper.json` 9 procedures verified; `listado-helper.json` references 3 procedures that do not exist in any source module (commit `ec6b4d0` deleted the original `Test_ListadoHelper_*` functions; actual coverage lives in `Test_CacheListadoNC_Parity.bas` under different names) |
+| **Staging reachability** | `reachable` — both integration commits are ancestors of `staging` |
+| **TDD evidence** | `thin` — last known passing is from 2026-06-06 (commits `500d6d5`/`2ca4de7`), not verified against current `staging` HEAD |
+| **Last verified commit** | `2ca4de7` (last known passing; not current HEAD) |
+| **Last verified at** | 2026-06-06 |
+| **Test evidence** | `tests/tests.vba.form-helper.json` 9/9 (last known at `2ca4de7`, **stale**) |
+| **Staging integration commit** | (not recorded — pending Phase 4 fresh run) |
+| **Evidence updated at** | 2026-06-06 (stale — needs refresh) |
 
 ## Business Behavior
 
@@ -94,7 +101,8 @@ _Web migration considerations — to be populated when migration work begins._
 
 ## Open Decisions
 
-1. **Manifest drift resolution**: retire `tests/tests.vba.listado-helper.json` (3 dead procedures) or update it to reference the replacement tests in `Test_CacheListadoNC_Parity.bas`. Required before feature can return to `passing`.
+1. **Manifest drift resolution (B3)**: retire `tests/tests.vba.listado-helper.json` (3 dead procedures) or update it to reference the replacement tests in `Test_CacheListadoNC_Parity.bas`. Required before feature can return to `passing`.
+2. **Fresh TDD evidence (B3)**: re-run `test_vba` against current `staging` HEAD to confirm 9/9 `form-helper.json` procedures still pass. Last known passing is from 2026-06-06 commits.
 
 ## Evidence Sources
 
@@ -102,3 +110,17 @@ _Web migration considerations — to be populated when migration work begins._
 - [Test manifest: form-helper](../../../tests/tests.vba.form-helper.json)
 - [Test manifest: listado-helper](../../../tests/tests.vba.listado-helper.json) (drifted)
 - [REGRESSION-ANCHOR entry](../../../openspec/REGRESSION-ANCHOR.md#form-ncproyecto-helper-coverage--project-listing-helper-coverage)
+
+## Post-Test Documentation Gate
+
+> **Rule**: Integration is not done until this section is updated. After staging integration and passing tests, update the Status section fields before declaring the work complete.
+
+| Step | Action | Done |
+|------|--------|------|
+| 1 | Tests pass against current `staging` HEAD | [ ] (last run was 2026-06-06; needs fresh run) |
+| 2 | `last_verified_commit` updated with current SHA | [ ] |
+| 3 | `last_verified_at` updated with current ISO datetime | [ ] |
+| 4 | `test_evidence` updated with manifest + pass/total | [ ] |
+| 5 | `staging_integration_commit` updated with merge SHA | [ ] |
+| 6 | `evidence_updated_at` updated with current datetime | [ ] |
+| 7 | Feature status reflects current state | [ ] (`regressed` — manifest drift unresolved) |

@@ -34,6 +34,8 @@ Every feature file MUST populate these fields. Empty = close-gate fails.
 | `status` | `active` / `passing` / `regressed` / `archived` |
 | `last_verified` | ISO date of most recent verification |
 | `manifest_drift_status` | `clean` / `drifted` / `unregistered` |
+| `staging_reachability` | `reachable` / `not-reachable` — ALL `integration_commits` must be ancestors of `staging` |
+| `tdd_evidence` | `fresh` / `thin` / `none` — fresh = manifest/test_vba run against current HEAD or verified staging commit; thin = commit-message-level only; none = no evidence |
 
 ## Domains
 
@@ -52,6 +54,57 @@ Every feature file MUST populate these fields. Empty = close-gate fails.
 4. Add a row to `openspec/REGRESSION-ANCHOR.md` summary table
 5. Add the feature to the domain listing above
 
+## Manifest-to-feature mapping
+
+The following `tests/*.json` manifests are mapped to features. Manifests not listed here are **unmapped** (either out of scope or pending feature file).
+
+| Manifest | Feature key | Status |
+|----------|-------------|--------|
+| `tests.vba.form-helper.json` | `form-ncproyecto-helper-coverage` | mapped |
+| `tests.vba.listado-helper.json` | `form-ncproyecto-helper-coverage` | mapped (drift documented; resolution pending) |
+| `tests.vba.seguimiento-tareas-helper.json` | `ncproyecto-seguimiento-tareas-helper` | mapped |
+| `tests.vba.proyecto-gestion-helper.json` | `form-fncproyecto-cache-invalidation` | mapped |
+| `tests.vba.audit-gestion-helper.json` | `audit-backend-list-cache` | mapped |
+| `tests.vba.json` (filter=issue-19) | `ce-fecha-obligatoria-postponement` | mapped |
+| (cache-trust manifest TBD) | `trust-ncproyecto-cache-hits` | **unmapped** — see feature open_decisions |
+| `tests.vba.cache-e2e.json` (if exists) | (potential cache-trust home) | candidate manifest — verify in Phase 4 |
+
+**Unregistered manifests** (not in `config.yaml` or with count mismatches):
+
+- `tests.vba.proyecto-gestion-helper.json` — 8 procedures, not in `config.yaml`
+- `tests.vba.audit-gestion-helper.json` — `config.yaml` says 5, source has 11
+
+## Release & Branching Policy
+
+| Branch | Role | Rules |
+|--------|------|-------|
+| `main` | Current production state | Updated only after UAT approval; never direct commits |
+| `staging` | UAT / integration candidate | All feature work targets this branch |
+
+### UAT → Production flow
+
+1. Feature work targets `staging` (all SDD changes, PRs, merges).
+2. After UAT with colleagues passes on `staging`, production release = `main` updated to exactly the approved `staging` state.
+3. If production goes badly, rollback = revert `main` to the previous production release commit.
+
+### UAT Tag Policy
+
+Each UAT round against staging produces an **immutable UAT tag**. Tags are sequential and never reused.
+
+| Rule | Detail |
+|------|--------|
+| **Naming** | `PRUEBAS-001`, `PRUEBAS-002`, `PRUEBAS-003`, … (increment on each UAT round) |
+| **When created** | Every time staging is promoted to UAT, create the next tag before testing begins |
+| **Immutability** | Once created, a UAT tag points to an exact commit and never moves |
+| **Issue found** | Fix staging → create next UAT tag for the new round |
+| **All approved** | The final approved UAT tag is the release gate — production promotion records this tag |
+| **Production release** | `main` is updated to the approved staging state; a production release tag/record is created |
+| **Rollback** | Revert `main` to the previous production release commit/tag |
+
+**Close-gate rule**: No feature may be promoted to production without a recorded, approved final UAT tag in its Release Tracking section.
+
+---
+
 ## Close-gate checklist
 
 Before declaring any feature closed:
@@ -62,5 +115,26 @@ Before declaring any feature closed:
 - [ ] `manifest_drift_status` is `clean` or drift is documented with resolution plan
 - [ ] `access_sync_status` records import/compile evidence (or N/A)
 - [ ] `integration_commits` lists SHAs with `is-ancestor` verification
+- [ ] **Staging reachability gate**: ALL `integration_commits` SHAs must be reachable from `staging` (`git merge-base --is-ancestor <sha> staging` = true). If ANY commit is not reachable, the feature status **cannot** be `passing` — it must be `not-current` or `regressed` until the commits are merged or recreated into `staging`.
+- [ ] **TDD evidence gate**: Fresh `test_vba` run evidence (manifest pass/total against current HEAD or a verified staging commit) is required before the feature can be declared `passing` or ready for UAT/release. Commit-message-level evidence ("3/3 green" in a commit body) is **not sufficient** for this gate — it must be a manifest result or Dysflow test run output.
+- [ ] **Post-test documentation gate**: After staging integration and passing tests, the feature ledger Status section is updated with fresh evidence before declaring work complete. Required fields: `last_verified_commit`, `last_verified_at`, `test_evidence`, `staging_integration_commit`, `evidence_updated_at`. Integration is **not done** until this gate is satisfied.
+- [ ] **UAT tag gate**: `approved_uat_tag` is recorded (or N/A for features not yet in UAT)
 - [ ] `openspec/REGRESSION-ANCHOR.md` summary table links to the feature file
 - [ ] This README domain listing includes the feature
+
+## Post-Test Documentation Gate (mandatory workflow rule)
+
+> **Integration is not done until the docs are updated with passing evidence.**
+
+When missing work is integrated into staging and tests pass, the feature ledger must be updated **immediately** before declaring the work complete. This is required so any future regression can be detected quickly from the ledger: last passing commit, tests/manifests, evidence, UAT tag/release status, rollback anchor.
+
+| Step | Gate | Required field(s) |
+|------|------|-------------------|
+| 1 | Tests pass against staging HEAD | — |
+| 2 | Feature ledger Status section updated | `last_verified_commit`, `last_verified_at` |
+| 3 | Test evidence recorded | `test_evidence` |
+| 4 | Staging integration commit recorded | `staging_integration_commit` |
+| 5 | Evidence timestamp recorded | `evidence_updated_at` |
+| 6 | Feature status reflects current state | `Current` |
+
+**Why this matters**: Without this gate, a regression can go undetected because the ledger still shows stale evidence from a previous run. The `evidence_updated_at` field creates a clear audit trail: if evidence is older than the latest integration commit, the feature is not verified against current code.

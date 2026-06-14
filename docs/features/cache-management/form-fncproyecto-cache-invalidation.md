@@ -6,9 +6,16 @@
 
 | Field | Value |
 |-------|-------|
-| **Current** | `passing` |
-| **Last verified** | 2026-06-12 (slice-level: Slice 2 3/3, Slice 3 4/4, Slice 4 1/1) |
+| **Current** | `not-current` (B1 blocker: not reachable from `staging`) |
+| **Last verified** | 2026-06-12 (slice-level: Slice 2 3/3, Slice 3 4/4, Slice 4 1/1) — **not against current `staging` HEAD** |
 | **Manifest drift** | `clean` (for `proyecto-gestion-helper.json`) |
+| **Staging reachability** | `not-reachable` — all 5 implementation SHAs are on `feat/form-fncproyecto-cache-invalidation` only; no merge or recreation has happened on `staging` |
+| **TDD evidence** | `thin` — slice-level evidence only; **no full manifest `test_vba` run** has been recorded against any `staging` HEAD |
+| **Last verified commit** | (none on `staging`; slice-level evidence is from `b2eb8a1` on feat branch) |
+| **Last verified at** | 2026-06-12 |
+| **Test evidence** | Slice 2 3/3 + Slice 3 4/4 + Slice 4 1/1 (commit-message-level, not a full manifest run) |
+| **Staging integration commit** | (none — feat branch not yet merged) |
+| **Evidence updated at** | 2026-06-12 (stale — needs full run against `staging` HEAD) |
 
 ## Business Behavior
 
@@ -87,8 +94,8 @@ _Web migration considerations — to be populated when migration work begins._
 
 ## Open Decisions
 
-1. **Staging reachability**: feat branch not yet merged to staging. All 5 implementation SHAs are reachable only from the feature branch. Resolution: merge feat branch to staging (or recreate on staging) and re-verify.
-2. **Full manifest run**: only slice-level evidence is recorded. Full manifest `test_vba` run needed before production promotion.
+1. **B1 — Staging reachability**: feat branch not yet merged to staging. All 5 implementation SHAs are reachable only from the feature branch. Resolution: merge feat branch to staging (or recreate on staging) and re-verify.
+2. **B1 — Full manifest run**: only slice-level evidence is recorded. Full manifest `test_vba` run needed against `staging` HEAD once reachable.
 3. **Spec wording drift**: R2 signature wording (`As Boolean` vs `As String`) remains inconsistent across artifacts.
 
 ## Evidence Sources
@@ -96,3 +103,17 @@ _Web migration considerations — to be populated when migration work begins._
 - [Archive report](../../../openspec/changes/archive/2026-06-12-form-fncproyecto-cache-invalidation/archive-report.md)
 - [Test manifest: proyecto-gestion-helper](../../../tests/tests.vba.proyecto-gestion-helper.json)
 - [Spec](../../../openspec/specs/form-fncproyecto-cache-invalidation/spec.md)
+
+## Post-Test Documentation Gate
+
+> **Rule**: Integration is not done until this section is updated. After staging integration and passing tests, update the Status section fields before declaring the work complete.
+
+| Step | Action | Done |
+|------|--------|------|
+| 1 | Tests pass against current `staging` HEAD | [ ] (B1: feat branch not yet merged; needs full manifest run after merge) |
+| 2 | `last_verified_commit` updated with current SHA | [ ] |
+| 3 | `last_verified_at` updated with current ISO datetime | [ ] |
+| 4 | `test_evidence` updated with manifest + pass/total | [ ] |
+| 5 | `staging_integration_commit` updated with merge SHA | [ ] |
+| 6 | `evidence_updated_at` updated with current datetime | [ ] |
+| 7 | Feature status reflects current state | [ ] (`not-current` until B1 resolved) |

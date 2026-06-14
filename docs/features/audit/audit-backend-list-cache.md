@@ -9,6 +9,13 @@
 | **Current** | `passing` |
 | **Last verified** | 2026-06-06 |
 | **Manifest drift** | `clean` |
+| **Staging reachability** | `reachable` — all 4 integration commits are ancestors of `staging` |
+| **TDD evidence** | `fresh` — 11/11 pass in manifest at verified staging commits |
+| **Last verified commit** | `3c4692f` (final commit) |
+| **Last verified at** | 2026-06-06 |
+| **Test evidence** | `tests/tests.vba.audit-gestion-helper.json` 11/11 |
+| **Staging integration commit** | `3c4692f` |
+| **Evidence updated at** | 2026-06-06 |
 
 ## Business Behavior
 
@@ -89,3 +96,17 @@ _Web migration considerations — to be populated when migration work begins._
 - [Archive report](../../../openspec/changes/archive/2026-06-06-audit-backend-list-cache/archive-report.md)
 - [Test manifest: audit-gestion-helper](../../../tests/tests.vba.audit-gestion-helper.json)
 - [Spec](../../../openspec/specs/audit-backend-list-cache/spec.md)
+
+## Post-Test Documentation Gate
+
+> **Rule**: Integration is not done until this section is updated. After staging integration and passing tests, update the Status section fields before declaring the work complete.
+
+| Step | Action | Done |
+|------|--------|------|
+| 1 | Tests pass against staging HEAD | [x] (11/11 at `3c4692f`) |
+| 2 | `last_verified_commit` updated with SHA | [x] |
+| 3 | `last_verified_at` updated with ISO datetime | [x] |
+| 4 | `test_evidence` updated with manifest + pass/total | [x] |
+| 5 | `staging_integration_commit` updated with merge SHA | [x] |
+| 6 | `evidence_updated_at` updated with current datetime | [x] |
+| 7 | Feature status reflects current state | [x] (`passing`) |
