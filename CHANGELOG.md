@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.56] - 2026-06-14
+
+### Fixed
+
+- `verify_binary`/`reconcile_binary` no longer compare a form's code-behind inside its `.form.txt`. A form's code-behind lives canonically in `forms/*.cls` (dysflow's export writes it from `CodeModule.Lines`, and import syncs it back into the document module), and the same code is also serialized — through a different path, `SaveAsText` — into the `.form.txt` `CodeBehindForm` section. Comparing it there only double-counted the code and re-introduced serialization noise (encoding, attribute headers, casing) the `.cls` comparison already owns. The classifier now strips everything from the `CodeBehindForm` marker onward and verifies a form's **code via its `.cls`** and its **UI/layout via its `.form.txt`**. A real UI change (control/property/layout) stays actionable; code-behind churn in the `.form.txt` is non-actionable.
+- Bumped `classifierRules` to `2026-06-14.r5-formtxt-codebehind-split`.
+
 ## [v1.2.55] - 2026-06-13
 
 ### Fixed

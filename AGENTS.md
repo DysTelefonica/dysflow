@@ -59,9 +59,15 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   functional ONLY when both sides name the module and the names differ (a real rename). A `.frm`
   starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be
   stripped; only `VERSION <num> CLASS` headers are.
-- **Form serialization noise is a LOCKED allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
-  `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `NameMap` and
-  `GUID` are functional — do not strip them. Unknown keys are retained (functional).
+- **A form's code-behind is verified through its `forms/*.cls`, NOT its `.form.txt`.** The code lives
+  canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the
+  document module). The `.form.txt` `CodeBehindForm` section is the same code serialized a second way
+  (`SaveAsText`), so the classifier strips everything from `CodeBehindForm` onward and compares a
+  `.form.txt` for its **UI/layout only**. Never compare form code-behind through the `.form.txt` — it
+  double-counts and re-imports the serialization noise the `.cls` already owns.
+- **Form serialization noise is an allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
+  `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `GUID` is
+  functional — do not strip it. Unknown keys are retained (functional).
 - **Toggle-property serialization is equivalent**: `Visible =0` ≡ `Visible = NotDefault` ≡
   `Visible =-1`. Access only serializes a non-default value, so the written value is always the same
   and only its `NotDefault`/`0`/`-1` representation varies. This collapse is value-token scoped — a

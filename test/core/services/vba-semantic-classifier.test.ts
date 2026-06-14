@@ -1312,3 +1312,116 @@ describe("module header boilerplate normalization", () => {
     expect(result.actionable).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T16 — .form.txt CodeBehindForm is verified via the .cls, not the .form.txt
+// ---------------------------------------------------------------------------
+
+describe("form.txt — code-behind is ignored (verified through the .cls)", () => {
+  const formWith = (code: string) =>
+    [
+      "Version =21",
+      "Begin Form",
+      '    Caption ="Test"',
+      "    Begin Label",
+      '        Name ="lblX"',
+      "    End",
+      "End",
+      "CodeBehindForm",
+      "Attribute VB_GlobalNameSpace = False",
+      "Attribute VB_Creatable = True",
+      "Option Compare Database",
+      "Option Explicit",
+      code,
+    ].join("\n");
+
+  it("ignores a code-behind-only difference (case) in a form.txt", () => {
+    const src = formWith('Private Sub Run()\n    Me.lblX.Caption = "Hola"\nEnd Sub');
+    const bin = formWith('Private Sub Run()\n    Me.lblX.caption = "Hola"\nEnd Sub');
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("ignores even a REAL code-behind change in a form.txt (the .cls owns it)", () => {
+    const src = formWith("Private Sub Run()\n    DoThing 1\nEnd Sub");
+    const bin = formWith("Private Sub Run()\n    DoThing 2\nEnd Sub");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("still flags a real UI/layout change in the form.txt", () => {
+    const src = [
+      "Version =21",
+      "Begin Form",
+      '    Caption ="Original"',
+      "End",
+      "CodeBehindForm",
+      "Option Compare Database",
+      "Private Sub Run()\nEnd Sub",
+    ].join("\n");
+    const bin = [
+      "Version =21",
+      "Begin Form",
+      '    Caption ="Changed"',
+      "End",
+      "CodeBehindForm",
+      "Option Compare Database",
+      "Private Sub Run()\nEnd Sub",
+    ].join("\n");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+
+  it("ignores code-behind churn even alongside serialization noise (UI identical)", () => {
+    const src = [
+      "Version =21",
+      "Checksum =-111",
+      "Begin Form",
+      '    Caption ="Test"',
+      "End",
+      "CodeBehindForm",
+      "Option Compare Database",
+      "Private Sub Run()\n    DoThing 1\nEnd Sub",
+    ].join("\n");
+    const bin = [
+      "Version =21",
+      "Checksum =-999",
+      "Begin Form",
+      '    Caption ="Test"',
+      "End",
+      "CodeBehindForm",
+      "Option Compare Database",
+      "Private Sub Run()\n    DoThing 2\nEnd Sub",
+    ].join("\n");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+});
