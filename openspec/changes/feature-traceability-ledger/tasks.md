@@ -90,7 +90,14 @@ Chain strategy: stacked-to-main
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| *(pending commit)* | PR 1: structure + first backfill | 1.1–1.8 | Link check, schema check | N/A — no Access objects modified |
-| *(pending sdd-apply)* | PR 2: 5 archived backfills | 2.1–2.8 | Ancestor checks, evidence source count | N/A — no Access objects modified |
-| *(pending sdd-apply)* | PR 3: index + mapping + guards + staging/tdd gates | 3.1–3.10 | Bidirectional links, schema spot-check, gate columns | N/A — no Access objects modified |
-| *(pending remediation)* | PR 4: blocker remediation (B1+B2+B3) | 4.1–4.13 | Staging reachability verified, fresh test_vba runs recorded | Import + manual compile for B2/B3 |
+| `af13d02` (PR #62, merged `f8c6b82`) | PR 1: structure + first backfill | 1.1–1.8 | Link check, schema check | N/A — no Access objects modified |
+| `792e14d` (PR #63, merged `18680b2`) | PR 2: 5 archived backfills | 2.1–2.8 | Ancestor checks, evidence source count | N/A — no Access objects modified |
+| `71112e1` (PR #64, merged `42e342a`) | PR 3: index + mapping + guards + staging/tdd gates | 3.1–3.10 | Bidirectional links, schema spot-check, gate columns | N/A — no Access objects modified |
+| `d5c009c` (PR #65 commit 1) | PR 4 part 1: code integration (B1) | 4.1–4.5 | Equivalent-changes trace; export/reimport path documented | Source in staging; binary current per `20b71f6`; user compile required |
+| `ddbca6e` (PR #65 commit 2, merged `1829f3f`) | PR 4 part 2: B1/B2/B3 doc updates | 4.4–4.13 | Staging reachability verified, fresh test_vba runs recorded (8/8 + 7/7 + 9/9) | N/A — no new Access objects; user compile required before next test_vba |
+
+**Chain strategy**: stacked-to-staging (4-PR chain, all target `staging`).
+**PR merge method**: `--merge` (preserves individual commit SHAs for traceability).
+**Final staging HEAD after all PRs merged**: `1829f3f`.
+
+**B1 equivalent-changes note**: \`feat/form-fncproyecto-cache-invalidation\` SHAs (`356f185`, `4849cf8`, `b85ebab`, `38a8e9b`, `b2eb8a1`) are NOT ancestors of \`staging\` — equivalent changes were brought in via the binary export/reimport path documented in commit `20b71f6` and earlier. All functional code is verified present at staging HEAD `20b71f64`.
