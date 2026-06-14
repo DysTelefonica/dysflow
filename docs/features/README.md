@@ -39,7 +39,10 @@ Every feature file MUST populate these fields. Empty = close-gate fails.
 
 | Domain | Features | Description |
 |--------|----------|-------------|
-| `project-listing` | 1 | NCProyecto listing, helpers, form integration, tracking indicators |
+| `project-listing` | 2 | NCProyecto listing, helpers, form integration, tracking indicators |
+| `cache-management` | 2 | Cache invalidation, rebuild, trust |
+| `audit` | 1 | Audit list cache, transaction fixes |
+| `compliance` | 1 | CE gating, date enforcement |
 
 ## How to add a feature
 
