@@ -2295,6 +2295,32 @@ errores:
 End Function
 
 
+' SDD: test-seam-separation — pure data helper, no ComboBox dependency.
+' Returns a Scripting.Dictionary of tipologia NC projects keyed by IDTipo.
+' Tests can call this directly without opening forms or requiring controls.
+Public Function ObtenerTiposNC( _
+                                Optional ByRef p_Error As String _
+                                ) As Scripting.Dictionary
+    On Error GoTo errores
+    
+    If m_ObjEntorno Is Nothing Then
+        Set ObtenerTiposNC = Nothing
+        Exit Function
+    End If
+    
+    Set ObtenerTiposNC = m_ObjEntorno.ColTipos
+    p_Error = m_ObjEntorno.Error
+    If p_Error <> "" Then
+        Err.Raise 100
+    End If
+    Exit Function
+ errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método ObtenerTiposNC ha devuelto el error: " & vbNewLine & Err.Description
+    End If
+    Set ObtenerTiposNC = Nothing
+End Function
+
 Public Function EstablecerComboTipo( _
                                             cmb As ComboBox, _
                                             Optional ByRef p_Error As String _
@@ -2307,9 +2333,17 @@ Public Function EstablecerComboTipo( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
-    Set m_Col = m_ObjEntorno.ColTipos
-    p_Error = m_ObjEntorno.Error
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
+    Set m_Col = ObtenerTiposNC(p_Error)
     If p_Error <> "" Then
         Err.Raise 100
     End If
@@ -2322,7 +2356,7 @@ Public Function EstablecerComboTipo( _
         Set m_Tipo = Nothing
     Next
     Exit Function
-errores:
+ errores:
     If Err.Number <> 1000 Then
         p_Error = "El método EstablecerComboTipo ha devuelto el error: " & vbNewLine & Err.Description
     End If
@@ -2339,7 +2373,15 @@ Public Function EstablecerComboResponsables( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
     
     If m_ObjEntorno.ColJefesProyecto Is Nothing Then
         Exit Function
@@ -2373,7 +2415,16 @@ Public Function EstablecerComboJP( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColJefesProyecto
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -2409,7 +2460,16 @@ Public Function EstablecerComboEstado( _
    
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     For Each m_ID In m_ObjEntorno.ColEstadosNC
         m_Titulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_ID))
         cmb.AddItem m_Titulo & ";" & m_ID
@@ -2431,7 +2491,16 @@ Public Function EstablecerComboEstadoAC( _
    
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     For Each m_ID In m_ObjEntorno.ColEstadosAC
         m_Titulo = m_ObjEntorno.ColEstadosACTitulo(CStr(m_ID))
         cmb.AddItem m_Titulo & ";" & m_ID
@@ -2454,7 +2523,16 @@ Public Function EstablecerComboResponsablesCalidad( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColUsuariosCalidad
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3645,7 +3723,16 @@ Public Function EstablecerComboResponsablesImplantacion( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColUsuariosCalidad
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3676,7 +3763,16 @@ Public Function EstablecerComboPuntosNormaNCAuditorias( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColPuntosNormaNCAuditorias
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3709,7 +3805,16 @@ Public Function EstablecerComboAuditoriasNombres( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColAuditorias
     If p_Error <> "" Then
         Err.Raise 1000
@@ -3851,7 +3956,16 @@ Public Function EstablecerComboOrdenarPor( _
     
     On Error GoTo errores
     
+    If cmb Is Nothing Then
+        Exit Function
+    End If
+    
     cmb.RowSource = ""
+    
+    If m_ObjEntorno Is Nothing Then
+        Exit Function
+    End If
+    
     Set m_Col = m_ObjEntorno.ColEnumOrdenTitulo
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then

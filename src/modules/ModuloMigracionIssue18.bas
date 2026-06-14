@@ -1,4 +1,4 @@
-Attribute VB_Name = "MigracionIssue18"
+Attribute VB_Name = "ModuloMigracionIssue18"
 ' ============================================================
 '  Modulo: ModuloMigracionIssue18
 '  Proposito: Helper idempotente para aplicar la migracion DDL

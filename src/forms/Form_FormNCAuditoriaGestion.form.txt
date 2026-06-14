@@ -1,6 +1,7 @@
 Version =21
 VersionRequired =20
-Checksum =-1833882569
+PublishOption =1
+Checksum =-1193409081
 Begin Form
     AutoResize = NotDefault
     RecordSelectors = NotDefault
@@ -32,10 +33,6 @@ Begin Form
     GUID = Begin
         0xd0779b60584a43479da5174602fbd2fd
     End
-    NameMap = Begin
-        0x0acc0e5500000000000000000000000000000000000000000c00000005000000 ,
-        0x0000000000000000000000000000
-    End
     Caption ="GESTIÓN DE NC DE AUDITORÍA"
     OnOpen ="[Event Procedure]"
     DatasheetFontName ="Arial"
@@ -44,10 +41,10 @@ Begin Form
         0x010000006801000000000000a10700000100000001000000
     End
     PrtDevMode = Begin
-        0x003eee80ad000000e0070d366e02000008b4dc0dfe7f00009681ca0dfe7f0000 ,
+        0x00000000000000002088efc6df00000060f2865cb20200000200000000000000 ,
         0x010403069c00581403ff000001000900ea0a6f08640001000f00580202000100 ,
-        0x580202000000436172746100fd7f000002000000ad00000000a0c580ad000000 ,
-        0x003eee80ad000000000000000000000000000000010000000000000001000000 ,
+        0x580202000000436172746100b2020000a087efc6df000000c886efc6df000000 ,
+        0x9086efc6df000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
         0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
         0x00000000000000000500000000002f0001000000000000000000000000000000 ,
@@ -216,19 +213,19 @@ Begin Form
     PrtDevNames = Begin
         0x08001f0036000100000000000000000000000000000000000000000000000000 ,
         0x00000000000000000000000000000000000000000000504f525450524f4d5054 ,
-        0x3a00000000000000000000000000
+        0x3a0000000000000000000000000000000000
     End
     AllowDatasheetView =0
     FilterOnLoad =0
     AllowLayoutView =0
     DatasheetGridlinesColor12 =12632256
     PrtDevModeW = Begin
-        0x0000ef80ad00000005302015000000000000000000000000cf02000000000000 ,
-        0x2800000000000000cf02000000000000b031ef80ad00000078fcfef8fd7f0000 ,
+        0x0000000000000000000000000000000000000000000000000000000000000000 ,
+        0x0000000000000000307befc6df00000000000000000000000400000000000000 ,
         0x01040306dc00581403ff000001000900ea0a6f08640001000f00580202000100 ,
-        0x580202000000430061007200740061000000ef80ad00000001040005ad000000 ,
-        0xc89aa95a6e020000cf0200000000000000f7fef8fd7f00002800000000000000 ,
-        0x7825ef80ad000000000000000000000000000000010000000000000001000000 ,
+        0x5802020000004300610072007400610000006b46b20200000a000000fe7f0000 ,
+        0x38000000000000000000000000000000000000000000000000007846b2020000 ,
+        0x3000000000000000000000000000000000000000010000000000000001000000 ,
         0x0200000001000000ffffffff4749533400000000000000000000000044494e55 ,
         0x2200d0002c032c11e25e8d530000000000000000000000000000000000000000 ,
         0x00000000000000000500000000002f0001000000000000000000000000000000 ,
@@ -399,8 +396,9 @@ Begin Form
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000000000000000000000000000000000000000000000000000000000000 ,
         0x0000000050004f0052005400500052004f004d00500054003a00000000000000 ,
-        0x0000000000000000000000000000000000000000
+        0x00000000000000000000000000000000000000000000000000000000
     End
+    NoSaveCTIWhenDisabled =1
     NoSaveCTIWhenDisabled =1
     Begin
         Begin Label
@@ -3159,10 +3157,8 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Compare Database
 Option Explicit
-
-
-Public Event NCSeleccinonada(p_NC As NCAuditoria)
-Public m_NCSeleccionada As NCAuditoria
+Public Event NCSeleccinonada(p_NC As ncAuditoria)
+Public m_NCSeleccionada As ncAuditoria
 Private m_Expediente As Expediente
 Private m_ColFiltrado As Scripting.Dictionary
 Private m_ParaVinculo As Boolean
@@ -3205,7 +3201,7 @@ Private Function ActualizarDatosFiltrados( _
                                             ) As String
    
     Dim m_ID As Variant
-    Dim m_NC As NCAuditoria
+    Dim m_NC As ncAuditoria
     Dim lst As ListBox
     Dim i As Long
     On Error GoTo errores
@@ -3277,7 +3273,7 @@ End Sub
 
 Private Sub PieDelFormulario_DblClick(Cancel As Integer)
     Dim m_ID As String
-    Dim m_NCAuditoria As NCAuditoria
+    Dim m_NCAuditoria As ncAuditoria
     Dim m_mensaje As String
     On Error GoTo errores
     VBA.DoEvents
@@ -3320,7 +3316,7 @@ End Sub
 
 Private Sub cmdSalir_Click()
     On Error Resume Next
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 
@@ -3539,7 +3535,7 @@ Private Sub ComandoEliminar_Click()
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
-    If Me.ComandoEliminar.Caption = "Eliminar" Then
+    If Me.ComandoEliminar.caption = "Eliminar" Then
         pregunta = MsgBox("¿Desea marcar como borrado la no conformidad de auditoria seleccionada?", vbExclamation + vbYesNo + vbDefaultButton2, "Borrado de NC")
         m_Motivo = Nz(InputBox("Introduzca el motivo para marcar como borrada la no conformidad", "Motivación"), "")
         
@@ -3556,7 +3552,7 @@ Private Sub ComandoEliminar_Click()
     Set m_NCOp = New NCaUDITORIAOperaciones
     With m_NCOp
         Set .nc = m_NCSeleccionada
-        If Me.ComandoEliminar.Caption = "Eliminar" Then
+        If Me.ComandoEliminar.caption = "Eliminar" Then
             .nc.MotivoBorrado = m_Motivo
             .Eliminar EnumSino.No, m_Error
         Else
@@ -3588,7 +3584,7 @@ End Sub
 Private Sub ComandoInformeLista_Click()
     Dim m_Col As Scripting.Dictionary
     Dim lst As ListBox
-    Dim m_NC As NCAuditoria
+    Dim m_NC As ncAuditoria
     Dim i As Long
     
     On Error GoTo errores
@@ -3853,7 +3849,7 @@ Private Sub Form_Open(Cancel As Integer)
     VBA.DoEvents
     m_Error = ""
     Ajustar Me
-    Me.Caption = Me.lblTitulo1.Caption
+    Me.caption = Me.lblTitulo1.caption
     Me.lblEstado.Visible = False
    
     EstablecerCombos m_Error
@@ -3869,7 +3865,7 @@ Private Sub Form_Open(Cancel As Integer)
     Me.ComandoInforme.Enabled = False
     Me.ComandoInformeLista.Enabled = False
     Me.ComandoAltaDeAuditoria.Enabled = False
-    Me.ComandoAltaDeAuditoria.Caption = "Alta para #"
+    Me.ComandoAltaDeAuditoria.caption = "Alta para #"
     VBA.DoEvents
     DoCmd.Hourglass False
     VBA.DoEvents
@@ -3883,7 +3879,7 @@ errores:
     Else
         pregunta = MsgBox(m_Error, vbExclamation, "Advertencia")
     End If
-    DoCmd.Close acForm, Me.Name, acSaveNo
+    DoCmd.Close acForm, Me.name, acSaveNo
 End Sub
 
 Public Function getNCsAudtoriasFiltrados(Optional ByRef p_Error As String) As Scripting.Dictionary
@@ -3891,7 +3887,7 @@ Public Function getNCsAudtoriasFiltrados(Optional ByRef p_Error As String) As Sc
     Dim m_TodosParametrosBusquedaVacios As EnumSino
     Dim m_ID As Variant
     Dim m_Col As Scripting.Dictionary
-    Dim m_NC As NCAuditoria
+    Dim m_NC As ncAuditoria
     
     
     Dim m_ColGoogle As Scripting.Dictionary
@@ -4020,7 +4016,7 @@ End Function
 Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     
     Dim m_ID As Variant
-    Dim m_NC As NCAuditoria
+    Dim m_NC As ncAuditoria
     
     Dim m_IDNCPrevia As String
     Dim i As Long
@@ -4047,7 +4043,7 @@ Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     Me.ComandoInforme.Enabled = False
     Me.ComandoNCAuditoriaHistorial.Enabled = False
     Me.ComandoAltaDeAuditoria.Enabled = False
-    Me.ComandoAltaDeAuditoria.Caption = "Alta para #"
+    Me.ComandoAltaDeAuditoria.caption = "Alta para #"
     Me.lblEstado.Visible = False
     Set m_NCSeleccionada = Nothing
     Me.ListaFiltrados.RowSource = "IDNoconformidad;Auditoría;Tipo;Nº;Descripción;Responsable;Estado;FApertura;FCierre"
@@ -4072,7 +4068,7 @@ Public Sub ActualizarLista(Optional p_ManteniendoSeleccionado As EnumSino)
     If IsNumeric(m_IDNCPrevia) Then
         For i = 1 To Me.ListaFiltrados.ListCount - 1
             If Me.ListaFiltrados.Column(0, i) = m_IDNCPrevia Then
-                Me.ListaFiltrados.Selected(i) = True
+                Me.ListaFiltrados.selected(i) = True
                 ListaFiltrados_Click
                 VBA.DoEvents
                 DoCmd.Hourglass False
@@ -4115,7 +4111,7 @@ Private Sub ListaFiltrados_Click()
     Me.ComandoInforme.Enabled = False
     Me.ComandoNCAuditoriaHistorial.Enabled = False
     Me.ComandoAltaDeAuditoria.Enabled = False
-    Me.ComandoAltaDeAuditoria.Caption = "Alta para #"
+    Me.ComandoAltaDeAuditoria.caption = "Alta para #"
     Me.lblEstado.Visible = False
     If Nz(Me.ListaFiltrados.Column(0), "") = "" Then
         Set m_NCSeleccionada = Nothing
@@ -4146,9 +4142,9 @@ Private Sub ListaFiltrados_Click()
     Me.ComandoEditar.Enabled = True
     
     If m_NCSeleccionada.Estado = "BORRADA" Then
-        Me.ComandoEliminar.Caption = "Habilitar"
+        Me.ComandoEliminar.caption = "Habilitar"
     Else
-        Me.ComandoEliminar.Caption = "Eliminar"
+        Me.ComandoEliminar.caption = "Eliminar"
     End If
     Me.ComandoEliminar.Enabled = True
     EstablecerBotonAltaPara m_NCSeleccionada.Auditoria
@@ -4172,12 +4168,12 @@ End Sub
 Private Sub EstablecerBotonAltaPara(Optional p_Auditoria As Auditoria)
     On Error Resume Next
     If p_Auditoria Is Nothing Then
-        Me.ComandoAltaDeAuditoria.Caption = "Alta para #"
+        Me.ComandoAltaDeAuditoria.caption = "Alta para #"
         Me.ComandoAltaDeAuditoria.Enabled = False
     Else
      
         Me.ComandoAltaDeAuditoria.Enabled = True
-        Me.ComandoAltaDeAuditoria.Caption = "Alta para " & p_Auditoria.NombreAuditoria
+        Me.ComandoAltaDeAuditoria.caption = "Alta para " & p_Auditoria.NombreAuditoria
     End If
 End Sub
 
@@ -4210,7 +4206,7 @@ Public Function SeleccionarNC( _
     End If
     For i = 1 To lst.ListCount - 1
         If lst.Column(0, i) = m_ID Then
-            lst.Selected(i) = True
+            lst.selected(i) = True
             ListaFiltrados_Click
             Exit Function
         End If
@@ -4228,7 +4224,7 @@ Private Function RellenarListaConCol( _
                                     Optional ByRef p_Error As String _
                                     ) As String
     
-    Dim m_NC As NCAuditoria
+    Dim m_NC As ncAuditoria
     Dim m_ID As Variant
     Dim m_Auditoria As Auditoria
     Dim m_NombreAuditoria As String
@@ -4267,7 +4263,7 @@ Private Function RellenarListaConCol( _
     Next
    
     If lst.ListCount > 1 Then
-        lst.Selected(1) = True
+        lst.selected(1) = True
         ListaFiltrados_Click
     End If
     Exit Function
@@ -4389,7 +4385,7 @@ Public Function ActualizarLineaLista( _
         m_IDLista = lst.Column(0, i)
         If m_ObjNCAuditoriaActiva.id = m_IDLista Then
             
-            lst.Selected(i) = True
+            lst.selected(i) = True
             With m_ObjNCAuditoriaActiva
                 m_LineaAlFinal = .id & ";" & .Auditoria.NombreAuditoria & ";" & .Tipo & ";" & _
                         Format(.Numero, "00") & ";" & Replace(.Descripcion, ";", ":") & ";" & _
