@@ -9,6 +9,13 @@
 | **Current** | `passing` |
 | **Last verified** | 2026-06-07 |
 | **Manifest drift** | `clean` |
+| **Staging reachability** | `reachable` — commit `aa1ef79` is ancestor of `staging` |
+| **TDD evidence** | `fresh` — 9/9 pass in manifest at verified staging commit |
+| **Last verified commit** | `aa1ef79` |
+| **Last verified at** | 2026-06-11 |
+| **Test evidence** | `tests/tests.vba.seguimiento-tareas-helper.json` 9/9 |
+| **Staging integration commit** | `aa1ef79` |
+| **Evidence updated at** | 2026-06-11 |
 
 ## Business Behavior
 
@@ -79,3 +86,17 @@ _Web migration considerations — to be populated when migration work begins._
 - [Archive report](../../../openspec/changes/archive/2026-06-07-ncproyecto-seguimiento-tareas-helper/archive-report.md)
 - [Test manifest: seguimiento-tareas-helper](../../../tests/tests.vba.seguimiento-tareas-helper.json)
 - [Spec](../../../openspec/specs/seguimiento-tareas-helper/spec.md)
+
+## Post-Test Documentation Gate
+
+> **Rule**: Integration is not done until this section is updated. After staging integration and passing tests, update the Status section fields before declaring the work complete.
+
+| Step | Action | Done |
+|------|--------|------|
+| 1 | Tests pass against staging HEAD | [x] (9/9 at `aa1ef79`) |
+| 2 | `last_verified_commit` updated with SHA | [x] |
+| 3 | `last_verified_at` updated with ISO datetime | [x] |
+| 4 | `test_evidence` updated with manifest + pass/total | [x] |
+| 5 | `staging_integration_commit` updated with merge SHA | [x] |
+| 6 | `evidence_updated_at` updated with current datetime | [x] |
+| 7 | Feature status reflects current state | [x] (`passing`) |
