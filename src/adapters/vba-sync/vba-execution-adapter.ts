@@ -225,17 +225,74 @@ function matchesTestFilter(test: VbaTestPlanEntry, filterParts: readonly string[
   );
 }
 
+/** Per-procedure detail preserved for each failing test (see {@link inspectTestResult}). */
+type VbaTestFailureDetail = {
+  procedure: string | undefined;
+  error: string | undefined;
+  logs: unknown[];
+  durationMs: number | undefined;
+  payload: unknown;
+};
+
+/** How many failing procedures to name in the human-readable error message. */
+const TESTS_FAILED_SUMMARY_LIMIT = 5;
+
+function toTestFailureDetail(test: Record<string, unknown>): VbaTestFailureDetail {
+  return {
+    procedure: stringValue(test.procedure),
+    error: stringValue(test.error),
+    logs: Array.isArray(test.logs) ? test.logs : [],
+    durationMs: typeof test.durationMs === "number" ? test.durationMs : undefined,
+    payload: test.payload,
+  };
+}
+
+function buildTestsFailedMessage(failures: readonly VbaTestFailureDetail[]): string {
+  const named = failures.slice(0, TESTS_FAILED_SUMMARY_LIMIT).map((failure) => {
+    const name = failure.procedure ?? "(unknown procedure)";
+    return failure.error ? `${name} — ${failure.error}` : name;
+  });
+  const overflow = failures.length - named.length;
+  const suffix = overflow > 0 ? `; +${overflow} more` : "";
+  return `${failures.length} VBA test(s) failed: ${named.join("; ")}${suffix}`;
+}
+
+/**
+ * Collapses an array of per-procedure runner results into a single failure when
+ * any procedure reported `ok: false`, while PRESERVING the structured detail the
+ * runner already produced. The runner returns one object per procedure
+ * (`ok`, `procedure`, `error`, `logs`, `payload`, `durationMs`); a consuming
+ * agent decides what to do next, so dropping that detail blinds it to WHICH
+ * test failed and why.
+ *
+ * The failing procedures are named in the error message (the MCP adapter only
+ * renders `code: message`, so the message is what reaches the agent) and the
+ * full structure is carried in `error.details` for programmatic consumers:
+ * `{ failedCount, failures[], results[] }`.
+ *
+ * Limitation: when the runner executes an aggregate entry point such as a VBA
+ * `RunAll`, Dysflow can only surface the individual inner failures if `RunAll`
+ * itself returns them in its JSON payload (`ok: false` plus error/logs).
+ * Dysflow does not parse VBA assertion output on its own.
+ */
 function inspectTestResult(result: OperationResult<unknown>): OperationResult<unknown> {
   if (!result.ok) return result;
   const tests = Array.isArray(result.data) ? result.data : undefined;
-  if (tests !== undefined) {
-    const failedCount = tests.filter((test) => isRecord(test) && test.ok === false).length;
-    if (failedCount > 0) {
-      return failureResult(
-        createDysflowError("VBA_TESTS_FAILED", `${failedCount} VBA test(s) failed.`),
-        { diagnostics: result.diagnostics, durationMs: result.durationMs },
-      );
-    }
-  }
-  return result;
+  if (tests === undefined) return result;
+
+  const failures = tests
+    .filter((test): test is Record<string, unknown> => isRecord(test) && test.ok === false)
+    .map(toTestFailureDetail);
+  if (failures.length === 0) return result;
+
+  return failureResult(
+    createDysflowError("VBA_TESTS_FAILED", buildTestsFailedMessage(failures), {
+      details: {
+        failedCount: failures.length,
+        failures,
+        results: tests,
+      },
+    }),
+    { diagnostics: result.diagnostics, durationMs: result.durationMs },
+  );
 }

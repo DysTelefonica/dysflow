@@ -440,4 +440,124 @@ describe("VbaExecutionAdapter", () => {
       error: { code: "VBA_TESTS_FAILED" },
     });
   });
+
+  it("preserves structured failure detail when one procedure fails among passing ones", async () => {
+    const results = [
+      { ok: true, procedure: "Test_A", durationMs: 5 },
+      {
+        ok: false,
+        procedure: "Test_B",
+        error: "Assert failed",
+        logs: ["expected 1", "got 2"],
+        durationMs: 123,
+        payload: { ok: false, error: "Assert failed" },
+      },
+    ];
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("VBA_TESTS_FAILED");
+    // The message must name the failing procedure so the MCP text rendering shows it.
+    expect(result.error.message).toContain("Test_B");
+    expect(result.error.message).toContain("Assert failed");
+    expect(result.error.details).toMatchObject({
+      failedCount: 1,
+      failures: [
+        {
+          procedure: "Test_B",
+          error: "Assert failed",
+          logs: ["expected 1", "got 2"],
+          durationMs: 123,
+          payload: { ok: false, error: "Assert failed" },
+        },
+      ],
+    });
+    // The full per-procedure report (including the passing one) is retained.
+    expect((result.error.details?.results as unknown[]).length).toBe(2);
+  });
+
+  it("captures every failing procedure when multiple tests fail", async () => {
+    const results = [
+      { ok: false, procedure: "Test_B", error: "Assert failed", durationMs: 10 },
+      { ok: true, procedure: "Test_C" },
+      { ok: false, procedure: "Test_D", error: "Timeout", logs: ["slow"], durationMs: 999 },
+    ];
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([
+        { procedure: "Test_B" },
+        { procedure: "Test_C" },
+        { procedure: "Test_D" },
+      ]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("2 VBA test(s) failed");
+    const details = result.error.details as {
+      failedCount: number;
+      failures: { procedure?: string }[];
+    };
+    expect(details.failedCount).toBe(2);
+    expect(details.failures.map((f) => f.procedure)).toEqual(["Test_B", "Test_D"]);
+  });
+
+  it("preserves a COM exception captured as ok:false (null payload, empty logs)", async () => {
+    const results = [
+      {
+        ok: false,
+        procedure: "Test_Throws",
+        error: "Run-time error '91': Object variable not set",
+        payload: null,
+        logs: [],
+        durationMs: 7,
+      },
+    ];
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_Throws" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("Test_Throws");
+    const details = result.error.details as {
+      failures: { procedure?: string; error?: string; payload: unknown; logs: unknown[] }[];
+    };
+    expect(details.failures[0]).toMatchObject({
+      procedure: "Test_Throws",
+      error: "Run-time error '91': Object variable not set",
+      payload: null,
+      logs: [],
+    });
+  });
+
+  it("still reports a failure with no error string and an unparseable payload", async () => {
+    const results = [{ ok: false, procedure: "Test_NoMessage", payload: "<<not-json>>" }];
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_NoMessage" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("Test_NoMessage");
+    const details = result.error.details as {
+      failures: { procedure?: string; error?: string; payload: unknown }[];
+    };
+    const [failure] = details.failures;
+    expect(failure?.procedure).toBe("Test_NoMessage");
+    expect(failure?.payload).toBe("<<not-json>>");
+    expect(failure?.error).toBeUndefined();
+  });
 });

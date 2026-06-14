@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.57] - 2026-06-14
+
+### Fixed
+
+- `test_vba` no longer collapses a failing run into the opaque `N VBA test(s) failed.` summary. The PowerShell runner already returns a per-procedure report (`ok`, `procedure`, `error`, `logs`, `payload`, `durationMs`); the adapter now preserves it. On failure the result stays `ok: false` with code `VBA_TESTS_FAILED` (no compatibility break), the message names the failing procedures, and `error.details` carries the structured report `{ failedCount, failures[], results[] }` — each `failures[]` entry keeping `procedure`, `error`, `logs`, `durationMs`, and `payload`. Consuming agents can now see exactly which procedure failed and why.
+- Documented the `RunAll` limitation: Dysflow can only surface inner failures of an aggregate entry point when that procedure itself returns them in its JSON payload; Dysflow does not parse VBA assertion output on its own.
+
 ## [v1.2.56] - 2026-06-14
 
 ### Fixed
