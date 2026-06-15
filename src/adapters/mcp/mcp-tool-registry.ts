@@ -21,6 +21,8 @@ export const VBA_SYNC_TOOL_NAMES = [
   "catalog_add_control",
   "harvest_form_catalog",
   "compare_module",
+  "vba_orphan_audit",
+  "vba_inline_execution",
 ] as const;
 
 export const QUERY_TOOL_NAMES = [

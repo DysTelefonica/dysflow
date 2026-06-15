@@ -39,6 +39,8 @@ const OUTPUT_CONTRACT_GROUPS = {
     "catalog_add_control",
     "harvest_form_catalog",
     "compare_module",
+    "vba_orphan_audit",
+    "vba_inline_execution",
   ],
   accessRunnerQuery: [
     "query_sql",

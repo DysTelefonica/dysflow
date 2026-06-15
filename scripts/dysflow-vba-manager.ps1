@@ -66,6 +66,9 @@ Param(
     ,
     [Parameter()]
     [string]$OperationFile = ""
+    ,
+    [Parameter()]
+    [switch]$Force
 )
 
 # Sentinel-guarantee trap. Any terminating error that escapes the per-action
@@ -1502,7 +1505,8 @@ function Remove-AccessObjectOrComponent {
     Param(
         [Parameter(Mandatory = $true)]$AccessApplication,
         [Parameter(Mandatory = $true)]$VbProject,
-        [Parameter(Mandatory = $true)][string]$ModuleName
+        [Parameter(Mandatory = $true)][string]$ModuleName,
+        [switch]$Force
     )
 
     $objectInfo = Resolve-AccessObjectInfo -AccessApplication $AccessApplication -ModuleName $ModuleName
@@ -1517,7 +1521,32 @@ function Remove-AccessObjectOrComponent {
                 kind   = $objectInfo.Kind
             }
         } catch {
-            throw ("No se pudo eliminar {0} '{1}': {2}" -f $objectInfo.Kind, $objectInfo.Name, $_.Exception.Message)
+            $errStr = ""
+            if ($_) { $errStr = $_.ToString() }
+            if ($_.Exception) { $errStr += " " + $_.Exception.ToString() }
+            $isFrictionError = ($errStr -like "*800ADEB9*" -or $errStr -like "*-2146771271*")
+            if ($isFrictionError) {
+                if ($Force) {
+                    try {
+                        $AccessApplication.RunCommand(4) # acCmdCompactDatabase = 4
+                        $AccessApplication.DoCmd.DeleteObject($objectType, $objectInfo.Name)
+                        return [pscustomobject]@{
+                            module = $ModuleName
+                            status = "ok"
+                            deleted = $objectInfo.Name
+                            kind   = $objectInfo.Kind + "-CompactDelete"
+                        }
+                    } catch {
+                        $remediation = "Access object cannot be deleted/modified. Ensure the object is not open in Design View, close the VBA Editor, or run a database compact & repair.`nNo se puede eliminar/modificar el objeto de Access. Asegúrese de que el objeto no esté abierto en Vista Diseño, cierre el Editor de VBA o ejecute Compactar y reparar base de datos."
+                        throw ("No se pudo eliminar {0} '{1}': {2}" -f $objectInfo.Kind, $objectInfo.Name, $remediation)
+                    }
+                } else {
+                    $remediation = "Access object cannot be deleted/modified. Ensure the object is not open in Design View, close the VBA Editor, or run a database compact & repair.`nNo se puede eliminar/modificar el objeto de Access. Asegúrese de que el objeto no esté abierto en Vista Diseño, cierre el Editor de VBA o ejecute Compactar y reparar base de datos."
+                    throw ("No se pudo eliminar {0} '{1}': {2}" -f $objectInfo.Kind, $objectInfo.Name, $remediation)
+                }
+            } else {
+                throw ("No se pudo eliminar {0} '{1}': {2}" -f $objectInfo.Kind, $objectInfo.Name, $_.Exception.Message)
+            }
         }
     }
 
@@ -1539,7 +1568,49 @@ function Remove-AccessObjectOrComponent {
             kind   = "VBComponent"
         }
     } catch {
-        throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $_.Exception.Message)
+        $errStr = ""
+        if ($_) { $errStr = $_.ToString() }
+        if ($_.Exception) { $errStr += " " + $_.Exception.ToString() }
+        $isFrictionError = ($errStr -like "*800ADEB9*" -or $errStr -like "*-2146771271*")
+        if ($isFrictionError) {
+            if ($Force) {
+                try {
+                    $objectType = 5 # acModule=5
+                    if ($componentName -like "Form_*") { $objectType = 2 }
+                    elseif ($componentName -like "Report_*") { $objectType = 3 }
+                    elseif ($component -and $component.Type -eq 3) { $objectType = 2 }
+
+                    $cleanName = $componentName -replace '^(Form_|Report_)', ''
+                    $AccessApplication.DoCmd.DeleteObject($objectType, $cleanName)
+                    return [pscustomobject]@{
+                        module = $ModuleName
+                        status = "ok"
+                        deleted = $componentName
+                        kind   = "VBComponent-ForceDelete"
+                    }
+                } catch {
+                    try {
+                        $AccessApplication.RunCommand(4) # acCmdCompactDatabase = 4
+                        $components.Remove($component)
+                        try { $AccessApplication.RunCommand(126) } catch {}
+                        return [pscustomobject]@{
+                            module = $ModuleName
+                            status = "ok"
+                            deleted = $componentName
+                            kind   = "VBComponent-CompactRemove"
+                        }
+                    } catch {
+                        $remediation = "Access object cannot be deleted/modified. Ensure the object is not open in Design View, close the VBA Editor, or run a database compact & repair.`nNo se puede eliminar/modificar el objeto de Access. Asegúrese de que el objeto no esté abierto en Vista Diseño, cierre el Editor de VBA o ejecute Compactar y reparar base de datos."
+                        throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $remediation)
+                    }
+                }
+            } else {
+                $remediation = "Access object cannot be deleted/modified. Ensure the object is not open in Design View, close the VBA Editor, or run a database compact & repair.`nNo se puede eliminar/modificar el objeto de Access. Asegúrese de que el objeto no esté abierto en Vista Diseño, cierre el Editor de VBA o ejecute Compactar y reparar base de datos."
+                throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $remediation)
+            }
+        } else {
+            throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $_.Exception.Message)
+        }
     } finally {
         if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
@@ -2887,12 +2958,16 @@ function Invoke-ExportAction {
             Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
             $exported += $name
         } catch {
-            $errMsg = $_.Exception.Message
-            Write-Status -Message ("WARN: No se pudo exportar '{0}': {1}" -f $name, $errMsg) -Color Yellow
-            $warnings += @{
-                module = $name
-                error = $errMsg
-                message = $errMsg
+            if ($Json) {
+                $errMsg = $_.Exception.Message
+                Write-Status -Message ("WARN: No se pudo exportar '{0}': {1}" -f $name, $errMsg) -Color Yellow
+                $warnings += @{
+                    module = $name
+                    error = $errMsg
+                    message = $errMsg
+                }
+            } else {
+                throw
             }
         }
     }
@@ -3062,7 +3137,8 @@ function Invoke-DeleteAction {
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
         [string[]]$NormalizedModules,
-        [switch]$Json
+        [switch]$Json,
+        [switch]$Force
     )
 
     if ($NormalizedModules.Count -eq 0) {
@@ -3076,7 +3152,7 @@ function Invoke-DeleteAction {
         $idx++
         Write-Status -Message ("[{0}/{1}] Eliminando: {2}" -f $idx, $NormalizedModules.Count, $name) -Color Cyan
         try {
-            $result = Remove-AccessObjectOrComponent -AccessApplication $Session.AccessApplication -VbProject $vbProject -ModuleName $name
+            $result = Remove-AccessObjectOrComponent -AccessApplication $Session.AccessApplication -VbProject $vbProject -ModuleName $name -Force:$Force
             $moduleResults.Add($result) | Out-Null
         } catch {
             $moduleResults.Add([pscustomobject]@{
@@ -3382,7 +3458,7 @@ try {
 
     } elseif ($Action -eq "Delete") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        Invoke-DeleteAction -Session $session -NormalizedModules $normalizedModules -Json:$Json
+        Invoke-DeleteAction -Session $session -NormalizedModules $normalizedModules -Json:$Json -Force:$Force
 
     } elseif ($Action -eq "List-Objects") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution

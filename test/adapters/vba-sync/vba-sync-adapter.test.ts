@@ -435,6 +435,48 @@ describe("VbaSyncAdapter Orchestrator", () => {
     expect(capturedCwd).toBe("C:/repo");
   });
 
+  it("serializes a boolean extra as a bare PowerShell switch (-Force), never -Force true", async () => {
+    const capture = (): (() => readonly string[]) => {
+      let captured: readonly string[] = [];
+      spawnMock.mockImplementationOnce((_command: string, args: readonly string[]) => {
+        captured = args;
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: EventEmitter;
+          stderr: EventEmitter;
+          kill: ReturnType<typeof vi.fn>;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.kill = vi.fn();
+        queueMicrotask(() => child.emit("close", 0));
+        return child;
+      });
+      return () => captured;
+    };
+
+    const baseRequest = {
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      action: "Delete",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      moduleNames: ["TempModule"],
+      json: true,
+      env: {},
+      timeoutMs: 1_000,
+      cwd: "C:/repo",
+    };
+
+    const getForced = capture();
+    await spawnVbaManager({ ...baseRequest, extra: { force: true } });
+    const forcedArgs = getForced();
+    expect(forcedArgs).toContain("-Force");
+    expect(forcedArgs[forcedArgs.indexOf("-Force") + 1]).not.toBe("true");
+
+    const getUnforced = capture();
+    await spawnVbaManager({ ...baseRequest, extra: { force: false } });
+    expect(getUnforced()).not.toContain("-Force");
+  });
+
   it("redacts passwords from runner failures", async () => {
     const service = new VbaSyncAdapter({
       executor: async () => ({
@@ -742,7 +784,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
           "run_vba",
           {},
           {
-            action: "Run",
+            action: "Run-Procedure",
             json: true,
             moduleNames: () => [],
             extra: () => ({ unsupportedKey: "value" }),

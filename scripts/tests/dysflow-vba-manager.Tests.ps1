@@ -1,4 +1,4 @@
-﻿#Requires -Modules Pester
+#Requires -Modules Pester
 <#
 .SYNOPSIS
     Pester tests for dysflow-vba-manager.ps1 COM cleanup paths and helper functions.
@@ -667,6 +667,8 @@ Describe "Invoke-ExportAction — behavioral (decompose S1)" {
 
         # Stub Write-Status — swallow console output in tests
         function script:Write-Status { param([string]$Message, $Color) }
+        function script:Get-AccessObjectNames { param($AccessApplication, $Kind) return @() }
+        function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
     }
 
     Context "filtered export — only matching modules are passed to Export-VbaModule" {
@@ -730,7 +732,7 @@ Describe "Invoke-ExportAction — behavioral (decompose S1)" {
             $fakeComponents = [PSCustomObject]@{ Count = 3 }
             $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
                 param($nameOrIndex)
-                return [PSCustomObject]@{ Name = "Component$nameOrIndex" }
+                return [PSCustomObject]@{ Name = "Component$nameOrIndex"; Type = 1 }
             }
             $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
             $fakeVbProject | Add-Member -MemberType NoteProperty -Name "VBComponents" -Value $fakeComponents -Force
@@ -948,6 +950,13 @@ Describe "Invoke-ExistsAction — behavioral (decompose S2)" {
             $script:StatusMessages | Should -Contain "moduleName: MyModule"
             $script:StatusMessages | Should -Contain "accessObjectExists: False"
             $script:StatusMessages | Should -Contain "vbComponentExists: False"
+        }
+    }
+
+    Context "non-mutation" {
+        It "does not mutate the database or files during exists check" {
+            $result = Invoke-ExistsAction -Session $script:FakeSession -ModuleName "MyModule"
+            $result | Should -BeNullOrEmpty
         }
     }
 }
@@ -1175,6 +1184,75 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             $results[1].status | Should -Be "error"
             $results[1].error | Should -Be "failed to remove component"
         }
+    }
+}
+
+Describe "Remove-AccessObjectOrComponent — behavioral" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Remove-AccessObjectOrComponent' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    It "throws bilingual remediation steps when HRESULT 0x800ADEB9 occurs and Force is false" {
+        function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
+        function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName) return "Form_MyForm" }
+        
+        $fakeComponents = [PSCustomObject]@{}
+        $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($name)
+            $e = New-Object System.Runtime.InteropServices.COMException("Mock open VBE error", [int]0x800ADEB9)
+            throw $e
+        }
+        $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+        $fakeAccessApp = [PSCustomObject]@{ }
+
+        $action = {
+            Remove-AccessObjectOrComponent -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleName "MyForm" -Force:$false
+        }
+        $action | Should -Throw "*Access object cannot be deleted/modified*"
+        $action | Should -Throw "*No se puede eliminar/modificar*"
+    }
+
+    It "falls back to DoCmd.DeleteObject when HRESULT 0x800ADEB9 occurs and Force is true" {
+        function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
+        function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName) return "Form_MyForm" }
+        
+        $script:DeleteObjectCalled = $false
+        $script:DeleteObjectType = $null
+        $script:DeleteObjectName = $null
+
+        $fakeAccessApp = [PSCustomObject]@{
+            DoCmd = [PSCustomObject]@{ }
+        }
+        $fakeAccessApp.DoCmd | Add-Member -MemberType ScriptMethod -Name "DeleteObject" -Value {
+            param($type, $name)
+            $script:DeleteObjectCalled = $true
+            $script:DeleteObjectType = $type
+            $script:DeleteObjectName = $name
+        }
+
+        $fakeComponents = [PSCustomObject]@{}
+        $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($name)
+            $e = New-Object System.Runtime.InteropServices.COMException("Mock open VBE error", [int]0x800ADEB9)
+            throw $e
+        }
+        $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+        $res = Remove-AccessObjectOrComponent -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleName "MyForm" -Force:$true
+        $res.status | Should -Be "ok"
+        $script:DeleteObjectCalled | Should -Be $true
+        $script:DeleteObjectType | Should -Be 2 # acForm = 2
+        $script:DeleteObjectName | Should -Be "MyForm"
     }
 }
 

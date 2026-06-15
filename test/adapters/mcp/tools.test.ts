@@ -749,12 +749,15 @@ describe("MCP tool registration over core services", () => {
         ).toHaveProperty("timeoutMs");
       }
 
-      const tools = createDysflowMcpTools({
-        ...makeServices(),
-        vbaSyncToolService: {
-          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+      const tools = createDysflowMcpTools(
+        {
+          ...makeServices(),
+          vbaSyncToolService: {
+            execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+          },
         },
-      });
+        true,
+      );
       const compile = tools.find((t) => t.name === "compile_vba");
       const result = await compile?.handler({ timeoutMs: 120_000 });
       expect(result).toEqual({
@@ -784,12 +787,18 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("accepts lowercase importMode aliases before dispatching import tools", async () => {
-      const tools = createDysflowMcpTools({
-        ...makeServices(),
-        vbaSyncToolService: {
-          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+      const tools = createDysflowMcpTools(
+        {
+          ...makeServices(),
+          vbaSyncToolService: {
+            execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+          },
         },
-      });
+        // writesEnabled: import always writes (no real dry-run), so it is
+        // write-gated regardless of the dryRun flag; this test exercises
+        // importMode aliasing, not the gate.
+        true,
+      );
       const importModules = tools.find((tool) => tool.name === "import_modules");
       expect(importModules).toBeDefined();
       if (importModules === undefined) throw new Error("import_modules should be registered");

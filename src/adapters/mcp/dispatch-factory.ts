@@ -28,12 +28,26 @@ export function createDispatchTool(
   env: Record<string, string | undefined>,
 ): DysflowMcpTool {
   const definition = getToolDefinition(name);
-  // MCP_TOOL_SCHEMAS is the sole source of truth for all MCP tool schemas (#200).
   const schema = mcpSchemaFor(name);
   const route = MCP_TOOL_ROUTES[name];
+  // These VBA tools always mutate the binary — none has a real dry-run mode in
+  // the PowerShell manager (e.g. Invoke-ImportAction takes no -DryRun), so the
+  // write-gate MUST apply regardless of any caller-supplied dryRun flag.
+  // Honoring resolveIsDryRun() for import_modules/import_all would let a caller
+  // bypass the gate by simply omitting dryRun (which defaults to true) while the
+  // import still writes to the binary.
+  const vbaWriteToolsAlwaysWrite = new Set<string>([
+    "delete_module",
+    "compile_vba",
+    "vba_inline_execution",
+    "import_modules",
+    "import_all",
+  ]);
+
   const isWriteGated =
     route.kind === "query-write-fixture" ||
-    (route.kind === "query-maintenance" && route.queryMode === "write");
+    (route.kind === "query-maintenance" && route.queryMode === "write") ||
+    vbaWriteToolsAlwaysWrite.has(name);
 
   return {
     name,
@@ -43,13 +57,13 @@ export function createDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
-      const isDryRun = resolveIsDryRun(input);
+      const isDryRun = vbaWriteToolsAlwaysWrite.has(name) ? false : resolveIsDryRun(input);
       if (
         isWriteGated &&
         !isDryRun &&
         !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))
       ) {
-        return writesDisabled();
+        return writesDisabled(name);
       }
       switch (route.kind) {
         case "vba-sync":

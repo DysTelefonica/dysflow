@@ -214,6 +214,10 @@ export const SCHEMA_PROPS = {
     type: "string",
     description: "Object name to check for existence.",
   } as JsonSchemaProperty,
+  code: {
+    type: "string",
+    description: "VBA code snippet to execute inline.",
+  } as JsonSchemaProperty,
 };
 
 /** Shared context props used by most tools (single source of truth). */

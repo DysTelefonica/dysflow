@@ -98,6 +98,9 @@ const VBA_MANAGER_EXTRA_KEYS = new Set([
   "importMode",
   "location",
   "proceduresJson",
+  "procedureName",
+  "argsJson",
+  "force",
 ]);
 const TOOL_NOT_IMPLEMENTED_MESSAGE =
   "This tool is tracked for parity but is not implemented by this service yet.";
@@ -162,6 +165,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       cwd: this.cwd,
       executeMappedTool: (toolName, params, mapping) =>
         this.executeMappedTool(toolName, params, mapping),
+      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
     });
     this.formsAdapter = new VbaFormsAdapter({
       executor: this.executor,
@@ -630,6 +634,12 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
   for (const [key, value] of Object.entries(request.extra)) {
     if (value === undefined) continue;
     const flag = `-${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+    // Booleans map to PowerShell [switch] params: emit the bare flag for true,
+    // omit it entirely for false. Never "-Flag true", which a switch rejects.
+    if (typeof value === "boolean") {
+      if (value) args.push(flag);
+      continue;
+    }
     args.push(flag, String(value));
   }
 

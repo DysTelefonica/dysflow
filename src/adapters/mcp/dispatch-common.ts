@@ -10,10 +10,14 @@ import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
-export function writesDisabled(): McpToolResult {
+export function writesDisabled(toolName?: string): McpToolResult {
+  const suffix = toolName ? ` (attempted: ${toolName})` : "";
   return {
     content: [
-      { type: "text", text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter." },
+      {
+        type: "text",
+        text: `MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter${suffix}.`,
+      },
     ],
     isError: true,
   };
