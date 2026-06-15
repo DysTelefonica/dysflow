@@ -132,14 +132,17 @@ Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigati
 | `53acb24` | chore(access): retire dead class InformeNCAuditorias | 0 | B1 (anomalía #2) | retire del dead-code marker + 3 capability docs actualizadas |
 | (Fase 1 — cierre) | | | | |
 | `pendiente` | (ningún otro commit de Fase 1; la matriz cubre el inventario base. Las capabilities faltantes y la asimetría Proyecto/Auditoría alimentan Fase 2 como planes de PR) | 1 | — | see §4 y §5 of `docs/inventory/feature-matrix.md` |
-| (Fase 2 — uno por capability) | | | | |
-| `c36d2f0` | test(vba): Test_CAT_MaestrosCatalogos (piloto CAP-CAT) | 2 | AC-5, AC-7 (CAP-CAT) | `src/modules/Test_CAT_MaestrosCatalogos.bas` con 2 tests (Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic + Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic). Cubre BR-CAT-5/6. Pendiente de compile VBE + Dysflow test_vba por el usuario; el body del commit documenta el workflow. |
-| `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 (CAP-CE) | access-vba-tdd |
-| `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 (CAP-IND) | access-vba-tdd |
-| `pendiente` | test(vba): CAP-NCA-AF (0% cobertura, 5 features) | 2 | AC-5, AC-7 (CAP-NCA-AF) | access-vba-tdd |
-| `pendiente` | test(vba): CAP-EXP (0% cobertura, 5 features) | 2 | AC-5, AC-7 (CAP-EXP) | access-vba-tdd |
-| `pendiente` | test(vba): CAP-UPN (0% cobertura, 6 features) | 2 | AC-5, AC-7 (CAP-UPN) | access-vba-tdd |
-| `pendiente` | test(vba): CAP-COM (0% cobertura, 8 features — depende de COM/Word/Outlook) | 2 | AC-5, AC-7 (CAP-COM) | access-vba-tdd; posiblemente requiera mockear COM o testear solo `Correo.Registrar` (DAO) |
+| (Fase 2 — uno por capability, 5 commits) | | | | |
+| `c36d2f0` | test(vba): Test_CAT_MaestrosCatalogos (CAP-CAT) | 2 | AC-5, AC-7 (CAP-CAT) | DB-backed; cubre BR-CAT-5/6. |
+| `8d0f828` | test(vba): Test_EXP_ExpedientesRiesgosResponsables (CAP-EXP) | 5 | AC-5, AC-7 (CAP-EXP) | Pure property; cubre BR-EXP-4/5. |
+| `94153e8` | test(vba): Test_NCA_AccionesSeguimiento (CAP-NCA-AF) | 5 | AC-5, AC-7 (CAP-NCA-AF) | Pure property; cubre BR-NCA-AF-5 parcial. |
+| `2336b97` | test(vba): Test_UPN_UsuariosPermisos (CAP-UPN) | 5 | AC-5, AC-7 (CAP-UPN) | Pure property; cubre BR-UPN-1..5 property. |
+| `6af3e60` | test(vba): Test_COM_ComunicacionesReportes (CAP-COM) | 5 | AC-5, AC-7 (CAP-COM) | Pure property; cubre BR-COM-1/2/4 property. |
+| (Fase 2 — BR lagunas pendientes de contrato) | | | | |
+| `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 (CAP-CE) | `Intended` per cap-CE §2; requiere producto. |
+| `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 (CAP-IND) | `Intended` per cap-IND §2; requiere producto. |
+| `pendiente` | test(vba): BR-REL-1..5 — checks documentales automatizables | 2 | AC-5, AC-7 (CAP-REL) | `Intended`; son checks de governance CI, no VBA tests. |
+| `pendiente` | test(vba): BR-UPN-7, BR-NCA-AF-4/5, BR-COM-3/5/6/7 — contratos Intended | 2 | AC-5, AC-7 | Requieren firma de producto antes de poder testear; ver §2 de cada capability. |
 | (más conforme avance Fase 1) | | | | |
 | (Fase 3) | | | | |
 | `pendiente` | docs(capabilities): index.md maestro | 3 | AC-1 | navegación |
