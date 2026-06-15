@@ -84,7 +84,8 @@
 
 | Elemento (funcionalidad o arreglo) | Ref. tracker | Versión staging (UAT) | Estado UAT | Release de producción | Fecha en prod | Nota |
 |---|---|---|---|---|---|---|
-| Gate FE pospuesto al cierre | Issue #45 / issue-19 | Pendiente | runtime-fresh-green 2026-06-15 | Pendiente | Pendiente | 13/13 PASS en Dysflow 2026-06-15; ancla histórica `8cb7f0a` (2026-06-06) |
+| Gate FE pospuesto al cierre | Issue #45 / issue-19 | `PRUEBAS-001` (v1.0.0) | `pending` (ronda UAT abierta 2026-06-15) | Pendiente | Pendiente | Web de aceptación: `docs/uat/PRUEBAS-001/uat-acceptance.html` (5 casos DADO/CUANDO/ENTONCES); recipient `andres.romandelperal@telefonica.com`. Ancla runtime previa: 13/13 PASS Dysflow 2026-06-15, 7 filtros; ancla histórica `8cb7f0a` (2026-06-06). |
+| Ronda UAT `PRUEBAS-001` (Issue #19) | GH #45, #46 | `PRUEBAS-001` | `pending` (oficina, fecha de mañana 2026-06-16) | n/a (gate) | n/a (gate) | 5 casos: UAT-1 Alta sin fecha, UAT-2 Edicion sin fecha, UAT-3 Cierre sin fecha bloquea, UAT-4 Cierre con fecha permite, UAT-5 Bypass MotivoAlta. Criterios checksum computado al cargar. Update del §5 ledger con `passed`/`rejected` al recibir el correo de `andres.romandelperal@telefonica.com`. |
 | Flujo completo de resultados de eficacia | Pendiente | Pendiente | pending | Pendiente | Pendiente | Faltan pruebas/reglas (BR-CE-5/6) |
 
 | Síntoma | Causa probable | Comprobación (Dysflow) | Ancla documental |
