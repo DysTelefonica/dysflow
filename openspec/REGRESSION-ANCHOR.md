@@ -57,6 +57,14 @@ If any check fails, the feature is **not closed** — fix the gap first.
 - Feature docs must support both regression prevention and future web migration.
 - Any behavior without a feature ledger page is a gap, not acceptable hidden knowledge.
 
+**Issue #67 + web-migration Feature-TDD coverage epic (change: `issue-67-feature-tdd-coverage`)**:
+
+- Dual objective: migrate `no_conformidades` to a web application AND build the TDD coverage that lets us migrate without dragging Access/VBA debt.
+- Bootstrap phase artifacts (Fase 0) created 2026-06-15:
+  - Proposal: [`openspec/changes/issue-67-feature-tdd-coverage/proposal.md`](changes/issue-67-feature-tdd-coverage/proposal.md) — 4-phase plan (0 bootstrap, 1 inventory, 2 TDD authoring, 3 closeout) with 8 acceptance criteria.
+  - Apply progress: [`openspec/changes/issue-67-feature-tdd-coverage/apply-progress.md`](changes/issue-67-feature-tdd-coverage/apply-progress.md) — live tracker with per-capability status and known gaps (BR-CE-5/6, BR-IND-8, BR-UPN-1..6/8, BR-XCUT-6, BR-DGE-1/2, BR-EXP-6/7, BR-REL-1..5).
+- AC-1 (`docs/capabilities/index.md`) and AC-2 (`docs/inventory/feature-matrix.md`) are the next concrete deliverables (Fase 1).
+
 **Phase 4 Blocker Resolution (2026-06-14)**:
 
 - **B1 — form-fncproyecto-cache-invalidation ✅ RESOLVED**: equivalent changes (RebuildNCProyectoListadoCache, audit binding rename, helper seams) integrated into staging via binary export/reimport path (commit `20b71f6` and earlier). Original feat-branch SHAs are NOT ancestors but all functional code is verified present at staging HEAD. Full manifest `test_vba` 8/8 PASSED against staging HEAD `20b71f64`.
@@ -76,3 +84,43 @@ If any check fails, the feature is **not closed** — fix the gap first.
 _(Entries move here after the feature is archived and the regression anchor confirms no open gaps.)_
 
 <!-- Future entries go here -->
+
+---
+
+## Active Divergences (2026-06-15)
+
+Business rules that are not implementable today because the source-of-truth is partial or disputed. Each entry links to the affected capability doc, names the product owner that has to resolve it, and tracks the issue/MR.
+
+### D1 — `BR-UPN-7` Matriz completa de permisos por rol × acción × dominio
+
+- **Capability**: [`docs/capabilities/users-permissions-navigation.md`](../docs/capabilities/users-permissions-navigation.md) §2 BR-UPN-7.
+- **Conflict**: la BR exige una matriz exhaustiva de "qué rol puede ejecutar qué acción sobre qué dominio" pero el código actual solo conoce 2 perfiles (`Admin` / `Resto`) y no persiste una matriz consultable; `cross-cutting-support` BR-XCUT-6 tiene la misma divergencia con un cross-link recíproco.
+- **Confidence**: `Intended` en §7 del capability, con FALTA → autor = product owner.
+- **Evidence of gap**:
+  - `src/modules/ModuloPermisos.bas` / equivalente solo tiene 2 helpers de chequeo, no la matriz.
+  - `docs/inventory/feature-matrix.md` no tiene feature `perm-matrix` con tests.
+  - `tests.vba.upn.json` no tiene cobertura de la matriz.
+- **Resolution path**: ticket al product owner para que (a) confirme las 2-3 dimensiones de la matriz (perfil, acción, dominio), (b) decida el formato de almacenamiento (¿tabla versionada? ¿Excel cargado? ¿constante en código?), (c) apruebe tests. Issue tracker: `00-no-conformidades-staging-clean#71` (a crear por el humano si la divergencia se mantiene más de 1 sprint).
+- **Stop-the-line impact**: ninguna mientras la matriz no sea BR cargada; la app funciona con los 2 perfiles hardcoded.
+
+### D2 — `BR-CE-5/6` Estados canónicos de control de eficacia y ventana de "fechas vs aceptar"
+
+- **Capability**: [`docs/capabilities/control-eficacia-workflow.md`](../docs/capabilities/control-eficacia-workflow.md) §2 BR-CE-5 y BR-CE-6.
+- **Conflict**: las BR describen un workflow de control de eficacia con al menos 4 estados canónicos (Planificado, EnEjecución, Cerrado-OK, Cerrado-NO) y una regla de "el FE se completa solo cuando hay fechas en todas las ACs" que aún tiene lagunas:
+  - `BR-CE-5`: transición de `EnEjecución` a `Cerrado-OK` exige `EficaciaOK = Sí`. La implementación actual (`Test_CE_Gating_Atomic` y similares) valida el gate, pero la pregunta de qué pasa si `EficaciaOK = No` y `RequiereControlEficacia = Sí` está mal cubierta — ¿el CE se queda abierto para siempre? ¿se cierra como `Cerrado-NO` automáticamente? La respuesta no está en el doc.
+  - `BR-CE-6`: "el FE se completa solo cuando todas las ACs tienen fecha real". El gate funciona en test, pero el doc original no resuelve el caso de NCs con cero ACs (¿FE se marca como N/A? ¿se cierra sin gate?).
+- **Confidence**: `Intended` en §7 del capability, con FALTA → autor = product owner.
+- **Evidence of gap**:
+  - `tests.vba.ce.json` cubre BR-CE-1..4 con 13/13 PASS, pero no BR-CE-5/6 (se rehusaron con "FALTA → autor").
+  - El commit `8cb7f0a` (Issue #19 CE postpone) solo implementa el gate "no permitir aceptar hasta que FE completo" — no resuelve el workflow post-aceptación.
+- **Resolution path**: ticket al product owner que defina explícitamente (a) la matriz de transiciones, (b) el comportamiento en `EficaciaOK = No`, (c) el caso de NCs sin ACs. Issue tracker: `00-no-conformidades-staging-clean#72` (a crear por el humano si la divergencia se mantiene más de 1 sprint).
+- **Stop-the-line impact**: ninguna mientras no se exija el workflow post-aceptación; el gate actual (BR-CE-1..4) sigue funcionando.
+
+---
+
+## Resolution Procedure for Active Divergences
+
+1. El product owner cierra la decisión en un issue dedicado (plantilla: "BR-X-N: definir [la regla]" con campos "Contexto", "Opciones", "Recomendación", "Decisión").
+2. El humano crea el issue, lo asigna al product owner, y mueve el BR de `Intended` a `Verified-static` (con link al issue como evidencia) o a `Likely` (con link al spec) en el §7 del capability afectado.
+3. La implementación de la decisión puede entrar en una nueva change SDD; esta sección de REGRESSION-ANCHOR se actualiza para reflejar la resolución.
+4. Cuando D1 y D2 estén cerrados, ambos se mueven a `## Resolved / Archived Entries` con SHA del commit de cierre.
