@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.2.60] - 2026-06-15
+
+### Added
+
+- **`vba_orphan_audit`** (read-only): lists VBA modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry reports `isOrphan`, `isSuspicious`, and `sourcePath`. The disk↔VBE cross-reference is case-insensitive, since VBA identifiers are case-insensitive and the VBE re-cases names on import.
+- **`vba_inline_execution`** (write-gated): runs a throwaway VBA snippet in one call — writes a temporary module, imports it, executes its public entry point, captures the result, and guarantees cleanup of both the temp module (force-deleted) and the temp file.
+- **`delete_module` `force`**: when deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + `DoCmd.DeleteObject`). Without `force`, the error returns bilingual remediation steps.
+- HRESULT troubleshooting guide at `docs/diagnostics/hresult-guide.md`; bilingual remediation advice for `0x800ADEB9` / `0x800A09D5` is appended to MCP error messages.
+
+### Fixed
+
+- HRESULT `0x800ADEB9` remediation was silently dropped when .NET rendered the COMException as a signed decimal — the lookup used the wrong decimal (`-2146824519`); corrected to `-2146771271`.
+
+### Security
+
+- Write-gating is now consistent across all VBA tools that mutate the binary (`delete_module`, `import_modules`, `import_all`, `compile_vba`, `vba_inline_execution`), and the error names the blocked tool. `import_modules` / `import_all` are gated unconditionally: the PowerShell manager has no import dry-run, so they always write — gating them via the caller-supplied `dryRun` flag let a caller bypass the gate by omitting `dryRun` (which defaults to dry-run). They are now always gated.
+- Bumped the transitive `esbuild` dependency to `>=0.28.1` (pnpm override) to clear the high-severity advisory GHSA-gv7w-rqvm-qjhr.
+
 ## [v1.2.59] - 2026-06-15
 
 ### Fixed
