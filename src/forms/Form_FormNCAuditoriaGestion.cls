@@ -533,15 +533,9 @@ Private Sub ComandoInforme_Click()
     VBA.DoEvents
     m_Error = ""
 
-    If m_NCSeleccionada Is Nothing Then
-        Set m_NCSeleccionada = constructor.getNCProyecto(p_IDNC:=Nz(Me.ListaFiltrados.Column(0), ""), p_Error:=m_Error)
-        If m_Error <> "" Then
-            Err.Raise 1000
-        End If
-        If m_NCSeleccionada Is Nothing Then
-            m_Error = "Se ha de seleccionar un elemento de la lista"
-            Err.Raise 1000
-        End If
+    EnsureNCAuditoriaGestionSelected p_EmptyMessage:="Se ha de seleccionar un elemento de la lista", p_Error:=m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000
     End If
     GenerarWordNoConformidades p_EsDeProyecto:=EnumSino.No, p_NC:=m_NCSeleccionada, p_Error:=m_Error
     If m_Error <> "" Then
@@ -1115,6 +1109,33 @@ errores:
         p_Error = "El método RellenarListaConCol ha devuelto el error: " & vbNewLine & Err.Description
     End If
 End Function
+
+Private Sub EnsureNCAuditoriaGestionSelected( _
+    Optional ByVal p_EmptyMessage As String = "Seleccione un elemento de la lista", _
+    Optional ByRef p_Error As String _
+    )
+
+    On Error GoTo errores
+
+    p_Error = ""
+    Set m_NCSeleccionada = ResolveNCAuditoriaGestionSelection( _
+                            p_Current:=m_NCSeleccionada, _
+                            p_SelectedID:=Nz(Me.ListaFiltrados.Column(0), ""), _
+                            p_Error:=p_Error)
+    If p_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If m_NCSeleccionada Is Nothing Then
+        p_Error = p_EmptyMessage
+        Err.Raise 1000
+    End If
+    Exit Sub
+
+errores:
+    If Err.Number <> 1000 Then
+        p_Error = "El método EnsureNCAuditoriaGestionSelected ha devuelto el error: " & Err.Description
+    End If
+End Sub
 
 
 Private Function EstablecerCombos( _
