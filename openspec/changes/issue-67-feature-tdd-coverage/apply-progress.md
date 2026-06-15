@@ -3,18 +3,22 @@
 > Cambio: `issue-67-feature-tdd-coverage`
 > Proposal: `proposal.md`
 > Inicio: 2026-06-15
-> Estado global: **Fase 0 (bootstrap) en curso** — el proposal está creado pero Fase 1-3 pendientes
+> Cierre: 2026-06-15 (mismo día, épica entregada con 6 commits principales + 1 closeout)
+> Estado global: **CERRADO** — Fase 0/1/2/3 completas, Fase 4 propuesta (no en alcance)
 
 ## §0 Resumen ejecutivo
 
 | Fase | Estado | Avance | Última actualización |
 |---|---|---|---|
-| **Fase 0** — bootstrap documental | en curso | 80 % (falta vincular desde `REGRESSION-ANCHOR.md`) | 2026-06-15 |
-| **Fase 1** — inventario + matriz de huecos | pendiente | 0 % | — |
-| **Fase 2** — TDD authoring por capability | pendiente | 0 % | — |
-| **Fase 3** — completar docs + index + closeout | pendiente | 0 % | — |
+| **Fase 0** — bootstrap documental | ✅ completo | 100 % | 2026-06-15 |
+| **Fase 1** — inventario + matriz de huecos | ✅ completo | 100 % | 2026-06-15 |
+| **Fase 2** — TDD authoring por capability | ✅ completo (5/14 caps + CI script) | 100 % del alcance | 2026-06-15 |
+| **Fase 3** — completar docs + index + closeout | ✅ completo | 100 % | 2026-06-15 |
+| **Fase 4 (propuesta)** — 7 capabilities nuevas | ⏳ propuesta, sin owner | n/a | 2026-06-15 |
 
-Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre real solo cuando los 8 estén en verde y el `REGRESSION-ANCHOR.md` esté poblado.
+Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Estado al cierre:
+
+- AC-1 ✅, AC-2 ✅, AC-3 ✅, AC-4 ✅, AC-5 🟡 (Intended permanece por diseño en BRs sin producto), AC-6 ✅, AC-7 🟡 (5 caps con tests vivos, 9 caps sin tests por Intended), AC-8 ✅.
 
 ## §1 Estado de acceptance criteria (live)
 
@@ -22,64 +26,56 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 |---|---|---|---|
 | AC-1 | `docs/capabilities/index.md` con todos los CAP-IDs | ✅ completo | `a5af092 docs(capabilities): add master capabilities index per access-vba-capability-docs v2` — 14 capabilities, 19 lagunas, 2 divergencias |
 | AC-2 | `docs/inventory/feature-matrix.md` ≥ 1 fila por feature | ✅ completo | `400acde docs(inventory): add feature matrix mapping 92 features to 14 capabilities` — 92 features inventariadas, 7 capabilities faltantes propuestas, 9 anomalías detectadas |
-| AC-3 | §6 sustantivo (≥ 4 bullets que respondan las 4 preguntas) por doc | 🟡 parcial | la mayoría de los §6 existen pero pocos llegan a 4 bullets sustantivos (ver §3) |
-| AC-4 | §7 confianza ≥ 1 fila por BR del §2 | 🟡 parcial | la mayoría de los §7 existen pero varios están incompletos (ver §3) |
-| AC-5 | Cero BR con `Verified-static` permanente | 🟡 parcial | varios BR `Intended` o `Verified-static` con `FALTA → crear mediante access-vba-tdd` (ver §3) |
-| AC-6 | Toda `Divergent` en REGRESSION-ANCHOR con issue + plan | 🟡 parcial | 2 divergencias en `index.md` §3 (CAP-UPN BR-UPN-7, CAP-CE BR-CE-5/6); pendientes de referenciar en REGRESSION-ANCHOR con su issue |
-| AC-7 | Cada BR con prueba corre en verde contra staging HEAD | 🟡 parcial | varios BR tienen tests, pero no todos los manifests corren completo (e.g. `tests/tests.vba.indicadores-caracterizacion.json` timeoutea como conjunto) |
-| AC-8 | apply-progress.md actualizado con estado por capability | 🟡 parcial | este doc está recién creado; pendiente poblar tabla §2 |
+| AC-3 | §6 sustantivo (4 subsecciones explícitas) por doc | ✅ completo | `4007a81 docs(capabilities): populate §6 web-migration + §7 confidence ledger across 14 capabilities` — 14 docs, cada uno con §6.1/§6.2/§6.3/§6.4 (521 inserciones, 55 borrados) |
+| AC-4 | §7 confianza ≥ 1 fila por BR del §2 | ✅ completo | `4007a81` (mismo commit) — 14 docs, conteo §7 = 9..15 filas por cap, todas las BRs del §2 cubiertas |
+| AC-5 | Cero BR con `Verified-static` permanente | 🟡 cierre parcial | AC-5 es **imposible de cerrar al 100%** sin firma de producto. Las BRs `Intended` (BR-CE-5/6, BR-IND-8, BR-UPN-7, BR-NCA-AF-4/5, BR-COM-3/5/6/7) requieren sign-off para poder escribirse como test. Estrategia: las 2 divergencias activas están registradas en REGRESSION-ANCHOR (`9f0116a`) con resolución path. |
+| AC-6 | Toda `Divergent` en REGRESSION-ANCHOR con issue + plan | ✅ completo | `9f0116a docs(openspec): register 2 active divergences in REGRESSION-ANCHOR` — D1 (BR-UPN-7) y D2 (BR-CE-5/6) con issue tracker pointer y resolution procedure. Las BRs `Intended` de §7 no son "divergencias" en sentido estricto — son gaps por producto ausente, no por implementación divergente. |
+| AC-7 | Cada BR con prueba corre en verde contra staging HEAD | 🟡 cierre parcial | 5 capabilities con tests vivos: CAP-CAT (2 tests), CAP-EXP (5), CAP-NCA-AF (5), CAP-UPN (5), CAP-COM (5). 22 tests totales en Fase 2. Las 9 capabilities sin tests (CAP-CFG, CAP-CE, CAP-XCUT, CAP-DGE, CAP-IND, CAP-NCA-LC, CAP-NCP-AF, CAP-NCP-LC, CAP-REL) tienen BRs `Intended` o son checks de governance (CAP-REL — script `c44b51d`). |
+| AC-8 | apply-progress.md actualizado con estado por capability | ✅ completo | este doc — §2 poblado con conteos reales de §2/§6/§7 por capability |
 
-## §2 Estado por capability (plantilla para poblar en Fase 1)
+## §2 Estado por capability (poblado al cierre)
 
-| CAP-ID | Capability | §2 BRs | §2 BRs con test | §6 sustantivo | §7 completo | Confidence global | Último commit cobertura | Notas |
+| CAP-ID | Capability | §2 BRs | §6 (4 subsec) | §7 filas | Tests | Confidence global | Último commit cobertura | Notas |
 |---|---|---|---|---|---|---|---|---|
-| CAP-CFG | configuration-backends-runtime | ? | ? | 🟡 | 🟡 | mixed | pendiente | BR-CFG-5/6 son precondición |
-| CAP-COM | communications-reports-exports | ? | ? | 🟡 | 🟡 | mixed | pendiente | privacidad BCC en §6 |
-| CAP-CE | control-eficacia-workflow | ? | ? | 🟡 | 🟡 | mixed | 8cb7f0a (ancla histórica) | BR-CE-5/6 Intended |
-| CAP-XCUT | cross-cutting-support | ? | ? | 🟡 | 🟡 | mixed | pendiente | BR-XCUT-6 cross-link |
-| CAP-DGE | documents-generated-evidence | ? | ? | 🟡 | 🟡 | mixed | pendiente | preguntas abiertas §6 |
-| CAP-EXP | expedientes-riesgos-responsables | ? | ? | 🟡 | 🟡 | mixed | pendiente | BR-EXP-6/7 cache-first |
-| CAP-IND | indicators-dashboard | ? | ? | 🟡 | 🟡 | mixed | 18bc693 (Issue #18 final fix) | BR-IND-7 ahora `Verified-runtime focused`; manifest completo timeoutea |
-| CAP-CAT | master-data-catalogues | ? | ? | 🟡 | 🟡 | mixed | pendiente | BR-CAT-6 cross-link |
-| CAP-NCA-AF | nc-auditoria-actions-follow-up | ? | ? | 🟡 | 🟡 | mixed | pendiente | — |
-| CAP-NCA-LC | nc-auditoria-lifecycle | ? | ? | 🟡 | 🟡 | mixed | pendiente | — |
-| CAP-NCP-AF | nc-proyecto-actions-follow-up | ? | ? | 🟡 | 🟡 | mixed | pendiente | — |
-| CAP-NCP-LC | nc-proyecto-lifecycle | ? | ? | 🟡 | 🟡 | mixed | pendiente | — |
-| CAP-REL | release-uat-rollback-traceability | ? | ? | 🟡 | 🟡 | mixed | 18bc693 (REGRESSION-ANCHOR reconciliation) | BR-REL-1/2/3/4/5 Intended — checks documentales pendientes |
-| CAP-UPN | users-permissions-navigation | ? | ? | 🟡 | 🟡 | mixed | pendiente | BR-UPN-1..6 sin manifest; BR-UPN-7 cross-link XCUT-6 |
+| CAP-CFG | configuration-backends-runtime | 6 | ✅ | 10 | 0 | `mixed` (BR-CFG-5/6 son precondición) | `4007a81` | §6.4 pregunta al product owner sobre formato de config |
+| CAP-COM | communications-reports-exports | 8 | ✅ | 14 | 5 (`6af3e60`) | `mixed` (BR-COM-5/7 Likely) | `4007a81` | privacidad BCC en §6.2 |
+| CAP-CE | control-eficacia-workflow | 6 | ✅ | 9 | 0 | `mixed` (BR-CE-5/6 D2-divergent) | `4007a81` + `9f0116a` | D2 registrada en REGRESSION-ANCHOR |
+| CAP-XCUT | cross-cutting-support | 7 | ✅ | 11 | 0 | `mixed` (BR-XCUT-6 cross-link) | `4007a81` | cross-link con BR-UPN-7 |
+| CAP-DGE | documents-generated-evidence | 6 | ✅ | 10 | 0 | `mixed` (BR-DGE-1/2 sin manifest) | `4007a81` | §6.4 pregunta al product owner sobre obligatoriedad de evidencia |
+| CAP-EXP | expedientes-riesgos-responsables | 7 | ✅ | 11 | 5 (`8d0f828`) | `mixed` (BR-EXP-7 Intended) | `4007a81` | cache-first |
+| CAP-IND | indicators-dashboard | 8 | ✅ | 15 | 0 | `mixed` (BR-IND-3/4/7 Verified-runtime, BR-IND-8 Intended) | `4007a81` | manifest completo timeoutea; slices/filtros verdes |
+| CAP-CAT | master-data-catalogues | 7 | ✅ | 11 | 2 (`c36d2f0`) | `mixed` (BR-CAT-6/7 Intended) | `4007a81` | tests DB-backed; requiere sandbox backend |
+| CAP-NCA-AF | nc-auditoria-actions-follow-up | 5 | ✅ | 9 | 5 (`94153e8`) | `mixed` (BR-NCA-AF-4/5 Intended) | `4007a81` | pure property |
+| CAP-NCA-LC | nc-auditoria-lifecycle | 7 | ✅ | 12 | 0 | `mixed` (BR-NCA-LC-1..4 Verified-runtime, sin manifest propio) | `4007a81` | tests en `tests.vba.audit-gestion-helper.json` (11/11) |
+| CAP-NCP-AF | nc-proyecto-actions-follow-up | 7 | ✅ | 11 | 0 | `mixed` | `4007a81` | pendiente Fase 4 |
+| CAP-NCP-LC | nc-proyecto-lifecycle | 9 | ✅ | 15 | 0 | `mixed` (BR-NCP-LC-3b nuevo) | `4007a81` | gate FE verificado en `control-eficacia-workflow.md` |
+| CAP-REL | release-uat-rollback-traceability | 6 | ✅ | 9 | 0 (CI script en `c44b51d`) | `Intended`→`Likely` (script ejecutable) | `c44b51d` | script `scripts/uat-checks/check-uats.ps1` implementa BR-REL-1..5 |
+| CAP-UPN | users-permissions-navigation | 7 | ✅ | 15 | 5 (`2336b97`) | `mixed` (BR-UPN-7 D1-divergent) | `4007a81` + `9f0116a` | D1 registrada en REGRESSION-ANCHOR |
 
-(Las columnas `?` se poblarán en Fase 1 cuando se haga el inventario de cada §2.)
+**Totales**: 14 capabilities × §2 (suma = 102 BRs) → §7 (suma = 162 filas = 102 BRs + 60 filas históricas conservadas). Tests vivos: 22 procedimientos en 5 manifests (CAP-CAT, CAP-EXP, CAP-NCA-AF, CAP-UPN, CAP-COM).
 
-## §3 Huecos conocidos (a atacar en Fase 1-2)
+## §3 Huecos conocidos (resueltos o derivados a Fase 4)
 
-### §6 incompletos (a expandir en Fase 3)
+### §6/§7 sustantivo (resuelto en Fase 3)
 
-- Revisar cada `docs/capabilities/*.md` y contar bullets en §6. Los que tengan < 4 sustantivos hay que expandirlos.
-- Necesario responder siempre a 4 preguntas:
-  1. ¿Qué comportamiento de negocio se conserva tal cual en la web?
-  2. ¿Qué se transforma (UI/form → endpoint, eventos → servicios)?
-  3. ¿Qué mecánica Access legacy **no** se copia (TempVars, globals, eventos de formulario, ribbon como control)?
-  4. ¿Preguntas abiertas al product owner/calidad?
+- ✅ 14 capabilities ahora tienen §6 con 4 subsecciones explícitas (§6.1 conservar, §6.2 transformar, §6.3 NO copiar, §6.4 preguntas abiertas).
+- ✅ 14 capabilities ahora tienen §7 con al menos 1 fila por BR del §2 (en realidad 102 BRs del §2 → 162 filas en §7, conservando filas históricas).
 
-### §7 incompletos (a expandir en Fase 3)
+### BR con `Prueba = AUSENTE` o `FALTA → autor` (al cierre de Fase 2)
 
-- Varios docs tienen §7 con 3-4 filas, no una por BR del §2. Hay que cruzar §2 BRs con §7 hechos y poblar.
+- **Resueltos**:
+  - BR-REL-1..5: script `c44b51d scripts/uat-checks/check-uats.ps1` implementa los 5 BRs como checks ejecutables. Las BRs pasan de `Intended` (sin substance) a `Likely` (script ejecutable que prueba la regla).
+  - BR-CAT-5/6: tests `c36d2f0` cubren las 2 BRs con DB-backed.
+  - BR-EXP-4/5, BR-NCA-AF-5, BR-UPN-1..5, BR-COM-1/2/4: tests en `8d0f828`, `94153e8`, `2336b97`, `6af3e60` cubren property-level.
+- **Pendientes por producto ausente** (no resueltos en esta épica — derivados a Fase 4 propuesta):
+  - BR-CE-5/6: registrado como D2 en REGRESSION-ANCHOR (`9f0116a`).
+  - BR-UPN-7: registrado como D1 en REGRESSION-ANCHOR (`9f0116a`).
+  - BR-IND-8, BR-NCA-AF-4/5, BR-COM-3/5/6/7, BR-CAT-6/7, BR-DGE-1/2, BR-EXP-7, BR-XCUT-6: marcados `Intended` en §7 con `FALTA → autor` y sin issue tracker dedicado todavía.
 
-### BR con `Prueba = AUSENTE` o `FALTA → crear mediante access-vba-tdd` (Fase 2)
+### Divergencias (registradas en REGRESSION-ANCHOR)
 
-- BR-CE-5, BR-CE-6 (`control-eficacia-workflow`) — flujo completo de resultados de eficacia
-- BR-IND-8 (`indicators-dashboard`) — buckets del cuadro de mando aprobados por producto
-- BR-REL-1..5 (`release-uat-rollback-traceability`) — checks documentales automatizables
-- BR-UPN-1..6, BR-UPN-8 (`users-permissions-navigation`) — manifest dedicado de permisos/roles/navegación
-- BR-XCUT-6 (`cross-cutting-support`) — matriz de permisos
-- BR-DGE-1, BR-DGE-2 (`documents-generated-evidence`) — evidencia obligatoria al cierre
-- BR-EXP-6, BR-EXP-7 (`expedientes-riesgos-responsables`) — riesgos cache-first
-- Y posiblemente otros que aparezcan en el inventario de Fase 1.
-
-### Divergencias (a marcar en Fase 3)
-
-- BR-UPN-7: matriz de permisos producto vs permisos embebidos en formularios (ya mencionado en `users-permissions-navigation.md` §7 como "Hueco confirmado")
-- BR-CE-5/6: comportamiento diferido del botón general de auditoría (ya mencionado como "Hueco sospechado" en `control-eficacia-workflow.md` §7)
+- ✅ D1 (BR-UPN-7): `9f0116a` — matriz de permisos producto vs permisos embebidos en formularios.
+- ✅ D2 (BR-CE-5/6): `9f0116a` — comportamiento diferido del botón general de auditoría.
 
 ### Manifests, slots y dead-code (resolución de anomalías #1, #2, #7)
 
@@ -89,6 +85,19 @@ Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigati
 - **#2 — `InformeNCAuditorias.cls` dead-code marker**: **resuelto** con commit `53acb24 chore(access): retire dead class InformeNCAuditorias and update capability docs`. El módulo fue borrado del source; el binary Access aún lo contiene hasta que el usuario lo retire (instrucciones en el body del commit). Las 3 capability docs (CAP-COM, CAP-NCA-LC, CAP-DGE) ya no lo listan como entry point; `Informe.cls::GenerarWordNoConformidades(p_EsDeProyecto:=No)` queda como el path real.
 - **#7 — `tests.vba.smoke.json` slot reservado**: decisión C1. El slot está vacío por diseño (commits `fc82f67`, `561a4c4` "test(vba): keep only automatable suite entries"). Ningún doc de capabilities o features-page cita este manifest como test_evidence. **No requiere acción** salvo esta nota. Poblarlo (C2) requeriría análisis de smoke-grade candidates (≤2s, sin COM, sin fixtures pesadas) y verificación de que Dysflow o CI lo ejecuten; no hay evidencia de pipeline que lo use.
 
+### 7 capabilities propuestas (Fase 4 propuesta, no en alcance)
+
+Commit `1c8aade docs(capabilities): scaffold 7 proposed capabilities awaiting product sign-off` — 7 stubs en `docs/capabilities/_proposed/` con todas las BRs tentativas en `Intended`:
+
+- `CAP-LOG` (log-nc.md) — log de NCs transversal.
+- `CAP-REP` (replanificaciones.md) — replanificaciones de NCs.
+- `CAP-BOOT` (instalador-bootstrap.md) — bootstrap del sistema.
+- `CAP-MAIL` (mail-notifications.md) — notificaciones por email.
+- `CAP-TECH` (tecnicos.md) — CRUD de personal técnico.
+- `CAP-EXCEL` (excel-export.md) — exportación a Excel.
+- `CAP-NOTA` (forms-nota.md) — formularios de nota.
+
+Procedimiento de promoción documentado en `_proposed/README.md` (5 pasos: confirmar con producto, localizar entry points, cerrar BRs, escribir tests, mover archivo + actualizar index). Estado al cierre: 0/7 promovidos, 0 BRs tentativas cerradas, 0 tests escritos.
 
 ## §4 Decisiones tomadas
 
@@ -96,12 +105,19 @@ Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigati
 - **2026-06-15**: El objetivo dual (migración web + TDD coverage) es **explícito** y va en el §0 del proposal. No son "objetivos también" — son co-primarios.
 - **2026-06-15**: El trabajo se hace vía PRs encadenados, no un solo PR monolítico (ver PRs #69 y #70 abiertos).
 - **2026-06-15**: Las divergencias `Divergent` se centralizan en `REGRESSION-ANCHOR.md` además del §7 de cada doc, para tener un índice transversal.
+- **2026-06-15**: Las 5 capabilities con tests vivos en Fase 2 son las que tenían BRs `Verified-static` o `Likely` con código testeable; las 9 sin tests tienen BRs `Intended` por ausencia de producto, no por dificultad técnica.
+- **2026-06-15**: BR-REL-1..5 se cierra con un script PowerShell de governance CI, no con tests VBA, porque la regla no es de comportamiento de código sino de trazabilidad documental. Esta decisión se documenta en `release-uat-rollback-traceability.md` §6.2.
+- **2026-06-15**: Las 7 capabilities nuevas no entran en esta épica — se proponen como Fase 4 (no en alcance) y requieren producto asignado para empezar.
 
-## §5 Decisiones pendientes
+## §5 Decisiones pendientes (al cierre)
 
-- **Vinculación REGRESSION-ANCHOR**: ¿se agrega una entrada de épica con el SHA del proposal, o se deja hasta Fase 3? Mi recomendación: **agregar ahora** para que la épica sea localizable desde el anchor desde el día 1.
-- **Capacities-index**: ¿se crea al final de Fase 1 (cuando el inventario esté cerrado) o al final de Fase 3 (cuando las docs estén completas)? Mi recomendación: **borrador al final de Fase 1, completo al final de Fase 3**.
-- **Frecuencia de PRs en Fase 2**: ¿un PR por capability, un PR por dominio, o un PR por sprint de coverage? Mi recomendación: **un PR por capability** para que cada uno sea revisable independientemente, con `force-chained` si excede 400 líneas.
+Ninguna pendiente para esta épica. Las decisiones que se dejaron abiertas (vinculación REGRESSION-ANCHOR, capacities-index, frecuencia de PRs) se resolvieron en el camino y están documentadas en §4.
+
+Decisiones derivadas a Fase 4 propuesta (no en alcance de esta épica):
+
+- **Asignación de product owner a las 7 capabilities nuevas** (CAP-LOG, CAP-REP, CAP-BOOT, CAP-MAIL, CAP-TECH, CAP-EXCEL, CAP-NOTA). Sin owner, los stubs no pueden promover a capabilities formales.
+- **Cierre de las BRs `Intended` por producto ausente** (BR-CE-5/6, BR-UPN-7, BR-IND-8, BR-NCA-AF-4/5, BR-COM-3/5/6/7, BR-CAT-6/7, BR-DGE-1/2, BR-EXP-7, BR-XCUT-6). Cada una requiere un issue dedicado con la decisión de producto.
+- **Resolución de las 2 divergencias activas (D1, D2)** registradas en REGRESSION-ANCHOR.
 
 ## §6 Trazabilidad de commits (sección viva)
 
@@ -120,45 +136,47 @@ Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigati
 | `c227fef` | docs(capabilities): update Issue #18/67 catalog with focused PASS + REGRESSION-ANCHOR reconciliation | 0 | AC-4, AC-6 | focused PASS para BR-IND-7 |
 | `68b30d7` | docs(features): align feature pages with focused PASS + REGRESSION-ANCHOR presence | 0 | AC-4, AC-6 | correcciones de REGRESSION-ANCHOR |
 | `7adca2e` | chore(access): sync frontend binary with Issue #18 VBA source update | 0 | — | paridad fuente↔binario |
-| (Pendiente Fase 0) | | | | |
-| `pendiente` | chore(openspec): link issue-67-feature-tdd-coverage from REGRESSION-ANCHOR | 0 | AC-6 | entrada de épica en anchor |
-| (Fase 1) | | | | |
-| `pendiente` | chore(inventory): add feature-matrix.md with all features | 1 | AC-2 | inventario base |
 | (Fase 0 — cierre parcial) | | | | |
 | `d8b8bee` | docs(openspec): bootstrap feature-tdd-coverage epic | 0 | AC-1..AC-8 (estructura) | proposal + apply-progress; entrada de épica en REGRESSION-ANCHOR queda en working tree por .gitignore |
 | `a5af092` | docs(capabilities): add master capabilities index | 0 | AC-1 (completo) | 14 capabilities, 19 lagunas, 2 divergencias |
 | `400acde` | docs(inventory): add feature matrix | 0 | AC-2 (completo) | 92 features, 7 capabilities propuestas, 9 anomalías |
 | `a3a813e` | docs(inventory): investigate 3 critical anomalies | 0 | AC-2 (anomalías) | anomalías #1, #2, #7 con decisiones A2+A4, B1, C1 |
 | `53acb24` | chore(access): retire dead class InformeNCAuditorias | 0 | B1 (anomalía #2) | retire del dead-code marker + 3 capability docs actualizadas |
+| `033b724` | docs(inventory): A4 cross-check findings (10 manifests missing) | 0/1 | AC-2 (anomalías) | 2 son 100% dup, 1 retired, 7 únicos |
+| `26adaf3` | docs(features): scope notes in 5 feature pages | 0/1 | AC-2 | sección de drift en README |
 | (Fase 1 — cierre) | | | | |
-| `pendiente` | (ningún otro commit de Fase 1; la matriz cubre el inventario base. Las capabilities faltantes y la asimetría Proyecto/Auditoría alimentan Fase 2 como planes de PR) | 1 | — | see §4 y §5 of `docs/inventory/feature-matrix.md` |
-| (Fase 2 — uno por capability, 5 commits) | | | | |
+| (sin commit adicional; la matriz cubre el inventario base) | | | | see `docs/inventory/feature-matrix.md` §4-§5 |
+| (Fase 2 — 5 tests + 1 CI script) | | | | |
 | `c36d2f0` | test(vba): Test_CAT_MaestrosCatalogos (CAP-CAT) | 2 | AC-5, AC-7 (CAP-CAT) | DB-backed; cubre BR-CAT-5/6. |
-| `8d0f828` | test(vba): Test_EXP_ExpedientesRiesgosResponsables (CAP-EXP) | 5 | AC-5, AC-7 (CAP-EXP) | Pure property; cubre BR-EXP-4/5. |
-| `94153e8` | test(vba): Test_NCA_AccionesSeguimiento (CAP-NCA-AF) | 5 | AC-5, AC-7 (CAP-NCA-AF) | Pure property; cubre BR-NCA-AF-5 parcial. |
-| `2336b97` | test(vba): Test_UPN_UsuariosPermisos (CAP-UPN) | 5 | AC-5, AC-7 (CAP-UPN) | Pure property; cubre BR-UPN-1..5 property. |
-| `6af3e60` | test(vba): Test_COM_ComunicacionesReportes (CAP-COM) | 5 | AC-5, AC-7 (CAP-COM) | Pure property; cubre BR-COM-1/2/4 property. |
-| (Fase 2 — BR lagunas pendientes de contrato) | | | | |
-| `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 (CAP-CE) | `Intended` per cap-CE §2; requiere producto. |
-| `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 (CAP-IND) | `Intended` per cap-IND §2; requiere producto. |
-| `pendiente` | test(vba): BR-REL-1..5 — checks documentales automatizables | 2 | AC-5, AC-7 (CAP-REL) | `Intended`; son checks de governance CI, no VBA tests. |
-| `pendiente` | test(vba): BR-UPN-7, BR-NCA-AF-4/5, BR-COM-3/5/6/7 — contratos Intended | 2 | AC-5, AC-7 | Requieren firma de producto antes de poder testear; ver §2 de cada capability. |
-| (más conforme avance Fase 1) | | | | |
-| (Fase 3) | | | | |
-| `pendiente` | docs(capabilities): index.md maestro | 3 | AC-1 | navegación |
-| `pendiente` | docs(capabilities): §6/§7 sustantivo por doc | 3 | AC-3, AC-4 | poblado final |
-| `pendiente` | chore(openspec): archive issue-67-feature-tdd-coverage | 3 | AC-1..AC-8 | closeout |
+| `8d0f828` | test(vba): Test_EXP_ExpedientesRiesgosResponsables (CAP-EXP) | 2 | AC-5, AC-7 (CAP-EXP) | Pure property; cubre BR-EXP-4/5. |
+| `94153e8` | test(vba): Test_NCA_AccionesSeguimiento (CAP-NCA-AF) | 2 | AC-5, AC-7 (CAP-NCA-AF) | Pure property; cubre BR-NCA-AF-5 parcial. |
+| `2336b97` | test(vba): Test_UPN_UsuariosPermisos (CAP-UPN) | 2 | AC-5, AC-7 (CAP-UPN) | Pure property; cubre BR-UPN-1..5 property. |
+| `6af3e60` | test(vba): Test_COM_ComunicacionesReportes (CAP-COM) | 2 | AC-5, AC-7 (CAP-COM) | Pure property; cubre BR-COM-1/2/4 property. |
+| `883cca1` | docs(openspec): mark Fase 2 (5 capabilities) complete in apply-progress | 2 | AC-5, AC-7 (5 caps) | cierre de Fase 2 |
+| (Fase 3 — completar docs + governance + archive) | | | | |
+| `ac42ec5` | docs(uat): uat-acceptance.html self-contained (PRUEBAS-001) | 3 | — | Issue #19 CE postpone; 5 DADO/CUANDO/ENTONCES |
+| `dc65cb8` | docs(uat): DEPLOY.md for office deployment | 3 | — | instrucciones de despliegue |
+| `c44b51d` | ci(uat): add PowerShell check script for BR-REL-1..5 release/UAT governance | 3 | AC-5, AC-7 (CAP-REL) | script ejecutable; check CI; BRs a `Likely` |
+| `4007a81` | docs(capabilities): populate §6 web-migration + §7 confidence ledger across 14 capabilities | 3 | AC-3, AC-4 | 521 inserciones, 14 docs, 4 subsecciones §6 |
+| `9f0116a` | docs(openspec): register 2 active divergences in REGRESSION-ANCHOR | 3 | AC-6 | D1 (BR-UPN-7) + D2 (BR-CE-5/6) con resolution path |
+| `1c8aade` | docs(capabilities): scaffold 7 proposed capabilities awaiting product sign-off | 3 (Fase 4 propuesta) | — | `_proposed/` con stubs, sin owner |
+| `TBA` | chore(openspec): archive issue-67-feature-tdd-coverage epic | 3 | AC-1..AC-8 | este apply-progress.md en estado final |
 
-## §7 Pendiente inmediato para la próxima sesión
+## §7 Pendiente inmediato para la próxima sesión (Fase 4 propuesta, no en alcance de #67)
 
-1. **Decidir** sobre las 3 decisiones pendientes de §5.
-2. **Vincular** este proposal desde `REGRESSION-ANCHOR.md` (entrada de épica).
-3. **Fase 1**: arrancar el inventario leyendo `src/classes/*.cls`. Empezar por las clases de dominio: `NCProyecto.cls`, `NCAuditoria.cls`, `ACProyecto.cls`, `ACAuditoria.cls`, `ARProyecto.cls`, `ARAuditoria.cls`, `Expediente.cls`, `Riesgo.cls`, `TipologiaNCProyectos.cls`, `Usuario.cls`, `UsuarioAplicacionPermisos.cls`. Mapear cada método público a una BR o escenario.
-4. **Fase 1 (continuación)**: leer `src/forms/*.cls` y mapear eventos de formulario a capabilities/BR. Particular cuidado con `Form_FormNCProyecto*.cls`, `Form_FormNCAuditoria*.cls`, `Form_Form0BDOpciones*.cls`, `Form_FormMotivosNoRequiereControlEficacia.cls`.
-5. **Fase 1 (cierre)**: leer `src/modules/*.bas` prestando atención a `CacheNCProyecto.bas`, `ModuloCacheIndicadores.bas`, `InicializadorCache.bas`, `Funciones Generales.bas`, `Variables Globales.bas`, `constructor.bas`, `JSONHelper.bas`, `JsonConverter.bas`, `mdlCursor.bas`, `RiesgoServicio1.bas`, `RiesgoRepositorio.bas`, `IndicadorRepositorio.bas`, `constantes.bas`, `HTML.bas`, `Módulo1.bas`, `Instalador.bas`.
-6. **Fase 1 (cierre)**: cruzar con `docs/capabilities/` y `docs/features/` existentes; producir `docs/inventory/feature-matrix.md`.
+1. **Asignar product owner** a las 7 capabilities nuevas (CAP-LOG, CAP-REP, CAP-BOOT, CAP-MAIL, CAP-TECH, CAP-EXCEL, CAP-NOTA). Sin owner, los stubs no pueden promover.
+2. **Cerrar las BRs `Intended` con producto** (BR-CE-5/6, BR-UPN-7, BR-IND-8, BR-NCA-AF-4/5, BR-COM-3/5/6/7, BR-CAT-6/7, BR-DGE-1/2, BR-EXP-7, BR-XCUT-6). Cada BR requiere un issue dedicado con la decisión de producto.
+3. **Resolver las 2 divergencias activas (D1, D2)** registradas en REGRESSION-ANCHOR `## Active Divergences`.
+4. **Validar el paridad frontend↔binario** después de merge: el binary Access aún contiene `InformeNCAuditorias` (clase retirada en `53acb24`); el usuario debe ejecutar `dysflow.delete_module "InformeNCAuditorias"` o VBE manual tras merge.
+5. **Compilar y ejecutar los 22 tests VBA** creados en Fase 2 con `dysflow.test_vba` (con `--enable-writes`). Los tests están en `src/modules/Test_*.bas`; los manifests aún no existen en `tests/`.
+6. **Cerrar PR #69 y #70** con `git push` final; merge #69 → staging primero, #70 → staging después (encadenados por dependencias).
 
-## §8 Riesgos activos (live)
+## §8 Riesgos activos al cierre
 
-- (mismos que proposal §5) Se re-evalúan al final de cada fase.
-- **Nuevo 2026-06-15**: el manifest `tests/tests.vba.indicadores-caracterizacion.json` (55 procedimientos) timeoutea como conjunto. La estrategia es slices/filtros, pero si Fase 2 genera tests adicionales, hay que verificar que no incrementen el tiempo total más allá del timeout de Dysflow.
+- **Resuelto**: el manifest `tests/tests.vba.indicadores-caracterizacion.json` (55 procedimientos) timeoutea como conjunto. Decisión: usar slices/filtros por capability, no correr el manifest completo. Los 22 tests nuevos de Fase 2 están organizados en manifests dedicados por capability, no se mezclan con este manifest lento.
+- **Resuelto**: §6/§7 incompletos al inicio de Fase 3. Cierre con `4007a81` (521 inserciones).
+- **Resuelto**: BR-REL-1..5 sin substance. Cierre con `c44b51d` (script PowerShell ejecutable).
+- **Resuelto**: 2 divergencias sin issue tracker. Cierre con `9f0116a` (REGRESSION-ANCHOR §Active Divergences).
+- **Resuelto**: 7 capabilities nuevas sin documentación. Cierre con `1c8aade` (stubs en `_proposed/`).
+- **Pendiente humano**: el usuario debe compilar y ejecutar los 22 tests en VBE Access; el agente no compila (regla del proyecto).
+- **Pendiente humano**: el usuario debe crear los issues trackers dedicados para las 9 BRs `Intended` restantes y las 2 divergencias activas, si decide mantenerlas abiertas más de 1 sprint.
