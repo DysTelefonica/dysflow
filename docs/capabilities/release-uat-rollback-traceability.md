@@ -15,7 +15,7 @@
 - **Problema que resuelve**: Evita afirmar “está hecho” con evidencias obsoletas o commits no alcanzables desde `staging`.
 - **Valor de negocio / por qué existe**: Una release de calidad necesita trazabilidad desde petición → SDD → código → prueba → UAT → producción → rollback.
 - **No-objetivos**: No ejecuta releases ni sustituye los gates de Git/SDD.
-- **Origen de la intención**: `docs/features/README.md`, `openspec/REGRESSION-ANCHOR.md`, reglas locales de trazabilidad SDD.
+- **Origen de la intención**: `docs/features/README.md`, `openspec/REGRESSION-ANCHOR.md` (presente en este checkout y reconciliado por `f122d9a chore(sdd): reconcile openspec config for capability catalog`) y reglas locales de trazabilidad SDD. La copia externa en `C:\00repos\documentacion\OPENSPEC\00_No_Conformidades` queda pendiente de verificación.
 - **Referencia de tracker de origen**: Issue #67 y política de UAT tags.
 
 ## §2 Contrato de comportamiento
@@ -29,7 +29,7 @@
 ### Reglas de negocio
 | ID regla | Enunciado (pretendido) | Autoridad | ¿Aplicada en código? | Prueba | Confianza |
 |---|---|---|---|---|---|
-| BR-REL-1 | Ninguna feature se cierra sin página en `docs/features/` y link en `openspec/REGRESSION-ANCHOR.md`. | Docs/features | Documental | FALTA → author via access-vba-tdd no aplica; crear check documental/script si procede | Verified-static |
+| BR-REL-1 | Ninguna feature se cierra sin página en `docs/features/` y, cuando exista, link en `openspec/REGRESSION-ANCHOR.md`; si el anchor falta en el checkout, debe quedar documentado como deuda de reconciliación. | Docs/features | Documental | FALTA → author via access-vba-tdd no aplica; crear check documental/script si procede | Verified-static |
 | BR-REL-2 | `last_known_passing` debe ser prueba contra HEAD actual o commit staging verificado; evidencia de commit message no basta. | Regression anchor | Documental | FALTA → check documental automatizable | Verified-static |
 | BR-REL-3 | Todos los commits de integración deben ser ancestros de `staging` antes de declarar `passing`. | Regression anchor + AGENTS | Documental/proceso | FALTA → check Git en verify/archive | Verified-static |
 | BR-REL-4 | Cada ronda UAT crea tag inmutable `PRUEBAS-###`; el tag final aprobado es gate de producción. | Docs/features README | Documental | FALTA → checklist o script de release | Verified-static |
@@ -53,12 +53,12 @@
 
 ### Señales de aceptación / presencia
 - Todas las páginas de capacidad tienen filas de release/UAT aunque estén pendientes.
-- `docs/features/README.md` y `openspec/REGRESSION-ANCHOR.md` coinciden en gates.
+- `docs/features/README.md` y, cuando esté disponible, `openspec/REGRESSION-ANCHOR.md` coinciden en gates; si el anchor no existe en el checkout, la ausencia está documentada como deuda.
 - Huecos de prueba aparecen en una matriz priorizada.
 
 ## §3 Mapa de implementación
 - **Puntos de entrada de UI**: no aplica; capacidad documental-operativa.
-- **Puntos de entrada de código/documentación**: `docs/features/README.md`, `openspec/REGRESSION-ANCHOR.md`, `docs/capabilities/README.md`, páginas de capability, OpenSpec archives.
+- **Puntos de entrada de código/documentación**: `docs/features/README.md`, `docs/capabilities/README.md`, páginas de capability, OpenSpec archives y la referencia pendiente a `openspec/REGRESSION-ANCHOR.md`.
 - **Datos afectados**: metadatos de Git, tags UAT/release, manifests, docs de trazabilidad.
 - **Salidas**: tablas de release, anchors de rollback, matriz de huecos, close-gate evidence.
 - **Dependencias e integraciones**: todas las capacidades y features.
@@ -77,8 +77,10 @@
 | Elemento | Ref. tracker | Versión de staging (UAT) | Estado UAT | Release de producción | Fecha en producción | Nota |
 |---|---|---|---|---|---|---|
 | Política de UAT tags | Issue #67 | Pendiente | pending | Pendiente | Pendiente | Documentada en `docs/features/README.md`. |
-| Regression anchor | Issue #67 | Pendiente | pending | Pendiente | Pendiente | Documentado en `openspec/REGRESSION-ANCHOR.md`. |
+| Regression anchor | Issue #67 | Reconciliado | reconciled | Pendiente | Pendiente | `openspec/REGRESSION-ANCHOR.md` presente y reconciliado por `f122d9a`; la fila de release/UAT/rollback queda pendiente hasta contar con tag UAT aprobado y release de producción. |
 | Matriz de huecos capability | Issue #67 | Pendiente | pending | Pendiente | Pendiente | Actualizada en `docs/capabilities/README.md`. |
+| `indicator-issues-cleanup` | Issue #67 / Issue #18 | Pendiente | pending | Pendiente | Pendiente | Evidencia mixta: slices verdes y focused PASS 2026-06-15 para reconstrucción completa/fallo post-escritura; manifest completo no verde, reachability Phase 3 y UAT/release pendientes. |
+| `audit-backend-list-cache` | Issue #67 | Pendiente | pending | Pendiente | Pendiente | SHA de regresión resuelto (`ad96b95` en `staging`; equivalente `c2026f5` en la rama documental) y manifest/config reconciliado por `staging:openspec/config.yaml`; faltan UAT/release. |
 
 | Síntoma | Causa probable | Comprobación | Ancla del documento |
 |---|---|---|---|
@@ -95,7 +97,7 @@
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
 | Existe política de UAT tags inmutables `PRUEBAS-###`. | Verified-static | `docs/features/README.md` | 2026-06-15 |
-| Existe close-gate de commits alcanzables y evidencia fresca. | Verified-static | `openspec/REGRESSION-ANCHOR.md` | 2026-06-15 |
+| Existe close-gate de commits alcanzables y evidencia fresca. | Verified-static | `docs/features/README.md`; `openspec/REGRESSION-ANCHOR.md` presente y reconciliado por `f122d9a` | 2026-06-15 |
 | Todas las capabilities tienen evidencia release/UAT completa. | Intended | Muchas filas siguen pendientes | 2026-06-15 |
 
 **⚠️ Divergencias (intención SDD ≠ realidad del código)**

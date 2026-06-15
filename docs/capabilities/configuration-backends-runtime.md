@@ -71,6 +71,7 @@
 2. Mantener pruebas de ruta/kill-switch/backend como smoke obligatorio de cualquier UAT que toque datos.
 3. Crear un diagnóstico de configuración que devuelva JSON con backend resuelto, modo, caché y seguridad.
 4. No promover feature/capacidad si la evidencia procede de backend incorrecto.
+5. Antes de usar una fila de release/UAT como evidencia, cruzarla con [`CAP-RELEASE-UAT-ROLLBACK`](release-uat-rollback-traceability.md): tag UAT, commit alcanzable, manifest citado y estado de backend deben pertenecer al mismo corte de `staging`.
 
 ## §5 Evidencia y trazabilidad
 - **Tests**: `tests/tests.vba.e2e.json`, `tests/tests.vba.cache-readiness.json`, procedimientos `Test_BackendConfigPaths_*` en `tests/tests.vba.json`; no reejecutados en esta sesión documental. **Caveat de runner**: tests registrados pero no reejecutados en esta sesión documental; promover a `Verified-runtime` solo tras reejecución contra el `staging` HEAD actual. **Precondición para BR-UPN-1..6 y BR-XCUT-1..7**: BR-CFG-5 (`AssertSafeBackendForCatalogBootstrap`) y BR-CFG-6 (auditoría de routing/kill-switch/indicadores) deben estar verdes antes de ejecutar suites que toquen `TbUsuariosAplicaciones` / `m_ObjUsuarioConectado` o costuras de soporte.
@@ -104,3 +105,6 @@
 
 **⚠️ Divergencias (intención SDD ≠ realidad del código)**
 - Sin divergencia confirmada. Riesgo: la configuración está parcialmente probada, pero falta un contrato operativo único de backend antes de cada UAT.
+
+**Deuda de runbook**
+- Falta un procedimiento único que una esta capacidad con la trazabilidad de release/UAT: comprobar backend activo/sandbox, kill-switch, manifests de configuración y fila de release antes de afirmar evidencia `Verified-runtime` en otra capacidad.
