@@ -20,12 +20,12 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 
 | AC | Descripción | Estado | Evidencia |
 |---|---|---|---|
-| AC-1 | `docs/capabilities/index.md` con todos los CAP-IDs | ❌ pendiente | archivo no existe |
-| AC-2 | `docs/inventory/feature-matrix.md` ≥ 1 fila por feature | ❌ pendiente | archivo no existe |
+| AC-1 | `docs/capabilities/index.md` con todos los CAP-IDs | ✅ completo | `a5af092 docs(capabilities): add master capabilities index per access-vba-capability-docs v2` — 14 capabilities, 19 lagunas, 2 divergencias |
+| AC-2 | `docs/inventory/feature-matrix.md` ≥ 1 fila por feature | ❌ pendiente | archivo no existe; requiere lectura de `src/classes/`, `src/forms/`, `src/modules/` (43+48+25 archivos) |
 | AC-3 | §6 sustantivo (≥ 4 bullets que respondan las 4 preguntas) por doc | 🟡 parcial | la mayoría de los §6 existen pero pocos llegan a 4 bullets sustantivos (ver §3) |
 | AC-4 | §7 confianza ≥ 1 fila por BR del §2 | 🟡 parcial | la mayoría de los §7 existen pero varios están incompletos (ver §3) |
 | AC-5 | Cero BR con `Verified-static` permanente | 🟡 parcial | varios BR `Intended` o `Verified-static` con `FALTA → crear mediante access-vba-tdd` (ver §3) |
-| AC-6 | Toda `Divergent` en REGRESSION-ANCHOR con issue + plan | ❌ pendiente | sin entry de épica en REGRESSION-ANCHOR.md |
+| AC-6 | Toda `Divergent` en REGRESSION-ANCHOR con issue + plan | 🟡 parcial | 2 divergencias en `index.md` §3 (CAP-UPN BR-UPN-7, CAP-CE BR-CE-5/6); pendientes de referenciar en REGRESSION-ANCHOR con su issue |
 | AC-7 | Cada BR con prueba corre en verde contra staging HEAD | 🟡 parcial | varios BR tienen tests, pero no todos los manifests corren completo (e.g. `tests/tests.vba.indicadores-caracterizacion.json` timeoutea como conjunto) |
 | AC-8 | apply-progress.md actualizado con estado por capability | 🟡 parcial | este doc está recién creado; pendiente poblar tabla §2 |
 
@@ -116,6 +116,9 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 | `pendiente` | chore(openspec): link issue-67-feature-tdd-coverage from REGRESSION-ANCHOR | 0 | AC-6 | entrada de épica en anchor |
 | (Fase 1) | | | | |
 | `pendiente` | chore(inventory): add feature-matrix.md with all features | 1 | AC-2 | inventario base |
+| (Fase 0 — cierre parcial) | | | | |
+| `d8b8bee` | docs(openspec): bootstrap feature-tdd-coverage epic | 0 | AC-1..AC-8 (estructura) | proposal + apply-progress; entrada de épica en REGRESSION-ANCHOR queda en working tree por .gitignore |
+| `a5af092` | docs(capabilities): add master capabilities index | 0 | AC-1 (completo) | 14 capabilities, 19 lagunas, 2 divergencias |
 | (Fase 2 — uno por capability) | | | | |
 | `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 | access-vba-tdd |
 | `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 | access-vba-tdd |
