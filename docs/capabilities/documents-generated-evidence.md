@@ -57,7 +57,7 @@
 
 ## §3 Mapa de implementación
 - **Puntos de entrada UI**: `Form_FormNCProyectoDocumentos`, `Form_FormNCAuditoriaDocumentos`, `Form_FormAuditoriaDocumentos`, `Form_FormARProyectoDocumentos`, `Form_FormARAuditoriaDocumentos`, `Form_FormNCAuditoriaGestion.ComandoInforme_Click`.
-- **Puntos de entrada de fuente**: `DocumentoService`, `DocumentoProyecto`, `DocumentoProyectoOperaciones`, `DocumentoAuditoria`, `DocumentoAuditoriaOperaciones`, `Informe`, `InformeNCAuditorias`.
+- **Puntos de entrada de fuente**: `DocumentoService`, `DocumentoProyecto`, `DocumentoProyectoOperaciones`, `DocumentoAuditoria`, `DocumentoAuditoriaOperaciones`, `Informe` (que cubre tanto proyecto como auditoría vía `GenerarWordNoConformidades(p_EsDeProyecto)`). El módulo `InformeNCAuditorias` fue retirado el 2026-06-15 como dead-code marker.
 - **Datos tocados**: registros de documento/adjunto (esquema exacto pendiente), registros padre NC Proyecto/NC Auditoría/Auditoría/AR, selecciones de informe generado.
 - **Salidas**: adjuntos, informes generados de NC de auditoría, documentos Word, exportaciones Excel, correos/órdenes de correo y paquete de evidencia UAT/release.
 - **Dependencias e integraciones**: ciclo de vida de Proyecto, ciclo de vida de Auditoría, control eficacia, informes, almacenamiento/filesystem.

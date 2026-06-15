@@ -66,7 +66,7 @@
 
 ## §3 Mapa de implementación
 - **Puntos de entrada de UI**: `Form_FormCorreo`; eventos de informe en `Form_FormNCAuditoriaGestion`; posibles `ComandoExportarAExcel_Click` en formularios de seguimiento.
-- **Puntos de entrada de código**: `Correo`, `Informe`, `InformeNCAuditorias`, `HTML`, `Módulo1.EnviarCorreoReactivacionNC`, `CorreoAlAdministrador` como soporte de error.
+- **Puntos de entrada de código**: `Correo`, `Informe` (incluye `GenerarWordNoConformidades(p_EsDeProyecto:=No)` para el caso auditoría), `HTML`, `Módulo1.EnviarCorreoReactivacionNC`, `CorreoAlAdministrador` como soporte de error. `InformeNCAuditorias` fue retirado como dead-code marker el 2026-06-15 (commit <SHA>) — el archivo `src/classes/InformeNCAuditorias.cls` estaba vacío desde el commit inicial `df3c17a` y ningún path de runtime lo instanciaba; la generación de informe de auditoría se hace por `Informe.GenerarWordNoConformidades(p_EsDeProyecto:=No)`.
 - **Datos afectados**: `TbCorreosEnviados`; rutas/plantillas de `Entorno`; NC Proyecto/Auditoría y acciones asociadas.
 - **Salidas**: filas de correo/orden de envío, HTML, documentos Word, posibles exportaciones Excel y evidencia documental vinculada.
 - **Dependencias e integraciones**: documentos/evidencia, NC Proyecto, NC Auditoría, acciones/seguimiento, soporte transversal.

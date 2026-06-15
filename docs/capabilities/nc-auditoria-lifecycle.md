@@ -63,7 +63,7 @@
 
 ## §3 Mapa de implementación
 - **Puntos de entrada UI**: `Form_FormNCAuditoriaGestion`, `Form_FormNCAuditoria`, `Form_FormNCAuditoriaGeneral`, `Form_FormNCAuditoriaSeguimiento`, `Form_FormNCAuditoriaAcciones`, `Form_FormNCAuditoriaAC`, `Form_FormNCAuditoriaAR`, `Form_FormNCAuditoriaDocumentos`, `Form_FormNCAuditoriaControlEficacia`.
-- **Puntos de entrada de fuente**: `NCAuditoriaGestionListadoHelper`, `NCAuditoriaListadoCache`, `NCAuditoriaSeguimientoHelper`, `NCAuditoria`, `NCAuditoriaOperaciones`, `ACAuditoriaOperaciones`, `ARAuditoriaOperaciones`, `InformeNCAuditorias`.
+- **Puntos de entrada de fuente**: `NCAuditoriaGestionListadoHelper`, `NCAuditoriaListadoCache`, `NCAuditoriaSeguimientoHelper`, `NCAuditoria`, `NCAuditoriaOperaciones`, `ACAuditoriaOperaciones`, `ARAuditoriaOperaciones`. La generación de informe de Word se hace desde `Informe.cls::GenerarWordNoConformidades(p_EsDeProyecto:=No)`; el módulo `InformeNCAuditorias` fue retirado el 2026-06-15 (estaba vacío desde el commit inicial y no se usaba).
 - **Datos tocados**: registros de NC Auditoría, caché de listado de auditoría, AC/AR de auditoría, documentos, control-eficacia, filas de caché compartida de indicadores.
 - **Salidas**: listado de auditoría, informe de auditoría, vistas de seguimiento/acciones, documentos, filas de indicadores.
 - **Dependencias e integraciones**: acciones/seguimiento de auditoría, documentos, control eficacia, indicadores, soporte transversal de caché.
