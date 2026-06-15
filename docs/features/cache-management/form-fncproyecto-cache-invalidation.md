@@ -7,15 +7,15 @@
 | Field | Value |
 |-------|-------|
 | **Current** | `passing` (B1 RESOLVED 2026-06-14) |
-| **Last verified** | 2026-06-14 (full manifest run 8/8 against staging HEAD `20b71f64`) |
+| **Last verified** | 2026-06-15 (`tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños contra staging HEAD `20b71f64`) |
 | **Manifest drift** | `clean` (for `proyecto-gestion-helper.json`) |
 | **Staging reachability** | `reachable` — all functional changes present in staging HEAD via export/reimport path; original feat-branch SHAs are NOT ancestors but equivalent code is verified (see Integration Commits) |
-| **TDD evidence** | `fresh` — full manifest `test_vba` run 8/8 PASSED against staging HEAD `20b71f64` 2026-06-14 |
+| **TDD evidence** | `fresh` — manifest verificado 8/8 mediante filtros pequeños contra staging HEAD `20b71f64` 2026-06-15 |
 | **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |
-| **Last verified at** | 2026-06-14 |
-| **Test evidence** | `tests/tests.vba.proyecto-gestion-helper.json` 8/8 (fresh run 2026-06-14) |
+| **Last verified at** | 2026-06-15 |
+| **Test evidence** | `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros: `CacheOff` 1/1, `RebuildForce` 2/2, `RefreshCache` 2/2, `ProyectoGestionForm` 2/2, `RenameHandler` 1/1 |
 | **Staging integration commit** | `20b71f64` (export/reimport path; all functional changes verified present) |
-| **Evidence updated at** | 2026-06-14 |
+| **Evidence updated at** | 2026-06-15 |
 
 ## Business Behavior
 
@@ -37,20 +37,25 @@ Cache management for the NCProyecto listing form: rebuild, refresh, and invalida
 
 | Procedure | Manifest | Status |
 |-----------|----------|--------|
-| `Test_NCProyectoGestionListadoHelper_*` (Slice 2: T1-T3) | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (3/3) |
-| `Test_NCProyectoGestionListadoHelper_*` (Slice 3: T4-T7) | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (4/4) |
-| `Test_NCProyectoGestionListadoHelper_*` (Slice 4: T8-T10) | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (1/1) |
+| `Test_ProyectoGestionHelper_CacheOff_NoOp_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`CacheOff` 1/1) |
+| `Test_ProyectoListadoCache_RebuildForceFull_DeleteAndRegen_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`RebuildForce` 2/2, ~27s) |
+| `Test_ProyectoListadoCache_RebuildForceStale_OnlyStaleRegen_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`RebuildForce` 2/2, ~25s) |
+| `Test_ProyectoGestionHelper_RefreshCache_TrueOnSuccess_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`RefreshCache` 2/2, ~27s) |
+| `Test_ProyectoGestionHelper_RefreshCache_FalseOnError_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`RefreshCache` 2/2) |
+| `Test_ProyectoGestionForm_ActualizarLista_SequenceHappyPath_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`ProyectoGestionForm` 2/2, ~26s) |
+| `Test_ProyectoGestionForm_ActualizarLista_RefreshError_RaiseAndCleanup_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`ProyectoGestionForm` 2/2) |
+| `Test_AuditGestionForm_RenameHandler_NoRegression_Atomic` | `tests/tests.vba.proyecto-gestion-helper.json` | PASS (`RenameHandler` 1/1) |
 
-**Note**: Slice-level verification passed. Full manifest run was not claimed in the archive; full run is deferred to a later phase.
+**Nota**: la verificación válida más reciente es 8/8 por filtros pequeños. Un intento amplio anterior quedó interrumpido y dejó la operación Dysflow obsoleta `dysflow-51869803-608b-44bc-8792-ef9ca837b894`, que posteriormente pasó a `status=timed_out`; no se considera fallo funcional. Las slices lentas (~25-27s) son coste de ejecución, no fallo del runner.
 
 ## Last Known Passing
 
 | Field | Value |
 |-------|-------|
-| **Date** | 2026-06-12 |
+| **Date** | 2026-06-15 |
 | **Commits** | `356f185`, `4849cf8`, `b85ebab`, `38a8e9b`, `b2eb8a1` (feat branch) |
 | **Manifest** | `tests/tests.vba.proyecto-gestion-helper.json` |
-| **Result** | Slice 2: 3/3; Slice 3: 4/4; Slice 4: 1/1 (slice-level only) |
+| **Result** | 8/8 por filtros pequeños: `CacheOff`, `RebuildForce`, `RefreshCache`, `ProyectoGestionForm`, `RenameHandler` |
 
 ## Integration Commits
 
@@ -95,7 +100,7 @@ _Web migration considerations — to be populated when migration work begins._
 ## Open Decisions
 
 1. **✅ RESOLVED (2026-06-14) — B1 Staging reachability**: all functional changes present in staging HEAD via export/reimport path. Original feat-branch SHAs are NOT ancestors but all equivalent code (RebuildNCProyectoListadoCache, audit binding rename, helper seams) is verified present. Full manifest `test_vba` 8/8 PASSED against staging HEAD `20b71f64`.
-2. **✅ RESOLVED (2026-06-14) — B1 Full manifest run**: 8/8 PASSED against staging HEAD `20b71f64` 2026-06-14.
+2. **✅ RESOLVED (2026-06-15) — B1 Manifest evidence**: 8/8 PASSED against staging HEAD `20b71f64` mediante filtros pequeños. El intento amplio previo quedó como caveat histórico (`timed_out`), no como pendiente funcional.
 3. **Spec wording drift**: R2 signature wording (`As Boolean` vs `As String`) remains inconsistent across artifacts (deferred, non-blocking).
 
 ## Evidence Sources
@@ -110,12 +115,12 @@ _Web migration considerations — to be populated when migration work begins._
 
 | Step | Action | Done |
 |------|--------|------|
-| 1 | Tests pass against current `staging` HEAD | [x] (8/8 PASSED, manifest `proyecto-gestion-helper.json`, staging HEAD `20b71f64` 2026-06-14) |
+| 1 | Tests pass against current `staging` HEAD | [x] (8/8 PASSED por filtros pequeños, manifest `proyecto-gestion-helper.json`, staging HEAD `20b71f64` 2026-06-15) |
 | 2 | `last_verified_commit` updated with current SHA | [x] (`20b71f64`) |
-| 3 | `last_verified_at` updated with current ISO datetime | [x] (2026-06-14) |
+| 3 | `last_verified_at` updated with current ISO datetime | [x] (2026-06-15) |
 | 4 | `test_evidence` updated with manifest + pass/total | [x] (`tests/tests.vba.proyecto-gestion-helper.json` 8/8) |
 | 5 | `staging_integration_commit` updated with merge SHA | [x] (`20b71f64`; export/reimport path) |
-| 6 | `evidence_updated_at` updated with current datetime | [x] (2026-06-14) |
+| 6 | `evidence_updated_at` updated with current datetime | [x] (2026-06-15) |
 | 7 | Feature status reflects current state | [x] (`passing` after B1 resolution) |
 
 ### Phase 4 Resolution Path (executed 2026-06-14)
@@ -123,5 +128,5 @@ _Web migration considerations — to be populated when migration work begins._
 1. Export equivalent changes from binary to src (commit `20b71f6` and earlier).
 2. Verify `RebuildNCProyectoListadoCache` exists in `CacheNCProyecto.bas` at staging HEAD.
 3. Verify `tests/tests.vba.proyecto-gestion-helper.json` is tracked at staging HEAD.
-4. Run full manifest `test_vba` against staging HEAD — 8/8 PASSED.
+4. Run manifest by small filters against staging HEAD — 8/8 PASSED.
 5. Update Status section with fresh evidence; status `not-current` → `passing`.

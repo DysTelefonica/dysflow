@@ -7,15 +7,15 @@
 | Field | Value |
 |-------|-------|
 | **Current** | `passing` |
-| **Last verified** | 2026-06-07 |
+| **Last verified** | 2026-06-15 (evidencia runtime recogida por slices; 9/9 procedimientos únicos) |
 | **Manifest drift** | `clean` |
 | **Staging reachability** | `reachable` — commit `aa1ef79` is ancestor of `staging` |
-| **TDD evidence** | `fresh` — 9/9 pass in manifest at verified staging commit |
+| **TDD evidence** | `fresh` — fallback 4/4, helper 4/4 y form 1/1; 9/9 procedimientos únicos PASS |
 | **Last verified commit** | `aa1ef79` |
-| **Last verified at** | 2026-06-11 |
-| **Test evidence** | `tests/tests.vba.seguimiento-tareas-helper.json` 9/9 |
+| **Last verified at** | 2026-06-15 |
+| **Test evidence** | `tests/tests.vba.seguimiento-tareas-helper.json` 9/9 procedimientos únicos; fallback/log, helper y form slices |
 | **Staging integration commit** | `aa1ef79` |
-| **Evidence updated at** | 2026-06-11 |
+| **Evidence updated at** | 2026-06-15 |
 
 ## Business Behavior
 
@@ -23,6 +23,8 @@ Deferred project tracking indicators for NCProyecto follow-up. The helper module
 - Tracking indicator calculation for deferred project tasks
 - Status display on the NCProyecto follow-up form
 - Helper seams for UI-free testability
+
+Evidencia runtime 2026-06-15: gate de esquema documentado, backend sandbox seguro, filas de fallback de caché registradas, caché desactivada registrada, ausencia de usuario registrada como `Sistema`, error forzado en seam de caché registrado, orden de predicados legacy preservado, fuente seleccionada por `Estado`, sin hidratación AR/AC/NC por fila, orden/export input determinista y delegación del formulario de rutas de filtro/carga/limpieza al helper.
 
 ## Acceptance Criteria
 
@@ -34,7 +36,17 @@ Deferred project tracking indicators for NCProyecto follow-up. The helper module
 
 | Procedure | Manifest | Status |
 |-----------|----------|--------|
-| `Test_NCProyectoSeguimientoHelper_*` (9 procedures) | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (9/9) |
+| `Test_TareasHelper_Fallback_EmptyCache_Logs` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (fallback/log 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_Fallback_DisabledCache_Logs` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (fallback/log 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_Fallback_NoUser_SafeLog` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (fallback/log 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_Fallback_CacheError_Logs` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (fallback/log 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_FilterParity_AllPredicates_Atomic` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (helper 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_Estado_SelectsSource` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (helper 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_NoARPerRowHydration` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (helper 4/4, evidencia 2026-06-15) |
+| `Test_TareasHelper_DeterministicOrder_ExportInput` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (helper 4/4, evidencia 2026-06-15) |
+| `Test_TareasForm_Delegates_FilterPaths` | `tests/tests.vba.seguimiento-tareas-helper.json` | PASS (`TareasForm` 1/1, evidencia 2026-06-15) |
+
+**Nota de recuento**: el filtro fallback ejecutó 4/4; el filtro amplio `TareasHelper_` devolvió esos 4 de nuevo más 4 pruebas helper; `TareasForm` ejecutó 1/1. Procedimientos únicos verdes: 9/9.
 
 ## Last Known Passing
 

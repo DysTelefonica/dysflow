@@ -1,5 +1,7 @@
 # Feature Catalog
 
+> **Business-first entry point**: start in [`docs/capabilities/`](../capabilities/) when you need to understand what the app does. This directory is the technical/regression evidence layer that supports those capabilities.
+
 > **Purpose**: First-class, stable, versioned source of truth for every No Conformidades feature. Each file documents what a feature is, whether it works today, how to recover from regression, and what to preserve during migration.
 
 **Canonical location**: `docs/features/` — this directory, not `openspec/`, is the permanent home.
@@ -42,7 +44,7 @@ Every feature file MUST populate these fields. Empty = close-gate fails.
 | Domain | Features | Description |
 |--------|----------|-------------|
 | `project-listing` | 2 | NCProyecto listing, helpers, form integration, tracking indicators |
-| `cache-management` | 2 | Cache invalidation, rebuild, trust |
+| `cache-management` | 3 | Cache invalidation, rebuild, trust, shared indicator cache |
 | `audit` | 1 | Audit list cache, transaction fixes |
 | `compliance` | 1 | CE gating, date enforcement |
 
@@ -66,13 +68,21 @@ The following `tests/*.json` manifests are mapped to features. Manifests not lis
 | `tests.vba.proyecto-gestion-helper.json` | `form-fncproyecto-cache-invalidation` | mapped |
 | `tests.vba.audit-gestion-helper.json` | `audit-backend-list-cache` | mapped |
 | `tests.vba.json` (filter=issue-19) | `ce-fecha-obligatoria-postponement` | mapped |
-| (cache-trust manifest TBD) | `trust-ncproyecto-cache-hits` | **unmapped** — see feature open_decisions |
-| `tests.vba.cache-e2e.json` (if exists) | (potential cache-trust home) | candidate manifest — verify in Phase 4 |
+| `tests.vba.cache-e2e.json` | `trust-ncproyecto-cache-hits` | mapped — cache trust diagnostics live here |
+| `tests.vba.indicadores-caracterizacion.json` | `indicator-issues-cleanup` | mapped — Issue #18 shared indicator cache characterization |
+| `tests.vba.indicator-fast-counts.json` | `indicator-issues-cleanup` | mapped — fast-count runtime coverage |
+| `tests.vba.cache-materialized.json` | `indicator-issues-cleanup` | mapped — materialized indicator cache coverage |
+| `tests.vba.cache-acar.json` | `indicator-issues-cleanup` | adjacent mapped coverage — AC/AR cache/listing invalidation |
+| `tests.vba.cache-readiness.json` | `indicator-issues-cleanup` | adjacent mapped coverage — kill-switch/readiness/warm-up state |
+| `tests.vba.cache-warmup.json` | `indicator-issues-cleanup` | adjacent mapped coverage — operator warm-up evidence |
 
-**Unregistered manifests** (not in `config.yaml` or with count mismatches):
+**Manifest reconciliation notes**:
 
-- `tests.vba.proyecto-gestion-helper.json` — 8 procedures, not in `config.yaml`
-- `tests.vba.audit-gestion-helper.json` — `config.yaml` says 5, source has 11
+- `tests.vba.audit-gestion-helper.json` count reconciled in `openspec/config.yaml` as 11 procedures.
+- `tests.vba.listado-helper.json` marked retired in `openspec/config.yaml` with replacement `tests/tests.vba.proyecto-gestion-helper.json`.
+- `tests.vba.proyecto-gestion-helper.json` registered in `openspec/config.yaml` as 8 procedures.
+- `tests.vba.indicadores-caracterizacion.json` registered in `openspec/config.yaml` as 46 procedures and mapped to `indicator-issues-cleanup`.
+- Remaining issue #67 work: prove all feature pages against fresh evidence, then remove any feature-level `pending evidence` / `pending traceability` markers.
 
 ## Release & Branching Policy
 

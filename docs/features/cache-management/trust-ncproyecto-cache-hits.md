@@ -36,18 +36,24 @@ Trust cache-first reads for ACs (Acciones Correctivas), ARs (Acciones de Resoluc
 
 | Procedure | Manifest | Status |
 |-----------|----------|--------|
-| (expected 3 cache-trust diagnostics) | TBD — no dedicated manifest located | UNKNOWN |
+| `Test_CacheTrust_LoadedEmptyARs_NoFallback_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — 7/7 manifest run 2026-06-14 |
+| `Test_CacheTrust_LoadedEmptyRiesgos_NoFallback_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — 7/7 manifest run 2026-06-14 |
+| `Test_CacheTrust_ARParentLink_NoFallback_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — 7/7 manifest run 2026-06-14 |
+| `Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — adjacent cache E2E evidence |
+| `Test_E2E_Cache_Invalidate_NoStaleListado_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — adjacent stale-listing regression evidence |
+| `Test_CacheListado_Reconstruir_RegeneraStale_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — adjacent rebuild evidence |
+| `Test_CacheListado_Reconstruir_UpsertFaltante_Atomic` | `tests/tests.vba.cache-e2e.json` | PASS — adjacent rebuild/upsert evidence |
 
-**Note**: This SDD was retroactive — implementation landed before formal SDD artifacts. The 3 cache-trust diagnostics procedures are expected to be registered in a cache-trust manifest that has not been located. No fresh `test_vba` execution has been run against current HEAD; evidence relies on commit message (`3/3 cache-trust diagnostics green`) and source review.
+**Note**: This SDD was retroactive — implementation landed before formal SDD artifacts. The 3 cache-trust diagnostics are now located in `tests/tests.vba.cache-e2e.json`; no separate cache-trust manifest is required.
 
 ## Last Known Passing
 
 | Field | Value |
 |-------|-------|
-| **Date** | 2026-06-06 |
-| **Commit** | `23af345` |
-| **Manifest** | (none located) |
-| **Result** | 3/3 (commit-message-level only) |
+| **Date** | 2026-06-14 |
+| **Commit** | `20b71f64` (staging HEAD fresh run); integration commit `23af345` |
+| **Manifest** | `tests/tests.vba.cache-e2e.json` |
+| **Result** | 7/7, including 3/3 cache-trust diagnostics |
 
 ## Integration Commits
 
@@ -78,7 +84,13 @@ Revert to commit before `23af345` to restore non-cache-first behavior.
 
 ## Migration Notes
 
-_Web migration considerations — to be populated when migration work begins._
+For a future web implementation, preserve the cache-trust contract rather than the Access mechanics:
+
+- Treat AC, AR, and Riesgo data as cache-first read models when the cache is known loaded.
+- Distinguish loaded-empty results from cache-miss results. An empty but loaded cache is a valid business result and must not silently fall back to live DAO/backend reads.
+- Expose diagnostics or observability for hit/miss/no-fallback paths so support can prove whether the web service trusted cache or queried source tables.
+- Keep fallback behavior explicit and testable: fallback is acceptable when cache is absent/stale, not when cache is loaded and legitimately empty.
+- Preserve parent-link behavior for AR -> AC -> NC relationships so detail views and invalidation scopes remain correct.
 
 ## Open Decisions
 
@@ -92,6 +104,7 @@ _Web migration considerations — to be populated when migration work begins._
 
 - [Archive report](../../../openspec/changes/archive/2026-06-06-trust-ncproyecto-cache-hits/archive-report.md)
 - [Spec](../../../openspec/specs/cache-trust/spec.md)
+- [Test manifest: cache-e2e](../../../tests/tests.vba.cache-e2e.json)
 
 ## Post-Test Documentation Gate
 

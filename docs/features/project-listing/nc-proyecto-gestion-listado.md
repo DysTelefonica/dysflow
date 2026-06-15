@@ -7,15 +7,15 @@
 | Field | Value |
 |-------|-------|
 | **Current** | `passing` (B3 RESOLVED 2026-06-14) |
-| **Last verified** | 2026-06-14 (full manifest run 9/9 against staging HEAD `20b71f64`) |
+| **Last verified** | 2026-06-15 (evidencia runtime recogida por slices/filtros; `form-helper` 9/9 y `proyecto-gestion-helper` 8/8) |
 | **Manifest drift** | `clean` — `form-helper.json` 9 procedures verified; `listado-helper.json` retired (see Required Tests note) |
 | **Staging reachability** | `reachable` — both integration commits (`500d6d5`/`2ca4de7`) are ancestors of `staging` |
-| **TDD evidence** | `fresh` — full manifest `test_vba` run 9/9 PASSED against staging HEAD `20b71f64` 2026-06-14 |
+| **TDD evidence** | `fresh` — `tests/tests.vba.form-helper.json` 9/9 por slices y `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños PASS |
 | **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |
-| **Last verified at** | 2026-06-14 |
-| **Test evidence** | `tests/tests.vba.form-helper.json` 9/9 (fresh run 2026-06-14) |
+| **Last verified at** | 2026-06-15 |
+| **Test evidence** | `tests/tests.vba.form-helper.json` 9/9 por slices: `FormHelper_Coverage` 1/1, `FormHelper_Listing` 4/4, `FormHelper_Open` 4/4; `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños |
 | **Staging integration commit** | `20b71f64` |
-| **Evidence updated at** | 2026-06-14 |
+| **Evidence updated at** | 2026-06-15 |
 
 ## Business Behavior
 
@@ -24,6 +24,8 @@ NCProyecto listing form routes through a helper module (`NCProyectoGestionListad
 - Schema enforcement (`EnsureSchema`) for listing pipe columns
 - Filter parity between cache and legacy paths
 - Alta/edicion mode routing for NCProyecto open/edit operations
+
+Evidencia runtime 2026-06-15: garantía de esquema para campos pipe de `TbCacheListadoNC`, logs de fallback con caché vacía/desactivada, filtros de caché por `Codigo`/`Juridica`/columna pipe de Google/sin filtro, `Alta` devolviendo un `NCProyecto` nuevo y comportamiento de `Edicion` existente/no encontrado/`borrado` verificado con fixtures de sandbox.
 
 ## Acceptance Criteria
 
@@ -38,20 +40,22 @@ NCProyecto listing form routes through a helper module (`NCProyectoGestionListad
 
 | Procedure | Manifest | Status |
 |-----------|----------|--------|
-| `Test_FormHelper_Coverage_Canary_Atomic` | `tests/tests.vba.form-helper.json` | PASS (9/9 last known at `500d6d5`/`2ca4de7`) |
-| `Test_FormHelper_Listing_EnsureSchema_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Listing_EmptyCacheFallback_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Listing_DisabledCacheFallback_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Listing_CacheFilters_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Open_AltaMode_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Open_EdicionMode_Exists_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Open_EdicionMode_NotFound_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
-| `Test_FormHelper_Open_EdicionMode_Borrado_Atomic` | `tests/tests.vba.form-helper.json` | PASS (same) |
+| `Test_FormHelper_Coverage_Canary_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Coverage` 1/1, evidencia 2026-06-15) |
+| `Test_FormHelper_Listing_EnsureSchema_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Listing` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Listing_EmptyCacheFallback_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Listing` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Listing_DisabledCacheFallback_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Listing` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Listing_CacheFilters_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Listing` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Open_AltaMode_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Open` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Open_EdicionMode_Exists_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Open` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Open_EdicionMode_NotFound_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Open` 4/4, evidencia 2026-06-15) |
+| `Test_FormHelper_Open_EdicionMode_Borrado_Atomic` | `tests/tests.vba.form-helper.json` | PASS (`FormHelper_Open` 4/4, evidencia 2026-06-15) |
 | `Test_Form_Fallback_EmptyCache_Atomic` | `tests/tests.vba.listado-helper.json` | **MISSING** — procedure not in source (drifted) |
 | `Test_Form_Fallback_DisabledCache_Atomic` | `tests/tests.vba.listado-helper.json` | **MISSING** — procedure not in source (drifted) |
 | `Test_Form_Fallback_NoLogFailure_Atomic` | `tests/tests.vba.listado-helper.json` | **MISSING** — procedure not in source (drifted) |
 
-**Manifest note**: `form-helper.json` lists 9 procedures — all confirmed present in last known passing. `listado-helper.json` listed 3 procedures — none existed in any source module (commit `ec6b4d0` deleted the original `Test_ListadoHelper_*` functions; the actual tests live in `Test_CacheListadoNC_Parity.bas` under different names). Resolution path: retire `listado-helper.json` or update it to reference the new procedures in `Test_CacheListadoNC_Parity.bas`. This is the regression that drove the feature into `regressed` status.
+**Manifest note**: `form-helper.json` lists 9 procedures — all covered by slices in the 2026-06-15 runtime evidence. `listado-helper.json` listed 3 procedures — none existed in any source module (commit `ec6b4d0` deleted the original `Test_ListadoHelper_*` functions; the actual tests live in `Test_CacheListadoNC_Parity.bas` under different names). Resolution path: retire `listado-helper.json` or update it to reference the new procedures in `Test_CacheListadoNC_Parity.bas`. This is the regression that drove the feature into `regressed` status.
+
+**Evidencia complementaria 2026-06-15**: `tests/tests.vba.proyecto-gestion-helper.json` ya no queda pendiente por el intento amplio interrumpido. Se verificó 8/8 mediante filtros pequeños: `CacheOff` 1/1, `RebuildForce` 2/2, `RefreshCache` 2/2, `ProyectoGestionForm` 2/2 y `RenameHandler` 1/1. La operación obsoleta `dysflow-51869803-608b-44bc-8792-ef9ca837b894` pasó posteriormente a `status=timed_out`; queda como caveat histórico del runner, no como fallo funcional. Varias slices tardan ~25-27s, pero finalizaron en verde.
 
 ## Last Known Passing
 
