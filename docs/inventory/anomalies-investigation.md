@@ -220,3 +220,49 @@ Ningún doc de capabilities ni features-page tiene un `Test evidence: tests.vba.
 | C1-C3 | `tests.vba.smoke.json` empty | **C1 revisado** (dejar + documentar en apply-progress) | Ninguno directo; el slot está reservado por diseño |
 
 **Próximo paso natural**: implementar A2 + A4 (reformular doc) y B1 (borrar clase + 3 mentions en docs capabilities) en una pasada de limpieza. C1 es solo documental.
+
+---
+
+## Anexo A — Cross-check de duplicación (A4, ejecutado 2026-06-15)
+
+Para fundamentar la recomendación A2 sobre la anomalía #1, se hizo un cross-check de los 10 manifests faltantes contra `tests.vba.json` (el manifest que sí está en esta rama). El objetivo era detectar si los procedimientos de los manifests faltantes ya están en `tests.vba.json` o son únicos.
+
+### Metodología
+
+1. Para cada manifest faltante, listar los nombres de procedimientos con `git show origin/staging:<path> | Select-String -Pattern '"procedure":'`.
+2. Para `tests.vba.json`, listar todos los nombres de procedimientos en este branch con el mismo filtro.
+3. Comparar sets y reportar duplicación.
+
+### Resultado por manifest
+
+| Manifest faltante | Procedimientos | ¿En `tests.vba.json`? | Duplicación | Observación |
+|---|---|---|---|---|
+| `form-helper.json` | 9 | 0 | 0% | Único. 9 procedimientos nuevos: `Test_FormHelper_*` (canary, listing, open) |
+| `form-helper-canary.json` | 1 | 1 (en `form-helper.json`) | 100% | **Duplicado total** de `Test_FormHelper_Coverage_Canary_Atomic` |
+| `form-helper-ensure.json` | 1 | 1 (en `form-helper.json`) | 100% | **Duplicado total** de `Test_FormHelper_Listing_EnsureSchema_Atomic` |
+| `listado-helper.json` | 0 | n/a | n/a | Vacío / retired (`_retired: true` per `nc-proyecto-gestion-listado.md` línea 108) |
+| `seguimiento-tareas-helper.json` | 9 | 0 | 0% | Único. 9 procedimientos de `Test_TareasHelper_*` y `Test_TareasForm_*` |
+| `proyecto-gestion-helper.json` | 8 | 0 | 0% | Único. 8 procedimientos de `Test_ProyectoGestionHelper_*`, `Test_ProyectoListadoCache_*`, etc. |
+| `audit-gestion-helper.json` | 11 | 0 | 0% | Único. 11 procedimientos de `Test_AuditListado*` y `Test_AuditGestionForm_*` |
+| `indicadores-caracterizacion.json` | ~55 | 9 | ~16% | 9 duplicados (`Test_Indicadores_Calcular_*`, `Test_Indicadores_FormatearCaption_*`, `Test_Indicadores_MensajeAvance_*`, `Test_Indicadores_BuildDatos_*`, `Test_Indicadores_CalcularDesdeColecciones_*`). ~46 únicos (`Test_Issue18_*`, `Test_CacheIndicadores*`, `Test_Issue36*`, `Test_Issue37*`, `Test_Issue50*`) |
+| `cache-acar.json` | 3 | 0 | 0% | Único. 3 procedimientos: `Test_CacheListado_ACAR_*`, `Test_PipeFlatten_*`, `Test_NCProyectoOperaciones_ACAR_*` |
+| `cache-warmup.json` | 1 | 0 | 0% | Único. 1 procedimiento: `Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic` |
+
+### Conclusión del cross-check
+
+- **2 manifests eliminables sin pérdida**: `form-helper-canary.json` y `form-helper-ensure.json` son 100% duplicados de `form-helper.json`. Pueden borrarse de la lista de manifests en `staging` sin afectar cobertura.
+- **1 manifest vacío**: `listado-helper.json` ya está retired.
+- **7 manifests con cobertura única**: los restantes 7 manifests (`form-helper`, `seguimiento-tareas-helper`, `proyecto-gestion-helper`, `audit-gestion-helper`, `indicadores-caracterizacion`, `cache-acar`, `cache-warmup`) contienen tests que **no existen en `tests.vba.json`**. Reproducir la evidencia `X/Y PASS` de las feature pages requiere cherry-pick de estos manifests desde `origin/staging`.
+
+### Implicación revisada para A2
+
+La opción A2 (reformular la doc) **sola no es suficiente**: la evidencia `X/Y PASS` no se puede reproducir en esta rama sin cherry-pick. La opción combinada correcta es:
+
+- **A2.1** — Reformular las feature pages para marcar la evidencia como "histórica de `staging` (commit XXX), no reproducible en esta rama sin cherry-pick de los manifests".
+- **A2.2** — Mantener `docs/features/README.md` "Manifest-to-feature mapping" con la nota de que algunos manifests no están en este checkout.
+- **A1 selectivo** — Cuando se planifique Fase 2 TDD authoring, cherry-pick los 7 manifests únicos (no los 2 duplicados, no el retired) desde `origin/staging` para que la rama sea self-contained y los tests corran.
+
+El cherry-pick no es código nuevo; es restaurar manifests que existen en staging. La revisión debe ser:
+- 7 archivos JSON a cherry-pick (no requiere reescritura de tests).
+- Reejecutar los tests cherry-pickeados para confirmar que pasan contra el `staging` HEAD actual.
+- Si algún test falla, abrir issue específico; no mezclar con la Fase 2 TDD authoring.
