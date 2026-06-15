@@ -307,6 +307,240 @@ errores:
     Resume salir
 End Function
 
+Public Function Cache_Indicadores_CargarBucket( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_Usuario As usuario, _
+                        ByVal p_Dominio As String, _
+                        Optional ByRef p_Error As String _
+                    ) As String
+    Dim root As Scripting.Dictionary
+    Dim value As Scripting.Dictionary
+    Dim cacheId As Long
+    Dim dominio As String
+    Dim responsable As String
+
+    On Error GoTo errores
+    p_Error = ""
+    If p_Db Is Nothing Then
+        p_Error = "Cache_Indicadores_CargarBucket requiere DAO.Database."
+        Exit Function
+    End If
+    If p_Usuario Is Nothing Then
+        p_Error = "Cache_Indicadores_CargarBucket requiere usuario."
+        Exit Function
+    End If
+
+    dominio = UCase$(Trim$(p_Dominio))
+    Select Case dominio
+        Case "PROYECTO"
+            cacheId = CACHE_PROYECTO_ID
+        Case "AUDITORIA", "AUDITORÍA"
+            cacheId = CACHE_AUDITORIA_ID
+        Case Else
+            p_Error = "Cache_Indicadores_CargarBucket: dominio desconocido '" & p_Dominio & "'"
+            Exit Function
+    End Select
+
+    responsable = p_Usuario.Nombre
+    Set value = New Scripting.Dictionary
+    value.CompareMode = TextCompare
+
+    If cacheId = CACHE_PROYECTO_ID Then
+        value("TareasPteReplanificarTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_TAR_PROY_PTE_REPLAN, vbNullString, p_Error)
+        value("TareasPteReplanificarUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_TAR_PROY_PTE_REPLAN, responsable, p_Error)
+        value("NCRegistradasTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_REGISTRADAS, vbNullString, p_Error)
+        value("NCRegistradasUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_REGISTRADAS, responsable, p_Error)
+        value("NCAccionesSinTareasTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_SIN_TAREAS, vbNullString, p_Error)
+        value("NCAccionesSinTareasUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_SIN_TAREAS, responsable, p_Error)
+        value("NCPteCETotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_PTE_CE, vbNullString, p_Error)
+        value("NCPteCEUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_PTE_CE, responsable, p_Error)
+        value("NCCECaducadaTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_CE_CADUCADA, vbNullString, p_Error)
+        value("NCCECaducadaUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_CE_CADUCADA, responsable, p_Error)
+        value("NCCENoConformeTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_CE_NO_CONFORME, vbNullString, p_Error)
+        value("NCCENoConformeUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_PROY_CE_NO_CONFORME, responsable, p_Error)
+    Else
+        value("TareasPteReplanificarTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_TAR_AUD_PTE_REPLAN, vbNullString, p_Error)
+        value("TareasPteReplanificarUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_TAR_AUD_PTE_REPLAN, responsable, p_Error)
+        value("NCRegistradasTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_REGISTRADAS, vbNullString, p_Error)
+        value("NCRegistradasUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_REGISTRADAS, responsable, p_Error)
+        value("NCAccionesSinTareasTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_SIN_TAREAS, vbNullString, p_Error)
+        value("NCAccionesSinTareasUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_SIN_TAREAS, responsable, p_Error)
+        value("NCPteCETotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_PTE_CE, vbNullString, p_Error)
+        value("NCPteCEUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_PTE_CE, responsable, p_Error)
+        value("NCCECaducadaTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_CE_CADUCADA, vbNullString, p_Error)
+        value("NCCECaducadaUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_CE_CADUCADA, responsable, p_Error)
+        value("NCCENoConformeTotal") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_CE_NO_CONFORME, vbNullString, p_Error)
+        value("NCCENoConformeUsuario") = Cache_Materializado_Count(p_Db, cacheId, BUCKET_NC_AUD_CE_NO_CONFORME, responsable, p_Error)
+    End If
+    If p_Error <> "" Then Exit Function
+
+    Set root = New Scripting.Dictionary
+    root("ok") = True
+    Set root("value") = value
+    root("error") = Null
+    Cache_Indicadores_CargarBucket = JsonConverter.ConvertToJson(root)
+    Exit Function
+errores:
+    p_Error = "Cache_Indicadores_CargarBucket: " & Err.Description
+End Function
+
+Public Function Cache_Indicadores_CargarDetalle( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_Usuario As usuario, _
+                        ByVal p_Dominio As String, _
+                        ByVal p_Bucket As String, _
+                        Optional ByRef p_Error As String _
+                    ) As String
+    Dim root As Scripting.Dictionary
+    Dim rows As Collection
+    Dim row As Scripting.Dictionary
+    Dim rs As DAO.Recordset
+    Dim sql As String
+    Dim cacheId As Long
+    Dim dominio As String
+    Dim bucket As String
+    Dim responsable As String
+
+    On Error GoTo errores
+    p_Error = ""
+    If p_Db Is Nothing Then
+        p_Error = "Cache_Indicadores_CargarDetalle requiere DAO.Database."
+        Exit Function
+    End If
+    If p_Usuario Is Nothing Then
+        p_Error = "Cache_Indicadores_CargarDetalle requiere usuario."
+        Exit Function
+    End If
+
+    dominio = UCase$(Trim$(p_Dominio))
+    Select Case dominio
+        Case "PROYECTO"
+            cacheId = CACHE_PROYECTO_ID
+        Case "AUDITORIA", "AUDITORÍA"
+            cacheId = CACHE_AUDITORIA_ID
+        Case Else
+            p_Error = "Cache_Indicadores_CargarDetalle: dominio desconocido '" & p_Dominio & "'"
+            Exit Function
+    End Select
+
+    bucket = Cache_Indicadores_NormalizarBucket(dominio, p_Bucket)
+    If bucket = vbNullString Then
+        p_Error = "Cache_Indicadores_CargarDetalle: bucket desconocido '" & p_Bucket & "' para dominio '" & p_Dominio & "'"
+        Exit Function
+    End If
+
+    responsable = p_Usuario.Nombre
+    sql = "SELECT IDCacheIndicadorProyecto, Bucket, TipoFila, IDEntidad, IDNoConformidad, " & _
+          "IDAccionCorrectiva, IDAccionRealizada, IDTarea, ResponsableCalidad, ResponsableUsuarioRed, " & _
+          "DisplayTitulo, DisplaySubtitulo FROM " & CACHE_PROYECTO_DETALLE & _
+          " WHERE IDCacheIndicadorProyecto=" & CStr(cacheId) & _
+          " AND Bucket=" & Cache_ProyectoMaterializado_SqlText(bucket)
+    If responsable <> vbNullString Then
+        sql = sql & " AND (ResponsableCalidad=" & Cache_ProyectoMaterializado_SqlText(responsable) & _
+                    " OR ResponsableUsuarioRed=" & Cache_ProyectoMaterializado_SqlText(responsable) & ")"
+    End If
+
+    Set rows = New Collection
+    Set rs = p_Db.OpenRecordset(sql, dbOpenSnapshot)
+    Do Until rs.EOF
+        Set row = New Scripting.Dictionary
+        row.CompareMode = TextCompare
+        row("IDCacheIndicadorProyecto") = rs.Fields("IDCacheIndicadorProyecto").Value
+        row("Bucket") = Nz(rs.Fields("Bucket").Value, vbNullString)
+        row("TipoFila") = Nz(rs.Fields("TipoFila").Value, vbNullString)
+        row("IDEntidad") = rs.Fields("IDEntidad").Value
+        row("IDNoConformidad") = rs.Fields("IDNoConformidad").Value
+        row("IDAccionCorrectiva") = rs.Fields("IDAccionCorrectiva").Value
+        row("IDAccionRealizada") = rs.Fields("IDAccionRealizada").Value
+        row("IDTarea") = rs.Fields("IDTarea").Value
+        row("ResponsableCalidad") = Nz(rs.Fields("ResponsableCalidad").Value, vbNullString)
+        row("ResponsableUsuarioRed") = Nz(rs.Fields("ResponsableUsuarioRed").Value, vbNullString)
+        row("DisplayTitulo") = Nz(rs.Fields("DisplayTitulo").Value, vbNullString)
+        row("DisplaySubtitulo") = Nz(rs.Fields("DisplaySubtitulo").Value, vbNullString)
+        rows.Add row
+        rs.MoveNext
+    Loop
+
+    Set root = New Scripting.Dictionary
+    root("ok") = True
+    Set root("value") = rows
+    root("error") = Null
+    Cache_Indicadores_CargarDetalle = JsonConverter.ConvertToJson(root)
+
+salir:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Exit Function
+errores:
+    p_Error = "Cache_Indicadores_CargarDetalle: " & Err.Description
+    Resume salir
+End Function
+
+Private Function Cache_Indicadores_NormalizarBucket(ByVal p_Dominio As String, ByVal p_Bucket As String) As String
+    Dim bucket As String
+
+    bucket = UCase$(Trim$(p_Bucket))
+    Select Case bucket
+        Case BUCKET_TAR_PROY_PTE_REPLAN, BUCKET_NC_PROY_REGISTRADAS, BUCKET_NC_PROY_SIN_TAREAS, BUCKET_NC_PROY_PTE_CE, BUCKET_NC_PROY_CE_CADUCADA, BUCKET_NC_PROY_CE_NO_CONFORME, _
+             BUCKET_TAR_AUD_PTE_REPLAN, BUCKET_NC_AUD_REGISTRADAS, BUCKET_NC_AUD_SIN_TAREAS, BUCKET_NC_AUD_PTE_CE, BUCKET_NC_AUD_CE_CADUCADA, BUCKET_NC_AUD_CE_NO_CONFORME
+            Cache_Indicadores_NormalizarBucket = bucket
+        Case "PENDIENTEREPLANIFICAR", "PENDIENTE_REPLANIFICAR", "TAREASPTEREPLANIFICAR"
+            If p_Dominio = "AUDITORIA" Or p_Dominio = "AUDITORÍA" Then
+                Cache_Indicadores_NormalizarBucket = BUCKET_TAR_AUD_PTE_REPLAN
+            Else
+                Cache_Indicadores_NormalizarBucket = BUCKET_TAR_PROY_PTE_REPLAN
+            End If
+        Case "NCREGISTRADAS", "NC_REGISTRADAS"
+            If p_Dominio = "AUDITORIA" Or p_Dominio = "AUDITORÍA" Then
+                Cache_Indicadores_NormalizarBucket = BUCKET_NC_AUD_REGISTRADAS
+            Else
+                Cache_Indicadores_NormalizarBucket = BUCKET_NC_PROY_REGISTRADAS
+            End If
+        Case Else
+            Cache_Indicadores_NormalizarBucket = vbNullString
+    End Select
+End Function
+
+Public Function Cache_Indicadores_ReconstruirTodo(Optional ByRef p_Error As String) As String
+    Dim root As Scripting.Dictionary
+    Dim value As Scripting.Dictionary
+    Dim proyectoOk As Boolean
+    Dim auditoriaOk As Boolean
+
+    On Error GoTo errores
+    p_Error = ""
+
+    proyectoOk = Cache_IndicadoresProyectoMaterializado_Sincronizar(p_Error)
+    If p_Error <> "" Then GoTo salir
+
+    auditoriaOk = Cache_IndicadoresAuditoriaMaterializado_Sincronizar(p_Error)
+    If p_Error <> "" Then GoTo salir
+
+    Set value = New Scripting.Dictionary
+    value.CompareMode = TextCompare
+    value("Proyecto") = proyectoOk
+    value("Auditoria") = auditoriaOk
+
+    Set root = New Scripting.Dictionary
+    root("ok") = (proyectoOk And auditoriaOk)
+    Set root("value") = value
+    root("error") = Null
+    Cache_Indicadores_ReconstruirTodo = JsonConverter.ConvertToJson(root)
+    Exit Function
+
+salir:
+    Set root = New Scripting.Dictionary
+    root("ok") = False
+    root("value") = Null
+    root("error") = p_Error
+    Cache_Indicadores_ReconstruirTodo = JsonConverter.ConvertToJson(root)
+    Exit Function
+errores:
+    p_Error = "Cache_Indicadores_ReconstruirTodo: " & Err.Description
+    Resume salir
+End Function
+
 Private Function Cache_ProyectoMaterializado_HeaderReady(ByVal p_Db As DAO.Database, ByRef p_Error As String) As Boolean
     Cache_ProyectoMaterializado_HeaderReady = Cache_Materializado_HeaderReady(p_Db, CACHE_PROYECTO_ID, "Proyecto", p_Error)
 End Function
@@ -378,6 +612,8 @@ Public Function Cache_IndicadoresProyectoMaterializado_Sincronizar(Optional ByRe
     Dim ws As DAO.Workspace
     Dim snapFecha As Date
     Dim detailCount As Long
+    Dim errDescription As String
+    Dim configId As Long
 
     On Error GoTo errores
     p_Error = ""
@@ -386,6 +622,8 @@ Public Function Cache_IndicadoresProyectoMaterializado_Sincronizar(Optional ByRe
     Set db = getdb(p_Error)
     If p_Error <> "" Or db Is Nothing Then GoTo salir
     If Not Cache_ProyectoMaterializadoSchemaReady(db, p_Error) Then GoTo salir
+    configId = Cache_Materializado_ConfigId(db, "PROYECTO", p_Error)
+    If p_Error <> "" Then GoTo salir
 
     Set ws = DBEngine.Workspaces(0)
     snapFecha = Now()
@@ -393,16 +631,16 @@ Public Function Cache_IndicadoresProyectoMaterializado_Sincronizar(Optional ByRe
     db.Execute "DELETE FROM " & CACHE_PROYECTO_DETALLE & " WHERE IDCacheIndicadorProyecto=" & CStr(CACHE_PROYECTO_ID), dbFailOnError
     db.Execute "DELETE FROM " & CACHE_PROYECTO_HEADER & " WHERE IDCacheIndicadorProyecto=" & CStr(CACHE_PROYECTO_ID), dbFailOnError
     db.Execute "INSERT INTO " & CACHE_PROYECTO_HEADER & _
-               " (IDCacheIndicadorProyecto, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & _
-               CStr(CACHE_PROYECTO_ID) & ", Now(), " & Cache_ProyectoMaterializado_SqlText(getNombreUsuarioConectado()) & ", 'SYNCING')", dbFailOnError
+               " (IDCacheIndicadorProyecto, IDCacheConfig, Dominio, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & _
+               CStr(CACHE_PROYECTO_ID) & ", " & CStr(configId) & ", 'PROYECTO', Now(), " & Cache_ProyectoMaterializado_SqlText(getNombreUsuarioConectado()) & ", 'SYNCING')", dbFailOnError
 
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", constructor.getSegsTareasProyectoPteReplanificar(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, "TAR_PROY_IRREGULARES", "TAREA", constructor.getSegsTareasProyecto(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_REGISTRADAS, "NC", constructor.getSegsNCProyectoRegistradas(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_SIN_TAREAS, "NC", constructor.getSegsNCProyectoAccionesSinTareas(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_PTE_CE, "NC", constructor.getSegsNCProyectoPteCE(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_CE_CADUCADA, "NC", constructor.getSegsNCProyectoCECaducada(db, p_Error), snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_CE_NO_CONFORME, "NC", constructor.getSegsNCProyectoCENoConforme(db, p_Error), snapFecha, p_Error
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", constructor.getSegsTareasProyectoPteReplanificar(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, "TAR_PROY_IRREGULARES", "TAREA", constructor.getSegsTareasProyecto(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_REGISTRADAS, "NC", constructor.getSegsNCProyectoRegistradas(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_SIN_TAREAS, "NC", constructor.getSegsNCProyectoAccionesSinTareas(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_PTE_CE, "NC", constructor.getSegsNCProyectoPteCE(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_CE_CADUCADA, "NC", constructor.getSegsNCProyectoCECaducada(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_PROY_CE_NO_CONFORME, "NC", constructor.getSegsNCProyectoCENoConforme(db, p_Error), snapFecha, p_Error, CACHE_PROYECTO_ID, configId, "PROYECTO"
     If p_Error <> "" Then Err.Raise 1000
 
     detailCount = Cache_ProyectoMaterializado_DetailCount(db, p_Error)
@@ -423,10 +661,11 @@ salir:
     Set ws = Nothing
     Exit Function
 errores:
+    errDescription = Err.Description
     On Error Resume Next
     If Not ws Is Nothing Then ws.Rollback
     On Error GoTo 0
-    If p_Error = "" Then p_Error = "Cache_IndicadoresProyectoMaterializado_Sincronizar: " & Err.Description
+    If p_Error = "" Then p_Error = "Cache_IndicadoresProyectoMaterializado_Sincronizar: " & errDescription
     Resume salir
 End Function
 
@@ -435,6 +674,8 @@ Public Function Cache_IndicadoresAuditoriaMaterializado_Sincronizar(Optional ByR
     Dim ws As DAO.Workspace
     Dim snapFecha As Date
     Dim detailCount As Long
+    Dim errDescription As String
+    Dim configId As Long
 
     On Error GoTo errores
     p_Error = ""
@@ -443,6 +684,8 @@ Public Function Cache_IndicadoresAuditoriaMaterializado_Sincronizar(Optional ByR
     Set db = getdb(p_Error)
     If p_Error <> "" Or db Is Nothing Then GoTo salir
     If Not Cache_ProyectoMaterializadoSchemaReady(db, p_Error) Then GoTo salir
+    configId = Cache_Materializado_ConfigId(db, "AUDITORIA", p_Error)
+    If p_Error <> "" Then GoTo salir
 
     Set ws = DBEngine.Workspaces(0)
     snapFecha = Now()
@@ -450,15 +693,15 @@ Public Function Cache_IndicadoresAuditoriaMaterializado_Sincronizar(Optional ByR
     db.Execute "DELETE FROM " & CACHE_PROYECTO_DETALLE & " WHERE IDCacheIndicadorProyecto=" & CStr(CACHE_AUDITORIA_ID), dbFailOnError
     db.Execute "DELETE FROM " & CACHE_PROYECTO_HEADER & " WHERE IDCacheIndicadorProyecto=" & CStr(CACHE_AUDITORIA_ID), dbFailOnError
     db.Execute "INSERT INTO " & CACHE_PROYECTO_HEADER & _
-               " (IDCacheIndicadorProyecto, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & _
-               CStr(CACHE_AUDITORIA_ID) & ", Now(), " & Cache_ProyectoMaterializado_SqlText(getNombreUsuarioConectado()) & ", 'SYNCING')", dbFailOnError
+               " (IDCacheIndicadorProyecto, IDCacheConfig, Dominio, FechaSincronizacion, UsuarioSincronizacion, Estado) VALUES (" & _
+               CStr(CACHE_AUDITORIA_ID) & ", " & CStr(configId) & ", 'AUDITORIA', Now(), " & Cache_ProyectoMaterializado_SqlText(getNombreUsuarioConectado()) & ", 'SYNCING')", dbFailOnError
 
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", constructor.getSegsTareasAuditoriaPteReplanificar(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_REGISTRADAS, "NC", constructor.getSegsNCAuditoriaRegistradas(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_SIN_TAREAS, "NC", constructor.getSegsNCAuditoriaAccionesSinTareas(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_PTE_CE, "NC", constructor.getSegsNCAuditoriaPteCE(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_CE_CADUCADA, "NC", constructor.getSegsNCAuditoriaCECaducada(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
-    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_CE_NO_CONFORME, "NC", constructor.getSegsNCAuditoriaCENoConforme(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_TAR_AUD_PTE_REPLAN, "TAREA", constructor.getSegsTareasAuditoriaPteReplanificar(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_REGISTRADAS, "NC", constructor.getSegsNCAuditoriaRegistradas(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_SIN_TAREAS, "NC", constructor.getSegsNCAuditoriaAccionesSinTareas(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_PTE_CE, "NC", constructor.getSegsNCAuditoriaPteCE(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_CE_CADUCADA, "NC", constructor.getSegsNCAuditoriaCECaducada(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
+    Cache_ProyectoMaterializado_InsertBucket db, BUCKET_NC_AUD_CE_NO_CONFORME, "NC", constructor.getSegsNCAuditoriaCENoConforme(db, p_Error), snapFecha, p_Error, CACHE_AUDITORIA_ID, configId, "AUDITORIA"
     If p_Error <> "" Then Err.Raise 1000
 
     detailCount = Cache_Materializado_DetailCount(db, CACHE_AUDITORIA_ID, p_Error)
@@ -481,10 +724,11 @@ salir:
     Set ws = Nothing
     Exit Function
 errores:
+    errDescription = Err.Description
     On Error Resume Next
     If Not ws Is Nothing Then ws.Rollback
     On Error GoTo 0
-    If p_Error = "" Then p_Error = "Cache_IndicadoresAuditoriaMaterializado_Sincronizar: " & Err.Description
+    If p_Error = "" Then p_Error = "Cache_IndicadoresAuditoriaMaterializado_Sincronizar: " & errDescription
     Resume salir
 End Function
 
@@ -495,6 +739,8 @@ Public Function Cache_IndicadoresProyectoMaterializado_SincronizarNC( _
     Dim db As DAO.Database
     Dim ws As DAO.Workspace
     Dim snapFecha As Date
+    Dim configId As Long
+    Dim detailCount As Long
 
     On Error GoTo errores
     p_Error = ""
@@ -509,6 +755,8 @@ Public Function Cache_IndicadoresProyectoMaterializado_SincronizarNC( _
     If p_Error <> "" Or db Is Nothing Then GoTo salir
     If Not Cache_ProyectoMaterializadoSchemaReady(db, p_Error) Then GoTo salir
     If Not Cache_ProyectoMaterializado_HeaderReady(db, p_Error) Then GoTo salir
+    configId = Cache_Materializado_ConfigId(db, "PROYECTO", p_Error)
+    If p_Error <> "" Then GoTo salir
 
     Set ws = DBEngine.Workspaces(0)
     snapFecha = Now()
@@ -518,14 +766,21 @@ Public Function Cache_IndicadoresProyectoMaterializado_SincronizarNC( _
                " WHERE IDCacheIndicadorProyecto=" & CStr(CACHE_PROYECTO_ID) & _
                " AND IDNoConformidad=" & CStr(p_IDNoConformidad), dbFailOnError
 
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", constructor.getSegsTareasProyectoPteReplanificar(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, "TAR_PROY_IRREGULARES", "TAREA", constructor.getSegsTareasProyecto(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_REGISTRADAS, "NC", constructor.getSegsNCProyectoRegistradas(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_SIN_TAREAS, "NC", constructor.getSegsNCProyectoAccionesSinTareas(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_PTE_CE, "NC", constructor.getSegsNCProyectoPteCE(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_CE_CADUCADA, "NC", constructor.getSegsNCProyectoCECaducada(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
-    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_CE_NO_CONFORME, "NC", constructor.getSegsNCProyectoCENoConforme(db, p_Error), p_IDNoConformidad, snapFecha, p_Error
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_TAR_PROY_PTE_REPLAN, "TAREA", constructor.getSegsTareasProyectoPteReplanificar(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, "TAR_PROY_IRREGULARES", "TAREA", constructor.getSegsTareasProyecto(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_REGISTRADAS, "NC", constructor.getSegsNCProyectoRegistradas(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_SIN_TAREAS, "NC", constructor.getSegsNCProyectoAccionesSinTareas(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_PTE_CE, "NC", constructor.getSegsNCProyectoPteCE(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_CE_CADUCADA, "NC", constructor.getSegsNCProyectoCECaducada(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
+    Cache_ProyectoMaterializado_InsertBucketParaNC db, BUCKET_NC_PROY_CE_NO_CONFORME, "NC", constructor.getSegsNCProyectoCENoConforme(db, p_Error), p_IDNoConformidad, snapFecha, p_Error, configId, "PROYECTO"
     If p_Error <> "" Then Err.Raise 1000
+
+    detailCount = Cache_Materializado_CountNC(db, CACHE_PROYECTO_ID, p_IDNoConformidad, p_Error)
+    If p_Error <> "" Then Err.Raise 1000
+    If detailCount = 0 Then
+        p_Error = "Cache_IndicadoresProyectoMaterializado_SincronizarNC: no se encontraron filas para NC " & CStr(p_IDNoConformidad) & "."
+        Err.Raise 1000
+    End If
 
     db.Execute "UPDATE " & CACHE_PROYECTO_HEADER & _
                " SET FechaSincronizacion=Now(), Estado='OK', ErrorUltimaSincronizacion=Null" & _
@@ -600,6 +855,92 @@ errores:
     Resume salir
 End Function
 
+Public Function Cache_Indicadores_ResolverNCDesdeAC( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_IDAccionCorrectiva As Long, _
+                        ByRef p_Error As String _
+                    ) As Long
+    p_Error = ""
+    If p_Db Is Nothing Then
+        p_Error = "Cache_Indicadores_ResolverNCDesdeAC requiere DAO.Database."
+        Exit Function
+    End If
+
+    Cache_Indicadores_ResolverNCDesdeAC = Cache_ProyectoMaterializado_ResolverNCDesdeAC(p_Db, p_IDAccionCorrectiva, p_Error)
+End Function
+
+Public Function Cache_Indicadores_ResolverNCDesdeAR( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_IDAccionRealizada As Long, _
+                        ByRef p_Error As String _
+                    ) As Long
+    p_Error = ""
+    If p_Db Is Nothing Then
+        p_Error = "Cache_Indicadores_ResolverNCDesdeAR requiere DAO.Database."
+        Exit Function
+    End If
+
+    Cache_Indicadores_ResolverNCDesdeAR = Cache_ProyectoMaterializado_ResolverNCDesdeAR(p_Db, p_IDAccionRealizada, p_Error)
+End Function
+
+Public Function Cache_Indicadores_SincronizarDesdeAC( _
+                        ByVal p_IDAccionCorrectiva As Long, _
+                        Optional ByRef p_Error As String _
+                    ) As String
+    Dim root As Scripting.Dictionary
+    Dim ok As Boolean
+
+    On Error GoTo errores
+    p_Error = ""
+    ok = Cache_IndicadoresProyectoMaterializado_SincronizarAC(p_IDAccionCorrectiva, p_Error)
+    Set root = New Scripting.Dictionary
+    root("ok") = ok
+    root("value") = ok
+    If p_Error = "" Then
+        root("error") = Null
+    Else
+        root("error") = p_Error
+    End If
+    Cache_Indicadores_SincronizarDesdeAC = JsonConverter.ConvertToJson(root)
+    Exit Function
+errores:
+    p_Error = "Cache_Indicadores_SincronizarDesdeAC: " & Err.Description
+    Set root = New Scripting.Dictionary
+    root("ok") = False
+    root("value") = False
+    root("error") = p_Error
+    Cache_Indicadores_SincronizarDesdeAC = JsonConverter.ConvertToJson(root)
+End Function
+
+Public Function Cache_Indicadores_SincronizarDesdeAR( _
+                        ByVal p_IDAccionRealizada As Long, _
+                        Optional ByRef p_Error As String _
+                    ) As String
+    Dim root As Scripting.Dictionary
+    Dim ok As Boolean
+
+    On Error GoTo errores
+    p_Error = ""
+    ok = Cache_IndicadoresProyectoMaterializado_SincronizarAR(p_IDAccionRealizada, p_Error)
+    Set root = New Scripting.Dictionary
+    root("ok") = ok
+    root("value") = ok
+    If p_Error = "" Then
+        root("error") = Null
+    Else
+        root("error") = p_Error
+    End If
+    Cache_Indicadores_SincronizarDesdeAR = JsonConverter.ConvertToJson(root)
+    Exit Function
+errores:
+    p_Error = "Cache_Indicadores_SincronizarDesdeAR: " & Err.Description
+    Set root = New Scripting.Dictionary
+    root("ok") = False
+    root("value") = False
+    root("error") = p_Error
+    Cache_Indicadores_SincronizarDesdeAR = JsonConverter.ConvertToJson(root)
+End Function
+
 Private Sub Cache_ProyectoMaterializado_InsertBucketParaNC( _
                         ByVal p_Db As DAO.Database, _
                         ByVal p_Bucket As String, _
@@ -607,7 +948,9 @@ Private Sub Cache_ProyectoMaterializado_InsertBucketParaNC( _
                         ByVal p_Items As Scripting.Dictionary, _
                         ByVal p_IDNoConformidad As Long, _
                         ByVal p_FechaSnapshot As Date, _
-                        ByRef p_Error As String _
+                        ByRef p_Error As String, _
+                        Optional ByVal p_ConfigId As Long = 0, _
+                        Optional ByVal p_Dominio As String = "PROYECTO" _
                     )
     Dim key As Variant
 
@@ -617,7 +960,7 @@ Private Sub Cache_ProyectoMaterializado_InsertBucketParaNC( _
 
     For Each key In p_Items.Keys
         If Cache_ProyectoMaterializado_ItemPerteneceNC(p_Items(key), p_IDNoConformidad, p_Error) Then
-            Cache_ProyectoMaterializado_InsertItem p_Db, p_Bucket, p_TipoFila, p_Items(key), p_FechaSnapshot, p_Error
+            Cache_ProyectoMaterializado_InsertItem p_Db, p_Bucket, p_TipoFila, p_Items(key), p_FechaSnapshot, p_Error, CACHE_PROYECTO_ID, p_ConfigId, p_Dominio
             If p_Error <> "" Then Exit Sub
         End If
     Next key
@@ -756,6 +1099,68 @@ errores:
     Resume salir
 End Function
 
+Private Function Cache_Materializado_CountNC( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_CacheId As Long, _
+                        ByVal p_IDNoConformidad As Long, _
+                        ByRef p_Error As String _
+                    ) As Long
+    Dim rs As DAO.Recordset
+    Dim sql As String
+
+    On Error GoTo errores
+    If p_Error <> "" Then Exit Function
+
+    sql = "SELECT COUNT(*) AS Total FROM " & CACHE_PROYECTO_DETALLE & _
+          " WHERE IDCacheIndicadorProyecto=" & CStr(p_CacheId) & _
+          " AND IDNoConformidad=" & CStr(p_IDNoConformidad)
+    Set rs = p_Db.OpenRecordset(sql, dbOpenSnapshot)
+    If Not rs.EOF Then Cache_Materializado_CountNC = CLng(Nz(rs.Fields("Total").Value, 0))
+
+salir:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Exit Function
+errores:
+    p_Error = "Cache_Materializado_CountNC: " & Err.Description
+    Resume salir
+End Function
+
+Private Function Cache_Materializado_ConfigId( _
+                        ByVal p_Db As DAO.Database, _
+                        ByVal p_Dominio As String, _
+                        ByRef p_Error As String _
+                    ) As Long
+    Dim rs As DAO.Recordset
+    Dim sql As String
+
+    On Error GoTo errores
+    If p_Error <> "" Then Exit Function
+
+    sql = "SELECT IDCacheConfig FROM TbCacheIndicadoresConfig " & _
+          "WHERE Dominio=" & Cache_ProyectoMaterializado_SqlText(p_Dominio) & " AND Activo=True"
+    Set rs = p_Db.OpenRecordset(sql, dbOpenSnapshot)
+    If rs.EOF Then
+        p_Error = "Cache materializado sin configuracion activa para dominio " & p_Dominio & "."
+        GoTo salir
+    End If
+
+    Cache_Materializado_ConfigId = CLng(Nz(rs.Fields("IDCacheConfig").Value, 0))
+    If Cache_Materializado_ConfigId <= 0 Then
+        p_Error = "Cache materializado con IDCacheConfig invalido para dominio " & p_Dominio & "."
+    End If
+
+salir:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    Exit Function
+errores:
+    p_Error = "Cache_Materializado_ConfigId: " & Err.Description
+    Resume salir
+End Function
+
 Public Function Cache_Test_IndicadoresAuditoriaMaterializado_Limpiar(Optional ByRef p_Error As String) As Boolean
     Dim db As DAO.Database
 
@@ -849,7 +1254,9 @@ Private Sub Cache_ProyectoMaterializado_InsertBucket( _
                         ByVal p_Items As Scripting.Dictionary, _
                         ByVal p_FechaSnapshot As Date, _
                         ByRef p_Error As String, _
-                        Optional ByVal p_CacheId As Long = CACHE_PROYECTO_ID _
+                        Optional ByVal p_CacheId As Long = CACHE_PROYECTO_ID, _
+                        Optional ByVal p_ConfigId As Long = 0, _
+                        Optional ByVal p_Dominio As String = "PROYECTO" _
                     )
     Dim key As Variant
 
@@ -858,7 +1265,7 @@ Private Sub Cache_ProyectoMaterializado_InsertBucket( _
     If p_Items Is Nothing Then Exit Sub
 
     For Each key In p_Items.Keys
-        Cache_ProyectoMaterializado_InsertItem p_Db, p_Bucket, p_TipoFila, p_Items(key), p_FechaSnapshot, p_Error, p_CacheId
+        Cache_ProyectoMaterializado_InsertItem p_Db, p_Bucket, p_TipoFila, p_Items(key), p_FechaSnapshot, p_Error, p_CacheId, p_ConfigId, p_Dominio
         If p_Error <> "" Then Exit Sub
     Next key
     Exit Sub
@@ -873,7 +1280,9 @@ Private Sub Cache_ProyectoMaterializado_InsertItem( _
                         ByVal p_Item As Object, _
                         ByVal p_FechaSnapshot As Date, _
                         ByRef p_Error As String, _
-                        Optional ByVal p_CacheId As Long = CACHE_PROYECTO_ID _
+                        Optional ByVal p_CacheId As Long = CACHE_PROYECTO_ID, _
+                        Optional ByVal p_ConfigId As Long = 0, _
+                        Optional ByVal p_Dominio As String = "PROYECTO" _
                     )
     Dim rs As DAO.Recordset
     Dim tarea As SegTareasProyecto
@@ -887,6 +1296,8 @@ Private Sub Cache_ProyectoMaterializado_InsertItem( _
     Set rs = p_Db.OpenRecordset(CACHE_PROYECTO_DETALLE, dbOpenDynaset)
     rs.AddNew
     rs!IDCacheIndicadorProyecto = p_CacheId
+    rs!IDCacheConfig = p_ConfigId
+    rs!Dominio = p_Dominio
     rs!Bucket = p_Bucket
     rs!TipoFila = p_TipoFila
     rs!FechaSnapshot = p_FechaSnapshot

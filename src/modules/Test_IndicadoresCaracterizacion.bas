@@ -2908,7 +2908,7 @@ Public Function Test_Issue18_SincronizarNC_Proyecto_InserirDetalle_Atomic() As S
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=992001", dbFailOnError
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=1", dbFailOnError
 
-    syncResult = Cache_Indicadores_SincronizarNC(992001, pError)
+    syncResult = Cache_IndicadoresProyectoMaterializado_SincronizarNC(992001, pError)
 
     Call TestHelper.AssertTrue(pError = "", "Act: per-NC sync for Proyecto must not report error", logs, assertError)
     Call TestHelper.AssertTrue(Not syncResult = "", "Act: per-NC sync must return JSON string", logs, assertError)
@@ -3003,8 +3003,8 @@ Public Function Test_Issue18_SincronizarNC_Proyecto_PreservaNCNoAfectada_Atomic(
     Call TestHelper.AssertTrue(unrelatedTitleBefore = 1, "Precondition: unrelated sentinel title is present before incremental sync", logs, assertError)
     If assertError <> "" Then GoTo finalizar
 
-    syncResult = Cache_Indicadores_SincronizarNC(992001, pError)
-    TestHelper.AddLog logs, "Act: Cache_Indicadores_SincronizarNC target=992001 returned pError='" & pError & "'"
+    syncResult = Cache_IndicadoresProyectoMaterializado_SincronizarNC(992001, pError)
+    TestHelper.AddLog logs, "Act: Cache_IndicadoresProyectoMaterializado_SincronizarNC target=992001 returned pError='" & pError & "'"
     Call TestHelper.AssertTrue(pError = "", "Act: per-NC sync must not report error", logs, assertError)
     Call TestHelper.AssertTrue(Len(syncResult) > 0, "Act: per-NC sync must return JSON", logs, assertError)
 
@@ -3077,7 +3077,7 @@ Public Function Test_Issue18_SincronizarNC_Auditoria_InserirDetalle_Atomic() As 
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoDetalle WHERE IDNoConformidad=992202", dbFailOnError
     db.Execute "DELETE FROM TbCacheIndicadoresProyectoHeader WHERE IDCacheIndicadorProyecto=2", dbFailOnError
 
-    syncResult = Cache_Indicadores_SincronizarNC(992202, pError)
+    syncResult = Cache_IndicadoresProyectoMaterializado_SincronizarNC(992202, pError)
 
     Call TestHelper.AssertTrue(pError = "", "Act: per-NC sync for Auditoria must not report error", logs, assertError)
     Call TestHelper.AssertTrue(Not syncResult = "", "Act: per-NC sync must return JSON string", logs, assertError)
@@ -3547,14 +3547,23 @@ Public Function Test_Issue18_ReconstruirTodo_Idempotent_Atomic() As String
     Call TestHelper.AssertTrue(pError = "", "Arrange: backend sandbox obtained", logs, assertError)
     If assertError <> "" Then GoTo finalizar
     If Not Issue18_RequireCacheDDL(db, logs, assertError) Then GoTo finalizar
+    If Not Issue18_RequireProyectoSourceSchema(db, logs, assertError) Then GoTo finalizar
+    If Not Issue18_RequireAuditoriaSourceSchema(db, logs, assertError) Then GoTo finalizar
 
+    Call CacheMaterializado_SeedProyectoBusinessFixture(db, logs)
+    Call CacheMaterializado_SeedAuditoriaBusinessFixture(db, logs)
+
+    pError = ""
     result1 = Cache_Indicadores_ReconstruirTodo(pError)
+    TestHelper.AddLog logs, "Act: first rebuild pError='" & pError & "', result=" & result1
     Call TestHelper.AssertTrue(pError = "", "Act: first rebuild must not report error", logs, assertError)
 
     headerCount1 = CacheMaterializado_CountRows(db, _
         "SELECT COUNT(*) AS Total FROM TbCacheIndicadoresProyectoHeader WHERE Estado='OK'")
 
+    pError = ""
     result2 = Cache_Indicadores_ReconstruirTodo(pError)
+    TestHelper.AddLog logs, "Act: second rebuild pError='" & pError & "', result=" & result2
     Call TestHelper.AssertTrue(pError = "", "Act: second rebuild must not report error", logs, assertError)
 
     headerCount2 = CacheMaterializado_CountRows(db, _
@@ -3565,6 +3574,10 @@ Public Function Test_Issue18_ReconstruirTodo_Idempotent_Atomic() As String
 finalizar:
     Call CacheMaterializado_Cleanup(logs, assertError)
     Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If Not db Is Nothing Then
+        Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+        Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    End If
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
     If assertError <> "" Then
         Test_Issue18_ReconstruirTodo_Idempotent_Atomic = TestHelper.BuildJsonFail(assertError, logs)
@@ -3577,6 +3590,10 @@ errores:
     On Error Resume Next
     Call CacheMaterializado_Cleanup(logs, assertError)
     Call CacheMaterializadoAuditoria_Cleanup(logs, assertError)
+    If Not db Is Nothing Then
+        Call CacheMaterializado_ProyectoBusinessCleanup(db, logs)
+        Call CacheMaterializado_AuditoriaBusinessCleanup(db, logs)
+    End If
     If sessionStarted Then Call TestHelper.EndTestSession(logs)
     On Error GoTo 0
     Test_Issue18_ReconstruirTodo_Idempotent_Atomic = TestHelper.BuildJsonFail(errMsg, logs)
@@ -3730,7 +3747,7 @@ Public Function Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_
     '   - Legacy UPDATE on TbCacheListado is a no-op (no row matches).
     '   - Legacy Cache_IndicadoresProyectoMaterializado_Sincronizar runs the full rebuild
     '     and is expected to succeed (cache config exists).
-    '   - Issue #18 Cache_Indicadores_SincronizarNC(992099) calls
+    '   - Issue #18 Cache_IndicadoresProyectoMaterializado_SincronizarNC(992099) calls
     '     DetectarDominioDesdeNC(992099) which fails with "NC not found" and propagates
     '     the error to indicatorSyncErr.
     ' The contract: InvalidarCache must return False (no false success) and surface

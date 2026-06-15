@@ -671,6 +671,7 @@ Public Function InvalidarCache( _
     Dim usuario As String
     Dim qdf As DAO.QueryDef
     Dim syncError As String
+    Dim indicatorSyncError As String
     
     On Error GoTo errores
     
@@ -688,6 +689,12 @@ Public Function InvalidarCache( _
     LogCacheOperacion p_IDNC, "Invalidar", p_Razon, usuario, True
     If Not Cache_IndicadoresProyectoMaterializado_Sincronizar(syncError) Then
         p_Error = "CacheNCProyecto.InvalidarCache no pudo sincronizar indicadores de Proyecto: " & syncError
+        InvalidarCache = False
+        Exit Function
+    End If
+
+    If Not Cache_IndicadoresProyectoMaterializado_SincronizarNC(CLng(p_IDNC), indicatorSyncError) Then
+        p_Error = "CacheNCProyecto.InvalidarCache no pudo sincronizar indicador de Proyecto para NC " & p_IDNC & ": " & indicatorSyncError
         InvalidarCache = False
         Exit Function
     End If
