@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.2.59] - 2026-06-15
+
+### Fixed
+
+- An Access operation interrupted while still in `starting` (before its Access process spawned and a PID was recorded) no longer stays stuck forever as `status: "starting"` with `accessPid: null`. Root cause: the record is persisted as `starting` before the process is spawned, and the finalizing state transition only runs after the runner returns — a hard interruption (client abort / kill) in that window skips it.
+- The pre-flight cleanup that runs before every Access operation now transitions a **stale** `starting`/no-PID record (idle past an in-flight grace window) to `failed`, stamping `metadata.interruptedReason`. This is registry-only bookkeeping — it inspects and kills no process, because no PID was ever owned.
+- `cleanup_access_operation` can now retire a stale `starting`/no-PID record **without `force`**, since there is no owned Access process to kill.
+
+### Security
+
+- The new non-`force` retire path **never kills any `MSACCESS.EXE`**. A record without an owned PID cannot drive a process kill; killing still requires a fully ownership-verified PID (matching name, start time, and command line). The safety scan is scoped to the record's own `accessPath`, so Access processes belonging to other projects (a different `.accdb`) are never matched or terminated. If a live `MSACCESS.EXE` for that `accessPath` is found, cleanup refuses and reports instead of killing. A `starting` record still inside the grace window is treated as possibly in-flight and left untouched.
+
 ## [v1.2.58] - 2026-06-15
 
 ### Added

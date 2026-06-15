@@ -397,6 +397,44 @@ export function createAccessOperationId(): string {
   return `dysflow-${randomUUID()}`;
 }
 
+/**
+ * A "starting" operation that never recorded process ownership is considered
+ * interrupted once it has been idle longer than this. Until the threshold
+ * elapses it may be a legitimately in-flight operation that simply has not yet
+ * emitted its DYSFLOW_ACCESS_PROCESS marker (e.g. Access is still launching).
+ */
+export const DEFAULT_STARTING_STALE_MS = 120_000;
+
+/**
+ * Structured reason stamped on an operation that was interrupted before it
+ * acquired (and recorded ownership of) an Access process. Because no PID was
+ * ever owned, there is no process to kill — retiring such a record is purely
+ * registry bookkeeping.
+ */
+export const INTERRUPTED_BEFORE_PID_REASON =
+  "Operation was interrupted before acquiring an Access PID; no Access process ownership was recorded, so there is no process to kill.";
+
+/**
+ * True when a record is a "starting" operation that never recorded process
+ * ownership (no PID and no start time) and has been idle past the staleness
+ * threshold. Such a record is safe to retire as registry-only bookkeeping:
+ * because no PID was ever owned it cannot, and must not, drive any process kill.
+ *
+ * The staleness window is the safety gate against retiring an operation that is
+ * still legitimately starting and has merely not emitted its PID marker yet.
+ */
+export function isInterruptedStartingRecord(
+  record: Pick<AccessOperationRecord, "status" | "accessPid" | "processStartTime" | "updatedAt">,
+  nowMs: number,
+  thresholdMs: number = DEFAULT_STARTING_STALE_MS,
+): boolean {
+  if (record.status !== "starting") return false;
+  if (record.accessPid !== null || record.processStartTime !== null) return false;
+  const updatedMs = Date.parse(record.updatedAt);
+  if (Number.isNaN(updatedMs)) return false;
+  return nowMs - updatedMs >= Math.max(0, thresholdMs);
+}
+
 export function toOperationMetadata(record: AccessOperationRecord): AccessOperationMetadata {
   return {
     operationId: record.operationId,

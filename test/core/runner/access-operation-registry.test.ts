@@ -793,7 +793,13 @@ describe("Access operation preflight cleanup safety", () => {
       projectRoot: "C:/repo/app",
     });
 
-    expect(result).toEqual({ cleaned: ["op-1"], killed: [], orphanedKilled: [], errors: [] });
+    expect(result).toEqual({
+      cleaned: ["op-1"],
+      killed: [],
+      orphanedKilled: [],
+      errors: [],
+      transitioned: [],
+    });
     await expect(registry.get("op-1")).resolves.toBeUndefined();
   });
 

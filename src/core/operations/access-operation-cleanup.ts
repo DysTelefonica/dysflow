@@ -7,7 +7,12 @@ import {
   successResult,
 } from "../contracts/index.js";
 import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
-import type { AccessOperationRegistry } from "./access-operation-registry.js";
+import {
+  type AccessOperationRegistry,
+  DEFAULT_STARTING_STALE_MS,
+  INTERRUPTED_BEFORE_PID_REASON,
+  isInterruptedStartingRecord,
+} from "./access-operation-registry.js";
 
 export type OsProcessInfo = {
   pid: number;
@@ -51,8 +56,18 @@ export class AccessOperationCleanupService {
       processInspector: ProcessInspector;
       processKiller: ProcessKiller;
       processScanner?: ProcessScanner;
+      clock?: () => string;
+      startingStaleMs?: number;
     },
   ) {}
+
+  private now(): number {
+    return Date.parse((this.options.clock ?? (() => new Date().toISOString()))());
+  }
+
+  private get startingStaleMs(): number {
+    return this.options.startingStaleMs ?? DEFAULT_STARTING_STALE_MS;
+  }
 
   async cleanup(request: {
     operationId: string;
@@ -86,6 +101,20 @@ export class AccessOperationCleanupService {
           "CLEANUP_PID_UNKNOWN",
           "Cleanup refused because the operation has no owned Access PID.",
         ),
+      );
+    }
+
+    // An interrupted "starting" operation never owned an Access PID, so retiring
+    // it kills nothing. Once stale (past the in-flight grace window) it is safe to
+    // retire WITHOUT force. retireUnownedOperation still scans for a live MSACCESS
+    // bound to THIS record's accessPath and refuses if one exists — it never kills,
+    // and the scan is scoped to this accessPath, so other projects' Access
+    // processes are never matched or touched.
+    if (isInterruptedStartingRecord(record, this.now(), this.startingStaleMs)) {
+      return this.retireUnownedOperation(
+        record.operationId,
+        record.accessPath,
+        INTERRUPTED_BEFORE_PID_REASON,
       );
     }
 
@@ -172,8 +201,12 @@ export class AccessOperationCleanupService {
   private async retireUnownedOperation(
     operationId: string,
     accessPath: string,
+    reason?: string,
   ): Promise<OperationResult<AccessCleanupResult>> {
     const diagnostics: Diagnostic[] = [];
+    if (reason !== undefined) {
+      diagnostics.push(createDiagnostic("info", "access.cleanup", reason));
+    }
 
     if (this.options.processScanner !== undefined) {
       let processes: OsProcessInfo[];

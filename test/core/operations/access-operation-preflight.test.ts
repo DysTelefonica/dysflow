@@ -42,7 +42,13 @@ describe("AccessOperationPreflightCleanupService", () => {
       projectRoot: "C:/repo/app",
     });
 
-    expect(result).toEqual({ cleaned: ["op-stale"], killed: [], orphanedKilled: [], errors: [] });
+    expect(result).toEqual({
+      cleaned: ["op-stale"],
+      killed: [],
+      orphanedKilled: [],
+      errors: [],
+      transitioned: [],
+    });
     expect(killed).toEqual([]);
     // cleaned records are purged from InMemory registry (parity with FileRegistry)
     await expect(registry.get("op-stale")).resolves.toBeUndefined();
@@ -79,6 +85,7 @@ describe("AccessOperationPreflightCleanupService", () => {
             "Refused to mark operation cleaned because it has no owned Access PID and processes cannot be scanned.",
         },
       ],
+      transitioned: [],
     });
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });
@@ -114,6 +121,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       killed: [1234],
       orphanedKilled: [],
       errors: [],
+      transitioned: [],
     });
     expect(killed).toEqual([1234]);
     // cleaned records are purged from InMemory registry (parity with FileRegistry)
@@ -144,6 +152,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       killed: [],
       orphanedKilled: [],
       errors: [],
+      transitioned: [],
     });
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });
@@ -172,6 +181,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       killed: [],
       orphanedKilled: [],
       errors: [],
+      transitioned: [],
     });
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "starting" });
   });
@@ -200,6 +210,7 @@ describe("AccessOperationPreflightCleanupService", () => {
       killed: [],
       orphanedKilled: [],
       errors: [],
+      transitioned: [],
     });
     await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "timed_out" });
   });

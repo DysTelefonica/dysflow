@@ -386,6 +386,7 @@ export class AccessPowerShellRunner implements AccessRunner {
             message: `Pre-flight cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
           },
         ],
+        transitioned: [],
       };
     }
   }

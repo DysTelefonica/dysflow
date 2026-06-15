@@ -98,6 +98,12 @@ Refusal examples include:
 - `CLEANUP_PROCESS_START_TIME_MISMATCH`
 - `CLEANUP_STATUS_NOT_ELIGIBLE`
 
+**Interrupted `starting` operations.** An operation is registered as `starting` (with `accessPid: null`) *before* the Access process is spawned. If the runtime is interrupted in that window (client abort, hard kill), the record is orphaned in `starting` with no PID because the finalizing transition never runs. Such records are handled safely:
+
+- The pre-flight cleanup that runs before every Access operation transitions a *stale* `starting` record (no PID, idle past the in-flight grace window) to `failed` and stamps `metadata.interruptedReason`. This is **registry-only bookkeeping — it inspects and kills nothing**, because no PID was ever owned.
+- `cleanup_access_operation` may retire a stale `starting`/no-PID record **without `force`**, since there is no owned process to kill. It still refuses (never kills) if a live `MSACCESS.EXE` bound to *that record's* `accessPath` is found, and the scan is scoped to that `accessPath` — Access processes of other projects (different `.accdb`) are never matched or touched.
+- A `starting` record that is still within the grace window is treated as possibly in-flight and is left alone (cleanup without `force` is refused with `CLEANUP_PID_UNKNOWN`).
+
 ### 3) Writes are safer by construction
 
 - Read tools are default/explicit `mode: "read"`.

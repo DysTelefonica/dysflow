@@ -8,10 +8,13 @@ import type {
   ProcessScanner,
 } from "./access-operation-cleanup.js";
 import { sameProcessStartTime } from "./access-operation-cleanup.js";
-import type {
-  AccessOperationRecord,
-  AccessOperationRegistry,
-  AccessOperationStatus,
+import {
+  type AccessOperationRecord,
+  type AccessOperationRegistry,
+  type AccessOperationStatus,
+  DEFAULT_STARTING_STALE_MS,
+  INTERRUPTED_BEFORE_PID_REASON,
+  isInterruptedStartingRecord,
 } from "./access-operation-registry.js";
 
 export type AccessOperationPreflightCleanupRequest = {
@@ -29,6 +32,13 @@ export type AccessOperationPreflightCleanupResult = {
   killed: number[];
   orphanedKilled: number[];
   errors: AccessOperationPreflightCleanupError[];
+  /**
+   * Operations transitioned out of a stuck state without any process action
+   * (e.g. an interrupted "starting" record marked failed). Registry-only
+   * bookkeeping — nothing was killed. Optional so existing preflight doubles
+   * that predate this field still satisfy the contract.
+   */
+  transitioned?: string[];
 };
 
 export type AccessOperationPreflightCleanup = {
@@ -54,8 +64,17 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       processScanner?: ProcessScanner;
       operationTimeoutMs?: number;
       clock?: () => string;
+      startingStaleMs?: number;
     },
   ) {}
+
+  private nowMs(): number {
+    return Date.parse((this.options.clock ?? (() => new Date().toISOString()))());
+  }
+
+  private get startingStaleMs(): number {
+    return this.options.startingStaleMs ?? DEFAULT_STARTING_STALE_MS;
+  }
 
   async cleanup(
     request: AccessOperationPreflightCleanupRequest,
@@ -65,6 +84,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       killed: [],
       orphanedKilled: [],
       errors: [],
+      transitioned: [],
     };
     let records: AccessOperationRecord[];
     try {
@@ -81,6 +101,14 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
 
     for (const record of records) {
       if (!this.matchesScope(record, request)) continue;
+
+      // An interrupted "starting" record never owned a PID; once stale it is
+      // transitioned to "failed" as registry-only bookkeeping. No process is
+      // inspected or killed here — there is no owned PID to act on.
+      if (isInterruptedStartingRecord(record, this.nowMs(), this.startingStaleMs)) {
+        await this.markInterruptedStartingFailed(record, result);
+        continue;
+      }
 
       if (record.status === "running" && record.accessPid !== null) {
         await this.reconcileRunningRecord(record, result);
@@ -242,6 +270,25 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       result.errors.push({
         operationId: "orphan",
         message: `Blocked cleanup because PID ${process.pid} is an unattributed MSACCESS process for the requested accessPath.`,
+      });
+    }
+  }
+
+  private async markInterruptedStartingFailed(
+    record: AccessOperationRecord,
+    result: AccessOperationPreflightCleanupResult,
+  ): Promise<void> {
+    try {
+      await this.options.registry.update(record.operationId, {
+        status: "failed",
+        metadata: { ...record.metadata, interruptedReason: INTERRUPTED_BEFORE_PID_REASON },
+        updatedAt: (this.options.clock ?? (() => new Date().toISOString()))(),
+      });
+      (result.transitioned ??= []).push(record.operationId);
+    } catch (error) {
+      result.errors.push({
+        operationId: record.operationId,
+        message: `Failed to mark interrupted operation failed: ${formatError(error)}`,
       });
     }
   }
