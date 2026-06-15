@@ -405,7 +405,7 @@ describe("VbaExecutionAdapter", () => {
     if (!result.ok) expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
   });
 
-  it("returns VBA_INVALID_TEST_PLAN when proceduresJson has non-object entries", async () => {
+  it("returns VBA_INVALID_TEST_PLAN when proceduresJson has entries that are neither strings nor objects", async () => {
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
@@ -413,11 +413,93 @@ describe("VbaExecutionAdapter", () => {
     const adapter = new VbaExecutionAdapter(orchestrator);
 
     const result = await adapter.execute("test_vba", {
-      proceduresJson: JSON.stringify(["string-item-not-object"]),
+      proceduresJson: JSON.stringify([123]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+      // The error should teach the valid shape, not just reject.
+      expect(result.error.message).toContain("procedure");
+    }
+  });
+
+  it("accepts proceduresJson shorthand: an array of procedure-name strings", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Shorthand" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["Test_Shorthand"]),
+    });
+
+    expect(result.ok).toBe(true);
+    // Shorthand strings are normalized to the canonical { procedure, args } shape.
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_Shorthand", args: [] }]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("accepts proceduresJson mixing shorthand strings and full objects", async () => {
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["Test_A", { procedure: "Test_B", args: ["x"] }]),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([
+          { procedure: "Test_A", args: [] },
+          { procedure: "Test_B", args: ["x"] },
+        ]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("rejects an empty or whitespace procedure-name string in proceduresJson", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["   "]),
     });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+  });
+
+  it("accepts a shorthand string array from a testsPath manifest", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-shorthand-manifest-"));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify(["Test_FromManifest"]), "utf8");
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
+
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_FromManifest", args: [] }]),
+      }),
+      expect.any(Object),
+    );
   });
 
   it("returns VBA_TESTS_FAILED when any test result has ok: false", async () => {

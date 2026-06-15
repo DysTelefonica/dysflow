@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.58] - 2026-06-15
+
+### Added
+
+- `test_vba` `proceduresJson` now accepts a **shorthand**: a bare procedure-name string is treated as a test with no arguments. `["Test_A","Test_B"]` is equivalent to `[{"procedure":"Test_A","args":[]},{"procedure":"Test_B","args":[]}]`, and shorthand strings may be mixed with full objects. The same shapes apply to a `testsPath` manifest file. Previously an array of strings failed with `VBA_INVALID_TEST_PLAN: Test #1 must be an object.`
+
+### Changed
+
+- `test_vba` invalid-plan errors now teach the valid shape instead of only rejecting (e.g. `Test #1 must be a procedure name string or an object like {"procedure":"Test_Name","args":[]}.`).
+- Documented the full `proceduresJson` contract in the MCP tool's input schema description and the README so consumers no longer have to discover it by trial and error.
+
 ## [v1.2.57] - 2026-06-14
 
 ### Fixed

@@ -168,12 +168,30 @@ function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
       ? value.tests
       : undefined;
   if (tests === undefined) {
-    throw new Error("tests.vba.json must contain an array or an object with a tests array.");
+    throw new Error(
+      'Test plan must be an array of tests or an object with a "tests" array, e.g. ["Test_Name"] or [{"procedure":"Test_Name","args":[]}].',
+    );
   }
   return tests.map((item, index) => {
-    if (!isRecord(item)) throw new Error(`Test #${index + 1} must be an object.`);
+    // Shorthand: a bare string is the procedure name with no arguments.
+    if (typeof item === "string") {
+      const procedure = item.trim();
+      if (procedure.length === 0) {
+        throw new Error(`Test #${index + 1} is an empty procedure name.`);
+      }
+      return { name: procedure, procedure, args: [], tags: [] };
+    }
+    if (!isRecord(item)) {
+      throw new Error(
+        `Test #${index + 1} must be a procedure name string or an object like {"procedure":"Test_Name","args":[]}.`,
+      );
+    }
     const procedure = stringValue(item.procedure) ?? stringValue(item.proc);
-    if (procedure === undefined) throw new Error(`Test #${index + 1} is missing procedure.`);
+    if (procedure === undefined) {
+      throw new Error(
+        `Test #${index + 1} is missing "procedure" (e.g. {"procedure":"Test_Name","args":[]}).`,
+      );
+    }
     const args = Array.isArray(item.args) ? item.args : [];
     const tags = Array.isArray(item.tags) ? item.tags.map(String) : [];
     return {

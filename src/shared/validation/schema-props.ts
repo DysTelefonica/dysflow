@@ -128,7 +128,8 @@ export const SCHEMA_PROPS = {
   } as JsonSchemaProperty,
   proceduresJson: {
     type: "string",
-    description: "JSON encoded VBA test procedures.",
+    description:
+      'JSON-encoded VBA test plan: a string that parses to an array of tests, or an object with a "tests" array. Each test is either a procedure-name string (shorthand, no args) or an object {"procedure":"Test_Name","args":[...],"tags":[...]} ("proc" is accepted as an alias for "procedure"). Examples: ["Test_A","Test_B"] or [{"procedure":"Test_A","args":["fixture",1]}].',
   } as JsonSchemaProperty,
   argsJson: {
     type: "string",
