@@ -370,8 +370,10 @@ describe("vba_inline_execution tool behavior", () => {
     const generatedModuleName = importParams?.moduleNames?.[0];
     expect(generatedModuleName).toMatch(/^_inline_[a-f0-9_]+$/);
 
-    // Verify written file and content
-    expect(writtenFiles[0]?.path).toContain(`modules\\${generatedModuleName}.bas`);
+    // Verify written file and content (separator-agnostic: CI runs on Linux)
+    expect(writtenFiles[0]?.path?.replace(/\\/g, "/")).toContain(
+      `modules/${generatedModuleName}.bas`,
+    );
     expect(writtenFiles[0]?.content).toContain(`Attribute VB_Name = "${generatedModuleName}"`);
     expect(writtenFiles[0]?.content).toContain("Public Sub ExecuteInline()");
     expect(writtenFiles[0]?.content).toContain("MsgBox 123");
@@ -387,7 +389,7 @@ describe("vba_inline_execution tool behavior", () => {
 
     // Verify file removal
     expect(removedFiles.length).toBe(1);
-    expect(removedFiles[0]).toContain(`modules\\${generatedModuleName}.bas`);
+    expect(removedFiles[0]?.replace(/\\/g, "/")).toContain(`modules/${generatedModuleName}.bas`);
   });
 
   it("cleans up even if execution fails", async () => {

@@ -100,7 +100,9 @@ describe("Component Resolver", () => {
   describe("resolveComponentPath", () => {
     it("should build path relative to destination root", () => {
       const path = resolveComponentPath("C:\\src", "Form_Menu");
-      expect(path).toBe("C:\\src\\forms\\Form_Menu.form.txt");
+      // Separator-agnostic: resolveComponentPath uses the OS separator, and CI
+      // runs on Linux while developers run on Windows.
+      expect(path.replace(/\\/g, "/")).toBe("C:/src/forms/Form_Menu.form.txt");
     });
   });
 });
