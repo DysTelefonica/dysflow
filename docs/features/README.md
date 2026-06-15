@@ -86,6 +86,21 @@ The following `tests/*.json` manifests are mapped to features. Manifests not lis
 - `tests.vba.indicadores-caracterizacion.json` registered in `openspec/config.yaml` as 46 procedures and mapped to `indicator-issues-cleanup`.
 - Remaining issue #67 work: prove all feature pages against fresh evidence, then remove any feature-level `pending evidence` / `pending traceability` markers.
 
+**Drift de manifests en esta rama (2026-06-15)**: cross-check A4 (ver `docs/inventory/anomalies-investigation.md` Anexo A) reveló que este branch (`feature/issue-67-final-fixes-2026-06-15`) tiene **7 manifests en `tests/`** mientras que `origin/staging` tiene **17**. Faltan 10 manifests en este checkout:
+
+- `form-helper.json` (9 procedimientos únicos)
+- `form-helper-canary.json` (1 procedimiento, 100% duplicado de `form-helper.json`)
+- `form-helper-ensure.json` (1 procedimiento, 100% duplicado de `form-helper.json`)
+- `listado-helper.json` (vacío, ya retired)
+- `seguimiento-tareas-helper.json` (9 únicos)
+- `proyecto-gestion-helper.json` (8 únicos)
+- `audit-gestion-helper.json` (11 únicos)
+- `indicadores-caracterizacion.json` (~55 procedimientos; 9 duplicados con `tests.vba.json`, 46 únicos)
+- `cache-acar.json` (3 únicos)
+- `cache-warmup.json` (1 único)
+
+**Implicación**: la evidencia `X/Y PASS` citada en cada feature page es **histórica de `staging` HEAD del momento**, no reproducible en este branch sin cherry-pick. Cada feature page affected incluye una línea `Scope note` que documenta el drift específico de su manifest. Para restaurar cobertura self-contained, cherry-pick los **7 manifests únicos** desde `origin/staging` (los 2 duplicados y el retired se pueden omitir). Esta acción se planifica en Fase 2 TDD authoring, no antes.
+
 ## Bloqueos de cierre descubiertos
 
 | Feature | Bloqueo/deuda | Dónde seguir |

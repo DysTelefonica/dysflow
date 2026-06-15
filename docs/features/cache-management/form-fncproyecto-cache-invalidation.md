@@ -9,6 +9,7 @@
 | **Current** | `passing` (B1 RESOLVED 2026-06-14) |
 | **Last verified** | 2026-06-15 (`tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños contra staging HEAD `20b71f64`) |
 | **Manifest drift** | `clean` (for `proyecto-gestion-helper.json`) |
+| **Scope note** | Evidencia `8/8` histórica de `staging` HEAD (no de este branch). El manifest `tests/tests.vba.proyecto-gestion-helper.json` NO está en este checkout. Ver [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). Para reproducir, cherry-pick desde `origin/staging`. |
 | **Staging reachability** | `reachable` — all functional changes present in staging HEAD via export/reimport path; original feat-branch SHAs are NOT ancestors but equivalent code is verified (see Integration Commits) |
 | **TDD evidence** | `fresh` — manifest verificado 8/8 mediante filtros pequeños contra staging HEAD `20b71f64` 2026-06-15 |
 | **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |

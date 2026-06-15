@@ -9,6 +9,7 @@
 | **Current** | `passing / pending UAT-release` |
 | **Last verified** | 2026-06-15 actualización documental con evidencia ya recogida; sin ejecución nueva de Dysflow/Access |
 | **Manifest drift** | `clean` |
+| **Scope note** | Evidencia `11/11` histórica de `staging` HEAD (no de este branch). El manifest `tests/tests.vba.audit-gestion-helper.json` NO está en este checkout. Ver [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). Para reproducir, cherry-pick desde `origin/staging`. |
 | **Staging reachability** | `reachable` — los 4 commits de integración de caché y el commit de corrección de regresión `ad96b95` son ancestros de `staging` |
 | **TDD evidence** | `fresh` — 11/11 pass in manifest after audit report-path regression fix |
 | **Last verified commit** | `ad96b95` — corrección de regresión registrada en `staging`; commit equivalente en la rama documental actual `c2026f5` |

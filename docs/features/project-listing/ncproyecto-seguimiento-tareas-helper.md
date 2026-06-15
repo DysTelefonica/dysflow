@@ -9,6 +9,7 @@
 | **Current** | `passing` |
 | **Last verified** | 2026-06-15 (evidencia runtime recogida por slices; 9/9 procedimientos únicos) |
 | **Manifest drift** | `clean` |
+| **Scope note** | Evidencia `9/9` histórica de `staging` HEAD (no de este branch). El manifest `tests/tests.vba.seguimiento-tareas-helper.json` NO está en este checkout. Ver [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). Para reproducir, cherry-pick desde `origin/staging`. |
 | **Staging reachability** | `reachable` — commit `aa1ef79` is ancestor of `staging` |
 | **TDD evidence** | `fresh` — fallback 4/4, helper 4/4 y form 1/1; 9/9 procedimientos únicos PASS |
 | **Last verified commit** | `aa1ef79` |
