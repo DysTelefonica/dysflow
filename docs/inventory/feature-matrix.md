@@ -200,3 +200,11 @@ Para no inflar la matriz ni quedarse corto, se considera **una feature** cualqui
 9. **Tres forms del menú (`Form_Form0BDOpciones`, `Form_Form0BDOpcionesAuditorias`, `Form_Form0BDOpcionesParteProyectos`) no se leyeron exhaustivamente**. Se listan como entry points de `CAP-UPN` y como cableado de menú, pero pueden contener botones adicionales con features de negocio que esta matriz no captura. Riesgo bajo: un barrido posterior con grep sobre `Private Sub Comando*_Click` reduciría la incertidumbre.
 
 10. **`Funciones Generales.bas` tiene 5160 líneas** y centraliza `PintarIndicadores` (3 modos), el reset de colecciones, la sincronización de caché materializada, la telemetría y la generación de HTML en parte. Es candidato natural para una descomposición en módulos cohesivos antes de migrar a web; mientras tanto, cualquier test que la atraviese tocará múltiples dominios (`CAP-IND`, `CAP-XCUT`, `CAP-COM`). Anotar como riesgo de Fase 2 al planificar authoring de tests de indicadores que pasen por `PintarIndicadores`.
+
+## §6 Investigación de anomalías seleccionadas
+
+Las anomalías #1, #2 y #7 (las más accionables) tienen investigación dedicada con búsqueda de referencias, comparativa contra `origin/staging` y opciones de remediación firmadas:
+
+- [`anomalies-investigation.md`](./anomalies-investigation.md) — 10 manifests faltantes en esta rama, `InformeNCAuditorias.cls` empty desde el commit inicial, `tests.vba.smoke.json` empty por diseño.
+
+Las anomalías #3, #4, #5, #6, #8, #9, #10 siguen en este §5 como deuda viva para resolver en próximas sesiones.
