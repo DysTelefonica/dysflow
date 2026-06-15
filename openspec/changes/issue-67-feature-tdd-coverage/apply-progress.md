@@ -80,7 +80,15 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 
 - BR-UPN-7: matriz de permisos producto vs permisos embebidos en formularios (ya mencionado en `users-permissions-navigation.md` §7 como "Hueco confirmado")
 - BR-CE-5/6: comportamiento diferido del botón general de auditoría (ya mencionado como "Hueco sospechado" en `control-eficacia-workflow.md` §7)
-- Cualquier divergencia nueva que el inventario revele.
+
+### Manifests, slots y dead-code (resolución de anomalías #1, #2, #7)
+
+Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigation.md`:
+
+- **#1 — Deriva de manifests (10 manifests faltan en esta rama)**: A4 cross-check ejecutado 2026-06-15. Solo 2 de los 10 son 100% duplicados de `form-helper.json` (`form-helper-canary` y `form-helper-ensure`); los otros 7 tienen tests únicos no presentes en `tests.vba.json`. Implicación: la opción A2 (reformular doc) no es suficiente sola; la feature pages' `X/Y PASS` requiere cherry-pick desde `origin/staging` para ser reproducible. Decisión final: combinar A2 con cherry-pick selectivo cuando se planee Fase 2 TDD authoring, no antes. La rama actual queda como snapshot de cierre de #67; la evidencia histórica se mantiene como referencia, no como prueba del estado de la rama.
+- **#2 — `InformeNCAuditorias.cls` dead-code marker**: **resuelto** con commit `53acb24 chore(access): retire dead class InformeNCAuditorias and update capability docs`. El módulo fue borrado del source; el binary Access aún lo contiene hasta que el usuario lo retire (instrucciones en el body del commit). Las 3 capability docs (CAP-COM, CAP-NCA-LC, CAP-DGE) ya no lo listan como entry point; `Informe.cls::GenerarWordNoConformidades(p_EsDeProyecto:=No)` queda como el path real.
+- **#7 — `tests.vba.smoke.json` slot reservado**: decisión C1. El slot está vacío por diseño (commits `fc82f67`, `561a4c4` "test(vba): keep only automatable suite entries"). Ningún doc de capabilities o features-page cita este manifest como test_evidence. **No requiere acción** salvo esta nota. Poblarlo (C2) requeriría análisis de smoke-grade candidates (≤2s, sin COM, sin fixtures pesadas) y verificación de que Dysflow o CI lo ejecuten; no hay evidencia de pipeline que lo use.
+
 
 ## §4 Decisiones tomadas
 
@@ -120,6 +128,8 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 | `d8b8bee` | docs(openspec): bootstrap feature-tdd-coverage epic | 0 | AC-1..AC-8 (estructura) | proposal + apply-progress; entrada de épica en REGRESSION-ANCHOR queda en working tree por .gitignore |
 | `a5af092` | docs(capabilities): add master capabilities index | 0 | AC-1 (completo) | 14 capabilities, 19 lagunas, 2 divergencias |
 | `400acde` | docs(inventory): add feature matrix | 0 | AC-2 (completo) | 92 features, 7 capabilities propuestas, 9 anomalías |
+| `a3a813e` | docs(inventory): investigate 3 critical anomalies | 0 | AC-2 (anomalías) | anomalías #1, #2, #7 con decisiones A2+A4, B1, C1 |
+| `53acb24` | chore(access): retire dead class InformeNCAuditorias | 0 | B1 (anomalía #2) | retire del dead-code marker + 3 capability docs actualizadas |
 | (Fase 1 — cierre) | | | | |
 | `pendiente` | (ningún otro commit de Fase 1; la matriz cubre el inventario base. Las capabilities faltantes y la asimetría Proyecto/Auditoría alimentan Fase 2 como planes de PR) | 1 | — | see §4 y §5 of `docs/inventory/feature-matrix.md` |
 | (Fase 2 — uno por capability) | | | | |
