@@ -21,7 +21,7 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 | AC | Descripción | Estado | Evidencia |
 |---|---|---|---|
 | AC-1 | `docs/capabilities/index.md` con todos los CAP-IDs | ✅ completo | `a5af092 docs(capabilities): add master capabilities index per access-vba-capability-docs v2` — 14 capabilities, 19 lagunas, 2 divergencias |
-| AC-2 | `docs/inventory/feature-matrix.md` ≥ 1 fila por feature | ❌ pendiente | archivo no existe; requiere lectura de `src/classes/`, `src/forms/`, `src/modules/` (43+48+25 archivos) |
+| AC-2 | `docs/inventory/feature-matrix.md` ≥ 1 fila por feature | ✅ completo | `400acde docs(inventory): add feature matrix mapping 92 features to 14 capabilities` — 92 features inventariadas, 7 capabilities faltantes propuestas, 9 anomalías detectadas |
 | AC-3 | §6 sustantivo (≥ 4 bullets que respondan las 4 preguntas) por doc | 🟡 parcial | la mayoría de los §6 existen pero pocos llegan a 4 bullets sustantivos (ver §3) |
 | AC-4 | §7 confianza ≥ 1 fila por BR del §2 | 🟡 parcial | la mayoría de los §7 existen pero varios están incompletos (ver §3) |
 | AC-5 | Cero BR con `Verified-static` permanente | 🟡 parcial | varios BR `Intended` o `Verified-static` con `FALTA → crear mediante access-vba-tdd` (ver §3) |
@@ -119,6 +119,9 @@ Aceptación de la épica: 8 criterios (AC-1 a AC-8) en `proposal.md` §3. Cierre
 | (Fase 0 — cierre parcial) | | | | |
 | `d8b8bee` | docs(openspec): bootstrap feature-tdd-coverage epic | 0 | AC-1..AC-8 (estructura) | proposal + apply-progress; entrada de épica en REGRESSION-ANCHOR queda en working tree por .gitignore |
 | `a5af092` | docs(capabilities): add master capabilities index | 0 | AC-1 (completo) | 14 capabilities, 19 lagunas, 2 divergencias |
+| `400acde` | docs(inventory): add feature matrix | 0 | AC-2 (completo) | 92 features, 7 capabilities propuestas, 9 anomalías |
+| (Fase 1 — cierre) | | | | |
+| `pendiente` | (ningún otro commit de Fase 1; la matriz cubre el inventario base. Las capabilities faltantes y la asimetría Proyecto/Auditoría alimentan Fase 2 como planes de PR) | 1 | — | see §4 y §5 of `docs/inventory/feature-matrix.md` |
 | (Fase 2 — uno por capability) | | | | |
 | `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 | access-vba-tdd |
 | `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 | access-vba-tdd |
