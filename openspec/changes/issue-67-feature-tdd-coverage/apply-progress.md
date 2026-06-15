@@ -133,9 +133,13 @@ Estado de las 3 anomalías investigadas en `docs/inventory/anomalies-investigati
 | (Fase 1 — cierre) | | | | |
 | `pendiente` | (ningún otro commit de Fase 1; la matriz cubre el inventario base. Las capabilities faltantes y la asimetría Proyecto/Auditoría alimentan Fase 2 como planes de PR) | 1 | — | see §4 y §5 of `docs/inventory/feature-matrix.md` |
 | (Fase 2 — uno por capability) | | | | |
-| `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 | access-vba-tdd |
-| `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 | access-vba-tdd |
-| `pendiente` | test(vba): BR-UPN-1..6 — manifest permisos/roles/navegación | 2 | AC-5, AC-7 | access-vba-tdd |
+| `c36d2f0` | test(vba): Test_CAT_MaestrosCatalogos (piloto CAP-CAT) | 2 | AC-5, AC-7 (CAP-CAT) | `src/modules/Test_CAT_MaestrosCatalogos.bas` con 2 tests (Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic + Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic). Cubre BR-CAT-5/6. Pendiente de compile VBE + Dysflow test_vba por el usuario; el body del commit documenta el workflow. |
+| `pendiente` | test(vba): BR-CE-5/6 — flujo completo de resultados de eficacia | 2 | AC-5, AC-7 (CAP-CE) | access-vba-tdd |
+| `pendiente` | test(vba): BR-IND-8 — buckets del cuadro de mando aprobados | 2 | AC-5, AC-7 (CAP-IND) | access-vba-tdd |
+| `pendiente` | test(vba): CAP-NCA-AF (0% cobertura, 5 features) | 2 | AC-5, AC-7 (CAP-NCA-AF) | access-vba-tdd |
+| `pendiente` | test(vba): CAP-EXP (0% cobertura, 5 features) | 2 | AC-5, AC-7 (CAP-EXP) | access-vba-tdd |
+| `pendiente` | test(vba): CAP-UPN (0% cobertura, 6 features) | 2 | AC-5, AC-7 (CAP-UPN) | access-vba-tdd |
+| `pendiente` | test(vba): CAP-COM (0% cobertura, 8 features — depende de COM/Word/Outlook) | 2 | AC-5, AC-7 (CAP-COM) | access-vba-tdd; posiblemente requiera mockear COM o testear solo `Correo.Registrar` (DAO) |
 | (más conforme avance Fase 1) | | | | |
 | (Fase 3) | | | | |
 | `pendiente` | docs(capabilities): index.md maestro | 3 | AC-1 | navegación |
