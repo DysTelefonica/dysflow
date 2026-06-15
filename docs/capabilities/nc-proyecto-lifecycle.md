@@ -106,14 +106,53 @@
 | Comportamiento de reabrir/eliminar poco claro | Falta contrato/prueba de negocio | Crear pruebas tras confirmar la regla | BR-NCP-LC-7..8 |
 
 ## §6 Notas de migración web
-- Mantener explícitos los estados de ciclo de vida en lugar de estado implícito de formulario.
-- Preservar el momento de validación FE solo en cierre y la distinción cargado-vacío/fallo-de-caché.
-- Mover la lógica DAO/formulario a límites de servicio/consulta; los formularios quedan como cableado fino.
-- Añadir escenarios UAT de negocio para crear, editar, buscar, ver, cerrar, reabrir, eliminar y rehabilitar antes del corte web.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- El listado/búsqueda usa comportamiento respaldado por helper, no lógica DAO directa en formulario (BR-NCP-LC-1): la web debe seguir resolviendo el listado mediante la capa de aplicación (`NCProyectoGestionListadoHelper` equivalente), no mediante SQL ad-hoc desde la UI.
+- Una caché vacía o desactivada cae a la fuente legacy; la semántica cargado-vacía no muestra blancos falsos (BR-NCP-LC-2): la web debe distinguir "caché vacía" de "caché no disponible" y caer al fallback con logs, replicando `Test_FormHelper_Listing_EmptyCacheFallback_Atomic` y `Test_FormHelper_Listing_DisabledCacheFallback_Atomic`.
+- Las rutas de listado por caché y legacy preservan la paridad de filtros (BR-NCP-LC-3): la web debe aplicar el mismo conjunto de filtros en ambas rutas, sin divergencia. `Test_FormHelper_Listing_CacheFilters_Atomic` ya documenta los filtros (`Codigo`, `Juridica`, columna pipe de Google).
+- Las operaciones helper de gestión/refresco de caché de proyecto son ejecutables por costuras acotadas (BR-NCP-LC-3b): la web debe permitir invocar `CacheOff`, `RebuildForce`, `RefreshCache`, `ProyectoGestionForm`, `RenameHandler` desde el servicio, no solo desde la UI.
+- `Alta` y `Edicion` no requieren `FechaPrevistaControlEficacia` (BR-NCP-LC-4): la web debe permitir crear/editar NC sin fecha prevista FE; el campo puede ser nulo o vacío y el guardado no debe bloquearse.
+- El cierre exige `FechaPrevistaControlEficacia` cuando es obligatoria y preserva la invariancia de `EficaciaOK` (BR-NCP-LC-5): el endpoint de cierre de la web debe rechazar la operación cuando el control es requerido y la fecha es vacía o futura más allá de la fecha de cierre.
+- Los indicadores de seguimiento reflejan el estado de tareas diferidas de proyecto (BR-NCP-LC-6): la web debe seguir garantizando que el helper de seguimiento de tareas devuelve el mismo estado que la app VBA actual.
+- Crear/editar/buscar/ver/cerrar/reabrir/eliminar/rehabilitar como escenarios de ciclo de vida de negocio (BR-NCP-LC-7): la web debe cubrir todos estos flujos con pruebas dedicadas, no inferirlos desde nombres de UI.
+- Los roles y permisos para cerrar/reabrir/eliminar/rehabilitar son explícitos (BR-NCP-LC-8): la API web debe aplicar la matriz de permisos y devolver `403` cuando corresponda.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormNCProyectoGestion` y `Form_FormNCProyectoSeguimiento` por endpoints REST con discriminador de dominio, no por formularios Access con lógica DAO directa.
+- Convertir `NCProyectoGestionListadoHelper` y `CacheNCProyecto` en una capa de aplicación con dos servicios diferenciados: `Listado` y `Cache`, no un módulo VBA con helper y caché entrelazados.
+- Reemplazar el patrón de carga diferida de indicadores (`OnTimer` + `m_CargaInicialIndicadoresPendiente = True` + `Me.TimerInterval = 100`) por un endpoint asíncrono o un skeleton explícito, no por un timer del cliente.
+- Mover la validación FE (gate de cierre) a un servicio de dominio invocado por el comando de cerrar, no como evento de formulario.
+- Sustituir el patrón "leer config desde `Variables Globales` cada vez" por una configuración inmutable por despliegue, leída al arranque.
+- Reemplazar `DoCmd.OpenForm "FormNCProyectoGestion"` con `OpenArgs` por un endpoint REST con `IDNCProyecto` en la URL.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar `OnTimer` con `TimerInterval = 100` como patrón de carga diferida: la web debe poder invocar el helper de forma síncrona o asíncrona real.
+- No duplicar la lógica de "esto es una NC de proyecto" en cada `.cls` de formulario: la web debe tener un único discriminador de dominio.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad: la web debe aplicar permisos en el servidor.
+- No migrar la separación física de formularios (general, gestión, seguimiento, AC, AR, documentos, control-eficacia) si la lógica de negocio es compartible: la web debe poder unificar bajo un mismo recurso con sub-estados.
+- No propagar el resultado de un hook de sincronización fallido como éxito: la web debe devolver error explícito.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Los estados canónicos de NC Proyecto son los mismos que en auditoría? (BR-NCP-LC-7) Confirmar lista y transiciones (crear → abrir → cerrar → reabrir → eliminar → rehabilitar).
+- ¿La rehabilitación de una NC de proyecto borrada es indefinida o tiene un plazo? (BR-NCP-LC-7)
+- ¿El cierre de una NC de proyecto exige todas las ACs cerradas o se permite cierre parcial? (BR-NCP-LC-5, adyacente a `control-eficacia-workflow` BR-CE-2)
+- ¿La diferencia entre `NC Proyecto` y `NC Auditoría` debe mantenerse en la web como dos entidades con servicios paralelos, o se unifican en una sola con `tipoDominio`? (BR-NCP-LC-7)
+- ¿La `borrado` de proyecto es soft delete (campo `Borrado`) o hard delete? (BR-NCP-LC-7) Hoy se prueba `Test_FormHelper_Open_EdicionMode_Borrado_Atomic`; la web debe replicar el comportamiento.
+- ¿El refactor de `Form_FormNCProyectoSeguimiento.cls` (Issue #38 + Issue #50) se mantiene como contrato de la web o se reescribe? Hoy la web debe consumir el helper `NCProyectoSeguimientoHelper.CargarIndicadoresSeguimientoProyecto` con la firma `p_DuracionSegundos`.
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-NCP-LC-1 — El listado/búsqueda debe usar comportamiento respaldado por helper, no lógica DAO directa en formulario. | Verified-runtime | `tests/tests.vba.form-helper.json` cubierto por slices: `FormHelper_Coverage` 1/1, `FormHelper_Listing` 4/4 y `FormHelper_Open` 4/4; total único 9/9 verde | 2026-06-15 |
+| BR-NCP-LC-2 — Una caché vacía o desactivada cae a la fuente legacy; la semántica de caché cargada-vacía no debe mostrar blancos falsos. | Verified-runtime | `Test_FormHelper_Listing_EmptyCacheFallback_Atomic` y `Test_FormHelper_Listing_DisabledCacheFallback_Atomic` verifican fallback con logs en fixtures sandbox | 2026-06-15 |
+| BR-NCP-LC-3 — Las rutas de listado por caché y legacy preservan la paridad de filtros. | Verified-runtime | `Test_FormHelper_Listing_CacheFilters_Atomic` verifica filtros por `Codigo`, `Juridica`, columna pipe de Google y sin filtro | 2026-06-15 |
+| BR-NCP-LC-3b — Las operaciones helper de gestión/refresco de caché de proyecto deben poder ejecutarse por costuras acotadas sin depender de una ejecución amplia del runner. | Verified-runtime | `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros: `CacheOff` 1/1, `RebuildForce` 2/2, `RefreshCache` 2/2, `ProyectoGestionForm` 2/2, `RenameHandler` 1/1 | 2026-06-15 |
+| BR-NCP-LC-4 — `Alta` y `Edicion` no deben requerir `FechaPrevistaControlEficacia`. | Verified-static | `NCProyectoOperaciones` según docs de cumplimiento; FALTA → reejecutar pruebas issue-19 | 2026-06-15 |
+| BR-NCP-LC-5 — El cierre debe exigir `FechaPrevistaControlEficacia` cuando sea obligatorio y preservar la invariancia de `EficaciaOK`. | Verified-static | Documento de funcionalidad de cumplimiento; FALTA → reejecutar pruebas issue-19 | 2026-06-15 |
+| BR-NCP-LC-6 — Los indicadores de seguimiento reflejan el estado de tareas diferidas de proyecto donde las vistas de ciclo de vida usan datos de seguimiento. | Verified-runtime | `tests/tests.vba.seguimiento-tareas-helper.json`: procedimientos únicos 9/9 verdes; fallback/log 4/4, helper 4/4 y formulario 1/1 | 2026-06-15 |
+| BR-NCP-LC-7 — Crear/editar/buscar/ver/cerrar/reabrir/eliminar/rehabilitar debe estar cubierto como escenarios de ciclo de vida de negocio. | Intended | FALTA → crear mediante access-vba-tdd; probar costuras helper/servicio, no comportamiento directo de formulario | 2026-06-15 |
+| BR-NCP-LC-8 — Los roles y permisos para cerrar/reabrir/eliminar/rehabilitar deben ser explícitos. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar la regla | 2026-06-15 |
 | Existe comportamiento de listado/helper/caché para NC Proyecto. | Verified-runtime | `tests/tests.vba.form-helper.json` 9/9 por slices: schema, fallback, filtros y apertura `Alta`/`Edicion` | 2026-06-15 |
 | La gestión/refresco de caché de proyecto está cubierta por costuras helper y formulario. | Verified-runtime | `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños: `CacheOff`, `RebuildForce`, `RefreshCache`, `ProyectoGestionForm`, `RenameHandler` | 2026-06-15 |
 | La fecha FE está prevista como validación solo de cierre, no de creación/edición. | Verified-static | Documento de funcionalidad de cumplimiento; sin reejecución en esta tarea | 2026-06-15 |

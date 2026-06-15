@@ -89,14 +89,44 @@
 | Se pierde historial de notas/replanificación | Retención/enlace sin probar | Confirmar esquema/reglas + pruebas | BR-NCA-AF-4 |
 
 ## §6 Notas de migración web
-- Modelar AC, AR, tareas, notas y replanificaciones de auditoría como recursos explícitos bajo NC de auditoría.
-- Mantener separadas las APIs de acciones de auditoría y proyecto aunque los patrones de implementación se compartan.
-- Preservar filtros de dominio en indicadores e informes.
-- No reutilizar componentes de acciones de Proyecto hasta que existan escenarios UAT específicos de auditoría.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- Las acciones/seguimiento de auditoría permanecen en su dominio: nunca enrutan por estado de acciones de Proyecto (BR-NCA-AF-1). La web debe mantener separados los endpoints y rutas de NC-Auditoria-AC/AR/tarea y NC-Proyecto-AC/AR/tarea, con guardas explícitas de `tipoDominio`.
+- La selección de informe/listado de auditoría sigue resolviendo por helpers de auditoría y NC de auditoría seleccionada (BR-NCA-AF-2): el endpoint de generación de informe de auditoría debe seguir exigiendo un `IDNoConformidad` válido (de la NC de auditoría) y `EnsureNCAuditoriaGestionSelected` debe sobrevivir a la migración como guard de la capa de aplicación, no como evento de formulario.
+- Las filas de indicadores compartidos pueden incluir auditoría, pero las lecturas filtran por dominio/responsable (BR-NCA-AF-3): el filtrado per-domain y per-responsable del cuadro de mando debe seguir aplicando, sin permitir fugas.
+- Las reglas de crear, vencimientos, finalización, cancelación, replanificación, notas y asignación de propietario de acciones de auditoría (BR-NCA-AF-4): la web debe seguir exigiendo los mismos campos obligatorios y las mismas transiciones de estado que la app VBA.
+- Los formularios de seguimiento de auditoría como cableado UI fino sobre costuras helper/servicio (BR-NCA-AF-5): la web debe poder llamar a los mismos servicios de mutación que la UI, sin lógica embebida en componentes de UI.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormNCAuditoriaSeguimiento`, `Form_FormNCAuditoriaSeguimientoNC`, `Form_FormNCAuditoriaSeguimientoTareas`, `Form_FormNCAuditoriaAcciones`, `Form_FormNCAuditoriaAC`, `Form_FormNCAuditoriaAR`, `Form_FormNCAuditoriaReplanificaciones`, `Form_FormNCAuditoriaNota` por endpoints REST diferenciados: `GET/POST/PUT` por recurso (`ac`, `ar`, `tarea`, `replanificacion`, `nota`).
+- Convertir `NCAuditoriaSeguimientoHelper`, `ACAuditoriaOperaciones`, `ARAuditoriaOperaciones`, `ReplanificacionesAuditoriaOperaciones` en servicios backend con una firma por comando (`Crear`, `Finalizar`, `Cancelar`, `Reasignar`, `Replanificar`, `Anotar`).
+- Reemplazar el patrón de `LogNCAuditoria` por un appender de logs estructurados a un bus de eventos, no por una tabla de Access consultable.
+- Mover la regla "el seguimiento de auditoría muestra solo auditoría" a un middleware de autorización que valide `tipoDominio=Auditoria` en cada request, no como check en el `.cls` del formulario.
+- Sustituir el `OnTimer` con `m_CargaInicialIndicadoresPendiente` por un endpoint asíncrono o un skeleton explícito, no por un timer del cliente.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar `Me.OpenArgs` ni `DoCmd.OpenForm` como contrato de selección de NC de auditoría: la API REST debe recibir `IDNoConformidad` (de la NC de auditoría) en la URL.
+- No duplicar la lógica de "esto es seguimiento de auditoría" en cada `.cls` de formulario: la web debe tener un único discriminador de dominio y un único guard.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad real: la web debe aplicar permisos en el servidor.
+- No migrar la combinación de `Form_FormNCAuditoriaAcciones` + `Form_FormNCAuditoriaAC` + `Form_FormNCAuditoriaAR` como tres UI distintas en la web si la lógica de negocio es la misma: la web puede tener un único recurso `accion` con subtipo.
+- No usar el helper `NCAuditoriaSeguimientoHelper` desde la capa de UI en la web: el helper debe ser consumido solo desde la capa de servicio, no por componentes.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Los estados canónicos de una AC/AR/tarea de auditoría son los mismos que en proyecto o son específicos de auditoría? (BR-NCA-AF-4) Confirmar lista y transiciones.
+- ¿La replanificación de una acción de auditoría tiene límite de veces o es indefinida? (BR-NCA-AF-4)
+- ¿Las notas de auditoría se pueden editar tras crear o son inmutables? (BR-NCA-AF-4) Confirmar política de retención.
+- ¿La cancelación de una acción de auditoría requiere motivo obligatorio? ¿Y la reasignación de propietario?
+- ¿La herencia de AC/AR desde proyecto a auditoría se permite o son siempre dominios disjuntos? Hoy se asume disjuntos, pero conviene confirmarlo.
+- ¿La fusión de UI `Acciones` + `AC` + `AR` en un único recurso es aceptable para el equipo de auditoría o se mantiene la separación por consistencia con proyecto?
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-NCA-AF-1 — Las acciones/seguimiento de auditoría siguen siendo específicas de dominio y nunca enrutan por estado de acciones de Proyecto. | Verified-runtime | `Issue38_SeguimientoAuditoria` 1/1, `Issue38_ResetearColTareas` 1/1 y slices de Issue #18 con Auditoria AC->NC / Auditoria AR hook; FALTA → crear mediante access-vba-tdd para el ciclo completo de acciones | 2026-06-15 |
+| BR-NCA-AF-2 — La selección de informe/listado de auditoría usa helpers de auditoría y NC de auditoría seleccionadas. | Verified-runtime | `ComandoInforme_Click` usa `EnsureNCAuditoriaGestionSelected`; `tests/tests.vba.audit-gestion-helper.json` pasó 11/11 tras el arreglo | 2026-06-15 |
+| BR-NCA-AF-3 — Los indicadores compartidos pueden incluir filas de Auditoría, pero las lecturas runtime filtran por dominio/responsable. | Verified-runtime | `CacheIndicadoresAuditoriaMaterializado` 3/3; `CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio` pasó dentro de slice 3/3; no afirmar suite completa `tests/tests.vba.indicadores-caracterizacion.json` verde | 2026-06-15 |
+| BR-NCA-AF-4 — Las reglas de creación, vencimientos, finalización, cancelación, replanificación, notas y asignación de propietario de acciones de auditoría son explícitas. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar esquema/reglas | 2026-06-15 |
+| BR-NCA-AF-5 — El comportamiento de formularios de seguimiento de auditoría permanece como cableado UI fino sobre costuras helper/servicio. | Intended | FALTA → crear mediante access-vba-tdd contra costuras helper/servicio, no comportamiento directo de formulario | 2026-06-15 |
 | Existen formularios/clases de acciones/seguimiento de auditoría. | Verified-static | Inventario de fuente de documentos existentes | 2026-06-15 |
 | La seguridad de selección de informe/listado de auditoría tiene evidencia runtime. | Verified-runtime | `tests/tests.vba.audit-gestion-helper.json` 11/11; `ComandoInforme_Click` usa `EnsureNCAuditoriaGestionSelected` | 2026-06-15 |
 | Existen slices de seguimiento/indicadores del lado Auditoría. | Verified-runtime | `Issue38_SeguimientoAuditoria` 1/1, `Issue38_ResetearColTareas` 1/1, `Issue18_ResolverNCDesde` 3/3 con Auditoria AC->NC, `Issue18_ARWriteHook` con hook Auditoria AR, `CacheIndicadoresAuditoriaMaterializado` 3/3 | 2026-06-15 |

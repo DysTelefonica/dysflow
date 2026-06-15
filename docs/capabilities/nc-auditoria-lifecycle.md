@@ -96,14 +96,48 @@
 | Regresión de acción de ciclo de vida de auditoría | Falta contrato E2E de ciclo de vida | Crear pruebas de ciclo de vida | BR-NCA-LC-6..7 |
 
 ## §6 Notas de migración web
-- Mantener `NC Auditoría` como dominio separado de `NC Proyecto`, aunque compartan infraestructura.
-- Modelar la caché de listado de auditoría como modelo de lectura backend con reconstrucción/invalidación y transacciones explícitas.
-- Preservar la lógica de selección de informes específica de auditoría y parámetros explícitos de ruta/petición.
-- Definir estados/permisos del ciclo de vida antes del corte web.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- La caché de listado de auditoría refleja los datos actuales de auditoría del backend (BR-NCA-LC-1): la web debe seguir resolviendo el listado de auditoría desde un modelo de lectura backend, no desde un estado de cliente. `tests.vba.audit-gestion-helper.json` 11/11 ya documenta el comportamiento.
+- La reconstrucción de caché de auditoría es atómica (BR-NCA-LC-2): si el sistema hace `Reconstruir` y falla a mitad, no debe quedar un dataset parcial. La web debe replicar el patrón transaccional de borrado-y-regeneración o un job con compensación.
+- La invalidación de caché fuerza recarga completa en el siguiente acceso al listado de auditoría (BR-NCA-LC-3): la web debe seguir invalidando explícitamente y reconstruyendo, sin caches intermedias obsoletas.
+- La generación de informes de auditoría usa resolver/constructor de auditoría, no la ruta de proyecto (BR-NCA-LC-4): el endpoint de generación de informe de la web debe seguir exigiendo un `IDNoConformidad` (de la NC de auditoría) y resolver por el constructor de auditoría; nunca `constructor.getNCProyecto`.
+- Los dominios auditoría y proyecto permanecen separados en caché, informes e indicadores (BR-NCA-LC-5): la web debe mantener la separación per-domain en la respuesta, no devolver una unión cruzada.
+- Las reglas de crear/editar/cerrar/reabrir/eliminar/rehabilitar de auditoría son explícitas (BR-NCA-LC-6): la web debe exigir los mismos campos obligatorios y las mismas transiciones que la app VBA actual.
+- El ciclo de vida en formularios como cableado UI fino sobre costuras helper/servicio (BR-NCA-LC-7): la web debe poder llamar a los mismos servicios que la UI, sin lógica embebida en componentes de UI.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormNCAuditoriaGestion`, `Form_FormNCAuditoria`, `Form_FormNCAuditoriaGeneral`, `Form_FormNCAuditoriaSeguimiento`, `Form_FormNCAuditoriaAcciones`, `Form_FormNCAuditoriaAC`, `Form_FormNCAuditoriaAR`, `Form_FormNCAuditoriaDocumentos`, `Form_FormNCAuditoriaControlEficacia` por endpoints REST con discriminador de dominio.
+- Convertir `NCAuditoriaGestionListadoHelper` y `NCAuditoriaListadoCache` en una capa de aplicación con dos servicios diferenciados: `Listado` y `Cache`, no un módulo VBA con helper y caché entrelazados.
+- Reemplazar `NCAuditoriaOperaciones`, `ACAuditoriaOperaciones`, `ARAuditoriaOperaciones` por servicios REST con una firma por comando (`Crear`, `Editar`, `Cerrar`, `Reabrir`, `Eliminar`, `Rehabilitar`).
+- Mover la generación de informe de Word desde `Informe.cls::GenerarWordNoConformidades(p_EsDeProyecto:=No)` a un servicio server-side con `p_EsDeProyecto:=No` como parámetro explícito y guard de tipo de NC.
+- Sustituir el patrón `EnsureNCAuditoriaGestionSelected` (que hoy es un helper VBA) por una validación en la capa de aplicación que rechace la generación si la NC no es de auditoría, retornando `400` o `409`.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar `DoCmd.OpenForm` con `OpenArgs` para abrir una NC de auditoría: la API REST debe recibir `IDNoConformidad` (de la NC de auditoría) en la URL.
+- No duplicar la lógica de "esto es una NC de auditoría" en cada `.cls` de formulario: la web debe tener un único discriminador de dominio.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad: la web debe aplicar permisos en el servidor.
+- No migrar la separación física de formularios (general, gestión, seguimiento, acciones, AC, AR, documentos, control-eficacia) si la lógica de negocio es compartible: la web debe poder unificar bajo un mismo recurso con sub-estados.
+- No reintroducir un módulo `InformeNCAuditorias.cls` paralelo: la ruta canónica sigue siendo `Informe.GenerarWordNoConformidades(p_EsDeProyecto:=No)`.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Cuáles son los estados canónicos de NC Auditoría? (BR-NCA-LC-6) Confirmar lista y transiciones (crear → abrir → cerrar → reabrir → eliminar → rehabilitar).
+- ¿La rehabilitación de una NC de auditoría borrada es indefinida o tiene un plazo? (BR-NCA-LC-6)
+- ¿El cierre de una NC de auditoría exige todas las ACs cerradas o se permite cierre parcial? (BR-NCA-LC-6, adyacente a `control-eficacia-workflow` BR-CE-2)
+- ¿La diferencia entre `NC Auditoría` y `NC Proyecto` debe mantenerse en la web como dos entidades con servicios paralelos, o se unifican en una sola con `tipoDominio`? (BR-NCA-LC-5)
+- ¿Las reglas de `Reabrir` y `Eliminar` son reversibles en auditoría? Si se reabre, ¿se restaura el histórico de indicadores o se parte de cero?
+- ¿La selección de informe de auditoría debe pasar obligatoriamente por `EnsureNCAuditoriaGestionSelected` o se admite una llamada directa con `IDNoConformidad` (de la NC de auditoría)?
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-NCA-LC-1 — La caché de listado de auditoría refleja los datos actuales de auditoría del backend. | Verified-runtime | `tests/tests.vba.audit-gestion-helper.json` pasó 11/11 tras el arreglo de selección de informe de auditoría | 2026-06-15 |
+| BR-NCA-LC-2 — La reconstrucción de caché de auditoría es atómica. | Verified-runtime | `tests/tests.vba.audit-gestion-helper.json` pasó 11/11; `CacheIndicadoresAuditoriaMaterializado` pasó 3/3 en evidencia de indicadores adyacente | 2026-06-15 |
+| BR-NCA-LC-3 — La invalidación de caché fuerza recarga completa en el siguiente acceso al listado de auditoría. | Verified-runtime | `tests/tests.vba.audit-gestion-helper.json` pasó 11/11 | 2026-06-15 |
+| BR-NCA-LC-4 — La generación de informes de auditoría usa resolver/constructor de auditoría, no la ruta de proyecto. | Verified-runtime | Fallo controlado de `Test_AuditGestionForm_ReportConstructorPath_Characterization` y manifest posterior 11/11; `ComandoInforme_Click` usa `EnsureNCAuditoriaGestionSelected` | 2026-06-15 |
+| BR-NCA-LC-5 — Los dominios auditoría y proyecto permanecen separados en caché, informes e indicadores. | Verified-runtime | `Issue18_ResolverNCDesde` 3/3 incluye Auditoria AC->NC; `Issue18_ARWriteHook` incluye hook Auditoria AR; `CacheIndicadoresAuditoriaMaterializado_SincronizarDesdeNegocio` pasó dentro de slice 3/3; no afirmar suite completa `tests/tests.vba.indicadores-caracterizacion.json` verde | 2026-06-15 |
+| BR-NCA-LC-6 — Las reglas completas de crear/editar/cerrar/reabrir/eliminar/rehabilitar auditoría son explícitas y están probadas. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar regla | 2026-06-15 |
+| BR-NCA-LC-7 — El comportamiento de ciclo de vida en formularios es cableado UI fino sobre costuras helper/servicio. | Intended | FALTA → crear mediante access-vba-tdd contra costuras helper/servicio, no lógica directa de formulario | 2026-06-15 |
 | Existe y está documentado el comportamiento helper de lista/caché de auditoría. | Verified-runtime | `tests/tests.vba.audit-gestion-helper.json` 11/11 | 2026-06-15 |
 | El informe de auditoría debe usar la ruta de constructor de auditoría. | Verified-runtime | `Test_AuditGestionForm_ReportConstructorPath_Characterization` falló con detalle controlado antes del arreglo y quedó cubierto por el manifest 11/11 después; `ComandoInforme_Click` usa `EnsureNCAuditoriaGestionSelected` | 2026-06-15 |
 | La paridad fuente↔binario del formulario de gestión de auditoría quedó comprobada tras el arreglo. | Verified-runtime | Usuario compiló manualmente; `dysflow_verify_binary` correcto para `Form_FormNCAuditoriaGestion.cls` y `.form.txt` | 2026-06-15 |

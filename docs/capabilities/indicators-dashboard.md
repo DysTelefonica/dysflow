@@ -141,14 +141,51 @@
 | Se discute el significado de buckets | Falta definición de producto | Confirmar definiciones UAT | BR-IND-8 |
 
 ## §6 Notas de migración web
-- Implementar indicadores como APIs de modelo de lectura materializado propiedad del backend para recuentos/detalle.
-- Mantener la separación de dominio y el filtrado por responsable como filtros de autorización/datos.
-- Preservar el refresco incremental por NC afectada y los fallos de sincronización visibles.
-- La reconstrucción completa es ruta de operador/reparación con logs de auditoría, no ruta normal de escritura.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- La caché de indicadores como estado materializado en backend, no estado de sesión frontend (BR-IND-1): la web debe seguir resolviendo recuentos y detalle desde un modelo de lectura backend, no recalcularlos en cada request del navegador.
+- La inclusión de filas de detalle en la caché, no solo recuentos agregados (BR-IND-2): las pruebas `Issue18_CargarDetalle` y `Issue18_DetalleCompleto` así lo documentan; la API REST debe seguir devolviendo las filas de detalle requeridas por el cuadro de mando, con el mismo esquema.
+- El filtrado runtime por usuario conectado/responsable y dominio (BR-IND-3): cada endpoint del cuadro de mando debe aplicar el filtro de responsable del usuario actual, sin permitir que un usuario vea filas de otro responsable o de otro dominio. La regla de per-domain-counts para esquivar el quirk DAO/Jet con `IN (1, 2)` debe replicarse en el backend SQL.
+- La separación de filas de Proyecto y Auditoría en cada lectura (BR-IND-4): la web debe seguir separando dominios en la respuesta, no devolver una unión cruzada. La query global debe sumar recuentos per-domain, como ya se documenta para `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic`.
+- El refresco incremental por NC afectada tras mutaciones de NC/AC/AR/tarea (BR-IND-5): un cambio en `NC 992099` solo debe refrescar el alcance de esa NC, no disparar una reconstrucción completa.
+- La resolución de padres AC→NC y AR/tarea→AC→NC (BR-IND-6): cualquier hook de escritura debe resolver la NC padre antes de sincronizar, replicando `Issue18_ResolverNCDesde`.
+- La propagación explícita del fallo de sincronización post-escritura (BR-IND-7): un fallo de `InvalidarCache` debe propagar `pError` y no afirmar que la caché está actualizada. La web debe hacer lo propio: devolver `5xx` o un payload con `sincronizado=false`.
+- La pertenencia al cuadro de mando como un recurso de lectura, no como UI: la web debe poder consumir los mismos buckets/detalle desde un panel web, una API externa o un job, sin pasar por la UI.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `ModuloCacheIndicadoresIssue18` y `ModuloCacheIndicadores` por un servicio backend de modelo de lectura con su propio SLA de frescura, no por código VBA in-process.
+- Convertir `IndicadorRepositorio` y `IndicadorServicio` en dos servicios REST diferenciados (lectura vs. sincronización), con autenticación y autorización declarativas.
+- Mover la lógica de `Issue18_NCWriteHook`, `Issue18_ACWriteHook` y `Issue18_ARWriteHook` a eventos del backend (cola/worker) que se disparen tras las mutaciones de dominio, no a un hook de formulario.
+- Reemplazar `Test_IndicadoresCaracterizacion` y `Test_IndicadoresTelemetry` por suites automatizadas de la API REST del cuadro de mando, con tiempos de respuesta esperados documentados.
+- Mover el contrato de buckets del cuadro de mando (umbrales, nombres, reglas de visibilidad) a un archivo de configuración versionado y revisable por producto, en lugar de estar embebido en el código.
+- Sustituir el patrón de `Form_FormIndicadores` por una SPA con componentes finos que consuman la API REST, no un formulario Access con estado mutable.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar la carga de indicadores en `Form_Load` con `TimerInterval = 100` y `m_CargaInicialIndicadoresPendiente` como patrón de la web: la API REST debe poder invocarse de forma síncrona o asíncrona real (cola/worker), no con un timer del cliente.
+- No migrar la query global `IN (1, 2)` con `COUNT(*)` sin predicados: la web debe usar SQL parametrizado con `GROUP BY` per-domain, no reproducir el quirk de DAO/Jet.
+- No usar la reconstrucción completa como ruta normal de escritura: en la web, una "reconstrucción completa" es un job explícito de operación con auditoría, no un side effect de `Save`.
+- No acoplar la lectura de la caché de indicadores al evento de un formulario concreto: la lectura debe ser un servicio reutilizable por cualquier consumidor.
+- No propagar el resultado de un hook de sincronización fallido como éxito: la web debe devolver error explícito y, si el cliente lo ignora, no debe reescribir el estado de la caché.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Los nombres de buckets, umbrales y reglas de visibilidad del cuadro de mando (BR-IND-8) están aprobados? Confirmar lista canónica y SLA de actualización por bucket.
+- ¿La resolución AC→NC y AR/tarea→AC→NC (BR-IND-6) puede tener AC o AR sin NC padre en algún caso especial? Hoy la regla es "toda AC/AR pertenece a una NC"; ¿se mantiene?
+- ¿El fallo de sincronización post-escritura (BR-IND-7) debe notificar al usuario o basta con log? Hoy se propaga `pError`; ¿la web debe mostrar un toast o devolver `5xx`?
+- ¿La deuda de rendimiento de los hooks (~120s) se aborda antes de la migración o se acepta como coste? Confirmar presupuesto de tiempo.
+- ¿El manifest completo `tests/tests.vba.indicadores-caracterizacion.json` debe dejarse como timeout histórico o se reescribe en formato no-aggregate para la web? Hoy timeoutea como conjunto; la web debe poder ejecutarse de forma atómica.
+- ¿El cuadro de mando debe exponer un endpoint "what-if" para simulaciones o solo los recuentos reales? Confirmar alcance.
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-IND-1 — La caché de indicadores es estado materializado compartido en backend, no estado de sesión frontend. | Verified-runtime | `Issue18_BackendCacheSchema` 2/2, `CacheIndicadoresMaterializado` 8/8, `CacheIndicadoresAuditoriaMaterializado` 3/3 tras retry | 2026-06-15 |
+| BR-IND-2 — La caché incluye filas de detalle necesarias por el cuadro de mando, no solo recuentos agregados. | Verified-runtime | `Issue18_CargarDetalle` 2/2 (~122s en un test), `Issue18_DetalleCompleto` 1/1 | 2026-06-15 |
+| BR-IND-3 — Las lecturas runtime filtran por usuario conectado/responsable. | Verified-runtime (resuelto 2026-06-15) | `Issue18_CargarBucket` 2/2 (~120s en un test); `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic` 1/1 tras arreglar la query global del propio test para sumar recuentos por dominio | 2026-06-15 |
+| BR-IND-4 — Las filas de Proyecto y Auditoría permanecen separadas por dominio. | Verified-runtime (resuelto 2026-06-15) | `CacheIndicadoresAuditoriaMaterializado` 3/3, `Issue18_CargarDetalle` 2/2; `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic` 1/1 tras el mismo arreglo de query per-domain; el test afirma 5 filas globales sumando Proyecto (1) + Auditoría (2) y mantiene `QA_User` 3 + `Otro_User` 2 | 2026-06-15 |
+| BR-IND-5 — Los cambios correctos de NC/AC/AR/tarea sincronizan solo el alcance de la NC afectada. | Verified-runtime | `Issue18_SincronizarNC` 3/3, `Issue18_NCWriteHook` 1/1 (~120s), `Issue18_ACWriteHook` 1/1 (~114s), `Issue18_ARWriteHook` 4/4 con dos hooks ~117–123s | 2026-06-15 |
+| BR-IND-6 — Los cambios de AC resuelven AC→NC; los de AR/tarea resuelven AR/tarea→AC→NC. | Verified-runtime | `Issue18_ResolverNCDesde` 3/3, `Issue18_ACWriteHook` 1/1, `Issue18_ARWriteHook` 4/4 | 2026-06-15 |
+| BR-IND-7 — La sincronización post-escritura fallida es visible e impide afirmaciones falsas de caché actual. | Verified-runtime focused | `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` PASS el 2026-06-15 (`4788` ms, `issue18_nc_write_hook_failed_sync_ok`): `NC 992099` inexistente, `InvalidarCache` devuelve `False` y propaga `pError` explícito | 2026-06-15 |
+| BR-IND-8 — Los nombres, umbrales y salidas de gestión de buckets del cuadro de mando están aprobados por producto. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar escenario UAT | 2026-06-15 |
 | La caché materializada de indicadores tiene evidencia runtime reciente por slices. | Verified-runtime | `indicator-fast-counts` 5/5, `cache-materialized` 13/13, filtros Issue #18 descritos en §5 | 2026-06-15 |
 | El manifest completo de caracterización de indicadores no puede tratarse como verde completo. | Pending | `tests/tests.vba.indicadores-caracterizacion.json` tiene 55 procedimientos y timeoutea como conjunto; usar slices | 2026-06-15 |
 | La reconstrucción completa idempotente y la propagación de fallo post-escritura tienen evidencia focused PASS. | Verified-runtime focused | `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` 1/1 (`4862` ms, `issue18_rebuild_idempotent_ok`) y `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` 1/1 (`4788` ms, `issue18_nc_write_hook_failed_sync_ok`) | 2026-06-15 |

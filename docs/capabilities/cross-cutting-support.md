@@ -98,14 +98,47 @@
 | Falta notificación requerida | Costura de correo indefinida/regresada | Confirmar regla + crear prueba de costura | BR-XCUT-7 |
 
 ## §6 Notas de migración web
-- Tratar el soporte compartido como servicios de plataforma: caché/modelos de lectura, repositorios, permisos, diagnósticos, correo, logging, configuración.
-- Preservar semántica cargado-vacío, filtros de dominio, sincronización de alcance afectado y APIs explícitas de reconstrucción/invalidación.
-- Añadir observabilidad: antigüedad de caché, estado de reconstrucción, fallos de sincronización, destino backend, decisiones de permisos, estado de correo/informe.
-- No migrar globals/TempVars/lógica de soporte acoplada a formularios tal cual; exponer límites de servicio explícitos.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- La semántica cargado-vacío de las cachés de proyecto, auditoría e indicadores como resultado válido, no como fallo (BR-XCUT-1, BR-XCUT-2): la web debe distinguir "caché cargada con cero filas" de "caché no disponible", igual que `cache-e2e` y los diagnósticos de cache-trust ya lo prueban.
+- La atomicidad de la reconstrucción de la caché de auditoría (BR-XCUT-3): si el sistema hace `Reconstruir` y falla a mitad, no debe quedar un dataset parcial: la web debe replicar el patrón transaccional de borrado-y-regeneración o un job con compensación.
+- El filtrado de la caché compartida de indicadores por usuario/responsable y dominio (BR-XCUT-4): el backend de la web debe seguir aplicando filtros de autorización/dominio en cada lectura, no permitir que un usuario vea filas de otro responsable o de otro dominio.
+- La regla de routing de backend expuesta al diagnóstico (BR-XCUT-5): si un test o UAT ejecuta contra el backend equivocado, el sistema debe detectarlo y reportarlo en vez de seguir adelante, igual que `AssertSafeBackendForCatalogBootstrap` ya hace para catálogos.
+- La matriz de permisos por acción sensible (cerrar/eliminar/rehabilitar/documento/acción/informe/configuración) como contrato único (BR-XCUT-6): la web debe tener una sola fuente de verdad que aplique esa matriz; no debe haber reglas duplicadas por formulario.
+- La obligatoriedad de notificar/loggear eventos sensibles (BR-XCUT-7): cualquier acción de cerrar/eliminar/rehabilitar debe dejar traza de quién, cuándo, desde qué IP, en qué estado quedó.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Tratar `CacheNCService`, `CacheNCCrud`, `CacheNCCacheRepositorio`, `CacheNCProyecto`, `ModuloCacheIndicadoresIssue18`, `ModuloCacheIndicadores` como una sola familia de servicios: API REST de modelos de lectura con versión, invalidación explícita y reintento, no como módulos VBA acoplados.
+- Reemplazar `NCAuditoriaListadoCache`, `NCAuditoriaGestionListadoHelper`, `NCProyectoGestionListadoHelper` por una capa de aplicación con la misma responsabilidad (lista/caché) pero expuesta como endpoints y con reintento en vez de formularios.
+- Convertir `IndicadorRepositorio` y `IndicadorServicio` en servicios de lectura materializada (modelos de lectura backend) con su propio SLA de frescura y observabilidad, en lugar de llamadas in-process desde VBA.
+- Sustituir `LogNCProyecto` / `LogNCAuditoria` (escritura de logs) por un appender de logs estructurados (JSON) a un bus de eventos, no por una tabla de Access.
+- Mover `JSONHelper` / `JsonConverter` al backend de la web (no debe quedar código de serialización dentro de la UI ni de los servicios de lectura).
+- Convertir `Usuario` y `UsuarioAplicacionPermisos` en un servicio de autorización con guardas declarativas, no como flags booleanos consultados en cada formulario.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No migrar globals (`m_ObjEntorno`, `m_ObjUsuarioConectado`) ni TempVars como estado compartido entre request en la web: el estado de runtime vive en el request scope del framework, no en variables globales.
+- No acoplar lógica de soporte a eventos de formulario (`Form_Load`, `Form_Open`): la inicialización de caché, de permisos y de diagnóstico debe ocurrir en el arranque del servicio o del request, no en eventos UI.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad real: la web debe aplicar permisos en el servidor y devolver `403` cuando corresponda, no ocultar UI como "control de acceso".
+- No replicar el patrón "leer config desde `Variables Globales` cada vez" en la web: la configuración se lee una vez al arranque del proceso y se cachea de forma inmutable.
+- No portar `TempVars` como mecanismo de comunicación entre formularios: la web usa rutas, query params y body de request, no variables globales.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿La matriz de permisos (BR-XCUT-6) es la misma para Proyecto y Auditoría o se diferencia? Confirmar si las acciones sensibles (cerrar/eliminar/rehabilitar) tienen la misma matriz en ambos dominios.
+- ¿Qué eventos generan notificación obligatoria (BR-XCUT-7)? ¿Basta con loggear o hay que enviar correo/Slack? Confirmar umbral y destinatarios.
+- ¿La antigüedad de caché tolerable tiene un SLA formal? Hoy la web no expone un SLA explícito; ¿debe ser configurable por tipo de dato?
+- ¿El `IndicadorServicio` debe seguir exponiendo las mismas filas de detalle que `Issue18_CargarDetalle` o se redefinen los campos de detalle? (BR-IND-2 adyacente)
+- ¿La `matriz de permisos` debe ser declarativa (roles → acciones) o seguir siendo checks booleanos (`EsTecnico`, `EsAdministrador`)? ¿Qué cobertura quiere el equipo de seguridad?
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-XCUT-1 — El soporte de caché/repositorio debe preservar el comportamiento de dominio y no cambiar el significado de negocio. | Verified-static | Documentos de funcionalidad existentes; FALTA → reejecutar antes de promover | 2026-06-15 |
+| BR-XCUT-2 — Los resultados de caché cargada-vacía son válidos y no fallos de caché. | Verified-static | `tests/tests.vba.cache-e2e.json` existente; FALTA → reejecutar | 2026-06-15 |
+| BR-XCUT-3 — La reconstrucción de caché de auditoría es atómica. | Verified-static | Manifest de auditoría existente; FALTA → reejecutar | 2026-06-15 |
+| BR-XCUT-4 — La caché compartida de indicadores filtra por usuario/responsable/dominio y expone fallos de sincronización. | Intended | FALTA → crear mediante access-vba-tdd; reejecutar/añadir pruebas de staging actual | 2026-06-15 |
+| BR-XCUT-5 — La configuración backend enruta lecturas/escrituras al entorno previsto; las pruebas no dependen de datos accidentales. | Intended | FALTA → crear mediante access-vba-tdd; definir/ejecutar diagnósticos de configuración backend | 2026-06-15 |
+| BR-XCUT-6 — La matriz de permisos para cerrar/eliminar/rehabilitar/documento/acción/informe/configuración es explícita. | Intended | FALTA → crear mediante `access-vba-tdd` tras confirmar matriz; cross-link `users-permissions-navigation` BR-UPN-7 y `master-data-catalogues` BR-CAT-6 | 2026-06-15 |
+| BR-XCUT-7 — El comportamiento de correo/logging requerido por negocio es explícito y comprobable. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar notificación/log; probar costuras | 2026-06-15 |
 | El soporte de caché/listado de proyecto tiene pruebas documentadas. | Verified-static | Documentos de funcionalidad existentes; sin reejecución | 2026-06-15 |
 | El soporte de caché de auditoría tiene pruebas documentadas. | Verified-static | Documento de funcionalidad de auditoría existente; sin reejecución | 2026-06-15 |
 | El soporte de indicadores está vigente en staging. | Intended | Solo evidencia histórica | 2026-06-15 |

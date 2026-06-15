@@ -103,14 +103,46 @@
 | Word/Excel incompleto | Plantilla/ruta/columnas sin contrato | Crear prueba de costura de salida | BR-COM-6..7 |
 
 ## §6 Notas de migración web
-- Modelar correo como cola/orden de envío con estado, no como efecto lateral invisible.
-- Sustituir Word Automation por generador server-side trazable o plantilla documental controlada.
-- Eliminar direcciones fijas en código; mover a configuración auditada.
-- Definir contratos de exportación con columnas, filtros y formato antes de migrar.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- La obligatoriedad de asunto, destinatario principal, copia y copia oculta antes de registrar un correo (BR-COM-1, BR-COM-2): la API de envío de la web debe rechazar la orden si falta cualquiera de esos campos, con el mismo orden de validación que `Form_FormCorreo.ComandoEnviarCorreo_Click` aplica hoy.
+- La generación del cuerpo del correo en HTML desde la NC activa con `p_ConAcciones:=EnumSino.Sí` (BR-COM-3): la plantilla de correo de la web debe seguir incluyendo el bloque de acciones cuando `ConAcciones` venga verdadero, conservando las dos firmas `HTMLNCProyecto` y `HTMLNCAuditoria`.
+- El modelo de **orden de envío** en `TbCorreosEnviados` (no envío SMTP directo) (BR-COM-4): el sistema de la web debe distinguir entre "orden registrada" y "envío efectivo", y nunca afirmar que un correo se envió solo porque se persistió.
+- La selección de plantilla Word por origen de la NC (Proyecto vs Auditoría) en `Informe.GenerarWordNoConformidades(p_EsDeProyecto:=)` y `PrepararPlantilla` (BR-COM-6): el generador documental de la web debe seguir exigiendo `p_EsDeProyecto` y rechazar la generación si no se resuelve, igual que el código VBA actual.
+- La separación de constructores para informes: `EnsureNCAuditoriaGestionSelected` + `constructor.getNCAuditoria` para auditoría, jamás `constructor.getNCProyecto` (BR-COM-8): la API REST de generación de informes debe mantener dos rutas explícitas con guard de tipo de NC.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormCorreo` y el botón `ComandoEnviarCorreo_Click` por una pantalla de redacción con vista previa del HTML generado y un endpoint `POST /correos/ordenes` que delegue en una capa de aplicación en lugar de un formulario Access.
+- Sustituir Word Automation local (`Informe.GenerarWordNoConformidades`) por un servicio server-side que use una plantilla controlada por configuración y devuelva una URL de descarga + entrada de auditoría inmutable, en lugar de un `.docx` generado en el cliente.
+- Reemplazar la BCC por defecto embebida en `Correo.Registrar` (BR-COM-5) por una política de destinatarios por configuración auditada, versionada y revisable por producto antes de promover release.
+- Convertir las exportaciones Excel de seguimiento en endpoints `GET /exportaciones/...` con un contrato explícito de columnas, filtros aplicados y formato, en lugar de eventos `ComandoExportarAExcel_Click` acoplados al formulario de seguimiento.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar la dirección fija de la copia oculta por defecto (BR-COM-5) como constante en código: moverla a configuración auditada o eliminarla si producto la considera obsoleta.
+- No migrar la generación de Word como dependencia del lado cliente: el archivo `.docx` debe ser generado y firmado en servidor, no por la app web del usuario.
+- No asumir que la fila en `TbCorreosEnviados` equivale a correo enviado: el estado de la orden y el estado del envío deben ser columnas separadas en el modelo de la web, con transiciones explícitas.
+- No duplicar la lógica de selección de plantilla de informe (`PrepararPlantilla` resuelve por `p_EsDeProyecto` y por plantilla de entorno) en cada consumidor; exponer un único servicio de generación que centralice esa decisión.
+- No reutilizar `Me.OpenArgs` ni ribbon como contrato de selección de NC: la API web debe recibir un identificador de NC explícito en la URL o el body, sin parámetros opacos.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿La BCC por defecto (BR-COM-5) sigue siendo una regla válida o es deuda operativa que debe eliminarse antes de migrar? Confirmar con Calidad y privacidad.
+- ¿Cuál es la plantilla Word oficial de NC de Proyecto y de NC de Auditoría? ¿Existe un repositorio versionado o hay que crearlo como parte de la migración? (BR-COM-6)
+- ¿Qué política de retención aplica a los documentos Word generados y a los correos ordenados? ¿Se conservan tras el cierre de la NC o se purgan? (BR-COM-4, BR-COM-6)
+- ¿El contrato de exportación Excel (BR-COM-7) debe cubrir los mismos seguimientos que hoy existen o se redefinen los reportes en la web? Confirmar lista de seguimientos, columnas y orden antes de la migración.
+- ¿Quién es el originador por defecto de un correo cuando el usuario no lo proporciona? ¿Se sigue derivando del usuario conectado como hace el código actual?
+- ¿El envío SMTP real lo hace un worker desacoplado, un servicio de la empresa o sigue siendo un Outlook local? Decidir y documentar antes de definir el modelo de estados de la orden.
 
 ## §7 Registro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-COM-1 — No se puede ordenar correo sin asunto. | Verified-static | `Form_FormCorreo.ComandoEnviarCorreo_Click` y `Correo.Registrar` en `src/forms/Form_FormCorreo.cls` + `src/classes/Correo.cls`; FALTA → crear mediante access-vba-tdd con objeto `Correo` y fixture de `TbCorreosEnviados` | 2026-06-15 |
+| BR-COM-2 — No se puede ordenar correo sin destinatario principal, copia ni copia oculta. | Verified-static | Validación en `Form_FormCorreo.cls` y `Correo.Registrar`; FALTA → crear mediante access-vba-tdd | 2026-06-15 |
+| BR-COM-3 — El cuerpo del correo se genera en HTML desde la NC activa y debe incluir acciones. | Verified-static | `HTMLNCProyecto` / `HTMLNCAuditoria` con `p_ConAcciones:=EnumSino.Sí`; FALTA → crear mediante access-vba-tdd sobre HTML | 2026-06-15 |
+| BR-COM-4 — El correo se registra como orden de envío en `TbCorreosEnviados`; no se afirma envío SMTP directo. | Verified-static | `Correo.Registrar` hace `AddNew`; FALTA → crear mediante access-vba-tdd con cardinalidad | 2026-06-15 |
+| BR-COM-5 — Si no hay BCC, se añade una copia oculta por defecto. | Likely | `Correo.Registrar`; FALTA → crear mediante access-vba-tdd; confirmar si sigue siendo regla de negocio válida | 2026-06-15 |
+| BR-COM-6 — La generación Word exige saber si la NC es de Proyecto o Auditoría y usa la plantilla correspondiente. | Verified-static | `Informe.GenerarWordNoConformidades` / `PrepararPlantilla`; FALTA → crear mediante access-vba-tdd o prueba de costura sin automatizar Word real | 2026-06-15 |
+| BR-COM-7 — Exportaciones Excel desde listados/seguimiento preservan filtros y columnas de negocio. | Likely | Eventos `ComandoExportarAExcel_Click` en formularios de seguimiento; FALTA → crear mediante access-vba-tdd; mapear eventos exactos | 2026-06-15 |
+| BR-COM-8 — La ruta de informe de auditoría usa selección/constructor de auditoría, no constructor de NC Proyecto. | Verified-static | `EnsureNCAuditoriaGestionSelected` / `constructor.getNCAuditoria`; referencia archivada `Test_AuditGestionForm_ReportConstructorPath_Characterization`; FALTA → reejecutar mediante access-vba-tdd | 2026-06-15 |
 | `Form_FormCorreo` valida asunto y destinatarios antes de registrar. | Verified-static | `src/forms/Form_FormCorreo.cls` | 2026-06-15 |
 | `Correo.Registrar` escribe en `TbCorreosEnviados`. | Verified-static | `src/classes/Correo.cls` | 2026-06-15 |
 | `Informe` genera documentos Word desde plantillas de Proyecto/Auditoría. | Verified-static | `src/classes/Informe.cls` | 2026-06-15 |
