@@ -52,7 +52,7 @@ testing:
     - path: tests/tests.vba.json
       tests: 81
     - path: tests/tests.vba.audit-gestion-helper.json
-      tests: 5
+      tests: 11
     - path: tests/tests.vba.cache-acar.json
       tests: 3
     - path: tests/tests.vba.cache-e2e.json
@@ -73,8 +73,14 @@ testing:
       tests: 1
     - path: tests/tests.vba.indicator-fast-counts.json
       tests: 5
+    - path: tests/tests.vba.indicadores-caracterizacion.json
+      tests: 46
     - path: tests/tests.vba.listado-helper.json
-      tests: 5
+      tests: 0
+      retired: true
+      replacement_manifest: tests/tests.vba.proyecto-gestion-helper.json
+    - path: tests/tests.vba.proyecto-gestion-helper.json
+      tests: 8
     - path: tests/tests.vba.smoke.json
       tests: 0
 
