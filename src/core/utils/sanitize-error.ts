@@ -29,5 +29,28 @@ export function sanitizeMcpErrorMessage(message: string, secrets?: readonly stri
   result = result.replace(/[A-Za-z]:\\(?:[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?)?/g, "[PATH]");
   // POSIX directory paths: /dir/subdir/...
   result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
+
+  const upperMsg = message.toUpperCase();
+  if (
+    upperMsg.includes("0X800ADEB9") ||
+    upperMsg.includes("800ADEB9") ||
+    upperMsg.includes("-2146771271")
+  ) {
+    result +=
+      "\n[Remediation Advice / Consejo de remediación]\n" +
+      "English: Access object cannot be deleted/modified. Ensure the object is not open in Design View, close the VBA Editor, or run a database compact & repair.\n" +
+      "Spanish: No se puede eliminar/modificar el objeto de Access. Asegúrese de que el objeto no esté abierto en Vista Diseño, cierre el Editor de VBA o ejecute Compactar y reparar base de datos.";
+  }
+  if (
+    upperMsg.includes("0X800A09D5") ||
+    upperMsg.includes("800A09D5") ||
+    upperMsg.includes("-2146823723")
+  ) {
+    result +=
+      "\n[Remediation Advice / Consejo de remediación]\n" +
+      "English: Name conflicts with an existing module, project, or object library. Access is case-insensitive for identifiers; ensure module names do not duplicate existing identifiers.\n" +
+      "Spanish: El nombre entra en conflicto con un módulo, proyecto o biblioteca de objetos existente. Access no distingue mayúsculas de minúsculas para los identificadores; asegúrese de que los nombres de los módulos no dupliquen identificadores existentes.";
+  }
+
   return result;
 }

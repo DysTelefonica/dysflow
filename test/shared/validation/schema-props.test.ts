@@ -165,6 +165,7 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "top",
       "testsPath",
       "exists_name",
+      "code",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

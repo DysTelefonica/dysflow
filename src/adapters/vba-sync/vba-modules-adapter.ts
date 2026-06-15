@@ -63,11 +63,16 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
     (input) => stringArray(input.moduleNames),
     (input) => ({ location: stringValue(input.location) }),
   ),
-  delete_module: mapping("Delete", true, (input) => {
-    const moduleNames = stringArray(input.moduleNames);
-    const moduleName = stringValue(input.moduleName);
-    return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
-  }),
+  delete_module: mapping(
+    "Delete",
+    true,
+    (input) => {
+      const moduleNames = stringArray(input.moduleNames);
+      const moduleName = stringValue(input.moduleName);
+      return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
+    },
+    (input) => ({ force: input.force === true ? true : undefined }),
+  ),
 };
 
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
@@ -178,7 +183,10 @@ async function compareSingleModule(
 }
 
 export class VbaModulesAdapter {
-  constructor(private readonly orchestrator: VbaModulesOrchestrator) {}
+  constructor(
+    private readonly orchestrator: VbaModulesOrchestrator,
+    private readonly fileSystem: ComparisonFileSystemPort = nodeComparisonFileSystem,
+  ) {}
 
   static handles(toolName: string): boolean {
     return (
@@ -193,7 +201,8 @@ export class VbaModulesAdapter {
       toolName === "reconcile_binary" ||
       toolName === "delete_module" ||
       toolName === "fix_encoding" ||
-      toolName === "compare_module"
+      toolName === "compare_module" ||
+      toolName === "vba_orphan_audit"
     );
   }
 
@@ -201,19 +210,22 @@ export class VbaModulesAdapter {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
+    if (toolName === "vba_orphan_audit") {
+      return this.auditOrphans(params);
+    }
     if (toolName === "compare_module") {
-      return compareSingleModule(params, this.getComparisonContext(), nodeComparisonFileSystem);
+      return compareSingleModule(params, this.getComparisonContext(), this.fileSystem);
     }
     if (toolName === "verify_code" || toolName === "verify_binary") {
       return compareSourceAgainstBinary(
         toolName,
         params,
         this.getComparisonContext(),
-        nodeComparisonFileSystem,
+        this.fileSystem,
       );
     }
     if (toolName === "reconcile_binary") {
-      return planReconcileBinary(params, this.getComparisonContext(), nodeComparisonFileSystem);
+      return planReconcileBinary(params, this.getComparisonContext(), this.fileSystem);
     }
 
     if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {
@@ -239,6 +251,110 @@ export class VbaModulesAdapter {
         : params;
 
     return this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+  }
+
+  async auditOrphans(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const mapping = MODULE_MAPPINGS.list_objects;
+    if (!mapping) {
+      return failureResult(createDysflowError("MAPPING_ERROR", "Missing list_objects mapping."));
+    }
+    const listResult = await this.orchestrator.executeMappedTool("list_objects", params, mapping);
+    if (!listResult.ok) return listResult;
+
+    // biome-ignore lint/suspicious/noExplicitAny: VBE data structure
+    const vbeData = listResult.data as any;
+    const vbeModules = vbeData?.modules || [];
+    const vbeClasses = vbeData?.classes || [];
+    const vbeForms = vbeData?.forms || [];
+    const vbeReports = vbeData?.reports || [];
+    const vbeDocumentModules = vbeData?.documentModules || [];
+
+    const vbeAll = new Set<string>([
+      ...vbeModules,
+      ...vbeClasses,
+      ...vbeForms,
+      ...vbeReports,
+      ...vbeDocumentModules,
+    ]);
+
+    const targetResult = await this.orchestrator.resolveExecutionTarget(params);
+    if (!targetResult.ok) return targetResult;
+    const destinationRoot = targetResult.data.destinationRoot;
+
+    const folders = [
+      destinationRoot,
+      resolve(destinationRoot, "modules"),
+      resolve(destinationRoot, "classes"),
+      resolve(destinationRoot, "forms"),
+      resolve(destinationRoot, "reports"),
+    ];
+
+    // VBA identifiers are case-insensitive and the VBE re-cases module names on
+    // import, so a disk file "myform.bas" and a VBE name "MyForm" are the SAME
+    // module. Key the cross-reference by lowercase name (keeping the original
+    // disk name for display) to avoid reporting one real module as two orphans.
+    const diskModulesMap = new Map<string, { name: string; path: string }>();
+    for (const folder of folders) {
+      try {
+        const entries = await this.fileSystem.readdir(folder);
+        for (const entry of entries) {
+          const entryName = typeof entry === "string" ? entry : entry.name;
+          const lower = entryName.toLowerCase();
+          let modName: string | null = null;
+
+          if (lower.endsWith(".form.txt")) {
+            modName = entryName.slice(0, -".form.txt".length);
+          } else if (lower.endsWith(".report.txt")) {
+            modName = entryName.slice(0, -".report.txt".length);
+          } else {
+            const ext = extname(entryName).toLowerCase();
+            if ([".bas", ".cls", ".frm"].includes(ext)) {
+              modName = parse(entryName).name;
+            }
+          }
+
+          if (modName) {
+            const key = modName.toLowerCase();
+            const fullPath = resolve(folder, entryName);
+            const current = diskModulesMap.get(key);
+            if (!current) {
+              diskModulesMap.set(key, { name: modName, path: fullPath });
+            } else if (current.path.endsWith(".form.txt") || current.path.endsWith(".report.txt")) {
+              diskModulesMap.set(key, { name: modName, path: fullPath });
+            }
+          }
+        }
+      } catch {
+        // Folder missing or readdir failed, ignore
+      }
+    }
+
+    const vbeKeys = new Set<string>([...vbeAll].map((n) => n.toLowerCase()));
+    const SUSPICIOUS_REGEX =
+      /^(Form_|Report_)?(Módulo|Modulo|Class|Clase|Form|Formulario|Report|Reporte)\d+$/i;
+    const orphans = [];
+    for (const name of vbeAll) {
+      const disk = diskModulesMap.get(name.toLowerCase());
+      orphans.push({
+        moduleName: name,
+        isOrphan: disk === undefined,
+        isSuspicious: SUSPICIOUS_REGEX.test(name),
+        sourcePath: disk?.path ?? null,
+      });
+    }
+
+    for (const [key, disk] of diskModulesMap) {
+      if (!vbeKeys.has(key)) {
+        orphans.push({
+          moduleName: disk.name,
+          isOrphan: true,
+          isSuspicious: SUSPICIOUS_REGEX.test(disk.name),
+          sourcePath: disk.path,
+        });
+      }
+    }
+
+    return successResult({ orphans });
   }
 
   private getComparisonContext() {

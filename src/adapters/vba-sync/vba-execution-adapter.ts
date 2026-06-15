@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   createDysflowError,
@@ -24,13 +26,29 @@ const EXECUTION_MAPPINGS = {
     (input) => ({ proceduresJson: directTestProceduresJson(input) }),
   ),
   run_vba: mapping(
-    "Run",
+    "Run-Procedure",
     true,
     (input) => stringArray(input.moduleNames),
     (input) => ({
       procedureName: stringValue(input.procedureName),
       argsJson: stringValue(input.argsJson),
     }),
+  ),
+  import_modules: mapping(
+    "Import",
+    false,
+    (input) => stringArray(input.moduleNames),
+    (input) => ({ importMode: stringValue(input.importMode) }),
+  ),
+  delete_module: mapping(
+    "Delete",
+    true,
+    (input) => {
+      const moduleNames = stringArray(input.moduleNames);
+      const moduleName = stringValue(input.moduleName);
+      return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
+    },
+    (input) => ({ force: input.force === true ? true : undefined }),
   ),
 };
 
@@ -41,19 +59,41 @@ export interface VbaSyncOrchestrator {
     mapping: DirectMapping,
   ): Promise<OperationResult<unknown>>;
   cwd: string;
+  resolveExecutionTarget?(params: Record<string, unknown>): Promise<OperationResult<unknown>>;
 }
 
+export interface ExecutionFileSystemPort {
+  writeFile(path: string, content: string): Promise<void>;
+  rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void>;
+}
+
+const defaultExecutionFileSystem: ExecutionFileSystemPort = {
+  writeFile: (path, content) => writeFile(path, content, "utf8"),
+  rm: (path, options) => rm(path, options),
+};
+
 export class VbaExecutionAdapter {
-  constructor(private readonly orchestrator: VbaSyncOrchestrator) {}
+  constructor(
+    private readonly orchestrator: VbaSyncOrchestrator,
+    private readonly fileSystem: ExecutionFileSystemPort = defaultExecutionFileSystem,
+  ) {}
 
   static handles(toolName: string): boolean {
-    return toolName === "run_vba" || toolName === "test_vba" || toolName === "compile_vba";
+    return (
+      toolName === "run_vba" ||
+      toolName === "test_vba" ||
+      toolName === "compile_vba" ||
+      toolName === "vba_inline_execution"
+    );
   }
 
   async execute(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
+    if (toolName === "vba_inline_execution") {
+      return this.executeInline(params);
+    }
     if (toolName === "compile_vba") {
       return this.orchestrator.executeMappedTool(toolName, params, EXECUTION_MAPPINGS.compile_vba);
     }
@@ -70,6 +110,96 @@ export class VbaExecutionAdapter {
         `Tool ${toolName} not supported by VbaExecutionAdapter.`,
       ),
     );
+  }
+
+  private async executeInline(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    if (typeof this.orchestrator.resolveExecutionTarget !== "function") {
+      return failureResult(
+        createDysflowError(
+          "ORCHESTRATOR_ERROR",
+          "Orchestrator must implement resolveExecutionTarget to run inline VBA.",
+        ),
+      );
+    }
+    const targetRes = await this.orchestrator.resolveExecutionTarget(params);
+    if (!targetRes.ok) return targetRes;
+    const targetData = targetRes.data as { destinationRoot: string };
+    const destinationRoot = targetData.destinationRoot;
+
+    const uuid = randomUUID().replace(/-/g, "_");
+    const moduleName = `_inline_${uuid}`;
+
+    const folder = resolve(destinationRoot, "modules");
+    const filePath = resolve(folder, `${moduleName}.bas`);
+
+    const rawCode = stringValue(params.code) || "";
+    const wrapper = `Attribute VB_Name = "${moduleName}"
+Public Sub ExecuteInline()
+${rawCode}
+End Sub
+`;
+
+    try {
+      await this.fileSystem.writeFile(filePath, wrapper);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "WRITE_ERROR",
+          `Failed to write temporary inline VBA file: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    let inlineResult: OperationResult<unknown> = failureResult(
+      createDysflowError("EXECUTION_ERROR", "Inline execution did not produce a result."),
+    );
+    try {
+      const importRes = await this.orchestrator.executeMappedTool(
+        "import_modules",
+        { ...params, moduleNames: [moduleName], dryRun: false },
+        EXECUTION_MAPPINGS.import_modules,
+      );
+      if (!importRes.ok) {
+        inlineResult = importRes;
+      } else {
+        inlineResult = await this.orchestrator.executeMappedTool(
+          "run_vba",
+          {
+            ...params,
+            moduleNames: [moduleName],
+            procedureName: `${moduleName}.ExecuteInline`,
+          },
+          EXECUTION_MAPPINGS.run_vba,
+        );
+      }
+    } catch (err) {
+      inlineResult = failureResult(
+        createDysflowError(
+          "EXECUTION_ERROR",
+          `Inline execution encountered an error: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    } finally {
+      try {
+        // force:true so a temp module that hits the corruption HRESULT
+        // (0x800ADEB9, e.g. VBE open) still gets removed instead of leaking
+        // an orphan _inline_* module into the binary on every failed cleanup.
+        await this.orchestrator.executeMappedTool(
+          "delete_module",
+          { ...params, moduleName, force: true },
+          EXECUTION_MAPPINGS.delete_module,
+        );
+      } catch {
+        // Suppress deletion tool failure during cleanup
+      }
+      try {
+        await this.fileSystem.rm(filePath, { force: true });
+      } catch {
+        // Suppress file removal failure
+      }
+    }
+
+    return inlineResult;
   }
 
   private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {

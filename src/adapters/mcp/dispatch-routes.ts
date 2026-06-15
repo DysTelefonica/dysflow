@@ -37,6 +37,8 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   catalog_add_control: { kind: "vba-sync" },
   harvest_form_catalog: { kind: "vba-sync" },
   compare_module: { kind: "vba-sync" },
+  vba_orphan_audit: { kind: "vba-sync" },
+  vba_inline_execution: { kind: "vba-sync" },
   // query maintenance (9)
   list_links: { kind: "query-maintenance", queryMode: "read" },
   export_queries: { kind: "query-maintenance", queryMode: "read" },
