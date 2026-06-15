@@ -543,12 +543,16 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`reconcile_binary`**: Dry-run reconciliation plan that reuses the `verify_binary` semantic report and returns `applied: false`. Each differing module carries a per-diff `recommendation` (`import_to_binary`, `export_to_src`, `manual_merge`, or `no_action`) plus a human-readable overall recommendation. Never mutates Access.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`delete_module`**: Delete a module from the VBA project.
-  - Parameters: `moduleName` (string, optional), `timeoutMs` (number, optional)
+* **`delete_module`**: Delete a module from the VBA project. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](./docs/diagnostics/hresult-guide.md)). Write-gated.
+  - Parameters: `moduleName` (string, optional), `force` (boolean, optional), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
+* **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
+  - Parameters: none (uses the active project context)
+* **`vba_inline_execution`**: Run a throwaway VBA snippet in one call — writes a temporary module, imports it, executes its public entry point, captures the result, and guarantees cleanup of both the binary component and the temp file. Write-gated.
+  - Parameters: `code` (string, required), `timeoutMs` (number, optional)
 
 #### Semantic diff classification
 
