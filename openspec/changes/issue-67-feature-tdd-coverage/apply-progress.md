@@ -201,3 +201,32 @@ Estado de los pendientes §7 al re-encender la épica el 2026-06-16:
 > En tests VBA con sandbox, los reads sobre tablas linkeadas deben usar `db.OpenRecordset` (snapshot) contra el handle devuelto por `getdb()`. NUNCA `DCount`/`DLookup` porque van por `CurrentDb` (frontend linkeado al backend de producción, no al sandbox local).
 
 **MCP gap identificado** (pendiente enviar al mantenedor de dysflow): un pre-flight estático que detecte uso de `DCount`/`DLookup` en archivos `src/modules/Test_*.bas` y avise antes de ejecutar `test_vba` — habría ahorrado esta iteración.
+
+**Verificación end-to-end** (2026-06-16, post-compile del usuario):
+
+- `dysflow.import_modules` 5 modulos Test_* (commit 5f17e50).
+- Usuario compilo en Access VBE.
+- `dysflow.test_vba` por manifest secuencial (no en paralelo contra el mismo .accdb, regla del proyecto):
+
+  | Manifest | Resultado | Duración | BR cubiertos |
+  |---|---|---|---|
+  | `tests.vba.cap-cat.json` | **2/2 verde** | 5.5s | BR-CAT-5/6 (Registrar+Eliminar contra sandbox) |
+  | `tests.vba.cap-exp.json` | **5/5 verde** | 13.2s | BR-EXP-4 (TextoExpediente formato) + BR-EXP-5 (cache memoization) + 13 propiedades round-trip |
+  | `tests.vba.cap-nca-af.json` | **5/5 verde** | 13.6s | BR-NCA-AF-1 (Particula NC/OB/OP + edge cases) |
+  | `tests.vba.cap-upn.json` | **5/5 verde** | 13.2s | BR-UPN-1..5 (EsAdministrador, PermisoPruebas, UsuarioRed, Matricula/Correo, flags booleanos) |
+  | `tests.vba.cap-com.json` | **5/5 verde** | 14.4s | BR-COM-1/2/4 (Correo round-trip + IDCorreoCalculado + destinatarios independientes) |
+
+  **Total: 22/22 verde** en ~60s. Primer test post-fix del routing sandbox (e386a8b) valida que `getdb().OpenRecordset` ve las fixtures que `Registrar`/`Eliminar` escriben en el mismo handle.
+
+- Cleanup: la fila `TIPOLOGIA_TEST_PROBE_990003` (IDTipo=990003) usada para diagnosticar la ruta MCP al sandbox fue borrada via `dysflow.exec_sql apply:true` post-verificacion.
+
+**Estado del cierre de épica #67**:
+
+- Fase 0/1/2/3 ✅ completas (apply-progress §0-§5)
+- Post-merge follow-ups (§9) ✅ todos resueltos:
+  - §7.4 paridad binaria → `8f59630` + `5f17e50` (import de tests)
+  - §7.5 manifests 22 tests → `2c8ee54` + verdes en esta sesión
+  - §7.6 PR #69 + #70 → MERGED
+  - Hallazgo DCount/DLookup → fix `e386a8b` + lesson en engram
+- **AC-5 (cero BR con `Verified-static` permanente)**: 🟡→✅. Las 2 divergencias D1/D2 siguen registradas pero el resto de BRs `Intended` ahora tiene tests vivos o BR ejecutable. AC-5 deja de depender de producto ausente para CAP-CAT, CAP-EXP, CAP-NCA-AF, CAP-UPN, CAP-COM.
+- **AC-7 (cada BR con prueba corre en verde contra staging HEAD)**: 🟡→✅ para los 5 caps con tests. Las 9 capabilities sin tests siguen pendientes por producto ausente (no por barrera técnica).
