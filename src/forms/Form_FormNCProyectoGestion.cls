@@ -485,9 +485,59 @@ End Sub
 
 
 Public Sub ComandoActualizarLista_Click()
-    On Error Resume Next
+    Dim errorNumber As Long
+    Dim errorDescription As String
+    Dim refreshResult As Scripting.Dictionary
+
+    On Error GoTo errores
+    VBA.DoEvents
+    DoCmd.Hourglass True
+    VBA.DoEvents
+    m_Error = ""
+
+    Set refreshResult = PrepareNCProyectoGestionRefresh(m_ObjEntorno, m_Error)
+    If refreshResult Is Nothing Then
+        m_Error = "PrepareNCProyectoGestionRefresh did not return a result"
+        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
+    End If
+    If Not CBool(refreshResult("Success")) Then
+        If m_Error = "" Then m_Error = "PrepareNCProyectoGestionRefresh failed at " & CStr(refreshResult("FailedStep"))
+        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
+    End If
+
+    EstablecerCombos m_Error
+    If m_Error <> "" Then
+        Err.Raise 1000, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", m_Error
+    End If
+
+    With Me.lblEstado
+        .Caption = CStr(refreshResult("FeedbackCaption"))
+        .Visible = True
+    End With
+
     ActualizarDatosFiltrados
     ActualizarLista
+
+    Me.lblEstado.Visible = False
+SALIR:
+    VBA.DoEvents
+    DoCmd.Hourglass False
+    VBA.DoEvents
+    If errorNumber <> 0 Then
+        Err.Raise errorNumber, "Form_FormNCProyectoGestion.ComandoActualizarLista_Click", errorDescription
+    End If
+    Exit Sub
+
+errores:
+    errorNumber = Err.Number
+    If errorNumber <> 1000 Then
+        m_Error = "Al ComandoActualizarLista_Click se ha producido el error n: " & Err.Number & vbNewLine & "Detalle: " & Err.Description
+        CorreoAlAdministrador m_Error
+    ElseIf m_Error = "" Then
+        m_Error = Err.Description
+    End If
+    errorDescription = m_Error
+    Resume SALIR
     
 End Sub
 
