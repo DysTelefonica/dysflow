@@ -28,8 +28,8 @@ El resto de los cambios (Issue #18 cache de indicadores, refactors, tests, schem
    - Si todo OK: saltar al paso 3.
 
 3. **Reemplazar el `{{RECIPIENT_EMAIL}}`** en `uat-acceptance.html` (línea ~210 en `UAT_META.recipient`).
-   - El mailto se arma con este valor; si queda el placeholder, el botón "Enviar por correo" no abrirá nada.
-   - Recomendado: email del firmante de calidad (Natalia, o quien firme el UAT).
+   - **Default ya aplicado**: `andres.romandelperal@telefonica.com` (desarrollador, mismo patrón que PRUEBAS-001 v1.0.0). El mailto se arma con este valor; la web funciona out-of-the-box.
+   - Si querés mandarlo al firmante de calidad (Natalia u otra persona), editar la línea `recipient:` en `UAT_META` antes de copiar a la lanzadera.
 
 4. **(Opcional) Ajustar el href de la app en staging** si la ruta real del `.accdb` de staging no es `\\datoste\aplicaciones_dys\Aplicaciones PpD\0Lanzadera\NoConformidades.accdb`.
    - Editar la línea `<a href="file:///..."` en la cabecera de la web.
