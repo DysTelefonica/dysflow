@@ -114,8 +114,6 @@ Public Function PintarIndicadores( _
     Dim m_AuditoriaSyncError As String
     Dim m_ProyectoSyncOk As Boolean
     Dim m_AuditoriaSyncOk As Boolean
-    Dim m_ProyectoCacheAttempted As Boolean
-    Dim m_AuditoriaCacheAttempted As Boolean
     
     On Error GoTo errores
     If p_Reiniciando = Empty Then
@@ -147,7 +145,6 @@ Public Function PintarIndicadores( _
 
     If m_IncluirProyecto Then
         If m_ModoNormalizado = "PROYECTO" Then
-            m_ProyectoCacheAttempted = True
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-materialized-cache-start", m_TelemetriaError)
             Set m_ConteosProyectoCache = Cache_IndicadoresProyectoMaterializado_CargarConteos(m_Usuario, m_ProyectoCacheError)
             m_ProyectoCachePath = (m_ProyectoCacheError = "" And Not m_ConteosProyectoCache Is Nothing)
@@ -165,14 +162,14 @@ Public Function PintarIndicadores( _
                     Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-materialized-cache-after-sync", m_ProyectoCachePath, m_TelemetriaError)
                 End If
 
-        If Not m_ProyectoCachePath And Not m_ProyectoCacheAttempted Then
+                If Not m_ProyectoCachePath Then
                     Set m_ConteosProyectoCache = Nothing
                     Call Indicadores_TelemetriaCacheEstado(m_Telemetria, "proyecto-legacy-fallback", True, m_TelemetriaError)
                 End If
             End If
         End If
 
-        If Not m_ProyectoCachePath And Not m_ProyectoCacheAttempted Then
+        If Not m_ProyectoCachePath Then
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "proyecto-cache-start", m_TelemetriaError)
             Set m_ColSegsTareasProyectoPteReplanificar = m_ObjEntorno.ColSegsTareasProyectoPteReplanificar
             Set m_ColSegsTareasProyectoIrregulares = m_ObjEntorno.ColSegsTareasProyecto
@@ -187,7 +184,6 @@ Public Function PintarIndicadores( _
 
     If m_IncluirAuditoria Then
         If m_ModoNormalizado = "AUDITORIA" Then
-            m_AuditoriaCacheAttempted = True
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-materialized-cache-start", m_TelemetriaError)
             Set m_ConteosAuditoriaCache = Cache_IndicadoresAuditoriaMaterializado_CargarConteos(m_Usuario, m_AuditoriaCacheError)
             m_AuditoriaCachePath = (m_AuditoriaCacheError = "" And Not m_ConteosAuditoriaCache Is Nothing)
@@ -212,7 +208,7 @@ Public Function PintarIndicadores( _
             End If
         End If
 
-        If Not m_AuditoriaCachePath And Not m_AuditoriaCacheAttempted Then
+        If Not m_AuditoriaCachePath Then
             Call Indicadores_TelemetriaEtapa(m_Telemetria, "auditoria-cache-start", m_TelemetriaError)
             Set m_ColSegsTareasAuditoriaPteReplanificar = m_ObjEntorno.ColSegsTareasAuditoriaPteReplanificar
             Set m_ColSegsNCAuditoriaRegistradas = m_ObjEntorno.ColSegsNCAuditoriaRegistradas
@@ -1512,7 +1508,7 @@ Public Function RegistrarLogProyecto( _
                                     Optional p_Linea As String, _
                                     Optional p_Objeto As Object, _
                                     Optional p_ObjetoAlInicio As Object, _
-                                    Optional p_Error As String _
+                                    Optional ByRef p_Error As String _
                                     ) As String
     Dim m_Log As LogNCProyecto
     Dim m_Linea As Variant
@@ -1535,8 +1531,15 @@ Public Function RegistrarLogProyecto( _
             If p_Linea <> "" Then
                 .Linea = p_Linea
             End If
-            
-            .usuario = m_ObjUsuarioConectado.UsuarioRed
+
+            ' Guard: m_ObjUsuarioConectado is a module-level global that may be Nothing
+            ' in test contexts. Fall back to "TEST_USER" so log rows can still be
+            ' written during fixture-driven test runs.
+            If Not m_ObjUsuarioConectado Is Nothing Then
+                .usuario = m_ObjUsuarioConectado.UsuarioRed
+            Else
+                .usuario = "TEST_USER"
+            End If
             .Alta p_Error
             If p_Error <> "" Then
                 Err.Raise 1000
@@ -2265,15 +2268,7 @@ Public Function EstablecerComboCodigo( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-
     cmb.RowSource = ""
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-
     Set m_Col = m_ObjEntorno.ColNCsProyecto
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -2295,32 +2290,6 @@ errores:
 End Function
 
 
-' SDD: test-seam-separation — pure data helper, no ComboBox dependency.
-' Returns a Scripting.Dictionary of tipologia NC projects keyed by IDTipo.
-' Tests can call this directly without opening forms or requiring controls.
-Public Function ObtenerTiposNC( _
-                                Optional ByRef p_Error As String _
-                                ) As Scripting.Dictionary
-    On Error GoTo errores
-    
-    If m_ObjEntorno Is Nothing Then
-        Set ObtenerTiposNC = Nothing
-        Exit Function
-    End If
-    
-    Set ObtenerTiposNC = m_ObjEntorno.ColTipos
-    p_Error = m_ObjEntorno.Error
-    If p_Error <> "" Then
-        Err.Raise 100
-    End If
-    Exit Function
- errores:
-    If Err.Number <> 1000 Then
-        p_Error = "El método ObtenerTiposNC ha devuelto el error: " & vbNewLine & Err.Description
-    End If
-    Set ObtenerTiposNC = Nothing
-End Function
-
 Public Function EstablecerComboTipo( _
                                             cmb As ComboBox, _
                                             Optional ByRef p_Error As String _
@@ -2333,17 +2302,9 @@ Public Function EstablecerComboTipo( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
-    Set m_Col = ObtenerTiposNC(p_Error)
+    Set m_Col = m_ObjEntorno.ColTipos
+    p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
         Err.Raise 100
     End If
@@ -2356,7 +2317,7 @@ Public Function EstablecerComboTipo( _
         Set m_Tipo = Nothing
     Next
     Exit Function
- errores:
+errores:
     If Err.Number <> 1000 Then
         p_Error = "El método EstablecerComboTipo ha devuelto el error: " & vbNewLine & Err.Description
     End If
@@ -2373,15 +2334,7 @@ Public Function EstablecerComboResponsables( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
     
     If m_ObjEntorno.ColJefesProyecto Is Nothing Then
         Exit Function
@@ -2415,16 +2368,7 @@ Public Function EstablecerComboJP( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColJefesProyecto
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -2460,16 +2404,7 @@ Public Function EstablecerComboEstado( _
    
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     For Each m_ID In m_ObjEntorno.ColEstadosNC
         m_Titulo = m_ObjEntorno.ColEstadosNCTitulo(CStr(m_ID))
         cmb.AddItem m_Titulo & ";" & m_ID
@@ -2491,16 +2426,7 @@ Public Function EstablecerComboEstadoAC( _
    
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     For Each m_ID In m_ObjEntorno.ColEstadosAC
         m_Titulo = m_ObjEntorno.ColEstadosACTitulo(CStr(m_ID))
         cmb.AddItem m_Titulo & ";" & m_ID
@@ -2523,16 +2449,7 @@ Public Function EstablecerComboResponsablesCalidad( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColUsuariosCalidad
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -2867,15 +2784,7 @@ Public Function EstablecerComboJuridicas( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-
     cmb.RowSource = ""
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-
     Set m_Col = m_ObjEntorno.ColJuridicasDistintas
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3723,16 +3632,7 @@ Public Function EstablecerComboResponsablesImplantacion( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColUsuariosCalidad
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3763,16 +3663,7 @@ Public Function EstablecerComboPuntosNormaNCAuditorias( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColPuntosNormaNCAuditorias
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then
@@ -3805,16 +3696,7 @@ Public Function EstablecerComboAuditoriasNombres( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColAuditorias
     If p_Error <> "" Then
         Err.Raise 1000
@@ -3956,16 +3838,7 @@ Public Function EstablecerComboOrdenarPor( _
     
     On Error GoTo errores
     
-    If cmb Is Nothing Then
-        Exit Function
-    End If
-    
     cmb.RowSource = ""
-    
-    If m_ObjEntorno Is Nothing Then
-        Exit Function
-    End If
-    
     Set m_Col = m_ObjEntorno.ColEnumOrdenTitulo
     p_Error = m_ObjEntorno.Error
     If p_Error <> "" Then

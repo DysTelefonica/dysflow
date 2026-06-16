@@ -99,14 +99,48 @@
 | Cambió el comportamiento de guardado de acción/tarea | Faltan pruebas de ciclo de vida de negocio | Crear pruebas específicas de acciones | BR-NCP-AF-6..7 |
 
 ## §6 Notas de migración web
-- Modelar acciones, tareas, riesgos e indicadores como recursos de dominio explícitos bajo NC Proyecto.
-- Preservar la semántica cargado-vacío frente a fallo-de-caché y el refresco de alcance afectado tras escrituras.
-- No copiar el acoplamiento directo formulario/DAO; exponer comandos de servicio y APIs de consulta/modelo de lectura.
-- Definir escenarios UAT de acción/tarea antes del corte web.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- Los indicadores de seguimiento diferido de proyecto reflejan el estado de tareas (BR-NCP-AF-1): la web debe seguir garantizando que la API de indicadores devuelve el mismo estado de tareas que la app VBA actual, con el contrato de helper de seguimiento (`Test_TareasHelper_*` 9/9).
+- El helper de seguimiento debe poder probarse sin estado UI vivo (BR-NCP-AF-2): la web debe permitir testear el helper como servicio puro, no como artefacto acoplado a la UI; replicar el patrón de `Test_TareasForm_Delegates_FilterPaths`.
+- Las lecturas relacionadas de AC/AR/Riesgo usan semántica cache-first cuando la caché está cargada (BR-NCP-AF-3): la web debe mantener la misma semántica; cargado-vacío no es fallback a backend.
+- La caché cargada-vacía de datos relacionados es un resultado válido, no un fallo (BR-NCP-AF-4): la web debe distinguir "caché cargada con cero filas" de "caché no disponible", igual que los diagnósticos cache-trust ya lo prueban.
+- Las mutaciones correctas que afectan a indicadores refrescan el `IDNoConformidad` afectado; los fallos son visibles (BR-NCP-AF-5): la web debe propagar el `pError` de un fallo de sincronización, no afirmar que la caché está actualizada.
+- Las reglas de crear, completar, cancelar, reasignar, vencimiento y propietario de AC/AR/tareas (BR-NCP-AF-6): la web debe exigir los mismos campos obligatorios y las mismas transiciones que la app VBA.
+- El comportamiento de acciones de formulario como cableado UI fino sobre costuras helper/servicio (BR-NCP-AF-7): la web debe poder llamar a los mismos servicios que la UI, sin lógica embebida en componentes de UI.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormNCProyectoSeguimiento`, `Form_FormNCProyectoSeguimientoTareas`, `Form_FormNCProyectoSeguimientoNC`, `Form_FormNCProyectoAC`, `Form_FormNCProyectoAR`, `Form_FormIndicadores` por endpoints REST diferenciados: `GET/POST/PUT` por recurso (`tarea`, `ac`, `ar`).
+- Convertir `NCProyectoSeguimientoHelper`, `CacheTrustDiagnostics`, `ModuloCacheIndicadoresIssue18` en una capa de aplicación con servicios diferenciados (`Seguimiento`, `Cache`, `Diagnostico`), no un módulo VBA con helper y diagnósticos entrelazados.
+- Reemplazar el patrón de carga diferida de indicadores (`OnTimer` + `m_CargaInicialIndicadoresPendiente = True` + `Me.TimerInterval = 100`) por un endpoint asíncrono o un skeleton explícito, no por un timer del cliente.
+- Mover la resolución de NC padre desde cambios de AC/AR/tarea (`Issue18_ResolverNCDesde`) a un evento del backend que se dispara tras la mutación, no como hook de formulario.
+- Sustituir `p_DuracionSegundos:=m_UltimaDuracionIndicadores` por un patrón de instrumentación de performance en el backend (métricas, trazas), no como propiedad de un objeto VBA.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar `OnTimer` con `TimerInterval = 100` como patrón de carga diferida: la web debe poder invocar el helper de forma síncrona o asíncrona real (cola/worker), no con un timer del cliente.
+- No duplicar la lógica de "esto es seguimiento de proyecto" en cada `.cls` de formulario: la web debe tener un único discriminador de dominio y un único guard.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad real: la web debe aplicar permisos en el servidor.
+- No migrar el patrón "consulta viva a backend si la caché está vacía" como ruta normal: la web debe responder vacío y permitir reintento explícito, no fallback silencioso.
+- No propagar el resultado de un hook de sincronización fallido como éxito: la web debe devolver error explícito y, si el cliente lo ignora, no debe reescribir el estado de la caché.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Los estados canónicos de una tarea/AC/AR de proyecto son los mismos que en auditoría? (BR-NCP-AF-6) Confirmar lista y transiciones.
+- ¿La replanificación de una tarea de proyecto tiene límite de veces o es indefinida? (BR-NCP-AF-6)
+- ¿Las notas de proyecto se pueden editar tras crear o son inmutables? (BR-NCP-AF-6) Confirmar política de retención.
+- ¿La cancelación de una tarea/AC/AR requiere motivo obligatorio? ¿Y la reasignación de propietario?
+- ¿El refactor de `Form_FormNCProyectoSeguimiento.cls` (Issue #38 + Issue #50) se mantiene como contrato de la web o se reescribe? Hoy la web debe consumir el helper `NCProyectoSeguimientoHelper.CargarIndicadoresSeguimientoProyecto` con la firma `p_DuracionSegundos`.
+- ¿La fusión de UI `AC` + `AR` en un único recurso `accion` con subtipo es aceptable o se mantiene la separación por consistencia con auditoría?
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-NCP-AF-1 — Los indicadores de seguimiento diferido de proyecto reflejan el estado de tareas. | Verified-runtime | `tests/tests.vba.seguimiento-tareas-helper.json`: 9/9 procedimientos únicos verdes; `Test_TareasHelper_FilterParity_AllPredicates_Atomic`, `Test_TareasHelper_Estado_SelectsSource`, `Test_TareasHelper_NoARPerRowHydration`, `Test_TareasHelper_DeterministicOrder_ExportInput` | 2026-06-15 |
+| BR-NCP-AF-2 — El comportamiento del helper de seguimiento debe poder probarse sin estado UI vivo. | Verified-runtime | Fallback/log 4/4 y helper 4/4 verdes; `Test_TareasForm_Delegates_FilterPaths` verifica delegación del formulario a rutas helper | 2026-06-15 |
+| BR-NCP-AF-3 — Las lecturas relacionadas de AC/AR/Riesgo usan semántica cache-first cuando la caché está cargada. | Verified-static | `tests/tests.vba.cache-e2e.json`; FALTA → reejecutar | 2026-06-15 |
+| BR-NCP-AF-4 — La caché cargada-vacía de datos relacionados es un resultado válido, no un fallo. | Verified-static | Diagnósticos existentes de cache-trust; FALTA → reejecutar | 2026-06-15 |
+| BR-NCP-AF-5 — Las mutaciones correctas que afectan a indicadores refrescan el `IDNoConformidad` afectado; los fallos son visibles. | Intended | FALTA → crear mediante access-vba-tdd; reejecutar/añadir pruebas actuales de sincronización en staging | 2026-06-15 |
+| BR-NCP-AF-6 — Se aplican las reglas de crear, completar, cancelar, reasignar, vencimiento y propietario de AC/AR/tareas. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar esquema/reglas | 2026-06-15 |
+| BR-NCP-AF-7 — El comportamiento de acciones de formulario permanece como cableado UI fino sobre costuras helper/servicio. | Intended | FALTA → crear mediante access-vba-tdd contra costuras helper/servicio; pruebas de formulario a nivel cableado solo si son inevitables | 2026-06-15 |
 | Existe y está documentado el helper de indicadores de tareas diferidas. | Verified-runtime | `tests/tests.vba.seguimiento-tareas-helper.json` 9/9 procedimientos únicos; fallback/log, helper y delegación de formulario | 2026-06-15 |
 | La semántica cache-first de datos relacionados está documentada. | Verified-static | Documento existente de cache-trust; sin reejecución | 2026-06-15 |
 | La sincronización de indicadores Issue #18 está vigente en staging. | Intended | Solo evidencia histórica; ejecución reciente pendiente | 2026-06-15 |

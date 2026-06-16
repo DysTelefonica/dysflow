@@ -9,6 +9,7 @@
 | **Current** | `passing` (B3 RESOLVED 2026-06-14) |
 | **Last verified** | 2026-06-15 (evidencia runtime recogida por slices/filtros; `form-helper` 9/9 y `proyecto-gestion-helper` 8/8) |
 | **Manifest drift** | `clean` — `form-helper.json` 9 procedures verified; `listado-helper.json` retired (see Required Tests note) |
+| **Scope note** | Evidencia `X/Y` histórica de `staging` HEAD (no de este branch). Los manifests `tests/tests.vba.form-helper.json`, `tests/tests.vba.proyecto-gestion-helper.json` y `tests/tests.vba.listado-helper.json` (retired) NO están en este checkout. Este branch es un subconjunto de `staging`; los 10 manifests faltantes están documentados en [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). Para reproducir, cherry-pick los 7 manifests únicos desde `origin/staging` (los 2 duplicados y el retired se omiten). |
 | **Staging reachability** | `reachable` — both integration commits (`500d6d5`/`2ca4de7`) are ancestors of `staging` |
 | **TDD evidence** | `fresh` — `tests/tests.vba.form-helper.json` 9/9 por slices y `tests/tests.vba.proyecto-gestion-helper.json` 8/8 por filtros pequeños PASS |
 | **Last verified commit** | `20b71f64` (staging HEAD, fresh run) |

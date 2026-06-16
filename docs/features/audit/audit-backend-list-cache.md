@@ -6,16 +6,27 @@
 
 | Field | Value |
 |-------|-------|
-| **Current** | `passing` |
+| **Current** | `passing / pending UAT-release` |
 | **Last verified** | 2026-06-15 actualización documental con evidencia ya recogida; sin ejecución nueva de Dysflow/Access |
 | **Manifest drift** | `clean` |
-| **Staging reachability** | `reachable` — all 4 integration commits are ancestors of `staging` |
+| **Scope note** | Evidencia `11/11` histórica de `staging` HEAD (no de este branch). El manifest `tests/tests.vba.audit-gestion-helper.json` NO está en este checkout. Ver [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). Para reproducir, cherry-pick desde `origin/staging`. |
+| **Staging reachability** | `reachable` — los 4 commits de integración de caché y el commit de corrección de regresión `ad96b95` son ancestros de `staging` |
 | **TDD evidence** | `fresh` — 11/11 pass in manifest after audit report-path regression fix |
-| **Last verified commit** | `a2d5ae4` + working tree fix pending commit |
+| **Last verified commit** | `ad96b95` — corrección de regresión registrada en `staging`; commit equivalente en la rama documental actual `c2026f5` |
 | **Last verified at** | 2026-06-14 |
 | **Test evidence** | `tests/tests.vba.audit-gestion-helper.json` 11/11 |
-| **Staging integration commit** | `3c4692f`; regression-fix commit pending |
+| **Staging integration commit** | `ad96b95` para la corrección de regresión de la ruta de informe; los commits de implementación de caché siguen siendo `e119189`, `31977af`, `7e27db8`, `3c4692f` |
 | **Evidence updated at** | 2026-06-15 |
+
+## Bloqueos de cierre
+
+Aunque la evidencia runtime citada indica 11/11, esta página mantiene deuda de trazabilidad antes de cerrar release/UAT:
+
+| Bloqueo/deuda | Estado actual | Siguiente evidencia requerida |
+|---|---|---|
+| SHA del arreglo de regresión | Resuelto: `ad96b95` en `staging`; existe commit equivalente `c2026f5` en la rama documental actual. | No requiere nueva ejecución runtime; conservar ambos SHAs como evidencia Git. |
+| Discrepancia manifest/config | Resuelto por evidencia de Git: `staging:openspec/config.yaml` registra `tests/tests.vba.audit-gestion-helper.json` con 11 procedimientos, igual que el manifest citado. En este checkout no existe `openspec/config.yaml`, por lo que la evidencia disponible es histórica/de rama, no un archivo local. | Reconciliar físicamente `openspec/config.yaml` si se restaura `openspec/` en este checkout. |
+| UAT/release | No hay tag UAT ni release de producción registrado en esta página. | Registrar `PRUEBAS-###`, estado UAT, release y rollback cuando existan. |
 
 ## Business Behavior
 
@@ -48,7 +59,7 @@ Audit list cache for the NC auditoria listing. The feature provides:
 | Field | Value |
 |-------|-------|
 | **Date** | 2026-06-14 |
-| **Commits** | `e119189`, `31977af`, `7e27db8`, `3c4692f`; regression fix pending commit on top of `a2d5ae4` |
+| **Commits** | `e119189`, `31977af`, `7e27db8`, `3c4692f`; corrección de regresión `ad96b95` en `staging` (commit equivalente en la rama documental actual `c2026f5`) |
 | **Manifest** | `tests/tests.vba.audit-gestion-helper.json` |
 | **Result** | 11/11 |
 
@@ -60,6 +71,7 @@ Audit list cache for the NC auditoria listing. The feature provides:
 | `31977af` | `feat(cache): read valid audit list cache` | Yes — verified 2026-06-14 |
 | `7e27db8` | `feat(cache): rebuild audit list cache` | Yes — verified 2026-06-14 |
 | `3c4692f` | `fix(cache): use workspace transaction for audit rebuild` | Yes — verified 2026-06-14 |
+| `ad96b95` | `fix(audit): ComandoInforme_Click routes through EnsureNCAuditoriaGestionSelected` | Yes — verificado 2026-06-15 con `git merge-base --is-ancestor ad96b95 staging` exit `0`; el commit equivalente de la rama documental actual `c2026f5` es ancestro del `HEAD` actual, no de `staging` |
 
 ## Access Sync Status
 
@@ -91,8 +103,8 @@ _Web migration considerations — to be populated when migration work begins._
 ## Open Decisions
 
 1. **Source/binary parity warning**: resolved for `Form_FormNCAuditoriaGestion` on 2026-06-14; `verify_binary` reported matched `.cls` and `.form.txt` after reimport/export sync.
-2. **Manifest count discrepancy**: `tests.vba.audit-gestion-helper.json` lists 11 procedures; `config.yaml` may reference fewer. Reconciliation pending.
-3. **Regression-fix commit pending**: the 2026-06-14 audit report-path fix is verified in the working tree and imported Access binary, but still needs a Git commit SHA recorded here before closeout.
+2. **Manifest count discrepancy**: resolved from Git evidence. `staging:openspec/config.yaml` lists `tests/tests.vba.audit-gestion-helper.json` with 11 procedures, matching this page and the manifest evidence. Local caveat: this checkout has no `openspec/config.yaml` file.
+3. **Regression-fix commit**: resolved as `ad96b95` on `staging`; the current documentation branch carries equivalent commit `c2026f5`.
 
 ## Evidence Sources
 
@@ -106,13 +118,13 @@ _Web migration considerations — to be populated when migration work begins._
 
 | Step | Action | Done |
 |------|--------|------|
-| 1 | Tests pass against staging HEAD | [x] (11/11 at `3c4692f`; 11/11 reverified 2026-06-14 on `a2d5ae4` + working tree fix) |
-| 2 | `last_verified_commit` updated with SHA | [ ] pending regression-fix commit SHA |
+| 1 | Tests pass against staging HEAD | [x] (11/11 at `3c4692f`; 11/11 evidence carried by regression-fix commit `ad96b95` on `staging`) |
+| 2 | `last_verified_commit` updated with SHA | [x] `ad96b95` |
 | 3 | `last_verified_at` updated with ISO datetime | [x] |
 | 4 | `test_evidence` updated with manifest + pass/total | [x] |
-| 5 | `staging_integration_commit` updated with merge SHA | [ ] pending regression-fix commit SHA |
+| 5 | `staging_integration_commit` updated with merge SHA | [x] `ad96b95` |
 | 6 | `evidence_updated_at` updated with current datetime | [x] |
-| 7 | Feature status reflects current state | [x] (`passing`, pending commit traceability) |
+| 7 | Feature status reflects current state | [x] (`passing`, pending UAT/release) |
 
 ## Regression Evidence — 2026-06-14
 

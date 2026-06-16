@@ -99,14 +99,49 @@
 | Rol calculado devuelve valor incorrecto | Regresión de `*Calculado` o `PermisoPruebas` | Crear prueba de `UsuarioAplicacionPermisos` con permisos forzados | BR-UPN-6 |
 
 ## §6 Notas de migración web
-- Traducir menús a rutas y permisos declarativos.
-- Centralizar roles en un servicio de autorización; no duplicar checks en cada controlador.
-- Mantener auditoría de decisiones de autorización.
-- No copiar dependencia de `TempVars`, globals o Ribbon como control de seguridad real.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- El menú principal enruta a Proyecto y Auditorías mediante formularios dedicados (BR-UPN-1): la web debe traducir cada opción de menú a una ruta explícita (`/proyectos`, `/auditorias`), con guard de rol y guard de dominio.
+- El usuario técnico no puede ejecutar altas sensibles de Proyecto/Auditoría (BR-UPN-2): la API REST de alta debe devolver `403` con mensaje explícito ("No tiene autorización para esa acción") cuando el usuario tiene `EsTecnico = Sí`. El mensaje debe ser el mismo que ya muestra `Form_Form0BDOpcionesParteProyectos.cls:46,104,142`.
+- Solo administrador ve Ribbon en modo pruebas; en uso normal se oculta (BR-UPN-3): la web debe mantener la regla "modo pruebas ⇒ admin visible" y "modo normal ⇒ oculto para no-admin", con `PermisoPruebas` como flag de autorización.
+- La gestión de Proyecto precarga NC abiertas y filtra al técnico por su nombre (BR-UPN-4): el endpoint de gestión de Proyecto debe aplicar el filtro `ResponsableTelefonica = usuario.Nombre` por defecto, sin permitir que el técnico vea NC de otro responsable.
+- La gestión de Auditoría precarga NC abiertas y filtra responsable de implantación para no técnicos (BR-UPN-5): el endpoint de gestión de Auditoría debe aplicar el filtro `RESPONSABLEIMPLANTACION = usuario.Nombre` por defecto para no técnicos.
+- Los 7 flags `EsUsuario*` (`Administrador`, `Calidad`, `Economia`, `Secretaria`, `Tecnico`, `SinAcceso`, `CalidadAvisos`) en `UsuarioAplicacionPermisos` + `PermisoPruebas` en `Usuario` (BR-UPN-6): la web debe seguir exponiendo los mismos 8 flags/permisos calculados, como atributos del claim/token del usuario.
+- La matriz completa de permisos por acción sensible (cerrar/eliminar/rehabilitar/documento/acción/informe/configuración) está aprobada por producto (BR-UPN-7): la web debe poder consumir esa matriz desde un único servicio de autorización, no como checks dispersos.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_Form0BDOpciones`, `Form_Form0BDOpcionesParteProyectos`, `Form_Form0BDOpcionesAuditorias`, `Form_Form0BDTecnicos` por un menú web declarativo con rutas, guards y permisos; no replicar la cinta (Ribbon) Access.
+- Convertir `Usuario` y `UsuarioAplicacionPermisos` en un servicio de identidad + autorización: el primero resuelve la identidad desde un token, el segundo aplica la matriz de permisos.
+- Reemplazar el patrón de inyección de `m_ObjUsuarioConectado` por middleware de autenticación/autorización en la capa de aplicación, no por una variable global mutada al inicio.
+- Mover los 7 flags `EsUsuario*` y `PermisoPruebas` a claims del JWT/token del usuario, no como propiedades de un objeto VBA.
+- Sustituir la cinta (Ribbon) como control de seguridad por un menú declarativo con guard de rol en el servidor; la cinta no debe decidir permisos, solo reflejar la decisión del servidor.
+- Reemplazar la convención de `Forms("FormNCProyectoGestion").ResponsableTelefonica = m_ObjUsuarioConectado.Nombre` por un parámetro de filtro explícito en la URL o body de request, con guard en el servidor.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar `TempVars` ni globals como mecanismo de inyección de usuario: la web debe usar autenticación por token/sesión, no variables globales.
+- No usar la cinta (Ribbon) ni la visibilidad de menús como control de seguridad real: la web debe aplicar permisos en el servidor y devolver `403` cuando corresponda.
+- No duplicar la lógica de "qué es un técnico" en cada `.cls` de formulario: la web debe tener un único servicio de autorización.
+- No migrar la combinación `EsTecnico` + `EsAdministrador` como dos checks booleanos independientes: la web debe tratarlos como roles dentro de una matriz declarativa.
+- No portar la dependencia de `Forms(...)` como mecanismo de comunicación entre formularios: la API REST debe recibir parámetros explícitos en la URL o body.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿La matriz de permisos (BR-UPN-7) es la misma para Proyecto y Auditoría o se diferencia por dominio? Confirmar alcance.
+- ¿Los 7 flags `EsUsuario*` se mantienen como están en la web o se renombran a roles más explícitos? (BR-UPN-6) Confirmar convención.
+- ¿El flag `SinAcceso` bloquea toda la app o solo rutas sensibles? (BR-UPN-6) Hoy se infiere del nombre; la web debe tener un contrato explícito.
+- ¿La cinta (Ribbon) sobrevive a la migración como artefacto de UI o se elimina? (BR-UPN-3) Si sobrevive, ¿quién la diseña?
+- ¿Los filtros de precarga por `ResponsableTelefonica` y `RESPONSABLEIMPLANTACION` (BR-UPN-4, BR-UPN-5) son obligatorios o el usuario puede quitarlos? ¿La respuesta del backend debe filtrar siempre por defecto?
+- ¿La auditoría de decisiones de autorización (denegado/permitido + motivo) tiene un SLA de retención? Confirmar antes de definir el servicio.
 
 ## §7 Registro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-UPN-1 — El menú principal enruta a Proyecto y Auditorías mediante formularios dedicados. | Verified-static | `Form_Form0BDOpciones.cls:15` (`DoCmd.OpenForm "Form0BDOpcionesParteProyectos"`) y `Form_Form0BDOpciones.cls:71` (`DoCmd.OpenForm "Form0BDOpcionesAuditorias"`); FALTA → crear mediante `access-vba-tdd` como contrato de navegación/cableado (sin UI) | 2026-06-15 |
+| BR-UPN-2 — Usuario técnico no puede ejecutar altas sensibles de Proyecto/Auditoría. | Verified-static | `EsTecnico = EnumSino.Sí` en `Form_Form0BDOpcionesParteProyectos.cls:46,104,142` y `Form_Form0BDOpcionesAuditorias.cls:50,168,265`; también `Form_Form0BDTecnicos.cls:124`; FALTA → crear mediante `access-vba-tdd` con fixtures de `TbUsuariosAplicaciones` + inyección de `m_ObjUsuarioConectado` y asserts sobre mensaje de autorización | 2026-06-15 |
+| BR-UPN-3 — Solo administrador ve Ribbon en modo pruebas; en uso normal se oculta. | Verified-static | `EsAdministrador = EnumSino.Sí` combinado con `PermisoPruebas` en `Form_Form0BDOpciones.cls:115,132`; `PermisoPruebas` declarado en `src/classes/Usuario.cls:36`; FALTA → crear mediante `access-vba-tdd` con coste vía stub de `m_ObjUsuarioConectado` y asserts sobre visibilidad de Ribbon | 2026-06-15 |
+| BR-UPN-4 — La gestión de Proyecto precarga NC abiertas y filtra al técnico por su nombre. | Verified-static | `Form_Form0BDOpcionesParteProyectos.cls:142-143` filtra `Forms("FormNCProyectoGestion").ResponsableTelefonica = m_ObjUsuarioConectado.Nombre`; FALTA → crear mediante `access-vba-tdd` con fixtures de NC y asserts sobre `ResponsableTelefonica` precargado | 2026-06-15 |
+| BR-UPN-5 — La gestión de Auditoría precarga NC abiertas y filtra responsable de implantación para no técnicos. | Verified-static | `Form_Form0BDOpcionesAuditorias.cls:140-141` filtra `Forms("FormNCAuditoriaGestion").RESPONSABLEIMPLANTACION = m_ObjUsuarioConectado.Nombre`; FALTA → crear mediante `access-vba-tdd` con fixtures de NC de auditoría y asserts sobre el filtro | 2026-06-15 |
+| BR-UPN-6 — Roles calculados de usuario: 7 flags `EsUsuario*` (`Administrador`, `Calidad`, `Economia`, `Secretaria`, `Tecnico`, `SinAcceso`, `CalidadAvisos`) en `UsuarioAplicacionPermisos` + `PermisoPruebas` en `Usuario` (8 flags/permisos calculados totales). | Verified-static | `src/classes/UsuarioAplicacionPermisos.cls:15-21` (7 flags `EsUsuario*`) y `src/classes/Usuario.cls:36` (`PermisoPruebas`); FALTA → crear mediante `access-vba-tdd` con fixtures de permisos por rol, asserts sobre cada `*Calculado` y `PermisoPruebas` | 2026-06-15 |
+| BR-UPN-7 — La matriz completa de permisos por acción sensible (cerrar/eliminar/rehabilitar/documento/acción/informe/configuración) está aprobada por producto. | Intended | FALTA → crear mediante `access-vba-tdd` tras confirmar matriz; misma matriz referenciada por `cross-cutting-support` BR-XCUT-6 | 2026-06-15 |
 | Los menús de Proyecto y Auditorías existen y enrutan formularios de dominio. | Verified-static | `src/forms/Form_Form0BDOpciones.cls:15,71` (`DoCmd.OpenForm "Form0BDOpcionesParteProyectos"` / `DoCmd.OpenForm "Form0BDOpcionesAuditorias"`) | 2026-06-15 |
 | Los técnicos están bloqueados en varias altas sensibles. | Verified-static | `EsTecnico = EnumSino.Sí` en `Form_Form0BDOpcionesParteProyectos.cls:46,104,142`, `Form_Form0BDOpcionesAuditorias.cls:50,168,265` y `Form_Form0BDTecnicos.cls:124` | 2026-06-15 |
 | El Ribbon en modo pruebas se reserva al administrador. | Verified-static | `EsAdministrador = EnumSino.Sí` + `PermisoPruebas` en `Form_Form0BDOpciones.cls:115,132`; `PermisoPruebas` declarado en `src/classes/Usuario.cls:36` | 2026-06-15 |

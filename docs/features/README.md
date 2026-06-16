@@ -6,6 +6,8 @@
 
 **Canonical location**: `docs/features/` — this directory, not `openspec/`, is the permanent home.
 
+> **Nota de trazabilidad**: este índice referencia `openspec/REGRESSION-ANCHOR.md` como ancla documental; ese archivo está presente en este checkout y reconciliado por `f122d9a chore(sdd): reconcile openspec config for capability catalog`. Para trazabilidad operativa, las páginas de `docs/features/`, [`docs/capabilities/release-uat-rollback-traceability.md`](../capabilities/release-uat-rollback-traceability.md) y los commits/manifests citados siguen siendo la fuente primaria de evidencia.
+
 ## How to use
 
 | Audience | Action |
@@ -53,7 +55,7 @@ Every feature file MUST populate these fields. Empty = close-gate fails.
 1. Copy `_template.md` to `docs/features/<domain>/<feature-key>.md`
 2. Fill every REQUIRED field (see schema above)
 3. Cross-reference at least 2 independent evidence sources (archive report + test manifest, or git history + source module)
-4. Add a row to `openspec/REGRESSION-ANCHOR.md` summary table
+4. Add a row to `openspec/REGRESSION-ANCHOR.md` summary table when that artifact is present/reconciled; if it is absent in the checkout, record the gap in the feature page and in the release/UAT capability instead of inventing anchor content.
 5. Add the feature to the domain listing above
 
 ## Manifest-to-feature mapping
@@ -78,11 +80,34 @@ The following `tests/*.json` manifests are mapped to features. Manifests not lis
 
 **Manifest reconciliation notes**:
 
-- `tests.vba.audit-gestion-helper.json` count reconciled in `openspec/config.yaml` as 11 procedures.
+- `tests.vba.audit-gestion-helper.json` reconciliado en `staging:openspec/config.yaml` con 11 procedimientos; salvedad del checkout local: `openspec/config.yaml` está ausente.
 - `tests.vba.listado-helper.json` marked retired in `openspec/config.yaml` with replacement `tests/tests.vba.proyecto-gestion-helper.json`.
 - `tests.vba.proyecto-gestion-helper.json` registered in `openspec/config.yaml` as 8 procedures.
 - `tests.vba.indicadores-caracterizacion.json` registered in `openspec/config.yaml` as 46 procedures and mapped to `indicator-issues-cleanup`.
 - Remaining issue #67 work: prove all feature pages against fresh evidence, then remove any feature-level `pending evidence` / `pending traceability` markers.
+
+**Drift de manifests en esta rama (2026-06-15)**: cross-check A4 (ver `docs/inventory/anomalies-investigation.md` Anexo A) reveló que este branch (`feature/issue-67-final-fixes-2026-06-15`) tiene **7 manifests en `tests/`** mientras que `origin/staging` tiene **17**. Faltan 10 manifests en este checkout:
+
+- `form-helper.json` (9 procedimientos únicos)
+- `form-helper-canary.json` (1 procedimiento, 100% duplicado de `form-helper.json`)
+- `form-helper-ensure.json` (1 procedimiento, 100% duplicado de `form-helper.json`)
+- `listado-helper.json` (vacío, ya retired)
+- `seguimiento-tareas-helper.json` (9 únicos)
+- `proyecto-gestion-helper.json` (8 únicos)
+- `audit-gestion-helper.json` (11 únicos)
+- `indicadores-caracterizacion.json` (~55 procedimientos; 9 duplicados con `tests.vba.json`, 46 únicos)
+- `cache-acar.json` (3 únicos)
+- `cache-warmup.json` (1 único)
+
+**Implicación**: la evidencia `X/Y PASS` citada en cada feature page es **histórica de `staging` HEAD del momento**, no reproducible en este branch sin cherry-pick. Cada feature page affected incluye una línea `Scope note` que documenta el drift específico de su manifest. Para restaurar cobertura self-contained, cherry-pick los **7 manifests únicos** desde `origin/staging` (los 2 duplicados y el retired se pueden omitir). Esta acción se planifica en Fase 2 TDD authoring, no antes.
+
+## Bloqueos de cierre descubiertos
+
+| Feature | Bloqueo/deuda | Dónde seguir |
+|---|---|---|
+| `indicator-issues-cleanup` | Evidencia mixta: hay slices verdes y focused PASS para reconstrucción completa/fallo post-escritura, pero no hay manifest completo verde; commits Phase 3 no reconciliados con `staging` y faltan UAT/release. | [`cache-management/indicator-issues-cleanup.md`](cache-management/indicator-issues-cleanup.md) |
+| `audit-backend-list-cache` | SHA de regresión resuelto (`ad96b95` en `staging`; equivalente `c2026f5` en la rama documental) y manifest/config reconciliado por `staging:openspec/config.yaml`; faltan filas UAT/release. | [`audit/audit-backend-list-cache.md`](audit/audit-backend-list-cache.md) |
+| Anchor transversal | `openspec/REGRESSION-ANCHOR.md` presente y reconciliado por `f122d9a`; copia externa en `C:\00repos\documentacion\OPENSPEC\00_No_Conformidades` pendiente de verificación. | [`../capabilities/release-uat-rollback-traceability.md`](../capabilities/release-uat-rollback-traceability.md) |
 
 ## Release & Branching Policy
 
@@ -129,7 +154,7 @@ Before declaring any feature closed:
 - [ ] **TDD evidence gate**: Fresh `test_vba` run evidence (manifest pass/total against current HEAD or a verified staging commit) is required before the feature can be declared `passing` or ready for UAT/release. Commit-message-level evidence ("3/3 green" in a commit body) is **not sufficient** for this gate — it must be a manifest result or Dysflow test run output.
 - [ ] **Post-test documentation gate**: After staging integration and passing tests, the feature ledger Status section is updated with fresh evidence before declaring work complete. Required fields: `last_verified_commit`, `last_verified_at`, `test_evidence`, `staging_integration_commit`, `evidence_updated_at`. Integration is **not done** until this gate is satisfied.
 - [ ] **UAT tag gate**: `approved_uat_tag` is recorded (or N/A for features not yet in UAT)
-- [ ] `openspec/REGRESSION-ANCHOR.md` summary table links to the feature file
+- [ ] `openspec/REGRESSION-ANCHOR.md` summary table links to the feature file, or the checkout explicitly records that the anchor is absent/pending reconciliation
 - [ ] This README domain listing includes the feature
 
 ## Post-Test Documentation Gate (mandatory workflow rule)

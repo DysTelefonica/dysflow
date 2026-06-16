@@ -89,14 +89,47 @@
 | Riesgos ausentes u obsoletos | Regresión cache-first o falta de vínculo | Reejecutar cache-e2e + prueba dedicada de riesgo | BR-EXP-6..7 |
 
 ## §6 Notas de migración web
-- Modelar expediente como agregado de contexto con responsables, jurídicas y riesgos asociados.
-- Separar la búsqueda de expedientes de los formularios consumidores mediante una API de selección reutilizable.
-- No copiar dependencia de globals/objetos `m_Obj*` como estado compartido implícito.
-- Convertir el ciclo de vida de riesgos en estados y comandos explícitos antes de migrar.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- El filtrado de la búsqueda de expedientes por palabra clave y responsable de calidad antes de seleccionar (BR-EXP-1): la web debe seguir exigiendo al menos uno de los dos filtros, o el `IDExpediente` directo, antes de devolver candidatos.
+- La selección de expediente solo se completa cuando hay un expediente cargado con `IDExpediente` válido (BR-EXP-2): la API de selección debe rechazar intentos de "elegir" cuando no hay fila seleccionada, replicando el `ComandoElegir_Click` y `ListaFiltrados_Click` del VBA.
+- Los responsables de calidad del combo de búsqueda proceden siempre de `m_ObjEntorno.ColUsuariosCalidad` (BR-EXP-3): la web no debe aceptar responsables arbitrarios; debe consultar un endpoint de "responsables de calidad" y limitar la búsqueda a ese dominio.
+- `Expediente.TextoExpediente` prioriza `Nemotecnico (CodExp)` y cae a `CodExp` si falta nemotécnico (BR-EXP-4): la API REST debe mantener esa regla de presentación y nunca devolver un literal vacío.
+- El expediente expone sus `Juridicas`, `Responsables`, `RESPONSABLECALIDAD`, `JefeProyecto` y `Riesgos` asociados (BR-EXP-5): la web debe serializar el expediente como agregado con sus vínculos, no como entidad aislada.
+- La lectura de riesgos de NC Proyecto con semántica cache-first cuando la caché está cargada (BR-EXP-6): si la caché tiene el expediente/riesgo, se responde desde ella; cargado-vacío es válido, no es fallback a backend.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Form_FormExpedientesBusqueda` por un endpoint REST `GET /expedientes?keyword=...&responsableCalidad=...` con paginación, retornando `{IDExp, Cod_Exp, Nemotécnico, Título}` y dejando que la UI pinte.
+- Convertir la combinación `Expediente` + `ExpedienteResponsable` en un agregado de dominio, con `constructor.getExpediente(IDExp)` retornando el expediente hidratado con todas sus relaciones.
+- Reemplazar el acceso a `m_ObjEntorno.ColUsuariosCalidad` por una API de catálogo de responsables de calidad, versionada y cacheable, no por un global mutado en runtime.
+- Mover el ciclo de vida de riesgos a una máquina de estados explícita con comandos (`Aceptar`, `Mitigar`, `Materializar`, `Retirar`, `Cerrar`, `Retipificar`) y eventos versionados, en lugar de un objeto `Riesgo` con propiedades dispersas.
+- Sustituir `RiesgoServicio` y `RiesgoRepositorio` por un servicio de dominio que reciba un comando, valide el estado origen, y devuelva el nuevo estado, no por un objeto con setters múltiples.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar la dependencia de `m_ObjEntorno` y `m_ObjUsuarioConectado` como estado compartido implícito: la web debe inyectar el contexto del usuario al servicio, no leer de globals.
+- No duplicar la lógica de "qué es un responsable de calidad" en cada formulario: la web debe tener un único servicio de "responsables" y un único catálogo de roles.
+- No usar la selección de expediente por `OpenArgs` o un string opaco: la API web debe recibir `IDExpediente` (entero) en la URL.
+- No migrar el patrón "consulta viva a backend si la caché está vacía" como ruta normal: en la web, cargado-vacío se responde vacío y se permite reintento explícito, no fallback silencioso.
+- No usar `Form_formRiesgosSeleccion` como única puerta de entrada al riesgo: la API web debe permitir consultar riesgos por `IDExpediente` sin necesidad de un formulario de selección intermedio.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Cuáles son los estados canónicos del ciclo de vida de riesgos? (BR-EXP-7) Hoy se mencionan aceptación, mitigación, contingencia, materialización, retirada, cierre y retipificación — ¿están todos o hay otros?
+- ¿Los riesgos asociados a NC Proyecto son siempre los mismos que los del expediente, o pueden existir riesgos solo de NC sin expediente? Confirmar cardinalidad.
+- ¿Un expediente puede tener más de un responsable de calidad o es único? Hoy `ColUsuariosCalidad` parece ser colección; ¿la búsqueda debe permitir varios? (BR-EXP-3)
+- ¿La relación `Riesgo → NC` es muchos-a-muchos o un riesgo está atado a una sola NC? (BR-EXP-5, BR-EXP-6)
+- ¿`Nemotécnico` es obligatorio para todos los expedientes o puede estar vacío? Si está vacío, ¿se debe permitir crear la NC asociada? (BR-EXP-4)
+- ¿La búsqueda por palabra clave aplica a `Nemotécnico`, `Cod_Exp` y `Título`, o solo a uno de ellos? Confirmar antes de definir el endpoint.
 
 ## §7 Registro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-EXP-1 — La búsqueda de expedientes filtra por palabra clave y responsable de calidad antes de seleccionar. | Verified-static | `Form_FormExpedientesBusqueda.Filtrar`, `constructor.getExpedientesBusqueda`; FALTA → author via access-vba-tdd con fixtures de expedientes y responsables | 2026-06-15 |
+| BR-EXP-2 — La selección de expediente solo emite evento si hay un expediente cargado; si no hay selección, no fuerza un objeto inválido. | Verified-static | `ComandoElegir_Click`, `ListaFiltrados_Click`; FALTA → author via access-vba-tdd | 2026-06-15 |
+| BR-EXP-3 — Los responsables de calidad del combo proceden de `m_ObjEntorno.ColUsuariosCalidad`. | Verified-static | `EstablecerComboResponsablesCalidad`; FALTA → author via access-vba-tdd | 2026-06-15 |
+| BR-EXP-4 — `Expediente.TextoExpediente` prioriza `Nemotecnico (CodExp)` y cae a `CodExp` si falta nemotécnico. | Verified-static | `Expediente.TextoExpediente`; FALTA → author via access-vba-tdd unitario | 2026-06-15 |
+| BR-EXP-5 — Un expediente puede exponer jurídicas, responsables, responsable de calidad, jefe de proyecto y riesgos asociados. | Verified-static | Propiedades `Juridicas`, `Responsables`, `RESPONSABLECALIDAD`, `JefeProyecto`, `Riesgos`; FALTA → author via access-vba-tdd con esquema primero | 2026-06-15 |
+| BR-EXP-6 — Los riesgos asociados a NC Proyecto deben leerse con semántica cache-first cuando la caché está cargada. | Verified-static | `tests/tests.vba.cache-e2e.json` 7/7 PASS (2026-06-14, staging `20b71f64`); referencia archivada en `docs/features/cache-management/trust-ncproyecto-cache-hits.md`; FALTA → reejecutar | 2026-06-15 |
+| BR-EXP-7 — El ciclo de vida propio de riesgos — aceptación, mitigación, contingencia, materialización, retirada, cierre y retipificación — está definido y probado. | Intended | FALTA → author via access-vba-tdd tras confirmar estados | 2026-06-15 |
 | Existe una UI de búsqueda/selección de expedientes con filtros por palabra clave y responsable. | Verified-static | `src/forms/Form_FormExpedientesBusqueda.cls` | 2026-06-15 |
 | El objeto `Expediente` expone responsables, jurídicas, responsable de calidad, jefe de proyecto y riesgos. | Verified-static | `src/classes/Expediente.cls` | 2026-06-15 |
 | El objeto `Riesgo` contiene campos de aceptación, retirada, mitigación, cierre y retipificación. | Verified-static | `src/classes/Riesgo.cls` | 2026-06-15 |

@@ -233,26 +233,14 @@ Public Function UpsertListado(ByVal p_IDNC As Long, Optional ByRef p_Error As St
         rsListado!ACR = Left$(Nz(rsNCSource!ACR, ""), 255)
         rsListado!Cerrada = Left$(CStr(Nz(rsNCSource!Cerrada, False)), 10)
     End If
-
+    
     rsNCSource.Close
     Set rsNCSource = Nothing
-
-    ' WU3: populate 1-to-N denormalized columns via PipeFlatten.
-    ' Permite Google/PC search sin joins a filter time.
-    ' REQ-LISTING-AC-CONCAT: AccionesCorrectivasConcatenadas
-    ' REQ-LISTING-AR-CONCAT: AccionesRealizadasConcatenadas
-    Dim acErr As String
-    rsListado!AccionesCorrectivasConcatenadas = PipeFlatten( _
-        "TbNCAccionCorrectivas", "AccionCorrectiva", "IDNoConformidad", _
-        p_IDNC, db, acErr)
-    rsListado!AccionesRealizadasConcatenadas = PipeFlatten( _
-        "TbNCAccionesRealizadas", "AccionRealizada", "IDNoConformidad", _
-        p_IDNC, db, acErr)
-
+    
     rsListado.Update
     rsListado.Close
     Set rsListado = Nothing
-
+    
     UpsertListado = True
     Exit Function
     

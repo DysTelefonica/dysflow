@@ -71,6 +71,7 @@
 2. Mantener pruebas de ruta/kill-switch/backend como smoke obligatorio de cualquier UAT que toque datos.
 3. Crear un diagnóstico de configuración que devuelva JSON con backend resuelto, modo, caché y seguridad.
 4. No promover feature/capacidad si la evidencia procede de backend incorrecto.
+5. Antes de usar una fila de release/UAT como evidencia, cruzarla con [`CAP-RELEASE-UAT-ROLLBACK`](release-uat-rollback-traceability.md): tag UAT, commit alcanzable, manifest citado y estado de backend deben pertenecer al mismo corte de `staging`.
 
 ## §5 Evidencia y trazabilidad
 - **Tests**: `tests/tests.vba.e2e.json`, `tests/tests.vba.cache-readiness.json`, procedimientos `Test_BackendConfigPaths_*` en `tests/tests.vba.json`; no reejecutados en esta sesión documental. **Caveat de runner**: tests registrados pero no reejecutados en esta sesión documental; promover a `Verified-runtime` solo tras reejecución contra el `staging` HEAD actual. **Precondición para BR-UPN-1..6 y BR-XCUT-1..7**: BR-CFG-5 (`AssertSafeBackendForCatalogBootstrap`) y BR-CFG-6 (auditoría de routing/kill-switch/indicadores) deben estar verdes antes de ejecutar suites que toquen `TbUsuariosAplicaciones` / `m_ObjUsuarioConectado` o costuras de soporte.
@@ -89,14 +90,45 @@
 | Caché no respeta OFF/ON | Kill-switch roto | Reejecutar cache-readiness | BR-CFG-4 |
 
 ## §6 Notas de migración web
-- Convertir configuración de entorno en configuración explícita por despliegue, con protección contra producción en tests.
-- Separar routing local de cachés/materialized read models.
-- Exponer diagnóstico de entorno auditable antes de ejecutar pruebas o migraciones.
-- No copiar rutas de usuario ni TempVars como configuración server-side.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- Forzar `BackendSandbox` en E2E aunque `BackendActivo=PROD` (BR-CFG-1): la suite E2E de la web debe seguir garantizando que el `profile=test` resuelve a un backend seguro y nunca toca producción, con el mismo guard de "intentar PROD en test ⇒ error" que el manifest `tests.vba.e2e.json` ya documenta.
+- Anclar rutas locales al `USERPROFILE` actual del usuario que ejecuta (BR-CFG-2): la sanitización de ruta de la web debe seguir reescribiendo rutas con perfil de usuario de Windows al directorio home del proceso del usuario, conservando la regla de rechazo de rutas que ya no son locales.
+- Respetar el kill-switch de caché: cualquier mutación de `TbConfiguracionBackends` o equivalente en la web debe persistir el flag y permitir restaurarlo a un estado conocido (BR-CFG-4) para no contaminar otras pruebas/UAT.
+- Bloquear el bootstrap de catálogo de estados cuando el backend no es seguro (BR-CFG-5): `AssertSafeBackendForCatalogBootstrap` debe seguir presente en el servicio de bootstrap de la web, rechazando rutas que contengan `prod`, `\` o `\datoste` con un error explícito y trazable.
+- Distinguir rutas UNC/no locales como inmutables (BR-CFG-3): el sanitizer de la web no debe "arreglar" rutas que ya no son locales a un usuario Windows; deben quedarse como están y, si el sistema las necesita, reportar error.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir `Variables Globales` y TempVars de backend (rutas frontend/backend, `BackendActivo`) por un servicio de configuración inmutable por despliegue, con `profile` (dev/staging/prod) y resolución determinista al arrancar el proceso, no como estado mutable global.
+- Reemplazar los `ForceLocalBackend` / `m_TestingMode` esparcidos por tests por un único perfil de testing inyectable en el contenedor de DI, con guard explícito en arranque para no permitir `prod` desde un runner de tests.
+- Convertir la lectura directa de `TbConfiguracionBackends` desde código de tests y formularios por una API REST de diagnóstico (`GET /diagnosticos/configuracion`) que devuelva JSON con backend resuelto, modo, estado de caché y resultado de guardas de seguridad.
+- Sustituir la convención implícita "ruta local = `\` o `C:\Users\...`" por una normalización explícita que compare contra `home` real del proceso y bloquee el guardado si no casa.
+- Mover la matriz de configuración a un repositorio versionado con un único archivo por entorno, no distribuida entre `Variables Globales`, `Entorno` y código de tests.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar rutas de usuario Windows como `C:\Users\<otro_usuario>\...` configuradas a mano en la app: cualquier ruta que apunte a otro perfil debe fallar de inicio, no continuar.
+- No migrar el patrón TempVars como configuración server-side: el modelo de la web debe leer configuración del entorno del proceso o de un servicio, no de variables globales mutables.
+- No mantener caches de backend compartidas entre runs de tests y runs de UAT: cada suite debe tener su propio perfil de testing y su propio sandbox, con teardown obligatorio.
+- No usar `KillSwitch` para "tocar" el estado durante una operación: la mutación debe ser transaccional con rollback si el runbook falla.
+- No aceptar rutas UNC como destino de configuración local: en la web, una ruta no local debe ser explícitamente un endpoint remoto, no un fichero de configuración caído en una share.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Cuál es la matriz canónica de entornos (dev, staging, UAT, producción) que el sistema web debe reconocer? ¿`BackendActivo` se mapea 1:1 o se renombra? (BR-CFG-1)
+- ¿Quién es el responsable de aprobar el cambio de kill-switch de caché? ¿Es una acción de un rol específico (Calidad/Soporte) o queda automatizada? (BR-CFG-4)
+- ¿La política de `AssertSafeBackendForCatalogBootstrap` debe endurecerse más allá de rechazar `prod`, `\` y `\datoste`? Por ejemplo, ¿bloquear también entornos no whitelisted por nombre? (BR-CFG-5)
+- ¿El diagnóstico de configuración debe ser público o restringido a un perfil de administrador/soporte? (BR-CFG-6)
+- ¿Qué campos de `TbConfiguracionBackends` sobreviven a la migración y cuáles se modelan como `env vars` o secretos en el despliegue?
+- ¿La auditoría de routing/kill-switch/indicadores (BR-CFG-6) tiene un SLA o debe quedar como rastro en logs? Confirmar si debe exponerse al usuario o solo a operación.
 
 ## §7 Registro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-CFG-1 — Las pruebas E2E deben forzar `BackendSandbox` aunque `BackendActivo` sea PROD. | Verified-static | `Test_E2E_EnvConfig_AplicaBackendActivo_Atomic` registrado en `tests/tests.vba.e2e.json`; no reejecutado | 2026-06-15 |
+| BR-CFG-2 — Las rutas locales de usuario Windows se anclan al `USERPROFILE` actual. | Verified-static | Familia `Test_BackendConfigPaths_*` registrada en `tests/tests.vba.json`; no reejecutado | 2026-06-15 |
+| BR-CFG-3 — Rutas actuales, no locales y UNC no se modifican indebidamente. | Verified-static | Familia `Test_BackendConfigPaths_*` registrada en `tests/tests.vba.json`; no reejecutado | 2026-06-15 |
+| BR-CFG-4 — El kill-switch de caché persiste cambios controlados y puede restaurarse. | Verified-static | Familia `Test_KillSwitch_*` registrada en `tests/tests.vba.cache-readiness.json`; no reejecutado | 2026-06-15 |
+| BR-CFG-5 — `EstadoCatalogoBootstrap` bloquea backend PROD/unsafe y exige LOCAL/SANDBOX/STAGING seguros. | Verified-static | `AssertSafeBackendForCatalogBootstrap` en `src/modules/EstadoCatalogoBootstrap.bas`; `Test_EstadoCatalogo_ProductionGuard_BlocksUnsafe_Atomic`; no reejecutado | 2026-06-15 |
+| BR-CFG-6 — Backend routing, configuración de caché e indicadores deben ser auditables antes de UAT/release. | Intended | FALTA → crear mediante access-vba-tdd para diagnósticos de configuración end-to-end | 2026-06-15 |
 | Hay pruebas registradas para forzar sandbox aunque `BackendActivo=PROD`. | Verified-static | `tests/tests.vba.e2e.json` | 2026-06-15 |
 | Hay pruebas registradas de sanitización de ruta Windows. | Verified-static | `tests/tests.vba.json` | 2026-06-15 |
 | `EstadoCatalogoBootstrap` bloquea rutas/backend inseguros por código. | Verified-static | `src/modules/EstadoCatalogoBootstrap.bas` | 2026-06-15 |
@@ -104,3 +136,6 @@
 
 **⚠️ Divergencias (intención SDD ≠ realidad del código)**
 - Sin divergencia confirmada. Riesgo: la configuración está parcialmente probada, pero falta un contrato operativo único de backend antes de cada UAT.
+
+**Deuda de runbook**
+- Falta un procedimiento único que una esta capacidad con la trazabilidad de release/UAT: comprobar backend activo/sandbox, kill-switch, manifests de configuración y fila de release antes de afirmar evidencia `Verified-runtime` en otra capacidad.

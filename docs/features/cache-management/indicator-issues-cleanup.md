@@ -6,14 +6,15 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Current** | `active` / `mixed evidence` — comportamiento documentado con evidencia runtime por slices; 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15; 1 caso sigue pendiente por anomalía runner/COM (`HRESULT 0x800706BE`) |
+| **Current** | `active` / `mixed evidence` — comportamiento documentado con evidencia runtime por slices; 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15; la reconstrucción completa idempotente y la propagación de fallo post-escritura tienen evidencia focused PASS del 2026-06-15 |
 | **Last verified** | 2026-06-15 — evidencia Dysflow aportada por filtros/slices; esta actualización documental no ejecutó Access/VBA |
 | **Manifest drift** | `known timeout` — `tests/tests.vba.indicadores-caracterizacion.json` tiene 55 procedimientos y timeoutea como conjunto; usar filtros/slices |
+| **Scope note** | Evidencia por slices/focused es histórica de `staging` HEAD (no de este branch). Los manifests `tests/tests.vba.indicadores-caracterizacion.json`, `tests/tests.vba.cache-acar.json` y `tests/tests.vba.cache-warmup.json` NO están en este checkout. Adicionalmente, los focused PASS (`Test_Issue18_ReconstruirTodo_Idempotent_Atomic` y `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic`) sí están en este branch y tienen verificación runtime de 2026-06-15 (ver `Last verified at`). Ver [`docs/inventory/anomalies-investigation.md` Anexo A](../inventory/anomalies-investigation.md#anexo-a--cross-check-de-duplicación-a4-ejecutado-2026-06-15). |
 | **Staging reachability** | `partial / pending evidence` — `git merge-base --is-ancestor` local confirmó algunos commits base en `staging`; commits posteriores de Phase 3 existen en el historial local, pero no son ancestros de `staging`/`origin/staging` en este checkout |
-| **TDD evidence** | `mixed` — múltiples slices `Verified-runtime`; no full manifest green; 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15; 1 caso pendiente por anomalía runner/COM |
+| **TDD evidence** | `mixed` — múltiples slices `Verified-runtime`; no full manifest green; 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15; evidencia focused PASS reciente para reconstrucción completa idempotente y fallo post-escritura |
 | **Last verified commit** | Pendiente de verificación contra el `staging` HEAD actual |
 | **Last verified at** | 2026-06-15 |
-| **Test evidence** | Actual por slices: `indicator-fast-counts` 5/5, `cache-materialized` 13/13, `audit-gestion-helper` 11/11, `Indicadores_` 11/11, `CacheIndicadoresMaterializado` 8/8, `CacheIndicadoresAuditoriaMaterializado` 3/3, slices Issue #18 listados debajo; no hay manifest completo verde |
+| **Test evidence** | Actual por slices: `indicator-fast-counts` 5/5, `cache-materialized` 13/13, `audit-gestion-helper` 11/11, `Indicadores_` 11/11, `CacheIndicadoresMaterializado` 8/8, `CacheIndicadoresAuditoriaMaterializado` 3/3, slices Issue #18 listados debajo, más focused PASS de `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` y `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic`; no hay manifest completo verde |
 | **Staging integration commit** | Pendiente de reconciliación; el archivo nombra `8cfb047` como cierre y `687a822` / `255e327` como docs de trazabilidad alcanzables desde `staging`, pero los SHA de implementación Phase 3 requieren reconciliación de alcance en este checkout |
 | **Evidence updated at** | 2026-06-15 — documentación actualizada con evidencia aportada; sin ejecutar Access/VBA en esta tarea |
 
@@ -54,8 +55,8 @@ En términos de negocio:
 - [x] Los cambios de NC sincronizan solo el alcance de `IDNoConformidad` afectado (`Issue18_SincronizarNC` 3/3, `Issue18_NCWriteHook` 1/1 ~120s).
 - [x] Los cambios de AC resuelven AC → NC y sincronizan solo la NC padre (`Issue18_ResolverNCDesde` 3/3, `Issue18_ACWriteHook` 1/1 ~114s).
 - [x] Los cambios de AR/tarea resuelven AR/tarea → AC → NC y sincronizan solo la NC padre (`Issue18_ARWriteHook` 4/4; dos hooks ~117–123s).
-- [ ] La reconstrucción completa es explícita y limitada a bootstrap/reparación/cambios globales: `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` queda pendiente por anomalía runner/COM. La última ejecución devuelve `HRESULT 0x800706BE` tras ~58s; no es regresión funcional. La auditoría posterior no encontró operación Dysflow viva ni lock activo del frontend. No marcar como fallo de comportamiento hasta obtener un retry limpio.
-- [ ] La sincronización post-escritura fallida se reporta/loguea y evita falso éxito: hooks pasan, pero falta prueba explícita de fallo post-escritura → FALTA → author via access-vba-tdd.
+- [x] La reconstrucción completa es explícita y limitada a bootstrap/reparación/cambios globales: `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` PASS el 2026-06-15, duración `4862` ms, valor `issue18_rebuild_idempotent_ok`. Evidencia focused runtime: schema Proyecto/Auditoría inspeccionado, fixture determinista Proyecto `NC=992001` / `AC=992011` / `AR=992021` y Auditoría `Auditoria=992201` / `NC=992202` / `AC=992211` / `AR=992221`; primera y segunda llamada a `Cache_Indicadores_ReconstruirTodo` con `pError=''`, resultado `ok true`, `Proyecto=true`, `Auditoria=true`; conteo de cabeceras estable; teardown OK.
+- [x] La sincronización post-escritura fallida se reporta/loguea y evita falso éxito: `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` PASS el 2026-06-15, duración `4788` ms, valor `issue18_nc_write_hook_failed_sync_ok`. Evidencia focused runtime: confirmado que no existe `NC 992099`; `InvalidarCache` devuelve `False` con `pError` `CacheNCProyecto.InvalidarCache no pudo sincronizar indicador de Proyecto para NC 992099: Cache_IndicadoresProyectoMaterializado_SincronizarNC: no se encontraron filas para NC 992099.`; asserts OK.
 - [x] Los tests aportados son schema-first, fixture-first y sandbox-safe según slices `Fixture` 2/2 y familias Issue #18; no se debe confiar en datos lucky.
 - [x] Proyecto, Auditoría y no regresión cross-domain están cubiertos: `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic` 1/1 con query per-domain (5 filas globales sumando Proyecto + Auditoría). `Test_Issue18_CargarDetalle_*` e `Test_Issue18_CargarBucket_*` Verified-runtime. `Test_Issue38_SeguimientoAuditoria` 1/1. Sin regresión cross-domain observada.
 
@@ -67,12 +68,13 @@ En términos de negocio:
 | `Test_Issue18_*Fixture_*` | filtro `Fixture` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 2/2 |
 | `Test_Issue18_SincronizarNC_*` | filtro `Issue18_SincronizarNC` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 3/3 |
 | `Test_Issue18_ResolverNCDesde*` | filtro `Issue18_ResolverNCDesde` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 3/3 |
-| `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` | `tests/tests.vba.indicadores-caracterizacion.json` | Pendiente por tooling: última ejecución `HRESULT 0x800706BE` tras ~58s; no es regresión funcional, es caveat del runner/COM; auditoría posterior sin operación Dysflow viva ni lock frontend |
+| `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` | `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime focused PASS 1/1 (2026-06-15), duración `4862` ms, valor `issue18_rebuild_idempotent_ok`; fixture-first Proyecto/Auditoría, doble reconstrucción idempotente con `pError=''`, cabeceras estables y teardown OK |
 | `Test_Issue18_CargarBucket_*` | filtro `Issue18_CargarBucket` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 2/2; un test ~120s |
 | `Test_Issue18_CargarDetalle_*` | filtro `Issue18_CargarDetalle` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 2/2; un test ~122s |
 | `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic` | `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 1/1 (resuelto 2026-06-15): query global del test ajustada para sumar recuentos per-domain (`IDCacheIndicadorProyecto=1` + `IDCacheIndicadorProyecto=2`), esquivando un quirk de caché DAO/Jet con `IN (1, 2)` en `COUNT(*)` sin más predicados; `QA_User` 3 + `Otro_User` 2, total global 5 |
 | `Test_Issue18_DetalleCompleto_CamposRequeridosUI_Atomic` | filtro `Issue18_DetalleCompleto` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 1/1 |
 | `Test_Issue18_NCWriteHook_*` | filtro `Issue18_NCWriteHook` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 1/1; ~120s |
+| `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` | `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime focused PASS 1/1 (2026-06-15), duración `4788` ms, valor `issue18_nc_write_hook_failed_sync_ok`; `NC 992099` inexistente fuerza fallo de sincronización, `InvalidarCache` devuelve `False` y propaga `pError` explícito |
 | `Test_Issue18_ACWriteHook_*` | filtro `Issue18_ACWriteHook` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 1/1; ~114s |
 | `Test_Issue18_ARWriteHook_*` | filtro `Issue18_ARWriteHook` en `tests/tests.vba.indicadores-caracterizacion.json` | Verified-runtime 4/4; dos hooks ~117–123s |
 | `Test_CacheIndicadoresMaterializado_*` Proyecto/Auditoría materialized cache family | `tests/tests.vba.cache-materialized.json`; filtros `CacheIndicadoresMaterializado`, `CacheIndicadoresAuditoriaMaterializado` | Verified-runtime 13/13 en manifest, 8/8 proyecto y 3/3 auditoría tras retry |
@@ -92,7 +94,7 @@ En términos de negocio:
 | **Date** | 2026-06-15 evidencia por slices Dysflow; la evidencia histórica de archivo sigue debajo para commits |
 | **Commit** | La evidencia histórica referencia `276e2bc`, `834d0de`, `4d45de3`, `bcb87c6`, `cd9a327`, `2b025a6`, `7b7e613`, `bf76fa0`, `89b2226`, `9cbc9f8`, `a74a947`; ancla actual de staging pendiente de reconciliación |
 | **Manifest** | `tests/tests.vba.indicadores-caracterizacion.json` by filters/slices; `tests/tests.vba.cache-materialized.json`; `tests/tests.vba.indicator-fast-counts.json`; `tests/tests.vba.audit-gestion-helper.json` |
-| **Result** | Verified-runtime por los slices listados en `Tests requeridos / evidencia actual`; el manifest completo `tests/tests.vba.indicadores-caracterizacion.json` de 55 procedimientos timeoutea como conjunto; un test Issue #18 queda pendiente por anomalía runner/COM (`HRESULT 0x800706BE`); 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15 |
+| **Result** | Verified-runtime por los slices listados en `Tests requeridos / evidencia actual`; el manifest completo `tests/tests.vba.indicadores-caracterizacion.json` de 55 procedimientos timeoutea como conjunto; `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` y `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` tienen focused PASS del 2026-06-15; 3 contratos divergentes previos (Issue18_GlobalCache + Issue38 + Issue50) resueltos el 2026-06-15 |
 
 ## Commits de integración
 
@@ -128,8 +130,18 @@ En términos de negocio:
 
 - `proceduresJson` como array shorthand falló con `VBA_INVALID_TEST_PLAN: Test #1 must be an object`; workaround usado: `testsPath` + `filter`.
 - El manifest completo `tests/tests.vba.indicadores-caracterizacion.json` devuelve `MCP error -32001: Request timed out`; no usarlo para afirmar rojo/verde funcional de todo el comportamiento.
-- `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` devuelve `HRESULT 0x800706BE` tras ~58s en la última ejecución; la auditoría posterior no encontró operación Dysflow viva ni lock activo del frontend. Marcar como evidencia pendiente, no fallo funcional. El error se encuadra como anomalía de runner/COM, no como regresión de la familia.
+- `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` tiene focused PASS del 2026-06-15 (`4862` ms, `issue18_rebuild_idempotent_ok`). Mantener, aun así, la cautela de no declarar verde el manifest completo porque no se ha ejecutado completo en esta evidencia.
 - Los hooks/lecturas lentos están verificados (`Verified-runtime`), pero sus duraciones ~114–123s son deuda de rendimiento y riesgo diagnóstico.
+
+## Bloqueos y deuda de cierre
+
+Esta página no autoriza cerrar la familia completa ni promoverla a UAT/release sin resolver estos puntos:
+
+| Bloqueo/deuda | Estado actual | Siguiente evidencia requerida |
+|---|---|---|
+| Evidencia mixta | Hay slices `Verified-runtime`, incluyendo focused PASS para reconstrucción completa y propagación de fallo post-escritura, pero no hay manifest completo verde. | Reejecutar por slices o manifest corregido contra el `staging` HEAD actual y registrar pass/total. |
+| Alcanzabilidad en `staging` | Varios commits Phase 3 figuran como `Pending / not ancestor` en este checkout. | Reconciliar SHAs o documentar commits equivalentes alcanzables desde `staging`. |
+| UAT/release | La sección de seguimiento de release sigue con `Pendiente`. | Registrar `PRUEBAS-###`, estado UAT, release de producción y ancla de rollback cuando existan. |
 
 ## Ancla de rollback
 
@@ -178,13 +190,13 @@ Para una futura implementación web, preservar los contratos de negocio y sustit
 
 ## Decisiones abiertas
 
-1. **Full manifest no verde**: mantener la estrategia por slices mientras `tests/tests.vba.indicadores-caracterizacion.json` timeoutee como conjunto.
+1. **Full manifest no verde**: mantener la estrategia por slices mientras `tests/tests.vba.indicadores-caracterizacion.json` timeoutee como conjunto. La evidencia focused PASS de `Test_Issue18_ReconstruirTodo_Idempotent_Atomic` y `Test_Issue18_NCWriteHook_InvalidarCache_FailedSync_ReturnsError_Atomic` no equivale a manifest completo verde.
 2. **Reachability reconciliation pending**: resolver por qué los commits posteriores de Phase 3 están presentes en el historial local pero no son ancestros de `staging` / `origin/staging` local en este checkout, pese a que el texto archivado describe cierre vía staging.
 3. **Divergencias funcionales previas resueltas el 2026-06-15**:
    - `Test_Issue18_GlobalCache_DosResponsables_DosDominios_Atomic`: query global del test ajustada para sumar recuentos per-domain (`IDCacheIndicadorProyecto=1` + `IDCacheIndicadorProyecto=2`), esquivando un quirk de caché DAO/Jet con `IN (1, 2)` en `COUNT(*)` sin más predicados. `Test_IndicadoresCaracterizacion.bas` línea 3389.
    - `Test_Issue38_SeguimientoProyecto_ActualizarModoProyecto_Contract` y `Test_Issue50_SeguimientoProyecto_CargaDiferidaHelper_Contract`: refactor de `src/forms/Form_FormNCProyectoSeguimiento.cls` alineado con el patrón de `Form_FormNCAuditoriaSeguimiento.cls` (flags privados, `Form_Timer`, programación del timer en `Form_Load`, delegación a `NCProyectoSeguimientoHelper.CargarIndicadoresSeguimientoProyecto` con `p_DuracionSegundos:=m_UltimaDuracionIndicadores`). `OnTimer = "[Event Procedure]"` en el `.form.txt` (línea 369) ya estaba enlazado. No hay regresión en `Test_Issue38_SeguimientoAuditoria`.
 4. **Auditoría runtime follow-up**: mantener seguimiento de cobertura Auditoría/cross-domain porque web migration debe preservar aislamiento de dominio.
-5. **Catalog linking**: esta página de feature existe pero aún no está enlazada desde `docs/features/README.md` u `openspec/REGRESSION-ANCHOR.md`; el follow-up de issue #67 debe añadir esos enlaces.
+5. **Catalog linking**: esta página ya está mapeada desde `docs/features/README.md` y figura en la tabla resumen de `openspec/REGRESSION-ANCHOR.md` (presente en este checkout, reconciliado por `f122d9a`).
 
 ## Fuentes de evidencia
 
@@ -207,10 +219,10 @@ Para una futura implementación web, preservar los contratos de negocio y sustit
 
 | Paso | Acción | Hecho |
 |------|--------|------|
-| 1 | Tests pass contra el `staging` HEAD actual | [ ] mixed: slices pasan, full manifest timeoutea, 3 contratos divergentes previos resueltos 2026-06-15, 1 caso pendiente por anomalía runner/COM (`HRESULT 0x800706BE`) |
+| 1 | Tests pass contra el `staging` HEAD actual | [ ] mixed: slices pasan, full manifest timeoutea, 3 contratos divergentes previos resueltos 2026-06-15, focused PASS para reconstrucción completa y fallo post-escritura; no hay manifest completo verde |
 | 2 | `last_verified_commit` actualizado con SHA actual | [ ] pendiente de fresh run |
 | 3 | `last_verified_at` actualizado con fecha ISO | [x] 2026-06-15 |
 | 4 | `test_evidence` actualizado con manifest + pass/total | [x] actualizado por slices; no full manifest green |
 | 5 | `staging_integration_commit` actualizado con SHA de merge | [ ] pendiente de reachability reconciliation |
 | 6 | `evidence_updated_at` actualizado tras fresh evidence | [x] 2026-06-15 |
-| 7 | Estado de feature refleja estado actual | [x] mixed evidence; 3 contratos divergentes resueltos 2026-06-15, queda 1 caso pendiente por anomalía runner/COM y reachability |
+| 7 | Estado de feature refleja estado actual | [x] mixed evidence; 3 contratos divergentes resueltos 2026-06-15, focused PASS para reconstrucción completa y fallo post-escritura; quedan full manifest, reachability y UAT/release pendientes |

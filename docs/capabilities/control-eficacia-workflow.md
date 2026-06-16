@@ -84,7 +84,8 @@
 
 | Elemento (funcionalidad o arreglo) | Ref. tracker | Versión staging (UAT) | Estado UAT | Release de producción | Fecha en prod | Nota |
 |---|---|---|---|---|---|---|
-| Gate FE pospuesto al cierre | Issue #45 / issue-19 | Pendiente | runtime-fresh-green 2026-06-15 | Pendiente | Pendiente | 13/13 PASS en Dysflow 2026-06-15; ancla histórica `8cb7f0a` (2026-06-06) |
+| Gate FE pospuesto al cierre | Issue #45 / issue-19 | `PRUEBAS-001` (v1.0.0) | `pending` (ronda UAT abierta 2026-06-15) | Pendiente | Pendiente | Web de aceptación: `docs/uat/PRUEBAS-001/uat-acceptance.html` (5 casos DADO/CUANDO/ENTONCES); recipient `andres.romandelperal@telefonica.com`. Ancla runtime previa: 13/13 PASS Dysflow 2026-06-15, 7 filtros; ancla histórica `8cb7f0a` (2026-06-06). |
+| Ronda UAT `PRUEBAS-001` (Issue #19) | GH #45, #46 | `PRUEBAS-001` | `pending` (oficina, fecha de mañana 2026-06-16) | n/a (gate) | n/a (gate) | 5 casos: UAT-1 Alta sin fecha, UAT-2 Edicion sin fecha, UAT-3 Cierre sin fecha bloquea, UAT-4 Cierre con fecha permite, UAT-5 Bypass MotivoAlta. Criterios checksum computado al cargar. Update del §5 ledger con `passed`/`rejected` al recibir el correo de `andres.romandelperal@telefonica.com`. |
 | Flujo completo de resultados de eficacia | Pendiente | Pendiente | pending | Pendiente | Pendiente | Faltan pruebas/reglas (BR-CE-5/6) |
 
 | Síntoma | Causa probable | Comprobación (Dysflow) | Ancla documental |
@@ -95,14 +96,45 @@
 | Estado de resultado/no requerido poco claro | Falta contrato de negocio | Confirmar reglas + crear pruebas (FALTA) | BR-CE-5 |
 
 ## §6 Notas de migración web
-- Implementar control de eficacia como servicio/gate de cierre, no como validación dispersa de formulario.
-- Preservar el momento: crear/editar puede continuar sin fecha prevista FE; cerrar no puede cuando FE es obligatorio.
-- Representar motivos no requeridos, eficacia fallida y replanificación como estado de dominio explícito.
-- No copiar acoplamiento TempVars/eventos de formulario.
+
+### §6.1 Conservar (comportamiento de negocio que debe sobrevivir)
+- La regla "no exigir `FechaPrevistaControlEficacia` en `Alta`/`Edicion`" (BR-CE-1): la web debe permitir crear/editar NC sin fecha prevista FE; el campo puede ser nulo o vacío y el guardado no debe bloquearse solo por esa fecha ausente.
+- El gate de `FechaPrevistaControlEficacia` se aplica exclusivamente al cierre (BR-CE-2): el endpoint de cierre de la web debe rechazar la operación cuando el control es requerido y la fecha es vacía o futura más allá de la fecha de cierre, replicando `Test_Issue19_CE_Cierre_SinDetalle_Bloquea` y `Test_Issue19_CE_Cierre_ConDetalle_PermiteCierre`.
+- La invariancia de `EficaciaOK` sobrevive a todas las rutas de bypass (BR-CE-4): cualquier camino de bypass para alta/edicion/auditoria debe preservar el cálculo `EficaciaOK` (`Pendiente` / `SinPendiente` / `EficaciaOK_SinCambios`), igual que validan `Issue19_CE_EstadoCalculado_` y `Issue19_CE_EficaciaOK_SinCambios`.
+- El bypass de auditoría por motivo de datos únicos (BR-CE-3): el botón `ComandoControlEficaciaDatos_Click` de `Form_FormNCAuditoriaGeneral` debe seguir permitiendo el bypass previsto vía `DatosGeneralesOK(p_MenosCef)`, con su test contractual (BR-CE-6).
+- Los motivos de "no requiere control de eficacia" como vocabulario de dominio (BR-CE-5): `Form_FormMotivosNoRequiereControlEficacia` y su evento `MotivoRegistrado` deben seguir siendo la fuente de los motivos que luego se persisten en NC Proyecto y NC Auditoría, sin convertirse en texto libre.
+
+### §6.2 Transformar (mecanismo legacy que se reformula)
+- Sustituir el patrón "validación en `Form_Load`/`BeforeUpdate` de cada formulario" por un servicio/gate de cierre único invocado por el comando de cerrar, tanto en Proyecto como en Auditoría.
+- Convertir la comprobación de paridad UI/dominio en un middleware que valide `m_ObjEntorno` o equivalente antes de la operación, en lugar de un evento `OnTimer` con flag `m_CargaInicialIndicadoresPendiente`.
+- Reemplazar la lectura directa de `EficaciaOK` desde el formulario de seguimiento por una API REST que devuelva el estado calculado y un payload con motivo, fecha y resultado, para que la UI solo pinte.
+- Trasladar la lógica de bypass por motivo (`MotivoAlta`, `MotivoDatosUnicos`) a una tabla versionada y consultable, no como checks dispersos en el `.cls` de cada formulario.
+- Modelar las replanificaciones de eficacia como un recurso explícito con estados (`replanificada`, `aceptada`, `cancelada`), no como un flag dentro del registro NC.
+
+### §6.3 NO copiar (deuda legacy de Access que no debe portarse)
+- No portar el acoplamiento TempVars/eventos de formulario para `EficaciaOK`: el estado debe vivir en la entidad de dominio NC y ser calculado por un servicio idempotente, no por la UI.
+- No duplicar la lógica de "no requiere CE" en cada formulario de alta/edición: la web debe tener un único punto que evalúe `RequiereControlEficacia` y centralice la decisión.
+- No migrar la separación física de "formularios de alta" vs "formularios de edición" como regla de UI: el backend debe aceptar ambas rutas y validar lo mismo.
+- No reutilizar `OnTimer` + `TimerInterval = 100` como patrón de carga diferida de indicadores: la web puede usar un endpoint asíncrono o un skeleton explícito, no un timer del lado cliente.
+- No exponer la fecha prevista FE como obligatoria en la API de `Crear`/`Editar`; la API de cierre es la única que debe rechazarla cuando aplica.
+
+### §6.4 Preguntas abiertas al product owner
+- ¿Cuáles son los motivos canónicos de "no requiere control de eficacia" (BR-CE-5) y qué campos de dominio los describen? Confirmar el catálogo completo.
+- ¿Qué reglas de aprobado/no aprobado/no requerido/replanificación/evidencia se consideran obligatorias para release (BR-CE-5)? ¿La replanificación tiene un número máximo de veces o es indefinida?
+- ¿El bypass del botón de auditoría `ComandoControlEficaciaDatos_Click` (BR-CE-6) es por rol (calidad/auditor) o por motivo? Confirmar la regla de negocio antes de migrar.
+- ¿La evidencia documental es obligatoria en todos los cierres con control de eficacia o solo cuando el resultado es "no eficaz"? (BR-CE-5)
+- ¿La diferencia entre NC Proyecto y NC Auditoría en el gate de eficacia se mantiene o se unifica en la web? Hoy la regla es equivalente pero el botón de auditoría tiene bypass explícito.
+- ¿Cómo se notifica al responsable cuando `EficaciaOK` cambia o cuando una replanificación vence? Confirmar canal y plantilla de notificación.
 
 ## §7 Libro de confianza
 | Hecho | Confianza | Evidencia | Fecha |
 |---|---|---|---|
+| BR-CE-1 — `FechaPrevistaControlEficacia` no debe bloquear `Alta` ni `Edicion`. | Verified-runtime | Dysflow 2026-06-15: `tests/tests.vba.json` filtros `Issue19_CE_Alta_` 5/5 (`Test_Issue19_CE_Alta_Si_SinDetalle_NoBloquea`, `Test_Issue19_CE_Alta_Si_ConDetalle_Pasa`, `Test_Issue19_CE_Alta_No_IgnoraDetalle`, `Test_Issue19_CE_Alta_MotivoAlta_Bypass_Si`, `Test_Issue19_CE_Alta_MotivoAlta_Bypass_BlankRequereCE`); ancla histórica `8cb7f0a` | 2026-06-15 |
+| BR-CE-2 — El gate de `FechaPrevistaControlEficacia` se aplica al cierre de NC. | Verified-runtime | Dysflow 2026-06-15: `tests/tests.vba.json` filtro `Issue19_CE_Cierre_` 2/2 (`Test_Issue19_CE_Cierre_SinDetalle_Bloquea`, `Test_Issue19_CE_Cierre_ConDetalle_PermiteCierre`); ancla histórica `8cb7f0a` | 2026-06-15 |
+| BR-CE-3 — Los escenarios de bypass para alta, edicion y auditoria siguen soportados. | Verified-runtime | Dysflow 2026-06-15: `tests/tests.vba.json` filtros `Issue19_CE_Edicion_` 1/1 (`Test_Issue19_CE_Edicion_MotivoDatosUnicos_Bypass`) y `Issue19_CE_Auditoria_` 1/1 (`Test_Issue19_CE_Auditoria_MotivoDatosUnicos_Bypass`); ancla histórica `8cb7f0a` | 2026-06-15 |
+| BR-CE-4 — La invariancia de `EficaciaOK` se preserva al mover el gate al cierre. | Verified-runtime | Dysflow 2026-06-15: `tests/tests.vba.json` filtros `Issue19_CE_EstadoCalculado_` 2/2 + `Issue19_CE_EficaciaOK_` 1/1 + `Issue19_Paridad_UI` 1/1; ancla histórica `8cb7f0a` | 2026-06-15 |
+| BR-CE-5 — Reglas de motivo no requerido, eficacia fallida, replanificación y evidencia son explícitas. | Intended | FALTA → crear mediante access-vba-tdd tras confirmar esquema/reglas | 2026-06-15 |
+| BR-CE-6 — El botón de control-eficacia general de auditoría respeta el bypass previsto (`DatosGeneralesOK(p_MenosCef)`). | Intended | FALTA → crear mediante access-vba-tdd contra costura helper/servicio | 2026-06-15 |
 | La fecha FE está prevista como gate solo de cierre. | Verified-runtime | Dysflow 2026-06-15: `tests/tests.vba.json` 13/13 PASS, 7 filtros verdes; ancla histórica `8cb7f0a` (2026-06-06) | 2026-06-15 |
 | La invariancia de `EficaciaOK` forma parte del contrato de gate. | Verified-runtime | Dysflow 2026-06-15: `Issue19_CE_EficaciaOK_` 1/1 + `Issue19_CE_EstadoCalculado_` 2/2 + `Issue19_Paridad_UI` 1/1; ancla histórica `8cb7f0a` | 2026-06-15 |
 | El flujo completo de resultados de eficacia está documentado y probado. | Intended | Reglas/pruebas pendientes (BR-CE-5/6) — `FALTA → crear mediante access-vba-tdd` | 2026-06-15 |

@@ -138,19 +138,6 @@ Public m_TestingMode As Boolean
 Public m_BackendSandboxURL As String
 Public m_BackendSandboxPassword As String
 Public m_BackendPassword As String
-Public m_TestSegTareasProyectoHydrationCountersEnabled As Boolean
-Public m_TestSegTareasProyectoARHydrationCount As Long
-Public m_TestSegTareasProyectoACHydrationCount As Long
-Public m_TestSegTareasProyectoNCHydrationCount As Long
-Public m_TestTareasHelperCacheErrorSeamEnabled As Boolean
-Public m_TestTareasHelperCacheErrorText As String
-Public m_TestSeguimientoTareasHelperDelegationSeamEnabled As Boolean
-Public m_TestSeguimientoTareasHelperDelegationCallCount As Long
-Public m_TestSeguimientoTareasHelperLastResponsableCalidad As String
-Public m_TestSeguimientoTareasHelperLastResponsable As String
-Public m_TestSeguimientoTareasHelperLastEstado As String
-Public m_TestSeguimientoTareasHelperLastIDExpediente As String
-Public m_TestFormSeguimientoTareasDelegationHookEnabled As Boolean
 
 
     
