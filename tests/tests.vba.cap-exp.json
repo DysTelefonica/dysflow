@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "EXP texto expediente nemotecnico y codigo formato con parentesis",
+      "procedure": "Test_EXP_TextoExpediente_NemotecnicoYCodExp_FormateaConParentesis_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-exp", "issue-67", "br-exp-4", "property"]
+    },
+    {
+      "name": "EXP texto expediente solo nemotecnico formato sin parentesis",
+      "procedure": "Test_EXP_TextoExpediente_SoloNemotecnico_FormateaSinParentesis_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-exp", "issue-67", "br-exp-4", "property"]
+    },
+    {
+      "name": "EXP texto expediente solo codigo formato sin nemotecnico",
+      "procedure": "Test_EXP_TextoExpediente_SoloCodExp_FormateaSinNemotecnico_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-exp", "issue-67", "br-exp-4", "property"]
+    },
+    {
+      "name": "EXP texto expediente cache memoization reutiliza cache en segunda lectura",
+      "procedure": "Test_EXP_TextoExpediente_CacheMemoization_ReutilizaCacheEnSegundaLectura_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-exp", "issue-67", "br-exp-5", "property", "cache"]
+    },
+    {
+      "name": "EXP expediente expone propiedades round trip",
+      "procedure": "Test_EXP_Expediente_ExponePropiedades_PropertiesRoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-exp", "issue-67", "br-exp-4", "br-exp-5", "property"]
+    }
+  ]
+}

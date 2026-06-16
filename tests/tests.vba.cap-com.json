@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "COM correo propiedades round trip",
+      "procedure": "Test_COM_Correo_Propiedades_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-com", "issue-67", "br-com-1", "property"]
+    },
+    {
+      "name": "COM correo IDCorreoCalculado instancia fresh retorna vacio",
+      "procedure": "Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-com", "issue-67", "br-com-2", "property"]
+    },
+    {
+      "name": "COM correo IDCorreoCalculado IDCorreo set retorna cached",
+      "procedure": "Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-com", "issue-67", "br-com-2", "property", "cache"]
+    },
+    {
+      "name": "COM correo asunto y cuerpo asignacion independiente",
+      "procedure": "Test_COM_Correo_AsuntoYCuerpo_AsignacionIndependiente_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-com", "issue-67", "br-com-1", "br-com-4", "property"]
+    },
+    {
+      "name": "COM correo tres campos destinatarios independientes",
+      "procedure": "Test_COM_Correo_TresCamposDestinatarios_Independientes_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-com", "issue-67", "br-com-4", "property"]
+    }
+  ]
+}

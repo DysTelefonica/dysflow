@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "NCA particula tipo NC retorna no conformidad",
+      "procedure": "Test_NCA_Particula_TipoNC_RetornaNoConformidad_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-nca-af", "issue-67", "br-nca-af-1", "property"]
+    },
+    {
+      "name": "NCA particula tipo OB retorna observacion",
+      "procedure": "Test_NCA_Particula_TipoOB_RetornaObservacion_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-nca-af", "issue-67", "br-nca-af-1", "property"]
+    },
+    {
+      "name": "NCA particula tipo OP retorna oportunidad de mejora",
+      "procedure": "Test_NCA_Particula_TipoOP_RetornaOportunidadDeMejora_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-nca-af", "issue-67", "br-nca-af-1", "property"]
+    },
+    {
+      "name": "NCA particula tipo desconocido retorna vacio",
+      "procedure": "Test_NCA_Particula_TipoDesconocido_RetornaVacio_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-nca-af", "issue-67", "br-nca-af-1", "property", "edge-case"]
+    },
+    {
+      "name": "NCA titulo sin auditoria retorna vacio",
+      "procedure": "Test_NCA_Titulo_SinAuditoria_RetornaVacio_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-nca-af", "issue-67", "br-nca-af-1", "property", "edge-case"]
+    }
+  ]
+}

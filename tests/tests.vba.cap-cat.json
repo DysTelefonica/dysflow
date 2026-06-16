@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "CAT tipologia registrar crea fila en TbTiposNCProyectos",
+      "procedure": "Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-cat", "issue-67", "br-cat-5", "br-cat-6", "sandbox", "db-backed"]
+    },
+    {
+      "name": "CAT tipologia eliminar borra fila de TbTiposNCProyectos",
+      "procedure": "Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-cat", "issue-67", "br-cat-5", "br-cat-6", "sandbox", "db-backed"]
+    }
+  ]
+}

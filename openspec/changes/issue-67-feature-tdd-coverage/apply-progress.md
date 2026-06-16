@@ -180,3 +180,24 @@ Decisiones derivadas a Fase 4 propuesta (no en alcance de esta épica):
 - **Resuelto**: 7 capabilities nuevas sin documentación. Cierre con `1c8aade` (stubs en `_proposed/`).
 - **Pendiente humano**: el usuario debe compilar y ejecutar los 22 tests en VBE Access; el agente no compila (regla del proyecto).
 - **Pendiente humano**: el usuario debe crear los issues trackers dedicados para las 9 BRs `Intended` restantes y las 2 divergencias activas, si decide mantenerlas abiertas más de 1 sprint.
+
+## §9 Post-merge follow-ups (2026-06-16, post #69 + #70 merge)
+
+Estado de los pendientes §7 al re-encender la épica el 2026-06-16:
+
+- **§7.4 — paridad frontend↔binario**: ✅ resuelto. Commit `8f59630 chore(binary): delete dead class InformeNCAuditorias from frontend` borró la clase del binary Access. `dysflow.list_objects` confirma ausencia post-delete.
+- **§7.5 — manifests de los 22 tests VBA**: ✅ resuelto. 5 manifests dedicados creados en `tests/tests.vba.cap-{cat,exp,nca-af,upn,com}.json` (2 + 5 + 5 + 5 + 5 = 22 procedimientos). Pendiente: usuario compila y corre con `dysflow.test_vba testsPath=tests/tests.vba.cap-<cap>.json` (con `--enable-writes`).
+- **§7.6 — PR #69 y #70 cerrados**: ✅ resuelto. PR #69 mergeado 2026-06-16T06:11:55Z. PR #70 también MERGED al staging tras encadenar.
+
+**Hallazgo nuevo en esta sesión** (`e386a8b test(cat): replace DCount/DLookup with db.OpenRecordset for sandbox routing`):
+
+- DCount y DLookup evalúan contra `CurrentDb` (frontend local con tablas linkeadas al backend de producción). En tests con sandbox (`getdb()`), los writes van al sandbox pero los reads via DCount/DLookup van al frontend linkeado — nunca ven las fixtures.
+- Fix: usar `db.OpenRecordset` (snapshot) contra el mismo handle que devuelve `getdb()`. Aplicado en `Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic` y `Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic`.
+- Los otros 4 tests nuevos (Test_EXP, Test_NCA, Test_UPN, Test_COM) son pure-property y NO requieren el patrón.
+- `InicializadorCache.bas` tiene 4 DCount en subs admin (EliminarCachesInvalidos, LimpiarLogsAntiguos) que en producción funcionan porque `getdb() == CurrentDb`, pero darían logs `Debug.Print` incorrectos en modo test. No es bug funcional (los writes sí van al sandbox), solo el log miente. No se corrige en esta épica — el subs admin no se invoca desde tests.
+
+**Lección para tests futuros** (memoria engram `bug/tests-vba-dcount-dlookup-no-funcionan-contra-sandbox-van-por-currentdb`):
+
+> En tests VBA con sandbox, los reads sobre tablas linkeadas deben usar `db.OpenRecordset` (snapshot) contra el handle devuelto por `getdb()`. NUNCA `DCount`/`DLookup` porque van por `CurrentDb` (frontend linkeado al backend de producción, no al sandbox local).
+
+**MCP gap identificado** (pendiente enviar al mantenedor de dysflow): un pre-flight estático que detecte uso de `DCount`/`DLookup` en archivos `src/modules/Test_*.bas` y avise antes de ejecutar `test_vba` — habría ahorrado esta iteración.

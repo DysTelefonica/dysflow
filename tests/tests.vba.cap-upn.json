@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "UPN usuario es administrador round trip",
+      "procedure": "Test_UPN_Usuario_EsAdministrador_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-upn", "issue-67", "br-upn-1", "property"]
+    },
+    {
+      "name": "UPN usuario permiso pruebas round trip",
+      "procedure": "Test_UPN_Usuario_PermisoPruebas_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-upn", "issue-67", "br-upn-2", "property"]
+    },
+    {
+      "name": "UPN usuario nombre usuario red round trip",
+      "procedure": "Test_UPN_Usuario_NombreUsuarioRed_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-upn", "issue-67", "br-upn-3", "property"]
+    },
+    {
+      "name": "UPN usuario matricula correo round trip",
+      "procedure": "Test_UPN_Usuario_MatriculaCorreo_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-upn", "issue-67", "br-upn-4", "property"]
+    },
+    {
+      "name": "UPN usuario flags booleanos round trip",
+      "procedure": "Test_UPN_Usuario_FlagsBooleanos_RoundTrip_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cap-upn", "issue-67", "br-upn-5", "property"]
+    }
+  ]
+}
