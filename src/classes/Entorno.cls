@@ -1984,6 +1984,15 @@ Public Property Get ColSegsTareasProyectoPteReplanificar() As Scripting.Dictiona
     On Error GoTo errores
     Me.Error = ""
     m_Error = ""
+    ' Check module-level cache first
+    Dim m_Cached As Scripting.Dictionary
+    Set m_Cached = Cache_Indicadores_Proyecto(BUCKET_TAR_PROY_PTE_REPLAN, p_Reset:=False, p_Error:=m_Error)
+    If m_Error <> "" Then
+        Err.Raise 1000
+    End If
+    If Not m_Cached Is Nothing Then
+        Set m_objColSegsTareasProyectoPteReplanificar = m_Cached
+    End If
     If Not m_objColSegsTareasProyectoPteReplanificar Is Nothing Then
         Set ColSegsTareasProyectoPteReplanificar = m_objColSegsTareasProyectoPteReplanificar
         Exit Property

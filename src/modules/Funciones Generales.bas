@@ -1512,7 +1512,7 @@ Public Function RegistrarLogProyecto( _
                                     Optional p_Linea As String, _
                                     Optional p_Objeto As Object, _
                                     Optional p_ObjetoAlInicio As Object, _
-                                    Optional ByRef p_Error As String _
+                                    Optional p_Error As String _
                                     ) As String
     Dim m_Log As LogNCProyecto
     Dim m_Linea As Variant

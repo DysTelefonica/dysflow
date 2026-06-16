@@ -145,6 +145,33 @@ Reglas duras para cualquier test que toque datos, tablas, configuración, caché
 - **Safe cleanup:** nunca `Stop-Process -Name MSACCESS -Force`. Usar `list_access_operations` → `cleanup_access_operation` con `operationId` real y `cleanupSafe=true`.
 - **Runtime desactualizado:** `dysflow --version` debe devolver la versión publicada actual. Si devuelve `latest: unknown` o un número viejo, `dysflow update` antes de seguir.
 
+### Dysflow MCP — Este proyecto (tabla legacy preservada del catálogo)
+
+- **Versión estable activa referencia:** runtime instalado en
+  `C:\Users\adm1\AppData\Local\dysflow`. Resolver siempre el path real
+  con `dysflow --version` antes de operar.
+- **Payload mínimo (operación normal):**
+  ```json
+  {
+    "projectId": "00-no-conformidades-staging-clean",
+    "moduleNames": ["ModuloEditado"]
+  }
+  ```
+- **Para tests VBA:**
+  ```json
+  {
+    "projectId": "00-no-conformidades-staging-clean",
+    "testsPath": "tests/tests.vba.json",
+    "procedureName": "Test_Algo_Especifico",
+    "compile": false
+  }
+  ```
+- **Herramientas disponibles (resumen):** `import_modules`, `import_all`,
+  `export_modules`, `verify_binary`, `test_vba`, `run_vba`, `query_sql`,
+  `list_tables`, `get_schema`, `exec_sql`, `run_script`,
+  `list_access_operations`, `cleanup_access_operation`.
+- **Nunca** usar `node cli.js` ni ningún CLI directo como camino normal.
+
 ---
 
 ## Dysflow — Seguridad multi-proyecto
@@ -154,3 +181,24 @@ Reglas duras para cualquier test que toque datos, tablas, configuración, caché
 - `list_access_operations` debe mostrar solo operaciones del proyecto actual.
 - `cleanup_access_operation` solo con `operationId` real + `accessPath` coincidente + `cleanupSafe=true`.
 - Marcadores sin `accessPid` o `cleanupSafe=false` son evidencia histórica, **no permiso para matar procesos**.
+
+### Access/VBA workflow — MCP SOLO, nunca CLI (preservado del catálogo)
+
+- **Usar SIEMPRE el servidor MCP `dysflow`** para sincronizar, verificar, testear y consultar Access.
+- **NUNCA usar `node cli.js`** ni ningún CLI directo como camino normal.
+- El binario Access solo se actualiza con `dysflow.import_modules`/`dysflow.import_all`. Sin import, el cambio NO existe para Access.
+
+### Workflow después de editar código en src/ (preservado del catálogo)
+```
+1. dysflow.import_modules <Módulo> <Clase> <Formulario>...  (con projectId)
+2. El usuario compila en Access VBE → Debug → Compile
+3. dysflow.test_vba o dysflow.run_vba si existe harness
+```
+
+### Reglas de higiene de operaciones Access (preservado del catálogo)
+
+1. Resolver `projectId` desde `.dysflow/project.json` antes de cualquier operación.
+2. Si falta `.dysflow/project.json`, usar `dysflow.init_project` para provisionar; no editar JSON a mano.
+3. Verificar contexto con `dysflow.doctor` cuando haya duda, timeout previo o sesión abierta.
+4. Ejecutar una sola operación Access por vez. Nunca en paralelo contra el mismo frontend/backend.
+5. La contraseña se resuelve desde `passwordEnv` del proyecto. No pasar passwords inline.
