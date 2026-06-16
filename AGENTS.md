@@ -8,8 +8,6 @@ El c├│digo generado se trabaja mediante exportaci├│n a `src/` y validaci
 
 ## dysflow MCP ÔÇö Este proyecto
 
-**Versi├│n estable activa:** `v0.5.3` (runtime en `C:\Users\adm.DEFENSA\AppData\Local\dysflow-runtime`)
-
 - `projectId`: `00-no-conformidades-staging-clean`
 - `accessPath`: `NoConformidades.accdb` (relativo al repo)
 - `backendPath`: `NoConformidades_Datos.accdb` (relativo al repo)
@@ -23,93 +21,14 @@ El c├│digo generado se trabaja mediante exportaci├│n a `src/` y validaci
 
 ---
 
-## dysflow ÔÇö C├│mo usar MCP correctamente
-
-### Happy path
-1. Usar `dysflow.doctor` con `projectId: "00-no-conformidades-staging-clean"` para verificar contexto antes de operar.
-2. Usar `dysflow.import_modules` con `projectId` + `moduleNames` para importar VBA editado.
-3. Usar `dysflow.test_vba` o `dysflow.run_vba` para ejecutar procedimientos.
-4. Nunca ejecutar varias operaciones Access en paralelo contra el mismo `.accdb`.
-
-### Herramientas disponibles
-| Necesidad | Tool MCP |
-|---|---|
-| Importar m├│dulos editados | `dysflow.import_modules` |
-| Importar todo src/ | `dysflow.import_all` |
-| Exportar desde Access | `dysflow.export_modules` |
-| Verificar src vs binario | `dysflow.verify_binary` |
-| Ejecutar tests VBA | `dysflow.test_vba` |
-| Ejecutar procedimiento VBA | `dysflow.run_vba` |
-| Compilar VBA | `dysflow.compile_vba` (solo diagn├│stico manual) |
-| Consultar datos | `dysflow.query_sql`, `dysflow.list_tables`, `dysflow.get_schema` |
-| Escribir datos | `dysflow.exec_sql` / `dysflow.run_script` con dry-run salvo intenci├│n expl├¡cita |
-| Ver operaciones activas | `dysflow.list_access_operations` |
-| Limpiar operaci├│n | `dysflow.cleanup_access_operation` (solo con `operationId` real + `cleanupSafe=true`) |
-
-### Payload m├¡nimo (operaci├│n normal)
-```json
-{
-  "projectId": "00-no-conformidades-staging-clean",
-  "moduleNames": ["ModuloEditado"]
-}
-```
-
-### Para tests VBA
-```json
-{
-  "projectId": "00-no-conformidades-staging-clean",
-  "testsPath": "tests/tests.vba.json",
-  "procedureName": "Test_Algo_Especifico",
-  "compile": false
-}
-```
-
----
-
 ## Regla de compilaci├│n ÔÇö SIEMPRE el usuario compila
 
 > **El usuario es el ├║nico que compila. Yo nunca compilo.**
 
-Despu├®s de cualquier `dysflow.import_modules` o `dysflow.import_all`:
+Despu├®s de cualquier `import_modules` o `import_all`:
 1. **NOTIFICAR**: "M├│dulo(s) importado(s). Compil├í vos manualmente en Access VBE ÔåÆ Debug ÔåÆ Compile."
 2. **ESPERAR** confirmaci├│n del usuario antes de ejecutar tests o procedimientos.
-3. **NUNCA** usar `dysflow.compile_vba` para compilar autom├íticamente.
-
----
-
-## dysflow MCP ÔÇö seguridad multi-proyecto
-
-- Cada operaci├│n Access queda registrada en `.dysflow/runtime/operations/<operationId>.json`.
-- `.dysflow/runtime/` es estado local: no commitear, no copiar entre worktrees.
-- `dysflow.list_access_operations` debe mostrar solo operaciones del proyecto actual.
-- `dysflow.cleanup_access_operation` solo con `operationId` real + `accessPath` coincidente + `cleanupSafe=true`.
-- Marcadores sin `accessPid` o `cleanupSafe=false` son evidencia hist├│rica, **no permiso para matar procesos**.
-- **Nunca** usar `Stop-Process MSACCESS` gen├®rico.
-
----
-
-## Access/VBA workflow ÔÇö MCP SOLO, nunca CLI
-
-- **Usar SIEMPRE el servidor MCP `dysflow`** para sincronizar, verificar, testear y consultar Access.
-- **NUNCA usar `node cli.js`** ni ning├║n CLI directo como camino normal.
-- El binario Access solo se actualiza con `dysflow.import_modules`/`dysflow.import_all`. Sin import, el cambio NO existe para Access.
-
-### Workflow despu├®s de editar c├│digo en src/
-```
-1. dysflow.import_modules <M├│dulo> <Clase> <Formulario>...  (con projectId)
-2. El usuario compila en Access VBE ÔåÆ Debug ÔåÆ Compile
-3. dysflow.test_vba o dysflow.run_vba si existe harness
-```
-
----
-
-## dysflow ÔÇö Reglas de higiene de operaciones Access
-
-1. Resolver `projectId` desde `.dysflow/project.json` antes de cualquier operaci├│n.
-2. Si falta `.dysflow/project.json`, usar `dysflow.init_project` para provisionar; no editar JSON a mano.
-3. Verificar contexto con `dysflow.doctor` cuando haya duda, timeout previo o sesi├│n abierta.
-4. Ejecutar una sola operaci├│n Access por vez. Nunca en paralelo contra el mismo frontend/backend.
-5. La contrase├▒a se resuelve desde `passwordEnv` del proyecto. No pasar passwords inline.
+3. **NUNCA** usar `compile_vba` para compilar autom├íticamente.
 
 ---
 
@@ -139,48 +58,12 @@ Regla dura para cualquier test que toque datos, tablas, configuraci├│n, cach
 
 ## Skills
 
-- `access-vba-sync`, `access-query`, `access-form-creation`, `jira-confluence-sdd`, `access-vba-tdd`
+- `jira-confluence-sdd`, `access-vba-tdd`
 - Los skills se resuelven desde las instalaciones globales/locales del entorno; no mantener copias vendorizadas en `.agents/skills/` dentro del repo salvo decisi├│n expl├¡cita.
 
 ## Dysflow
 
-This project is a dysflow consumer. **All Access/VBA work goes through dysflow** — do not use legacy skills like `vba-sync`, `access-query`, `access-vba-sync`, or `access-form-creation` for new work. They are deprecated; dysflow replaces them.
+This project is a dysflow consumer. **All Access/VBA work goes through dysflow.**
 
-For the full reference (every tool, the sync loop, secret management, safe cleanup), read the opencode global `AGENTS.md` `<!-- gentle-ai:dysflow-reference -->` block. The summary below is the must-know subset.
+For the full reference (every tool, the sync loop, secret management, safe cleanup), read the opencode global `AGENTS.md` `<!-- gentle-ai:dysflow-reference -->` block.
 
-### Project config
-
-- This project ships a `.dysflow/project.json` at the repo root. Use its `projectId` (and any password env name declared in it) as the canonical identity.
-- If the file is missing, do not invent a project id — fix the config first.
-
-### Secret management
-
-- Never hardcode the Access password. Resolve it through `ACCESS_VBA_PASSWORD` (or the password env name declared in `.dysflow/project.json`).
-
-### Reach for these dysflow MCP tools first
-
-- Schema and data: `query_sql`, `exec_sql`, `list_tables`, `list_linked_tables`, `get_schema`, `get_relationships`, `count_rows`, `distinct_values`, `compare_backends`.
-- VBA source sync: `import_all` / `import_modules`, `export_all` / `export_modules`, `compile_vba`, `test_vba`, `run_vba`, `verify_code`, `verify_binary`, `reconcile_binary`, `delete_module`, `fix_encoding`, `list_objects`, `exists`.
-- SQL fixtures: `seed_fixture`, `teardown_fixture`, `create_table`, `drop_table`, `run_script`, `export_queries`, `import_queries`.
-- Links: `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`.
-- Operations and cleanup: `dysflow_access_operations_list`, `dysflow_access_cleanup`, `list_access_operations`, `cleanup_access_operation`, `compact_repair`.
-- Forms and catalog: `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`, `generate_erd`.
-- Diagnostics: `dysflow_doctor`, `dysflow_query_execute`, `dysflow_vba_execute`.
-
-### VBA sync loop (CRITICAL)
-
-After editing any `*.bas` / `*.cls` / `*.frm` file on disk, the changes are NOT visible to Access until you run the loop:
-
-1. `import_all` (or `import_modules`) — load the disk changes into the binary.
-2. `compile_vba` — compile the freshly imported code in Access.
-3. `test_vba` (or `run_vba`) — run the focused test.
-
-Skipping any of these three will run outdated code and produce confusing failures.
-
-### Safe cleanup
-
-Never `Stop-Process -Name MSACCESS -Force`. Use `dysflow_access_operations_list` (or `list_access_operations`) then `dysflow_access_cleanup` (or `cleanup_access_operation`) with a real operation id and the diagnostics it returns.
-
-### E2E
-
-The MCP E2E entry point resets `DYSFLOW_HOME` so the runner is forced to use the test-runtime copy of `dysflow-access-runner.ps1` instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale production install. If you are running the E2E manually, you do not need to set `DYSFLOW_HOME` yourself.
