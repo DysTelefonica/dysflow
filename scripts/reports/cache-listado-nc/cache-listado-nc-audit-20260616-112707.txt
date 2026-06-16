@@ -1,0 +1,17 @@
+Auditoría TbCacheListadoNC - 2026-06-16 11:27:07
+Backend: C:\00repos\codigo\00_NO_CONFORMIDADES_staging\scripts\..\NoConformidades_Datos.accdb
+Ámbito: NC no cerradas
+
+NC reales del ámbito: 47
+Filas válidas totales en cache (TbCacheListadoNC, CacheValida=True): 47
+Filas totales en cache: 47
+Filas inválidas/no vigentes en cache: 0
+
+Faltantes en cache válida: 0
+(ninguno)
+
+Sobrantes/stale en cache válida: 0
+(ninguno)
+
+IDs con filas inválidas/no vigentes: 0
+(ninguno)

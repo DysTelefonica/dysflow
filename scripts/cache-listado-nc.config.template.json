@@ -1,0 +1,18 @@
+{
+  "BackendPath": "C:\\path\\to\\NoConformidades_Datos.accdb",
+  "ReportDirectory": ".\\scripts\\reports",
+  "MaxRowsToShow": 50,
+  "CommandTimeoutSeconds": 30,
+  "OperationTimeoutSeconds": 90,
+  "PasswordEnvironmentVariable": "ACCESS_VBA_PASSWORD",
+  "RepairMode": "ConservativeInvalidate",
+  "NotificationRecipient": "andres.romandelperal@telefonica.com",
+  "NotificationOriginator": "cache-listado-nc-tui",
+  "NotificationApplication": "NoConformidades",
+  "EmailOnNoRepair": true,
+  "HtmlReportDirectory": ".\\reports\\cache-listado-nc\\html",
+  "AceProviders": [
+    "Microsoft.ACE.OLEDB.16.0",
+    "Microsoft.ACE.OLEDB.12.0"
+  ]
+}

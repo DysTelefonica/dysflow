@@ -669,6 +669,79 @@ Public Sub AyudaCache()
 End Sub
 
 ' --------------------------------------------------------------------------------
+' Prepara staging calentando las caches principales sin abortar por fallos parciales.
+' Diseñado para ejecución desde Ventana Inmediato/debugger y para sandboxes de test.
+' --------------------------------------------------------------------------------
+Public Function PrepararStagingConCaches( _
+    Optional ByVal p_SoloFaltantes As Boolean = False, _
+    Optional ByVal p_Verbose As Boolean = True _
+    ) As Boolean
+
+    Dim errores As Collection
+    Dim stepError As String
+    Dim auditOk As Boolean
+    Dim item As Variant
+
+    On Error GoTo EH
+
+    Set errores = New Collection
+    If p_Verbose Then Debug.Print "=== PrepararStagingConCaches: inicio ==="
+
+    ' 1) NC project/detail cache + NC project/list cache side effects.
+    '    Staging/UAT must prefer a complete rebuild by default: if the list cache
+    '    is partially populated, list forms can return incomplete user-visible results.
+    Err.Clear
+    On Error Resume Next
+    PoblarCacheMasivo p_SoloFaltantes
+    If Err.Number <> 0 Then
+        stepError = "PoblarCacheMasivo: " & Err.Number & " - " & Err.Description
+        errores.Add stepError
+        If p_Verbose Then Debug.Print "[WARN] " & stepError
+        Err.Clear
+    ElseIf p_Verbose Then
+        Debug.Print "[OK] PoblarCacheMasivo"
+    End If
+    On Error GoTo EH
+
+    ' 2) NC audit/list cache.
+    stepError = ""
+    Err.Clear
+    On Error Resume Next
+    auditOk = RebuildNCAuditoriaListadoCache(0, stepError)
+    If Err.Number <> 0 Then
+        stepError = "RebuildNCAuditoriaListadoCache: " & Err.Number & " - " & Err.Description
+        errores.Add stepError
+        If p_Verbose Then Debug.Print "[WARN] " & stepError
+        Err.Clear
+    ElseIf Not auditOk Then
+        If stepError = "" Then stepError = "RebuildNCAuditoriaListadoCache returned False"
+        errores.Add stepError
+        If p_Verbose Then Debug.Print "[WARN] " & stepError
+    ElseIf p_Verbose Then
+        Debug.Print "[OK] RebuildNCAuditoriaListadoCache"
+    End If
+    On Error GoTo EH
+
+    If p_Verbose Then
+        If errores.count = 0 Then
+            Debug.Print "=== PrepararStagingConCaches: completado sin errores parciales ==="
+        Else
+            Debug.Print "=== PrepararStagingConCaches: completado con " & errores.count & " error(es) parcial(es) ==="
+            For Each item In errores
+                Debug.Print " - " & CStr(item)
+            Next item
+        End If
+    End If
+
+    PrepararStagingConCaches = True
+    Exit Function
+
+EH:
+    If p_Verbose Then Debug.Print "ERROR en PrepararStagingConCaches: " & Err.Description
+    PrepararStagingConCaches = False
+End Function
+
+' --------------------------------------------------------------------------------
 ' 1. LIMPIEZA DE CACHÉS OBSOLETOS (Renombrado para evitar conflicto)
 ' --------------------------------------------------------------------------------
 Public Sub InvalidarCachesObsoletos(Optional p_DiasSinUso As Integer = 30)

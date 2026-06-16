@@ -1,0 +1,17 @@
+﻿AuditorÃ­a TbCacheListadoNC - 2026-06-16 11:58:55
+Backend: C:\00repos\codigo\00_NO_CONFORMIDADES_staging\scripts\..\NoConformidades_Datos.accdb
+Ãmbito: NC no cerradas
+
+NC reales del Ã¡mbito: 433
+Filas vÃ¡lidas totales en cache (TbCacheListadoNC, CacheValida=True): 433
+Filas totales en cache: 433
+Filas invÃ¡lidas/no vigentes en cache: 0
+
+Faltantes en cache vÃ¡lida: 0
+(ninguno)
+
+Sobrantes/stale en cache vÃ¡lida: 0
+(ninguno)
+
+IDs con filas invÃ¡lidas/no vigentes: 0
+(ninguno)

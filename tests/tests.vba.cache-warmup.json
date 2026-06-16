@@ -1,10 +1,22 @@
 {
   "tests": [
     {
-      "name": "Issue #41 operator warmup list/detail/log evidence",
-      "procedure": "Test_E2E_Cache_PrecalentarSincronizar_LogEvidence_Atomic",
+      "name": "PrepararStaging no crashea en sandbox vacio",
+      "procedure": "Test_Cache_PrepararStaging_EmptySandbox_NoCrash_Atomic",
       "expect": { "ok": true },
-      "tags": ["e2e", "atomic", "cache-warmup", "issue-41", "plan-002", "spec-009", "staging", "sandbox", "write-controlled"]
+      "tags": ["atomic", "cache-warmup", "staging-prep", "issue-67", "br-rel-5"]
+    },
+    {
+      "name": "PrepararStaging idempotente: segunda llamada no rompe",
+      "procedure": "Test_Cache_PrepararStaging_Idempotente_SegundaLlamadaOk_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-warmup", "staging-prep", "issue-67", "br-rel-5", "idempotence"]
+    },
+    {
+      "name": "PrepararStaging resiliencia: cache fallida no aborta la otra",
+      "procedure": "Test_Cache_PrepararStaging_Resiliencia_CacheFallidaNoAborta_Atomic",
+      "expect": { "ok": true },
+      "tags": ["atomic", "cache-warmup", "staging-prep", "issue-67", "br-rel-5", "resilience"]
     }
   ]
 }
