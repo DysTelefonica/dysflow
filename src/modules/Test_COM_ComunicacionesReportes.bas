@@ -98,7 +98,10 @@ Cleanup:
 End Function
 
 ' ============================================
-' TEST 2 — IDCorreoCalculado retorna vacio en instancia fresh
+' TEST 2 — IDCorreoCalculado retorna un ID fresco no vacio en instancia fresh
+' (la propiedad siempre calcula via constructor.getID; no es un cache de
+' IDCorreo, asi que "fresh" significa "sin escribir a TbCorreosEnviados
+' todavia, pero con un nuevo Long asignado por la BD")
 ' ============================================
 Public Function Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_Atomic() As String
     On Error GoTo EH
@@ -125,12 +128,12 @@ Public Function Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_At
     actual = c.IDCorreoCalculado
     TestHelper.AddLog logs, "Act: IDCorreoCalculado devolvio '" & actual & "'"
 
-    If Not TestHelper.AssertTrue(actual = "", "Assert1: IDCorreoCalculado debe ser vacio en instancia fresh (IDCorreo=''); actual='" & actual & "'", logs, assertError) Then
+    If Not TestHelper.AssertTrue(actual <> "", "Assert1: IDCorreoCalculado debe devolver un ID fresco (no vacio) en instancia fresh; actual='" & actual & "'", logs, assertError) Then
         Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
     End If
 
-    Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_Atomic = TestHelper.BuildJsonOk(logs, "IDCorreoCalculado='" & actual & "' (vacio en instancia fresh)")
+    Test_COM_Correo_IDCorreoCalculado_InstanciaFresh_RetornaVacio_Atomic = TestHelper.BuildJsonOk(logs, "IDCorreoCalculado='" & actual & "' (ID fresco no vacio)")
     GoTo Cleanup
 
 EH:
@@ -145,7 +148,9 @@ Cleanup:
 End Function
 
 ' ============================================
-' TEST 3 — IDCorreoCalculado retorna cached cuando IDCorreo esta set
+' TEST 3 — IDCorreoCalculado siempre calcula un ID fresco,
+' independiente de IDCorreo seteado. (La propiedad NO es un cache
+' de IDCorreo; siempre llama a constructor.getID.)
 ' ============================================
 Public Function Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atomic() As String
     On Error GoTo EH
@@ -168,17 +173,17 @@ Public Function Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atom
 
     Set c = New Correo
     c.IDCorreo = "CORREO-CACHED-002"
-    TestHelper.AddLog logs, "Arrange: IDCorreo='CORREO-CACHED-002'"
+    TestHelper.AddLog logs, "Arrange: IDCorreo='CORREO-CACHED-002' (no debe afectar IDCorreoCalculado)"
 
     actual = c.IDCorreoCalculado
     TestHelper.AddLog logs, "Act: IDCorreoCalculado devolvio '" & actual & "'"
 
-    If Not TestHelper.AssertTrue(actual = "CORREO-CACHED-002", "Assert1: IDCorreoCalculado debe devolver IDCorreo cuando esta set; actual='" & actual & "'", logs, assertError) Then
+    If Not TestHelper.AssertTrue(actual <> "" And actual <> "CORREO-CACHED-002", "Assert1: IDCorreoCalculado debe devolver un ID fresco de la BD, NO el IDCorreo seteado ('CORREO-CACHED-002'); actual='" & actual & "'", logs, assertError) Then
         Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
     End If
 
-    Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atomic = TestHelper.BuildJsonOk(logs, "IDCorreoCalculado='" & actual & "' (cached)")
+    Test_COM_Correo_IDCorreoCalculado_IDCorreoSet_RetornaCached_Atomic = TestHelper.BuildJsonOk(logs, "IDCorreoCalculado='" & actual & "' (ID fresco, independiente de IDCorreo)")
     GoTo Cleanup
 
 EH:
