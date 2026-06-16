@@ -13,6 +13,7 @@
 - **Fix de botón "Informe" en NC de auditoría** (commit `ad96b95`): el botón ahora usa `EnsureNCAuditoriaGestionSelected` en vez de armar el contexto ad-hoc. Cubre 1 caso UAT-6.
 - **#51** — Carga diferida de indicadores de auditoría (commit `3243f65`): los indicadores cargan vía timer; la pantalla no se congela. Cubre 1 caso UAT-7.
 - **Fix de regresiones en indicadores** (commit `bf97614`): restaura valores correctos en formularios `Form_Form0BDOpcionesAuditorias`, `Form_Form0BDOpcionesParteProyectos`, y los seguimientos. Cubre 1 caso UAT-8.
+- **#48 / PR #58** — Invalidación de cache de combos en `Form_FormNCProyectoGestion` (PR mergeado 2026-06-16T07:36:36Z): `ComandoActualizarLista` ahora invalida la cache de combos y los rellena con la cache reconstruida. Cubre 1 caso UAT-9.
 
 El resto de los cambios (Issue #18 cache de indicadores, refactors, tests, schema, docs) son internos y se documentan en `docs/uat/dev-internal-changes-2026-06-16.md` — NO se validan en oficina.
 
@@ -47,11 +48,12 @@ El resto de los cambios (Issue #18 cache de indicadores, refactors, tests, schem
 ## En la oficina (mañana)
 
 1. **Validador abre la web** desde el acceso directo de la lanzadera.
-2. **Responde los 8 casos DADO/CUANDO/ENTONCES** en este orden:
+2. **Responde los 9 casos DADO/CUANDO/ENTONCES** en este orden:
    - UAT-1 a UAT-5: validación del cambio #45 (5 casos).
    - UAT-6: botón "Informe" en NC de auditoría.
    - UAT-7: indicadores de auditoría sin congelar la pantalla.
    - UAT-8: indicadores muestran contadores correctos.
+   - UAT-9: combos de NC de proyecto se actualizan al volver al formulario.
 3. **Escribe observaciones** en cada caso (especialmente si marca "No cumple": qué vio vs qué esperaba, pasos para reproducir).
 4. **Rellena Nombre** (campo obligatorio para habilitar la descarga). NO requiere Cargo/área.
 5. **Pulsa "Descargar registro"** — se baja un `.html` autocontenido con el veredicto (`ACEPTADO` o `RECHAZADO`).
@@ -74,7 +76,7 @@ El resto de los cambios (Issue #18 cache de indicadores, refactors, tests, schem
 - **El retire de `InformeNCAuditorias.cls` NO se valida en el UAT** (se valida por binary sync manual arriba, paso 2). Si el binary sync falla, el usuario verá "Sub or Function not defined" en el arranque de la app y el UAT no es ejecutable.
 - **Las 11 issues abiertos en GitHub** (BR-IND-8, BR-UPN-7, etc.) son governance pendiente de producto, NO entran en este UAT (son contratos que aún no están firmados por el product owner).
 - **Las 7 capabilities nuevas propuestas** (CAP-LOG, CAP-REP, CAP-BOOT, CAP-MAIL, CAP-TECH, CAP-EXCEL, CAP-NOTA en `_proposed/`) tampoco entran — no son código aún, son stubs esperando sign-off.
-- **PR #58 (`feat/form-fncproyecto-cache-invalidation`)** sigue OPEN. No es bloqueante para este release (su contenido es ortogonal a los 4 cambios user-visible de arriba). Se puede mergear en un round posterior.
+- **PR #58 (`feat/form-fncproyecto-cache-invalidation`)** fue mergeado a staging el 2026-06-16T07:36:36Z y queda incorporado en este UAT como UAT-9. Su branch remota `feat/form-fncproyecto-cache-invalidation` fue borrada por `--delete-branch` al mergear.
 
 ## Contacto
 

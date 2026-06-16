@@ -248,7 +248,12 @@ const UAT_DATA = [
   // === Cambio 4: Indicadores muestran valores correctos (regresiones restauradas) ===
   { id: "UAT-8", criterio: "Indicadores-Valores-Regresiones",
     titulo: "Indicadores muestran contadores correctos de NCs",
-    esperado: "DADO el formulario de indicadores de auditoría, CUANDO consulto el total de NCs abiertas y cerradas, ENTONCES los números coinciden con los conteos reales (verificables abriendo el listado de NCs y contando)." }
+    esperado: "DADO el formulario de indicadores de auditoría, CUANDO consulto el total de NCs abiertas y cerradas, ENTONCES los números coinciden con los conteos reales (verificables abriendo el listado de NCs y contando)." },
+
+  // === Cambio 5: Invalidación de cache de combos en NC de proyecto (PR #58, Issue #48) ===
+  { id: "UAT-9", criterio: "#48-CacheInvalidation-RefreshCombos",
+    titulo: "Combos de NC de proyecto se actualizan al volver al formulario",
+    esperado: "DADO el formulario de gestión de NCs de proyecto abierto con combos cargados (proyectos, responsables, tipos), CUANDO modifico una NC (alta, edición o baja) desde otro formulario y vuelvo al de gestión, ENTONCES los combos reflejan el cambio sin necesidad de recargar manualmente la pantalla." }
 ];
 // ===========================================================================
 
