@@ -230,3 +230,27 @@ Estado de los pendientes §7 al re-encender la épica el 2026-06-16:
   - Hallazgo DCount/DLookup → fix `e386a8b` + lesson en engram
 - **AC-5 (cero BR con `Verified-static` permanente)**: 🟡→✅. Las 2 divergencias D1/D2 siguen registradas pero el resto de BRs `Intended` ahora tiene tests vivos o BR ejecutable. AC-5 deja de depender de producto ausente para CAP-CAT, CAP-EXP, CAP-NCA-AF, CAP-UPN, CAP-COM.
 - **AC-7 (cada BR con prueba corre en verde contra staging HEAD)**: 🟡→✅ para los 5 caps con tests. Las 9 capabilities sin tests siguen pendientes por producto ausente (no por barrera técnica).
+
+**Post-§9 follow-up work (2026-06-16, después del cierre de la épica)**:
+
+Commits posteriores a `045c227` (merge de feature/issue-67-final-fixes a staging):
+
+- `3a36cef fix(cache): use db.OpenRecordset for admin subs counts (sandbox-safe)` — extiende la lección de e386a8b a `InicializadorCache.bas` (4 `DCount` en subs admin `EliminarCachesInvalidos` + `LimpiarLogsAntiguos`). Helper privado `CountOnDb(db, table)` que opera sobre el mismo handle que las escrituras. Sin cambio de comportamiento en producción; corrige los `Debug.Print` en modo test.
+- `e8442da docs(capabilities): promote BR-EXP-4/5 and BR-NCA-AF-1 to Verified-runtime` — 22 tests verdes permiten promover estas 3 BRs en `docs/capabilities/expedientes-riesgos-responsables.md` y `nc-auditoria-actions-follow-up.md` §7. Distingue `Verified-runtime` (test que cubre la regla directamente) de `Verified-static` con test parcial (property round-trips no son behaviour tests del BR; ej. BR-UPN-1..6 y BR-COM-1/2/4 mantienen su status original).
+- Issue triage 2026-06-16: 2 cerrados (#48 por PR #58 MERGED, #67 por épica #67), 17 comentados con status (5 perf/bug con options A/B/C, 12 governance/divergence con path de resolución). Comentarios en issues 43, 52, 53, 54, 56, 71-82.
+- PR #58 (`feat/form-fncproyecto-cache-invalidation`) MERGED 2026-06-16T07:36:36Z con `--delete-branch`. UAT-9 agregado a PRUEBAS-002 cubriendo `ComandoActualizarLista` → invalidación de cache de combos. Branch local + remote borrada.
+- Rama stale `feature/cache-form-filter-wu1-tests` cerrada como superseded (merge base pre-issue-67; el trabajo de estado-cache-bootstrap y cache-form-filter-coverage ya está en `origin/staging` con SHAs diferentes pero contenido idéntico). Branch local + remote borrada.
+- 6 ramas mergeadas previas borradas (local + remote): `chore/sdd-record-feature-traceability-ledger`, `feat/feature-traceability-ledger-pr1..4`, `feat/form-fncproyecto-cache-invalidation`, `fix/issue-67-catalog-2026-06-15`. Estado final de ramas: 2 locales (main, staging), 3 remotas (origin, origin/main, origin/staging).
+
+**PRUEBAS-002 release batch**:
+
+- Web autocontenida en `docs/uat/PRUEBAS-002/uat-acceptance.html` con 9 casos DADO/CUANDO/ENTONCES cubriendo los 5 cambios user-visible del batch.
+- Recipient default: `andres.romandelperal@telefonica.com` (cambiable en `UAT_META.recipient` línea 208 antes de enviar al firmante).
+- DEPLOY.md con flujo pre-oficina / oficina / post-oficina + caveats.
+- `docs/uat/dev-internal-changes-2026-06-16.md` con la dev list de los ~65 commits internos.
+- 9 casos:
+  - UAT-1..UAT-5: #45 Posponer gate de FechaPrevistaControlEficacia al cierre (5 casos)
+  - UAT-6: fix botón "Informe" en NC de auditoría (commit ad96b95)
+  - UAT-7: #51 carga diferida de indicadores de auditoría (commit 3243f65)
+  - UAT-8: fix regresiones en indicadores (commit bf97614)
+  - UAT-9: #48 invalidación de cache de combos en `Form_FormNCProyectoGestion` (PR #58 MERGED)
