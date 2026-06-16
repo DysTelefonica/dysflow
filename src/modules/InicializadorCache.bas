@@ -11,6 +11,30 @@ Option Explicit
 ' ============================================
 
 ' ============================================
+' HELPERS PRIVADOS
+' ============================================
+' CountOnDb: cuenta filas de una tabla en el MISMO handle db que las escrituras.
+' Es la versión "sandbox-safe" de DCount: DCount evalua contra CurrentDb (que en
+' modo test apunta al frontend linkeado, no al sandbox), asi que miente en
+' subs admin invocados con m_TestingMode=True. Mismo patron que
+' Test_CAT_Tipologia_Registrar_Atomic (e386a8b): usar db.OpenRecordset sobre
+' el handle que ya tenemos para que reads y writes operen sobre la misma DB.
+Private Function CountOnDb(ByRef p_Db As DAO.Database, ByVal p_Table As String) As Long
+    Dim rs As DAO.Recordset
+    On Error GoTo errores
+    Set rs = p_Db.OpenRecordset("SELECT COUNT(*) AS C FROM [" & p_Table & "]", dbOpenSnapshot)
+    CountOnDb = rs.Fields("C").Value
+    rs.Close
+    Set rs = Nothing
+    Exit Function
+errores:
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    Set rs = Nothing
+    CountOnDb = -1
+End Function
+
+' ============================================
 ' FUNCIONES PÚBLICAS
 ' ============================================
 
@@ -695,19 +719,19 @@ Public Sub EliminarCachesInvalidos(Optional p_DiasInvalidos As Integer = 60)
     
     On Error GoTo errores
     Set db = getdb()
-    
-    ' Contar antes
-    registrosAntes = DCount("*", "TbCacheNCProyecto")
-    
+
+    ' Contar antes (sandbox-safe: sobre el mismo handle db que vamos a escribir)
+    registrosAntes = CountOnDb(db, "TbCacheNCProyecto")
+
     ' Eliminar
     sql = "DELETE FROM TbCacheNCProyecto " & _
           "WHERE CacheValida = False " & _
           "AND DATEDIFF('d', Nz(FechaUltimoUso, FechaCache), Now()) > " & p_DiasInvalidos & ";"
-    
+
     db.Execute sql, dbFailOnError
-    
-    ' Contar después
-    registrosDespues = DCount("*", "TbCacheNCProyecto")
+
+    ' Contar después (mismo handle, post-delete)
+    registrosDespues = CountOnDb(db, "TbCacheNCProyecto")
     
     Debug.Print ">> Se han eliminado " & (registrosAntes - registrosDespues) & " registros de caché inválidos por más de " & p_DiasInvalidos & " días."
     
@@ -973,16 +997,18 @@ Public Sub LimpiarLogsAntiguos(Optional p_DiasLogs As Integer = 90, Optional p_D
     
     On Error GoTo errores
     Set db = getdb()
-    
-    registrosAntes = DCount("*", "TbLogCache")
-    
+
+    ' Contar antes (sandbox-safe: sobre el mismo handle db que vamos a escribir)
+    registrosAntes = CountOnDb(db, "TbLogCache")
+
     ' Limpiar logs generales antiguos
     db.Execute "DELETE FROM TbLogCache WHERE FechaOperacion < DateAdd('d', -" & p_DiasLogs & ", Now());", dbFailOnError
-    
+
     ' Limpiar errores antiguos (más agresivo)
     db.Execute "DELETE FROM TbLogCache WHERE TipoOperacion = 'Error' AND FechaOperacion < DateAdd('d', -" & p_DiasErrores & ", Now());", dbFailOnError
-    
-    registrosDespues = DCount("*", "TbLogCache")
+
+    ' Contar después (mismo handle, post-delete)
+    registrosDespues = CountOnDb(db, "TbLogCache")
     
     Debug.Print ">> Limpieza de logs completada. Registros eliminados: " & (registrosAntes - registrosDespues)
     
