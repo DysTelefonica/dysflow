@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!--
+  Web de aceptación UAT — PRUEBAS-003
+  Funcionalidad: control de eficacia — motivo de no aplicación + fecha prevista aplazada
+  Tag de staging validado: v0.1.0-staging.1
+  Versión de criterios: 0.1.0 (cyrb53 abajo)
+  Audiencia: equipo de calidad (Natalia + compis)
+  Cambios respecto a main: feat(NC): postpone FechaPrevistaControlEficacia gating
+  to NC close (closes #45) + endurecimiento del motivo de no CE.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aceptación UAT — Control de eficacia (v0.1.0)</title>
+<style>
+  :root {
+    --tf-blue: #0066ff; --tf-blue-70: #0356c9; --tf-blue-10: #e5f0ff;
+    --tf-navy: #031a34; --tf-white: #f7f7ff;
+    --tf-text-primary: #031a34; --tf-text-secondary: #58617a;
+    --tf-background: #ffffff; --tf-background-alt: #f7f7ff; --tf-background-dark: #031a34;
+    --tf-border: #d1d5e4; --tf-border-focus: #0066ff;
+    --tf-green: #3a8340; --tf-green-bg: #e9f5ea;
+    --tf-red: #d6786b; --tf-red-dark: #843c34; --tf-red-bg: #f9eeed;
+    --tf-yellow: #b8860b; --tf-yellow-bg: #fef3c7;
+    --tf-radius-card: 8px; --tf-radius-input: 8px; --tf-radius-button: 32px;
+    --tf-font-family: "Telefonica Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-8: 48px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tf-blue: #227aff; --tf-blue-10: #00264d;
+      --tf-text-primary: #ffffff; --tf-text-secondary: #b0b6ca;
+      --tf-background: #000522; --tf-background-alt: #00182f; --tf-background-dark: #000522;
+      --tf-border: #00264d; --tf-border-focus: #227aff;
+      --tf-green-bg: #10301a; --tf-red-bg: #2e1513; --tf-yellow-bg: #3a2a08;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--tf-font-family); color: var(--tf-text-secondary); background: var(--tf-background-alt); line-height: 1.6; }
+  .tf-container { width: 100%; max-width: 880px; margin: 0 auto; padding: 0 var(--space-4); }
+  header.tf-header { background: var(--tf-background); border-bottom: 1px solid var(--tf-border); position: sticky; top: 0; z-index: 100; }
+  .tf-header__inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .tf-wordmark { font-weight: 900; font-size: 1.25rem; color: var(--tf-blue); letter-spacing: -.01em; }
+  .tf-env-tag { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #fff; background: var(--tf-blue); border-radius: var(--tf-radius-button); padding: 4px 12px; }
+  main { padding: var(--space-8) 0; }
+  h1 { font-weight: 400; font-size: clamp(1.625rem, 4vw, 2.25rem); color: var(--tf-text-primary); margin: 0 0 var(--space-2); }
+  .tf-lead { font-size: 1.0625rem; margin: 0 0 var(--space-5); max-width: 60ch; }
+  .tf-meta { background: var(--tf-background); border: 1px solid var(--tf-border); border-radius: var(--tf-radius-card); padding: var(--space-5); margin-bottom: var(--space-6); display: grid; gap: var(--space-3); }
+  .tf-meta dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--space-4); margin: 0; }
+  .tf-meta dt { font-weight: 500; color: var(--tf-text-primary); font-size: .875rem; }
+  .tf-meta dd { margin: 0; font-size: .875rem; word-break: break-all; }
+  code, .tf-code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace; font-size: .85em; background: var(--tf-background-alt); padding: 1px 6px; border-radius: 4px; color: var(--tf-text-primary); }
+  .tf-tag { display: inline-block; font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace; font-size: .85rem; font-weight: 600; color: var(--tf-blue); background: var(--tf-blue-10); padding: 3px 10px; border-radius: 4px; border: 1px solid var(--tf-blue); }
+  .tf-progress { position: sticky; top: 64px; z-index: 90; background: var(--tf-background-alt); padding: var(--space-3) 0; border-bottom: 1px solid var(--tf-border); font-size: .875rem; color: var(--tf-text-primary); }
+  .tf-progress strong { color: var(--tf-blue); }
+  .tf-case { background: var(--tf-background); border: 1px solid var(--tf-border); border-radius: var(--tf-radius-card); padding: var(--space-5); margin-bottom: var(--space-4); border-left: 4px solid var(--tf-border); }
+  .tf-case[data-state="pass"] { border-left-color: var(--tf-green); }
+  .tf-case[data-state="fail"] { border-left-color: var(--tf-red-dark); }
+  .tf-case__id { font-size: .75rem; font-weight: 600; color: var(--tf-blue); text-transform: uppercase; letter-spacing: .06em; }
+  .tf-case__title { font-size: 1.125rem; font-weight: 500; color: var(--tf-text-primary); margin: 4px 0 var(--space-3); }
+  .tf-case__expect { background: var(--tf-background-alt); border-radius: var(--tf-radius-input); padding: var(--space-3) var(--space-4); font-size: .9375rem; margin-bottom: var(--space-4); }
+  .tf-case__expect b { color: var(--tf-text-primary); font-weight: 500; }
+  fieldset { border: 0; margin: 0; padding: 0; }
+  legend { font-weight: 500; font-size: .875rem; color: var(--tf-text-primary); margin-bottom: var(--space-2); }
+  .tf-choices { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+  .tf-choice { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; border: 1.5px solid var(--tf-border); border-radius: var(--tf-radius-button); padding: 8px 18px; font-weight: 500; font-size: .9375rem; color: var(--tf-text-primary); transition: border-color .15s, background .15s; }
+  .tf-choice:focus-within { outline: 3px solid color-mix(in srgb, var(--tf-blue), white 45%); outline-offset: 2px; }
+  .tf-choice input { accent-color: var(--tf-blue); margin: 0; }
+  .tf-choice--pass:has(input:checked) { background: var(--tf-green-bg); border-color: var(--tf-green); color: var(--tf-green); }
+  .tf-choice--fail:has(input:checked) { background: var(--tf-red-bg); border-color: var(--tf-red-dark); color: var(--tf-red-dark); }
+  label.tf-label { display: block; font-size: .875rem; font-weight: 500; color: var(--tf-text-primary); margin-bottom: var(--space-2); }
+  textarea.tf-textarea { width: 100%; min-height: 84px; resize: vertical; padding: 10px 14px; border: 1.5px solid var(--tf-border); border-radius: var(--tf-radius-input); font-family: var(--tf-font-family); font-size: 1rem; color: var(--tf-text-primary); background: var(--tf-background); outline: none; }
+  textarea.tf-textarea:focus { border-color: var(--tf-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tf-blue), white 70%); }
+  .tf-signer { display: grid; gap: var(--space-3); grid-template-columns: 1fr 1fr; margin: var(--space-5) 0; }
+  @media (max-width: 640px) { .tf-signer { grid-template-columns: 1fr; } }
+  input.tf-input { width: 100%; height: 44px; padding: 10px 14px; border: 1.5px solid var(--tf-border); border-radius: var(--tf-radius-input); font-family: var(--tf-font-family); font-size: 1rem; color: var(--tf-text-primary); background: var(--tf-background); outline: none; }
+  input.tf-input:focus { border-color: var(--tf-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tf-blue), white 70%); }
+  .tf-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-5); }
+  .tf-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 22px; border-radius: var(--tf-radius-button); border: 2px solid transparent; font-family: var(--tf-font-family); font-size: .9375rem; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+  .tf-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--tf-blue), white 45%); outline-offset: 3px; }
+  .tf-button:disabled { opacity: .4; cursor: not-allowed; }
+  .tf-button--primary { color: #fff; background: var(--tf-blue); border-color: var(--tf-blue); }
+  .tf-button--primary:hover:not(:disabled) { background: var(--tf-blue-70); border-color: var(--tf-blue-70); }
+  .tf-button--secondary { color: var(--tf-blue); background: transparent; border-color: var(--tf-blue); }
+  .tf-button--secondary:hover:not(:disabled) { background: var(--tf-blue-10); }
+  .tf-note { font-size: .8125rem; color: var(--tf-text-secondary); margin-top: var(--space-3); }
+  footer.tf-footer { background: var(--tf-background-dark); color: #b0b6ca; padding: var(--space-8) 0; margin-top: var(--space-8); }
+  .tf-footer__legal { font-size: .8125rem; color: #6e7894; }
+  .tf-skip { position: absolute; left: -9999px; }
+  .tf-skip:focus { left: var(--space-4); top: var(--space-2); background: #fff; padding: 8px 16px; border-radius: var(--tf-radius-input); z-index: 200; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<a href="#contenido" class="tf-skip">Saltar al contenido</a>
+<header class="tf-header">
+  <div class="tf-container tf-header__inner">
+    <span class="tf-wordmark">Telefónica</span>
+    <span class="tf-env-tag">Staging · UAT</span>
+  </div>
+</header>
+
+<main id="contenido">
+  <div class="tf-container">
+    <h1>Control de eficacia: motivo de no aplicación y fecha prevista aplazada</h1>
+    <p class="tf-lead">Esta tanda de UAT valida los dos cambios en el control de eficacia que entraron en staging: (1) cuando una no conformidad NO requiere control de eficacia, el sistema te obliga a justificar el motivo, y (2) cuando SÍ lo requiere, podés abrir la no conformidad sin fecha prevista, pero el sistema te la va a pedir cuando intentes cerrarla.</p>
+
+    <section class="tf-meta" aria-label="Datos de la funcionalidad">
+      <dl>
+        <dt>Funcionalidad</dt><dd>Control de eficacia — motivo y fecha prevista (<span id="featId">nc-ce-motivo-fecha</span>)</dd>
+        <dt>Versión de criterios</dt><dd><span id="critVer">0.1.0</span> · checksum <code id="critSum">—</code></dd>
+        <dt>Destinatario de la prueba</dt><dd>andres.romandelperal@telefonica.com</dd>
+      </dl>
+    </section>
+
+    <section class="tf-meta" aria-label="Trazabilidad técnica">
+      <dl>
+        <dt>Tag de staging</dt><dd><span class="tf-tag" id="uatTag">v0.1.0-staging.1</span></dd>
+        <dt>Commit</dt><dd><code id="uatCommit">7fe71cb</code></dd>
+        <dt>Rama congelada</dt><dd><code>staging</code> (no se toca hasta que vuelva la aceptación firmada)</dd>
+        <dt>Repositorio</dt><dd>github.com/DysTelefonica/No_conformidades · rama <code>staging</code> · tag <code>v0.1.0-staging.1</code></dd>
+        <dt>Fecha del tag</dt><dd>2026-06-16</dd>
+      </dl>
+    </section>
+  </div>
+
+  <div class="tf-progress" role="status" aria-live="polite">
+    <div class="tf-container">Progreso: <strong><span id="done">0</span>/<span id="total">0</span></strong> pruebas respondidas</div>
+  </div>
+
+  <div class="tf-container">
+    <form id="uatForm" novalidate>
+      <div id="cases"></div>
+
+      <section class="tf-meta" aria-label="Quién valida">
+        <div class="tf-signer">
+          <div>
+            <label class="tf-label" for="signerName">Nombre de quien valida *</label>
+            <input class="tf-input" id="signerName" name="signerName" autocomplete="name" required>
+          </div>
+        </div>
+      </section>
+
+      <div class="tf-actions">
+        <button type="button" class="tf-button tf-button--primary" id="downloadBtn" disabled>Descargar registro de aceptación</button>
+        <button type="button" class="tf-button tf-button--secondary" id="mailBtn" disabled>Enviar por correo</button>
+      </div>
+      <p class="tf-note" id="hint">Respondé todas las pruebas y tu nombre para habilitar la descarga. El correo no se envía solo: se abre tu gestor de correo para que adjuntes el registro descargado.</p>
+    </form>
+  </div>
+</main>
+
+<footer class="tf-footer">
+  <div class="tf-container">
+    <p class="tf-footer__legal">Documento interno de aceptación UAT. Los datos introducidos solo se procesan en tu navegador; nada se envía hasta que adjuntás el registro a un correo. © Telefónica.</p>
+  </div>
+</footer>
+
+<script>
+const UAT_META = {
+  featureId: "nc-ce-motivo-fecha",
+  featureName: "Control de eficacia: motivo de no aplicación y fecha prevista aplazada",
+  criteriaVersion: "0.1.0",
+  recipient: "andres.romandelperal@telefonica.com",
+  stagingTag: "v0.1.0-staging.1",
+  stagingCommit: "7fe71cb",
+  stagingBranch: "staging",
+  tagDate: "2026-06-16"
+};
+const UAT_DATA = [
+  {
+    id: "UAT-1",
+    criterio: "CR-1",
+    titulo: "Si una NC no requiere control de eficacia, el sistema te obliga a justificar el motivo",
+    esperado: "DADO que estás dando de alta una no conformidad, CUANDO en el campo «¿Requiere control de eficacia?» elegís «No», ENTONCES el sistema te muestra un botón «Meter Motivos No CE» y no te deja cerrar la NC correctamente hasta que hayas escrito un motivo."
+  },
+  {
+    id: "UAT-2",
+    criterio: "CR-2",
+    titulo: "Podés abrir una NC sin fecha prevista de CE, pero el sistema te la pide al cerrarla",
+    esperado: "DADO que estás dando de alta una no conformidad marcando «Sí» en «¿Requiere control de eficacia?», CUANDO dejás vacía la fecha prevista y guardás, ENTONCES la NC se crea igual. Más adelante, CUANDO intentás cerrar la NC, ENTONCES el sistema te bloquea con un mensaje claro pidiéndote que pongas la fecha prevista antes de poder cerrar."
+  }
+];
+
+const $ = (s, el = document) => el.querySelector(s);
+const casesEl = $("#cases"), totalEl = $("#total"), doneEl = $("#done");
+const downloadBtn = $("#downloadBtn"), mailBtn = $("#mailBtn");
+
+function checksum(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0, c; i < str.length; i++) {
+    c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
+}
+const CRIT_SUM = checksum(JSON.stringify(UAT_DATA.map(c => [c.id, c.criterio, c.esperado])));
+$("#critSum").textContent = CRIT_SUM;
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+
+UAT_DATA.forEach((c, i) => {
+  const sec = document.createElement("section");
+  sec.className = "tf-case"; sec.dataset.idx = i;
+  sec.innerHTML = `
+    <div class="tf-case__id">${esc(c.id)} · criterio ${esc(c.criterio)}</div>
+    <h2 class="tf-case__title">${esc(c.titulo)}</h2>
+    <div class="tf-case__expect"><b>Qué se espera:</b> ${esc(c.esperado)}</div>
+    <fieldset>
+      <legend>¿La aplicación lo cumple?</legend>
+      <div class="tf-choices">
+        <label class="tf-choice tf-choice--pass"><input type="radio" name="r${i}" value="pass" required> Sí, cumple</label>
+        <label class="tf-choice tf-choice--fail"><input type="radio" name="r${i}" value="fail"> No cumple</label>
+      </div>
+    </fieldset>
+    <label class="tf-label" for="obs${i}">Observaciones</label>
+    <textarea class="tf-textarea" id="obs${i}" name="obs${i}" placeholder="Qué viste, qué esperabas, pasos para reproducir…"></textarea>`;
+  casesEl.appendChild(sec);
+});
+totalEl.textContent = UAT_DATA.length;
+
+function refresh() {
+  let done = 0;
+  UAT_DATA.forEach((_, i) => {
+    const v = (document.querySelector(`input[name="r${i}"]:checked`) || {}).value;
+    if (v) done++;
+    const sec = casesEl.children[i];
+    sec.dataset.state = v || "";
+  });
+  doneEl.textContent = done;
+  const ready = done === UAT_DATA.length && $("#signerName").value.trim().length > 0;
+  downloadBtn.disabled = !ready; mailBtn.disabled = !ready;
+}
+$("#uatForm").addEventListener("input", refresh);
+
+function collect() {
+  return {
+    feature: UAT_META.featureName, featureId: UAT_META.featureId,
+    criteriaVersion: UAT_META.criteriaVersion, criteriaChecksum: CRIT_SUM,
+    stagingTag: UAT_META.stagingTag, stagingCommit: UAT_META.stagingCommit,
+    stagingBranch: UAT_META.stagingBranch, tagDate: UAT_META.tagDate,
+    signer: $("#signerName").value.trim(),
+    datetime: new Date().toISOString(),
+    results: UAT_DATA.map((c, i) => ({
+      id: c.id, criterio: c.criterio, titulo: c.titulo,
+      resultado: (document.querySelector(`input[name="r${i}"]:checked`) || {}).value || "",
+      observaciones: $(`#obs${i}`).value.trim()
+    }))
+  };
+}
+
+function recordHtml(d) {
+  const allPass = d.results.every(r => r.resultado === "pass");
+  const rows = d.results.map(r => `<tr><td>${esc(r.id)}</td><td>${esc(r.titulo)}</td><td>${r.resultado === "pass" ? "CUMPLE" : "NO CUMPLE"}</td><td>${esc(r.observaciones) || "—"}</td></tr>`).join("");
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Registro UAT — ${esc(d.feature)}</title>
+<style>body{font-family:system-ui,sans-serif;color:#031a34;max-width:820px;margin:24px auto;padding:0 16px}
+h1{color:#0066ff}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5e4;padding:8px;text-align:left;font-size:14px;vertical-align:top}
+th{background:#e5f0ff}.verdict{font-weight:700;padding:8px 16px;border-radius:8px;display:inline-block;margin-top:8px;background:${allPass ? "#e9f5ea;color:#3a8340" : "#f9eeed;color:#843c34"}}
+.trace{background:#f7f7ff;padding:12px 16px;border-radius:8px;margin:12px 0;font-size:13px;color:#58617a}
+.trace code{background:#fff;padding:1px 6px;border-radius:4px;color:#031a34;border:1px solid #d1d5e4}
+</style></head><body>
+<h1>Registro de aceptación UAT</h1>
+<p><b>Funcionalidad:</b> ${esc(d.feature)} (${esc(d.featureId)})<br>
+<b>Versión de criterios:</b> ${esc(d.criteriaVersion)} · checksum ${esc(d.criteriaChecksum)}<br>
+<b>Valida:</b> ${esc(d.signer)}<br>
+<b>Fecha:</b> ${esc(d.datetime)}</p>
+<div class="trace"><b>Trazabilidad técnica:</b> tag <code>${esc(d.stagingTag)}</code> · commit <code>${esc(d.stagingCommit)}</code> · rama <code>${esc(d.stagingBranch)}</code> · fecha del tag ${esc(d.tagDate)}</div>
+<span class="verdict">${allPass ? "ACEPTADO — todas las pruebas cumplen" : "RECHAZADO — hay pruebas que no cumplen"}</span>
+<table><thead><tr><th>Prueba</th><th>Descripción</th><th>Resultado</th><th>Observaciones</th></tr></thead><tbody>${rows}</tbody></table>
+<p style="font-size:12px;color:#58617a;margin-top:24px">Registro generado en el navegador del validador. El checksum fija los criterios aceptados; si los criterios cambian, esta aceptación deja de ser válida para la nueva versión.</p>
+</body></html>`;
+}
+
+downloadBtn.addEventListener("click", () => {
+  const d = collect();
+  const blob = new Blob([recordHtml(d)], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `UAT_${d.featureId}_${d.criteriaVersion}_${d.stagingTag}_${d.signer.replace(/\s+/g, "-")}.html`;
+  a.click(); URL.revokeObjectURL(a.href);
+  $("#hint").textContent = "Registro descargado. Ahora pulsá \"Enviar por correo\" y adjuntá el archivo descargado.";
+});
+
+mailBtn.addEventListener("click", () => {
+  const d = collect();
+  const allPass = d.results.every(r => r.resultado === "pass");
+  const subject = `UAT ${allPass ? "ACEPTADO" : "RECHAZADO"} — ${d.feature} (${d.criteriaVersion} · ${d.stagingTag})`;
+  const body = [
+    `Funcionalidad: ${d.feature} (${d.featureId})`,
+    `Versión de criterios: ${d.criteriaVersion} · checksum ${d.criteriaChecksum}`,
+    `Tag de staging validado: ${d.stagingTag} (commit ${d.stagingCommit}, rama ${d.stagingBranch})`,
+    `Valida: ${d.signer}`,
+    `Resultado global: ${allPass ? "ACEPTADO" : "RECHAZADO"}`,
+    ``,
+    `IMPORTANTE: adjunta a este correo el archivo de registro descargado antes de enviar.`
+  ].join("\n");
+  window.location.href = `mailto:${encodeURIComponent(UAT_META.recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+});
+
+refresh();
+</script>
+</body>
+</html>
