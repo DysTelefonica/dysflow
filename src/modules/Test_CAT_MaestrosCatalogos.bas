@@ -73,21 +73,32 @@ Public Function Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic() As String
         GoTo Cleanup
     End If
 
-    ' Assert 2: la fila debe existir en TbTiposNCProyectos con Tipologia = nuestra fixture
-    rowsAfter = DCount("[IDTipo]", "TbTiposNCProyectos", "[Tipologia]='" & Replace(tipologia, "'", "''") & "'")
+    ' Assert 2: la fila debe existir en TbTiposNCProyectos con Tipologia = nuestra fixture.
+    ' IMPORTANTE: DCount evalua contra CurrentDb (frontend). En test mode los writes van
+    ' al sandbox (m_TestingMode=True), no al frontend local. Por eso usamos db.OpenRecordset
+    ' contra el MISMO handle que ya tenemos del sandbox.
+    Dim rsCount As DAO.Recordset
+    Set rsCount = db.OpenRecordset("SELECT COUNT(*) AS C FROM TbTiposNCProyectos WHERE Tipologia='" & Replace(tipologia, "'", "''") & "'", dbOpenSnapshot)
+    rowsAfter = rsCount.Fields("C").Value
+    rsCount.Close
+    Set rsCount = Nothing
     If Not TestHelper.AssertTrue(rowsAfter = 1, "Assert2: TbTiposNCProyectos debe contener exactamente 1 fila con Tipologia='" & tipologia & "'; rowsAfter=" & rowsAfter, logs, assertError) Then
         Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
     End If
-    TestHelper.AddLog logs, "Assert2: DCount(IDTipo WHERE Tipologia='" & tipologia & "') = " & rowsAfter
+    TestHelper.AddLog logs, "Assert2: db.OpenRecordset COUNT WHERE Tipologia='" & tipologia & "') = " & rowsAfter
 
     ' Assert 3: IDTipo debe ser positivo (IDTipoCalculado asignó un Long)
-    idTipo = DLookup("[IDTipo]", "TbTiposNCProyectos", "[Tipologia]='" & Replace(tipologia, "'", "''") & "'")
+    Dim rsId As DAO.Recordset
+    Set rsId = db.OpenRecordset("SELECT IDTipo FROM TbTiposNCProyectos WHERE Tipologia='" & Replace(tipologia, "'", "''") & "'", dbOpenSnapshot)
+    idTipo = rsId.Fields("IDTipo").Value
+    rsId.Close
+    Set rsId = Nothing
     If Not TestHelper.AssertTrue(idTipo > 0, "Assert3: IDTipo debe ser positivo (>0); idTipo=" & idTipo, logs, assertError) Then
         Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
     End If
-    TestHelper.AddLog logs, "Assert3: DLookup IDTipo=" & idTipo
+    TestHelper.AddLog logs, "Assert3: db.OpenRecordset IDTipo=" & idTipo
 
     Test_CAT_Tipologia_Registrar_CreaTipologia_Atomic = TestHelper.BuildJsonOk(logs, "tipologia=" & tipologia & " idTipo=" & idTipo)
     GoTo Cleanup
@@ -159,8 +170,16 @@ Public Function Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic() As String
         GoTo Cleanup
     End If
 
-    idTipo = DLookup("[IDTipo]", "TbTiposNCProyectos", "[Tipologia]='" & Replace(tipologia, "'", "''") & "'")
-    rowsBefore = DCount("[IDTipo]", "TbTiposNCProyectos", "[Tipologia]='" & Replace(tipologia, "'", "''") & "'")
+    ' Assert 2: la fila debe existir en TbTiposNCProyectos con Tipologia = nuestra fixture.
+    ' Verificamos contra el sandbox (db), no contra CurrentDb (frontend), porque los writes
+    ' del test van al sandbox y DCount evaluaria contra el frontend local (que no recibe
+    ' los cambios).
+    Dim rsCount As DAO.Recordset
+    Set rsCount = db.OpenRecordset("SELECT COUNT(*) AS C, MAX(IDTipo) AS IDTipoMax FROM TbTiposNCProyectos WHERE Tipologia='" & Replace(tipologia, "'", "''") & "'", dbOpenSnapshot)
+    rowsBefore = rsCount.Fields("C").Value
+    idTipo = rsCount.Fields("IDTipoMax").Value
+    rsCount.Close
+    Set rsCount = Nothing
     If Not TestHelper.AssertTrue(rowsBefore = 1, "Precondición: Arrange debe dejar 1 fila; rowsBefore=" & rowsBefore, logs, assertError) Then
         Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
@@ -182,13 +201,17 @@ Public Function Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic() As String
         GoTo Cleanup
     End If
 
-    ' Assert 2: la fila debe haber desaparecido
-    rowsAfter = DCount("[IDTipo]", "TbTiposNCProyectos", "[Tipologia]='" & Replace(tipologia, "'", "''") & "'")
+    ' Assert 2: la fila debe haber desaparecido (verificamos contra sandbox via db)
+    Dim rsCount2 As DAO.Recordset
+    Set rsCount2 = db.OpenRecordset("SELECT COUNT(*) AS C FROM TbTiposNCProyectos WHERE Tipologia='" & Replace(tipologia, "'", "''") & "'", dbOpenSnapshot)
+    rowsAfter = rsCount2.Fields("C").Value
+    rsCount2.Close
+    Set rsCount2 = Nothing
     If Not TestHelper.AssertTrue(rowsAfter = 0, "Assert2: TbTiposNCProyectos no debe contener filas con Tipologia='" & tipologia & "' post-Eliminar; rowsAfter=" & rowsAfter, logs, assertError) Then
         Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic = TestHelper.BuildJsonFail(assertError, logs)
         GoTo Cleanup
     End If
-    TestHelper.AddLog logs, "Assert2: DCount(IDTipo WHERE Tipologia='" & tipologia & "') = " & rowsAfter
+    TestHelper.AddLog logs, "Assert2: db.OpenRecordset COUNT WHERE Tipologia='" & tipologia & "' = " & rowsAfter
 
     Test_CAT_Tipologia_Eliminar_LimpiaTipologia_Atomic = TestHelper.BuildJsonOk(logs, "tipologia=" & tipologia & " idTipo=" & idTipo & " rowsBefore=" & rowsBefore & " rowsAfter=" & rowsAfter)
     GoTo Cleanup
