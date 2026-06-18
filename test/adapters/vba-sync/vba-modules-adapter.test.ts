@@ -732,4 +732,136 @@ describe("VbaModulesAdapter", () => {
       modulesPlanned: ["Entorno", "Form_Main", "Report_Invoice"],
     });
   });
+
+  it("export_all --prune deletes disk modules absent from the exported set after a clean export", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-clean-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await mkdir(join(sourceRoot, "forms"), { recursive: true });
+    await mkdir(join(sourceRoot, "queries"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Obsolete.bas"), "old", "utf8");
+    await writeFile(join(sourceRoot, "forms", "Form_Gone.form.txt"), "ui", "utf8");
+    await writeFile(join(sourceRoot, "forms", "Form_Gone.cls"), "code", "utf8");
+    await writeFile(join(sourceRoot, "queries", "qryActive.sql"), "SELECT 1", "utf8");
+
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({ prune: { applied: true } });
+
+    // Live module and saved queries survive — queries are never pruned.
+    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+    expect(await readFile(join(sourceRoot, "queries", "qryActive.sql"), "utf8")).toBe("SELECT 1");
+
+    // Orphans (both the .form.txt UI and its .cls code-behind) are removed.
+    await expect(readFile(join(sourceRoot, "modules", "Obsolete.bas"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(join(sourceRoot, "forms", "Form_Gone.form.txt"), "utf8"),
+    ).rejects.toThrow();
+    await expect(readFile(join(sourceRoot, "forms", "Form_Gone.cls"), "utf8")).rejects.toThrow();
+  });
+
+  it("export_all --prune does NOT delete anything when the export reported warnings", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-warned-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Obsolete.bas"), "old", "utf8");
+
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout:
+          'DYSFLOW_RESULT {"ok":true,"exported":["Live"],"warnings":[{"module":"Form_X","error":"open in design view"}]}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({ prune: { applied: false, reason: "export-had-warnings" } });
+
+    // A non-clean export must never trigger deletions: the orphan survives.
+    expect(await readFile(join(sourceRoot, "modules", "Obsolete.bas"), "utf8")).toBe("old");
+  });
+
+  it("export_all without prune never deletes orphan files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-off-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Obsolete.bas"), "old", "utf8");
+
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", {});
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(await readFile(join(sourceRoot, "modules", "Obsolete.bas"), "utf8")).toBe("old");
+    expect(result.data).not.toHaveProperty("prune");
+  });
+
+  it("export_all --prune rejects a filtered export (would delete everything else)", async () => {
+    let executorCalled = false;
+    const service = new VbaSyncAdapter({
+      executor: async () => {
+        executorCalled = true;
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true, filter: "Live" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    // Must fail BEFORE running any export — a filtered prune is never partially applied.
+    expect(executorCalled).toBe(false);
+  });
 });

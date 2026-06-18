@@ -182,6 +182,36 @@ async function compareSingleModule(
   );
 }
 
+const MANAGED_CODE_EXTENSIONS = [".bas", ".cls", ".frm"];
+
+/**
+ * Maps a disk file name to the VBA module name it represents, or null when the
+ * file is not a managed source artifact. Forms/reports serialize as
+ * `<name>.form.txt` / `<name>.report.txt`; code lives in `.bas` / `.cls` / `.frm`.
+ * Keep this aligned with the export layout so orphan detection and pruning
+ * agree on what counts as a managed file.
+ */
+function managedDiskModuleName(entryName: string): string | null {
+  const lower = entryName.toLowerCase();
+  if (lower.endsWith(".form.txt")) return entryName.slice(0, -".form.txt".length);
+  if (lower.endsWith(".report.txt")) return entryName.slice(0, -".report.txt".length);
+  if (MANAGED_CODE_EXTENSIONS.includes(extname(entryName).toLowerCase())) {
+    return parse(entryName).name;
+  }
+  return null;
+}
+
+/** Folders that hold managed source artifacts. Queries are intentionally excluded. */
+function managedFolders(destinationRoot: string): string[] {
+  return [
+    destinationRoot,
+    resolve(destinationRoot, "modules"),
+    resolve(destinationRoot, "classes"),
+    resolve(destinationRoot, "forms"),
+    resolve(destinationRoot, "reports"),
+  ];
+}
+
 export class VbaModulesAdapter {
   constructor(
     private readonly orchestrator: VbaModulesOrchestrator,
@@ -250,7 +280,79 @@ export class VbaModulesAdapter {
         ? { ...params, destinationRoot: exportPath }
         : params;
 
+    if (toolName === "export_all" && truthy(params.prune)) {
+      if (stringValue(params.filter) !== undefined) {
+        return failureResult(
+          createDysflowError(
+            "INVALID_INPUT",
+            "export_all prune is incompatible with filter: a filtered export only lists the matching modules, so pruning would delete every other on-disk file. Run an unfiltered export_all to prune.",
+          ),
+        );
+      }
+      return this.exportAllWithPrune(effectiveParams);
+    }
+
     return this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+  }
+
+  /**
+   * Runs export_all, then deletes managed source files whose object no longer
+   * exists in the binary, so `src` mirrors the live project.
+   *
+   * Safety invariant: pruning NEVER runs after a non-clean export. If any module
+   * failed to serialize (e.g. a form open in design view), it is still live in
+   * the binary, so deleting its file would destroy real source. In that case the
+   * prune is skipped and reported, never silently applied. The export result's
+   * `exported` list is the single source of truth for what must survive; queries
+   * are never pruned.
+   */
+  private async exportAllWithPrune(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const mapping = MODULE_MAPPINGS.export_all;
+    if (!mapping) {
+      return failureResult(createDysflowError("MAPPING_ERROR", "Missing export_all mapping."));
+    }
+    const exportResult = await this.orchestrator.executeMappedTool("export_all", params, mapping);
+    if (!exportResult.ok) return exportResult;
+
+    const data = (exportResult.data ?? {}) as Record<string, unknown>;
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    const meta = { diagnostics: exportResult.diagnostics, durationMs: exportResult.durationMs };
+
+    if (warnings.length > 0) {
+      return successResult(
+        { ...data, prune: { applied: false, reason: "export-had-warnings", deleted: [] } },
+        meta,
+      );
+    }
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const destinationRoot = target.data.destinationRoot;
+
+    const exported = Array.isArray(data.exported) ? data.exported.map(String) : [];
+    const keep = new Set(exported.map((name) => name.toLowerCase()));
+
+    const deleted: string[] = [];
+    for (const folder of managedFolders(destinationRoot)) {
+      let entries: readonly { name: string }[] | readonly string[];
+      try {
+        entries = await this.fileSystem.readdir(folder);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        const entryName = typeof entry === "string" ? entry : entry.name;
+        const modName = managedDiskModuleName(entryName);
+        if (modName === null || keep.has(modName.toLowerCase())) continue;
+        const fullPath = resolve(folder, entryName);
+        await this.fileSystem.rm(fullPath, { recursive: false, force: true });
+        deleted.push(fullPath);
+      }
+    }
+
+    return successResult({ ...data, prune: { applied: true, deleted } }, meta);
   }
 
   async auditOrphans(params: Record<string, unknown>): Promise<OperationResult<unknown>> {

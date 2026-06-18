@@ -40,11 +40,13 @@ for (const [label, fixturePath] of [["accessPath", accessPath], ["backendPath", 
 await rm(tempRoot, { recursive: true, force: true });
 await mkdir(tempRoot, { recursive: true });
 await mkdir(join(tempRoot, "exports"), { recursive: true });
+await mkdir(join(tempRoot, "exports", "prune"), { recursive: true });
 await mkdir(join(tempRoot, "ERD"), { recursive: true });
 
 const sqlScript = join(tempRoot, "script.sql");
 const formSpec = join(tempRoot, "form-spec.json");
 const queriesExportPath = join(tempRoot, "exports", "queries.json");
+const pruneExportPath = join(tempRoot, "exports", "prune");
 const probeTable = `ZZZ_DysflowMcpE2E_${Date.now()}`;
 await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
 await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
@@ -220,6 +222,21 @@ await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });
 await record("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName] });
 await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, diff: false });
+// export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
+// The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
+// exercises the prune path end-to-end without touching the project's real src/.
+const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true });
+try {
+  const pruneData = JSON.parse(pruneResult.text ?? "{}");
+  const ok = pruneData.prune !== undefined && typeof pruneData.prune.applied === "boolean";
+  rows.push({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
+  console.log(`${ok ? "PASS" : "FAIL"}\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
+} catch (err) {
+  rows.push({ area: "vba-sync", tool: "export_all:prune-report", pass: false, expected: "parseable JSON with prune report", ms: 0, summary: String(err) });
+  console.log(`FAIL\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
+}
+// Guard: prune + filter must be rejected (a filtered prune would delete everything else).
+await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, filter: existingModuleName }, { expected: "error" });
 await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true, compile: false });
 await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true, compile: false });
 await record("vba-sync", "compile_vba", { ...ctx, timeoutMs: 60000 }, { timeoutMs: 60000 });
