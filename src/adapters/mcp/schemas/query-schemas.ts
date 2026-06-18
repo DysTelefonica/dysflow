@@ -6,6 +6,7 @@ import {
   type JsonObjectSchema,
   type JsonSchemaProperty,
   SCHEMA_PROPS,
+  STRICT_CTX,
 } from "../../../shared/validation/index.js";
 import type { QueryToolName } from "../mcp-tool-registry.js";
 
@@ -293,6 +294,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
       rootPath: SCHEMA_PROPS.rootPath,
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,

@@ -82,11 +82,31 @@ export function buildAliasTools(
               operationId: string;
               accessPath: string;
               force?: boolean;
+              projectId?: string;
+              contextId?: string;
+              backendPath?: string;
+              destinationRoot?: string;
+              projectRoot?: string;
+              timeoutMs?: number;
+              strictContext?: boolean;
+              expectedAccessPath?: string;
+              expectedProjectRoot?: string;
+              expectedDestinationRoot?: string;
             };
             return {
               operationId: request.operationId,
               accessPath: request.accessPath,
               force: request.force,
+              projectId: request.projectId,
+              contextId: request.contextId,
+              backendPath: request.backendPath,
+              destinationRoot: request.destinationRoot,
+              projectRoot: request.projectRoot,
+              timeoutMs: request.timeoutMs,
+              strictContext: request.strictContext,
+              expectedAccessPath: request.expectedAccessPath,
+              expectedProjectRoot: request.expectedProjectRoot,
+              expectedDestinationRoot: request.expectedDestinationRoot,
             };
           },
         ),
@@ -97,13 +117,38 @@ export function buildAliasTools(
       inputSchema: runVbaSchema,
       handler: async (input) =>
         handleMcpVbaExecute(input, runVbaSchema, services, allowedProcedures, (validatedInput) => {
-          const request = validatedInput as { procedureName: string; argsJson?: string };
+          const request = validatedInput as {
+            procedureName: string;
+            argsJson?: string;
+            projectId?: string;
+            contextId?: string;
+            accessPath?: string;
+            backendPath?: string;
+            destinationRoot?: string;
+            projectRoot?: string;
+            timeoutMs?: number;
+            strictContext?: boolean;
+            expectedAccessPath?: string;
+            expectedProjectRoot?: string;
+            expectedDestinationRoot?: string;
+          };
           const parsedArgs = parseMcpArgsJson(request.argsJson);
           if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
           return {
             moduleName: "",
             procedureName: request.procedureName,
             arguments: parsedArgs.value,
+            projectId: request.projectId,
+            contextId: request.contextId,
+            accessPath: request.accessPath,
+            backendPath: request.backendPath,
+            destinationRoot: request.destinationRoot,
+            projectRoot: request.projectRoot,
+            timeoutMs: request.timeoutMs,
+            strictContext: request.strictContext,
+            expectedAccessPath: request.expectedAccessPath,
+            expectedProjectRoot: request.expectedProjectRoot,
+            expectedDestinationRoot: request.expectedDestinationRoot,
           } satisfies AccessVbaRequest;
         }),
     },
@@ -125,12 +170,32 @@ export function buildAliasTools(
               backendPath?: string;
               databasePath?: string;
               sourcePath?: string;
+              projectId?: string;
+              contextId?: string;
+              accessPath?: string;
+              destinationRoot?: string;
+              projectRoot?: string;
+              timeoutMs?: number;
+              strictContext?: boolean;
+              expectedAccessPath?: string;
+              expectedProjectRoot?: string;
+              expectedDestinationRoot?: string;
             };
             return {
               sql: request.sql ?? request.query ?? "",
               mode: "read",
               backendPath: request.backendPath,
               databasePath: request.databasePath ?? request.sourcePath,
+              projectId: request.projectId,
+              contextId: request.contextId,
+              accessPath: request.accessPath,
+              destinationRoot: request.destinationRoot,
+              projectRoot: request.projectRoot,
+              timeoutMs: request.timeoutMs,
+              strictContext: request.strictContext,
+              expectedAccessPath: request.expectedAccessPath,
+              expectedProjectRoot: request.expectedProjectRoot,
+              expectedDestinationRoot: request.expectedDestinationRoot,
             } satisfies AccessQueryRequest;
           },
         ),

@@ -26,9 +26,9 @@ Chain strategy: pending
 
 ## Phase 1: TDD Red (Failing Tests)
 
-- [ ] 1.1 Add failing cases to `test/shared/validation/validator.test.ts` for schemas allowing context, overrides, and `timeoutMs`.
+- [x] 1.1 Add failing cases to `test/shared/validation/validator.test.ts` for schemas allowing context, overrides, and `timeoutMs`.
 - [x] 1.2 Add failing mapping assertions in `test/core/mapping/access-query-request-mapper.test.ts` for override parameters.
-- [ ] 1.3 Add failing test cases in `test/adapters/mcp/stdio.test.ts` for cache-based dynamic resolution and config-isolated routing.
+- [x] 1.3 Add failing test cases in `test/adapters/mcp/stdio.test.ts` for cache-based dynamic resolution and config-isolated routing.
 
 ## Phase 2: Core Foundation & Mapping (TDD Green)
 
@@ -39,16 +39,16 @@ Chain strategy: pending
 
 ## Phase 3: Schema Definitions & Tool Aliases (TDD Green)
 
-- [ ] 3.1 Update `run_vba` and `cleanup_access_operation` in `src/adapters/mcp/schemas/vba-sync-schemas.ts` with overrides/context/timeoutMs.
-- [ ] 3.2 Add override and context parameters to `relink_directory` schema in `src/adapters/mcp/schemas/query-schemas.ts`.
-- [ ] 3.3 Extend `VBA_EXECUTE_SCHEMA` and `DOCTOR_SCHEMA` in `src/adapters/mcp/schemas/dysflow-schemas.ts` to support overrides.
-- [ ] 3.4 Update alias tool handlers mapping in `src/adapters/mcp/alias-tools.ts` to forward validated override parameters.
+- [x] 3.1 Update `run_vba` and `cleanup_access_operation` in `src/adapters/mcp/schemas/vba-sync-schemas.ts` with overrides/context/timeoutMs.
+- [x] 3.2 Add override and context parameters to `relink_directory` schema in `src/adapters/mcp/schemas/query-schemas.ts`.
+- [x] 3.3 Extend `VBA_EXECUTE_SCHEMA` and `DOCTOR_SCHEMA` in `src/adapters/mcp/schemas/dysflow-schemas.ts` to support overrides.
+- [x] 3.4 Update alias tool handlers mapping in `src/adapters/mcp/alias-tools.ts` to forward validated override parameters.
 
 ## Phase 4: Dynamic Services Implementation (TDD Green)
 
-- [ ] 4.1 Replace `createUnavailableServices` with `createDynamicServices` in `src/adapters/mcp/stdio.ts` using caching with `resolvedConfigCacheKey`.
-- [ ] 4.2 Wrap `cleanupService`, `orphanCleanupService`, and `operationRegistry` in dynamic routing in `stdio.ts`.
-- [ ] 4.3 Update `resolveConfigForInput` in `stdio.ts` to forward `timeoutMs` to configuration resolution.
+- [x] 4.1 Replace `createUnavailableServices` with `createDynamicServices` in `src/adapters/mcp/stdio.ts` using caching with `resolvedConfigCacheKey`.
+- [x] 4.2 Wrap `cleanupService`, `orphanCleanupService`, and `operationRegistry` in dynamic routing in `stdio.ts`.
+- [x] 4.3 Update `resolveConfigForInput` in `stdio.ts` to forward `timeoutMs` to configuration resolution.
 
 ## Phase 5: Verification (TDD Green/Refactor)
 

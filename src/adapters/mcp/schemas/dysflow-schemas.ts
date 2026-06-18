@@ -9,7 +9,12 @@
 // from here — the re-exports are identity (`export { X } from`) so the
 // runtime values are the same instances as in src/shared/validation/.
 
-import type { JsonObjectSchema } from "../../../shared/validation/index.js";
+import {
+  ACCESS_OVERRIDE,
+  type JsonObjectSchema,
+  SCHEMA_PROPS,
+  STRICT_CTX,
+} from "../../../shared/validation/index.js";
 
 // Re-exports — types.
 export type {
@@ -59,6 +64,9 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
       description: "Public VBA procedure to execute.",
     },
     arguments: { type: "array", items: {}, description: "Procedure arguments." },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+    timeoutMs: SCHEMA_PROPS.timeoutMs,
   },
 };
 
@@ -113,6 +121,9 @@ export const DOCTOR_SCHEMA: JsonObjectSchema = {
       type: "boolean",
       description: "Include environment diagnostics when supported.",
     },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+    timeoutMs: SCHEMA_PROPS.timeoutMs,
   },
 };
 

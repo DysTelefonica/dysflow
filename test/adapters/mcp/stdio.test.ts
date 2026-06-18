@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it } from "vitest";
 import {
+  createDynamicServices,
   createUnavailableServices,
   DEFAULT_MAX_REQUEST_BYTES,
   MCP_PROTOCOL_VERSION,
@@ -593,5 +594,93 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(result.ok).toBe(true);
     expect(serviceFactoryCalledWithConfig).toBe(true);
     expect(result).toMatchObject({ ok: true, data: { sqlRun: "SELECT * FROM Table" } });
+  });
+});
+
+describe("createDynamicServices — caching, isolation and routing", () => {
+  it("caches and reuses services when configs match, and creates new ones when overrides differ", async () => {
+    const dbPathA = resolve("test-runtime/db-a.accdb");
+    const dbPathB = resolve("test-runtime/db-b.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(dbPathA, "", "utf8");
+    writeFileSync(dbPathB, "", "utf8");
+
+    const createdConfigs: string[] = [];
+    const services = createDynamicServices(
+      undefined,
+      { code: "STARTUP_ERR", message: "Startup error", retryable: false },
+      {
+        cwd: process.cwd(),
+        env: {},
+        serviceFactory: (config) => {
+          createdConfigs.push(config.accessDbPath);
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    // First call with dbPathA
+    const result1 = await services.vbaService.execute({
+      accessPath: dbPathA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+    expect(result1.ok).toBe(true);
+    expect(createdConfigs).toEqual([resolve(dbPathA)]);
+
+    // Second call with dbPathA — should be cached
+    const result2 = await services.vbaService.execute({
+      accessPath: dbPathA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+    expect(result2.ok).toBe(true);
+    expect(createdConfigs).toEqual([resolve(dbPathA)]); // No new factory call
+
+    // Third call with dbPathB — should create new service instance
+    const result3 = await services.vbaService.execute({
+      accessPath: dbPathB,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+    expect(result3.ok).toBe(true);
+    expect(createdConfigs).toEqual([resolve(dbPathA), resolve(dbPathB)]);
+  });
+
+  it("propagates timeoutMs override to service configurations", async () => {
+    const dbPath = resolve("test-runtime/db-timeout.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(dbPath, "", "utf8");
+
+    let resolvedTimeout: number | undefined;
+    const services = createDynamicServices(
+      undefined,
+      { code: "STARTUP_ERR", message: "Startup error", retryable: false },
+      {
+        cwd: process.cwd(),
+        env: {},
+        serviceFactory: (config) => {
+          resolvedTimeout = config.timeoutMs;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    await services.vbaService.execute({
+      accessPath: dbPath,
+      moduleName: "Mod",
+      procedureName: "Proc",
+      timeoutMs: 9999,
+    });
+
+    expect(resolvedTimeout).toBe(9999);
   });
 });

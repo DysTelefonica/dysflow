@@ -12,7 +12,11 @@ import {
 import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
-import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import {
+  type AccessOperationRecord,
+  createInMemoryAccessOperationRegistry,
+  createProjectAccessOperationRegistry,
+} from "../../core/operations/access-operation-registry.js";
 import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
@@ -79,9 +83,10 @@ export async function startMcpStdioAdapter(
 ): Promise<void> {
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
-  const services = configResult.ok
-    ? createConfiguredServices(configResult.data)
-    : createUnavailableServices(configResult.error);
+  const services = createDynamicServices(
+    configResult.ok ? configResult.data : undefined,
+    configResult.ok ? undefined : configResult.error,
+  );
   const writesEnabled = options?.writesEnabled ?? false;
   const startupConfig = configResult.ok ? configResult.data : undefined;
 
@@ -255,6 +260,194 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   };
 }
 
+export function createDynamicServices(
+  startupConfig?: DysflowConfig,
+  startupError?: DysflowError,
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    serviceFactory?: (config: DysflowConfig) => DysflowMcpServices;
+  } = {},
+): DysflowMcpServices {
+  const serviceCache = new Map<string, DysflowMcpServices>();
+
+  const defaultRegistry = startupConfig
+    ? createProjectAccessOperationRegistry(startupConfig)
+    : createInMemoryAccessOperationRegistry();
+
+  const resolveService = async (
+    input: unknown,
+  ): Promise<{ ok: true; services: DysflowMcpServices } | { ok: false; error: DysflowError }> => {
+    const configResult = await resolveConfigForInput(input, options);
+    if (!configResult.ok) {
+      if (startupError !== undefined) {
+        return { ok: false, error: startupError };
+      }
+      return { ok: false, error: configResult.error };
+    }
+
+    if (!existsSync(configResult.data.accessDbPath)) {
+      if (startupError !== undefined) {
+        return { ok: false, error: startupError };
+      }
+      return {
+        ok: false,
+        error: {
+          code: "CONFIG_TARGET_NOT_FOUND",
+          message: `Configured accessPath does not exist on disk: ${configResult.data.accessDbPath}.`,
+          retryable: false,
+        },
+      };
+    }
+
+    const cacheKey = resolvedConfigCacheKey(configResult.data);
+    let services = serviceCache.get(cacheKey);
+    if (services === undefined) {
+      services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
+      if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
+        const oldestKey = serviceCache.keys().next().value;
+        if (oldestKey !== undefined) serviceCache.delete(oldestKey);
+      }
+      serviceCache.set(cacheKey, services);
+    }
+    return { ok: true, services };
+  };
+
+  return {
+    vbaService: {
+      execute: async (request, onProgress) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        return res.services.vbaService.execute(request, onProgress);
+      },
+    },
+    queryService: {
+      execute: async (request, onProgress) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        return res.services.queryService.execute(request, onProgress);
+      },
+    },
+    diagnosticsService: {
+      run: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        return res.services.diagnosticsService.run(request);
+      },
+    },
+    cleanupService: {
+      cleanup: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        if (res.services.cleanupService === undefined) {
+          return failureResult({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Cleanup service is not available.",
+            retryable: false,
+          });
+        }
+        return res.services.cleanupService.cleanup(request);
+      },
+    },
+    orphanCleanupService: {
+      listOrphans: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) throw new Error(res.error.message);
+        if (res.services.orphanCleanupService === undefined) {
+          throw new Error("Orphan cleanup service is not available.");
+        }
+        return res.services.orphanCleanupService.listOrphans(request);
+      },
+      cleanupOrphan: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        if (res.services.orphanCleanupService === undefined) {
+          return failureResult({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Orphan cleanup service is not available.",
+            retryable: false,
+          });
+        }
+        return res.services.orphanCleanupService.cleanupOrphan(request);
+      },
+    },
+    operationRegistry: {
+      create: async (record) => {
+        const res = await resolveService(record);
+        const reg =
+          res.ok && res.services.operationRegistry
+            ? res.services.operationRegistry
+            : defaultRegistry;
+        return reg.create(record);
+      },
+      update: async (operationId, patch) => {
+        for (const service of serviceCache.values()) {
+          if (service.operationRegistry) {
+            const record = await service.operationRegistry.get(operationId);
+            if (record) {
+              return service.operationRegistry.update(operationId, patch);
+            }
+          }
+        }
+        return defaultRegistry.update(operationId, patch);
+      },
+      get: async (operationId) => {
+        for (const service of serviceCache.values()) {
+          if (service.operationRegistry) {
+            const record = await service.operationRegistry.get(operationId);
+            if (record) return record;
+          }
+        }
+        return defaultRegistry.get(operationId);
+      },
+      listRecent: async (opts) => {
+        const allRecordsMap = new Map<string, AccessOperationRecord>();
+        const addRecords = (records: AccessOperationRecord[]) => {
+          for (const r of records) {
+            allRecordsMap.set(r.operationId, r);
+          }
+        };
+        for (const service of serviceCache.values()) {
+          if (service.operationRegistry) {
+            try {
+              const records = await service.operationRegistry.listRecent(opts);
+              addRecords(records);
+            } catch {
+              // ignore
+            }
+          }
+        }
+        try {
+          const records = await defaultRegistry.listRecent(opts);
+          addRecords(records);
+        } catch {
+          // ignore
+        }
+        const sorted = Array.from(allRecordsMap.values()).sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        );
+        const limit = opts?.limit ?? 50;
+        return sorted.slice(0, limit);
+      },
+    },
+    vbaSyncToolService: {
+      execute: async (toolName, input) => {
+        const res = await resolveService(input);
+        if (res.ok && res.services.vbaSyncToolService !== undefined) {
+          return res.services.vbaSyncToolService.execute(toolName, input);
+        }
+        const fallbackService = createUnavailableVbaSyncToolService(
+          res.ok
+            ? { code: "CONFIG_MISSING_ACCESS_PATH", message: "Missing", retryable: false }
+            : res.error,
+          options,
+        );
+        return fallbackService.execute(toolName, input);
+      },
+    },
+  };
+}
+
 export function createUnavailableServices(
   error: DysflowError,
   options: {
@@ -263,62 +456,7 @@ export function createUnavailableServices(
     serviceFactory?: (config: DysflowConfig) => DysflowMcpServices;
   } = {},
 ): DysflowMcpServices {
-  const unavailable = async () => failureResult(error);
-  const serviceCache = new Map<string, DysflowMcpServices>();
-  const resolveService = async (input: unknown): Promise<DysflowMcpServices | undefined> => {
-    const configResult = await resolveConfigForInput(input, options);
-    if (configResult.ok && !existsSync(configResult.data.accessDbPath)) return undefined;
-    if (!configResult.ok) return undefined;
-
-    const cacheKey = resolvedConfigCacheKey(configResult.data);
-    const cachedServices = serviceCache.get(cacheKey);
-    if (cachedServices !== undefined) return cachedServices;
-
-    const services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
-    if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
-      const oldestKey = serviceCache.keys().next().value;
-      if (oldestKey !== undefined) serviceCache.delete(oldestKey);
-    }
-    serviceCache.set(cacheKey, services);
-    return services;
-  };
-  return {
-    vbaService: {
-      execute: async (request, onProgress) => {
-        const dynamicServices = await resolveService(request);
-        if (dynamicServices === undefined) return unavailable();
-        return dynamicServices.vbaService.execute(request, onProgress);
-      },
-    },
-    queryService: {
-      execute: async (request, onProgress) => {
-        const dynamicServices = await resolveService(request);
-        if (dynamicServices === undefined) return unavailable();
-        return dynamicServices.queryService.execute(request, onProgress);
-      },
-    },
-    diagnosticsService: {
-      run: async (request) => {
-        const dynamicServices = await resolveService(request);
-        if (dynamicServices !== undefined) return dynamicServices.diagnosticsService.run(request);
-        return failureResult({
-          code: error.code,
-          message: error.message,
-          retryable: error.retryable,
-        });
-      },
-    },
-    vbaSyncToolService: {
-      execute: async (toolName, input) => {
-        const dynamicServices = await resolveService(input);
-        if (dynamicServices !== undefined && dynamicServices.vbaSyncToolService !== undefined) {
-          return dynamicServices.vbaSyncToolService.execute(toolName, input);
-        }
-        const fallbackService = createUnavailableVbaSyncToolService(error, options);
-        return fallbackService.execute(toolName, input);
-      },
-    },
-  };
+  return createDynamicServices(undefined, error, options);
 }
 
 async function resolveConfigForInput(
@@ -329,6 +467,13 @@ async function resolveConfigForInput(
   const params = isRecord(input) ? input : {};
   const projectRoot = stringOrUndefined(params.projectRoot);
   const preferProjectConfig = resolutionOptions.preferProjectConfig === true;
+  const timeoutMs =
+    typeof params.timeoutMs === "number"
+      ? params.timeoutMs
+      : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
+        ? Number(params.timeoutMs)
+        : undefined;
+
   return await loadDysflowConfigAsync({
     cwd: projectRoot ?? options.cwd,
     env: options.env,
@@ -340,6 +485,7 @@ async function resolveConfigForInput(
     backendPath: preferProjectConfig ? undefined : stringOrUndefined(params.backendPath),
     destinationRoot: stringOrUndefined(params.destinationRoot),
     projectRoot,
+    timeoutMs,
   });
 }
 

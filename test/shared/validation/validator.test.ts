@@ -131,3 +131,100 @@ describe("validateInput — array validation", () => {
     expect(result).toBe("items[1] must be a string.");
   });
 });
+
+import {
+  DOCTOR_SCHEMA,
+  VBA_EXECUTE_SCHEMA,
+} from "../../../src/adapters/mcp/schemas/dysflow-schemas.js";
+import { QUERY_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/query-schemas.js";
+import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
+
+describe("Validate tool schemas with overrides and context parameters", () => {
+  it("run_vba allows context, overrides, and timeoutMs", () => {
+    const input = {
+      procedureName: "Main",
+      projectId: "p1",
+      contextId: "c1",
+      accessPath: "a",
+      backendPath: "b",
+      destinationRoot: "d",
+      projectRoot: "pr",
+      timeoutMs: 5000,
+      strictContext: true,
+      expectedAccessPath: "ea",
+      expectedProjectRoot: "epr",
+      expectedDestinationRoot: "edr",
+    };
+    expect(validateInput(input, VBA_SYNC_TOOL_SCHEMAS.run_vba)).toBeUndefined();
+  });
+
+  it("cleanup_access_operation allows context, overrides, and timeoutMs", () => {
+    const input = {
+      operationId: "op-1",
+      accessPath: "a",
+      projectId: "p1",
+      contextId: "c1",
+      backendPath: "b",
+      destinationRoot: "d",
+      projectRoot: "pr",
+      timeoutMs: 5000,
+      strictContext: true,
+      expectedAccessPath: "ea",
+      expectedProjectRoot: "epr",
+      expectedDestinationRoot: "edr",
+    };
+    expect(validateInput(input, VBA_SYNC_TOOL_SCHEMAS.cleanup_access_operation)).toBeUndefined();
+  });
+
+  it("relink_directory allows context, overrides, and expected paths", () => {
+    const input = {
+      rootPath: "C:/root",
+      projectId: "p1",
+      contextId: "c1",
+      accessPath: "a",
+      backendPath: "b",
+      destinationRoot: "d",
+      projectRoot: "pr",
+      strictContext: true,
+      expectedAccessPath: "ea",
+      expectedProjectRoot: "epr",
+      expectedDestinationRoot: "edr",
+    };
+    expect(validateInput(input, QUERY_TOOL_SCHEMAS.relink_directory)).toBeUndefined();
+  });
+
+  it("VBA_EXECUTE_SCHEMA allows context, overrides, and timeoutMs", () => {
+    const input = {
+      procedureName: "Main",
+      projectId: "p1",
+      contextId: "c1",
+      accessPath: "a",
+      backendPath: "b",
+      destinationRoot: "d",
+      projectRoot: "pr",
+      timeoutMs: 5000,
+      strictContext: true,
+      expectedAccessPath: "ea",
+      expectedProjectRoot: "epr",
+      expectedDestinationRoot: "edr",
+    };
+    expect(validateInput(input, VBA_EXECUTE_SCHEMA)).toBeUndefined();
+  });
+
+  it("DOCTOR_SCHEMA allows context, overrides, and timeoutMs", () => {
+    const input = {
+      projectId: "p1",
+      contextId: "c1",
+      accessPath: "a",
+      backendPath: "b",
+      destinationRoot: "d",
+      projectRoot: "pr",
+      timeoutMs: 5000,
+      strictContext: true,
+      expectedAccessPath: "ea",
+      expectedProjectRoot: "epr",
+      expectedDestinationRoot: "edr",
+    };
+    expect(validateInput(input, DOCTOR_SCHEMA)).toBeUndefined();
+  });
+});

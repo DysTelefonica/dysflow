@@ -17,15 +17,25 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       operationId: SCHEMA_PROPS.operationId,
-      accessPath: SCHEMA_PROPS.accessPath,
       force: SCHEMA_PROPS.force,
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
   run_vba: {
     type: "object",
     required: ["procedureName"],
     additionalProperties: false,
-    properties: { procedureName: SCHEMA_PROPS.procedureName, argsJson: SCHEMA_PROPS.argsJson },
+    properties: {
+      procedureName: SCHEMA_PROPS.procedureName,
+      argsJson: SCHEMA_PROPS.argsJson,
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
   },
   export_modules: {
     type: "object",
