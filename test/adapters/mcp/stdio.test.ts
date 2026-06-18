@@ -216,6 +216,51 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(query.requests).toEqual([]);
   }, 15_000);
 
+  // #13228 (E2E) — the MCP resolution path must honor an explicit destinationRoot
+  // override carried by the request, even when the startup cwd resolves a different
+  // repo config. This is the exact path that overwrote 186 staging files: a request
+  // passing only destinationRoot (no accessPath) used to collapse to the startup src/.
+  it("honors an explicit destinationRoot override over the startup repo config", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-dest-override-"));
+    const startup = join(root, "staging");
+    const worktreeSrc = join(root, "worktree", "src");
+    mkdirSync(worktreeSrc, { recursive: true });
+    mkdirSync(join(startup, ".dysflow"), { recursive: true });
+    writeFileSync(join(startup, "front.accdb"), "", "utf8");
+    writeFileSync(
+      join(startup, ".dysflow", "project.json"),
+      JSON.stringify({ id: "staging", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    let capturedDestinationRoot: string | undefined;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: startup,
+        env: {},
+        serviceFactory: (config) => {
+          capturedDestinationRoot = config.destinationRoot;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    await services.vbaService.execute({
+      destinationRoot: worktreeSrc,
+    } as unknown as Parameters<typeof services.vbaService.execute>[0]);
+
+    expect(capturedDestinationRoot).toBe(worktreeSrc);
+  });
+
   it("reuses unavailable-path services when resolved config is unchanged", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-same-"));
     const frontend = join(root, "front.accdb");

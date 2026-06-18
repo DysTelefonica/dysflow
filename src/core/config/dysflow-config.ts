@@ -248,9 +248,14 @@ function buildProjectConfig(
     );
   }
 
-  const backendPath = resolveProjectPath(raw.backendPath ?? input.backendPath, projectRoot);
+  const backendPath = resolveProjectPath(input.backendPath ?? raw.backendPath, projectRoot);
+  // #13228 — an explicit caller override MUST win over the discovered repo config.
+  // The discovered config is a DEFAULT, not an authority over what the caller asked
+  // for. This matches buildExplicitConfig and resolveProjectRoot, which already let
+  // the explicit value win; the old `raw.* ?? input.*` order let a startup project's
+  // src/ overwrite a worktree export target (186-file incident).
   const destinationRoot =
-    resolveProjectPath(raw.destinationRoot ?? input.destinationRoot ?? "src", projectRoot) ??
+    resolveProjectPath(input.destinationRoot ?? raw.destinationRoot ?? "src", projectRoot) ??
     projectRoot;
   const accessPasswordEnv = resolvePasswordEnv(raw);
   const backendPasswordEnv = resolveBackendPasswordEnv(raw);

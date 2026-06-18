@@ -52,6 +52,40 @@ describe("dysflow configuration", () => {
     }
   });
 
+  // #13228 — an explicitly-passed destinationRoot MUST win over a discovered repo
+  // config's destinationRoot. Otherwise export_all from a worktree whose cwd resolves
+  // the startup project overwrites the wrong src/ (the 186-file staging incident).
+  it("explicit destinationRoot wins over a discovered repo config destinationRoot", async () => {
+    const { root, cleanup } = createTempWorkspace();
+    try {
+      const startup = join(root, "staging");
+      const worktreeSrc = join(root, "worktree", "src");
+      const worktreeBackend = join(root, "worktree", "backend.accdb");
+      mkdirSync(worktreeSrc, { recursive: true });
+      writeRepoProjectConfig(startup, {
+        accessPath: "front.accdb",
+        backendPath: "backend.accdb",
+        destinationRoot: "src",
+      });
+      writeFileSync(join(startup, "front.accdb"), "", "utf8");
+
+      const result = await loadDysflowConfigAsync({
+        cwd: startup,
+        env: {},
+        destinationRoot: worktreeSrc,
+        backendPath: worktreeBackend,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      // The caller's explicit overrides win over the discovered repo config's values.
+      expect(result.data.destinationRoot).toBe(worktreeSrc);
+      expect(result.data.backendPath).toBe(worktreeBackend);
+    } finally {
+      cleanup();
+    }
+  });
+
   it("still succeeds when only one config filename exists", () => {
     const { root, cleanup } = createTempWorkspace();
     try {
