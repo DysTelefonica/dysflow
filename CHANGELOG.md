@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.3.1] - 2026-06-18
+
+### Added
+
+- **`delete_module` batch support**: accept a `moduleNames` array to delete a batch of modules in a single Access session, avoiding COM collisions. Backward compatibility for single `moduleName` is preserved.
+
 ## [v1.3.0] - 2026-06-18
 
 ### Added
