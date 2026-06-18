@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.2.61] - 2026-06-18
+
+### Fixed
+
+- **Config resolution (#535)**: an explicitly-passed `destinationRoot`/`backendPath` was overridden by the discovered `.dysflow/project.json`. Without an explicit `accessPath`, resolution walked up from the MCP startup cwd, found the startup project, and its `src/` collapsed onto the caller's target — so `export_all` from a worktree could overwrite the wrong `src/` (a real incident broke 186 staging files). `accessPath` appeared to work only because it routes through the explicit-config branch. The caller's explicit override now wins; the discovered repo config is a default, not an authority.
+
+### Security
+
+- Cleared high-severity advisories: bumped `vite` to `8.0.16` (clears GHSA-fx2h-pf6j-xcff) and added a pnpm override for `hono >=4.12.25` (clears GHSA-88fw-hqm2-52qc).
+
+### Changed
+
+- Modernized the dev toolchain: `vite` 6 → 8, `vitest` → 4.1.9, `@biomejs/biome` → 2.5.0. Aligned `@types/node` with the supported Node 20 runtime (`engines: >=20`).
+
 ## [v1.2.60] - 2026-06-15
 
 ### Added
