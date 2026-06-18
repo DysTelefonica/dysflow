@@ -25,12 +25,12 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
+    "@biomejs/biome": "2.5.0",
     "@types/node": "~22.19.0",
-    "@vitest/coverage-v8": "4.1.7",
+    "@vitest/coverage-v8": "4.1.9",
     "typescript": "6.0.3",
-    "vite": "6.4.2",
-    "vitest": "4.1.7"
+    "vite": "8.0.16",
+    "vitest": "4.1.9"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
@@ -38,7 +38,8 @@
   },
   "pnpm": {
     "overrides": {
-      "esbuild@<0.28.1": ">=0.28.1"
+      "esbuild@<0.28.1": ">=0.28.1",
+      "hono@<4.12.25": ">=4.12.25"
     }
   }
 }
