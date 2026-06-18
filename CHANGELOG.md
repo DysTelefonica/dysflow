@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.3.0] - 2026-06-18
+
+### Added
+
+- **`export_all` `prune`** (opt-in): after a fully clean export, `prune: true` mirrors the binary by deleting on-disk source files (`.bas`/`.cls`/`.form.txt`/`.report.txt`) whose object no longer exists, reporting them under `prune.deleted`. `export_all` remains additive by default. Safety guards: it never prunes if the export reported any warning (`prune.applied: false`); `prune` + `filter` is rejected with `INVALID_INPUT` (a filtered export would make every other file look orphaned); saved queries are never pruned; the keep-set is the export's own `exported` list.
+
 ## [v1.2.61] - 2026-06-18
 
 ### Fixed
