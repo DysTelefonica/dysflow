@@ -525,7 +525,11 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 * **`export_modules`**: Export VBA source code modules to disk.
   - Parameters: `moduleNames` (array, optional), `filter` (string, optional), `destinationRoot` (string, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional), `expectedAccessPath`/`expectedProjectRoot`/`expectedDestinationRoot` (string, optional)
 * **`export_all`**: Export all VBA modules (including code-less forms and reports visual layouts) and saved queries from the database.
-  - Parameters: `filter` (string, optional), `diff` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+  - Parameters: `filter` (string, optional), `diff` (boolean, optional), `prune` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+  - **`prune`**: when `true`, after a **fully clean** export, deletes on-disk source files (`.bas`/`.cls`/`.form.txt`/`.report.txt`) whose module no longer exists in the binary, so the destination mirrors the binary. It deletes directly and lists the removed paths under `prune.deleted`. Guarantees:
+    - **Never prunes after a warning.** If any module failed to serialize (e.g. a form open in design view) it is still live, so its file is kept; the response is `prune: { applied: false, reason: "export-had-warnings", deleted: [] }`.
+    - **Incompatible with `filter`.** A filtered export only lists the matching modules, so pruning would delete every other on-disk file — this combination is rejected with `INVALID_INPUT`.
+    - **Saved queries are never pruned.** Only the managed module/class/form/report folders are scanned.
 * **`import_modules`**: Import VBA source modules from disk.
   - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`import_all`**: Bulk import all local modules into the Access project.

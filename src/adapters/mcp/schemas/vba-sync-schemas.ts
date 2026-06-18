@@ -49,6 +49,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       filter: SCHEMA_PROPS.filter,
       diff: SCHEMA_PROPS.diff,
+      prune: SCHEMA_PROPS.prune,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

@@ -87,3 +87,9 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
 - Update path security: the ONLY update mechanism is the GitHub Release tar.gz with SHA-256
   verification. There is NO git-clone / source-build fallback. See
   [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
+- **`export_all` prune is destructive — preserve its guards.** When `prune: true`, deletions are
+  gated on a fully clean export (skip on ANY warning), scoped to managed source extensions
+  (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
+  saved-queries folder is never scanned. `prune` + `filter` is rejected (`INVALID_INPUT`) because a
+  filtered export would make every non-matching file look orphaned. Never weaken these when editing
+  `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`.

@@ -183,6 +183,11 @@ export const SCHEMA_PROPS = {
     description: "Create a backup before compact/repair.",
   } as JsonSchemaProperty,
   diff: { type: "boolean", description: "Include a diff when supported." } as JsonSchemaProperty,
+  prune: {
+    type: "boolean",
+    description:
+      "export_all only: after a fully clean export, delete on-disk source files (.bas/.cls/.form.txt/.report.txt) whose module no longer exists in the binary, so the destination mirrors the binary. Deletes directly and reports what was removed. NEVER prunes if the export reported any warning (a module that failed to serialize is still live). Saved queries are never pruned. Default false.",
+  } as JsonSchemaProperty,
   limit: {
     type: "number",
     minimum: 1,
