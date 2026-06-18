@@ -139,6 +139,22 @@ export function buildQueryReadRequest(
     importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
+    projectId: getStr(params, "projectId"),
+    contextId: getStr(params, "contextId"),
+    accessPath: getStr(params, "accessPath"),
+    destinationRoot: getStr(params, "destinationRoot"),
+    projectRoot: getStr(params, "projectRoot"),
+    timeoutMs:
+      typeof params.timeoutMs === "number"
+        ? params.timeoutMs
+        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
+          ? Number(params.timeoutMs)
+          : undefined,
+    strictContext:
+      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
+    expectedAccessPath: getStr(params, "expectedAccessPath"),
+    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
+    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
   };
 }
 
@@ -166,6 +182,22 @@ export function buildWriteFixtureRequest(
     dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
+    projectId: getStr(params, "projectId"),
+    contextId: getStr(params, "contextId"),
+    accessPath: getStr(params, "accessPath"),
+    destinationRoot: getStr(params, "destinationRoot"),
+    projectRoot: getStr(params, "projectRoot"),
+    timeoutMs:
+      typeof params.timeoutMs === "number"
+        ? params.timeoutMs
+        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
+          ? Number(params.timeoutMs)
+          : undefined,
+    strictContext:
+      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
+    expectedAccessPath: getStr(params, "expectedAccessPath"),
+    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
+    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
   };
 }
 
@@ -210,9 +242,24 @@ export function buildMaintenanceRequest(
     removeUnresolved: params.removeUnresolved === true ? true : undefined,
     noBackup: params.backup === false ? true : undefined,
     recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
-    timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
+    timeoutMs:
+      typeof params.timeoutMs === "number"
+        ? params.timeoutMs
+        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
+          ? Number(params.timeoutMs)
+          : undefined,
     backendPassword:
       getStr(params, "backendPassword", ["password"]) ??
       (params.passwordEnv ? env(getStr(params, "passwordEnv") ?? "") : undefined),
+    projectId: getStr(params, "projectId"),
+    contextId: getStr(params, "contextId"),
+    accessPath: getStr(params, "accessPath"),
+    destinationRoot: getStr(params, "destinationRoot"),
+    projectRoot: getStr(params, "projectRoot"),
+    strictContext:
+      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
+    expectedAccessPath: getStr(params, "expectedAccessPath"),
+    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
+    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
   };
 }

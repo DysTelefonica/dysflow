@@ -25,6 +25,13 @@ export async function resolveExecutionTarget(
   params: Record<string, unknown>,
   context: ExecutionTargetContext,
 ): Promise<OperationResult<ExecutionTarget>> {
+  const explicitTimeoutMs =
+    typeof params.timeoutMs === "number"
+      ? params.timeoutMs
+      : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
+        ? Number(params.timeoutMs)
+        : undefined;
+
   const hasExplicitConfigOverride =
     stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
   const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
@@ -38,6 +45,7 @@ export async function resolveExecutionTarget(
       projectRoot: stringValue(params.projectRoot),
       projectId: stringValue(params.projectId),
       contextId: stringValue(params.contextId),
+      timeoutMs: explicitTimeoutMs,
     });
     if (!config.ok) return config;
     return successResult({
@@ -52,7 +60,11 @@ export async function resolveExecutionTarget(
   }
 
   if (context.accessPath === undefined) {
-    const repoConfig = await loadDysflowConfigAsync({ env: context.env, cwd: context.cwd });
+    const repoConfig = await loadDysflowConfigAsync({
+      env: context.env,
+      cwd: context.cwd,
+      timeoutMs: explicitTimeoutMs,
+    });
     if (repoConfig.ok) {
       return successResult({
         ...repoConfig.data,
@@ -79,6 +91,6 @@ export async function resolveExecutionTarget(
     destinationRoot,
     projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
     projectId: undefined,
-    timeoutMs: context.timeoutMs ?? 30000,
+    timeoutMs: explicitTimeoutMs ?? context.timeoutMs ?? 30000,
   });
 }

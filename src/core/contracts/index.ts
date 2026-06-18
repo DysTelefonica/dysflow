@@ -89,6 +89,18 @@ export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;
   arguments?: readonly unknown[];
+  // Overrides
+  projectId?: string;
+  contextId?: string;
+  accessPath?: string;
+  backendPath?: string;
+  destinationRoot?: string;
+  projectRoot?: string;
+  timeoutMs?: number;
+  strictContext?: boolean;
+  expectedAccessPath?: string;
+  expectedProjectRoot?: string;
+  expectedDestinationRoot?: string;
 };
 
 export type LinkClassification =
@@ -190,6 +202,16 @@ export type AccessQueryRequest = {
   recursive?: boolean;
   timeoutMs?: number;
   backendPassword?: string;
+  // Overrides
+  projectId?: string;
+  contextId?: string;
+  accessPath?: string;
+  destinationRoot?: string;
+  projectRoot?: string;
+  strictContext?: boolean;
+  expectedAccessPath?: string;
+  expectedProjectRoot?: string;
+  expectedDestinationRoot?: string;
 };
 
 export function createDiagnostic(

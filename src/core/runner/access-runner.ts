@@ -79,7 +79,21 @@ import {
 
 export { extractResultPayload, RESULT_MARKER, RunnerResultChannelError };
 
-export type AccessDiagnosticsRequest = { includeEnvironment?: boolean };
+export type AccessDiagnosticsRequest = {
+  includeEnvironment?: boolean;
+  // Overrides
+  projectId?: string;
+  contextId?: string;
+  accessPath?: string;
+  backendPath?: string;
+  destinationRoot?: string;
+  projectRoot?: string;
+  timeoutMs?: number;
+  strictContext?: boolean;
+  expectedAccessPath?: string;
+  expectedProjectRoot?: string;
+  expectedDestinationRoot?: string;
+};
 export type AccessRunnerOperation =
   | { kind: "vba"; request: AccessVbaRequest }
   | { kind: "query"; request: AccessQueryRequest }

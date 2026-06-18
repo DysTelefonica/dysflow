@@ -32,4 +32,20 @@ describe("resolveExecutionTarget", () => {
       expect(result.data.destinationRoot).toBe("C:/my-project/dest");
     }
   });
+
+  it("resolves timeoutMs override from params", async () => {
+    const result = await resolveExecutionTarget({ timeoutMs: 45000 }, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.timeoutMs).toBe(45000);
+    }
+  });
+
+  it("resolves timeoutMs from context when not overridden", async () => {
+    const result = await resolveExecutionTarget({}, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.timeoutMs).toBe(15000);
+    }
+  });
 });

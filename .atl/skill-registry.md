@@ -12,11 +12,13 @@ Last updated: 2026-06-18
 - C:\Users\adm1\.claude\skills
 - C:\Users\adm1\.gemini\skills
 - C:\Users\adm1\.gemini\antigravity\skills
+- C:\Users\adm1\.gemini\antigravity-cli\skills
 - C:\Users\adm1\.cursor\skills
 - C:\Users\adm1\.copilot\skills
 - C:\Users\adm1\.codex\skills
 - C:\Users\adm1\.openclaw\skills
 - C:\Users\adm1\.hermes\skills
+- Project Root (C:\Proyectos\dysflow)
 
 ## Contract
 
@@ -59,9 +61,19 @@ Last updated: 2026-06-18
 | `work-unit-commits` | Plan commits as reviewable work units. Trigger: implementation, commit splitting, chained PRs, or keeping tests and docs with code. | user | `C:\Users\adm1\.config\opencode\skills\work-unit-commits\SKILL.md` |
 | `writing-plans` | Use when you have a spec or requirements for a multi-step task, before touching code | user | `C:\Users\adm1\.agents\skills\writing-plans\SKILL.md` |
 
+## Project Conventions
+
+| Convention File | Description | Referenced Files | Path |
+| --- | --- | --- | --- |
+| `AGENTS.md` | Canonical guide for any agent working in this repo. Explains codebase structure (hexagonal), VBA semantic diff invariants, and testing rules. | `docs/testing/testing-philosophy.md`, `docs/testing/repo-quality-gates.md`, `docs/security/update-trust-model.md`, `README.md`, `src/core/services/vba-semantic-classifier.ts`, `src/adapters/vba-sync/vba-modules-adapter.ts` | `C:\Proyectos\dysflow\AGENTS.md` |
+| `CLAUDE.md` | Guidelines importing AGENTS.md. | `AGENTS.md`, `docs/testing/testing-philosophy.md` | `C:\Proyectos\dysflow\CLAUDE.md` |
+| `docs/testing/testing-philosophy.md` | Authoritative testing criteria. Rules on refactor-safety, port testing, and mocking boundaries. | `docs/testing/repo-quality-gates.md` | `C:\Proyectos\dysflow\docs\testing\testing-philosophy.md` |
+| `docs/testing/repo-quality-gates.md` | Current test/coverage floors and quality rules for PowerShell runner contracts. | `docs/testing/testing-philosophy.md` | `C:\Proyectos\dysflow\docs\testing\repo-quality-gates.md` |
+| `docs/security/update-trust-model.md` | Security properties of self-update and PowerShell spawn boundaries (`shell: false`). | `src/core/runner/powershell-executor.ts` | `C:\Proyectos\dysflow\docs\security\update-trust-model.md` |
+
 ## Loading protocol
 
-1. Match task context and target files against the `Trigger / description` column.
+1. Match task context and target files against the `Trigger / description` column or convention files.
 2. Pass only the matching `Path` values to the subagent under `## Skills to load before work`.
-3. Instruct the subagent to read those exact `SKILL.md` files before reading, writing, reviewing, testing, or creating artifacts.
+3. Instruct the subagent to read those exact `SKILL.md` or convention files before reading, writing, reviewing, testing, or creating artifacts.
 4. If no matching skill exists, proceed without project skill injection and report `skill_resolution: none`.

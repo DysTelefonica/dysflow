@@ -1,7 +1,7 @@
 schema: spec-driven
 project: dysflow
-initialized: 2026-05-15
-artifact_store: hybrid
+initialized: 2026-06-18
+artifact_store: openspec
 
 context: |
   Productization repo for Dysflow, currently README + planning docs only.
@@ -15,7 +15,7 @@ testing:
   test_command: "pnpm test"
   runner: "pnpm"
   framework: "Vitest"
-  detected: "2026-05-30"
+  detected: "2026-06-18"
   layers:
     unit:
       available: true

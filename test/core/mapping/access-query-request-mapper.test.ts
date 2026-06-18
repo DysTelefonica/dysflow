@@ -85,6 +85,33 @@ describe("access-query-request-mapper", () => {
         "Invalid Access query action",
       );
     });
+
+    it("maps context and override properties", () => {
+      const request = buildQueryReadRequest("query_sql", {
+        projectId: "proj-123",
+        contextId: "ctx-456",
+        accessPath: "C:/access.accdb",
+        backendPath: "C:/backend.accdb",
+        destinationRoot: "C:/dest",
+        projectRoot: "C:/proj",
+        timeoutMs: 5000,
+        strictContext: true,
+        expectedAccessPath: "C:/expected-access.accdb",
+        expectedProjectRoot: "C:/expected-proj",
+        expectedDestinationRoot: "C:/expected-dest",
+      });
+      expect(request.projectId).toBe("proj-123");
+      expect(request.contextId).toBe("ctx-456");
+      expect(request.accessPath).toBe("C:/access.accdb");
+      expect(request.backendPath).toBe("C:/backend.accdb");
+      expect(request.destinationRoot).toBe("C:/dest");
+      expect(request.projectRoot).toBe("C:/proj");
+      expect(request.timeoutMs).toBe(5000);
+      expect(request.strictContext).toBe(true);
+      expect(request.expectedAccessPath).toBe("C:/expected-access.accdb");
+      expect(request.expectedProjectRoot).toBe("C:/expected-proj");
+      expect(request.expectedDestinationRoot).toBe("C:/expected-dest");
+    });
   });
 
   describe("buildWriteFixtureRequest", () => {
@@ -125,6 +152,33 @@ describe("access-query-request-mapper", () => {
         allowTable: "C",
       });
       expect(request.allowTables).toEqual(["A", "B"]);
+    });
+
+    it("maps context and override properties", () => {
+      const request = buildWriteFixtureRequest("seed_fixture", {
+        projectId: "proj-123",
+        contextId: "ctx-456",
+        accessPath: "C:/access.accdb",
+        backendPath: "C:/backend.accdb",
+        destinationRoot: "C:/dest",
+        projectRoot: "C:/proj",
+        timeoutMs: 5000,
+        strictContext: true,
+        expectedAccessPath: "C:/expected-access.accdb",
+        expectedProjectRoot: "C:/expected-proj",
+        expectedDestinationRoot: "C:/expected-dest",
+      });
+      expect(request.projectId).toBe("proj-123");
+      expect(request.contextId).toBe("ctx-456");
+      expect(request.accessPath).toBe("C:/access.accdb");
+      expect(request.backendPath).toBe("C:/backend.accdb");
+      expect(request.destinationRoot).toBe("C:/dest");
+      expect(request.projectRoot).toBe("C:/proj");
+      expect(request.timeoutMs).toBe(5000);
+      expect(request.strictContext).toBe(true);
+      expect(request.expectedAccessPath).toBe("C:/expected-access.accdb");
+      expect(request.expectedProjectRoot).toBe("C:/expected-proj");
+      expect(request.expectedDestinationRoot).toBe("C:/expected-dest");
     });
   });
 
@@ -207,6 +261,38 @@ describe("access-query-request-mapper", () => {
         () => undefined,
       );
       expect(request.backendPassword).toBe("topsecret");
+    });
+
+    it("maps context and override properties", () => {
+      const request = buildMaintenanceRequest(
+        "link_tables",
+        "write",
+        {
+          projectId: "proj-123",
+          contextId: "ctx-456",
+          accessPath: "C:/access.accdb",
+          backendPath: "C:/backend.accdb",
+          destinationRoot: "C:/dest",
+          projectRoot: "C:/proj",
+          timeoutMs: 5000,
+          strictContext: true,
+          expectedAccessPath: "C:/expected-access.accdb",
+          expectedProjectRoot: "C:/expected-proj",
+          expectedDestinationRoot: "C:/expected-dest",
+        },
+        () => undefined,
+      );
+      expect(request.projectId).toBe("proj-123");
+      expect(request.contextId).toBe("ctx-456");
+      expect(request.accessPath).toBe("C:/access.accdb");
+      expect(request.backendPath).toBe("C:/backend.accdb");
+      expect(request.destinationRoot).toBe("C:/dest");
+      expect(request.projectRoot).toBe("C:/proj");
+      expect(request.timeoutMs).toBe(5000);
+      expect(request.strictContext).toBe(true);
+      expect(request.expectedAccessPath).toBe("C:/expected-access.accdb");
+      expect(request.expectedProjectRoot).toBe("C:/expected-proj");
+      expect(request.expectedDestinationRoot).toBe("C:/expected-dest");
     });
   });
 });
