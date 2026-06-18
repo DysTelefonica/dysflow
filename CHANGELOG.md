@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.3.2] - 2026-06-18
+
+### Added
+
+- **Dynamic Config/Service Isolation**: MCP stdio server now wraps and instantiates service components dynamically (`createDynamicServices`), resolving per-call configuration/database overrides on the fly and caching them. This avoids stale-cache issues and allows switching targets mid-session without restarting the server.
+- **Aligned Schema Overrides**: Extended validation schemas for `run_vba` (`dysflow_vba_execute`), `cleanup_access_operation`, `relink_directory`, and `dysflow_doctor` to fully support context and workspace overrides (`ACCESS_OVERRIDE` / `STRICT_CTX` / `timeoutMs`).
+
 ## [v1.3.1] - 2026-06-18
 
 ### Added

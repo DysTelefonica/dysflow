@@ -503,6 +503,7 @@ Execute a public VBA procedure via COM automation. Enforces `allowedProcedures` 
   - `moduleName` (string, optional): Target module containing the procedure.
   - `arguments` (array, optional): Positional arguments passed to the procedure.
   - `projectId`, `contextId` (optional)
+  - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
 
 #### `dysflow_query_execute`
 Run arbitrary SQL statements. Writes are guarded by the write-safety model.
@@ -516,6 +517,7 @@ Run diagnostics on the MCP connection, Access installation, and configuration.
 * **Parameters**:
   - `includeEnvironment` (boolean, optional): True to query environment settings and logs.
   - `projectId`, `contextId` (optional)
+  - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
 
 #### `dysflow_access_operations_list`
 Retrieve active and completed Access operation handles managed by Dysflow.
@@ -634,6 +636,8 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
 * **`compact_repair`**: Execute compact and repair operations.
   - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
+* **`relink_directory`**: Bulk relink table references recursively under a directory root.
+  - Parameters: `rootPath` (string, required), `dryRun`, `apply`, `backup` (boolean, optional), `recursive` (boolean, optional), `maps` (array, optional), `denyPrefixes` (array, optional), `strictLocal` (boolean, optional), `removeUnresolved` (boolean, optional), `timeoutMs` (number, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional overrides)
 
 #### 4. GUI & Forms
 * **`validate_form_spec`**: Parse and lint a JSON specification for form generation.
