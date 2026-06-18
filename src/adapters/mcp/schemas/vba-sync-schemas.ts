@@ -164,6 +164,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       moduleName: SCHEMA_PROPS.moduleName,
+      moduleNames: SCHEMA_PROPS.moduleNames,
       force: SCHEMA_PROPS.force,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },

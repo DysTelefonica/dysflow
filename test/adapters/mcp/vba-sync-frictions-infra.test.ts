@@ -5,6 +5,7 @@ import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-syn
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
 import { sanitizeMcpErrorMessage } from "../../../src/core/utils/sanitize-error.js";
+import { validateInput } from "../../../src/shared/validation/validator.js";
 
 /* biome-ignore-start lint/suspicious/noExplicitAny: test mocks and type casts */
 
@@ -27,12 +28,33 @@ describe("MCP tool schema registration for vba-sync-frictions", () => {
   });
 });
 
+describe("delete_module batch input contract", () => {
+  it("accepts a moduleNames array so multiple modules delete in one Access session", () => {
+    const schema = VBA_SYNC_TOOL_SCHEMAS.delete_module;
+    expect(schema.properties.moduleNames).toBeDefined();
+    const error = validateInput(
+      {
+        moduleNames: ["ACService", "ARService", "Test_CRUDService_TransactionBoundaries"],
+        force: true,
+      },
+      schema,
+    );
+    expect(error).toBeUndefined();
+  });
+
+  it("still accepts a single moduleName (backward compatible)", () => {
+    const schema = VBA_SYNC_TOOL_SCHEMAS.delete_module;
+    const error = validateInput({ moduleName: "ACService", force: true }, schema);
+    expect(error).toBeUndefined();
+  });
+});
+
 describe("writesDisabled helper tool-name gating", () => {
   it("includes the tool name in the error message when provided", () => {
     const res = writesDisabled("delete_module");
     expect(res.isError).toBe(true);
     expect(res.content?.[0]?.text).toBe(
-      "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: delete_module).",
+      'MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: delete_module). Enable writes by setting "allowWrites": true in .dysflow/project.json (per-repo, recommended) or by launching the server with `dysflow mcp --enable-writes` (process-wide).',
     );
   });
 });

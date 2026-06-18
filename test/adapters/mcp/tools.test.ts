@@ -411,7 +411,7 @@ describe("MCP tool registration over core services", () => {
       content: [
         {
           type: "text",
-          text: "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter.",
+          text: 'MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter. Enable writes by setting "allowWrites": true in .dysflow/project.json (per-repo, recommended) or by launching the server with `dysflow mcp --enable-writes` (process-wide).',
         },
       ],
       isError: true,

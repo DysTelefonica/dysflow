@@ -16,7 +16,7 @@ export function writesDisabled(toolName?: string): McpToolResult {
     content: [
       {
         type: "text",
-        text: `MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter${suffix}.`,
+        text: `MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter${suffix}. Enable writes by setting "allowWrites": true in .dysflow/project.json (per-repo, recommended) or by launching the server with \`dysflow mcp --enable-writes\` (process-wide).`,
       },
     ],
     isError: true,

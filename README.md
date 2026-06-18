@@ -456,13 +456,24 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
-Write-capable SQL tools are disabled by default on MCP, matching the HTTP safety model. Start MCP with `--enable-writes` only for trusted local maintenance sessions:
+**Write tools are disabled by default on MCP**, matching the HTTP safety model. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to enable writes:
+
+**Option 1 — per-repo (recommended).** Set `"allowWrites": true` in the repo's `.dysflow/project.json`. Writes are then enabled for that project even if MCP was started without `--enable-writes`, and the setting travels with the repo:
+
+```json
+{
+  "accessDbPath": "path/to/database.accdb",
+  "allowWrites": true
+}
+```
+
+**Option 2 — process-wide.** Start MCP with `--enable-writes`. This enables writes for every project that server instance touches, so use it only for trusted local maintenance sessions:
 
 ```powershell
 dysflow mcp --enable-writes
 ```
 
-Project-scoped override: when a call resolves a registered/repo `.dysflow/project.json` with `"allowWrites": true`, write tools are enabled for that project even if MCP was started without `--enable-writes`. `dryRun` operations remain allowed in all modes.
+`dryRun` operations remain allowed in all modes regardless of either setting.
 
 ### Common Input Parameters
 
@@ -547,8 +558,8 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`reconcile_binary`**: Dry-run reconciliation plan that reuses the `verify_binary` semantic report and returns `applied: false`. Each differing module carries a per-diff `recommendation` (`import_to_binary`, `export_to_src`, `manual_merge`, or `no_action`) plus a human-readable overall recommendation. Never mutates Access.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`delete_module`**: Delete a module from the VBA project. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](./docs/diagnostics/hresult-guide.md)). Write-gated.
-  - Parameters: `moduleName` (string, optional), `force` (boolean, optional), `timeoutMs` (number, optional)
+* **`delete_module`**: Delete one or more modules from the VBA project. Pass `moduleNames` (array) to delete a batch in a single Access session — this avoids the COM collisions that arise from issuing many parallel single-module calls; `moduleName` (singular) is still accepted for one module. The result reports per-module outcomes. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](./docs/diagnostics/hresult-guide.md)). Write-gated.
+  - Parameters: `moduleNames` (array, optional), `moduleName` (string, optional — single-module shorthand), `force` (boolean, optional — applies to the whole batch), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
 * **`exists`**: Verify if an object or module exists.
