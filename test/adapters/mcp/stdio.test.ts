@@ -1,7 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,11 +14,14 @@ import {
   MCP_PROTOCOL_VERSION_REVIEW,
   resolveMcpWriteAccessForInput,
   resolveProjectOperationRegistryPath,
+  startWithSdkServer,
 } from "../../../src/adapters/mcp/stdio.js";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";
+import { isRecord } from "../../../src/core/utils/index.js";
 
 class FakeVbaService {
   public requests: unknown[] = [];
@@ -682,5 +687,83 @@ describe("createDynamicServices — caching, isolation and routing", () => {
     });
 
     expect(resolvedTimeout).toBe(9999);
+  });
+});
+
+describe("E2E mock transport — multiple database targeting with overrides", () => {
+  it("routes tool calls to the correct database dynamically via overrides", async () => {
+    const dbPath1 = resolve("test-runtime/db-e2e-1.accdb");
+    const dbPath2 = resolve("test-runtime/db-e2e-2.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(dbPath1, "", "utf8");
+    writeFileSync(dbPath2, "", "utf8");
+
+    const targetedDbs: string[] = [];
+    const services = createDynamicServices(
+      undefined,
+      { code: "STARTUP_ERR", message: "Startup error", retryable: false },
+      {
+        cwd: process.cwd(),
+        env: {},
+        serviceFactory: (config) => {
+          return {
+            vbaService: {
+              execute: async () => {
+                targetedDbs.push(config.accessDbPath);
+                return successResult({
+                  returnValue: `result-from-${basename(config.accessDbPath)}`,
+                });
+              },
+            },
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    const tools = createDysflowMcpTools(
+      services,
+      false, // writesEnabled
+      async () => false, // writeAccessResolver
+      {}, // env
+      undefined, // allowedProcedures
+      async (input) => {
+        const accessPath =
+          isRecord(input) && typeof input.accessPath === "string" ? input.accessPath : dbPath1;
+        return successResult({ accessPath, projectRoot: process.cwd() });
+      },
+    );
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const serverDone = startWithSdkServer(tools, serverTransport);
+
+    const client = new Client({ name: "test-client", version: "0.0.1" }, { capabilities: {} });
+    await client.connect(clientTransport);
+
+    try {
+      const res1 = await client.callTool({
+        name: "run_vba",
+        arguments: {
+          procedureName: "SomeProc",
+          accessPath: dbPath1,
+        },
+      });
+      expect(res1.isError).toBeFalsy();
+      expect(targetedDbs).toContain(resolve(dbPath1));
+
+      const res2 = await client.callTool({
+        name: "run_vba",
+        arguments: {
+          procedureName: "SomeProc",
+          accessPath: dbPath2,
+        },
+      });
+      expect(res2.isError).toBeFalsy();
+      expect(targetedDbs).toContain(resolve(dbPath2));
+    } finally {
+      await client.close();
+      await serverDone.catch(() => {});
+    }
   });
 });

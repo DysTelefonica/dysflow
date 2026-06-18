@@ -52,5 +52,5 @@ Chain strategy: pending
 
 ## Phase 5: Verification (TDD Green/Refactor)
 
-- [ ] 5.1 Run test suite using `pnpm test` to verify all new validation, mapping, and services tests pass.
-- [ ] 5.2 Add and execute E2E mock transport tests in `test/adapters/mcp/stdio.test.ts` verifying multiple database targeting with overrides.
+- [x] 5.1 Run test suite using `pnpm test` to verify all new validation, mapping, and services tests pass.
+- [x] 5.2 Add and execute E2E mock transport tests in `test/adapters/mcp/stdio.test.ts` verifying multiple database targeting with overrides.

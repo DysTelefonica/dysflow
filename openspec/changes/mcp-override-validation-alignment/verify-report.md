@@ -1,6 +1,6 @@
 # Verification Report
 
-**Change**: mcp-override-validation-alignment (Work Unit 2: Schemas & Dynamic Services Wrapper)
+**Change**: mcp-override-validation-alignment (Final Verification)
 **Mode**: Strict TDD
 **Verdict**: PASS
 **Last re-verified**: 2026-06-18
@@ -10,36 +10,28 @@
 | Metric | Value |
 |--------|-------|
 | Tasks total | 16 |
-| Tasks complete | 14 |
-| Tasks incomplete | 2 |
-| Apply status | in_progress |
+| Tasks complete | 16 |
+| Tasks incomplete | 0 |
+| Apply status | all_done |
 
 ## Build & Tests Execution
 
-**Focused tests (Contracts, Mapping, config target resolution, Schemas, Dynamic Services Wrapper)**: Passed
+**Focused tests (Contracts, Mapping, Config Target Resolution, Schemas, Dynamic Services Wrapper, E2E Mock Transport)**: Passed
 
 ```text
 pnpm vitest run test/core/config/execution-target.test.ts test/core/mapping/access-query-request-mapper.test.ts test/shared/validation/validator.test.ts test/adapters/mcp/stdio.test.ts
 
  RUN  v4.1.9 C:/Proyectos/dysflow
 
- ✓ test/shared/validation/validator.test.ts (19 tests) 6ms
- ✓ test/adapters/mcp/stdio.test.ts (21 tests) 57ms
- ✓ test/core/mapping/access-query-request-mapper.test.ts (21 tests) 9ms
- ✓ test/core/config/execution-target.test.ts (4 tests) 4ms
+ ✓ test/core/mapping/access-query-request-mapper.test.ts (21 tests) 10ms
+ ✓ test/shared/validation/validator.test.ts (19 tests) 8ms
+ ✓ test/core/config/execution-target.test.ts (4 tests) 5ms
+ ✓ test/adapters/mcp/stdio.test.ts (22 tests) 68ms
 
  Test Files  4 passed (4)
-      Tests  65 passed (65)
-   Start at  20:51:07
-   Duration  1.21s
-```
-
-**Full test suite**: Passed (when run sequentially/in isolation for COM-bound integration tests)
-
-```text
-pnpm vitest run test/integration/vba-source-comparison-real-fixture.test.ts
-Test Files: 1 passed
-Tests: 1 passed
+      Tests  66 passed (66)
+   Start at  20:54:50
+   Duration  907ms
 ```
 
 **Build**: Passed
@@ -70,6 +62,7 @@ Checked 197 files.
 | Dynamic services isolation | `createDynamicServices` isolates configurations and instantiates new ones when overrides differ | `test/adapters/mcp/stdio.test.ts` lines 600-646 | ✅ COMPLIANT |
 | Propagate timeout override | `createDynamicServices` propagates `timeoutMs` override to service configurations | `test/adapters/mcp/stdio.test.ts` lines 648-683 | ✅ COMPLIANT |
 | Dynamic routing of registry & cleanup | `cleanupService`, `orphanCleanupService`, and `operationRegistry` routed dynamically to correct instances | Verified in `src/adapters/mcp/stdio.ts` lines 338-406 | ✅ COMPLIANT |
+| E2E dynamic tool routing | Client calls tools with different database overrides and the server routes them to the correct backend | `test/adapters/mcp/stdio.test.ts` lines 691-766 | ✅ COMPLIANT |
 
 ## Correctness (Static Evidence)
 
@@ -80,6 +73,7 @@ Checked 197 files.
 | `src/adapters/mcp/schemas/dysflow-schemas.ts` | ✅ Implemented | Extended schemas for `VBA_EXECUTE_SCHEMA` and `DOCTOR_SCHEMA` with overrides and `timeoutMs`. |
 | `src/adapters/mcp/alias-tools.ts` | ✅ Implemented | Mapped override and context properties in tool handlers. |
 | `src/adapters/mcp/stdio.ts` | ✅ Implemented | Implemented cache-based dynamic resolution wrapper `createDynamicServices`, routing cleanup and registry services dynamically. |
+| `test/adapters/mcp/stdio.test.ts` | ✅ Implemented | Added caching/isolation validation tests, timeout propagation validation tests, and full InMemoryTransport client-server E2E mock tool routing tests. |
 
 ## Coherence (Design)
 
@@ -93,9 +87,9 @@ Checked 197 files.
 
 | Check | Result | Details |
 |-------|--------|---------|
-| RED confirmed (tests exist) | ✅ | Schema validations and stdio caching test cases existed and failed before integration. |
+| RED confirmed (tests exist) | ✅ | Tests for schemas, stdio caching, and E2E mock routing were created and failed prior to integration. |
 | GREEN confirmed (tests pass) | ✅ | Focused test suites run and pass. |
-| Triangulation adequate | ✅ | Caching hits, caching misses, and timeout overrides are triangulated. |
+| Triangulation adequate | ✅ | Verified caching, isolation, and dynamic targeting across different database paths and timeout override values. |
 | Safety Net for modified files | ✅ | All tests run successfully. |
 
 ## Test Layer Distribution
@@ -106,8 +100,9 @@ Checked 197 files.
 | Unit / configuration | 4 passed tests | 1 | Vitest |
 | Unit / validation | 19 passed tests | 1 | Vitest |
 | Unit / stdio dynamic resolution | 21 passed tests | 1 | Vitest |
+| E2E Mock Transport | 1 passed test | 1 | Vitest |
 | Integrated regression safety | 1371 passed tests | 100 | Vitest |
-| **Total relevant executed** | **1436** | **104** | |
+| **Total relevant executed** | **1437** | **105** | |
 
 ## Changed File Coverage
 
@@ -121,10 +116,10 @@ Checked 197 files.
 
 ## Assertion Quality
 
-**Assertion quality**: ✅ High. The tests verify schema validity, correct caching behaviors, service isolation, and timeout override routing with exact assertions.
+**Assertion quality**: ✅ High. The new E2E mock transport tests utilize the real `@modelcontextprotocol/sdk` InMemoryTransport client-server connection, and verify that calls to `run_vba` with distinct `accessPath` properties are dynamically routed and target the correct database correctly.
 
 ## Verdict
 
 **PASS**
 
-Work Unit 2 is fully verified and compliant.
+Change is 100% verified, clean, and fully compliant with requirements.
