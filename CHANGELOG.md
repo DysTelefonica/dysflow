@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.3.3] - 2026-06-19
+
+### Fixed
+
+- **`test_vba` `spawn ENAMETOOLONG` on large test plans**: the full test plan was serialized into an inline `-ProceduresJson` command-line argument, so a plan with enough tests/args overflowed the Windows ~32K command-line limit and Node's `spawn` failed with `ENAMETOOLONG` before Access ever started (`import_modules` was unaffected — it only passes a short module-name list). Plans over 8K chars are now written to a temp file passed via `-ProceduresJsonFile` (already supported by the PowerShell runner), keeping the command line bounded; the temp file is cleaned up even on timeout/error. Small plans stay inline.
+
 ## [v1.3.2] - 2026-06-18
 
 ### Added
