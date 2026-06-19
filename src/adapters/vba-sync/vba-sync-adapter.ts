@@ -1,4 +1,6 @@
-import { readFile, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import { resolveExecutionTarget as resolveExecutionTargetInCore } from "../../core/config/execution-target.js";
@@ -612,7 +614,18 @@ function isPathMissingError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 }
 
-export const spawnVbaManager: VbaManagerExecutor = (request) => {
+/**
+ * Inline length above which `proceduresJson` is offloaded to a temp file passed
+ * via `-ProceduresJsonFile` instead of inline `-ProceduresJson`. Windows caps a
+ * process command line at ~32K chars; a full VBA test plan (one entry per test,
+ * with args) easily blows past that once enough tests accumulate, and Node's
+ * `spawn` then throws `ENAMETOOLONG` before MSACCESS.EXE ever starts. Offloading
+ * keeps the command line bounded. Kept well below the OS limit so the rest of the
+ * arguments (paths, flags) can never tip the total over.
+ */
+const PROCEDURES_JSON_INLINE_LIMIT = 8_000;
+
+export const spawnVbaManager: VbaManagerExecutor = async (request) => {
   const args = [
     "-NoProfile",
     "-NonInteractive",
@@ -631,8 +644,23 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
   if (request.json) args.push("-Json");
   if (request.operationId !== undefined) args.push("-OperationId", request.operationId);
   if (request.operationFile !== undefined) args.push("-OperationFile", request.operationFile);
+
+  let proceduresJsonFile: string | undefined;
   for (const [key, value] of Object.entries(request.extra)) {
     if (value === undefined) continue;
+    // A large test plan would overflow the Windows command line (spawn
+    // ENAMETOOLONG). Write it to a temp file the PS script reads via
+    // -ProceduresJsonFile; cleaned up in the finally below.
+    if (
+      key === "proceduresJson" &&
+      typeof value === "string" &&
+      value.length > PROCEDURES_JSON_INLINE_LIMIT
+    ) {
+      proceduresJsonFile = join(tmpdir(), `dysflow-procedures-${randomUUID()}.json`);
+      await writeFile(proceduresJsonFile, value, "utf8");
+      args.push("-ProceduresJsonFile", proceduresJsonFile);
+      continue;
+    }
     const flag = `-${key.charAt(0).toUpperCase()}${key.slice(1)}`;
     // Booleans map to PowerShell [switch] params: emit the bare flag for true,
     // omit it entirely for false. Never "-Flag true", which a switch rejects.
@@ -643,12 +671,18 @@ export const spawnVbaManager: VbaManagerExecutor = (request) => {
     args.push(flag, String(value));
   }
 
-  return spawnPowerShellProcess({
-    command: POWERSHELL_EXE,
-    args,
-    timeoutMs: request.timeoutMs,
-    cwd: request.cwd,
-    env: request.env,
-    signal: request.signal,
-  });
+  try {
+    return await spawnPowerShellProcess({
+      command: POWERSHELL_EXE,
+      args,
+      timeoutMs: request.timeoutMs,
+      cwd: request.cwd,
+      env: request.env,
+      signal: request.signal,
+    });
+  } finally {
+    if (proceduresJsonFile !== undefined) {
+      await rm(proceduresJsonFile, { force: true }).catch(() => undefined);
+    }
+  }
 };

@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -475,6 +476,95 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const getUnforced = capture();
     await spawnVbaManager({ ...baseRequest, extra: { force: false } });
     expect(getUnforced()).not.toContain("-Force");
+  });
+
+  it("offloads a large proceduresJson to a temp file via -ProceduresJsonFile to avoid spawn ENAMETOOLONG", async () => {
+    // A test plan large enough that passing it inline on the command line would
+    // bloat the Windows ~32K command-line limit (the cause of spawn ENAMETOOLONG).
+    const bigPlan = JSON.stringify(
+      Array.from({ length: 2_000 }, (_, i) => ({
+        procedure: `Test_${i}`,
+        args: ["x".repeat(20)],
+      })),
+    );
+    expect(bigPlan.length).toBeGreaterThan(8_000);
+
+    let capturedArgs: readonly string[] = [];
+    let fileContentDuringSpawn: string | undefined;
+    spawnMock.mockImplementationOnce((_command: string, args: readonly string[]) => {
+      capturedArgs = args;
+      const idx = args.indexOf("-ProceduresJsonFile");
+      const filePath = idx !== -1 ? args[idx + 1] : undefined;
+      if (filePath !== undefined) {
+        fileContentDuringSpawn = readFileSync(filePath, "utf8");
+      }
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill: ReturnType<typeof vi.fn>;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    });
+
+    await spawnVbaManager({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      action: "Run-Tests",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      moduleNames: [],
+      json: true,
+      extra: { proceduresJson: bigPlan },
+      timeoutMs: 1_000,
+      cwd: "C:/repo",
+    });
+
+    // The payload moves to a file the PS script reads; it is NOT on the command line.
+    expect(capturedArgs).toContain("-ProceduresJsonFile");
+    expect(capturedArgs).not.toContain("-ProceduresJson");
+    expect(capturedArgs).not.toContain(bigPlan);
+    // The temp file held the exact JSON while the process was running.
+    expect(fileContentDuringSpawn).toBe(bigPlan);
+    // The command line stays bounded regardless of plan size.
+    expect(capturedArgs.join(" ").length).toBeLessThan(2_000);
+  });
+
+  it("keeps a small proceduresJson inline as -ProceduresJson without a temp file", async () => {
+    const smallPlan = JSON.stringify([{ procedure: "Test_A", args: [] }]);
+
+    let capturedArgs: readonly string[] = [];
+    spawnMock.mockImplementationOnce((_command: string, args: readonly string[]) => {
+      capturedArgs = args;
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill: ReturnType<typeof vi.fn>;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    });
+
+    await spawnVbaManager({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      action: "Run-Tests",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      moduleNames: [],
+      json: true,
+      extra: { proceduresJson: smallPlan },
+      timeoutMs: 1_000,
+      cwd: "C:/repo",
+    });
+
+    expect(capturedArgs).toContain("-ProceduresJson");
+    expect(capturedArgs[capturedArgs.indexOf("-ProceduresJson") + 1]).toBe(smallPlan);
+    expect(capturedArgs).not.toContain("-ProceduresJsonFile");
   });
 
   it("redacts passwords from runner failures", async () => {
