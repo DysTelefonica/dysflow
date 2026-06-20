@@ -189,13 +189,23 @@ export async function compareSourceAgainstBinary(
     const result = await ctx.runVbaManager(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
+      // The export timed out: the PowerShell process is killed, but the Access COM
+      // process it spawned is a separate process that survives as an orphan. Reap
+      // it immediately by re-running the path/lock cleanup so a timeout never
+      // leaks an Access process (orphans would otherwise linger until the next op).
+      const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(
+        await ctx.runPreflightCleanup(target.data),
+      );
       return failureResult(
         createDysflowError(
           "VBA_MANAGER_TIMEOUT",
           `verify export timed out after ${result.durationMs}ms`,
           { retryable: true },
         ),
-        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        {
+          diagnostics: [...preflightDiagnostics, ...timeoutCleanupDiagnostics],
+          durationMs: result.durationMs,
+        },
       );
     }
     if (result.exitCode !== 0) {
