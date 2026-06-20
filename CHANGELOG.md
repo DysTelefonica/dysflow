@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.4.1] - 2026-06-20
+
+### Fixed
+
+- **`import_modules` with `importMode="Auto"` silently dropped a form/report's code-behind**: for a form/report exported as both a `.form.txt` (layout + an embedded copy of the code-behind) and a `.cls` (the canonical code), `Resolve-ImportFileForModule` in `Auto` mode resolved to the `.form.txt` first and imported it via `LoadFromText`, never reading the `.cls`. Because `verify_binary` compares a form's code through the `.cls` (the `formtxt-codebehind-split` rule), editing the canonical `.cls` and importing with `Auto` returned `ok:true` while the binary kept the stale embedded code-behind, so `verify_binary` reported the form as `sourceNewer` forever. `Auto`/`Code` now sync the `.cls` into the freshly loaded document module after `LoadFromText` (reusing the `importMode=Code` `DeleteLines` + `AddFromFile` path); `importMode=Form` stays layout-only. If the code-behind cannot be synced the import now fails loudly instead of reporting a false `ok:true`. Verified against real Access with a negative/positive control (a marker added only to the `.cls` round-trips through the binary after `Auto` only with the fix).
+
 ## [v1.4.0] - 2026-06-20
 
 ### Fixed
