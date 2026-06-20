@@ -15,6 +15,7 @@ import {
   type AccessOperationPreflightCleanup,
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
+  reapOrphanedAccessOnTimeout,
 } from "../../core/operations/access-operation-preflight.js";
 import {
   type AccessOperationRecord,
@@ -289,8 +290,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
       // spawned survives as an orphan. Reap it immediately via the path/lock
       // cleanup so a timeout never leaks an Access process (otherwise it lingers
       // until the next operation's preflight).
-      const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(
-        await this.runPreflightCleanup(target.data),
+      const timeoutCleanupDiagnostics = await reapOrphanedAccessOnTimeout(() =>
+        this.runPreflightCleanup(target.data),
       );
       return failureResult(
         createDysflowError(

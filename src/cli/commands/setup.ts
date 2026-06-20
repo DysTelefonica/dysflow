@@ -186,7 +186,7 @@ async function writeRelativeProjectConfig(
   return {
     message: [
       `Wrote portable project config to ${projectPath}`,
-      `Recommended: tune "timeoutMs" in .dysflow/project.json for this project — large databases and heavy whole-project operations may need more than the default ${config.timeoutMs}ms.`,
+      `Recommended: tune "timeoutMs" in .dysflow/project.json for this project — large databases and heavy whole-project operations may need more than the current ${config.timeoutMs}ms.`,
     ].join("\n"),
     projectPath,
   };
