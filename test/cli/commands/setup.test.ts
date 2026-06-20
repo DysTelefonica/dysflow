@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -176,6 +176,31 @@ describe("handleSetupCommand — successful display", () => {
       });
 
       expect(result.stdout).not.toContain("Wrote portable project config");
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it("scaffolds a per-project timeoutMs and recommends tuning it", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    try {
+      const result = await handleSetupCommand(["--write-project"], {
+        cwd: workspace.root,
+        env: { DYSFLOW_ACCESS_PASSWORD: "top-secret" },
+      });
+
+      expect(result.exitCode).toBe(0);
+      const written = JSON.parse(
+        readFileSync(join(workspace.root, ".dysflow", "project.json"), "utf8"),
+      );
+      // The scaffold makes the per-project timeout an explicit, editable knob so a
+      // large database does not silently fall back to the generic default and
+      // false-timeout heavy whole-project operations.
+      expect(typeof written.timeoutMs).toBe("number");
+      expect(written.timeoutMs).toBeGreaterThan(0);
+      // And the CLI explicitly nudges the user to tune it per project.
+      expect(result.stdout.toLowerCase()).toContain("recommend");
+      expect(result.stdout.toLowerCase()).toContain("timeoutms");
     } finally {
       workspace.cleanup();
     }
