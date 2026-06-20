@@ -162,7 +162,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Normalize-AccessDocumentTextForLoadFromText',
             'Get-PreferredNewline',
             'Normalize-Newlines',
-            'Get-AccessLockFilePath'
+            'Get-AccessLockFilePath',
+            'Resolve-FormCodeBehindFile'
         )
 
         $extractedCode = ($functionDefs |
@@ -328,6 +329,49 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
         It "returns false for a form property line" {
             Test-LooksLikeVbaCodeLine -Line "    Caption = `"My Form`"" | Should -Be $false
+        }
+    }
+
+    Context "Resolve-FormCodeBehindFile" {
+        It "returns the sibling .cls when a form has both .form.txt and .cls" {
+            $root = Join-Path $TestDrive "src-both"
+            New-Item -ItemType Directory -Path (Join-Path $root "forms") -Force | Out-Null
+            Set-Content -Path (Join-Path $root "forms" "Form_Foo.form.txt") -Value "Version =20"
+            Set-Content -Path (Join-Path $root "forms" "Form_Foo.cls") -Value "Option Explicit"
+            $result = Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Form_Foo"
+            $result | Should -Be (Join-Path $root "forms" "Form_Foo.cls")
+        }
+
+        It "resolves the .cls via Form_ prefix when the module name omits it" {
+            $root = Join-Path $TestDrive "src-prefix"
+            New-Item -ItemType Directory -Path (Join-Path $root "forms") -Force | Out-Null
+            Set-Content -Path (Join-Path $root "forms" "Form_Bar.form.txt") -Value "Version =20"
+            Set-Content -Path (Join-Path $root "forms" "Form_Bar.cls") -Value "Option Explicit"
+            $result = Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Bar"
+            $result | Should -Be (Join-Path $root "forms" "Form_Bar.cls")
+        }
+
+        It "returns null when the form has only a .form.txt (no separate code-behind)" {
+            $root = Join-Path $TestDrive "src-layout-only"
+            New-Item -ItemType Directory -Path (Join-Path $root "forms") -Force | Out-Null
+            Set-Content -Path (Join-Path $root "forms" "Form_Baz.form.txt") -Value "Version =20"
+            Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Form_Baz" | Should -BeNullOrEmpty
+        }
+
+        It "returns null for a regular class outside forms/reports" {
+            $root = Join-Path $TestDrive "src-class"
+            New-Item -ItemType Directory -Path (Join-Path $root "classes") -Force | Out-Null
+            Set-Content -Path (Join-Path $root "classes" "MyClass.cls") -Value "Option Explicit"
+            Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "MyClass" | Should -BeNullOrEmpty
+        }
+
+        It "resolves a report code-behind under reports/" {
+            $root = Join-Path $TestDrive "src-report"
+            New-Item -ItemType Directory -Path (Join-Path $root "reports") -Force | Out-Null
+            Set-Content -Path (Join-Path $root "reports" "Report_Inv.report.txt") -Value "Version =20"
+            Set-Content -Path (Join-Path $root "reports" "Report_Inv.cls") -Value "Option Explicit"
+            $result = Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Report_Inv"
+            $result | Should -Be (Join-Path $root "reports" "Report_Inv.cls")
         }
     }
 }
