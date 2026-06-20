@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.4.0] - 2026-06-20
+
+### Fixed
+
+- **`run_vba` / `vba_inline_execution` with no arguments failed with `VBA_MANAGER_FAILED`**: `Invoke-RunProcedureAction` declared `$ProcedureArgsJson` as a `Mandatory [string]`, which PowerShell rejects when empty (`cannot bind argument … because it is an empty string`) before the body ran. Running a procedure with no args passed `""` and hit the binding error. `[AllowEmptyString()]` now lets the empty case reach `Convert-ProcedureArgsJson`, which already maps it to no args.
+- **A VBA-manager timeout leaked an orphaned Access process**: on timeout the PowerShell process is killed, but the Access COM process it spawned is a separate process that survived as an orphan until the next operation's preflight cleanup. Both timeout paths (the `verify_binary` / `reconcile_binary` export and `executeMappedTool`) now re-run the path/lock cleanup immediately so a timeout never leaks an Access process. The cleanup is guarded — if it throws, it degrades to a warning diagnostic instead of masking the original timeout.
+
+### Added
+
+- **`dysflow setup` scaffolds a per-project `timeoutMs`**: the generated `.dysflow/project.json` now includes an explicit, editable `timeoutMs`, and the command recommends tuning it. The configured project timeout is honored end-to-end when no per-call timeout is given; surfacing the knob at init keeps heavy whole-project operations on large databases from silently falling back to the generic default and false-timing out.
+
 ## [v1.3.3] - 2026-06-19
 
 ### Fixed
