@@ -85,6 +85,14 @@ export function createDispatchTool(
             input,
             (key) => env[key],
           );
+          // Only backendPassword is passed as an in-scope secret here, by design —
+          // this is NOT a missing-accessPassword-redaction defect. The
+          // AccessPowerShellRunner owns accessPassword and already redacts it from
+          // EVERY error message at the source (secrets = [accessPassword,
+          // backendPassword]) before any failureResult reaches this sink, and the
+          // value travels to PowerShell via env only, never argv. backendPassword is
+          // re-passed here only as belt-and-suspenders / HTTP parity (#429).
+          // Verified by test/core/runner/access-runner-error-redaction.test.ts.
           return translateCoreResultToMcpContent(
             await services.queryService.execute(maintenanceRequest),
             resolveInScopeSecrets(maintenanceRequest.backendPassword),
