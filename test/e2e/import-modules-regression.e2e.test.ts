@@ -86,6 +86,11 @@ function setupWorkspace(): void {
         accessPath: "NoConformidades.accdb",
         backendPath: "NoConformidades_Datos.accdb",
         destinationRoot: "src",
+        // Heavy whole-project operations (verify_binary / reconcile_binary export
+        // the ENTIRE project) exceed the generic default on this large fixture.
+        // Set a realistic per-project timeout so the suite verifies the config is
+        // HONORED end-to-end (no per-call timeoutMs is passed by these tools).
+        timeoutMs: 120_000,
       },
       null,
       2,

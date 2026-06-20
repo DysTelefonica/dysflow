@@ -285,13 +285,23 @@ export class VbaSyncAdapter implements VbaSyncPort {
     });
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
+      // The PowerShell process is killed on timeout, but the Access COM process it
+      // spawned survives as an orphan. Reap it immediately via the path/lock
+      // cleanup so a timeout never leaks an Access process (otherwise it lingers
+      // until the next operation's preflight).
+      const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(
+        await this.runPreflightCleanup(target.data),
+      );
       return failureResult(
         createDysflowError(
           "VBA_MANAGER_TIMEOUT",
           `${toolName} timed out after ${result.durationMs}ms`,
           { retryable: true },
         ),
-        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        {
+          diagnostics: [...preflightDiagnostics, ...timeoutCleanupDiagnostics],
+          durationMs: result.durationMs,
+        },
       );
     }
     let parsedOutput: unknown;

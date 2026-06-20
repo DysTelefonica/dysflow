@@ -192,6 +192,77 @@ describe("vba-source-comparison", () => {
     expect(capturedTimeoutMs).toBe(9999);
   });
 
+  it("honors the project config timeoutMs when no params.timeoutMs is given", async () => {
+    // Coverage for the contract: with no per-call timeout, the export must use
+    // the project's configured timeoutMs (target.data.timeoutMs), NOT a generic
+    // hardcoded fallback. A large database sets a high project timeout precisely
+    // so heavy whole-project verify/reconcile exports do not false-timeout.
+    let capturedTimeoutMs = 0;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 90_000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { timeoutMs: number; destinationRoot: string }) => {
+        capturedTimeoutMs = req.timeoutMs;
+        await mkdir(req.destinationRoot, { recursive: true });
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
+      },
+    };
+    await compareSourceAgainstBinary("verify_binary", {}, ctx, testFileSystem);
+    expect(capturedTimeoutMs).toBe(90_000);
+  });
+
+  it("reaps the orphaned Access process when the export times out", async () => {
+    // On timeout the PowerShell process is killed but the Access COM process it
+    // spawned survives as an orphan. The export must run cleanup again on the
+    // timeout path so nothing is left orphaned.
+    let preflightCalls = 0;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => {
+        preflightCalls += 1;
+        return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
+      },
+      runVbaManager: async (req: { destinationRoot: string }) => {
+        await mkdir(req.destinationRoot, { recursive: true });
+        return { exitCode: 1, stdout: "", stderr: "", durationMs: 31000, timedOut: true };
+      },
+    };
+    const result = await compareSourceAgainstBinary("verify_binary", {}, ctx, testFileSystem);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+    // Once before the export (preflight) and once after the timeout (reap orphan).
+    expect(preflightCalls).toBe(2);
+  });
+
   it("planReconcileBinary returns not-ok recommendation when source and binary differ", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-recon-diff-"));
     const sourceRoot = join(root, "src");
