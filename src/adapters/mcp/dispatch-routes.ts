@@ -34,6 +34,10 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   compile_vba: { kind: "vba-sync", mutatesBinary: true },
   verify_code: { kind: "vba-sync", mutatesBinary: false },
   verify_binary: { kind: "vba-sync", mutatesBinary: false },
+  // reconcile_binary is read-only DESPITE its name: planReconcileBinary runs a
+  // dry-run compare (compareSourceAgainstBinary) and only RECOMMENDS an explicit
+  // import/export — it never mutates the .accdb. Keep mutatesBinary:false.
+  // See src/core/services/vba-source-comparison.ts (planReconcileBinary).
   reconcile_binary: { kind: "vba-sync", mutatesBinary: false },
   delete_module: { kind: "vba-sync", mutatesBinary: true },
   generate_erd: { kind: "vba-sync", mutatesBinary: false },
