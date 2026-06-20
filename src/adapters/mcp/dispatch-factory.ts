@@ -30,24 +30,19 @@ export function createDispatchTool(
   const definition = getToolDefinition(name);
   const schema = mcpSchemaFor(name);
   const route = MCP_TOOL_ROUTES[name];
-  // These VBA tools always mutate the binary — none has a real dry-run mode in
-  // the PowerShell manager (e.g. Invoke-ImportAction takes no -DryRun), so the
-  // write-gate MUST apply regardless of any caller-supplied dryRun flag.
-  // Honoring resolveIsDryRun() for import_modules/import_all would let a caller
-  // bypass the gate by simply omitting dryRun (which defaults to true) while the
-  // import still writes to the binary.
-  const vbaWriteToolsAlwaysWrite = new Set<string>([
-    "delete_module",
-    "compile_vba",
-    "vba_inline_execution",
-    "import_modules",
-    "import_all",
-  ]);
+  // VBA tools that mutate the binary always pass the write-gate. None has a real
+  // dry-run mode in the PowerShell manager (e.g. Invoke-ImportAction takes no
+  // -DryRun), so the gate MUST apply regardless of any caller-supplied dryRun
+  // flag — honoring resolveIsDryRun() for import_modules/import_all would let a
+  // caller bypass the gate by simply omitting dryRun (which defaults to true)
+  // while the import still writes to the binary. Which tools mutate the binary is
+  // declared on the route (`mutatesBinary`), not duplicated here (#405).
+  const isBinaryWrite = route.kind === "vba-sync" && route.mutatesBinary;
 
   const isWriteGated =
     route.kind === "query-write-fixture" ||
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
-    vbaWriteToolsAlwaysWrite.has(name);
+    isBinaryWrite;
 
   return {
     name,
@@ -57,7 +52,7 @@ export function createDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
-      const isDryRun = vbaWriteToolsAlwaysWrite.has(name) ? false : resolveIsDryRun(input);
+      const isDryRun = isBinaryWrite ? false : resolveIsDryRun(input);
       if (
         isWriteGated &&
         !isDryRun &&
