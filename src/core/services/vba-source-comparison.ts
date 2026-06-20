@@ -8,6 +8,7 @@ import {
 import {
   type AccessOperationPreflightCleanupResult,
   diagnosticsFromPreflightCleanup,
+  reapOrphanedAccessOnTimeout,
 } from "../operations/access-operation-preflight.js";
 import { sanitizeSecrets, truthy } from "../utils/index.js";
 import { buildRuntimeDiagnostics, type RuntimeDiagnostics } from "../utils/runtime-info.js";
@@ -193,8 +194,8 @@ export async function compareSourceAgainstBinary(
       // process it spawned is a separate process that survives as an orphan. Reap
       // it immediately by re-running the path/lock cleanup so a timeout never
       // leaks an Access process (orphans would otherwise linger until the next op).
-      const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(
-        await ctx.runPreflightCleanup(target.data),
+      const timeoutCleanupDiagnostics = await reapOrphanedAccessOnTimeout(() =>
+        ctx.runPreflightCleanup(target.data),
       );
       return failureResult(
         createDysflowError(

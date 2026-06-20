@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { OsProcessInfo } from "../../../src/core/operations/access-operation-cleanup.js";
-import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
+import {
+  AccessOperationPreflightCleanupService,
+  reapOrphanedAccessOnTimeout,
+} from "../../../src/core/operations/access-operation-preflight.js";
 import {
   type AccessOperationRecord,
   InMemoryAccessOperationRegistry,
@@ -861,5 +864,30 @@ describe("AccessOperationPreflightCleanupService", () => {
         }),
       );
     });
+  });
+});
+
+describe("reapOrphanedAccessOnTimeout", () => {
+  it("returns the cleanup diagnostics on success", async () => {
+    const diagnostics = await reapOrphanedAccessOnTimeout(async () => ({
+      cleaned: [],
+      killed: [],
+      orphanedKilled: [],
+      errors: [{ operationId: "op-x", message: "could not kill 42" }],
+    }));
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain("op-x: could not kill 42");
+  });
+
+  it("degrades to a warning diagnostic instead of throwing when cleanup fails", async () => {
+    // A timeout is already a failure path: a throwing cleanup must NOT mask the
+    // original timeout. The helper swallows it into a warning diagnostic.
+    const diagnostics = await reapOrphanedAccessOnTimeout(async () => {
+      throw new Error("registry unavailable");
+    });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.level).toBe("warning");
+    expect(diagnostics[0]?.message).toContain("orphan cleanup after timeout failed");
+    expect(diagnostics[0]?.message).toContain("registry unavailable");
   });
 });

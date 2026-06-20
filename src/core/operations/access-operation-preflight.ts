@@ -366,6 +366,28 @@ export function diagnosticsFromPreflightCleanup(
   );
 }
 
+/**
+ * Reaps the Access COM process orphaned by a killed PowerShell run on a timeout
+ * path, returning the cleanup's diagnostics. Defensive by design: a timeout is
+ * already a failure path, so if the cleanup itself throws we degrade to a warning
+ * diagnostic rather than masking the original timeout with the cleanup error.
+ */
+export async function reapOrphanedAccessOnTimeout(
+  cleanup: () => Promise<AccessOperationPreflightCleanupResult>,
+): Promise<Diagnostic[]> {
+  try {
+    return diagnosticsFromPreflightCleanup(await cleanup());
+  } catch (error) {
+    return [
+      createDiagnostic(
+        "warning",
+        "access.preflight",
+        `orphan cleanup after timeout failed: ${formatError(error)}`,
+      ),
+    ];
+  }
+}
+
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
