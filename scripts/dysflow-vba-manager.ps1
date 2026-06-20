@@ -3197,7 +3197,10 @@ function Invoke-RunProcedureAction {
     Param(
         [Parameter(Mandatory = $true)]$Session,
         [Parameter(Mandatory = $true)][string]$ProcedureName,
-        [Parameter(Mandatory = $true)][string]$ProcedureArgsJson,
+        # AllowEmptyString: a no-arg procedure (run_vba / vba_inline_execution with no
+        # args) passes "". A bare Mandatory [string] rejects empty with a binding error
+        # before the body runs; Convert-ProcedureArgsJson already maps empty -> @().
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ProcedureArgsJson,
         [switch]$Json
     )
 

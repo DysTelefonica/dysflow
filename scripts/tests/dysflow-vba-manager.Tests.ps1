@@ -1459,6 +1459,28 @@ Describe "Invoke-RunProcedureAction — behavioral (decompose S5)" {
             $obj.returnValue | Should -Be 15
         }
     }
+
+    Context "empty arguments (no-arg procedures, e.g. inline execution)" {
+        It "accepts an empty ProcedureArgsJson and runs the procedure with no arguments" {
+            # Regression: $ProcedureArgsJson was a Mandatory [string], which PowerShell
+            # rejects when empty ("cannot bind argument ... because it is an empty
+            # string"). run_vba / vba_inline_execution run a procedure with NO args, so
+            # this path MUST accept "". Convert-ProcedureArgsJson already maps empty -> @().
+            $script:MockConvertedArgs = @()
+            $script:AccessProcedureResult = [PSCustomObject]@{
+                ok = $true
+                procedure = "ExecuteInline"
+                returnValue = $null
+            }
+
+            { Invoke-RunProcedureAction -Session $script:FakeSession -ProcedureName "ExecuteInline" -ProcedureArgsJson "" } |
+                Should -Not -Throw
+
+            $script:AccessProcedureCalled | Should -Be $true
+            $script:AccessProcedureParams.ProcedureName | Should -Be "ExecuteInline"
+            $script:AccessProcedureParams.ProcedureArgs.Count | Should -Be 0
+        }
+    }
 }
 
 # ===========================================================================
