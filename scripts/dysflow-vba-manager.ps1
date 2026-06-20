@@ -1479,6 +1479,41 @@ function Resolve-ImportFileForModule {
     return $null
 }
 
+function Resolve-FormCodeBehindFile {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$ModulesPath,
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    # A form/report is exported as TWO artifacts: the `.form.txt`/`.report.txt`
+    # (layout + an embedded serialization of the code-behind) and a separate
+    # `.cls` that holds the canonical code (verify_binary compares the form's
+    # code through this `.cls`, not the embedded copy). When both exist, an Auto
+    # import must sync the `.cls` after loading the document so the canonical code
+    # wins over the possibly-stale embedded copy. Returns that `.cls` path, or
+    # $null when the module has no separate code-behind (layout-only form, or a
+    # plain module/class that is not a document).
+    $modulesPathText = [string]$ModulesPath
+    $moduleNameText  = [string]$ModuleName
+
+    $candidateNames = @(
+        $moduleNameText,
+        ("Form_" + ($moduleNameText -replace '^Form_', '')),
+        ("Report_" + ($moduleNameText -replace '^Report_', ''))
+    ) | Select-Object -Unique
+
+    foreach ($folder in @('forms', 'reports')) {
+        $searchPath = Join-Path -Path $modulesPathText -ChildPath $folder
+        if (-not (Test-Path -Path $searchPath)) { continue }
+        foreach ($candidate in $candidateNames) {
+            $cls = Join-Path -Path $searchPath -ChildPath ($candidate + '.cls')
+            if (Test-Path -Path $cls) { return $cls }
+        }
+    }
+    return $null
+}
+
 function Remove-ExistingComponent {
     [CmdletBinding()]
     Param(
@@ -2030,6 +2065,44 @@ function Invoke-CompileVbaProject {
     }
 }
 
+function Import-DocumentCodeBehind {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$VbProject,
+        [Parameter(Mandatory = $true)][string]$ModuleName,
+        [Parameter(Mandatory = $true)][string]$SourcePath
+    )
+
+    # Overwrites the code module of an already-existing document (form/report)
+    # component with the canonical code-behind from $SourcePath (a `.cls`). Called
+    # after a form/report is loaded via LoadFromText so the `.cls` — the source of
+    # truth verify_binary compares against — wins over the `.form.txt`'s embedded
+    # (and possibly stale) copy. Reuses the same DeleteLines + AddFromFile path
+    # that importMode=Code uses for document code-behind.
+    $componentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+    if (-not $componentName) {
+        throw ("No se encontro el document module '{0}' tras LoadFromText; no se pudo sincronizar el code-behind desde '{1}'." -f $ModuleName, $SourcePath)
+    }
+
+    $ext = [System.IO.Path]::GetExtension($SourcePath)
+    $tmpAnsi = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_codebehind_{0}{1}" -f @([guid]::NewGuid().ToString("N"), $ext))
+    $component = $null
+    $codeModule = $null
+    try {
+        Convert-Utf8CodeImportToAnsiTempFile -InputPath $SourcePath -TempPath $tmpAnsi
+        $component = $VbProject.VBComponents.Item($componentName)
+        $codeModule = $component.CodeModule
+        $count = $codeModule.CountOfLines
+        if ($count -gt 0) { $codeModule.DeleteLines(1, $count) }
+        $codeModule.AddFromFile($tmpAnsi)
+    } finally {
+        if ($tmpAnsi -and (Test-Path -Path $tmpAnsi)) { Remove-Item -Path $tmpAnsi -Force -ErrorAction SilentlyContinue }
+        foreach ($obj in @($codeModule, $component)) {
+            if ($obj) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($obj) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+        }
+    }
+}
+
 function Import-VbaModule {
     [CmdletBinding()]
     Param(
@@ -2119,6 +2192,18 @@ function Import-VbaModule {
                     throw ("LoadFromText falló para '{0}'. Detalle de errors.txt: {1}" -f $objectName, ($detail.Trim()))
                 }
                 throw
+            }
+
+            # The document we just loaded carries an embedded copy of the
+            # code-behind, but the canonical code lives in the sibling `.cls`
+            # (what verify_binary compares). Under Auto/Code, sync that `.cls`
+            # into the freshly loaded document module so the canonical code wins
+            # over a possibly-stale embedded copy. ImportMode=Form is layout-only.
+            if ($ImportMode -ne "Form") {
+                $codeBehindSrc = Resolve-FormCodeBehindFile -ModulesPath $ModulesPath -ModuleName $ModuleName
+                if ($codeBehindSrc) {
+                    Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $ModuleName -SourcePath $codeBehindSrc
+                }
             }
 
             return [pscustomobject]@{
