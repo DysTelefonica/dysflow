@@ -272,18 +272,16 @@ describe("dysflow command modules", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain(`Wrote portable project config to ${projectPath}`);
-      expect(readFileSync(projectPath, "utf8")).toBe(
-        `${JSON.stringify(
-          {
-            id: basename(workspace),
-            accessPath: "E2E_testing/front.accdb",
-            backendPath: "E2E_testing/backend.accdb",
-            destinationRoot: "src",
-          },
-          null,
-          2,
-        )}\n`,
-      );
+      const written = JSON.parse(readFileSync(projectPath, "utf8"));
+      expect(written).toMatchObject({
+        id: basename(workspace),
+        accessPath: "E2E_testing/front.accdb",
+        backendPath: "E2E_testing/backend.accdb",
+        destinationRoot: "src",
+      });
+      // The scaffold now surfaces a per-project timeout as an editable knob.
+      expect(typeof written.timeoutMs).toBe("number");
+      expect(written.timeoutMs).toBeGreaterThan(0);
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

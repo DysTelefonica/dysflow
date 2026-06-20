@@ -174,9 +174,20 @@ async function writeRelativeProjectConfig(
           backendPath: toPortableProjectPath(config.backendPath, projectRoot),
         }),
     destinationRoot: "src",
+    // Scaffold the per-project timeout as an explicit, editable knob. Heavy
+    // whole-project operations (verify_binary / reconcile_binary / export_all)
+    // on large databases can exceed the generic default; surfacing it here lets
+    // the user tune it instead of silently false-timing out.
+    timeoutMs: config.timeoutMs,
   };
 
   await mkdir(dirname(projectPath), { recursive: true });
   await writeFile(projectPath, `${JSON.stringify(projectJson, null, 2)}\n`, "utf8");
-  return { message: `Wrote portable project config to ${projectPath}`, projectPath };
+  return {
+    message: [
+      `Wrote portable project config to ${projectPath}`,
+      `Recommended: tune "timeoutMs" in .dysflow/project.json for this project — large databases and heavy whole-project operations may need more than the default ${config.timeoutMs}ms.`,
+    ].join("\n"),
+    projectPath,
+  };
 }
