@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.5.0] - 2026-06-21
+
+### Changed
+
+- **`importMode=Form` is deprecated and now behaves exactly like `Auto`**: a form/report is always imported with its UI/layout from the `.form.txt` AND its canonical code from the sibling `.cls`. There is no separate "layout-only" import, because `LoadFromText` always carries the form's embedded code-behind — the old `Form` mode therefore did not mean "UI without code"; it meant "UI plus the possibly-stale embedded copy, and skip the `.cls` sync", which could leave the binary running outdated code-behind. `Form` (and `form`) is still accepted as a deprecated alias so existing callers keep working; it normalizes to `Auto` in both the TypeScript adapter and the PowerShell runner. `Code` mode is unchanged (imports only `.cls`/`.bas` code-behind without touching layout via `LoadFromText`). The dead `Form`-specific branches in `Resolve-ImportFileForModule` and `Import-VbaModule` were removed so the `.cls` always wins for a document's code.
+
 ## [v1.4.1] - 2026-06-20
 
 ### Fixed
