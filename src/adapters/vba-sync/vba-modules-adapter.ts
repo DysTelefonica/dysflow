@@ -518,9 +518,11 @@ function normalizeImportMode(importMode: string | undefined): string | undefined
   switch (importMode.toLowerCase()) {
     case "auto":
     case "replace":
-      return "Auto";
+    // `form` is a deprecated alias for `auto`: a form/report always imports its
+    // UI from the `.form.txt` and its canonical code from the sibling `.cls`,
+    // so there is no separate layout-only mode. Kept as an accepted alias.
     case "form":
-      return "Form";
+      return "Auto";
     case "code":
       return "Code";
     default:

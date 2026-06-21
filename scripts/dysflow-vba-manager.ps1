@@ -244,14 +244,19 @@ function Resolve-ImportModeValue {
     if ([string]::IsNullOrWhiteSpace($ImportMode)) { return "Auto" }
     if ($ImportMode -ieq "replace") { return "Auto" }
     if ($ImportMode -ieq "Auto") { return "Auto" }
-    if ($ImportMode -ieq "Form") { return "Form" }
+    # `Form` is a deprecated alias for `Auto`. A form/report always imports its
+    # UI/layout from the `.form.txt` AND its canonical code from the sibling
+    # `.cls` — there is no useful "layout-only" import, because LoadFromText
+    # always carries the embedded (and possibly stale) code-behind. Mapping Form
+    # to Auto guarantees the `.cls` wins for code while keeping old callers working.
+    if ($ImportMode -ieq "Form") { return "Auto" }
     if ($ImportMode -ieq "Code") { return "Code" }
 
     Write-DysflowResult -Result ([ordered]@{
         ok = $false
         error = [ordered]@{
             code = "VBA_MANAGER_INVALID_IMPORT_MODE"
-            message = "Invalid ImportMode '$ImportMode'. Valid values are Auto, Form, Code, or alias replace."
+            message = "Invalid ImportMode '$ImportMode'. Valid values are Auto, Code, or aliases replace/Form (Form is deprecated and behaves like Auto)."
         }
     }) -Depth 6
     exit 1
@@ -1433,7 +1438,6 @@ function Resolve-ImportFileForModule {
 
     $subFolders = @("forms", "reports", "classes", "modules", "")
     switch ($ImportMode) {
-        "Form" { $extensions = @(".form.txt", ".report.txt", ".frm") }
         "Code" { $extensions = @(".cls", ".bas") }
         default { $extensions = @(".form.txt", ".report.txt", ".frm", ".cls", ".bas") }
     }
@@ -1461,7 +1465,6 @@ function Resolve-ImportFileForModule {
         Where-Object { $_.BaseName -ieq $moduleNameText -or ($_.Name -replace '\.(form|report)\.txt$', '') -ieq $moduleNameText } |
         Where-Object {
             switch ($ImportMode) {
-                "Form" { $_.Name -match '\.(form|report)\.txt$' -or $_.Extension -ieq '.frm' }
                 "Code" { $_.Extension -ieq '.cls' -or $_.Extension -ieq '.bas' }
                 default { $true }
             }
@@ -2196,14 +2199,14 @@ function Import-VbaModule {
 
             # The document we just loaded carries an embedded copy of the
             # code-behind, but the canonical code lives in the sibling `.cls`
-            # (what verify_binary compares). Under Auto/Code, sync that `.cls`
-            # into the freshly loaded document module so the canonical code wins
-            # over a possibly-stale embedded copy. ImportMode=Form is layout-only.
-            if ($ImportMode -ne "Form") {
-                $codeBehindSrc = Resolve-FormCodeBehindFile -ModulesPath $ModulesPath -ModuleName $ModuleName
-                if ($codeBehindSrc) {
-                    Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $ModuleName -SourcePath $codeBehindSrc
-                }
+            # (what verify_binary compares). Sync that `.cls` into the freshly
+            # loaded document module so the canonical code wins over a
+            # possibly-stale embedded copy. Only Code mode skips this block (it
+            # resolves the `.cls` directly and never reaches LoadFromText); the
+            # deprecated Form alias now normalizes to Auto, so it syncs too.
+            $codeBehindSrc = Resolve-FormCodeBehindFile -ModulesPath $ModulesPath -ModuleName $ModuleName
+            if ($codeBehindSrc) {
+                Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $ModuleName -SourcePath $codeBehindSrc
             }
 
             return [pscustomobject]@{
@@ -2218,7 +2221,7 @@ function Import-VbaModule {
         $tmpAnsiSanitized = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_import_sanitized_{0}{1}" -f @([guid]::NewGuid().ToString("N"), $ext))
         Convert-Utf8CodeImportToAnsiTempFile -InputPath $src -TempPath $tmpAnsiSanitized
         $actualComponentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
-        $looksLikeDocumentCode = ($ImportMode -ne "Form") -and ($ext -ieq '.cls') -and (Test-LooksLikeDocumentCodeTarget -ModuleName $ModuleName -SourcePath $src -ModulesPath $ModulesPath)
+        $looksLikeDocumentCode = ($ext -ieq '.cls') -and (Test-LooksLikeDocumentCodeTarget -ModuleName $ModuleName -SourcePath $src -ModulesPath $ModulesPath)
         try {
             if (-not $actualComponentName) {
                 if ($looksLikeDocumentCode) {

@@ -163,7 +163,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Get-PreferredNewline',
             'Normalize-Newlines',
             'Get-AccessLockFilePath',
-            'Resolve-FormCodeBehindFile'
+            'Resolve-FormCodeBehindFile',
+            'Resolve-ImportModeValue'
         )
 
         $extractedCode = ($functionDefs |
@@ -372,6 +373,30 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             Set-Content -Path (Join-Path $root "reports" "Report_Inv.cls") -Value "Option Explicit"
             $result = Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Report_Inv"
             $result | Should -Be (Join-Path $root "reports" "Report_Inv.cls")
+        }
+    }
+
+    Context "Resolve-ImportModeValue" {
+        It "defaults to Auto when empty" {
+            Resolve-ImportModeValue -ImportMode "" | Should -Be "Auto"
+        }
+
+        It "maps the replace alias to Auto" {
+            Resolve-ImportModeValue -ImportMode "replace" | Should -Be "Auto"
+        }
+
+        It "keeps Auto (case-insensitive)" {
+            Resolve-ImportModeValue -ImportMode "auto" | Should -Be "Auto"
+        }
+
+        It "deprecates Form to Auto so the canonical .cls always wins for code" {
+            Resolve-ImportModeValue -ImportMode "Form" | Should -Be "Auto"
+            Resolve-ImportModeValue -ImportMode "form" | Should -Be "Auto"
+        }
+
+        It "keeps Code (case-insensitive)" {
+            Resolve-ImportModeValue -ImportMode "code" | Should -Be "Code"
+            Resolve-ImportModeValue -ImportMode "Code" | Should -Be "Code"
         }
     }
 }

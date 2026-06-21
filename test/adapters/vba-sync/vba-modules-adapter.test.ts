@@ -145,8 +145,9 @@ describe("VbaModulesAdapter", () => {
   it.each([
     ["replace", "Auto"],
     ["auto", "Auto"],
-    ["form", "Form"],
+    ["form", "Auto"],
     ["code", "Code"],
+    ["Form", "Auto"],
   ])("normalizes import_modules importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({
@@ -177,8 +178,9 @@ describe("VbaModulesAdapter", () => {
   it.each([
     ["replace", "Auto"],
     ["auto", "Auto"],
-    ["form", "Form"],
+    ["form", "Auto"],
     ["code", "Code"],
+    ["Form", "Auto"],
   ])("normalizes import_all importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({

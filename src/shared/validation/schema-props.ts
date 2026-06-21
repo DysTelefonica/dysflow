@@ -142,7 +142,7 @@ export const SCHEMA_PROPS = {
     type: "string",
     enum: ["Auto", "Form", "Code", "auto", "form", "code", "replace"],
     description:
-      "VBA import mode. Lowercase aliases and replace are normalized before invoking the runner.",
+      "VBA import mode. Auto (default) imports a form/report's UI from its .form.txt and its canonical code from the sibling .cls. Code imports only code-behind/.bas. Form is a deprecated alias for Auto (there is no layout-only import). Lowercase variants and replace are normalized before invoking the runner.",
   } as JsonSchemaProperty,
   mode: {
     type: "string",
