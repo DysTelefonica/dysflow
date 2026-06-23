@@ -79,10 +79,7 @@ if (!canRunE2e) {
 // Workspace
 // ---------------------------------------------------------------------------
 
-const workspaceRoot = join(
-  tmpdir(),
-  `dysflow-stale-codebehind-e2e-${process.pid}-${Date.now()}`,
-);
+const workspaceRoot = join(tmpdir(), `dysflow-stale-codebehind-e2e-${process.pid}-${Date.now()}`);
 const projectId = "dysflow-stale-codebehind-e2e";
 
 function setupWorkspace(): void {
@@ -117,13 +114,7 @@ function setupWorkspace(): void {
   // STALE_CODEBEHIND_MARKER.  This simulates an out-of-date .form.txt whose
   // embedded CodeBehindForm has old (stale) code.
   // -------------------------------------------------------------------------
-  const realFormTxt = join(
-    repoRoot,
-    "E2E_testing",
-    "src",
-    "forms",
-    `${FORM_NAME}.form.txt`,
-  );
+  const realFormTxt = join(repoRoot, "E2E_testing", "src", "forms", `${FORM_NAME}.form.txt`);
   const formTxtContent = readFileSync(realFormTxt, "utf8");
   const cbfIndex = formTxtContent.indexOf("\nCodeBehindForm");
   if (cbfIndex === -1) {
@@ -165,20 +156,10 @@ function setupWorkspace(): void {
   // Use the real fixture .cls and prepend the CANONICAL_CLS_MARKER comment so
   // assertions can distinguish between the two code paths.
   // -------------------------------------------------------------------------
-  const realCls = join(
-    repoRoot,
-    "E2E_testing",
-    "src",
-    "forms",
-    `${FORM_NAME}.cls`,
-  );
+  const realCls = join(repoRoot, "E2E_testing", "src", "forms", `${FORM_NAME}.cls`);
   const clsContent = readFileSync(realCls, "utf8");
   const canonicalCls = `${CANONICAL_CLS_MARKER}\r\n${clsContent}`;
-  writeFileSync(
-    join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`),
-    canonicalCls,
-    "utf8",
-  );
+  writeFileSync(join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`), canonicalCls, "utf8");
 }
 
 // ---------------------------------------------------------------------------
@@ -308,147 +289,133 @@ describe.skipIf(!canRunE2e)(
       }
     });
 
-    it(
-      'importMode "Auto": re-exported .cls reflects the .cls source, not the stale CodeBehindForm',
-      async () => {
-        // Phase 1 — import the form (LoadFromText from .form.txt, then AddFromFile from .cls).
-        const importResult = await callMcp(
-          "import_modules",
-          {
-            projectId,
-            moduleNames: [FORM_NAME],
-            importMode: "Auto",
-            dryRun: false,
-            compile: false,
-          },
-          { timeoutMs: 90_000 },
-        );
-        expect(importResult.timedOut, `import timed out: ${importResult.text}`).toBe(false);
-        expect(importResult.isError, `import failed: ${importResult.text}`).toBe(false);
-        expect(importResult.ok, `import not ok: ${importResult.text}`).toBe(true);
+    it('importMode "Auto": re-exported .cls reflects the .cls source, not the stale CodeBehindForm', async () => {
+      // Phase 1 — import the form (LoadFromText from .form.txt, then AddFromFile from .cls).
+      const importResult = await callMcp(
+        "import_modules",
+        {
+          projectId,
+          moduleNames: [FORM_NAME],
+          importMode: "Auto",
+          dryRun: false,
+          compile: false,
+        },
+        { timeoutMs: 90_000 },
+      );
+      expect(importResult.timedOut, `import timed out: ${importResult.text}`).toBe(false);
+      expect(importResult.isError, `import failed: ${importResult.text}`).toBe(false);
+      expect(importResult.ok, `import not ok: ${importResult.text}`).toBe(true);
 
-        // Phase 2 — export the form so we can read what Access has stored.
-        // export_modules writes to src/forms/ inside the workspace (destinationRoot = "src").
-        const exportResult = await callMcp(
-          "export_modules",
-          {
-            projectId,
-            moduleNames: [FORM_NAME],
-          },
-          { timeoutMs: 60_000 },
-        );
-        expect(exportResult.timedOut, `export timed out: ${exportResult.text}`).toBe(false);
-        expect(exportResult.isError, `export failed: ${exportResult.text}`).toBe(false);
-        expect(exportResult.ok, `export not ok: ${exportResult.text}`).toBe(true);
+      // Phase 2 — export the form so we can read what Access has stored.
+      // export_modules writes to src/forms/ inside the workspace (destinationRoot = "src").
+      const exportResult = await callMcp(
+        "export_modules",
+        {
+          projectId,
+          moduleNames: [FORM_NAME],
+        },
+        { timeoutMs: 60_000 },
+      );
+      expect(exportResult.timedOut, `export timed out: ${exportResult.text}`).toBe(false);
+      expect(exportResult.isError, `export failed: ${exportResult.text}`).toBe(false);
+      expect(exportResult.ok, `export not ok: ${exportResult.text}`).toBe(true);
 
-        // Read the re-exported .cls from the workspace filesystem.
-        const exportedClsPath = join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`);
-        expect(
-          existsSync(exportedClsPath),
-          `Expected exported .cls at ${exportedClsPath}`,
-        ).toBe(true);
-        const exportedCls = readFileSync(exportedClsPath, "utf8");
+      // Read the re-exported .cls from the workspace filesystem.
+      const exportedClsPath = join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`);
+      expect(existsSync(exportedClsPath), `Expected exported .cls at ${exportedClsPath}`).toBe(
+        true,
+      );
+      const exportedCls = readFileSync(exportedClsPath, "utf8");
 
-        // Assert: the canonical .cls marker must be present — Phase 2 won.
-        expect(
-          exportedCls,
-          `Expected CANONICAL_CLS_MARKER in exported .cls — Phase 2 (.cls) must overwrite Phase 1 (CodeBehindForm)`,
-        ).toContain(CANONICAL_CLS_MARKER);
+      // Assert: the canonical .cls marker must be present — Phase 2 won.
+      expect(
+        exportedCls,
+        `Expected CANONICAL_CLS_MARKER in exported .cls — Phase 2 (.cls) must overwrite Phase 1 (CodeBehindForm)`,
+      ).toContain(CANONICAL_CLS_MARKER);
 
-        // Assert: the stale CodeBehindForm marker must NOT be present — Phase 1 code was replaced.
-        expect(
-          exportedCls,
-          `Expected STALE_CODEBEHIND_MARKER to be absent from exported .cls — Phase 2 must have won`,
-        ).not.toContain(STALE_CODEBEHIND_MARKER);
-      },
-      180_000,
-    );
+      // Assert: the stale CodeBehindForm marker must NOT be present — Phase 1 code was replaced.
+      expect(
+        exportedCls,
+        `Expected STALE_CODEBEHIND_MARKER to be absent from exported .cls — Phase 2 must have won`,
+      ).not.toContain(STALE_CODEBEHIND_MARKER);
+    }, 180_000);
 
-    it(
-      'importMode "Auto" + compile:true: compile succeeds after stale CodeBehindForm is overwritten by Phase 2',
-      async () => {
-        // Import with compile:true — after the form is imported (Phase 1 LoadFromText + Phase 2 cls sync),
-        // acCmdCompileAndSaveAllModules is called and must report ok:true.
-        const importResult = await callMcp(
-          "import_modules",
-          {
-            projectId,
-            moduleNames: [FORM_NAME],
-            importMode: "Auto",
-            dryRun: false,
-            compile: true,
-          },
-          { timeoutMs: 90_000 },
-        );
-        expect(importResult.timedOut, `import+compile timed out: ${importResult.text}`).toBe(false);
-        expect(importResult.isError, `import+compile failed: ${importResult.text}`).toBe(false);
-        expect(importResult.ok, `import+compile not ok: ${importResult.text}`).toBe(true);
+    it('importMode "Auto" + compile:true: compile succeeds after stale CodeBehindForm is overwritten by Phase 2', async () => {
+      // Import with compile:true — after the form is imported (Phase 1 LoadFromText + Phase 2 cls sync),
+      // acCmdCompileAndSaveAllModules is called and must report ok:true.
+      const importResult = await callMcp(
+        "import_modules",
+        {
+          projectId,
+          moduleNames: [FORM_NAME],
+          importMode: "Auto",
+          dryRun: false,
+          compile: true,
+        },
+        { timeoutMs: 90_000 },
+      );
+      expect(importResult.timedOut, `import+compile timed out: ${importResult.text}`).toBe(false);
+      expect(importResult.isError, `import+compile failed: ${importResult.text}`).toBe(false);
+      expect(importResult.ok, `import+compile not ok: ${importResult.text}`).toBe(true);
 
-        // The response text must contain a compileResult with ok:true.
-        expect(
-          importResult.text,
-          `Expected compileResult in response: ${importResult.text}`,
-        ).toContain('"compileResult"');
-        // Parse and assert compileResult.ok directly.
-        const parsed = JSON.parse(importResult.text) as Record<string, unknown>;
-        const compileResult = parsed.compileResult as
-          | { ok: boolean; error?: string | null }
-          | undefined;
-        expect(compileResult, "compileResult must be present in response").toBeDefined();
-        expect(
-          compileResult?.ok,
-          `compile must report ok:true — error was: ${compileResult?.error ?? "none"}`,
-        ).toBe(true);
-      },
-      90_000,
-    );
+      // The response text must contain a compileResult with ok:true.
+      expect(
+        importResult.text,
+        `Expected compileResult in response: ${importResult.text}`,
+      ).toContain('"compileResult"');
+      // Parse and assert compileResult.ok directly.
+      const parsed = JSON.parse(importResult.text) as Record<string, unknown>;
+      const compileResult = parsed.compileResult as
+        | { ok: boolean; error?: string | null }
+        | undefined;
+      expect(compileResult, "compileResult must be present in response").toBeDefined();
+      expect(
+        compileResult?.ok,
+        `compile must report ok:true — error was: ${compileResult?.error ?? "none"}`,
+      ).toBe(true);
+    }, 90_000);
 
-    it(
-      'importMode "Code": re-exported .cls reflects the .cls source (control case)',
-      async () => {
-        // importMode "Code" uses only the .cls — the .form.txt CodeBehindForm is not involved.
-        // This is a control: the canonical marker must still be present regardless.
-        const importResult = await callMcp(
-          "import_modules",
-          {
-            projectId,
-            moduleNames: [FORM_NAME],
-            importMode: "Code",
-            dryRun: false,
-            compile: false,
-          },
-          { timeoutMs: 90_000 },
-        );
-        expect(importResult.timedOut, `import timed out: ${importResult.text}`).toBe(false);
-        expect(importResult.isError, `import failed: ${importResult.text}`).toBe(false);
-        expect(importResult.ok, `import not ok: ${importResult.text}`).toBe(true);
+    it('importMode "Code": re-exported .cls reflects the .cls source (control case)', async () => {
+      // importMode "Code" uses only the .cls — the .form.txt CodeBehindForm is not involved.
+      // This is a control: the canonical marker must still be present regardless.
+      const importResult = await callMcp(
+        "import_modules",
+        {
+          projectId,
+          moduleNames: [FORM_NAME],
+          importMode: "Code",
+          dryRun: false,
+          compile: false,
+        },
+        { timeoutMs: 90_000 },
+      );
+      expect(importResult.timedOut, `import timed out: ${importResult.text}`).toBe(false);
+      expect(importResult.isError, `import failed: ${importResult.text}`).toBe(false);
+      expect(importResult.ok, `import not ok: ${importResult.text}`).toBe(true);
 
-        const exportResult = await callMcp(
-          "export_modules",
-          {
-            projectId,
-            moduleNames: [FORM_NAME],
-          },
-          { timeoutMs: 60_000 },
-        );
-        expect(exportResult.timedOut, `export timed out: ${exportResult.text}`).toBe(false);
-        expect(exportResult.isError, `export failed: ${exportResult.text}`).toBe(false);
-        expect(exportResult.ok, `export not ok: ${exportResult.text}`).toBe(true);
+      const exportResult = await callMcp(
+        "export_modules",
+        {
+          projectId,
+          moduleNames: [FORM_NAME],
+        },
+        { timeoutMs: 60_000 },
+      );
+      expect(exportResult.timedOut, `export timed out: ${exportResult.text}`).toBe(false);
+      expect(exportResult.isError, `export failed: ${exportResult.text}`).toBe(false);
+      expect(exportResult.ok, `export not ok: ${exportResult.text}`).toBe(true);
 
-        const exportedClsPath = join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`);
-        expect(
-          existsSync(exportedClsPath),
-          `Expected exported .cls at ${exportedClsPath}`,
-        ).toBe(true);
-        const exportedCls = readFileSync(exportedClsPath, "utf8");
+      const exportedClsPath = join(workspaceRoot, "src", "forms", `${FORM_NAME}.cls`);
+      expect(existsSync(exportedClsPath), `Expected exported .cls at ${exportedClsPath}`).toBe(
+        true,
+      );
+      const exportedCls = readFileSync(exportedClsPath, "utf8");
 
-        // Assert: the canonical .cls content was used (Code mode reads only .cls).
-        expect(
-          exportedCls,
-          `Expected CANONICAL_CLS_MARKER in exported .cls — importMode Code must use the .cls`,
-        ).toContain(CANONICAL_CLS_MARKER);
-      },
-      180_000,
-    );
+      // Assert: the canonical .cls content was used (Code mode reads only .cls).
+      expect(
+        exportedCls,
+        `Expected CANONICAL_CLS_MARKER in exported .cls — importMode Code must use the .cls`,
+      ).toContain(CANONICAL_CLS_MARKER);
+    }, 180_000);
   },
 );

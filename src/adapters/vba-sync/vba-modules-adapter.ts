@@ -298,15 +298,16 @@ export class VbaModulesAdapter {
       return this.exportAllWithPrune(effectiveParams);
     }
 
-    const importResult = await this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+    const importResult = await this.orchestrator.executeMappedTool(
+      toolName,
+      effectiveParams,
+      mapping,
+    );
     if (!importResult.ok) return importResult;
 
     // If compile:true is requested, run acCmdCompileAndSaveAllModules after a successful import.
     // Skip compile on dry-run (already handled above), on import failure, or when compile is falsy.
-    if (
-      (toolName === "import_modules" || toolName === "import_all") &&
-      truthy(params.compile)
-    ) {
+    if ((toolName === "import_modules" || toolName === "import_all") && truthy(params.compile)) {
       const compileResult = await this.orchestrator.executeMappedTool(
         "compile_vba",
         params,
@@ -316,7 +317,10 @@ export class VbaModulesAdapter {
       // Merge compileResult into the import result data so callers can inspect it.
       return {
         ...importResult,
-        data: { ...(importResult.data as Record<string, unknown>), compileResult: compileResult.data },
+        data: {
+          ...(importResult.data as Record<string, unknown>),
+          compileResult: compileResult.data,
+        },
       };
     }
 
