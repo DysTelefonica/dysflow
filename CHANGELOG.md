@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.5.1] - 2026-06-23
+
+### Fixed
+
+- **`import_modules` mangled non-ASCII VBComponent names (e.g. `Módulo1` → `Mód×lo1`)**: `DoCmd.CopyObject` is not Unicode-safe — when creating a new VBA component from a seed, it silently corrupts non-ASCII characters in the new-object name via the system's ANSI codepage. The fix forces the correct name via the `VBComponent.Name` COM property setter immediately after `CopyObject`; this setter follows the same Unicode-safe path as the VBE F4 → Name rename and is a no-op when `CopyObject` happened to produce the right name. This affected the create path only (re-importing an existing module used `DeleteLines + AddFromFile` and was unaffected).
+- **Non-ASCII module names corrupted in `list_objects` and tool output**: `powershell.exe` 5.1 defaults its stdout to the active console code page (e.g. CP1252). Node.js reads the child process stdout as UTF-8, so non-ASCII bytes (e.g. `ó` = 0xF3 in CP1252) were invalid UTF-8 start bytes and were replaced with U+FFFD in any JSON response — including `list_objects`, `import_modules`, and `export_all` output. The fix adds `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at PowerShell script startup so all stdout is valid UTF-8 end-to-end.
+
 ## [v1.5.0] - 2026-06-21
 
 ### Changed

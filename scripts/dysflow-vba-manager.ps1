@@ -107,6 +107,11 @@ trap {
 }
 
 $ErrorActionPreference = "Stop"
+# powershell.exe (5.1) defaults stdout to the active console code page (e.g. CP1252).
+# Node.js reads the child's stdout as UTF-8, so non-ASCII chars (e.g. ó, í) arrive as
+# U+FFFD replacement characters. Force UTF-8 output so VBA module names and any other
+# user-supplied strings round-trip correctly through JSON.
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:QuietOutput = [bool]$Json
 $script:HasDysflowResultEmitted = $false
 
@@ -1916,6 +1921,11 @@ function New-VbComponentFromCodeFile {
                 throw ("CopyObject devolvió sin error, pero no se encontró el componente clonado '{0}'." -f $ModuleName)
             }
             $newComponent = $VbProject.VBComponents.Item($resolvedClonedName)
+            # DoCmd.CopyObject is not Unicode-safe: non-ASCII characters in the new object name
+            # are mangled by the ANSI codepage (e.g. "Módulo1" becomes "Mód×lo1"). Force the
+            # correct name via the COM property setter, which is Unicode-safe (same path as VBE
+            # F4 → Name). This is a no-op when CopyObject happened to produce the right name.
+            $newComponent.Name = $ModuleName
         } else {
             $newComponent = $VbProject.VBComponents.Add($componentType)
             $newComponent.Name = $ModuleName

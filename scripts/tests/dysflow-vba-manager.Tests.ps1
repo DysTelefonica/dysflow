@@ -41,6 +41,48 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         }
     }
 
+    Context "New-VbComponentFromCodeFile — Unicode-safe name assignment (issue: CopyObject non-ASCII)" {
+        BeforeAll {
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+                (Resolve-Path $script:ScriptPath).Path, [ref]$null, [ref]$null
+            )
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq 'New-VbComponentFromCodeFile' },
+                $true
+            ) | Select-Object -First 1
+            $script:NewVbFnText = if ($fnAst) { $fnAst.Extent.Text } else { "" }
+        }
+
+        It "New-VbComponentFromCodeFile is defined in the script" {
+            $script:NewVbFnText | Should -Not -BeNullOrEmpty
+        }
+
+        It "sets Console.OutputEncoding to UTF-8 early in the script body (guards non-ASCII names in JSON stdout)" {
+            # powershell.exe (5.1) writes stdout through the active console code page (e.g.
+            # CP1252). Node.js reads it as UTF-8 — any non-ASCII char (e.g. ó) arrives as
+            # U+FFFD. Setting [Console]::OutputEncoding = UTF8 early ensures all Write-Output
+            # and ConvertTo-Json output is emitted as valid UTF-8.
+            $source = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
+            $source | Should -Match '\[Console\]::OutputEncoding\s*=.*UTF8' `
+                -Because "stdout must be UTF-8 so non-ASCII VBA module names round-trip correctly through list_objects JSON"
+        }
+
+        It "assigns newComponent.Name = ModuleName in BOTH the CopyObject branch and the Add branch (guards against CopyObject non-ASCII mangling)" {
+            # DoCmd.CopyObject is not Unicode-safe: it mangles non-ASCII chars in the new object
+            # name (e.g. Módulo1 -> Mód×lo1). The fix is to force VBComponent.Name via COM
+            # *inside* the CopyObject branch — the same Unicode-safe setter used by the VBE F4
+            # Properties pane. Without this, delete_module + import_modules re-creates the
+            # component with the same mojibake name every time.
+            $assignments = [regex]::Matches(
+                $script:NewVbFnText,
+                [regex]::Escape('$newComponent.Name = $ModuleName')
+            )
+            $assignments.Count | Should -BeGreaterOrEqual 2 `
+                -Because "both the CopyObject branch and the VBComponents.Add branch must set .Name via the Unicode-safe COM property; a single assignment only in the else branch leaves the CopyObject path uncovered"
+        }
+    }
+
     Context "COM cleanup function definitions" {
         BeforeAll {
             # Parse the AST to verify function definitions without executing the script

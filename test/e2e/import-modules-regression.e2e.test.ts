@@ -520,3 +520,138 @@ describe.skipIf(!canRunE2e)(
     }, 90_000);
   },
 );
+
+// ----- Non-ASCII module name roundtrip (CopyObject Unicode-safe fix) -----
+// Root cause: DoCmd.CopyObject mangles non-ASCII chars in the new object name (e.g. Módulo1 →
+// Mód×lo1). The fix forces VBComponent.Name via the COM property setter after CopyObject. These
+// tests verify the full create and delete+re-import paths against a temporary fixture workspace.
+const nonAsciiWorkspace = join(
+  tmpdir(),
+  `dysflow-nonascii-e2e-${process.pid}-${Date.now()}`,
+);
+const nonAsciiModuleName = "TestMódulo"; // TestMódulo — ó = U+00F3
+const nonAsciiProjectId = "dysflow-nonascii-e2e";
+
+function setupNonAsciiWorkspace(): void {
+  mkdirSync(join(nonAsciiWorkspace, ".dysflow"), { recursive: true });
+  mkdirSync(join(nonAsciiWorkspace, "src", "modules"), { recursive: true });
+  cpSync(fixtureFront, join(nonAsciiWorkspace, "NoConformidades.accdb"));
+  cpSync(fixtureBackend, join(nonAsciiWorkspace, "NoConformidades_Datos.accdb"));
+  writeFileSync(
+    join(nonAsciiWorkspace, ".dysflow", "project.json"),
+    `${JSON.stringify(
+      {
+        id: nonAsciiProjectId,
+        accessPath: "NoConformidades.accdb",
+        backendPath: "NoConformidades_Datos.accdb",
+        destinationRoot: "src",
+        allowWrites: true,
+        timeoutMs: 120_000,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  // Module with a non-ASCII VBA name — UTF-8 file, ó stored as C3 B3.
+  // This is the exact encoding pattern that triggered the CopyObject mojibake.
+  const content = [
+    `Attribute VB_Name = "${nonAsciiModuleName}"`,
+    "Option Compare Database",
+    "Option Explicit",
+    "",
+    "Public Function SiempreCinco() As Long",
+    "    SiempreCinco = 5",
+    "End Function",
+    "",
+  ].join("\r\n");
+  writeFileSync(
+    join(nonAsciiWorkspace, "src", "modules", `${nonAsciiModuleName}.bas`),
+    content,
+    "utf8",
+  );
+}
+
+describe.skipIf(!canRunE2e)(
+  "import_modules: non-ASCII module name roundtrip (CopyObject Unicode-safe fix)",
+  () => {
+    beforeAll(() => {
+      setupNonAsciiWorkspace();
+    });
+    afterAll(() => {
+      try {
+        rmSync(nonAsciiWorkspace, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    });
+
+    it(
+      "imports a new non-ASCII module without mangling VBComponent.Name",
+      async () => {
+        // The module does not exist in the fixture → goes through New-VbComponentFromCodeFile
+        // → the CopyObject branch → the Unicode-safe .Name fix must apply.
+        const r = await callMcp(
+          "import_modules",
+          {
+            projectId: nonAsciiProjectId,
+            moduleNames: [nonAsciiModuleName],
+            importMode: "Code",
+            dryRun: false,
+            compile: false,
+          },
+          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+        );
+        assertUniversalContract(r);
+        expect(r.ok).toBe(true);
+
+        const list = await callMcp(
+          "list_objects",
+          { projectId: nonAsciiProjectId, filter: "*" },
+          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+        );
+        assertUniversalContract(list);
+        // Exact Unicode match — no mojibake variant (×, ?, Ã, etc.)
+        expect(list.text).toContain(nonAsciiModuleName);
+        expect(list.text).not.toMatch(/TestM[^ó]dulo/);
+      },
+      120_000,
+    );
+
+    it(
+      "delete + re-import preserves the non-ASCII module name",
+      async () => {
+        const del = await callMcp(
+          "delete_module",
+          { projectId: nonAsciiProjectId, moduleName: nonAsciiModuleName },
+          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+        );
+        assertUniversalContract(del);
+
+        const reimport = await callMcp(
+          "import_modules",
+          {
+            projectId: nonAsciiProjectId,
+            moduleNames: [nonAsciiModuleName],
+            importMode: "Code",
+            dryRun: false,
+            compile: false,
+          },
+          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+        );
+        assertUniversalContract(reimport);
+        expect(reimport.ok).toBe(true);
+
+        const list = await callMcp(
+          "list_objects",
+          { projectId: nonAsciiProjectId, filter: "*" },
+          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+        );
+        assertUniversalContract(list);
+        expect(list.text).toContain(nonAsciiModuleName);
+        expect(list.text).not.toMatch(/TestM[^ó]dulo/);
+      },
+      120_000,
+    );
+  },
+);
