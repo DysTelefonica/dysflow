@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.5.2] - 2026-06-23
+
+### Added
+
+- **`compile: true` support in `import_modules` and `import_all`**: the `compile` parameter was already present in the JSON schema but was silently ignored. It now triggers `acCmdCompileAndSaveAllModules` (via `Action: "Compile"`) after a successful import, saving all modules in the Access VBA project. Compile errors are propagated with full context (`error`, `component`, `line`) and surface as a failed result; a successful compile merges `compileResult` into the import response. Compile is skipped on dry-run and on import failure.
+
 ## [v1.5.1] - 2026-06-23
 
 ### Fixed

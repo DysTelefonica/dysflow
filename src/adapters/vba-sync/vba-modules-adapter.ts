@@ -32,6 +32,12 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   tmpdir: () => tmpdir(),
 };
 
+/**
+ * Compile mapping — used when compile:true is requested after a successful import.
+ * Maps to Action: "Compile" with JSON output enabled (same as compile_vba tool).
+ */
+const COMPILE_MAPPING: DirectMapping = mapping("Compile", true);
+
 const MODULE_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
   export_all: mapping("Export", false, (input) => {
@@ -292,7 +298,29 @@ export class VbaModulesAdapter {
       return this.exportAllWithPrune(effectiveParams);
     }
 
-    return this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+    const importResult = await this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+    if (!importResult.ok) return importResult;
+
+    // If compile:true is requested, run acCmdCompileAndSaveAllModules after a successful import.
+    // Skip compile on dry-run (already handled above), on import failure, or when compile is falsy.
+    if (
+      (toolName === "import_modules" || toolName === "import_all") &&
+      truthy(params.compile)
+    ) {
+      const compileResult = await this.orchestrator.executeMappedTool(
+        "compile_vba",
+        params,
+        COMPILE_MAPPING,
+      );
+      if (!compileResult.ok) return compileResult;
+      // Merge compileResult into the import result data so callers can inspect it.
+      return {
+        ...importResult,
+        data: { ...(importResult.data as Record<string, unknown>), compileResult: compileResult.data },
+      };
+    }
+
+    return importResult;
   }
 
   /**

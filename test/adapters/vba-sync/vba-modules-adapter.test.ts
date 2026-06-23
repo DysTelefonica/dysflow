@@ -537,6 +537,206 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
+  it("import_modules with compile:true calls compile after successful import", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-compile-success-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "compile-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "Import") {
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        // Compile action
+        return {
+          exitCode: 0,
+          stdout:
+            'DYSFLOW_RESULT {"ok":true,"phase":"compile","error":null,"component":null,"line":null}',
+          stderr: "",
+          durationMs: 2,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Entorno"],
+      compile: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import+compile success");
+    expect(actions).toEqual(["Import", "Compile"]);
+    expect(result.data).toMatchObject({
+      operation: "import_modules",
+      result: { ok: true },
+      compileResult: { ok: true, phase: "compile" },
+    });
+  });
+
+  it("import_modules with compile:true propagates compile failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-compile-fail-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "compile-fail-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "Import") {
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        // Compile fails: PowerShell exits non-zero and returns a structured error
+        return {
+          exitCode: 1,
+          stdout:
+            'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_COMPILE_ERROR","message":"type mismatch"},"phase":"compile","component":"Form_Foo","line":42}',
+          stderr: "",
+          durationMs: 3,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Entorno"],
+      compile: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected compile failure");
+    expect(actions).toEqual(["Import", "Compile"]);
+    expect(result.error.code).toBe("VBA_COMPILE_ERROR");
+  });
+
+  it("import_modules with compile:false (default) does NOT call compile", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-no-compile-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "no-compile-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Entorno"],
+      compile: false,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import success");
+    expect(actions).toEqual(["Import"]);
+    expect(result.data).not.toHaveProperty("compileResult");
+  });
+
+  it("import_all with compile:true calls compile after successful import", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-all-compile-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await mkdir(join(root, "src", "modules"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(root, "src", "modules", "Entorno.bas"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "import-all-compile",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "Import") {
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        return {
+          exitCode: 0,
+          stdout:
+            'DYSFLOW_RESULT {"ok":true,"phase":"compile","error":null,"component":null,"line":null}',
+          stderr: "",
+          durationMs: 2,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", {
+      compile: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import_all+compile success");
+    expect(actions).toEqual(["Import", "Compile"]);
+    expect(result.data).toMatchObject({
+      operation: "import_all",
+      compileResult: { ok: true, phase: "compile" },
+    });
+  });
+
   it("maps list/exists tools with JSON output enabled", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
