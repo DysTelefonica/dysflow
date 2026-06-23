@@ -136,7 +136,11 @@ export const SCHEMA_PROPS = {
     description:
       "JSON encoded argument array. Non-arrays will be wrapped in a single-element array [value].",
   } as JsonSchemaProperty,
-  compile: { type: "boolean", description: "Compile before running." } as JsonSchemaProperty,
+  compile: {
+    type: "boolean",
+    description:
+      "Trigger a VBA project compile+save (acCmdCompileAndSaveAllModules). For test_vba: runs before the test. For import_modules/import_all: runs after a successful import. Compile errors are propagated with component and line context.",
+  } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: {
     type: "string",
