@@ -806,6 +806,17 @@ function Resolve-CompactPassword {
   return $AccessPassword
 }
 
+# Removes a leftover compaction target (pure I/O). DAO CompactDatabase throws if the target
+# already exists; a run killed between compaction and the final Move-Item leaves a stale
+# "<base>.compacted" file that would make every future compact_repair fail. Kept in sync with
+# scripts/tests/compact-repair-target-backup.Tests.ps1.
+function Clear-CompactTarget {
+  param([string]$TargetPath)
+  if (Test-Path -LiteralPath $TargetPath) {
+    Remove-Item -LiteralPath $TargetPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Compact-RepairDatabase {
   param($Payload, [string]$AccessDbPath)
   $plan = Get-CompactRepairPlan -Payload $Payload -AccessDbPath $AccessDbPath
@@ -837,14 +848,27 @@ function Compact-RepairDatabase {
     $compactPassword = Resolve-CompactPassword -SourceFull $sourceFull -AccessDbPath $AccessDbPath -AccessPassword $AccessPassword -BackendPassword $BackendPassword
   }
 
+  $backupFirst = ($null -ne $Payload.backupFirst) -and [bool]$Payload.backupFirst
+
   if ($dryRun) {
     return [ordered]@{
       dryRun = $true
       sourcePath = $sourceFull
       targetPath = $targetPath
+      backupFirst = $backupFirst
       wouldReplaceSource = $true
     }
   }
+
+  # Optional safety backup of the source before the (destructive) compaction.
+  $backupPath = $null
+  if ($backupFirst) {
+    $backupPath = Backup-AccessFile -Path $sourceFull
+  }
+
+  # DAO CompactDatabase fails if the target already exists; clear any leftover from a prior
+  # aborted run so compaction is not blocked indefinitely.
+  Clear-CompactTarget -TargetPath $targetPath
 
   $dbEngine = New-DaoDbEngine
   try {
@@ -860,6 +884,7 @@ function Compact-RepairDatabase {
       dryRun = $false
       sourcePath = $sourceFull
       targetPath = $targetPath
+      backupPath = $backupPath
       compacted = $true
     }
   } finally {

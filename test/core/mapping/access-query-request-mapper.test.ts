@@ -232,6 +232,18 @@ describe("access-query-request-mapper", () => {
       expect(request.timeoutMs).toBe(1234);
     });
 
+    it("forwards backupFirst so compact_repair can back up before compacting", () => {
+      const on = buildMaintenanceRequest(
+        "compact_repair",
+        "write",
+        { backupFirst: true },
+        () => undefined,
+      );
+      expect(on.backupFirst).toBe(true);
+      const off = buildMaintenanceRequest("compact_repair", "write", {}, () => undefined);
+      expect(off.backupFirst).toBeUndefined();
+    });
+
     it("resolves backendPassword from explicit value, then password alias", () => {
       expect(
         buildMaintenanceRequest("link_tables", "write", { backendPassword: "x" }, () => undefined)

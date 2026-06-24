@@ -192,6 +192,8 @@ export type AccessQueryRequest = {
   definition?: string;
   rows?: readonly Record<string, unknown>[];
   dryRun?: boolean;
+  /** compact_repair: back up the database (Backup-AccessFile) before compacting. */
+  backupFirst?: boolean;
   allowTables?: readonly string[];
   denyTables?: readonly string[];
   maps?: readonly { from: string; to: string }[];

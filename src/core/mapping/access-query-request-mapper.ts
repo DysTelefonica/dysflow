@@ -231,6 +231,7 @@ export function buildMaintenanceRequest(
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
     dryRun: resolveIsDryRun(input),
+    backupFirst: params.backupFirst === true ? true : undefined,
     maps: Array.isArray(params.maps)
       ? params.maps.filter(
           (m): m is { from: string; to: string } =>
