@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.7.2] - 2026-06-24
+
+### Fixed
+
+- **`compact_repair` can now compact a project's own configured database.** The runner rejected any source whose resolved path equaled `-AccessDbPath` with `compact_repair cannot rewrite the currently open database safely. Use a separate databasePath`, which made compacting the project's own `.accdb` from the MCP impossible — the primary use case. The guard protected against nothing real: `compact_repair` is early-dispatched **before** MSACCESS opens, runs pure DAO `CompactDatabase` into a **distinct** temp target, then atomically `Move-Item`s it over the source while holding the cross-process execution lock (the same operation a direct `Access.Application.CompactRepair` performs safely). The source/target planning was extracted into a pure, Pester-tested `Get-CompactRepairPlan` and the guard removed. DAO still surfaces a real error if the source is genuinely open.
+
+### Changed
+
+- **`compact_repair` MCP schema now accepts `apply`.** `apply: true` previously failed `additionalProperties` validation with `MCP_INPUT_INVALID`; the dispatch write-gate already honored it via `resolveIsDryRun`, so the schema now exposes it alongside `dryRun` for parity with `relink_directory`.
+
 ## [v1.7.1] - 2026-06-24
 
 Internal hardening and a follow-up architecture migration. No change to the MCP/CLI surface
