@@ -225,7 +225,9 @@ await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, dif
 // export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
-const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true });
+// prune does a full project export plus an orphan scan, so it is heavier than a plain
+// export_all — give the operation (and the harness) ample time on large fixtures.
+const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, timeoutMs: 120000 }, { timeoutMs: 120000 });
 try {
   const pruneData = JSON.parse(pruneResult.text ?? "{}");
   const ok = pruneData.prune !== undefined && typeof pruneData.prune.applied === "boolean";
