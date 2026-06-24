@@ -218,20 +218,27 @@ export async function runWithAccessExecutionLock<T>(
 
   await previous;
 
-  const lockPath = getCrossProcessLockPath(key, fileSystem);
-  await fileSystem.mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
-  const releaseCrossProcessLock = await acquireCrossProcessAccessLock(
-    lockPath,
-    timeoutMs,
-    50,
-    fileSystem,
-  );
-  const stopHeartbeat = startLockHeartbeat(lockPath, undefined, fileSystem);
+  // The in-process release (releaseCurrent + map cleanup) MUST run even if acquiring the
+  // cross-process lock throws (e.g. RunnerLockTimeoutError). If it doesn't, `current` stays
+  // pending forever and every later same-key call deadlocks on `await previous`. So the
+  // cross-process acquisition lives INSIDE this try/finally, not before it.
   try {
-    return await work();
+    const lockPath = getCrossProcessLockPath(key, fileSystem);
+    await fileSystem.mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
+    const releaseCrossProcessLock = await acquireCrossProcessAccessLock(
+      lockPath,
+      timeoutMs,
+      50,
+      fileSystem,
+    );
+    const stopHeartbeat = startLockHeartbeat(lockPath, undefined, fileSystem);
+    try {
+      return await work();
+    } finally {
+      clearInterval(stopHeartbeat);
+      await releaseCrossProcessLock();
+    }
   } finally {
-    clearInterval(stopHeartbeat);
-    await releaseCrossProcessLock();
     releaseCurrent();
     if (lockState.get(normalizedKey) === current) lockState.delete(normalizedKey);
   }

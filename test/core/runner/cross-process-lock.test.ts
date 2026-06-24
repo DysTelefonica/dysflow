@@ -168,6 +168,38 @@ describe("cross-process-lock module API", () => {
       expect(result).toBe("second-call-ok");
     });
 
+    it("does NOT poison in-process lockState when cross-process acquire times out", async () => {
+      const lockState = new Map<string, Promise<void>>();
+      const dbPath = join(tmpdir(), "poison-test-deterministic.accdb");
+      const lockPath = getCrossProcessLockPath(dbPath);
+      const key = dbPath.toLowerCase();
+      // Pre-create the lock dir so acquireCrossProcessAccessLock sees EEXIST, enters the
+      // wait loop, and (with a 1ms timeout) throws RunnerLockTimeoutError. That throw
+      // happens BEFORE the try/finally that releases the in-process lock — so a regression
+      // here leaves the lockState entry pending forever and deadlocks every later same-key call.
+      await mkdir(lockPath, { recursive: false });
+      try {
+        await expect(
+          runWithAccessExecutionLock(dbPath, async () => "never", 1, lockState),
+        ).rejects.toThrow(RunnerLockTimeoutError);
+
+        // The in-process lock entry must be cleaned up even though acquire threw.
+        expect(lockState.has(key)).toBe(false);
+      } finally {
+        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      }
+
+      // A subsequent call on the SAME key + SAME lockState must not hang. With the bug
+      // present this awaits a never-resolving promise and the test times out.
+      const result = await runWithAccessExecutionLock(
+        dbPath,
+        async () => "recovered",
+        5_000,
+        lockState,
+      );
+      expect(result).toBe("recovered");
+    });
+
     it("startLockHeartbeat returns a NodeJS.Timeout handle", () => {
       const dbPath = join(tmpdir(), "heartbeat-test-deterministic.accdb");
       const handle = startLockHeartbeat(dbPath);
