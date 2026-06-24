@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.6.1] - 2026-06-24
+
+Internal hardening only — no change to the MCP/CLI surface or runtime behavior.
+
+### Changed
+
+- **Config loading moved behind an injected `ConfigFileSystemPort`.** `src/core/config/dysflow-config.ts` no longer touches the filesystem directly; the node-backed default now lives in `src/adapters/config/dysflow-config-node.ts`, so config resolution is unit-testable with an in-memory fake. A new `core-boundary` architecture test ratchets against any new direct `node:fs`/network import in `src/core` (existing direct-I/O files are an explicit, shrink-only allow-list).
+
+### Fixed
+
+- **Deterministic test runs on Windows.** Real-Access integration tests were included in the parallel unit pool and intermittently threw `spawn UNKNOWN (errno -4094)` when spawning MSACCESS/PowerShell concurrently. They now run single-fork via `vitest.integration.config.ts` (new `test:integration` script); the default `pnpm test` run is Access-free by construction and no longer races on process spawning.
+
 ## [v1.6.0] - 2026-06-24
 
 ### Changed
