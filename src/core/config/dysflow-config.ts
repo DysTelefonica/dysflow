@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { access } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
   createDysflowError,
@@ -7,13 +5,23 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import {
-  isAbsolutePath,
-  REDACTED_SECRET,
-  readJsonFileAsync,
-  readJsonFileSync,
-  stringValue,
-} from "../utils/index.js";
+import { isAbsolutePath, REDACTED_SECRET, stringValue } from "../utils/index.js";
+
+// ---------------------------------------------------------------------------
+// I/O port — owned by core, implemented by adapters (src/adapters/config).
+//
+// Loading config is "read a JSON file discovered by walking up the directory
+// tree" — filesystem I/O. Per docs/testing/testing-philosophy.md that must sit
+// behind an injected port: core stays unit-testable with an in-memory fake, and
+// the node-backed default lives in the adapter layer (dysflow-config-node.ts).
+// ---------------------------------------------------------------------------
+
+export interface ConfigFileSystemPort {
+  existsSync(path: string): boolean;
+  existsAsync(path: string): Promise<boolean>;
+  readJsonSync<T>(path: string): T;
+  readJsonAsync<T>(path: string): Promise<T>;
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECT_CONFIG_PATH = ".dysflow/project.json";
@@ -138,29 +146,41 @@ export function loadDysflowConfigShared<
   ) as T;
 }
 
-export function loadDysflowConfig(input: DysflowConfigInput = {}): OperationResult<DysflowConfig> {
+export function loadDysflowConfigWith(
+  input: DysflowConfigInput,
+  fileSystem: ConfigFileSystemPort,
+): OperationResult<DysflowConfig> {
   const cwd = resolve(input.cwd ?? process.cwd());
-  const repoConfig = findRepoProjectConfigPath(cwd);
+  const repoConfig = findRepoProjectConfigPath(cwd, fileSystem);
 
   const env = input.env ?? process.env;
   const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 
   return loadDysflowConfigShared(input, repoConfig, (path) =>
-    loadProjectConfigFromPath(path, input, env, cwd, "repo-config", requestedProjectId),
+    loadProjectConfigFromPath(path, input, env, cwd, "repo-config", requestedProjectId, fileSystem),
   );
 }
 
-export async function loadDysflowConfigAsync(
-  input: DysflowConfigInput = {},
+export async function loadDysflowConfigAsyncWith(
+  input: DysflowConfigInput,
+  fileSystem: ConfigFileSystemPort,
 ): Promise<OperationResult<DysflowConfig>> {
   const cwd = resolve(input.cwd ?? process.cwd());
-  const repoConfig = await findRepoProjectConfigPathAsync(cwd);
+  const repoConfig = await findRepoProjectConfigPathAsync(cwd, fileSystem);
 
   const env = input.env ?? process.env;
   const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
 
   return loadDysflowConfigShared(input, repoConfig, (path) =>
-    loadProjectConfigFromPathAsync(path, input, env, cwd, "repo-config", requestedProjectId),
+    loadProjectConfigFromPathAsync(
+      path,
+      input,
+      env,
+      cwd,
+      "repo-config",
+      requestedProjectId,
+      fileSystem,
+    ),
   );
 }
 
@@ -312,10 +332,11 @@ function loadProjectConfigFromPath(
   env: Record<string, string | undefined>,
   cwd: string,
   configSource: DysflowConfigSource,
-  projectId?: string,
+  projectId: string | undefined,
+  fileSystem: ConfigFileSystemPort,
 ): OperationResult<DysflowConfig> {
   const resolvedPath = resolvePathMaybeRelative(configPath, cwd);
-  if (!existsSync(resolvedPath)) {
+  if (!fileSystem.existsSync(resolvedPath)) {
     return failureResult(
       createDysflowError(
         "CONFIG_PROJECT_FILE_NOT_FOUND",
@@ -326,7 +347,7 @@ function loadProjectConfigFromPath(
 
   let raw: DysflowProjectConfig;
   try {
-    raw = readJsonFileSync<DysflowProjectConfig>(resolvedPath);
+    raw = fileSystem.readJsonSync<DysflowProjectConfig>(resolvedPath);
   } catch (err) {
     return failureResult(
       createDysflowError(
@@ -345,10 +366,11 @@ async function loadProjectConfigFromPathAsync(
   env: Record<string, string | undefined>,
   cwd: string,
   configSource: DysflowConfigSource,
-  projectId?: string,
+  projectId: string | undefined,
+  fileSystem: ConfigFileSystemPort,
 ): Promise<OperationResult<DysflowConfig>> {
   const resolvedPath = resolvePathMaybeRelative(configPath, cwd);
-  if (!(await pathExists(resolvedPath))) {
+  if (!(await fileSystem.existsAsync(resolvedPath))) {
     return failureResult(
       createDysflowError(
         "CONFIG_PROJECT_FILE_NOT_FOUND",
@@ -359,7 +381,7 @@ async function loadProjectConfigFromPathAsync(
 
   let raw: DysflowProjectConfig;
   try {
-    raw = await readJsonFileAsync<DysflowProjectConfig>(resolvedPath);
+    raw = await fileSystem.readJsonAsync<DysflowProjectConfig>(resolvedPath);
   } catch (err) {
     return failureResult(
       createDysflowError(
@@ -434,6 +456,7 @@ function resolvePathMaybeRelative(value: string, cwd: string): string {
 
 async function findRepoProjectConfigPathAsync(
   cwd: string,
+  fileSystem: ConfigFileSystemPort,
 ): Promise<
   | { found: "none" }
   | { found: "compat" | "standard"; path: string }
@@ -452,8 +475,8 @@ async function findRepoProjectConfigPathAsync(
     visited.push(dir);
     const standard = resolve(dir, DEFAULT_PROJECT_CONFIG_PATH);
     const compat = resolve(dir, OLD_PROJECT_CONFIG_PATH);
-    const standardExists = await pathExists(standard);
-    const compatExists = await pathExists(compat);
+    const standardExists = await fileSystem.existsAsync(standard);
+    const compatExists = await fileSystem.existsAsync(compat);
 
     if (standardExists && compatExists) {
       return { found: "ambiguous", paths: [standard, compat] };
@@ -472,17 +495,9 @@ async function findRepoProjectConfigPathAsync(
   }
 }
 
-async function pathExists(candidate: string): Promise<boolean> {
-  try {
-    await access(candidate);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function findRepoProjectConfigPath(
   cwd: string,
+  fileSystem: ConfigFileSystemPort,
 ):
   | { found: "none" }
   | { found: "compat" | "standard"; path: string }
@@ -500,8 +515,8 @@ function findRepoProjectConfigPath(
     visited.push(dir);
     const standard = resolve(dir, DEFAULT_PROJECT_CONFIG_PATH);
     const compat = resolve(dir, OLD_PROJECT_CONFIG_PATH);
-    const standardExists = existsSync(standard);
-    const compatExists = existsSync(compat);
+    const standardExists = fileSystem.existsSync(standard);
+    const compatExists = fileSystem.existsSync(compat);
 
     if (standardExists && compatExists) {
       return { found: "ambiguous", paths: [standard, compat] };

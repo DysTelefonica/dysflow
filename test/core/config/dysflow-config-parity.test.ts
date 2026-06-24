@@ -19,8 +19,8 @@ import { describe, expect, it } from "vitest";
 import {
   loadDysflowConfig,
   loadDysflowConfigAsync,
-  loadProjectConfigCore,
-} from "../../../src/core/config/dysflow-config";
+} from "../../../src/adapters/config/dysflow-config-node";
+import { loadProjectConfigCore } from "../../../src/core/config/dysflow-config";
 
 // ---------------------------------------------------------------------------
 // Helpers

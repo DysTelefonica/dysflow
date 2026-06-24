@@ -1,4 +1,3 @@
-import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import { createDysflowError, failureResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import {
@@ -9,6 +8,7 @@ import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
+import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
   createWindowsAccessOperationPreflightCleanup,

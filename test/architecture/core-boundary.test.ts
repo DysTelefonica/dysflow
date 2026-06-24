@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
 import { failureResult, successResult } from "../../src/core/contracts/index";
@@ -99,5 +99,56 @@ describe("MCP/core architecture boundary", () => {
     });
 
     expect(vbaSyncRequests).toEqual([{ toolName: "export_all", input: {} }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// I/O port boundary
+//
+// docs/testing/testing-philosophy.md mandates "test at the ports": src/core may
+// only reach the filesystem/network through an INJECTED port, never by importing
+// node:fs / node:net (etc.) directly. The list below is the GRANDFATHERED debt
+// that predates this guard.
+//
+// This is a RATCHET, not a freeze:
+//   - a NEW core file importing an I/O builtin fails the suite (debt must not grow)
+//   - migrating a listed file to a port but forgetting to delete its entry here
+//     ALSO fails (the debt list must not go stale)
+//
+// The ONLY legal edit to KNOWN_DIRECT_IO_DEBT is REMOVAL after a real migration.
+// Network builtins are absent on purpose: none exist in core today, so any new
+// one fails immediately.
+// ---------------------------------------------------------------------------
+
+const IO_BUILTIN_IMPORT =
+  /\b(?:from|import|require)\b[^"'\n]*["']node:(?:fs(?:\/promises)?|net|http|https|http2|dgram|tls)["']/;
+
+const KNOWN_DIRECT_IO_DEBT: ReadonlySet<string> = new Set([
+  "src/core/operations/access-operation-registry.ts",
+  "src/core/runner/access-runner.ts",
+  "src/core/runner/cross-process-lock.ts",
+  "src/core/services/vba-form-service.ts",
+  "src/core/utils/index.ts",
+  "src/core/utils/package-info.ts",
+]);
+
+function toPosixRelative(file: string): string {
+  return relative(process.cwd(), file).split(sep).join("/");
+}
+
+describe("core I/O port boundary", () => {
+  const ioImporters = collectTypeScriptFiles(coreRoot)
+    .filter((file) => !file.endsWith(".test.ts"))
+    .filter((file) => IO_BUILTIN_IMPORT.test(readFileSync(file, "utf8")))
+    .map(toPosixRelative);
+
+  it("admits no new direct filesystem/network imports in src/core", () => {
+    const unexpected = ioImporters.filter((file) => !KNOWN_DIRECT_IO_DEBT.has(file));
+    expect(unexpected).toEqual([]);
+  });
+
+  it("keeps the I/O debt list honest — migrated files must be removed from it", () => {
+    const stale = [...KNOWN_DIRECT_IO_DEBT].filter((file) => !ioImporters.includes(file));
+    expect(stale).toEqual([]);
   });
 });

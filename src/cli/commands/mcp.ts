@@ -1,5 +1,5 @@
+import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
 import { startMcpStdioAdapter } from "../../adapters/mcp/stdio.js";
-import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 export const MCP_USAGE = "Usage: dysflow mcp [--enable-writes]";

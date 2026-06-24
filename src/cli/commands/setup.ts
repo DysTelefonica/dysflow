@@ -1,10 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import {
-  type DysflowConfig,
-  loadDysflowConfigAsync,
-  redactDysflowConfig,
-} from "../../core/config/dysflow-config.js";
+import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
+import { type DysflowConfig, redactDysflowConfig } from "../../core/config/dysflow-config.js";
 import { isAbsolutePath } from "../../core/utils/index.js";
 import { parseNamedArgs } from "./install-utils.js";
 import type { CliCommandContext, CliResult } from "./types.js";

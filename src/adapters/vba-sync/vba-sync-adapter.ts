@@ -25,6 +25,7 @@ import {
 import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
+import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
@@ -417,6 +418,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       accessPath: this.accessPath,
       destinationRoot: this.destinationRoot,
       timeoutMs: this.timeoutMs,
+      fileSystem: nodeConfigFileSystem,
     });
   }
 

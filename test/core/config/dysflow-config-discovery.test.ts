@@ -15,7 +15,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { findRepoProjectConfigPathForTesting } from "../../../src/core/config/dysflow-config.js";
+import { nodeConfigFileSystem } from "../../../src/adapters/config/dysflow-config-node.js";
+import { findRepoProjectConfigPathForTesting as findRepoProjectConfigPathRaw } from "../../../src/core/config/dysflow-config.js";
+
+// The discovery helper now takes an injected ConfigFileSystemPort. These tests
+// create real .dysflow/project.json files in temp workspaces, so they bind the
+// node-backed port here and keep the existing single-arg call sites unchanged.
+const findRepoProjectConfigPathForTesting = (cwd: string) =>
+  findRepoProjectConfigPathRaw(cwd, nodeConfigFileSystem);
 
 let workspace: string;
 let outer: string;

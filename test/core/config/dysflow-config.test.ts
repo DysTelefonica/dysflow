@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   loadDysflowConfig,
   loadDysflowConfigAsync,
+} from "../../../src/adapters/config/dysflow-config-node";
+import {
   loadDysflowConfigShared,
   loadProjectConfigCore,
   redactDysflowConfig,

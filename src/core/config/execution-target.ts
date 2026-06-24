@@ -1,6 +1,10 @@
 import { type OperationResult, successResult } from "../contracts/index.js";
 import { stringValue } from "../utils/index.js";
-import { type DysflowConfig, loadDysflowConfigAsync } from "./dysflow-config.js";
+import {
+  type ConfigFileSystemPort,
+  type DysflowConfig,
+  loadDysflowConfigAsyncWith,
+} from "./dysflow-config.js";
 
 export type ExecutionTargetContext = {
   env: Record<string, string | undefined>;
@@ -8,6 +12,7 @@ export type ExecutionTargetContext = {
   accessPath?: string;
   destinationRoot?: string;
   timeoutMs?: number;
+  fileSystem: ConfigFileSystemPort;
 };
 
 export type ExecutionTarget = Pick<
@@ -36,17 +41,20 @@ export async function resolveExecutionTarget(
     stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
   const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
   if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
-    const config = await loadDysflowConfigAsync({
-      env: context.env,
-      cwd: context.cwd,
-      accessDbPath: stringValue(params.accessPath),
-      backendPath: stringValue(params.backendPath),
-      destinationRoot: stringValue(params.destinationRoot),
-      projectRoot: stringValue(params.projectRoot),
-      projectId: stringValue(params.projectId),
-      contextId: stringValue(params.contextId),
-      timeoutMs: explicitTimeoutMs,
-    });
+    const config = await loadDysflowConfigAsyncWith(
+      {
+        env: context.env,
+        cwd: context.cwd,
+        accessDbPath: stringValue(params.accessPath),
+        backendPath: stringValue(params.backendPath),
+        destinationRoot: stringValue(params.destinationRoot),
+        projectRoot: stringValue(params.projectRoot),
+        projectId: stringValue(params.projectId),
+        contextId: stringValue(params.contextId),
+        timeoutMs: explicitTimeoutMs,
+      },
+      context.fileSystem,
+    );
     if (!config.ok) return config;
     return successResult({
       ...config.data,
@@ -60,11 +68,14 @@ export async function resolveExecutionTarget(
   }
 
   if (context.accessPath === undefined) {
-    const repoConfig = await loadDysflowConfigAsync({
-      env: context.env,
-      cwd: context.cwd,
-      timeoutMs: explicitTimeoutMs,
-    });
+    const repoConfig = await loadDysflowConfigAsyncWith(
+      {
+        env: context.env,
+        cwd: context.cwd,
+        timeoutMs: explicitTimeoutMs,
+      },
+      context.fileSystem,
+    );
     if (repoConfig.ok) {
       return successResult({
         ...repoConfig.data,

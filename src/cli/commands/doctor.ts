@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
-import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";

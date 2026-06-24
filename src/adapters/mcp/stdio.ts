@@ -9,7 +9,7 @@ import {
   LATEST_PROTOCOL_VERSION,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { type DysflowConfig, loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
+import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import { type DysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import { AccessOperationCleanupService } from "../../core/operations/access-operation-cleanup.js";
 import {
@@ -24,6 +24,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
+import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
   createWindowsAccessOperationPreflightCleanup,

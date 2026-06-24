@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { loadDysflowConfigAsync } from "../../core/config/dysflow-config.js";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -32,6 +31,7 @@ import {
   type JsonObjectSchema,
   validateInput,
 } from "../../shared/validation/index.js";
+import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { createHttpServices } from "./http-services-factory.js";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
