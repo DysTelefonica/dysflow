@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  assertSafeArchiveEntries,
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
   validateReleaseTagName,
@@ -55,6 +56,50 @@ describe("validateReleaseTagName", () => {
 
   it("throws for pre-release tags", () => {
     expect(() => validateReleaseTagName("v1.2.3-beta")).toThrow("Invalid Dysflow release tag");
+  });
+});
+
+describe("assertSafeArchiveEntries", () => {
+  it("accepts a listing of normal relative entries", () => {
+    const listing = ["source/", "source/package.json", "source/dist/cli/index.js", "source/scripts/dysflow-access-runner.ps1"].join("\n");
+    expect(() => assertSafeArchiveEntries(listing)).not.toThrow();
+  });
+
+  it("ignores blank and whitespace-only lines", () => {
+    const listing = "\nsource/package.json\n  \n\tsource/dist/index.js\n";
+    expect(() => assertSafeArchiveEntries(listing)).not.toThrow();
+  });
+
+  it("accepts filenames that merely contain dots (not a .. segment)", () => {
+    expect(() => assertSafeArchiveEntries("source/foo..bar.js\nsource/...rc")).not.toThrow();
+  });
+
+  it("rejects a parent-traversal segment", () => {
+    expect(() => assertSafeArchiveEntries("source/../../etc/cron.d/evil")).toThrow(/unsafe/i);
+  });
+
+  it("rejects a leading parent-traversal segment", () => {
+    expect(() => assertSafeArchiveEntries("../outside.js")).toThrow(/unsafe/i);
+  });
+
+  it("rejects an absolute POSIX path", () => {
+    expect(() => assertSafeArchiveEntries("/etc/passwd")).toThrow(/unsafe/i);
+  });
+
+  it("rejects a Windows drive-letter absolute path", () => {
+    expect(() => assertSafeArchiveEntries("C:/Windows/System32/evil.dll")).toThrow(/unsafe/i);
+  });
+
+  it("rejects a Windows backslash drive-letter absolute path", () => {
+    expect(() => assertSafeArchiveEntries("C:\\Windows\\System32\\evil.dll")).toThrow(/unsafe/i);
+  });
+
+  it("rejects a UNC path", () => {
+    expect(() => assertSafeArchiveEntries("//server/share/evil")).toThrow(/unsafe/i);
+  });
+
+  it("rejects a backslash parent-traversal segment", () => {
+    expect(() => assertSafeArchiveEntries("source\\..\\..\\evil")).toThrow(/unsafe/i);
   });
 });
 
@@ -248,6 +293,53 @@ describe("createGitHubReleaseUpdateProvider — preparePackage", () => {
       expect(archiveCall).toContain("v2.0.0");
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("refuses to extract when the archive listing contains a traversal entry", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    execFileMock.mockClear();
+    // `tar -tzf` returns a malicious listing; everything else returns empty.
+    execFileMock.mockImplementation(
+      (
+        _file: unknown,
+        args: unknown,
+        options: unknown,
+        callback: (...a: unknown[]) => void,
+      ) => {
+        const cb = typeof options === "function" ? options : callback;
+        const argList = Array.isArray(args) ? (args as string[]) : [];
+        const stdout = argList.includes("-tzf") ? "source/package.json\n../../evil.sh\n" : "";
+        if (cb) queueMicrotask(() => cb(null, { stdout, stderr: "" }));
+      },
+    );
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }, { skipChecksum: true }),
+      ).rejects.toThrow(/unsafe/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+      // Restore the default empty-stdout mock for subsequent tests.
+      execFileMock.mockImplementation(
+        (
+          _file: unknown,
+          _args: unknown,
+          options: unknown,
+          callback: (...a: unknown[]) => void,
+        ) => {
+          const cb = typeof options === "function" ? options : callback;
+          if (cb) queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
+        },
+      );
     }
   });
 

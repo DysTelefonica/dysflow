@@ -44,6 +44,43 @@ export function validateReleaseTagName(tagName: string): string {
   return tagName;
 }
 
+/**
+ * Returns true when an archive entry path would escape the extraction root —
+ * an absolute path (POSIX, Windows drive-letter, or UNC) or any `..` parent
+ * segment. Backslashes are normalized so Windows-style separators are caught
+ * regardless of the tar implementation that produced the listing.
+ */
+function isUnsafeArchiveEntry(entry: string): boolean {
+  const normalized = entry.replace(/\\/g, "/");
+  if (normalized.startsWith("/")) return true; // absolute POSIX path or UNC (//server/...)
+  if (/^[a-zA-Z]:/.test(normalized)) return true; // Windows drive-letter absolute path
+  return normalized.split("/").some((segment) => segment === ".."); // parent traversal
+}
+
+/**
+ * Defense-in-depth against tar path traversal (zip/tar-slip). The release tar.gz
+ * is already SHA-256 verified, but a release published from a compromised account
+ * could carry traversal entries. We validate the `tar -tzf` listing and refuse to
+ * extract if any entry would escape the extraction root, instead of trusting the
+ * system tar to reject it.
+ *
+ * @throws when any entry is an absolute path or contains a `..` segment.
+ */
+export function assertSafeArchiveEntries(listing: string): void {
+  const entries = listing
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  for (const entry of entries) {
+    if (isUnsafeArchiveEntry(entry)) {
+      throw new Error(
+        `Refusing to extract release archive: unsafe path entry "${entry}". ` +
+          "The archive contains an absolute path or a '..' traversal segment.",
+      );
+    }
+  }
+}
+
 export function createGitHubReleaseRequestHeaders(
   env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
@@ -194,7 +231,13 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
         const archivePath = path.join(tempRoot, archiveName);
         await writeFile(archivePath, archiveBuffer);
 
-        // 4. Extract archive
+        // 4. Inspect archive entries and refuse traversal before extracting (zip/tar-slip).
+        const listing = await runCommandOutput("tar", ["-tzf", archivePath], tempRoot, {
+          timeoutMs: 60_000,
+        });
+        assertSafeArchiveEntries(listing);
+
+        // 5. Extract archive
         await mkdir(packageRoot, { recursive: true });
         await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot, {
           timeoutMs: 60_000,
