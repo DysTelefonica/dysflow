@@ -9,7 +9,12 @@ export default defineConfig({
       "test/architecture/**/*.test.ts",
       "test/quality-gates/**/*.test.ts",
       "test/docs/**/*.test.ts",
-      "test/integration/**/*.test.ts",
+      // Real-Access integration tests live in vitest.integration.config.ts so the
+      // default unit run never spawns MSACCESS/PowerShell in parallel — concurrent
+      // process spawning under the fork pool races and throws spawn UNKNOWN
+      // (errno -4094) on Windows. Only the pure file-reading contract test, which
+      // spawns nothing, stays in the fast unit run.
+      "test/integration/dysflow-result-writer-contract.test.ts",
       "test/shared/**/*.test.ts",
       "test/scripts-vba-manager.test.ts",
     ],
