@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.7.4] - 2026-06-24
+
+### Fixed
+
+- **Lock acquisition no longer fails intermittently with "Access is denied" on Windows.** Directory deletion is not synchronous on Windows: a concurrent lock *release* leaves the lock directory in `DELETE_PENDING` state while a handle (or the indexer/antivirus) still touches it, so a competing `mkdir` returns `EACCES` (`ERROR_ACCESS_DENIED`) or `EPERM` instead of `EEXIST`. Both lock acquirers — the cross-process execution lock (`cross-process-lock.ts`) and the operation-registry mutation lock (`access-operation-registry.ts`) — only retried on `EEXIST` and **threw** on `EACCES`/`EPERM`, causing intermittent failures under contention. A shared `isTransientLockContentionError` helper now treats `EEXIST`/`EACCES`/`EPERM` as transient and backs off + retries; stale-lock eviction still runs only for `EEXIST`, and `EACCES`/`EPERM` retries are logged so a genuinely permanent permission error (bounded by the acquire deadline) stays observable.
+
 ## [v1.7.3] - 2026-06-24
 
 ### Fixed
