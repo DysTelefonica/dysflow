@@ -35,7 +35,7 @@ Commands:
 
 ## VBA semantic diff — behavioral contract
 
-`verify_code` / `verify_binary` / `reconcile_binary` run in **semantic mode** by default. The job
+`verify_code` (the single source/binary compare tool) runs in **semantic mode** by default. The job
 is to keep `actionableDifferent` honest: a consuming agent decides what to sync based on it, so
 non-functional noise must NEVER be reported as actionable. Full taxonomy lives in the README
 ([Semantic diff classification](./README.md#semantic-diff-classification)); the core is

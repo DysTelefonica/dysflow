@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.6.0] - 2026-06-24
+
+### Changed
+
+- **BREAKING — the source/binary compare tools collapsed into a single `verify_code`**: `verify_binary`, `reconcile_binary`, and `compare_module` were four MCP tool names over one engine (`compareSourceAgainstBinary`) and have been **removed**. `verify_code` now covers every scope and replaces all of them:
+  - **Whole project** — omit `moduleNames` (old `verify_binary`).
+  - **Subset / single module** — pass `moduleNames` (old `compare_module`). A `moduleNames` filter that matches nothing now returns `MODULE_NOT_FOUND` instead of a misleading empty "all match".
+  - **Reconcile plan** — the result carries a new aggregated, classification-aware `recommendation` (human string) plus `recommendedAction` (`no_action` | `import_to_binary` | `export_to_src` | `manual_merge`), so a consumer reads the sync direction in one shot (old `reconcile_binary`). It still never mutates Access; apply with the explicit `import_*` / `export_*` tools.
+
+  Everything else is unchanged: semantic classification, `summary`, `actionableDifferent` / `nonActionableDifferent`, `hasFunctionalDifferences` / `actionableOk`, per-diff `classification` / `reason` / `recommendedAction`, optional `diffs`, `dysflowVersion`, and `classifierRules`. The visible MCP tool inventory drops from 48 to 45 dispatch names.
+
+  **Migration:** `verify_binary` → `verify_code` (identical args); `compare_module {moduleName}` → `verify_code {moduleNames:[name]}`; `reconcile_binary` → `verify_code`, then read `recommendation` / `recommendedAction`.
+
 ## [v1.5.2] - 2026-06-23
 
 ### Added
