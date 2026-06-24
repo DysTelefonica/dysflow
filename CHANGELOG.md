@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.7.0] - 2026-06-24
+
+Security hardening of the runner lock and the self-update path. No change to the MCP/CLI
+surface; default runtime behavior is unchanged (the signature gate ships inert).
+
+### Fixed
+
+- **Runner lock no longer deadlocks after a cross-process lock timeout.** When acquiring the cross-process file lock threw (e.g. `RunnerLockTimeoutError` under contention), the throw happened before the `try/finally` that releases the in-process serialized lock, so `releaseCurrent()` never ran. The chained promise stayed pending forever and every later same-key operation deadlocked on `await previous`. The cross-process acquisition now lives inside a `try/finally` that always releases the in-process lock and cleans the `lockState` map (`src/core/runner/cross-process-lock.ts`).
+- **Lock heartbeat failures are no longer swallowed silently.** A persistent non-ENOENT `utimes` failure (e.g. `EPERM`) stopped refreshing the lock mtime, letting a concurrent acquirer declare a live lock stale and steal it — breaking mutual exclusion invisibly. Non-ENOENT heartbeat errors are now routed to an observable sink; ENOENT stays benign (the lock was already released).
+
+### Security
+
+- **Tar-slip defense on update extraction.** The release archive listing (`tar -tzf`) is now validated before extraction; any absolute path (POSIX, Windows drive-letter, UNC) or `..` parent segment is rejected (`assertSafeArchiveEntries`), instead of trusting the system `tar` to refuse traversal.
+- **Authenticity gate for SHA256SUMS.** Added fail-closed Ed25519 signature verification over `SHA256SUMS` (`SHA256SUMS.sig`), verified before the hash is matched (`verifyChecksumsSignature`). The trust anchor (`RELEASE_SIGNING_PUBLIC_KEY_PEM`) ships empty, so verification is skipped until the maintainer generates a key, signs releases, and embeds the public key — see [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md) for the enablement steps.
+
 ## [v1.6.1] - 2026-06-24
 
 Internal hardening only — no change to the MCP/CLI surface or runtime behavior.
