@@ -6,7 +6,7 @@
 import { mkdir, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   acquireCrossProcessAccessLock,
   CROSS_PROCESS_LOCK_STALE_MS,
@@ -215,6 +215,68 @@ describe("cross-process-lock module API", () => {
       expect(typeof handle).toBe("object");
       ac.abort();
       clearInterval(handle);
+    });
+  });
+
+  describe("startLockHeartbeat — failure observability", () => {
+    const stubPort = (overrides: Partial<LockFileSystemPort>): LockFileSystemPort => ({
+      mkdir: async () => undefined,
+      rm: async () => {},
+      stat: async () => null,
+      utimes: async () => {},
+      writeFile: async () => {},
+      tmpdir: () => tmpdir(),
+      ...overrides,
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("surfaces a non-ENOENT utimes failure to the error sink", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const errors: unknown[] = [];
+      const fileSystem = stubPort({
+        utimes: async () => {
+          const err: NodeJS.ErrnoException = new Error("operation not permitted");
+          err.code = "EPERM";
+          throw err;
+        },
+      });
+      const handle = startLockHeartbeat("/locks/x.lock", undefined, fileSystem, (error) =>
+        errors.push(error),
+      );
+      try {
+        await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2);
+        await vi.waitFor(() => expect(errors.length).toBeGreaterThan(0));
+      } finally {
+        clearInterval(handle);
+      }
+      expect((errors[0] as NodeJS.ErrnoException).code).toBe("EPERM");
+    });
+
+    it("does NOT surface an ENOENT utimes failure (lock already released)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const errors: unknown[] = [];
+      const fileSystem = stubPort({
+        utimes: async () => {
+          const err: NodeJS.ErrnoException = new Error("no such file");
+          err.code = "ENOENT";
+          throw err;
+        },
+      });
+      const handle = startLockHeartbeat("/locks/x.lock", undefined, fileSystem, (error) =>
+        errors.push(error),
+      );
+      try {
+        await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2);
+        // Flush any pending microtasks from the fire-and-forget catch handler.
+        await Promise.resolve();
+        await Promise.resolve();
+      } finally {
+        clearInterval(handle);
+      }
+      expect(errors).toHaveLength(0);
     });
   });
 

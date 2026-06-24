@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir as nodeTmpdir } from "node:os";
 import { join } from "node:path";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
 
@@ -152,12 +153,19 @@ export function startLockHeartbeat(
   lockPath: string,
   stopSignal?: AbortSignal,
   fileSystem: LockFileSystemPort = defaultFileSystem,
+  onHeartbeatError: (error: unknown) => void = (error) =>
+    logSwallowedIoError("cross-process-lock:heartbeat", error),
 ): NodeJS.Timeout {
   const intervalMs = CROSS_PROCESS_LOCK_STALE_MS / 2;
   const handle = setInterval(() => {
     const now = new Date();
-    fileSystem.utimes(lockPath, now, now).catch(() => {
-      // Swallow — if the dir is gone the lock has already been released.
+    fileSystem.utimes(lockPath, now, now).catch((error: unknown) => {
+      // ENOENT means the lock dir is gone — the lock has already been released, which is the
+      // normal teardown race, not a failure. Any other error means the heartbeat could not
+      // refresh the mtime; left unobserved, a persistent failure lets a concurrent acquirer
+      // declare this live lock stale and steal it, breaking mutual exclusion. Surface it.
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return;
+      onHeartbeatError(error);
     });
   }, intervalMs);
   // Allow the Node.js event loop to exit even if the interval is somehow not cleared.
