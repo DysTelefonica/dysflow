@@ -13,6 +13,12 @@ jobs:
     permissions:
       contents: write
 
+    # Safe to expose: this is the boolean "is a signing key configured?", not the key
+    # itself. Used to gate the signing step. The actual secret is only injected into the
+    # signing step's own env, never into build/install steps.
+    env:
+      HAS_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -41,12 +47,38 @@ jobs:
       - name: Generate checksums
         run: sha256sum dysflow-*.tar.gz > SHA256SUMS
 
+      # Authenticity: when RELEASE_SIGNING_KEY is configured, sign SHA256SUMS with the
+      # Ed25519 release key and publish a detached base64 signature (SHA256SUMS.sig). The
+      # self-updater verifies it fail-closed against RELEASE_SIGNING_PUBLIC_KEY_PEM. When no
+      # key is configured the step is skipped and the release is checksum-only (unchanged).
+      # See docs/security/update-trust-model.md.
+      - name: Sign checksums (Ed25519)
+        if: ${{ env.HAS_SIGNING_KEY == 'true' }}
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          KEYFILE="$RUNNER_TEMP/release-signing.key"
+          PUBFILE="$RUNNER_TEMP/release-signing.pub"
+          RAWSIG="$RUNNER_TEMP/SHA256SUMS.sig.raw"
+          umask 077
+          printf '%s' "$RELEASE_SIGNING_KEY" > "$KEYFILE"
+          openssl pkeyutl -sign -inkey "$KEYFILE" -rawin -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
+          # Self-verify the produced signature so a broken signing step fails the release
+          # instead of publishing an invalid SHA256SUMS.sig.
+          openssl pkey -in "$KEYFILE" -pubout -out "$PUBFILE"
+          base64 -d SHA256SUMS.sig > "$RAWSIG"
+          openssl pkeyutl -verify -pubin -inkey "$PUBFILE" -rawin -in SHA256SUMS -sigfile "$RAWSIG"
+          rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
+          echo "Signed SHA256SUMS -> SHA256SUMS.sig"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             dysflow-*.tar.gz
             SHA256SUMS
+            SHA256SUMS.sig
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
         env:

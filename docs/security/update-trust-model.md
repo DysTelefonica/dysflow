@@ -45,18 +45,25 @@ detached **Ed25519 signature** over `SHA256SUMS`:
 
 **To enable release signing (maintainer action required):**
 
-1. Generate an Ed25519 keypair, kept offline or as a protected CI secret:
+1. Generate the Ed25519 keypair with the helper script:
    ```
-   openssl genpkey -algorithm ed25519 -out dysflow-release.key
-   openssl pkey -in dysflow-release.key -pubout -out dysflow-release.pub
+   .github/scripts/generate-release-signing-key.sh
    ```
-2. In the release pipeline, sign `SHA256SUMS` and publish `SHA256SUMS.sig`:
+   This writes `dysflow-release.key` (private, keep offline) and `dysflow-release.pub`
+   (public, SPKI PEM), and self-verifies the pair.
+2. Store the private key as the GitHub Actions secret `RELEASE_SIGNING_KEY`:
    ```
-   openssl pkeyutl -sign -inkey dysflow-release.key -rawin -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
+   gh secret set RELEASE_SIGNING_KEY < dysflow-release.key
    ```
-3. Paste the public key (`dysflow-release.pub` contents) into `RELEASE_SIGNING_PUBLIC_KEY_PEM`.
+   The release workflow (`.github/workflows/release.yml`) already has a **Sign checksums
+   (Ed25519)** step that runs only when this secret is present; it signs `SHA256SUMS`,
+   self-verifies the signature, and publishes `SHA256SUMS.sig`.
+3. Paste the contents of `dysflow-release.pub` into `RELEASE_SIGNING_PUBLIC_KEY_PEM`
+   (`src/cli/commands/install/downloader.ts`), commit, and cut a release.
 
-Until step 3 is done the embedded key is empty and the gate is inert by design.
+Until step 3 is done the embedded key is empty and the gate is inert by design. Steps 2 and
+3 must land together for the first signed release: the secret enables signing, the embedded
+public key enables verification. Then delete the local private key copy.
 
 ## Authentication for GitHub API requests
 
