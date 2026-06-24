@@ -785,6 +785,27 @@ function Get-CompactRepairPlan {
   return [ordered]@{ dryRun = $dryRun; sourceFull = $sourceFull; targetPath = $targetPath }
 }
 
+# Selects the password for the database being compacted (pure; no COM). The configured
+# frontend (AccessDbPath) is protected with the ACCESS password; a separate/backend file with
+# the BACKEND password; cross-fallback otherwise. Raw payload passwords are stripped for
+# security (#498), so these env-sourced values are the real source.
+# Kept in sync with scripts/tests/compact-repair-password.Tests.ps1.
+function Resolve-CompactPassword {
+  param(
+    [string]$SourceFull,
+    [string]$AccessDbPath,
+    [string]$AccessPassword,
+    [string]$BackendPassword
+  )
+  $accessFull = if ([string]::IsNullOrWhiteSpace($AccessDbPath)) { "" } else { [System.IO.Path]::GetFullPath($AccessDbPath) }
+  if (-not [string]::IsNullOrWhiteSpace($accessFull) -and $SourceFull -ieq $accessFull) {
+    if (-not [string]::IsNullOrWhiteSpace($AccessPassword)) { return $AccessPassword }
+    return $BackendPassword
+  }
+  if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) { return $BackendPassword }
+  return $AccessPassword
+}
+
 function Compact-RepairDatabase {
   param($Payload, [string]$AccessDbPath)
   $plan = Get-CompactRepairPlan -Payload $Payload -AccessDbPath $AccessDbPath
@@ -809,7 +830,11 @@ function Compact-RepairDatabase {
     $compactPassword = [Environment]::GetEnvironmentVariable($envKey)
   }
   if ([string]::IsNullOrWhiteSpace($compactPassword)) {
-    $compactPassword = $BackendPassword
+    # The configured frontend (AccessDbPath) is protected with the ACCESS password; a separate
+    # or backend file with the BACKEND password. Previously this only tried $BackendPassword,
+    # which failed with "No es una contraseña válida" when compacting the password-protected
+    # frontend (the primary case after the in-place compaction fix).
+    $compactPassword = Resolve-CompactPassword -SourceFull $sourceFull -AccessDbPath $AccessDbPath -AccessPassword $AccessPassword -BackendPassword $BackendPassword
   }
 
   if ($dryRun) {
