@@ -287,6 +287,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       sourcePath: SCHEMA_PROPS.sourcePath,
       backupFirst: SCHEMA_PROPS.backupFirst,
       dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
     },
   },
   relink_directory: {

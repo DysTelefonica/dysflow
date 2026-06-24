@@ -750,7 +750,12 @@ function Remove-LinkTable {
   }
 }
 
-function Compact-RepairDatabase {
+# Resolves the compact_repair source/target paths and dry-run flag (pure; no COM).
+# Source precedence: databasePath > backendPath > AccessDbPath. The target is always a
+# DISTINCT temp file ("<base>.compacted<ext>") next to the source, so the source can be
+# compacted in place via an atomic Move-Item without an exclusive-rewrite race.
+# Kept in sync with scripts/tests/compact-repair-plan.Tests.ps1.
+function Get-CompactRepairPlan {
   param($Payload, [string]$AccessDbPath)
   $dryRun = $true
   if ($null -ne $Payload.dryRun) {
@@ -767,11 +772,6 @@ function Compact-RepairDatabase {
     throw "databasePath or backendPath is required for compact_repair."
   }
   $sourceFull = [System.IO.Path]::GetFullPath($sourcePath)
-  $accessFull = [System.IO.Path]::GetFullPath($AccessDbPath)
-  if (-not $dryRun -and $sourceFull -ieq $accessFull) {
-    throw "compact_repair cannot rewrite the currently open database safely. Use a separate databasePath."
-  }
-
   $targetPath = [string]$Payload.targetPath
   if ([string]::IsNullOrWhiteSpace($targetPath)) {
     $folder = [System.IO.Path]::GetDirectoryName($sourceFull)
@@ -782,6 +782,22 @@ function Compact-RepairDatabase {
     $folder = [System.IO.Path]::GetDirectoryName($sourceFull)
     $targetPath = Resolve-SandboxedPath -RawPath $targetPath -RootPath $folder -Label "targetPath"
   }
+  return [ordered]@{ dryRun = $dryRun; sourceFull = $sourceFull; targetPath = $targetPath }
+}
+
+function Compact-RepairDatabase {
+  param($Payload, [string]$AccessDbPath)
+  $plan = Get-CompactRepairPlan -Payload $Payload -AccessDbPath $AccessDbPath
+  $dryRun = $plan.dryRun
+  $sourceFull = $plan.sourceFull
+  $targetPath = $plan.targetPath
+  # Rewriting the configured database in place is SAFE: compact_repair is early-dispatched
+  # before MSACCESS opens (pure DAO CompactDatabase into the DISTINCT temp target above),
+  # then atomically Move-Item's it over the source while holding the cross-process execution
+  # lock. There is NO pre-emptive sourceFull == AccessDbPath rejection: that guard made
+  # compacting a project's own database impossible (the primary MCP use case) even though a
+  # direct Access.Application.CompactRepair on the same file succeeds. DAO surfaces a real
+  # error only if the source is genuinely open.
 
   # Resolve password: payload explicit > payload passwordEnv > env fallback
   $compactPassword = [string]$Payload.backendPassword
