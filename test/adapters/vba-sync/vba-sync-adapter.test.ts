@@ -837,14 +837,20 @@ describe("VbaSyncAdapter Orchestrator", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("resolveDefaultVbaManagerScriptPath returns default when DYSFLOW_HOME is undefined", () => {
-    expect(resolveDefaultVbaManagerScriptPath({})).toBe("scripts/dysflow-vba-manager.ps1");
+  it("resolveDefaultVbaManagerScriptPath returns an absolute package-root path when DYSFLOW_HOME is undefined", () => {
+    const resolved = resolveDefaultVbaManagerScriptPath({}).replace(/\\/g, "/");
+    // Now cwd-independent: absolute path ending in the bundled script, not the bare relative.
+    expect(resolved.endsWith("scripts/dysflow-vba-manager.ps1")).toBe(true);
+    expect(resolved).not.toBe("scripts/dysflow-vba-manager.ps1");
   });
 
-  it("resolveDefaultVbaManagerScriptPath returns default when DYSFLOW_HOME is whitespace", () => {
-    expect(resolveDefaultVbaManagerScriptPath({ DYSFLOW_HOME: "   " })).toBe(
-      "scripts/dysflow-vba-manager.ps1",
+  it("resolveDefaultVbaManagerScriptPath returns an absolute package-root path when DYSFLOW_HOME is whitespace", () => {
+    const resolved = resolveDefaultVbaManagerScriptPath({ DYSFLOW_HOME: "   " }).replace(
+      /\\/g,
+      "/",
     );
+    expect(resolved.endsWith("scripts/dysflow-vba-manager.ps1")).toBe(true);
+    expect(resolved).not.toBe("scripts/dysflow-vba-manager.ps1");
   });
 
   it("executeMappedTool returns VBA_MANAGER_EXTRA_NOT_ALLOWED for extra keys not in the allowed set", async () => {

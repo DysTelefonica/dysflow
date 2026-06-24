@@ -25,6 +25,7 @@ import {
 import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
+import { findPackageRootNear } from "../../core/utils/package-info.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
@@ -482,7 +483,14 @@ export function resolveDefaultVbaManagerScriptPath(
   if (home !== undefined && home.trim().length > 0) {
     return `${home.replace(/\\$/, "")}/app/scripts/dysflow-vba-manager.ps1`;
   }
-  return "scripts/dysflow-vba-manager.ps1";
+  // No DYSFLOW_HOME (dev / tests): resolve an ABSOLUTE path from the package root so the script
+  // is found regardless of the spawn's working directory. The bare relative default broke when
+  // an operation spawned PowerShell with a project-directory cwd (list_objects E2E:
+  // "scripts/dysflow-vba-manager.ps1 ... no existe").
+  const root = findPackageRootNear(import.meta.url);
+  return root !== undefined
+    ? join(root, "scripts", "dysflow-vba-manager.ps1")
+    : "scripts/dysflow-vba-manager.ps1";
 }
 
 function buildTargetDiagnostics(

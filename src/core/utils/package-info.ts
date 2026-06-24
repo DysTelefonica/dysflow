@@ -4,6 +4,22 @@ import { fileURLToPath } from "node:url";
 
 export const MAX_PACKAGE_ROOT_DEPTH = 12;
 
+/**
+ * Walks up from `moduleUrl` to the nearest directory containing a `package.json` and returns
+ * it, or `undefined` if none is found within {@link MAX_PACKAGE_ROOT_DEPTH} levels. Used to
+ * resolve bundled `scripts/*.ps1` to an absolute, cwd-independent path.
+ */
+export function findPackageRootNear(moduleUrl: string): string | undefined {
+  let currentDir = dirname(fileURLToPath(moduleUrl));
+  for (let depth = 0; depth < MAX_PACKAGE_ROOT_DEPTH; depth += 1) {
+    if (existsSync(join(currentDir, "package.json"))) return currentDir;
+    const parent = dirname(currentDir);
+    if (parent === currentDir) break;
+    currentDir = parent;
+  }
+  return undefined;
+}
+
 export function readPackageVersionNear(moduleUrl: string, fallback = "0.0.0"): string {
   let currentDir = dirname(fileURLToPath(moduleUrl));
 
