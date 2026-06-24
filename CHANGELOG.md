@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.7.1] - 2026-06-24
+
+Internal hardening and a follow-up architecture migration. No change to the MCP/CLI surface
+or runtime behavior.
+
+### Changed
+
+- **Lock filesystem port moved out of `src/core` into an adapter.** `cross-process-lock.ts` no longer imports `node:fs/promises`; the node-backed `LockFileSystemPort` now lives in `src/adapters/runner/node-lock-file-system.ts` and is injected into `AccessPowerShellRunner` by the composition roots. The file was removed from the `KNOWN_DIRECT_IO_DEBT` ratchet in `core-boundary.test.ts`. Mirrors the v1.6.1 config migration; behavior unchanged.
+- **Dynamic operation registry `update` no longer reads twice.** The MCP dynamic-services registry probed each cached registry with `get()` and then `update()`; since `update()` is a no-op returning `undefined` when it does not own the id, it now calls `update()` directly, removing a redundant file read for the file-backed registry. Adds behavior coverage for the routing.
+
+### CI
+
+- **Release signing pipeline (publisher side).** Added a keygen helper (`.github/scripts/generate-release-signing-key.sh`) and a conditional `Sign checksums (Ed25519)` step in `release.yml` that signs `SHA256SUMS` → `SHA256SUMS.sig` when the `RELEASE_SIGNING_KEY` secret is present (skipped, checksum-only, otherwise). Completes the verification gate added in v1.7.0; signing stays inert until the maintainer provisions the key.
+
 ## [v1.7.0] - 2026-06-24
 
 Security hardening of the runner lock and the self-update path. No change to the MCP/CLI
