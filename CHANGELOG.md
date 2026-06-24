@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.7.6] - 2026-06-24
+
+### Fixed
+
+- **VBA-sync operations resolve the manager script independent of the working directory.** Without `DYSFLOW_HOME`, the default `dysflow-vba-manager.ps1` path was the bare relative `scripts/dysflow-vba-manager.ps1`, which failed (`-File ... no existe`) when an operation spawned PowerShell with a project-directory `cwd` — surfaced by the real-Access E2E as `list_objects` failing. It now resolves to an absolute path from the package root (new `findPackageRootNear` helper) and is cwd-independent. Production (where `DYSFLOW_HOME` is set) is unaffected.
+
+### Tests
+
+- Added unit guards that catch two issues at unit speed instead of only via the heavy real-Access E2E: the vba-manager script-path resolution, and the advertised (non-hidden) MCP tool count (51). Corrected the stale `advertised-tool-count` expectation (52 → 51) in `E2E_testing/mcp-e2e.mjs`.
+
 ## [v1.7.5] - 2026-06-24
 
 ### Fixed
