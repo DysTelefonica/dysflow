@@ -16,6 +16,7 @@ import {
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../process/windows-processes.js";
+import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import type { DysflowHttpServices } from "./server.js";
 
 export async function createHttpServices(
@@ -33,6 +34,7 @@ export async function createHttpServices(
   const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
+    lockFileSystem: nodeLockFileSystem,
     operationRegistry,
     preflightCleanup: createWindowsAccessOperationPreflightCleanup({
       registry: operationRegistry,

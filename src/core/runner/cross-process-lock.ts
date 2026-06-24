@@ -1,12 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  mkdir as nodeMkdir,
-  rm as nodeRm,
-  stat as nodeStat,
-  utimes as nodeUtimes,
-  writeFile as nodeWriteFile,
-} from "node:fs/promises";
-import { tmpdir as nodeTmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
@@ -31,28 +24,9 @@ export interface LockFileSystemPort {
   tmpdir(): string;
 }
 
-const defaultFileSystem: LockFileSystemPort = {
-  mkdir: (path, options) => nodeMkdir(path, options),
-  rm: (path, options) => nodeRm(path, options),
-  stat: async (path) => {
-    try {
-      const s = await nodeStat(path);
-      return { mtimeMs: s.mtimeMs };
-    } catch {
-      return null;
-    }
-  },
-  utimes: (path, atime, mtime) => nodeUtimes(path, atime, mtime),
-  writeFile: (path, data, encoding) => nodeWriteFile(path, data, encoding),
-  tmpdir: () => nodeTmpdir(),
-};
-
-export function getCrossProcessLockPath(
-  accessPath: string,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
-): string {
+export function getCrossProcessLockPath(accessPath: string): string {
   const hash = createHash("sha256").update(accessPath.toLowerCase()).digest("hex").slice(0, 16);
-  return join(fileSystem.tmpdir(), "dysflow-locks", `${hash}.lock`);
+  return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
 /**
@@ -76,7 +50,7 @@ export function getCrossProcessLockPath(
 export async function evictStaleLock(
   lockPath: string,
   staleMs: number,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
+  fileSystem: LockFileSystemPort,
 ): Promise<boolean> {
   const info = await fileSystem.stat(lockPath);
   if (info === null || Date.now() - info.mtimeMs <= staleMs) return false;
@@ -110,8 +84,8 @@ export async function evictStaleLock(
 export async function acquireCrossProcessAccessLock(
   lockPath: string,
   timeoutMs: number,
-  sleepMs = 50,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
+  sleepMs: number,
+  fileSystem: LockFileSystemPort,
 ): Promise<() => Promise<void>> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -135,7 +109,7 @@ export async function acquireCrossProcessAccessLock(
 
 export async function releaseCrossProcessAccessLock(
   lockPath: string,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
+  fileSystem: LockFileSystemPort,
 ): Promise<void> {
   await fileSystem.rm(lockPath, { recursive: true, force: true }).catch(() => {});
 }
@@ -151,8 +125,8 @@ export async function releaseCrossProcessAccessLock(
  */
 export function startLockHeartbeat(
   lockPath: string,
+  fileSystem: LockFileSystemPort,
   stopSignal?: AbortSignal,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
   onHeartbeatError: (error: unknown) => void = (error) =>
     logSwallowedIoError("cross-process-lock:heartbeat", error),
 ): NodeJS.Timeout {
@@ -202,6 +176,8 @@ export const defaultAccessExecutionLocks = new Map<string, Promise<void>>();
  * @param key           - The access path to lock on (normalized to lowercase).
  * @param work          - The async unit of work to execute while holding the lock.
  * @param timeoutMs     - Max time to wait for the cross-process lock.
+ * @param fileSystem    - Injected filesystem port. Production injects `nodeLockFileSystem`
+ *                        (src/adapters/runner/node-lock-file-system.ts); tests inject a fake.
  * @param lockState     - Optional in-process lock map. Defaults to the module-level
  *                        `defaultAccessExecutionLocks` singleton so production code
  *                        gets the original serialized behaviour without passing anything.
@@ -210,8 +186,8 @@ export async function runWithAccessExecutionLock<T>(
   key: string,
   work: () => T | Promise<T>,
   timeoutMs: number,
+  fileSystem: LockFileSystemPort,
   lockState: Map<string, Promise<void>> = defaultAccessExecutionLocks,
-  fileSystem: LockFileSystemPort = defaultFileSystem,
 ): Promise<T> {
   const normalizedKey = key.toLowerCase();
   const previous = lockState.get(normalizedKey) ?? Promise.resolve();
@@ -231,7 +207,7 @@ export async function runWithAccessExecutionLock<T>(
   // pending forever and every later same-key call deadlocks on `await previous`. So the
   // cross-process acquisition lives INSIDE this try/finally, not before it.
   try {
-    const lockPath = getCrossProcessLockPath(key, fileSystem);
+    const lockPath = getCrossProcessLockPath(key);
     await fileSystem.mkdir(join(lockPath, ".."), { recursive: true }).catch(() => {});
     const releaseCrossProcessLock = await acquireCrossProcessAccessLock(
       lockPath,
@@ -239,7 +215,7 @@ export async function runWithAccessExecutionLock<T>(
       50,
       fileSystem,
     );
-    const stopHeartbeat = startLockHeartbeat(lockPath, undefined, fileSystem);
+    const stopHeartbeat = startLockHeartbeat(lockPath, fileSystem);
     try {
       return await work();
     } finally {

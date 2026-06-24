@@ -1,6 +1,7 @@
 import { loadDysflowConfig } from "../../adapters/config/dysflow-config-node.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
+import { nodeLockFileSystem } from "../../adapters/runner/node-lock-file-system.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
@@ -46,6 +47,7 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
     const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
     const runner = new AccessPowerShellRunner({
       executor: createDefaultPowerShellExecutor(),
+      lockFileSystem: nodeLockFileSystem,
       operationRegistry,
       preflightCleanup: createWindowsAccessOperationPreflightCleanup({
         registry: operationRegistry,

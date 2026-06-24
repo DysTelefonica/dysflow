@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
@@ -66,6 +67,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       };
     };
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationRegistry: registry,
       operationIdFactory: () => "op-success",
@@ -102,6 +104,7 @@ describe("AccessPowerShellRunner operation ownership", () => {
       accessProcess: { pid: 4568, processStartTime: "2026-05-15T10:01:00.000Z" },
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationRegistry: registry,
       operationIdFactory: () => "op-timeout",

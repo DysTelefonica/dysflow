@@ -7,6 +7,7 @@ import { mkdir, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import {
   acquireCrossProcessAccessLock,
   CROSS_PROCESS_LOCK_STALE_MS,
@@ -58,6 +59,7 @@ describe("cross-process-lock module API", () => {
             return label;
           },
           5_000,
+          nodeLockFileSystem,
           lockState,
         );
 
@@ -86,6 +88,7 @@ describe("cross-process-lock module API", () => {
             return label;
           },
           5_000,
+          nodeLockFileSystem,
           lockState,
         );
 
@@ -109,7 +112,13 @@ describe("cross-process-lock module API", () => {
     it("accepts work that returns a non-promise value", async () => {
       const lockState = new Map<string, Promise<void>>();
       const dbPath = join(tmpdir(), "sync-result-deterministic.accdb");
-      const result = await runWithAccessExecutionLock(dbPath, () => 42, 5_000, lockState);
+      const result = await runWithAccessExecutionLock(
+        dbPath,
+        () => 42,
+        5_000,
+        nodeLockFileSystem,
+        lockState,
+      );
       expect(result).toBe(42);
     });
 
@@ -127,7 +136,7 @@ describe("cross-process-lock module API", () => {
       await mkdir(lockPath, { recursive: false });
       try {
         await expect(
-          runWithAccessExecutionLock(dbPath, async () => {}, 1, lockState),
+          runWithAccessExecutionLock(dbPath, async () => {}, 1, nodeLockFileSystem, lockState),
         ).rejects.toThrow(RunnerLockTimeoutError);
       } finally {
         const { rm } = await import("node:fs/promises");
@@ -138,7 +147,13 @@ describe("cross-process-lock module API", () => {
     it("cleans up lockState map entry after work completes", async () => {
       const lockState = new Map<string, Promise<void>>();
       const dbPath = join(tmpdir(), "cleanup-test-deterministic.accdb");
-      await runWithAccessExecutionLock(dbPath, async () => {}, 5_000, lockState);
+      await runWithAccessExecutionLock(
+        dbPath,
+        async () => {},
+        5_000,
+        nodeLockFileSystem,
+        lockState,
+      );
       const key = dbPath.toLowerCase();
       expect(lockState.has(key)).toBe(false);
     });
@@ -154,6 +169,7 @@ describe("cross-process-lock module API", () => {
             throw new Error("synthetic error");
           },
           5_000,
+          nodeLockFileSystem,
           lockState,
         ),
       ).rejects.toThrow("synthetic error");
@@ -163,6 +179,7 @@ describe("cross-process-lock module API", () => {
         dbPath,
         async () => "second-call-ok",
         5_000,
+        nodeLockFileSystem,
         lockState,
       );
       expect(result).toBe("second-call-ok");
@@ -180,7 +197,7 @@ describe("cross-process-lock module API", () => {
       await mkdir(lockPath, { recursive: false });
       try {
         await expect(
-          runWithAccessExecutionLock(dbPath, async () => "never", 1, lockState),
+          runWithAccessExecutionLock(dbPath, async () => "never", 1, nodeLockFileSystem, lockState),
         ).rejects.toThrow(RunnerLockTimeoutError);
 
         // The in-process lock entry must be cleaned up even though acquire threw.
@@ -195,6 +212,7 @@ describe("cross-process-lock module API", () => {
         dbPath,
         async () => "recovered",
         5_000,
+        nodeLockFileSystem,
         lockState,
       );
       expect(result).toBe("recovered");
@@ -202,7 +220,7 @@ describe("cross-process-lock module API", () => {
 
     it("startLockHeartbeat returns a NodeJS.Timeout handle", () => {
       const dbPath = join(tmpdir(), "heartbeat-test-deterministic.accdb");
-      const handle = startLockHeartbeat(dbPath);
+      const handle = startLockHeartbeat(dbPath, nodeLockFileSystem);
       expect(typeof handle).toBe("object");
       expect(handle).not.toBeNull();
       clearInterval(handle);
@@ -211,7 +229,7 @@ describe("cross-process-lock module API", () => {
     it("startLockHeartbeat accepts an AbortSignal and auto-stops when it fires", () => {
       const dbPath = join(tmpdir(), "heartbeat-abort-test-deterministic.accdb");
       const ac = new AbortController();
-      const handle = startLockHeartbeat(dbPath, ac.signal);
+      const handle = startLockHeartbeat(dbPath, nodeLockFileSystem, ac.signal);
       expect(typeof handle).toBe("object");
       ac.abort();
       clearInterval(handle);
@@ -243,7 +261,7 @@ describe("cross-process-lock module API", () => {
           throw err;
         },
       });
-      const handle = startLockHeartbeat("/locks/x.lock", undefined, fileSystem, (error) =>
+      const handle = startLockHeartbeat("/locks/x.lock", fileSystem, undefined, (error) =>
         errors.push(error),
       );
       try {
@@ -265,7 +283,7 @@ describe("cross-process-lock module API", () => {
           throw err;
         },
       });
-      const handle = startLockHeartbeat("/locks/x.lock", undefined, fileSystem, (error) =>
+      const handle = startLockHeartbeat("/locks/x.lock", fileSystem, undefined, (error) =>
         errors.push(error),
       );
       try {
@@ -307,8 +325,8 @@ describe("cross-process-lock module API", () => {
       // can succeed. The other observes the directory already gone. This is the property
       // that prevents two processes from both deleting a freshly re-created lock.
       const results = await Promise.all([
-        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS),
-        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS),
+        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, nodeLockFileSystem),
+        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, nodeLockFileSystem),
       ]);
 
       expect(results.filter(Boolean)).toHaveLength(1);
@@ -322,7 +340,11 @@ describe("cross-process-lock module API", () => {
       await rm(lockPath, { recursive: true, force: true }).catch(() => {});
       await mkdir(lockPath, { recursive: true });
 
-      const evicted = await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS);
+      const evicted = await evictStaleLock(
+        lockPath,
+        CROSS_PROCESS_LOCK_STALE_MS,
+        nodeLockFileSystem,
+      );
 
       expect(evicted).toBe(false);
       // The live lock must survive.
@@ -333,7 +355,9 @@ describe("cross-process-lock module API", () => {
       const lockPath = join(tmpdir(), "dysflow-locks-test", `absent-${process.pid}.lock`);
       await rm(lockPath, { recursive: true, force: true }).catch(() => {});
 
-      await expect(evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS)).resolves.toBe(false);
+      await expect(
+        evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, nodeLockFileSystem),
+      ).resolves.toBe(false);
     });
   });
 
@@ -373,7 +397,7 @@ describe("cross-process-lock module API", () => {
       tmpdir: () => "vtmp",
     };
 
-    const lockPath = getCrossProcessLockPath("virtual.accdb", mockFs);
+    const lockPath = getCrossProcessLockPath("virtual.accdb");
     const release = await acquireCrossProcessAccessLock(lockPath, 1000, 50, mockFs);
     expect(virtualFiles.has(lockPath)).toBe(true);
 

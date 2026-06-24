@@ -17,6 +17,7 @@
  * see the comment in src/adapters/mcp/dispatch-factory.ts.
  */
 import { describe, expect, it } from "vitest";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
@@ -53,6 +54,7 @@ describe("AccessPowerShellRunner — accessPassword redaction in error output", 
     });
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationRegistry: new InMemoryAccessOperationRegistry(),
       operationIdFactory: () => "op-runner-failed-redaction",

@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadDysflowConfig } from "../../src/adapters/config/dysflow-config-node";
 import { startDysflowHttpServer } from "../../src/adapters/http/server";
 import { createDefaultPowerShellExecutor } from "../../src/adapters/powershell/default-executor.js";
+import { nodeLockFileSystem } from "../../src/adapters/runner/node-lock-file-system";
 import { AccessPowerShellRunner } from "../../src/core/runner/access-runner";
 import { AccessDiagnosticsService } from "../../src/core/services/diagnostics-service";
 import { AccessQueryService } from "../../src/core/services/query-service";
@@ -76,6 +77,7 @@ function createAccessFixtureWorkspace(): { root: string; cleanup(): void } {
 function createAccessFixtureRunner(): AccessPowerShellRunner {
   return new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
+    lockFileSystem: nodeLockFileSystem,
     scriptPath: resolve("scripts/dysflow-access-runner.ps1"),
   });
 }

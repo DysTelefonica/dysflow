@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
+import { nodeLockFileSystem } from "../../adapters/runner/node-lock-file-system.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { createProjectAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
@@ -46,6 +47,7 @@ async function createDiagnosticsService(
   return new AccessDiagnosticsService({
     runner: new AccessPowerShellRunner({
       executor: createDefaultPowerShellExecutor(),
+      lockFileSystem: nodeLockFileSystem,
       operationRegistry,
       preflightCleanup: createWindowsAccessOperationPreflightCleanup({
         registry: operationRegistry,

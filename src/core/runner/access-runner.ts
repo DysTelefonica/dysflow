@@ -40,10 +40,12 @@ export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 import {
   CROSS_PROCESS_LOCK_STALE_MS,
   getCrossProcessLockPath,
+  type LockFileSystemPort,
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
 } from "./cross-process-lock.js";
 
+export type { LockFileSystemPort };
 export { CROSS_PROCESS_LOCK_STALE_MS, getCrossProcessLockPath, RunnerLockTimeoutError };
 
 export const RUNNER_INVALID_OUTPUT = "RUNNER_INVALID_OUTPUT";
@@ -123,6 +125,12 @@ export type AccessPowerShellRunnerOptions = {
   clock?: () => string;
   lockAcquireTimeoutMs?: number;
   fileExists?: FileExistsChecker;
+  /**
+   * Filesystem port for the cross-process execution lock. Injected so the domain never
+   * reaches `node:fs` directly. Production injects `nodeLockFileSystem`
+   * (src/adapters/runner/node-lock-file-system.ts); tests inject a fake or the node port.
+   */
+  lockFileSystem: LockFileSystemPort;
 };
 
 const noopPreflightCleanup: AccessOperationPreflightCleanup = {
@@ -140,6 +148,7 @@ export class AccessPowerShellRunner implements AccessRunner {
   private readonly clock: () => string;
   private readonly lockAcquireTimeoutMs: number;
   private readonly fileExists: FileExistsChecker;
+  private readonly lockFileSystem: LockFileSystemPort;
 
   constructor(options: AccessPowerShellRunnerOptions) {
     this.executor = options.executor;
@@ -150,6 +159,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.lockAcquireTimeoutMs = options.lockAcquireTimeoutMs ?? 30_000;
     this.fileExists = options.fileExists ?? ((path) => existsSync(path));
+    this.lockFileSystem = options.lockFileSystem;
   }
 
   async run<TData = unknown>(
@@ -170,216 +180,219 @@ export class AccessPowerShellRunner implements AccessRunner {
       return await runWithAccessExecutionLock(
         config.accessDbPath,
         async () => {
-          let finalOperation = operation;
-          if (operation.kind === "query") {
-            // Default the read/write target to the project's configured
-            // backend when the caller did not pass databasePath or
-            // backendPath. This used to silently fall through to the
-            // frontend (CurrentDb) when the config also had no
-            // backendPath, which surfaced to MCP callers as the opaque
-            // "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line" error after
-            // the PowerShell runner threw "Access database not found".
-            if (!operation.request.backendPath && !operation.request.databasePath) {
-              if (config.backendPath) {
-                finalOperation = {
-                  ...operation,
-                  request: {
-                    ...operation.request,
-                    backendPath: config.backendPath,
-                  },
-                };
-              } else if (config.accessDbPath) {
-                finalOperation = {
-                  ...operation,
-                  request: {
-                    ...operation.request,
-                    databasePath: config.accessDbPath,
-                  },
-                };
-              }
-            }
-
-            // Fail fast with a structured error if no read/write target
-            // can be resolved. Without this check, the PowerShell runner
-            // would throw "Access database not found:" mid-execution and
-            // the MCP caller would only see RUNNER_INVALID_JSON, hiding
-            // the real cause.
-            if (finalOperation.kind === "query") {
-              const finalRequest = finalOperation.request;
-              // Biome lint forbids `in` operator against optional fields; use
-              // value checks instead. The query request fields are all
-              // optional strings so a typeof + length > 0 check is the
-              // canonical "is this present and non-empty?" probe.
-              const candidatePaths: readonly unknown[] = [
-                finalRequest.databasePath,
-                finalRequest.backendPath,
-              ];
-              const hasTarget = candidatePaths.some(
-                (value) => typeof value === "string" && value.length > 0,
-              );
-              if (!hasTarget) {
-                return failureResult(
-                  createDysflowError(
-                    "CONFIG_MISSING_TARGET_PATH",
-                    "Cannot resolve a target Access database. Pass databasePath / backendPath in the request, or set accessPath / backendPath in the project config (.dysflow/project.json).",
-                  ),
-                );
-              }
-              // Also fail fast if the project config's accessPath points
-              // at a .accdb that does not exist on disk. Without this
-              // check the PowerShell runner opens MSACCESS, fails to
-              // find the file, throws "Access database not found", and
-              // the MCP caller only sees "RUNNER_INVALID_JSON: No
-              // DYSFLOW_RESULT line". The error has to surface as a
-              // structured CONFIG_TARGET_NOT_FOUND so the caller can
-              // tell config from a real Access failure.
-              if (typeof config.accessDbPath === "string" && config.accessDbPath.length > 0) {
-                if (!this.fileExists(config.accessDbPath)) {
-                  return failureResult(
-                    createDysflowError(
-                      "CONFIG_TARGET_NOT_FOUND",
-                      `Configured accessPath does not exist on disk: ${config.accessDbPath}. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.`,
-                    ),
-                  );
-                }
-              }
-            }
-          }
-
-          const preflightResult = await this.runPreflightCleanup(config);
-          const operationId = this.operationIdFactory();
-          let record = await this.operationRegistry.create({
-            operationId,
-            action: finalOperation.kind,
-            accessPath: config.accessDbPath,
-            projectRootAbs: config.projectRoot ?? process.cwd(),
-            destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
-            accessPid: null,
-            processStartTime: null,
-            status: "starting",
-            metadata: stripPayloadSecrets(finalOperation.request),
-            updatedAt: this.clock(),
-          });
-
-          // Compute secrets before the executor call so they are in scope for
-          // marker-payload sanitization inside onAccessProcessCaptured (#417).
-          const dynamicBackendPassword =
-            finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined
-              ? finalOperation.request.backendPassword
-              : config.backendPassword;
-          const secrets = [config.accessPassword, dynamicBackendPassword].filter(
-            (secret): secret is string => Boolean(secret),
-          );
-
-          const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
-          const execution = await this.executor(
-            "powershell.exe",
-            buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
-            {
-              timeoutMs: config.timeoutMs,
-              operationId,
-              accessPath: config.accessDbPath,
-              env: buildPowerShellEnvironment(config, finalOperation),
-              onProgress: options.onProgress,
-              onAccessProcessCaptured: async (process) => {
-                try {
-                  // Sanitize free-text marker fields before persisting so secrets
-                  // (passwords, tokens) are never stored in the registry (#417).
-                  const safeCommandLine =
-                    typeof process.commandLine === "string"
-                      ? sanitizeSecrets(process.commandLine, secrets)
-                      : undefined;
-                  record =
-                    (await this.operationRegistry.update(operationId, {
-                      accessPid: process.pid,
-                      processStartTime: process.processStartTime,
-                      commandLine: safeCommandLine,
-                      status: "running",
-                      updatedAt: this.clock(),
-                    })) ?? record;
-                } catch (error) {
-                  captureDiagnostics.push(
-                    createDiagnostic(
-                      "error",
-                      "access.pid",
-                      `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`,
-                    ),
-                  );
-                }
-              },
-            },
-          );
-          const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
-          record = await this.updateOperationFromExecution(record, execution);
-          const operationMetadata = toOperationMetadata(record);
-
-          if (execution.timedOut) {
-            return failureResult(
-              createDysflowError(
-                "RUNNER_TIMEOUT",
-                `Access operation timed out after ${config.timeoutMs}ms.`,
-                { retryable: true },
-              ),
-              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
-            );
-          }
-
-          if (execution.exitCode !== 0) {
-            const safeOutput = sanitizeSecrets(
-              execution.stderr || execution.stdout || "No runner output.",
-              secrets,
-            );
-            return failureResult(
-              createDysflowError(
-                "RUNNER_FAILED",
-                `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
-              ),
-              { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
-            );
-          }
-
-          try {
-            return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
-              diagnostics,
-              durationMs: execution.durationMs,
-              operation: operationMetadata,
-            });
-          } catch (parseError) {
-            const underlyingMessage =
-              parseError instanceof Error ? parseError.message : String(parseError);
-            // Truncated, secret-scrubbed stdout preview for operator diagnostics (#474)
-            const rawPreview = execution.stdout.slice(0, 200);
-            const safePreview = sanitizeSecrets(rawPreview, secrets);
-            const stdoutPreviewDiags: Diagnostic[] =
-              safePreview.length > 0
-                ? [
-                    createDiagnostic(
-                      "warning",
-                      "powershell.stdout",
-                      `[stdout-preview] ${safePreview}`,
-                    ),
-                  ]
-                : [];
-            return failureResult(
-              createDysflowError(
-                "RUNNER_INVALID_JSON",
-                `PowerShell runner produced invalid JSON output: ${underlyingMessage}`,
-              ),
-              {
-                diagnostics: [...diagnostics, ...stdoutPreviewDiags],
-                durationMs: execution.durationMs,
-                operation: operationMetadata,
-              },
-            );
-          }
+          return await this.runLockedOperation<TData>(operation, config, options);
         },
         this.lockAcquireTimeoutMs,
+        this.lockFileSystem,
       );
     } catch (error) {
       if (error instanceof RunnerLockTimeoutError) {
         return failureResult(createDysflowError("RUNNER_LOCK_TIMEOUT", error.message));
       }
       throw error;
+    }
+  }
+
+  private async runLockedOperation<TData = unknown>(
+    operation: AccessRunnerOperation,
+    config: DysflowConfig,
+    options: AccessRunnerRunOptions,
+  ): Promise<OperationResult<TData>> {
+    let finalOperation = operation;
+    if (operation.kind === "query") {
+      // Default the read/write target to the project's configured
+      // backend when the caller did not pass databasePath or
+      // backendPath. This used to silently fall through to the
+      // frontend (CurrentDb) when the config also had no
+      // backendPath, which surfaced to MCP callers as the opaque
+      // "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line" error after
+      // the PowerShell runner threw "Access database not found".
+      if (!operation.request.backendPath && !operation.request.databasePath) {
+        if (config.backendPath) {
+          finalOperation = {
+            ...operation,
+            request: {
+              ...operation.request,
+              backendPath: config.backendPath,
+            },
+          };
+        } else if (config.accessDbPath) {
+          finalOperation = {
+            ...operation,
+            request: {
+              ...operation.request,
+              databasePath: config.accessDbPath,
+            },
+          };
+        }
+      }
+
+      // Fail fast with a structured error if no read/write target
+      // can be resolved. Without this check, the PowerShell runner
+      // would throw "Access database not found:" mid-execution and
+      // the MCP caller would only see RUNNER_INVALID_JSON, hiding
+      // the real cause.
+      if (finalOperation.kind === "query") {
+        const finalRequest = finalOperation.request;
+        // Biome lint forbids `in` operator against optional fields; use
+        // value checks instead. The query request fields are all
+        // optional strings so a typeof + length > 0 check is the
+        // canonical "is this present and non-empty?" probe.
+        const candidatePaths: readonly unknown[] = [
+          finalRequest.databasePath,
+          finalRequest.backendPath,
+        ];
+        const hasTarget = candidatePaths.some(
+          (value) => typeof value === "string" && value.length > 0,
+        );
+        if (!hasTarget) {
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              "Cannot resolve a target Access database. Pass databasePath / backendPath in the request, or set accessPath / backendPath in the project config (.dysflow/project.json).",
+            ),
+          );
+        }
+        // Also fail fast if the project config's accessPath points
+        // at a .accdb that does not exist on disk. Without this
+        // check the PowerShell runner opens MSACCESS, fails to
+        // find the file, throws "Access database not found", and
+        // the MCP caller only sees "RUNNER_INVALID_JSON: No
+        // DYSFLOW_RESULT line". The error has to surface as a
+        // structured CONFIG_TARGET_NOT_FOUND so the caller can
+        // tell config from a real Access failure.
+        if (typeof config.accessDbPath === "string" && config.accessDbPath.length > 0) {
+          if (!this.fileExists(config.accessDbPath)) {
+            return failureResult(
+              createDysflowError(
+                "CONFIG_TARGET_NOT_FOUND",
+                `Configured accessPath does not exist on disk: ${config.accessDbPath}. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    const preflightResult = await this.runPreflightCleanup(config);
+    const operationId = this.operationIdFactory();
+    let record = await this.operationRegistry.create({
+      operationId,
+      action: finalOperation.kind,
+      accessPath: config.accessDbPath,
+      projectRootAbs: config.projectRoot ?? process.cwd(),
+      destinationRootAbs: config.destinationRoot ?? config.projectRoot ?? process.cwd(),
+      accessPid: null,
+      processStartTime: null,
+      status: "starting",
+      metadata: stripPayloadSecrets(finalOperation.request),
+      updatedAt: this.clock(),
+    });
+
+    // Compute secrets before the executor call so they are in scope for
+    // marker-payload sanitization inside onAccessProcessCaptured (#417).
+    const dynamicBackendPassword =
+      finalOperation.kind === "query" && finalOperation.request.backendPassword !== undefined
+        ? finalOperation.request.backendPassword
+        : config.backendPassword;
+    const secrets = [config.accessPassword, dynamicBackendPassword].filter(
+      (secret): secret is string => Boolean(secret),
+    );
+
+    const captureDiagnostics: Diagnostic[] = diagnosticsFromPreflightCleanup(preflightResult);
+    const execution = await this.executor(
+      "powershell.exe",
+      buildPowerShellArguments(this.scriptPath, finalOperation, config, operationId),
+      {
+        timeoutMs: config.timeoutMs,
+        operationId,
+        accessPath: config.accessDbPath,
+        env: buildPowerShellEnvironment(config, finalOperation),
+        onProgress: options.onProgress,
+        onAccessProcessCaptured: async (process) => {
+          try {
+            // Sanitize free-text marker fields before persisting so secrets
+            // (passwords, tokens) are never stored in the registry (#417).
+            const safeCommandLine =
+              typeof process.commandLine === "string"
+                ? sanitizeSecrets(process.commandLine, secrets)
+                : undefined;
+            record =
+              (await this.operationRegistry.update(operationId, {
+                accessPid: process.pid,
+                processStartTime: process.processStartTime,
+                commandLine: safeCommandLine,
+                status: "running",
+                updatedAt: this.clock(),
+              })) ?? record;
+          } catch (error) {
+            captureDiagnostics.push(
+              createDiagnostic(
+                "error",
+                "access.pid",
+                `Failed to record Access PID ownership: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            );
+          }
+        },
+      },
+    );
+    const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
+    record = await this.updateOperationFromExecution(record, execution);
+    const operationMetadata = toOperationMetadata(record);
+
+    if (execution.timedOut) {
+      return failureResult(
+        createDysflowError(
+          "RUNNER_TIMEOUT",
+          `Access operation timed out after ${config.timeoutMs}ms.`,
+          { retryable: true },
+        ),
+        { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+      );
+    }
+
+    if (execution.exitCode !== 0) {
+      const safeOutput = sanitizeSecrets(
+        execution.stderr || execution.stdout || "No runner output.",
+        secrets,
+      );
+      return failureResult(
+        createDysflowError(
+          "RUNNER_FAILED",
+          `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+        ),
+        { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+      );
+    }
+
+    try {
+      return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
+        diagnostics,
+        durationMs: execution.durationMs,
+        operation: operationMetadata,
+      });
+    } catch (parseError) {
+      const underlyingMessage =
+        parseError instanceof Error ? parseError.message : String(parseError);
+      // Truncated, secret-scrubbed stdout preview for operator diagnostics (#474)
+      const rawPreview = execution.stdout.slice(0, 200);
+      const safePreview = sanitizeSecrets(rawPreview, secrets);
+      const stdoutPreviewDiags: Diagnostic[] =
+        safePreview.length > 0
+          ? [createDiagnostic("warning", "powershell.stdout", `[stdout-preview] ${safePreview}`)]
+          : [];
+      return failureResult(
+        createDysflowError(
+          "RUNNER_INVALID_JSON",
+          `PowerShell runner produced invalid JSON output: ${underlyingMessage}`,
+        ),
+        {
+          diagnostics: [...diagnostics, ...stdoutPreviewDiags],
+          durationMs: execution.durationMs,
+          operation: operationMetadata,
+        },
+      );
     }
   }
 

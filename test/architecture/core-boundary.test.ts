@@ -126,7 +126,6 @@ const IO_BUILTIN_IMPORT =
 const KNOWN_DIRECT_IO_DEBT: ReadonlySet<string> = new Set([
   "src/core/operations/access-operation-registry.ts",
   "src/core/runner/access-runner.ts",
-  "src/core/runner/cross-process-lock.ts",
   "src/core/services/vba-form-service.ts",
   "src/core/utils/index.ts",
   "src/core/utils/package-info.ts",

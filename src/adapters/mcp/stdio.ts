@@ -32,6 +32,7 @@ import {
   WindowsMsAccessProcessScanner,
   WindowsProcessKiller,
 } from "../process/windows-processes.js";
+import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
@@ -228,6 +229,7 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry(config);
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
+    lockFileSystem: nodeLockFileSystem,
     operationRegistry,
     preflightCleanup: createWindowsAccessOperationPreflightCleanup({ registry: operationRegistry }),
   });

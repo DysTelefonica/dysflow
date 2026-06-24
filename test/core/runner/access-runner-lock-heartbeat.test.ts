@@ -17,6 +17,7 @@ import { stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
   AccessPowerShellRunner,
@@ -83,6 +84,7 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -168,6 +170,7 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",

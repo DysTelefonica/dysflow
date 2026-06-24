@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
@@ -60,6 +61,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
 
     const executor = buildMixedStderrExecutor(capturedPids);
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/runner.ps1",
@@ -108,6 +110,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/runner.ps1",
@@ -147,6 +150,7 @@ describe("AccessPowerShellRunner — progress callback", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/runner.ps1",

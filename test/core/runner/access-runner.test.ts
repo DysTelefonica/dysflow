@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDefaultPowerShellExecutor } from "../../../src/adapters/powershell/default-executor.js";
+import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-system.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
 import {
@@ -70,6 +71,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run access.ps1",
@@ -141,6 +143,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.access-no-passwd.ps1",
@@ -182,6 +185,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.compare.ps1",
@@ -235,6 +239,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -282,6 +287,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -337,6 +343,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -389,6 +396,7 @@ describe("AccessPowerShellRunner", () => {
     });
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationRegistry: registry,
       preflightCleanup: noOpPreflight,
@@ -437,6 +445,7 @@ describe("AccessPowerShellRunner", () => {
     // port reports it missing — proving the runner consults the port, not the
     // real filesystem, and never reaches the executor.
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -495,6 +504,7 @@ describe("AccessPowerShellRunner", () => {
     };
 
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationIdFactory: (() => {
         let count = 0;
@@ -532,6 +542,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -580,6 +591,7 @@ describe("AccessPowerShellRunner", () => {
       },
     };
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor: async () => ({
         exitCode: 0,
         stdout: "DYSFLOW_RESULT {}",
@@ -622,6 +634,7 @@ describe("AccessPowerShellRunner", () => {
 
   it("continues and emits a diagnostic when preflight cleanup throws", async () => {
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor: async () => ({
         exitCode: 0,
         stdout: "DYSFLOW_RESULT {}",
@@ -672,6 +685,7 @@ describe("AccessPowerShellRunner", () => {
     };
     let updateCalls = 0;
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       operationRegistry: {
         create: async (record) => record,
@@ -726,6 +740,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: true,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -774,6 +789,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: true,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -808,6 +824,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -863,6 +880,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -893,6 +911,7 @@ describe("AccessPowerShellRunner", () => {
         timedOut: false,
       });
       const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
         executor,
         preflightCleanup: noOpPreflight,
         scriptPath: "C:/tools/run.ps1",
@@ -919,6 +938,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -949,6 +969,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -980,6 +1001,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1002,6 +1024,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1024,6 +1047,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1046,6 +1070,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1068,6 +1093,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1092,6 +1118,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1117,6 +1144,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1140,6 +1168,7 @@ describe("AccessPowerShellRunner", () => {
       timedOut: false,
     });
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run.ps1",
@@ -1161,6 +1190,7 @@ describe("AccessPowerShellRunner", () => {
 
   it("each runner gets its own isolated in-memory registry by default and does not share state", () => {
     const runner1 = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor: async () => ({
         exitCode: 0,
         stdout: "{}",
@@ -1171,6 +1201,7 @@ describe("AccessPowerShellRunner", () => {
       preflightCleanup: noOpPreflight,
     });
     const runner2 = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor: async () => ({
         exitCode: 0,
         stdout: "{}",
@@ -1218,6 +1249,7 @@ describe("Cross-process lock for .accdb", () => {
         timedOut: false,
       });
       const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
         executor,
         preflightCleanup: noOpPreflight,
         scriptPath: "C:/tools/run.ps1",
@@ -1250,6 +1282,7 @@ describe("Cross-process lock for .accdb", () => {
     // AGENTS.md: "Never modify the production runtime at %LOCALAPPDATA%\dysflow" — tests must
     // not inadvertently use it either.
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor: createDefaultPowerShellExecutor(),
       scriptPath: join(process.cwd(), "scripts/dysflow-access-runner.ps1"),
     });
@@ -1302,6 +1335,7 @@ describe("Cross-process lock for .accdb", () => {
       };
     };
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run access.ps1",
@@ -1336,6 +1370,7 @@ describe("Cross-process lock for .accdb", () => {
       };
     };
     const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
       executor,
       preflightCleanup: noOpPreflight,
       scriptPath: "C:/tools/run access.ps1",
@@ -1378,6 +1413,7 @@ describe("Cross-process lock for .accdb", () => {
         };
       };
       const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
         executor,
         preflightCleanup: noOpPreflight,
         scriptPath: "C:/tools/run access.ps1",
