@@ -1,4 +1,4 @@
-// Schemas for the 22 VBA sync tools (VBA_SYNC_TOOL_NAMES).
+// Schemas for the VBA sync tools (VBA_SYNC_TOOL_NAMES).
 
 import {
   ACCESS_OVERRIDE,
@@ -47,6 +47,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       moduleNames: SCHEMA_PROPS.moduleNames,
       filter: SCHEMA_PROPS.filter,
       destinationRoot: SCHEMA_PROPS.destinationRoot,
+      exportPath: SCHEMA_PROPS.exportPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -60,6 +61,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       filter: SCHEMA_PROPS.filter,
       diff: SCHEMA_PROPS.diff,
       prune: SCHEMA_PROPS.prune,
+      exportPath: SCHEMA_PROPS.exportPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
