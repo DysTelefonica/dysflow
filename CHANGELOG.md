@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.7.3] - 2026-06-24
+
+### Fixed
+
+- **`compact_repair` now compacts a password-protected frontend with the correct password.** The runner's only env-sourced compaction password was `$BackendPassword`, but the configured frontend (`accessPath`) is protected with the **access** password — so compacting a password-protected project database failed with the DAO error `No es una contraseña válida` even though `query_execute` / `test_vba` (which use the access password) opened the same binary fine. Raw payload passwords are stripped before reaching PowerShell for security (#498), so the env-sourced `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_BACKEND_PASSWORD` are the real source. A new pure, Pester-tested `Resolve-CompactPassword` selects the password by the database being compacted: the configured frontend uses the access password, a separate/backend file uses the backend password, with cross-fallback. Explicit `passwordEnv` payload overrides still win.
+
 ## [v1.7.2] - 2026-06-24
 
 ### Fixed
