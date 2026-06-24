@@ -382,12 +382,14 @@ export function createDynamicServices(
         return reg.create(record);
       },
       update: async (operationId, patch) => {
+        // update() is a no-op returning undefined when the registry does not own the id
+        // (see AccessOperationRegistry.update), so we can probe each cached registry with a
+        // single locked read-modify-write instead of a separate get() followed by update() —
+        // which, for the file-backed registry, read the JSON twice per call.
         for (const service of serviceCache.values()) {
           if (service.operationRegistry) {
-            const record = await service.operationRegistry.get(operationId);
-            if (record) {
-              return service.operationRegistry.update(operationId, patch);
-            }
+            const updated = await service.operationRegistry.update(operationId, patch);
+            if (updated) return updated;
           }
         }
         return defaultRegistry.update(operationId, patch);

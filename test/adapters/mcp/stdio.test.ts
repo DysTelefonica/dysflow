@@ -18,6 +18,7 @@ import {
 } from "../../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../../src/core/services/query-service.js";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service.js";
@@ -556,6 +557,59 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(result?.ok).toBe(true);
     expect(serviceFactoryCalledWithConfig).toBe(true);
     expect(result).toMatchObject({ ok: true, data: { toolRun: "export_modules" } });
+  });
+
+  it("routes operationRegistry.update to the registry that owns the operationId (dynamic services)", async () => {
+    const tempDbPath = resolve("test-runtime/temp-db-ops-registry.accdb");
+    mkdirSync(join(process.cwd(), "test-runtime"), { recursive: true });
+    writeFileSync(tempDbPath, "", "utf8");
+
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: "C:/missing",
+        env: {},
+        serviceFactory: () => ({
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: new FakeQueryService(),
+          diagnosticsService: new FakeDiagnosticsService(),
+          operationRegistry: new InMemoryAccessOperationRegistry(),
+        }),
+      },
+    );
+
+    const registry = services.operationRegistry;
+    expect(registry).toBeDefined();
+    if (!registry) return;
+
+    // create routes to the registry resolved from accessPath and caches that service.
+    const created = await registry.create({
+      operationId: "op-dyn-1",
+      action: "vba",
+      accessPath: tempDbPath,
+      accessPid: null,
+      processStartTime: null,
+      status: "starting",
+      metadata: {},
+      updatedAt: new Date().toISOString(),
+    });
+    expect(created.operationId).toBe("op-dyn-1");
+
+    // update must find the owning registry in the cache and land the patch there.
+    const updated = await registry.update("op-dyn-1", { status: "running" });
+    expect(updated?.status).toBe("running");
+
+    // and the change is observable through a subsequent get.
+    const fetched = await registry.get("op-dyn-1");
+    expect(fetched?.status).toBe("running");
+
+    // updating an unknown operationId routes to the default registry and returns undefined.
+    const missing = await registry.update("op-does-not-exist", { status: "completed" });
+    expect(missing).toBeUndefined();
   });
 
   it("resolves queryService dynamically when databasePath is passed in adapted request", async () => {
