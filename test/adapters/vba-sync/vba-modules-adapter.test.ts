@@ -18,11 +18,13 @@ describe("VbaModulesAdapter", () => {
     expect(VbaModulesAdapter.handles("list_objects")).toBe(true);
     expect(VbaModulesAdapter.handles("exists")).toBe(true);
     expect(VbaModulesAdapter.handles("verify_code")).toBe(true);
-    expect(VbaModulesAdapter.handles("verify_binary")).toBe(true);
-    expect(VbaModulesAdapter.handles("reconcile_binary")).toBe(true);
     expect(VbaModulesAdapter.handles("delete_module")).toBe(true);
     expect(VbaModulesAdapter.handles("fix_encoding")).toBe(true);
     expect(VbaModulesAdapter.handles("run_vba")).toBe(false);
+    // Collapsed into verify_code — these names no longer exist.
+    expect(VbaModulesAdapter.handles("verify_binary")).toBe(false);
+    expect(VbaModulesAdapter.handles("reconcile_binary")).toBe(false);
+    expect(VbaModulesAdapter.handles("compare_module")).toBe(false);
   });
 
   it("characterizes import plan result shaping for explicit overrides", () => {
@@ -830,7 +832,7 @@ describe("VbaModulesAdapter", () => {
     expect(await readFile(join(sourceRoot, "modules", "Module2.bas"), "utf8")).toBe("disk");
   });
 
-  it("verify_binary supports selective module comparison", async () => {
+  it("verify_code supports selective module comparison", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-verify-binary-adapter-"));
     const sourceRoot = join(root, "src");
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
@@ -855,12 +857,12 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("verify_binary", { moduleNames: ["Module1"] });
+    const result = await service.execute("verify_code", { moduleNames: ["Module1"] });
 
     expect(result).toMatchObject({
       ok: true,
       data: {
-        operation: "verify_binary",
+        operation: "verify_code",
         ok: true,
         matched: [{ moduleName: "Module1", fileType: "bas" }],
         different: [],
@@ -870,7 +872,63 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
-  it("reconcile_binary returns a safe dry-run plan instead of mutating Access", async () => {
+  it("verify_code with a moduleNames filter that matches nothing returns MODULE_NOT_FOUND", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-verify-notfound-adapter-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+        await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "same", "utf8");
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 2, timedOut: false };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("verify_code", { moduleNames: ["GhostModule"] });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("MODULE_NOT_FOUND");
+  });
+
+  it("verify_code aggregates a source-newer recommendation when only source has functional lines", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-verify-reco-adapter-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Module1.bas"), "Line A\nLine B\nLine C", "utf8");
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
+        await writeFile(
+          join(request.destinationRoot, "modules", "Module1.bas"),
+          "Line A\nLine B",
+          "utf8",
+        );
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 3, timedOut: false };
+      },
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("verify_code", { diff: true });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        operation: "verify_code",
+        recommendedAction: "import_to_binary",
+        recommendation: expect.stringContaining("import"),
+      },
+    });
+  });
+
+  it("verify_code stays a safe dry-run and recommends a manual merge when both sides changed", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-vba-reconcile-adapter-"));
     const sourceRoot = join(root, "src");
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
@@ -887,17 +945,18 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("reconcile_binary", { diff: true });
+    const result = await service.execute("verify_code", { diff: true });
 
     expect(result).toMatchObject({
       ok: true,
       data: {
-        operation: "reconcile_binary",
+        operation: "verify_code",
         ok: false,
         dryRun: true,
         willModifyAccess: false,
         different: [{ moduleName: "Module1" }],
-        recommendation: expect.stringContaining("Dry-run only"),
+        recommendedAction: "manual_merge",
+        recommendation: expect.any(String),
       },
     });
   });

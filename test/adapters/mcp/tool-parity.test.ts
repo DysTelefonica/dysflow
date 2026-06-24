@@ -42,11 +42,11 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 48-tool inventory", () => {
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(24);
+  it("declares the complete 45-tool inventory", () => {
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(21);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(48);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(48);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(45);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(45);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -55,8 +55,8 @@ describe("Dysflow MCP tool parity inventory", () => {
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(48);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(48);
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(45);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(45);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
@@ -73,11 +73,10 @@ describe("Dysflow MCP tool parity inventory", () => {
         "seed_fixture",
       ]),
     );
-    // Zero-hidden-tools policy (#510): verify_binary and reconcile_binary are now
-    // implemented and visible, so no tool remains pending.
+    // Zero-hidden-tools policy (#510): every registered tool is implemented and
+    // visible, so no tool remains pending.
     expect(pending.length).toBe(0);
-    expect(getToolDefinition("verify_binary")).toMatchObject({ status: "implemented" });
-    expect(getToolDefinition("reconcile_binary")).toMatchObject({ status: "implemented" });
+    expect(getToolDefinition("verify_code")).toMatchObject({ status: "implemented" });
     expect(getToolDefinition("query_sql")).toMatchObject({
       name: "query_sql",
       slice: "query",
@@ -197,11 +196,11 @@ describe("Dysflow MCP tool parity inventory", () => {
     });
     await expect(
       tools
-        .find((tool) => tool.name === "verify_binary")
+        .find((tool) => tool.name === "verify_code")
         ?.handler({ moduleNames: ["Form_Main"], diff: true }),
     ).resolves.toEqual({
       isError: false,
-      content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_binary" }) }],
+      content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_code" }) }],
     });
 
     expect(vbaSyncCalls).toEqual([
@@ -209,7 +208,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         toolName: "export_modules",
         input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" },
       },
-      { toolName: "verify_binary", input: { moduleNames: ["Form_Main"], diff: true } },
+      { toolName: "verify_code", input: { moduleNames: ["Form_Main"], diff: true } },
     ]);
     expect(queryCalls).toEqual([
       {

@@ -1,6 +1,6 @@
 /**
- * Runtime diagnostics — ambient runtime information surfaced in verify_binary /
- * reconcile_binary results so consumers can identify exactly which Dysflow
+ * Runtime diagnostics — ambient runtime information surfaced in verify_code
+ * results so consumers can identify exactly which Dysflow
  * binary is executing, through which interface (CLI / MCP stdio / shared-core),
  * and when it was built.
  *

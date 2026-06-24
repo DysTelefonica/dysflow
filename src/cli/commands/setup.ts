@@ -175,7 +175,7 @@ async function writeRelativeProjectConfig(
         }),
     destinationRoot: "src",
     // Scaffold the per-project timeout as an explicit, editable knob. Heavy
-    // whole-project operations (verify_binary / reconcile_binary / export_all)
+    // whole-project operations (verify_code / export_all)
     // on large databases can exceed the generic default; surfacing it here lets
     // the user tune it instead of silently false-timing out.
     timeoutMs: config.timeoutMs,

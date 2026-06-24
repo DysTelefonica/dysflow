@@ -36,8 +36,6 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "test_vba",
   "compile_vba",
   "verify_code",
-  "verify_binary",
-  "reconcile_binary",
   "delete_module",
   "generate_erd",
   "fix_encoding",
@@ -45,7 +43,6 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "generate_form",
   "catalog_add_control",
   "harvest_form_catalog",
-  "compare_module",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService

@@ -571,11 +571,7 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("verify/reconcile tool visibility (#175, #510)", () => {
-    const IMPLEMENTED_VERIFY_TOOL_NAMES = [
-      "verify_code",
-      "verify_binary",
-      "reconcile_binary",
-    ] as const;
+    const IMPLEMENTED_VERIFY_TOOL_NAMES = ["verify_code"] as const;
 
     function makeServices() {
       return {
@@ -736,8 +732,6 @@ describe("MCP tool registration over core services", () => {
         "test_vba",
         "compile_vba",
         "verify_code",
-        "verify_binary",
-        "reconcile_binary",
         "delete_module",
         "generate_erd",
         "fix_encoding",

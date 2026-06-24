@@ -86,8 +86,8 @@ function setupWorkspace(): void {
         accessPath: "NoConformidades.accdb",
         backendPath: "NoConformidades_Datos.accdb",
         destinationRoot: "src",
-        // Heavy whole-project operations (verify_binary / reconcile_binary export
-        // the ENTIRE project) exceed the generic default on this large fixture.
+        // Heavy whole-project operations (verify_code exports the ENTIRE project)
+        // exceed the generic default on this large fixture.
         // Set a realistic per-project timeout so the suite verifies the config is
         // HONORED end-to-end (no per-call timeoutMs is passed by these tools).
         timeoutMs: 120_000,
@@ -345,14 +345,6 @@ function buildToolCases(): ToolCase[] {
     t("test_vba", "happy", { projectId, proceduresJson: "[]" }, 60_000),
     t("test_vba", "sad", { projectId, proceduresJson: "not-valid-json" }, 60_000),
     t("verify_code", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
-    t("verify_code", "sad", { projectId, moduleNames: [] }, 60_000),
-    t("verify_binary", "happy", { projectId, moduleNames: ["TestGoodModule"], diff: true }, 60_000),
-    t(
-      "reconcile_binary",
-      "happy",
-      { projectId, moduleNames: ["TestGoodModule"], diff: true },
-      60_000,
-    ),
     // Whole-project (no moduleNames) cases are exercised by the dedicated
     // regression block below with stronger assertions than the universal
     // contract, because empty moduleNames means "verify everything" — a happy
@@ -492,9 +484,9 @@ describe.skipIf(!canRunE2e)(
       );
     }
 
-    // ----- Whole-project verify/reconcile regression -----
+    // ----- Whole-project verify regression -----
     // A consumer reported VBA_MANAGER_FAILED ("...NormalizedModules ... matriz
-    // vacía") when calling verify_binary on a populated database without
+    // vacía") when calling verify_code on a populated database without
     // moduleNames. Root cause: the PowerShell Export action rejected an empty
     // NormalizedModules array at parameter-binding time, before its export-all
     // branch could run. Omitting moduleNames must verify the ENTIRE project and
@@ -509,13 +501,8 @@ describe.skipIf(!canRunE2e)(
       expect(r.ok).toBe(true);
     };
 
-    it("verify_binary verifies the whole project when no moduleNames are given", async () => {
-      const r = await callMcp("verify_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
-      assertWholeProjectOk(r);
-    }, 90_000);
-
-    it("reconcile_binary reconciles the whole project when no moduleNames are given", async () => {
-      const r = await callMcp("reconcile_binary", { projectId, diff: true }, { timeoutMs: 60_000 });
+    it("verify_code verifies the whole project when no moduleNames are given", async () => {
+      const r = await callMcp("verify_code", { projectId, diff: true }, { timeoutMs: 60_000 });
       assertWholeProjectOk(r);
     }, 90_000);
   },
@@ -525,10 +512,7 @@ describe.skipIf(!canRunE2e)(
 // Root cause: DoCmd.CopyObject mangles non-ASCII chars in the new object name (e.g. Módulo1 →
 // Mód×lo1). The fix forces VBComponent.Name via the COM property setter after CopyObject. These
 // tests verify the full create and delete+re-import paths against a temporary fixture workspace.
-const nonAsciiWorkspace = join(
-  tmpdir(),
-  `dysflow-nonascii-e2e-${process.pid}-${Date.now()}`,
-);
+const nonAsciiWorkspace = join(tmpdir(), `dysflow-nonascii-e2e-${process.pid}-${Date.now()}`);
 const nonAsciiModuleName = "TestMódulo"; // TestMódulo — ó = U+00F3
 const nonAsciiProjectId = "dysflow-nonascii-e2e";
 
@@ -586,72 +570,64 @@ describe.skipIf(!canRunE2e)(
       }
     });
 
-    it(
-      "imports a new non-ASCII module without mangling VBComponent.Name",
-      async () => {
-        // The module does not exist in the fixture → goes through New-VbComponentFromCodeFile
-        // → the CopyObject branch → the Unicode-safe .Name fix must apply.
-        const r = await callMcp(
-          "import_modules",
-          {
-            projectId: nonAsciiProjectId,
-            moduleNames: [nonAsciiModuleName],
-            importMode: "Code",
-            dryRun: false,
-            compile: false,
-          },
-          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
-        );
-        assertUniversalContract(r);
-        expect(r.ok).toBe(true);
+    it("imports a new non-ASCII module without mangling VBComponent.Name", async () => {
+      // The module does not exist in the fixture → goes through New-VbComponentFromCodeFile
+      // → the CopyObject branch → the Unicode-safe .Name fix must apply.
+      const r = await callMcp(
+        "import_modules",
+        {
+          projectId: nonAsciiProjectId,
+          moduleNames: [nonAsciiModuleName],
+          importMode: "Code",
+          dryRun: false,
+          compile: false,
+        },
+        { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+      );
+      assertUniversalContract(r);
+      expect(r.ok).toBe(true);
 
-        const list = await callMcp(
-          "list_objects",
-          { projectId: nonAsciiProjectId, filter: "*" },
-          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
-        );
-        assertUniversalContract(list);
-        // Exact Unicode match — no mojibake variant (×, ?, Ã, etc.)
-        expect(list.text).toContain(nonAsciiModuleName);
-        expect(list.text).not.toMatch(/TestM[^ó]dulo/);
-      },
-      120_000,
-    );
+      const list = await callMcp(
+        "list_objects",
+        { projectId: nonAsciiProjectId, filter: "*" },
+        { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+      );
+      assertUniversalContract(list);
+      // Exact Unicode match — no mojibake variant (×, ?, Ã, etc.)
+      expect(list.text).toContain(nonAsciiModuleName);
+      expect(list.text).not.toMatch(/TestM[^ó]dulo/);
+    }, 120_000);
 
-    it(
-      "delete + re-import preserves the non-ASCII module name",
-      async () => {
-        const del = await callMcp(
-          "delete_module",
-          { projectId: nonAsciiProjectId, moduleName: nonAsciiModuleName },
-          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
-        );
-        assertUniversalContract(del);
+    it("delete + re-import preserves the non-ASCII module name", async () => {
+      const del = await callMcp(
+        "delete_module",
+        { projectId: nonAsciiProjectId, moduleName: nonAsciiModuleName },
+        { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+      );
+      assertUniversalContract(del);
 
-        const reimport = await callMcp(
-          "import_modules",
-          {
-            projectId: nonAsciiProjectId,
-            moduleNames: [nonAsciiModuleName],
-            importMode: "Code",
-            dryRun: false,
-            compile: false,
-          },
-          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
-        );
-        assertUniversalContract(reimport);
-        expect(reimport.ok).toBe(true);
+      const reimport = await callMcp(
+        "import_modules",
+        {
+          projectId: nonAsciiProjectId,
+          moduleNames: [nonAsciiModuleName],
+          importMode: "Code",
+          dryRun: false,
+          compile: false,
+        },
+        { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+      );
+      assertUniversalContract(reimport);
+      expect(reimport.ok).toBe(true);
 
-        const list = await callMcp(
-          "list_objects",
-          { projectId: nonAsciiProjectId, filter: "*" },
-          { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
-        );
-        assertUniversalContract(list);
-        expect(list.text).toContain(nonAsciiModuleName);
-        expect(list.text).not.toMatch(/TestM[^ó]dulo/);
-      },
-      120_000,
-    );
+      const list = await callMcp(
+        "list_objects",
+        { projectId: nonAsciiProjectId, filter: "*" },
+        { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
+      );
+      assertUniversalContract(list);
+      expect(list.text).toContain(nonAsciiModuleName);
+      expect(list.text).not.toMatch(/TestM[^ó]dulo/);
+    }, 120_000);
   },
 );

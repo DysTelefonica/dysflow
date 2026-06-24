@@ -32,13 +32,11 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   exists: { kind: "vba-sync", mutatesBinary: false },
   test_vba: { kind: "vba-sync", mutatesBinary: false },
   compile_vba: { kind: "vba-sync", mutatesBinary: true },
+  // verify_code is the single source/binary compare tool (read-only dry-run): it
+  // does whole-project AND single-module comparison and only RECOMMENDS an
+  // explicit import/export — it never mutates the .accdb. Keep mutatesBinary:false.
+  // See src/core/services/vba-source-comparison.ts (compareSourceAgainstBinary).
   verify_code: { kind: "vba-sync", mutatesBinary: false },
-  verify_binary: { kind: "vba-sync", mutatesBinary: false },
-  // reconcile_binary is read-only DESPITE its name: planReconcileBinary runs a
-  // dry-run compare (compareSourceAgainstBinary) and only RECOMMENDS an explicit
-  // import/export — it never mutates the .accdb. Keep mutatesBinary:false.
-  // See src/core/services/vba-source-comparison.ts (planReconcileBinary).
-  reconcile_binary: { kind: "vba-sync", mutatesBinary: false },
   delete_module: { kind: "vba-sync", mutatesBinary: true },
   generate_erd: { kind: "vba-sync", mutatesBinary: false },
   fix_encoding: { kind: "vba-sync", mutatesBinary: false },
@@ -46,7 +44,6 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   generate_form: { kind: "vba-sync", mutatesBinary: false },
   catalog_add_control: { kind: "vba-sync", mutatesBinary: false },
   harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false },
-  compare_module: { kind: "vba-sync", mutatesBinary: false },
   vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false },
   vba_inline_execution: { kind: "vba-sync", mutatesBinary: true },
   // query maintenance (9)

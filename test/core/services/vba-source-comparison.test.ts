@@ -7,7 +7,6 @@ import {
   collectVbaSourceFiles,
   compareSourceAgainstBinary,
   compareVbaSourceTrees,
-  planReconcileBinary,
   type VbaExecutionRequest,
 } from "../../../src/core/services/vba-source-comparison";
 
@@ -55,7 +54,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
   });
 
@@ -88,7 +87,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
   });
 
@@ -121,7 +120,7 @@ describe("vba-source-comparison", () => {
         timedOut: true,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
   });
@@ -155,7 +154,7 @@ describe("vba-source-comparison", () => {
         timedOut: false,
       }),
     };
-    const result = await compareSourceAgainstBinary("verify_code", {}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_FAILED");
   });
@@ -188,7 +187,7 @@ describe("vba-source-comparison", () => {
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
       },
     };
-    await compareSourceAgainstBinary("verify_code", { timeoutMs: 9999 }, ctx, testFileSystem);
+    await compareSourceAgainstBinary({ timeoutMs: 9999 }, ctx, testFileSystem);
     expect(capturedTimeoutMs).toBe(9999);
   });
 
@@ -224,7 +223,7 @@ describe("vba-source-comparison", () => {
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
       },
     };
-    await compareSourceAgainstBinary("verify_binary", {}, ctx, testFileSystem);
+    await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(capturedTimeoutMs).toBe(90_000);
   });
 
@@ -256,14 +255,14 @@ describe("vba-source-comparison", () => {
         return { exitCode: 1, stdout: "", stderr: "", durationMs: 31000, timedOut: true };
       },
     };
-    const result = await compareSourceAgainstBinary("verify_binary", {}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
     // Once before the export (preflight) and once after the timeout (reap orphan).
     expect(preflightCalls).toBe(2);
   });
 
-  it("planReconcileBinary returns not-ok recommendation when source and binary differ", async () => {
+  it("verify_code surfaces a manual-merge recommendation when source and binary differ", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-recon-diff-"));
     const sourceRoot = join(root, "src");
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
@@ -296,11 +295,12 @@ describe("vba-source-comparison", () => {
         return { exitCode: 0, stdout: "", stderr: "", durationMs: 10, timedOut: false };
       },
     };
-    const result = await planReconcileBinary({}, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.ok).toBe(false);
-      expect(result.data.recommendation).toContain("review differences");
+      expect(result.data.recommendedAction).toBe("manual_merge");
+      expect(result.data.recommendation).toContain("merge");
     }
   });
 
@@ -511,12 +511,7 @@ describe("vba-source-comparison", () => {
       },
     };
 
-    const result = await compareSourceAgainstBinary(
-      "verify_code",
-      { diff: false },
-      ctx,
-      testFileSystem,
-    );
+    const result = await compareSourceAgainstBinary({ diff: false }, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
@@ -527,7 +522,7 @@ describe("vba-source-comparison", () => {
     }
   });
 
-  it("runs planReconcileBinary and returns recommendations", async () => {
+  it("verify_code returns an in-sync recommendation when source and binary match", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-recon-ctx-"));
     const sourceRoot = join(root, "src");
     const binaryRoot = join(root, "bin");
@@ -576,12 +571,13 @@ describe("vba-source-comparison", () => {
       },
     };
 
-    const result = await planReconcileBinary({ diff: false }, ctx, testFileSystem);
+    const result = await compareSourceAgainstBinary({ diff: false }, ctx, testFileSystem);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
-        operation: "reconcile_binary",
+        operation: "verify_code",
         ok: true,
+        recommendedAction: "no_action",
         recommendation: expect.stringContaining("already match"),
       });
     }
@@ -921,7 +917,7 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(rd).toHaveProperty("runtimePath");
   });
 
-  it("planReconcileBinary result also carries runtimeDiagnostics", async () => {
+  it("verify_code result also carries runtimeDiagnostics", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-recon-diag-"));
     const sourceRoot = join(root, "src");
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
@@ -955,14 +951,14 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       },
     };
 
-    const reconcileResult = await planReconcileBinary({}, ctx, testFileSystem);
-    expect(reconcileResult.ok).toBe(true);
-    if (reconcileResult.ok) {
-      expect(reconcileResult.data).toHaveProperty("runtimeDiagnostics");
-      expect(typeof reconcileResult.data.runtimeDiagnostics).toBe("object");
-      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("dysflowVersion");
-      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("runtimeType");
-      expect(reconcileResult.data.runtimeDiagnostics).toHaveProperty("runtimePath");
+    const verifyResult = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+    expect(verifyResult.ok).toBe(true);
+    if (verifyResult.ok) {
+      expect(verifyResult.data).toHaveProperty("runtimeDiagnostics");
+      expect(typeof verifyResult.data.runtimeDiagnostics).toBe("object");
+      expect(verifyResult.data.runtimeDiagnostics).toHaveProperty("dysflowVersion");
+      expect(verifyResult.data.runtimeDiagnostics).toHaveProperty("runtimeType");
+      expect(verifyResult.data.runtimeDiagnostics).toHaveProperty("runtimePath");
     }
   });
 

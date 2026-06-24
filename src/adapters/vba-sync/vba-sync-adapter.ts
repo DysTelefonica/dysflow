@@ -34,7 +34,6 @@ import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
 
 export type {
-  VbaReconcilePlanResult,
   VbaSourceComparisonEntry,
   VbaSourceComparisonFile,
   VbaSourceDiffEntry,

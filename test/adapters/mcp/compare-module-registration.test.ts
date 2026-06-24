@@ -1,11 +1,17 @@
 /**
- * Parity test for the compare_module MCP tool registration.
+ * Regression guard for the compare-tool consolidation.
  *
- * Guards all 5 required registration surfaces so a silently missed file causes
- * a failing test rather than a silent runtime 404. Per the design (§10.3):
- *   1. VBA_SYNC_TOOL_NAMES  — mcp-tool-registry.ts
- *   2. implementedToolNames — tool-parity-registry.ts (via getToolDefinition)
- *   3. MCP_TOOL_ROUTES      — dispatch-routes.ts
+ * verify_code / verify_binary / reconcile_binary / compare_module were four names
+ * over one engine (compareSourceAgainstBinary). They are collapsed into a single
+ * tool, verify_code, that does whole-project AND single-module comparison and
+ * carries an aggregated recommendation. This test locks the removal across all 5
+ * registration surfaces so a stray re-introduction is caught, and confirms
+ * verify_code remains fully registered.
+ *
+ * Surfaces:
+ *   1. VBA_SYNC_TOOL_NAMES   — mcp-tool-registry.ts
+ *   2. tool-parity-registry  — tool-parity-registry.ts (via TOOL_MAP)
+ *   3. MCP_TOOL_ROUTES       — dispatch-routes.ts
  *   4. VBA_SYNC_TOOL_SCHEMAS — vba-sync-schemas.ts
  *   5. VbaModulesAdapter.handles() — vba-modules-adapter.ts
  */
@@ -13,49 +19,41 @@ import { describe, expect, it } from "vitest";
 import { MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/dispatch-routes.js";
 import { VBA_SYNC_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry.js";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
-import { getToolDefinition } from "../../../src/adapters/mcp/tool-parity-registry.js";
+import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry.js";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
 
-describe("compare_module registration — all 5 surfaces", () => {
-  const TOOL = "compare_module" as const;
+const REMOVED_TOOLS = ["verify_binary", "reconcile_binary", "compare_module"] as const;
+const parityNames = new Set(TOOL_PARITY_REGISTRY.map((tool) => tool.name));
 
-  it("surface 1: VBA_SYNC_TOOL_NAMES includes compare_module", () => {
-    expect((VBA_SYNC_TOOL_NAMES as readonly string[]).includes(TOOL)).toBe(true);
-  });
-
-  it("surface 2: tool-parity-registry marks compare_module as implemented (vba-sync slice)", () => {
-    const def = getToolDefinition(TOOL);
-    expect(def.status).toBe("implemented");
-    expect(def.slice).toBe("vba-sync");
-  });
-
-  it("surface 3: dispatch-routes registers compare_module with kind vba-sync (not alias)", () => {
-    const route = (MCP_TOOL_ROUTES as Record<string, { kind: string }>)[TOOL];
-    expect(route).toBeDefined();
-    expect(route?.kind).toBe("vba-sync");
-  });
-
-  it("surface 4: VBA_SYNC_TOOL_SCHEMAS defines compare_module schema with required moduleName and optional strict", () => {
-    const schema = (VBA_SYNC_TOOL_SCHEMAS as Record<string, unknown>)[TOOL] as {
-      required?: string[];
-      properties?: Record<string, unknown>;
-    };
-    expect(schema).toBeDefined();
-    expect(schema?.required).toContain("moduleName");
-    expect(schema?.properties).toHaveProperty("strict");
-    expect(schema?.properties).toHaveProperty("diff");
-  });
-
-  it("surface 5: VbaModulesAdapter.handles('compare_module') returns true", () => {
-    expect(VbaModulesAdapter.handles(TOOL)).toBe(true);
-  });
+describe("compare-tool consolidation — removed names are absent from every surface", () => {
+  for (const tool of REMOVED_TOOLS) {
+    it(`${tool} is gone from all 5 registration surfaces`, () => {
+      expect((VBA_SYNC_TOOL_NAMES as readonly string[]).includes(tool)).toBe(false);
+      expect(parityNames.has(tool as never)).toBe(false);
+      expect((MCP_TOOL_ROUTES as Record<string, unknown>)[tool]).toBeUndefined();
+      expect((VBA_SYNC_TOOL_SCHEMAS as Record<string, unknown>)[tool]).toBeUndefined();
+      expect(VbaModulesAdapter.handles(tool)).toBe(false);
+    });
+  }
 });
 
-describe("compare_module result shape contract (port-level)", () => {
-  it("handles returns false for unrelated tools", () => {
-    expect(VbaModulesAdapter.handles("query_sql")).toBe(false);
-    expect(VbaModulesAdapter.handles("run_vba")).toBe(false);
-    expect(VbaModulesAdapter.handles("export_modules")).toBe(true);
-    expect(VbaModulesAdapter.handles("compare_module")).toBe(true);
+describe("compare-tool consolidation — verify_code remains the single compare tool", () => {
+  it("verify_code is registered across all 5 surfaces", () => {
+    const TOOL = "verify_code";
+    expect((VBA_SYNC_TOOL_NAMES as readonly string[]).includes(TOOL)).toBe(true);
+    expect(parityNames.has(TOOL)).toBe(true);
+    const route = (MCP_TOOL_ROUTES as Record<string, { kind: string }>)[TOOL];
+    expect(route?.kind).toBe("vba-sync");
+    expect((VBA_SYNC_TOOL_SCHEMAS as Record<string, unknown>)[TOOL]).toBeDefined();
+    expect(VbaModulesAdapter.handles(TOOL)).toBe(true);
+  });
+
+  it("verify_code schema exposes the unified knobs (moduleNames, strict, diff)", () => {
+    const schema = (VBA_SYNC_TOOL_SCHEMAS as Record<string, unknown>).verify_code as {
+      properties?: Record<string, unknown>;
+    };
+    expect(schema?.properties).toHaveProperty("moduleNames");
+    expect(schema?.properties).toHaveProperty("strict");
+    expect(schema?.properties).toHaveProperty("diff");
   });
 });

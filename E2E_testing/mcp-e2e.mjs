@@ -253,17 +253,17 @@ try {
   rows.push({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: false, expected: "parseable JSON with semantic fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 }
-// compare_module: single-module semantic classification.
-const compareModuleResult = await record("vba-sync", "compare_module", { ...ctx, moduleName: existingModuleName, diff: true });
-// Validate the compare_module response shape.
+// verify_code single-module: the unified tool covers the old compare_module via a moduleNames filter.
+const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true });
+// Validate the unified single-module response shape, including the aggregated recommendation.
 try {
-  const cmData = JSON.parse(compareModuleResult.text ?? "{}");
-  const hasModuleFields = cmData.operation === "compare_module" && "moduleName" in cmData && "ok" in cmData;
-  rows.push({ area: "vba-sync", tool: "compare_module:shape", pass: hasModuleFields, expected: "operation=compare_module+moduleName+ok present", ms: 0, summary: hasModuleFields ? "compare_module shape valid" : `missing fields in: ${Object.keys(cmData).join(",")}` });
-  console.log(`${hasModuleFields ? "PASS" : "FAIL"}\tcompare_module:shape\t0ms\t${rows.at(-1).summary}`);
+  const smData = JSON.parse(singleModuleResult.text ?? "{}");
+  const hasModuleFields = smData.operation === "verify_code" && "ok" in smData && "recommendedAction" in smData;
+  rows.push({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
+  console.log(`${hasModuleFields ? "PASS" : "FAIL"}\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  rows.push({ area: "vba-sync", tool: "compare_module:shape", pass: false, expected: "parseable JSON with compare_module fields", ms: 0, summary: String(err) });
-  console.log(`FAIL\tcompare_module:shape\t0ms\t${rows.at(-1).summary}`);
+  rows.push({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
+  console.log(`FAIL\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 }
 await record("vba-sync", "delete_module", { ...ctx, moduleName: "DysflowMcpE2EMissing" }, { expected: "error" });
 await record("vba-sync", "fix_encoding", { ...ctx, location: "Src" });

@@ -14,8 +14,6 @@ import {
 import {
   type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
-  planReconcileBinary,
-  type VbaComparisonContext,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
@@ -114,80 +112,6 @@ export interface VbaModulesOrchestrator {
   ): Promise<OperationResult<unknown>>;
 }
 
-/**
- * Compare a single named VBA module semantically against its binary export.
- *
- * Reuses compareSourceAgainstBinary with moduleNames=[moduleName] so the
- * full export+compare+classify pipeline is invoked with no duplicated logic.
- * Returns a single-module result shape: the one classified diff entry (or
- * matched/missing signal) plus the aggregated semantic summary.
- *
- * Errors on unknown module names (not found in source or binary).
- */
-async function compareSingleModule(
-  params: Record<string, unknown>,
-  ctx: VbaComparisonContext,
-  fileSystem: ComparisonFileSystemPort,
-): Promise<OperationResult<unknown>> {
-  const moduleName = stringValue(params.moduleName);
-  if (!moduleName) {
-    return failureResult(
-      createDysflowError("INVALID_INPUT", "compare_module requires a non-empty moduleName."),
-    );
-  }
-
-  const effectiveParams = { ...params, moduleNames: [moduleName] };
-  const result = await compareSourceAgainstBinary("verify_code", effectiveParams, ctx, fileSystem);
-  if (!result.ok) return result;
-
-  const {
-    matched,
-    different,
-    missingInSource,
-    missingInBinary,
-    diffs,
-    summary,
-    actionableDifferent,
-    nonActionableDifferent,
-    hasFunctionalDifferences,
-    actionableOk,
-  } = result.data;
-
-  // Validate the requested module was actually found in at least one side
-  const totalFound =
-    matched.length + different.length + missingInSource.length + missingInBinary.length;
-  if (totalFound === 0) {
-    return failureResult(
-      createDysflowError(
-        "MODULE_NOT_FOUND",
-        `Module "${moduleName}" was not found in source or binary export.`,
-      ),
-    );
-  }
-
-  return successResult(
-    {
-      operation: "compare_module",
-      moduleName,
-      ok: result.data.ok,
-      dryRun: result.data.dryRun,
-      willModifyAccess: result.data.willModifyAccess,
-      sourceRoot: result.data.sourceRoot,
-      matched,
-      different,
-      missingInSource,
-      missingInBinary,
-      ...(diffs !== undefined ? { diffs } : {}),
-      ...(summary !== undefined ? { summary } : {}),
-      ...(actionableDifferent !== undefined ? { actionableDifferent } : {}),
-      ...(nonActionableDifferent !== undefined ? { nonActionableDifferent } : {}),
-      ...(hasFunctionalDifferences !== undefined ? { hasFunctionalDifferences } : {}),
-      ...(actionableOk !== undefined ? { actionableOk } : {}),
-    },
-    { diagnostics: result.diagnostics, durationMs: result.durationMs },
-  );
-}
-
 const MANAGED_CODE_EXTENSIONS = [".bas", ".cls", ".frm"];
 
 /**
@@ -233,11 +157,8 @@ export class VbaModulesAdapter {
       toolName === "list_objects" ||
       toolName === "exists" ||
       toolName === "verify_code" ||
-      toolName === "verify_binary" ||
-      toolName === "reconcile_binary" ||
       toolName === "delete_module" ||
       toolName === "fix_encoding" ||
-      toolName === "compare_module" ||
       toolName === "vba_orphan_audit"
     );
   }
@@ -249,19 +170,8 @@ export class VbaModulesAdapter {
     if (toolName === "vba_orphan_audit") {
       return this.auditOrphans(params);
     }
-    if (toolName === "compare_module") {
-      return compareSingleModule(params, this.getComparisonContext(), this.fileSystem);
-    }
-    if (toolName === "verify_code" || toolName === "verify_binary") {
-      return compareSourceAgainstBinary(
-        toolName,
-        params,
-        this.getComparisonContext(),
-        this.fileSystem,
-      );
-    }
-    if (toolName === "reconcile_binary") {
-      return planReconcileBinary(params, this.getComparisonContext(), this.fileSystem);
+    if (toolName === "verify_code") {
+      return compareSourceAgainstBinary(params, this.getComparisonContext(), this.fileSystem);
     }
 
     if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {

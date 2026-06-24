@@ -11,8 +11,6 @@ export const VBA_SYNC_TOOL_NAMES = [
   "test_vba",
   "compile_vba",
   "verify_code",
-  "verify_binary",
-  "reconcile_binary",
   "delete_module",
   "generate_erd",
   "fix_encoding",
@@ -20,7 +18,6 @@ export const VBA_SYNC_TOOL_NAMES = [
   "generate_form",
   "catalog_add_control",
   "harvest_form_catalog",
-  "compare_module",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

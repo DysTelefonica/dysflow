@@ -16,6 +16,7 @@ import {
   classifyVbaPair,
   SEMANTIC_CLASSIFIER_RULES,
   type VbaComparisonMode,
+  type VbaRecommendation,
   type VbaSemanticCategory,
 } from "./vba-semantic-classifier.js";
 
@@ -56,7 +57,7 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
 export type VbaSemanticSummary = Partial<Record<VbaSemanticCategory, number>>;
 
 export type VbaVerifyResult = {
-  operation: "verify_code" | "verify_binary";
+  operation: "verify_code";
   ok: boolean;
   dryRun: true;
   willModifyAccess: false;
@@ -72,6 +73,10 @@ export type VbaVerifyResult = {
   nonActionableDifferent?: readonly VbaSourceComparisonEntry[];
   hasFunctionalDifferences?: boolean;
   actionableOk?: boolean;
+  /** Aggregated human-facing recommendation for the whole comparison (semantic mode). */
+  recommendation?: string;
+  /** Machine key for the aggregated recommendation (semantic mode). */
+  recommendedAction?: VbaRecommendation;
   /** Runtime package version that produced this result (e.g. "1.2.53"). */
   dysflowVersion?: string;
   /** Fingerprint of the active semantic-classification rule set. */
@@ -81,12 +86,6 @@ export type VbaVerifyResult = {
    * interface (CLI / MCP stdio / shared-core), and when it was built.
    */
   runtimeDiagnostics?: RuntimeDiagnostics;
-};
-
-export type VbaReconcilePlanResult = Omit<VbaVerifyResult, "operation"> & {
-  operation: "reconcile_binary";
-  /** Human-readable overall recommendation for the reconcile action. */
-  recommendation: string;
 };
 
 export type VbaExecutionTarget = {
@@ -148,7 +147,6 @@ export interface ComparisonFileSystemPort {
 }
 
 export async function compareSourceAgainstBinary(
-  toolName: "verify_code" | "verify_binary",
   params: Record<string, unknown>,
   ctx: VbaComparisonContext,
   fileSystem: ComparisonFileSystemPort,
@@ -228,8 +226,25 @@ export async function compareSourceAgainstBinary(
       fileSystem,
       comparisonMode,
     );
+    const requestedModules = stringArray(params.moduleNames);
+    if (requestedModules.length > 0) {
+      const found =
+        comparison.matched.length +
+        comparison.different.length +
+        comparison.missingInSource.length +
+        comparison.missingInBinary.length;
+      if (found === 0) {
+        return failureResult(
+          createDysflowError(
+            "MODULE_NOT_FOUND",
+            `No requested module was found in source or binary export: ${requestedModules.join(", ")}.`,
+          ),
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        );
+      }
+    }
     return successResult(
-      { operation: toolName, ...comparison },
+      { operation: "verify_code", ...comparison },
       { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
     );
   } finally {
@@ -238,50 +253,6 @@ export async function compareSourceAgainstBinary(
 }
 
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
-
-export async function planReconcileBinary(
-  params: Record<string, unknown>,
-  ctx: VbaComparisonContext,
-  fileSystem: ComparisonFileSystemPort,
-): Promise<OperationResult<VbaReconcilePlanResult>> {
-  const comparison = await compareSourceAgainstBinary("verify_code", params, ctx, fileSystem);
-  if (!comparison.ok) return comparison;
-  return successResult(
-    {
-      operation: "reconcile_binary",
-      ok: comparison.data.ok,
-      dryRun: comparison.data.dryRun,
-      willModifyAccess: comparison.data.willModifyAccess,
-      sourceRoot: comparison.data.sourceRoot,
-      dysflowVersion: comparison.data.dysflowVersion,
-      classifierRules: comparison.data.classifierRules,
-      runtimeDiagnostics: comparison.data.runtimeDiagnostics,
-      matched: comparison.data.matched,
-      different: comparison.data.different,
-      missingInSource: comparison.data.missingInSource,
-      missingInBinary: comparison.data.missingInBinary,
-      diffs: comparison.data.diffs,
-      // Additive semantic fields (present in semantic mode)
-      ...(comparison.data.summary !== undefined ? { summary: comparison.data.summary } : {}),
-      ...(comparison.data.actionableDifferent !== undefined
-        ? { actionableDifferent: comparison.data.actionableDifferent }
-        : {}),
-      ...(comparison.data.nonActionableDifferent !== undefined
-        ? { nonActionableDifferent: comparison.data.nonActionableDifferent }
-        : {}),
-      ...(comparison.data.hasFunctionalDifferences !== undefined
-        ? { hasFunctionalDifferences: comparison.data.hasFunctionalDifferences }
-        : {}),
-      ...(comparison.data.actionableOk !== undefined
-        ? { actionableOk: comparison.data.actionableOk }
-        : {}),
-      recommendation: comparison.data.ok
-        ? "Source and Access binary exports already match; no reconciliation is needed."
-        : "Dry-run only: review differences, then run an explicit import/export workflow if you want to reconcile.",
-    },
-    { diagnostics: comparison.diagnostics, durationMs: comparison.durationMs },
-  );
-}
 
 export async function compareVbaSourceTrees(
   sourceRoot: string,
@@ -429,9 +400,64 @@ export async function compareVbaSourceTrees(
           nonActionableDifferent: sortComparisonEntries(nonActionableDifferent),
           hasFunctionalDifferences,
           actionableOk: !hasFunctionalDifferences,
+          ...aggregateRecommendation(
+            semanticSummary,
+            missingInSource.length,
+            missingInBinary.length,
+            hasFunctionalDifferences,
+          ),
         }
       : {}),
   };
+}
+
+/**
+ * Derives a single whole-comparison recommendation from the per-category summary
+ * and the missing buckets. This is the aggregate the old `reconcile_binary`
+ * surfaced, made classification-aware: the consumer reads one direction instead
+ * of inferring it from the per-module diffs.
+ *
+ * - missingInBinary = present on disk, absent in the binary -> import to binary.
+ * - missingInSource = present in the binary, absent on disk -> export to source.
+ */
+function aggregateRecommendation(
+  summary: Record<string, number>,
+  missingInSourceCount: number,
+  missingInBinaryCount: number,
+  hasFunctional: boolean,
+): { recommendation: string; recommendedAction: VbaRecommendation } {
+  if (!hasFunctional) {
+    return {
+      recommendedAction: "no_action",
+      recommendation:
+        "Source and the Access binary already match (ignoring non-functional noise); no sync needed.",
+    };
+  }
+  const sourceNewer = summary.sourceNewer ?? 0;
+  const binaryNewer = summary.binaryNewer ?? 0;
+  const bothChanged = summary.bothChanged ?? 0;
+  const wantsImport = sourceNewer > 0 || missingInBinaryCount > 0;
+  const wantsExport = binaryNewer > 0 || missingInSourceCount > 0;
+  if (bothChanged > 0 || (wantsImport && wantsExport)) {
+    return {
+      recommendedAction: "manual_merge",
+      recommendation:
+        "Both source and the Access binary changed; review the per-module diffs and merge manually before syncing.",
+    };
+  }
+  if (wantsImport) {
+    return {
+      recommendedAction: "import_to_binary",
+      recommendation: "Source is ahead; import the listed modules into the Access binary.",
+    };
+  }
+  if (wantsExport) {
+    return {
+      recommendedAction: "export_to_src",
+      recommendation: "The Access binary is ahead; export the listed modules to source.",
+    };
+  }
+  return { recommendedAction: "no_action", recommendation: "No actionable differences." };
 }
 
 export async function collectVbaSourceFiles(
