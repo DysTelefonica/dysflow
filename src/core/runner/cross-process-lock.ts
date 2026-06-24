@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isLockAlreadyExistsError, isTransientLockContentionError } from "../utils/lock-errors.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
@@ -98,9 +99,16 @@ export async function acquireCrossProcessAccessLock(
         await releaseCrossProcessAccessLock(lockPath, fileSystem);
       };
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      // Stale lock: claim-and-retry. Fresh lock: back off and poll again.
-      if (await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)) continue;
+      if (!isTransientLockContentionError(err)) throw err;
+      // EEXIST: the lock dir exists and may be stale and evictable. EACCES/EPERM: a concurrent
+      // release left the dir in Windows DELETE_PENDING state — eviction is pointless mid-delete,
+      // so just back off and retry. A genuinely permanent permission error is bounded by the
+      // acquire deadline (surfaces as RunnerLockTimeoutError).
+      if (isLockAlreadyExistsError(err)) {
+        if (await evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)) continue;
+      } else {
+        logSwallowedIoError("cross-process-lock:acquire-transient", err);
+      }
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
   }

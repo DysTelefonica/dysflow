@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { isLockAlreadyExistsError, isTransientLockContentionError } from "../utils/lock-errors.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export type AccessOperationStatus =
@@ -202,8 +203,14 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
       try {
         await mkdir(this.lockPath);
       } catch (error) {
-        if (!isFileExistsError(error)) throw error;
-        await this.removeLockIfStale();
+        if (!isTransientLockContentionError(error)) throw error;
+        // EEXIST: the lock dir exists and may be stale. EACCES/EPERM: a concurrent release left
+        // it in Windows DELETE_PENDING state — eviction is pointless mid-delete, so just retry.
+        if (isLockAlreadyExistsError(error)) {
+          await this.removeLockIfStale();
+        } else {
+          logSwallowedIoError("access-operation-registry:acquire-transient", error);
+        }
         if (Date.now() >= deadline) {
           throw new Error(`Timed out acquiring operation registry lock: ${this.lockPath}`);
         }
@@ -216,7 +223,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
         return { ownerToken };
       } catch (error) {
         await this.removeOwnerlessLockDirectory().catch(() => undefined);
-        if (!isPathMissingError(error) && !isErrorWithCode(error, "EEXIST")) throw error;
+        if (!isPathMissingError(error) && !isTransientLockContentionError(error)) throw error;
         await this.removeLockIfStale();
         if (Date.now() >= deadline) {
           throw new Error(`Timed out acquiring operation registry lock: ${this.lockPath}`);
@@ -371,10 +378,6 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
   private evictOldestRecords(): void {
     evictOldestRecordsFromMap(this.records, this.maxRecords);
   }
-}
-
-function isFileExistsError(error: unknown): boolean {
-  return isErrorWithCode(error, "EEXIST");
 }
 
 function isPathMissingError(error: unknown): boolean {

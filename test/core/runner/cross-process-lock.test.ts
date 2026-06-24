@@ -372,6 +372,37 @@ describe("cross-process-lock module API", () => {
     });
   });
 
+  it("retries (not throws) when mkdir fails with EACCES from a DELETE_PENDING race, then acquires", async () => {
+    let mkdirCalls = 0;
+    const fileSystem: LockFileSystemPort = {
+      mkdir: async (path) => {
+        if (path.endsWith(".lock")) {
+          mkdirCalls += 1;
+          if (mkdirCalls === 1) {
+            // Simulate the Windows DELETE_PENDING race: a concurrent release left the dir
+            // mid-deletion, so the first mkdir gets EACCES instead of EEXIST.
+            const err: NodeJS.ErrnoException = new Error("access denied");
+            err.code = "EACCES";
+            throw err;
+          }
+        }
+        return path;
+      },
+      rm: async () => {},
+      stat: async () => null,
+      utimes: async () => {},
+      writeFile: async () => {},
+      tmpdir: () => tmpdir(),
+    };
+    const lockPath = join(tmpdir(), "dysflow-transient-test", `eacces-${process.pid}.lock`);
+
+    // Before the fix this rejects on the first EACCES; after it, it backs off and acquires.
+    const release = await acquireCrossProcessAccessLock(lockPath, 2_000, 5, fileSystem);
+    expect(mkdirCalls).toBeGreaterThanOrEqual(2);
+    expect(typeof release).toBe("function");
+    await release();
+  });
+
   it("supports in-memory LockFileSystemPort mock without touching physical disk", async () => {
     const virtualFiles = new Map<string, { mtimeMs: number; data?: string; isDir?: boolean }>();
 
