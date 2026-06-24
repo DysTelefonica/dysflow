@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.7.5] - 2026-06-24
+
+### Fixed
+
+- **`compact_repair` no longer wedges on a leftover target file.** DAO `CompactDatabase` throws if the target already exists; a run killed between compaction and the final `Move-Item` left a stale `<base>.compacted` file that made every subsequent `compact_repair` on that database fail. A new Pester-tested `Clear-CompactTarget` removes a leftover target before compacting.
+- **`compact_repair` now honors `backupFirst`.** The MCP schema accepted `backupFirst` but it was silently ignored — the field was never forwarded from the request mapper to the PowerShell payload, so the runner could not see it. `backupFirst` is now wired through `AccessQueryRequest` + `buildMaintenanceRequest`; when set, the runner backs the source up via `Backup-AccessFile` before compacting and returns the `backupPath` in the result (`null` when no backup was taken).
+
 ## [v1.7.4] - 2026-06-24
 
 ### Fixed
