@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,6 +8,26 @@ const GITHUB_LATEST_RELEASE_API =
   "https://api.github.com/repos/DysTelefonica/dysflow/releases/latest";
 
 const FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * Trusted Ed25519 public key (SPKI PEM) used to verify the detached `SHA256SUMS.sig`
+ * signature published alongside a release. This is the supply-chain trust anchor that
+ * raises the update model from "integrity vs transport" to "authenticity vs publisher".
+ *
+ * EMPTY until the maintainer enables release signing:
+ *   1. Generate a keypair (kept offline / in a release secret):
+ *        openssl genpkey -algorithm ed25519 -out dysflow-release.key
+ *        openssl pkey -in dysflow-release.key -pubout -out dysflow-release.pub
+ *   2. Sign SHA256SUMS in the release pipeline and publish SHA256SUMS.sig (base64):
+ *        openssl pkeyutl -sign -inkey dysflow-release.key -rawin -in SHA256SUMS \
+ *          | base64 -w0 > SHA256SUMS.sig
+ *   3. Paste the PEM public key here.
+ *
+ * While empty, signature verification is skipped and the model is checksum-only
+ * (unchanged behavior). Once set, a missing or invalid signature is a hard failure.
+ * See docs/security/update-trust-model.md.
+ */
+const RELEASE_SIGNING_PUBLIC_KEY_PEM = "";
 
 export type ReleaseInfo = {
   version: string;
@@ -42,6 +62,27 @@ export function validateReleaseTagName(tagName: string): string {
     throw new Error(`Invalid Dysflow release tag: ${tagName}`);
   }
   return tagName;
+}
+
+/**
+ * Verifies a detached Ed25519 signature over the SHA256SUMS text against a trusted
+ * SPKI-PEM public key. Returns false (never throws) on any malformed input so the
+ * caller can treat verification failure as a single hard error.
+ */
+export function verifyChecksumsSignature(
+  checksums: string,
+  signatureBase64: string,
+  publicKeyPem: string,
+): boolean {
+  try {
+    const publicKey = createPublicKey(publicKeyPem);
+    const signature = Buffer.from(signatureBase64, "base64");
+    if (signature.length === 0) return false;
+    // Ed25519 uses a null algorithm digest with the raw message.
+    return cryptoVerify(null, Buffer.from(checksums, "utf8"), publicKey, signature);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -101,7 +142,10 @@ async function tryResolveGitCommitSha(cwd: string): Promise<string | undefined> 
   }
 }
 
-export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
+export function createGitHubReleaseUpdateProvider(
+  options: { signingPublicKeyPem?: string } = {},
+): ReleaseUpdateProvider {
+  const signingPublicKeyPem = options.signingPublicKeyPem ?? RELEASE_SIGNING_PUBLIC_KEY_PEM;
   return {
     async resolveLatestRelease(): Promise<ReleaseInfo> {
       const controller = new AbortController();
@@ -197,6 +241,39 @@ export function createGitHubReleaseUpdateProvider(): ReleaseUpdateProvider {
             );
           }
           const checksumsText = await checksumsResponse.text();
+
+          // Authenticity gate: when a signing key is configured, the SHA256SUMS file must
+          // carry a valid detached Ed25519 signature from the trusted publisher key. This
+          // fails closed — a missing or invalid signature aborts the update. Without it the
+          // checksum only proves the archive matches whatever SHA256SUMS was served, which a
+          // compromised publisher controls. See docs/security/update-trust-model.md.
+          if (signingPublicKeyPem.trim().length > 0) {
+            const signatureUrl = `https://github.com/DysTelefonica/dysflow/releases/download/${tagName}/SHA256SUMS.sig`;
+            const sigController = new AbortController();
+            const sigTimeout = setTimeout(() => sigController.abort(), FETCH_TIMEOUT_MS);
+            let sigResponse: Response;
+            try {
+              sigResponse = await fetch(signatureUrl, {
+                headers: createGitHubReleaseRequestHeaders(environment),
+                signal: sigController.signal,
+              });
+            } finally {
+              clearTimeout(sigTimeout);
+            }
+            if (!sigResponse.ok) {
+              throw new Error(
+                `Failed to download release signature from ${signatureUrl}: HTTP ${sigResponse.status}. ` +
+                  "This release is required to be signed; refusing to proceed.",
+              );
+            }
+            const signatureBase64 = (await sigResponse.text()).trim();
+            if (!verifyChecksumsSignature(checksumsText, signatureBase64, signingPublicKeyPem)) {
+              throw new Error(
+                "Release signature verification failed: SHA256SUMS does not match the trusted Dysflow signing key.",
+              );
+            }
+          }
+
           const lines = checksumsText.split(/\r?\n/);
           let expectedHash: string | undefined;
           for (const line of lines) {

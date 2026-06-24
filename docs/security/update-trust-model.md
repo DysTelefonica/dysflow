@@ -20,6 +20,44 @@ verifying it against the SHA-256 checksums published in the same release.
 commit `499d5e4`. Any attempt to introduce a source-build fallback reintroduces the
 supply-chain risk that audit finding #436 identified.
 
+## Archive extraction (tar-slip defense)
+
+Before extracting, the downloader lists the archive entries (`tar -tzf`) and refuses any
+entry that is an absolute path (POSIX, Windows drive-letter, or UNC) or contains a `..`
+parent segment (`assertSafeArchiveEntries` in `downloader.ts`). This is defense-in-depth:
+the archive is already SHA-256 verified, but the guard ensures a tampered or malicious
+archive cannot write outside the extraction root even if the system `tar` would allow it.
+
+## Authenticity: SHA256SUMS signature
+
+Integrity (SHA-256) only proves the archive matches whatever `SHA256SUMS` was served from
+the release. A compromised publisher controls *both* the archive and `SHA256SUMS`, so the
+checksum alone does not establish authenticity. To close that gap the downloader supports a
+detached **Ed25519 signature** over `SHA256SUMS`:
+
+| Property | Detail |
+|----------|--------|
+| Trust anchor | `RELEASE_SIGNING_PUBLIC_KEY_PEM` (SPKI PEM) embedded in `downloader.ts`. Empty by default. |
+| Signature asset | `SHA256SUMS.sig` (base64 detached Ed25519 signature) published in the same release. |
+| Verification | `verifyChecksumsSignature(checksums, signatureBase64, publicKeyPem)` — verifies before the hash is matched. |
+| Fail-closed | When the key is configured, a missing or invalid signature is a hard error; the update aborts. |
+| Disabled state | While the key is empty, verification is skipped and the model is checksum-only (unchanged behavior). |
+
+**To enable release signing (maintainer action required):**
+
+1. Generate an Ed25519 keypair, kept offline or as a protected CI secret:
+   ```
+   openssl genpkey -algorithm ed25519 -out dysflow-release.key
+   openssl pkey -in dysflow-release.key -pubout -out dysflow-release.pub
+   ```
+2. In the release pipeline, sign `SHA256SUMS` and publish `SHA256SUMS.sig`:
+   ```
+   openssl pkeyutl -sign -inkey dysflow-release.key -rawin -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
+   ```
+3. Paste the public key (`dysflow-release.pub` contents) into `RELEASE_SIGNING_PUBLIC_KEY_PEM`.
+
+Until step 3 is done the embedded key is empty and the gate is inert by design.
+
 ## Authentication for GitHub API requests
 
 The `resolveLatestRelease` function reads `GH_TOKEN` or `GITHUB_TOKEN` from the

@@ -1,9 +1,11 @@
+import { createHash, sign as cryptoSign, generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   assertSafeArchiveEntries,
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
   validateReleaseTagName,
+  verifyChecksumsSignature,
 } from "../../../../src/cli/commands/install/downloader";
 
 // Mock child_process for runCommand/runCommandOutput
@@ -61,7 +63,12 @@ describe("validateReleaseTagName", () => {
 
 describe("assertSafeArchiveEntries", () => {
   it("accepts a listing of normal relative entries", () => {
-    const listing = ["source/", "source/package.json", "source/dist/cli/index.js", "source/scripts/dysflow-access-runner.ps1"].join("\n");
+    const listing = [
+      "source/",
+      "source/package.json",
+      "source/dist/cli/index.js",
+      "source/scripts/dysflow-access-runner.ps1",
+    ].join("\n");
     expect(() => assertSafeArchiveEntries(listing)).not.toThrow();
   });
 
@@ -100,6 +107,101 @@ describe("assertSafeArchiveEntries", () => {
 
   it("rejects a backslash parent-traversal segment", () => {
     expect(() => assertSafeArchiveEntries("source\\..\\..\\evil")).toThrow(/unsafe/i);
+  });
+});
+
+describe("verifyChecksumsSignature", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const pubPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+  const checksums =
+    "1111111111111111111111111111111111111111111111111111111111111111  dysflow-v1.0.0.tar.gz\n";
+  const signature = cryptoSign(null, Buffer.from(checksums, "utf8"), privateKey).toString("base64");
+
+  it("returns true for a valid signature over the checksums", () => {
+    expect(verifyChecksumsSignature(checksums, signature, pubPem)).toBe(true);
+  });
+
+  it("returns false when the checksums text was tampered", () => {
+    expect(verifyChecksumsSignature(`${checksums}# tampered`, signature, pubPem)).toBe(false);
+  });
+
+  it("returns false for a signature produced by a different key", () => {
+    const other = generateKeyPairSync("ed25519");
+    const otherSig = cryptoSign(null, Buffer.from(checksums, "utf8"), other.privateKey).toString(
+      "base64",
+    );
+    expect(verifyChecksumsSignature(checksums, otherSig, pubPem)).toBe(false);
+  });
+
+  it("returns false for a malformed public key", () => {
+    expect(verifyChecksumsSignature(checksums, signature, "-----not a key-----")).toBe(false);
+  });
+
+  it("returns false for a malformed signature", () => {
+    expect(verifyChecksumsSignature(checksums, "!!! not base64 !!!", pubPem)).toBe(false);
+  });
+});
+
+describe("createGitHubReleaseUpdateProvider — signature verification (fail-closed)", () => {
+  it("rejects the update when a signing key is configured and the signature is invalid", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    const { publicKey } = generateKeyPairSync("ed25519");
+    const pubPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      const archiveHash = createHash("sha256").update(archiveBytes).digest("hex");
+      // 1: archive
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      // 2: SHA256SUMS (hash matches, so failure can only come from the signature gate)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${archiveHash}  dysflow-v1.0.0.tar.gz\n`,
+      });
+      // 3: SHA256SUMS.sig — a syntactically valid but WRONG signature
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => Buffer.from("not-the-real-signature").toString("base64"),
+      });
+
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: pubPem });
+      await expect(
+        provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }),
+      ).rejects.toThrow(/signature/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does NOT fetch a signature when no signing key is configured (default)", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      const archiveHash = createHash("sha256").update(archiveBytes).digest("hex");
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${archiveHash}  dysflow-v1.0.0.tar.gz\n`,
+      });
+      const provider = createGitHubReleaseUpdateProvider();
+      // tar is mocked to empty stdout, so extraction proceeds; the point is only TWO fetches
+      // (archive + checksums), never a third for the signature.
+      await provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }).catch(() => {});
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
@@ -303,12 +405,7 @@ describe("createGitHubReleaseUpdateProvider — preparePackage", () => {
     execFileMock.mockClear();
     // `tar -tzf` returns a malicious listing; everything else returns empty.
     execFileMock.mockImplementation(
-      (
-        _file: unknown,
-        args: unknown,
-        options: unknown,
-        callback: (...a: unknown[]) => void,
-      ) => {
+      (_file: unknown, args: unknown, options: unknown, callback: (...a: unknown[]) => void) => {
         const cb = typeof options === "function" ? options : callback;
         const argList = Array.isArray(args) ? (args as string[]) : [];
         const stdout = argList.includes("-tzf") ? "source/package.json\n../../evil.sh\n" : "";
@@ -330,12 +427,7 @@ describe("createGitHubReleaseUpdateProvider — preparePackage", () => {
       globalThis.fetch = originalFetch;
       // Restore the default empty-stdout mock for subsequent tests.
       execFileMock.mockImplementation(
-        (
-          _file: unknown,
-          _args: unknown,
-          options: unknown,
-          callback: (...a: unknown[]) => void,
-        ) => {
+        (_file: unknown, _args: unknown, options: unknown, callback: (...a: unknown[]) => void) => {
           const cb = typeof options === "function" ? options : callback;
           if (cb) queueMicrotask(() => cb(null, { stdout: "", stderr: "" }));
         },
