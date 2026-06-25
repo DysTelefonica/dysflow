@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.7.8] - 2026-06-25
+
+Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v1.7.6/v1.7.7.
+
+### Tests
+
+- De-flaked the `handleUpdateCommand` install tests. Two update tests pointed `preparePackage` at `process.cwd()`, so `installRuntime` copied the built `dist` and ran a real `pnpm install --prod` of the project dependencies — which could exceed the 15s test timeout on slow/loaded machines. They now use a lightweight deps-free release package root (~3.2s → ~0.5s for the trio), and the up-to-date test asserts `preparePackage` is never called.
+
 ## [v1.7.7] - 2026-06-25
 
 Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v1.7.6.
