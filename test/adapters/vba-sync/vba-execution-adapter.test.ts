@@ -40,6 +40,60 @@ describe("VbaExecutionAdapter", () => {
     );
   });
 
+  // --- vba_inline_execution guardrails (#533) ---------------------------------
+
+  function makeInlineAdapter() {
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
+    const resolveExecutionTarget = vi
+      .fn()
+      .mockResolvedValue(successResult({ destinationRoot: "C:/repo/src", projectRoot: "C:/repo" }));
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool,
+      cwd: "C:/repo",
+      resolveExecutionTarget,
+    };
+    const fileSystem = {
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      rm: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem);
+    return { adapter, executeMappedTool, fileSystem };
+  }
+
+  it("rejects inline code over the 1024-char cap before doing any work (#533)", async () => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", { code: "a".repeat(1025) });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(fileSystem.writeFile).not.toHaveBeenCalled();
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("rejects inline code that closes its own procedure block (#533)", async () => {
+    const { adapter, fileSystem } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'Debug.Print "x"\nEnd Sub',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(fileSystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("clamps the inline timeout to the 30s ceiling (#533)", async () => {
+    const { adapter, executeMappedTool } = makeInlineAdapter();
+    await adapter.execute("vba_inline_execution", {
+      code: 'Debug.Print "ok"',
+      timeoutMs: 120_000,
+    });
+    for (const toolName of ["import_modules", "run_vba"]) {
+      const call = executeMappedTool.mock.calls.find((c) => c[0] === toolName);
+      expect(call, `expected a ${toolName} call`).toBeDefined();
+      expect((call?.[1] as { timeoutMs?: number }).timeoutMs).toBe(30_000);
+    }
+  });
+
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {
     const executeMappedTool = vi
       .fn()

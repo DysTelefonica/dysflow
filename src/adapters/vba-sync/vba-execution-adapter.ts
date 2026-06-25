@@ -52,6 +52,10 @@ const EXECUTION_MAPPINGS = {
   ),
 };
 
+/** Defense-in-depth limits for vba_inline_execution (issue #533). */
+const MAX_INLINE_CODE_CHARS = 1024;
+const INLINE_TIMEOUT_CEILING_MS = 30_000;
+
 export interface VbaSyncOrchestrator {
   executeMappedTool(
     toolName: string,
@@ -113,6 +117,30 @@ export class VbaExecutionAdapter {
   }
 
   private async executeInline(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const rawCode = stringValue(params.code) || "";
+
+    // Guardrail (#533): 1024-character code cap — reject before touching the binary.
+    if (rawCode.length > MAX_INLINE_CODE_CHARS) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Inline VBA code exceeds the ${MAX_INLINE_CODE_CHARS}-character cap (got ${rawCode.length}). Move larger logic into a module and run it with run_vba.`,
+        ),
+      );
+    }
+
+    // Guardrail (#533): the snippet is wrapped in Public Sub ExecuteInline()/End Sub,
+    // so a snippet that closes its own procedure block produces malformed VBA that
+    // Access refuses to import. Reject it and point the caller at run_vba.
+    if (/\bEnd\s+(?:Sub|Function|Property)\b/i.test(rawCode)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "Inline VBA code must be a single procedure body and must not contain 'End Sub'/'End Function'/'End Property'. Define helpers in a module and call them with run_vba.",
+        ),
+      );
+    }
+
     if (typeof this.orchestrator.resolveExecutionTarget !== "function") {
       return failureResult(
         createDysflowError(
@@ -126,13 +154,20 @@ export class VbaExecutionAdapter {
     const targetData = targetRes.data as { destinationRoot: string };
     const destinationRoot = targetData.destinationRoot;
 
+    // Guardrail (#533): clamp the effective timeout to the ceiling before any sub-call.
+    const requestedTimeout = Number(params.timeoutMs);
+    const clampedTimeout =
+      Number.isFinite(requestedTimeout) && requestedTimeout > 0
+        ? Math.min(requestedTimeout, INLINE_TIMEOUT_CEILING_MS)
+        : INLINE_TIMEOUT_CEILING_MS;
+    const inlineParams = { ...params, timeoutMs: clampedTimeout };
+
     const uuid = randomUUID().replace(/-/g, "_");
     const moduleName = `_inline_${uuid}`;
 
     const folder = resolve(destinationRoot, "modules");
     const filePath = resolve(folder, `${moduleName}.bas`);
 
-    const rawCode = stringValue(params.code) || "";
     const wrapper = `Attribute VB_Name = "${moduleName}"
 Public Sub ExecuteInline()
 ${rawCode}
@@ -156,7 +191,7 @@ End Sub
     try {
       const importRes = await this.orchestrator.executeMappedTool(
         "import_modules",
-        { ...params, moduleNames: [moduleName], dryRun: false },
+        { ...inlineParams, moduleNames: [moduleName], dryRun: false },
         EXECUTION_MAPPINGS.import_modules,
       );
       if (!importRes.ok) {
@@ -165,7 +200,7 @@ End Sub
         inlineResult = await this.orchestrator.executeMappedTool(
           "run_vba",
           {
-            ...params,
+            ...inlineParams,
             moduleNames: [moduleName],
             procedureName: `${moduleName}.ExecuteInline`,
           },
@@ -186,7 +221,7 @@ End Sub
         // an orphan _inline_* module into the binary on every failed cleanup.
         await this.orchestrator.executeMappedTool(
           "delete_module",
-          { ...params, moduleName, force: true },
+          { ...inlineParams, moduleName, force: true },
           EXECUTION_MAPPINGS.delete_module,
         );
       } catch {
