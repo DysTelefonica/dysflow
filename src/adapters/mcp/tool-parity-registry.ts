@@ -82,6 +82,106 @@ function classifyToolName(name: DysflowMcpToolName): ParitySlice {
   return (VBA_SYNC_TOOL_NAMES as readonly string[]).includes(name) ? "vba-sync" : "query";
 }
 
+/**
+ * Real per-tool descriptions advertised to consuming agents (#544). Each line
+ * tells an LLM what the tool does, the key arguments, and the footguns
+ * (read-only / write-gated / destructive / dry-run / headless). The parity
+ * `slice`/`status` above stay separate — they track porting for contract tests,
+ * they are NOT the consumer-facing contract. Keep these honest and additive.
+ */
+export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
+  // VBA sync — operations lifecycle
+  list_access_operations:
+    "List the Access operations dysflow is tracking, with their PIDs and status. Read-only. Use it to verify whether an MSACCESS process is actually live before asserting it or blocking a destructive action.",
+  cleanup_access_operation:
+    "Reconcile or release a tracked Access operation by operationId. WITHOUT force it inspects the recorded PID and reconciles a dead one (kills nothing); WITH force:true it kills the process. Write-gated.",
+  // VBA sync — source <-> binary sync
+  export_modules:
+    "Export specific VBA modules from the Access binary to the on-disk source tree. Scope with moduleNames (exact) or filter (substring). Read-only on the binary. destinationRoot is honored only when accessPath is also passed; otherwise the project source root is used. For a full mirror use export_all.",
+  export_all:
+    "Mirror ALL VBA modules from the binary to the source tree. diff:true reports per-file drift without writing. prune:true DELETES orphaned managed source files (.bas/.cls/.form.txt/.report.txt) absent from the binary; prune is rejected together with filter. Read-only on the binary.",
+  import_modules:
+    "Import specific source modules INTO the Access binary (mutates the binary; write-gated). importMode controls merge vs replace. compile:true compiles after import and fails on a real compile error in standard/class modules; dryRun:true returns a plan without writing.",
+  import_all:
+    "Import the entire source tree into the Access binary (mutates the binary; write-gated). Heavier than import_modules — prefer that for a targeted change. Supports compile:true and dryRun:true (plan mode).",
+  list_objects:
+    "List the VBA project's modules, classes, forms and reports, optionally filtered by name. Read-only.",
+  exists: "Check whether a named module/object exists in the VBA project. Read-only.",
+  // VBA sync — execution & test
+  run_vba:
+    "Execute one PUBLIC VBA procedure by name and return its result. Pass arguments via argsJson — a JSON array of scalars only (string/number/boolean/null). Requires a compiled project; subject to the allowedProcedures allowlist when configured. Headless.",
+  test_vba:
+    "Run VBA test procedures and report pass/fail per atom — the project's green gate. Select tests with proceduresJson (explicit list), filter (name substring) or testsPath. Requires a compiled project: import and compile before running.",
+  compile_vba:
+    "Compile and save all VBA modules headless. Reports a structured VBA_COMPILE_ERROR when standard/class modules fail to compile (via Application.IsCompiled); mutates only the binary's compiled state. Form/report document modules cannot be verified headless.",
+  verify_code:
+    "Compare the on-disk source against the VBA source exported live from the binary. Read-only and dry-run. Act on actionableDifferent / recommendedAction, NOT raw different[] (most diffs are non-functional export noise). Folding is string-aware. strict:true does a byte-exact compare; diff:true adds per-module snippets.",
+  delete_module:
+    "Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.",
+  generate_erd:
+    "Generate an entity-relationship document of the database schema to erdPath. Read-only.",
+  fix_encoding:
+    "Normalize a leading UTF-8 BOM on source files (and round-trip module encoding in the binary). It ONLY removes BOMs — it does NOT restore lossy '?' characters left by mojibake; restore those by editing the source and confirm with verify_code.",
+  // VBA sync — forms
+  validate_form_spec:
+    "Validate a form/report spec (inline spec or specPath) against the form schema without creating anything. Read-only.",
+  generate_form:
+    "Generate a form or report from a spec (spec or specPath). replace:true overwrites an existing object; dryRun:true validates and plans without writing. Write-gated.",
+  catalog_add_control:
+    "Add a control definition to a form-generation catalog. Edits the catalog file, not the Access binary.",
+  harvest_form_catalog:
+    "Harvest control definitions from existing forms into a catalog (optionally filtered), to seed form generation. Read-only on the binary.",
+  vba_orphan_audit:
+    "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
+  vba_inline_execution:
+    "Execute an arbitrary VBA snippet inline (no module needed) and return its result, headless. Powerful and unsandboxed: the snippet must be a single procedure body (no End Sub), is capped at 1024 chars, and runs under a 30s timeout ceiling. Write-gated. For repeatable logic add a module and use run_vba.",
+  // Query — read
+  query_sql:
+    "Run a read-only SQL SELECT against the database and return rows. Pass the statement as sql (or query). Read-only.",
+  list_tables:
+    "List the database's tables (names only). Read-only — use get_schema for a table's columns.",
+  list_linked_tables:
+    "List tables linked into the frontend from a backend, with their connection sources. Read-only.",
+  get_schema: "Return the column schema (names, types, sizes, keys) of a table. Read-only.",
+  count_rows: "Count rows in a table or for a SQL/query predicate. Read-only.",
+  distinct_values:
+    "Return the distinct values of a column (by tableName+columnName, or via a SQL/query). Read-only.",
+  compare_backends:
+    "Compare two backend databases (the configured backend vs comparePath) and report schema/data differences. Read-only.",
+  list_access_files:
+    "List Access database files under a root/directory path. Read-only filesystem scan.",
+  get_relationships: "Return the database's defined relationships (foreign keys). Read-only.",
+  list_links: "List the frontend's linked-table connections. Read-only.",
+  // Query — write & maintenance
+  exec_sql:
+    "Execute a guarded SQL write (INSERT/UPDATE/DELETE/DDL). Write-gated; dryRun/apply control plan vs commit; allowTables/denyTables constrain which tables may be touched.",
+  run_script:
+    "Execute a guarded multi-statement Access SQL script from scriptPath/path. Write-gated; dryRun/apply and allow/deny table guards apply.",
+  create_table:
+    "Create a table from a definition/fields list. Write-gated; dryRun/apply control plan vs commit.",
+  drop_table: "Drop a table (DESTRUCTIVE). Write-gated; dryRun/apply control plan vs commit.",
+  seed_fixture:
+    "Insert fixture rows into a table for testing. Write-gated; dryRun/apply and allow/deny table guards apply.",
+  teardown_fixture:
+    "Remove fixture rows/data from a table. Write-gated; dryRun/apply and allow/deny table guards apply.",
+  link_tables:
+    "Link tables from backendPath into the frontend. Write-gated; dryRun:true plans without writing. NOTE: when backendPassword is set, Access stores the credential inside the linked-table Connect string in the .accdb.",
+  relink_tables:
+    "Re-point existing linked tables to a new/updated backendPath. Write-gated; dryRun:true plans without writing. NOTE: a set backendPassword is persisted in the linked-table Connect string.",
+  localize_backend_links:
+    "Rewrite backend links to a local copy of the backend. Write-gated; dryRun:true plans without writing.",
+  unlink_table:
+    "Remove a linked table from the frontend (does not drop backend data). Write-gated; dryRun:true plans without writing.",
+  export_queries:
+    "Export saved queries (QueryDefs) from the database to exportPath/path. Read-only on the binary.",
+  import_queries:
+    "Import saved query definitions (queryDefinitions/queries) into the database. Write-gated; dryRun:true plans without writing.",
+  compact_repair:
+    "Compact and repair the database (maintenance; mutates the file). Write-gated; backupFirst:true backs up before, dryRun/apply control plan vs commit.",
+  relink_directory:
+    "Batch-relink Access frontends under a root directory to local backends, with alias maps and verification. Large surface (maps/denyPrefixes/strictLocal/removeUnresolved/recursive); write-gated; dryRun/apply control plan vs commit. Prefer passwordEnv over a raw password argument.",
+};
+
 export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP_TOOL_NAMES.map(
   (name) => {
     const slice = classifyToolName(name);
@@ -90,7 +190,7 @@ export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP
       name,
       slice,
       status,
-      description: buildDescription(name, slice, status),
+      description: TOOL_DESCRIPTIONS[name] ?? buildDescription(name, slice, status),
     };
   },
 );
