@@ -59,14 +59,18 @@ describe("HTTP validation schemas", () => {
       minLength: 1,
       maxLength: 100000,
     });
-    expect(HTTP_WRITE_QUERY_SCHEMA.properties.dryRun).toEqual({
-      type: "boolean",
-      description: "Run without applying writes.",
-    });
-    expect(HTTP_WRITE_QUERY_SCHEMA.properties.apply).toEqual({
-      type: "boolean",
-      description: "Apply a write instead of dry run.",
-    });
+    const dryRun = HTTP_WRITE_QUERY_SCHEMA.properties?.dryRun as {
+      type: string;
+      description: string;
+    };
+    const apply = HTTP_WRITE_QUERY_SCHEMA.properties?.apply as {
+      type: string;
+      description: string;
+    };
+    expect(dryRun.type).toBe("boolean");
+    expect(dryRun.description).toMatch(/default/i);
+    expect(apply.type).toBe("boolean");
+    expect(apply.description).toMatch(/precedence|default/i);
   });
 
   it("HTTP_VBA_EXECUTE_SCHEMA validates moduleName, procedureName, and optional arguments array", () => {

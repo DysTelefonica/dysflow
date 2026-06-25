@@ -51,15 +51,16 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
     });
   });
 
-  it("contains dryRun and apply boolean properties", () => {
-    expect(SCHEMA_PROPS.dryRun).toEqual({
-      type: "boolean",
-      description: "Run without applying writes.",
-    });
-    expect(SCHEMA_PROPS.apply).toEqual({
-      type: "boolean",
-      description: "Apply a write instead of dry run.",
-    });
+  it("contains dryRun and apply boolean properties that advertise the write contract", () => {
+    const dryRun = SCHEMA_PROPS.dryRun as { type: string; description: string };
+    expect(dryRun.type).toBe("boolean");
+    expect(dryRun.description).toMatch(/default/i);
+    expect(dryRun.description).toMatch(/dry[- ]?run/i);
+
+    const apply = SCHEMA_PROPS.apply as { type: string; description: string };
+    expect(apply.type).toBe("boolean");
+    expect(apply.description).toMatch(/commit|appl/i);
+    expect(apply.description).toMatch(/precedence|default/i);
   });
 
   it("contains timeoutMs with minimum constraint", () => {

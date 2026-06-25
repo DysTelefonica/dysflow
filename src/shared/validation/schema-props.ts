@@ -97,10 +97,15 @@ export const SCHEMA_PROPS = {
     items: { type: "object", additionalProperties: true },
     description: "Fixture rows.",
   } as JsonSchemaProperty,
-  dryRun: { type: "boolean", description: "Run without applying writes." } as JsonSchemaProperty,
+  dryRun: {
+    type: "boolean",
+    description:
+      "Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default.",
+  } as JsonSchemaProperty,
   apply: {
     type: "boolean",
-    description: "Apply a write instead of dry run.",
+    description:
+      "Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default).",
   } as JsonSchemaProperty,
   allowTables: {
     type: "array",
