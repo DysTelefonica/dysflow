@@ -15,6 +15,7 @@ import {
   stringValue,
   truthy,
 } from "../../core/utils/index.js";
+import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const EXECUTION_MAPPINGS = {
@@ -64,6 +65,7 @@ export interface VbaSyncOrchestrator {
   ): Promise<OperationResult<unknown>>;
   cwd: string;
   resolveExecutionTarget?(params: Record<string, unknown>): Promise<OperationResult<unknown>>;
+  env?: Record<string, string | undefined>;
 }
 
 export interface ExecutionFileSystemPort {
@@ -153,6 +155,18 @@ export class VbaExecutionAdapter {
     if (!targetRes.ok) return targetRes;
     const targetData = targetRes.data as { destinationRoot: string };
     const destinationRoot = targetData.destinationRoot;
+
+    // Guardrail (#548): inline execution writes a temp module under destinationRoot,
+    // which a writes-enabled caller can override via ACCESS_OVERRIDE. Refuse to write
+    // into the dysflow production runtime (AGENTS.md hard rule).
+    if (isWithinRuntime(destinationRoot, this.orchestrator.env ?? process.env)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "Refusing to run inline VBA against a destinationRoot inside the dysflow production runtime. Point destinationRoot at your project, not the installed runtime.",
+        ),
+      );
+    }
 
     // Guardrail (#533): clamp the effective timeout to the ceiling before any sub-call.
     const requestedTimeout = Number(params.timeoutMs);

@@ -81,6 +81,31 @@ describe("VbaExecutionAdapter", () => {
     expect(fileSystem.writeFile).not.toHaveBeenCalled();
   });
 
+  it("refuses inline execution when destinationRoot is inside the production runtime (#548)", async () => {
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool,
+      cwd: "C:/runtime/dysflow",
+      env: { DYSFLOW_HOME: "C:/runtime/dysflow" } as NodeJS.ProcessEnv,
+      resolveExecutionTarget: vi
+        .fn()
+        .mockResolvedValue(successResult({ destinationRoot: "C:/runtime/dysflow/app" })),
+    };
+    const fileSystem = {
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      rm: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem);
+
+    const result = await adapter.execute("vba_inline_execution", { code: 'Debug.Print "x"' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(fileSystem.writeFile).not.toHaveBeenCalled();
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
   it("clamps the inline timeout to the 30s ceiling (#533)", async () => {
     const { adapter, executeMappedTool } = makeInlineAdapter();
     await adapter.execute("vba_inline_execution", {

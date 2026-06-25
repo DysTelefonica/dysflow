@@ -167,6 +167,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     });
     this.executionAdapter = new VbaExecutionAdapter({
       cwd: this.cwd,
+      env: this.env,
       executeMappedTool: (toolName, params, mapping) =>
         this.executeMappedTool(toolName, params, mapping),
       resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
