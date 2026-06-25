@@ -1,5 +1,5 @@
 import { spawn, execSync } from "node:child_process";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -207,6 +207,12 @@ await record("query", "list_access_files", { projectId, rootPath: scriptDir });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], dryRun: false });
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, dryRun: true, backupFirst: false });
+// compact_repair APPLY on a COPY of the password-protected frontend (non-destructive).
+// dry-run never calls DAO CompactDatabase, so this is the only E2E that actually compacts a
+// protected database — it guards the source-password (5th DAO arg) fix.
+const compactApplyTarget = join(tempRoot, "compact-apply-target.accdb");
+await cp(accessPath, compactApplyTarget);
+await record("maintenance", "compact_repair", { projectId, accessPath: compactApplyTarget, apply: true, backupFirst: true });
 await record("links", "link_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "relink_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "localize_backend_links", { projectId, accessPath, backendPath, dryRun: false });
