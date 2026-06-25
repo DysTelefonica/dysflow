@@ -340,9 +340,13 @@ describe.skipIf(!canRunE2e)(
       ).not.toContain(STALE_CODEBEHIND_MARKER);
     }, 180_000);
 
-    it('importMode "Auto" + compile:true: compile succeeds after stale CodeBehindForm is overwritten by Phase 2', async () => {
-      // Import with compile:true — after the form is imported (Phase 1 LoadFromText + Phase 2 cls sync),
-      // acCmdCompileAndSaveAllModules is called and must report ok:true.
+    it('importMode "Auto" + compile:true: form import does NOT hard-fail; compile is reported unverified (#543)', async () => {
+      // Importing a form with compile:true must NOT hard-fail. The IsCompiled
+      // compile gate is reliable for standard/class modules, but Access cannot
+      // bring a programmatically imported form's document module to a compiled
+      // state headless, so dysflow does not trust that signal for document
+      // modules: it surfaces the import success with compileResult.verified=false
+      // instead of a spurious compile failure (issue #543 scoping).
       const importResult = await callMcp(
         "import_modules",
         {
@@ -355,24 +359,22 @@ describe.skipIf(!canRunE2e)(
         { timeoutMs: 90_000 },
       );
       expect(importResult.timedOut, `import+compile timed out: ${importResult.text}`).toBe(false);
-      expect(importResult.isError, `import+compile failed: ${importResult.text}`).toBe(false);
+      expect(importResult.isError, `import+compile hard-failed: ${importResult.text}`).toBe(false);
       expect(importResult.ok, `import+compile not ok: ${importResult.text}`).toBe(true);
 
-      // The response text must contain a compileResult with ok:true.
+      // The response carries a compileResult marked as not verified for the form's
+      // document module (rather than a trusted ok:true or a hard failure).
       expect(
         importResult.text,
         `Expected compileResult in response: ${importResult.text}`,
       ).toContain('"compileResult"');
-      // Parse and assert compileResult.ok directly.
       const parsed = JSON.parse(importResult.text) as Record<string, unknown>;
-      const compileResult = parsed.compileResult as
-        | { ok: boolean; error?: string | null }
-        | undefined;
+      const compileResult = parsed.compileResult as { verified?: boolean } | undefined;
       expect(compileResult, "compileResult must be present in response").toBeDefined();
       expect(
-        compileResult?.ok,
-        `compile must report ok:true — error was: ${compileResult?.error ?? "none"}`,
-      ).toBe(true);
+        compileResult?.verified,
+        `compile of a document module must be reported as unverified: ${importResult.text}`,
+      ).toBe(false);
     }, 90_000);
 
     it('importMode "Code": re-exported .cls reflects the .cls source (control case)', async () => {

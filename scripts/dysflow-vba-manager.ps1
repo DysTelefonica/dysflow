@@ -2042,39 +2042,77 @@ function Get-ActiveVbeLocation {
     }
 }
 
+function New-CompileFailureResult {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Message,
+        $Location
+    )
+    if (-not $Location) {
+        $Location = [pscustomobject]@{
+            component = $null; line = $null; column = $null
+            endLine = $null; endColumn = $null; sourceLine = $null
+        }
+    }
+    return [pscustomobject]@{
+        ok         = $false
+        phase      = "compile"
+        # Structured object (NOT a bare string) so the TS adapter maps it to a
+        # DysflowError with code VBA_COMPILE_ERROR (failureFromStructuredRunnerResult).
+        error      = [ordered]@{ code = "VBA_COMPILE_ERROR"; message = $Message }
+        component  = $Location.component
+        line       = $Location.line
+        column     = $Location.column
+        endLine    = $Location.endLine
+        endColumn  = $Location.endColumn
+        sourceLine = $Location.sourceLine
+    }
+}
+
 function Invoke-CompileVbaProject {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)]$AccessApplication
     )
 
+    # acCmdCompileAndSaveAllModules = 126.
+    # IMPORTANT (issue #543): RunCommand(126) does NOT throw on most compile
+    # failures — it returns normally even when modules fail to compile. The
+    # authoritative success signal is Application.IsCompiled, checked below.
     try {
-        # acCmdCompileAndSaveAllModules = 126
         $AccessApplication.RunCommand(126)
-        return [pscustomobject]@{
-            ok          = $true
-            phase       = "compile"
-            error       = $null
-            component   = $null
-            line        = $null
-            column      = $null
-            endLine     = $null
-            endColumn   = $null
-            sourceLine  = $null
-        }
     } catch {
         $location = Get-ActiveVbeLocation -AccessApplication $AccessApplication
-        return [pscustomobject]@{
-            ok          = $false
-            phase       = "compile"
-            error       = $_.Exception.Message
-            component   = $location.component
-            line        = $location.line
-            column      = $location.column
-            endLine     = $location.endLine
-            endColumn   = $location.endColumn
-            sourceLine  = $location.sourceLine
-        }
+        return New-CompileFailureResult -Message $_.Exception.Message -Location $location
+    }
+
+    $isCompiled = $true
+    try { $isCompiled = [bool]$AccessApplication.IsCompiled } catch { $isCompiled = $true }
+
+    if (-not $isCompiled) {
+        # Access can leave document modules (forms/reports) whose code was modified
+        # programmatically flagged as uncompiled until a second compile pass, even
+        # when the code is valid. Retry once before declaring a failure; a genuine
+        # compile error stays uncompiled across BOTH passes (issue #543).
+        try { $AccessApplication.RunCommand(126) } catch { Write-Debug "Diagnostics: $_" }
+        try { $isCompiled = [bool]$AccessApplication.IsCompiled } catch { $isCompiled = $true }
+    }
+
+    if (-not $isCompiled) {
+        $location = Get-ActiveVbeLocation -AccessApplication $AccessApplication
+        return New-CompileFailureResult -Message "VBA project failed to compile (Application.IsCompiled is False after acCmdCompileAndSaveAllModules). One or more modules contain compile errors." -Location $location
+    }
+
+    return [pscustomobject]@{
+        ok          = $true
+        phase       = "compile"
+        error       = $null
+        component   = $null
+        line        = $null
+        column      = $null
+        endLine     = $null
+        endColumn   = $null
+        sourceLine  = $null
     }
 }
 
@@ -3282,12 +3320,13 @@ function Invoke-CompileAction {
         if ($compileResult.ok) {
             Write-Status -Message "OK compilación VBA completada" -Color Green
         } else {
-            Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error) -Color Red
+            Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error.message) -Color Red
             if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
             if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
             if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
         }
     }
+    return $compileResult
 }
 
 function Invoke-RunProcedureAction {
@@ -3581,7 +3620,13 @@ try {
 
     } elseif ($Action -eq "Compile") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        Invoke-CompileAction -Session $session -Json:$Json
+        # Capture (do NOT let the returned object leak onto stdout and pollute the
+        # DYSFLOW_RESULT channel). The structured result is already emitted by
+        # Invoke-CompileAction; a compile failure must surface as a non-zero exit
+        # so the TS adapter takes its structured-failure path (issue #543). exit
+        # runs the finally block below, which closes the Access session.
+        $compileActionResult = Invoke-CompileAction -Session $session -Json:$Json
+        if ($compileActionResult -and -not $compileActionResult.ok) { exit 1 }
 
     } elseif ($Action -eq "Generate-ERD") {
         Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json

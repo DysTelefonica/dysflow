@@ -223,18 +223,86 @@ export class VbaModulesAdapter {
         params,
         COMPILE_MAPPING,
       );
-      if (!compileResult.ok) return compileResult;
+
+      if (!compileResult.ok) {
+        // The IsCompiled compile gate (issue #543) is reliable for standard and
+        // class modules, but NOT for document modules: Access cannot bring a
+        // programmatically imported form/report document module to a compiled
+        // state headless, so it reports a spurious VBA_COMPILE_ERROR even when the
+        // code is valid (tracked separately). When the import set includes a
+        // form/report, do NOT hard-fail on a compile result we cannot trust —
+        // surface the import success with compileVerified:false so the caller
+        // knows the compile was not verified. For standard/class-only imports the
+        // failure is trustworthy and propagates as a hard failure.
+        const untrustworthy =
+          compileResult.error.code === "VBA_COMPILE_ERROR" &&
+          (await this.importIncludesDocumentModule(toolName, params));
+        if (!untrustworthy) return compileResult;
+        return {
+          ...importResult,
+          data: {
+            ...(importResult.data as Record<string, unknown>),
+            compileResult: {
+              ok: false,
+              verified: false,
+              reason: "document-module-compile-not-verifiable-headless",
+              error: compileResult.error,
+            },
+          },
+        };
+      }
+
       // Merge compileResult into the import result data so callers can inspect it.
       return {
         ...importResult,
         data: {
           ...(importResult.data as Record<string, unknown>),
-          compileResult: compileResult.data,
+          compileResult: { ...(compileResult.data as Record<string, unknown>), verified: true },
         },
       };
     }
 
     return importResult;
+  }
+
+  /**
+   * True when the import set includes a form/report document module. Used to
+   * decide whether a post-import compile failure is trustworthy: the IsCompiled
+   * gate cannot verify document modules headless (issue #543), so a compile error
+   * after a form/report import must not hard-fail the operation.
+   */
+  private async importIncludesDocumentModule(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<boolean> {
+    // import_all imports every object, including all forms and reports.
+    if (toolName === "import_all") return true;
+    const moduleNames = stringArray(params.moduleNames).map((name) => name.toLowerCase());
+    if (moduleNames.length === 0) return false;
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return false;
+    const root = target.data.destinationRoot;
+
+    for (const folder of [resolve(root, "forms"), resolve(root, "reports")]) {
+      let entries: readonly { name: string }[] | readonly string[];
+      try {
+        entries = await this.fileSystem.readdir(folder);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        const entryName = typeof entry === "string" ? entry : entry.name;
+        const lower = entryName.toLowerCase();
+        const base = lower.endsWith(".form.txt")
+          ? lower.slice(0, -".form.txt".length)
+          : lower.endsWith(".report.txt")
+            ? lower.slice(0, -".report.txt".length)
+            : null;
+        if (base !== null && moduleNames.includes(base)) return true;
+      }
+    }
+    return false;
   }
 
   /**
