@@ -687,10 +687,14 @@ describe("handleUpdateCommand end-to-end", () => {
     await writeFile(installedPackageJson, JSON.stringify(oldPackageJson, null, 2), "utf8");
 
     const localVersion = await getLocalDysflowVersion();
+    // Lightweight release package (no real deps) so installRuntime's `pnpm install --prod`
+    // is a no-op. Pointing at process.cwd() copied the built dist and resolved real deps,
+    // which intermittently exceeded the 15s test timeout on slow/loaded machines.
+    const releasePackageRoot = await createPackageRoot(root, localVersion, "UPDATED_RUNTIME");
     const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: localVersion }),
-        preparePackage: async () => ({ packageRoot: process.cwd() }),
+        preparePackage: async () => ({ packageRoot: releasePackageRoot }),
       },
     });
 
@@ -721,7 +725,11 @@ describe("handleUpdateCommand end-to-end", () => {
     const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: localVersion }),
-        preparePackage: async () => ({ packageRoot: process.cwd() }),
+        // Up-to-date path must short-circuit before any package preparation/copy. Throwing
+        // here asserts preparePackage is never called (and avoids the process.cwd() copy).
+        preparePackage: async () => {
+          throw new Error("preparePackage must not be called when the runtime is up to date");
+        },
       },
     });
 
@@ -749,10 +757,11 @@ describe("handleUpdateCommand end-to-end", () => {
     );
     await writeFile(installedMarker, "OLD_RUNTIME", "utf8");
 
+    const releasePackageRoot = await createPackageRoot(root, localVersion, "FORCED_RUNTIME");
     const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--force"], {
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: localVersion }),
-        preparePackage: async () => ({ packageRoot: process.cwd() }),
+        preparePackage: async () => ({ packageRoot: releasePackageRoot }),
       },
     });
     expect(result.exitCode).toBe(0);
