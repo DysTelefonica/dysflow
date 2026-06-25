@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.7.7] - 2026-06-25
+
+Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v1.7.6.
+
+### Tests
+
+- Consolidated the `resolveDefaultVbaManagerScriptPath` no-`DYSFLOW_HOME` assertions into the dedicated `vba-manager-script-path.test.ts` (including the whitespace-`DYSFLOW_HOME` edge case) and removed the duplicates from `vba-sync-adapter.test.ts`. No coverage change.
+
 ## [v1.7.6] - 2026-06-24
 
 ### Fixed
