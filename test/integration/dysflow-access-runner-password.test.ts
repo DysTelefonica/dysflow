@@ -26,6 +26,27 @@ if (!canRun) {
   console.warn("[dysflow] Skipping compact_repair password tests: requires Windows.");
 }
 
+/** Real DAO availability (for the apply-path test that actually compacts a protected DB). */
+function hasDaoCom(): boolean {
+  if (!isWindows) return false;
+  try {
+    const out = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "try { $e = New-Object -ComObject DAO.DBEngine.120; [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null; 'ok' } catch { 'missing' }",
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 15_000 },
+    );
+    return out.trim().includes("ok");
+  } catch {
+    return false;
+  }
+}
+const hasDao = hasDaoCom();
+
 // ---------------------------------------------------------------------------
 // PowerShell executor
 // ---------------------------------------------------------------------------
@@ -227,4 +248,52 @@ describe("compact_repair password handling", { timeout: 60_000 }, () => {
     expect(result.stdout).toContain("DYSFLOW_RESULT");
     expect(result.stdout).toContain('"dryRun":true');
   });
+
+  // ------------------------------------------------------------------
+  // Test (real DAO): apply compaction of a PASSWORD-PROTECTED source.
+  // Regression for "No es una contraseña válida": the source password must be
+  // passed to DAO CompactDatabase's 5th arg (SrcConnect), not only the 3rd
+  // (DstConnect). With the old 3rd-arg-only call this failed to open a protected
+  // source. The password reaches the runner via $env:DYSFLOW_ACCESS_PASSWORD
+  // (frontend == AccessDbPath -> Resolve-CompactPassword returns $AccessPassword).
+  // ------------------------------------------------------------------
+  it.skipIf(!canRun || !hasDao)(
+    "apply: compacts a password-protected source and keeps it protected",
+    () => {
+      const testDb = join(tmpRoot, "protected.accdb");
+      const pwd = "compactPwd-Áç1";
+      const create = runPs(`
+        $e = New-Object -ComObject DAO.DBEngine.120
+        try {
+          $db = $e.CreateDatabase('${testDb}', ';LANGID=0x0409;CP=1252;COUNTRY=0')
+          $td = $db.CreateTableDef('Products'); $f = $td.CreateField('ID', 4)
+          $td.Fields.Append($f); $db.TableDefs.Append($td)
+          $db.NewPassword('', '${pwd}')
+          $db.Close()
+        } finally { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null }
+      `);
+      expect(create.exitCode).toBe(0);
+
+      // compact_repair apply; password supplied via env (NOT payload, matching production
+      // where raw payload passwords are stripped). No DYSFLOW_MOCK_COM -> real DAO.
+      const payload = JSON.stringify({ action: "compact_repair", dryRun: false });
+      const result = runPs(`
+        $env:DYSFLOW_ACCESS_PASSWORD = '${pwd}'
+        & '${scriptPath}' -AccessDbPath '${testDb}' -Operation 'query' -PayloadJson '${payload}'
+      `);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('"compacted":true');
+      // The password must NOT leak into any output channel.
+      expect(result.stdout + result.stderr).not.toContain(pwd);
+
+      // The compacted database must still open with the same password (preserved on the output).
+      const reopen = runPs(`
+        $e = New-Object -ComObject DAO.DBEngine.120
+        try { $db = $e.OpenDatabase('${testDb}', $false, $false, ';PWD=${pwd}'); $db.Close(); 'OPENED_OK' }
+        finally { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null }
+      `);
+      expect(reopen.stdout).toContain("OPENED_OK");
+    },
+  );
 });

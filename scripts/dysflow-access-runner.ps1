@@ -873,7 +873,19 @@ function Compact-RepairDatabase {
   $dbEngine = New-DaoDbEngine
   try {
     if (-not [string]::IsNullOrWhiteSpace($compactPassword)) {
-      $dbEngine.CompactDatabase($sourceFull, $targetPath, ";PWD=$compactPassword")
+      # DAO CompactDatabase(Src, Dst, DstConnect, Options, SrcConnect): the SOURCE password MUST
+      # be supplied in the 5th arg (SrcConnect) to OPEN a password-protected source; the 3rd arg
+      # (DstConnect) carries the SAME password so the compacted output stays protected. Passing
+      # ";PWD=" only in the 3rd arg never opened a protected source — it failed with
+      # "No es una contraseña válida" (verified empirically against DAO.DBEngine.120).
+      $pwdConnect = ";PWD=$compactPassword"
+      $dbEngine.CompactDatabase(
+        $sourceFull,
+        $targetPath,
+        $pwdConnect,
+        [System.Reflection.Missing]::Value,
+        $pwdConnect
+      )
     } else {
       $dbEngine.CompactDatabase($sourceFull, $targetPath)
     }
