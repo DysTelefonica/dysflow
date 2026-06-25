@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.7.9] - 2026-06-25
+
+### Fixed
+
+- **`compact_repair` can now compact a password-protected database.** The runner passed the password only as DAO `CompactDatabase`'s 3rd argument (`DstConnect`, which sets the *output* password), never the 5th (`SrcConnect`) that *opens* a protected source — so compacting a password-protected `.accdb` always failed with `No es una contraseña válida`, even with the correct password. (Verified empirically against `DAO.DBEngine.120`: 3rd-arg-only fails to open a protected source; 3rd + 5th succeeds.) The password is now supplied in both args, so the protected source opens and the compacted output stays protected. The password-selection fix in v1.7.3 was correct — only the DAO call site was wrong, and the MCP E2E only exercised the dry-run path, so it was not caught earlier. Added a real-DAO integration test that compacts a password-protected database end to end.
+
 ## [v1.7.8] - 2026-06-25
 
 Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v1.7.6/v1.7.7.
