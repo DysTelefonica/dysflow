@@ -22,4 +22,10 @@ describe("resolveDefaultVbaManagerScriptPath", () => {
     expect(isAbsolute(resolved)).toBe(true);
     expect(existsSync(resolved)).toBe(true);
   });
+
+  it("treats a whitespace DYSFLOW_HOME as unset and still resolves an absolute existing path", () => {
+    const resolved = resolveDefaultVbaManagerScriptPath({ DYSFLOW_HOME: "   " });
+    expect(isAbsolute(resolved)).toBe(true);
+    expect(existsSync(resolved)).toBe(true);
+  });
 });
