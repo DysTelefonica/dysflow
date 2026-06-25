@@ -327,13 +327,18 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       passwordEnv: {
         type: "string",
-        description: "Environment variable name containing the backend database password.",
+        description:
+          "PREFERRED: name of an environment variable holding the backend database password. Use this instead of passing the password inline so the secret never appears in the tool-call arguments.",
       } as JsonSchemaProperty,
       backendPassword: {
         type: "string",
-        description: "Raw backend database password.",
+        description:
+          "Raw backend database password. DISCOURAGED — prefer passwordEnv; an inline secret can be captured in tool-call transcripts. When set it is forwarded to PowerShell via the environment (never argv) and redacted from error output.",
       } as JsonSchemaProperty,
-      password: { type: "string", description: "Alias for backendPassword." } as JsonSchemaProperty,
+      password: {
+        type: "string",
+        description: "Alias for backendPassword. DISCOURAGED — prefer passwordEnv.",
+      } as JsonSchemaProperty,
     },
   },
 };
