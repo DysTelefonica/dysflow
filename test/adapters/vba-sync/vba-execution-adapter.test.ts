@@ -81,6 +81,45 @@ describe("VbaExecutionAdapter", () => {
     expect(fileSystem.writeFile).not.toHaveBeenCalled();
   });
 
+  it("rejects inline code containing blocklisted unsafe keywords case-insensitively while allowing concatenated words", async () => {
+    const { adapter, fileSystem } = makeInlineAdapter();
+
+    for (const kw of ["Declare", "Shell", "CreateObject", "GetObject", "Lib"]) {
+      const result = await adapter.execute("vba_inline_execution", {
+        code: `Debug.Print "hello"\n${kw} something`,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error(`expected rejection for keyword ${kw}`);
+      expect(result.error.code).toBe("INVALID_INPUT");
+      expect(result.error.message).toContain("Unsafe keywords detected in inline VBA snippet");
+      expect(fileSystem.writeFile).not.toHaveBeenCalled();
+    }
+
+    const resultUpper = await adapter.execute("vba_inline_execution", {
+      code: 'CREATEOBJECT("Scripting.FileSystemObject")',
+    });
+    expect(resultUpper.ok).toBe(false);
+    if (resultUpper.ok) throw new Error("expected rejection for CREATEOBJECT");
+    expect(resultUpper.error.code).toBe("INVALID_INPUT");
+
+    const resultAllowed = await adapter.execute("vba_inline_execution", {
+      code: 'Dim myLib As String\nShellExecute 0, "open", "cmd.exe"',
+    });
+    expect(resultAllowed.ok).toBe(true);
+
+    const resultLibBlocked = await adapter.execute("vba_inline_execution", {
+      code: "Dim lib As Object",
+    });
+    expect(resultLibBlocked.ok).toBe(false);
+    if (resultLibBlocked.ok) throw new Error("expected rejection for lib keyword");
+    expect(resultLibBlocked.error.code).toBe("INVALID_INPUT");
+
+    const resultLibVarAllowed = await adapter.execute("vba_inline_execution", {
+      code: "Dim libVar As Object",
+    });
+    expect(resultLibVarAllowed.ok).toBe(true);
+  });
+
   it("refuses inline execution when destinationRoot is inside the production runtime (#548)", async () => {
     const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
     const orchestrator: VbaSyncOrchestrator = {

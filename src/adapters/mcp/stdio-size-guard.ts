@@ -118,5 +118,6 @@ export class SizeLimitTransform extends Transform {
       error: { code: -32700, message: "Request too large" },
     });
     this.errorOutput.write(`${frame}\n`);
+    this.destroy();
   }
 }

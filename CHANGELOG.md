@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.9.3] - 2026-06-26
+
+VBA inline execution sanitization, standardized dryRun defaults, size-limit stream destruction, and listOrphans OperationResult integration.
+
+### Fixed
+
+- **VBA inline execution regex sanitization.** `vba_inline_execution` now validates the input code parameter using a case-insensitive word-boundary check (`\bDeclare\b`, `\bShell\b`, `\bCreateObject\b`, `\bGetObject\b`, `\bLib\b`), rejecting unsafe command injection attempts with `INVALID_INPUT`.
+- **Standardized dryRun defaults.** Writing tools (`import_modules`, `import_all`, and `generateForm`) now consistently default to plan mode (`dryRun: true`) unless `apply === true` or `dryRun === false` is explicitly supplied.
+- **Immediate stream termination on limit violations.** The stdio size guard (`SizeLimitTransform`) now explicitly closes and destroys the stream via `this.destroy()` immediately after sending the `id: null` error frame, preventing client hangs.
+- **listOrphans error mapping integration.** `AccessOrphanCleanupService.listOrphans` was updated to return `OperationResult` instead of throwing raw error exceptions or returning empty arrays on failures, ensuring clean and safe error propagation through MCP tool output translation.
+
 ## [v1.9.2] - 2026-06-26
 
 Filesystem write-gates for forms/catalog tooling, PowerShell security hardening against path traversal, and core dependency refactoring (issues #565, #566, #568, #569, #570, #577, #579).

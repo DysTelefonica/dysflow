@@ -171,6 +171,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Variables Globales"],
       importMode: inputMode,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -201,7 +202,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("import_all", { importMode: inputMode });
+    const result = await service.execute("import_all", { importMode: inputMode, apply: true });
 
     expect(result.ok).toBe(true);
     expect(capturedImportMode).toBe(expectedMode);
@@ -373,6 +374,36 @@ describe("VbaModulesAdapter", () => {
       operation: "import_modules",
       modulesPlanned: ["Entorno", "Variables Globales"],
       modulesCount: 2,
+    });
+  });
+
+  it("defaults to dryRun: true for import_modules and import_all when parameters are omitted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-default-dryrun-"));
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      accessPath: join(root, "front.accdb"),
+      destinationRoot: root,
+    });
+
+    const resultModules = await service.execute("import_modules", {
+      moduleNames: ["Entorno"],
+    });
+    expect(resultModules.ok).toBe(true);
+    if (!resultModules.ok) throw new Error("expected success");
+    expect(resultModules.data).toMatchObject({
+      operation: "import_modules",
+      dryRun: true,
+      willModifyAccess: false,
+    });
+
+    const resultAll = await service.execute("import_all", {});
+    expect(resultAll.ok).toBe(true);
+    if (!resultAll.ok) throw new Error("expected success");
+    expect(resultAll.data).toMatchObject({
+      operation: "import_all",
+      dryRun: true,
       willModifyAccess: false,
     });
   });
@@ -524,6 +555,7 @@ describe("VbaModulesAdapter", () => {
 
     const result = await service.execute("import_modules", {
       moduleNames: ["Entorno"],
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -582,6 +614,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Entorno"],
       compile: true,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -637,6 +670,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Entorno"],
       compile: true,
+      apply: true,
     });
 
     expect(result.ok).toBe(false);
@@ -689,6 +723,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Form_Probe"],
       compile: true,
+      apply: true,
     });
 
     // A form import must NOT hard-fail on the untrustworthy compile gate.
@@ -746,6 +781,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Form_Probe"],
       compile: true,
+      apply: true,
     });
 
     // A .cls-only form is still a document module — must NOT hard-fail on the gate.
@@ -790,6 +826,7 @@ describe("VbaModulesAdapter", () => {
     const result = await service.execute("import_modules", {
       moduleNames: ["Entorno"],
       compile: false,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -841,6 +878,7 @@ describe("VbaModulesAdapter", () => {
 
     const result = await service.execute("import_all", {
       compile: true,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);

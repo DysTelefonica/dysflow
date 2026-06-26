@@ -481,7 +481,11 @@ describe("Dysflow MCP tool parity inventory", () => {
       },
     });
 
-    const generated = await service.execute("generate_form", { spec, destinationRoot: tempRoot });
+    const generated = await service.execute("generate_form", {
+      spec,
+      destinationRoot: tempRoot,
+      apply: true,
+    });
     expect(generated.ok).toBe(true);
     const generatedPath = (generated.ok ? (generated.data as { outputPath?: string }) : undefined)
       ?.outputPath;

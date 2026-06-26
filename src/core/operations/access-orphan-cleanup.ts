@@ -54,12 +54,19 @@ export class AccessOrphanCleanupService {
     this.clock = options.clock ?? (() => new Date());
   }
 
-  async listOrphans(request: AccessOrphanCleanupRequest): Promise<AccessOrphanCandidate[]> {
+  async listOrphans(
+    request: AccessOrphanCleanupRequest,
+  ): Promise<OperationResult<AccessOrphanCandidate[]>> {
     let processes: OsProcessInfo[];
     try {
       processes = await this.options.processScanner.listProcesses();
-    } catch {
-      return [];
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "PROCESS_SCAN_FAILED",
+          `Failed to scan processes: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
     }
 
     let registryRecords: AccessOperationRecord[];
@@ -97,7 +104,7 @@ export class AccessOrphanCleanupService {
       });
     }
 
-    return candidates;
+    return successResult(candidates);
   }
 
   async cleanupOrphan(

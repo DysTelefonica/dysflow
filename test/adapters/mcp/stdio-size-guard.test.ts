@@ -33,6 +33,9 @@ async function collect(
     transform.on("end", () => {
       errorOutput.end();
     });
+    transform.on("close", () => {
+      errorOutput.end();
+    });
 
     errorOutput.on("data", (chunk: string) => errorChunks.push(chunk));
     errorOutput.on("end", () => {
@@ -44,9 +47,13 @@ async function collect(
     errorOutput.on("error", reject);
 
     for (const chunk of chunks) {
-      transform.write(chunk);
+      if (!transform.destroyed) {
+        transform.write(chunk);
+      }
     }
-    transform.end();
+    if (!transform.destroyed) {
+      transform.end();
+    }
   });
 }
 
@@ -88,13 +95,33 @@ describe("SizeLimitTransform", () => {
     });
   });
 
-  it("continues processing the next line after dropping an oversized one", async () => {
+  it("destroys the stream immediately and emits 'close' on size limit violation", async () => {
+    const maxBytes = 10;
+    const oversizedLine = "a".repeat(maxBytes + 1);
+
+    const errorOutput = new PassThrough({ encoding: "utf8" });
+    const transform = new SizeLimitTransform(maxBytes, errorOutput);
+
+    let closeEmitted = false;
+    transform.on("close", () => {
+      closeEmitted = true;
+    });
+
+    transform.write(`${oversizedLine}\n`);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+
+    expect(transform.destroyed).toBe(true);
+    expect(closeEmitted).toBe(true);
+  });
+
+  it("stops processing and does NOT process the next line after dropping an oversized one", async () => {
     const maxBytes = 10;
     const oversizedLine = "a".repeat(maxBytes + 1);
     const normalLine = "hello";
     const { output, errors } = await collect([`${oversizedLine}\n${normalLine}\n`], maxBytes);
 
-    expect(output).toBe(`${normalLine}\n`);
+    expect(output).toBe("");
     expect(errors).toContain("-32700");
   });
 

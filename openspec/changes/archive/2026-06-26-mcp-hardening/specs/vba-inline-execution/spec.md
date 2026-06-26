@@ -1,9 +1,6 @@
-# vba-inline-execution Specification
+# Delta for vba-inline-execution
 
-## Purpose
-Compiles and executes temporary VBA snippets on the fly.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Inline Execution and Cleanup
 

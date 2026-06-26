@@ -16,14 +16,14 @@ class FakeOrphanCleanupService {
   public listOrphansRequests: unknown[] = [];
   public cleanupOrphanRequests: unknown[] = [];
   constructor(
-    private readonly listResult: readonly AccessOrphanCandidate[] = [],
+    private readonly listResult: OperationResult<AccessOrphanCandidate[]> = successResult([]),
     private readonly cleanupResult: OperationResult<AccessOrphanCleanupResult> = successResult({
       killed: [],
       refused: [],
       errors: [],
     }),
   ) {}
-  async listOrphans(request: unknown): Promise<readonly AccessOrphanCandidate[]> {
+  async listOrphans(request: unknown): Promise<OperationResult<AccessOrphanCandidate[]>> {
     this.listOrphansRequests.push(request);
     return this.listResult;
   }
@@ -86,7 +86,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler returns success when service returns success and schema is valid", async () => {
     const fakeOrphan = new FakeOrphanCleanupService(
-      [],
+      successResult([]),
       successResult({
         killed: [12345],
         refused: [],
@@ -125,7 +125,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler blocks confirmed cleanup when writes are disabled", async () => {
     const fakeOrphan = new FakeOrphanCleanupService(
-      [],
+      successResult([]),
       successResult({
         killed: [12345],
         refused: [],
@@ -174,14 +174,16 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
   });
 
   it("handler lists orphan candidates when confirmPid is missing", async () => {
-    const fakeOrphan = new FakeOrphanCleanupService([
-      {
-        pid: 12345,
-        accessPath: "C:/project/app.accdb",
-        startTime: "2026-06-08T10:00:00.000Z",
-        mainWindowHandle: 0,
-      },
-    ]);
+    const fakeOrphan = new FakeOrphanCleanupService(
+      successResult([
+        {
+          pid: 12345,
+          accessPath: "C:/project/app.accdb",
+          startTime: "2026-06-08T10:00:00.000Z",
+          mainWindowHandle: 0,
+        },
+      ]),
+    );
     const tools = createDysflowMcpTools(
       {
         ...makeBaseServices(),
@@ -206,14 +208,16 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
   });
 
   it("handler lists orphan candidates when writes are enabled and confirmPid is missing", async () => {
-    const fakeOrphan = new FakeOrphanCleanupService([
-      {
-        pid: 12345,
-        accessPath: "C:/project/app.accdb",
-        startTime: "2026-06-08T10:00:00.000Z",
-        mainWindowHandle: 0,
-      },
-    ]);
+    const fakeOrphan = new FakeOrphanCleanupService(
+      successResult([
+        {
+          pid: 12345,
+          accessPath: "C:/project/app.accdb",
+          startTime: "2026-06-08T10:00:00.000Z",
+          mainWindowHandle: 0,
+        },
+      ]),
+    );
     const tools = createDysflowMcpTools(
       {
         ...makeBaseServices(),
@@ -305,7 +309,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
   it("handler propagates service failure result as McpToolResult with isError true", async () => {
     const fakeOrphan = new FakeOrphanCleanupService(
-      [],
+      successResult([]),
       failureResult(
         createDysflowError(
           "ORPHAN_CLEANUP_NOT_HEADLESS",
@@ -333,6 +337,29 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
 
     expect(result?.isError).toBe(true);
     expect(result?.content[0]?.text).toContain("ORPHAN_CLEANUP_NOT_HEADLESS");
+  });
+
+  it("handler propagates listOrphans failure as McpToolResult with isError true", async () => {
+    const fakeOrphan = new FakeOrphanCleanupService(
+      failureResult(createDysflowError("PROCESS_SCAN_FAILED", "Failed to scan processes")),
+    );
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
+
+    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toContain("PROCESS_SCAN_FAILED");
   });
 
   it("handler returns ORPHAN_CLEANUP_PATH_UNRESOLVED when accessPath is missing", async () => {

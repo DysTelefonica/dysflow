@@ -174,7 +174,8 @@ export class VbaModulesAdapter {
       return compareSourceAgainstBinary(params, this.getComparisonContext(), this.fileSystem);
     }
 
-    if (truthy(params.dryRun) && (toolName === "import_all" || toolName === "import_modules")) {
+    const dryRun = params.apply === true ? false : params.dryRun !== false;
+    if (dryRun && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
     }
 

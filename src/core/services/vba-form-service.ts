@@ -6,7 +6,7 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import { isRecord, stringValue, truthy } from "../utils/index.js";
+import { isRecord, stringValue } from "../utils/index.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,8 @@ export class VbaFormService {
     const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
     const outputPath = resolve(formsDir, fileName);
 
-    if (truthy(params.dryRun) && !truthy(params.apply)) {
+    const dryRun = params.apply === true ? false : params.dryRun !== false;
+    if (dryRun) {
       return successResult({
         dryRun: true,
         generated: false,

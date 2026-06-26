@@ -74,7 +74,7 @@ export type DysflowMcpServices = {
     listOrphans(request: {
       accessPath: string;
       projectRoot: string;
-    }): Promise<readonly AccessOrphanCandidate[]>;
+    }): Promise<OperationResult<AccessOrphanCandidate[]>>;
     cleanupOrphan(request: {
       accessPath: string;
       projectRoot: string;

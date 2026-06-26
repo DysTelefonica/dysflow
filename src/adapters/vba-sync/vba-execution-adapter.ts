@@ -131,6 +131,13 @@ export class VbaExecutionAdapter {
       );
     }
 
+    // Safety guardrail: reject blocklisted unsafe keywords case-insensitively
+    if (/\b(Declare|Shell|CreateObject|GetObject|Lib)\b/i.test(rawCode)) {
+      return failureResult(
+        createDysflowError("INVALID_INPUT", "Unsafe keywords detected in inline VBA snippet"),
+      );
+    }
+
     // Guardrail (#533): the snippet is wrapped in Public Sub ExecuteInline()/End Sub,
     // so a snippet that closes its own procedure block produces malformed VBA that
     // Access refuses to import. Reject it and point the caller at run_vba.

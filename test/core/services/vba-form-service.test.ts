@@ -152,6 +152,36 @@ describe("VbaFormService", () => {
     }
   });
 
+  it("defaults to dry-run for generateForm when dryRun/apply parameters are omitted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-default-dryrun-"));
+    const service = new VbaFormService({ cwd: root });
+    const result = await service.generateForm({
+      spec: { name: "Form_Default", kind: "Form", controls: [] },
+      destinationRoot: root,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { dryRun: boolean; generated: boolean };
+      expect(data.dryRun).toBe(true);
+      expect(data.generated).toBe(false);
+    }
+  });
+
+  it("generateForm executes and generates file when apply: true is passed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-gen-apply-"));
+    const service = new VbaFormService({ cwd: root });
+    const result = await service.generateForm({
+      spec: { name: "Form_Apply", kind: "Form", controls: [] },
+      destinationRoot: root,
+      apply: true,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as { generated: boolean };
+      expect(data.generated).toBe(true);
+    }
+  });
+
   it("generateForm returns failure when spec is invalid", async () => {
     const service = new VbaFormService({ cwd: process.cwd() });
     const result = await service.generateForm({});
@@ -375,6 +405,7 @@ describe("VbaFormService", () => {
         controls: [{ name: "btnClick", type: "CommandButton" }],
       },
       destinationRoot: root,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -511,6 +542,7 @@ describe("VbaFormService", () => {
       const result = await service.generateForm({
         spec: { name: "Form_FakePort", kind: "Form", controls: [{ name: "btn", type: "Button" }] },
         destinationRoot: "/fake/root",
+        apply: true,
       });
 
       expect(result.ok).toBe(true);
@@ -609,6 +641,7 @@ describe("VbaFormService", () => {
       await service.generateForm({
         spec: { name: "Form_TS", kind: "Form", controls: [] },
         destinationRoot: "/fake",
+        apply: true,
       });
 
       const firstWritten = writtenFiles[0];
@@ -628,6 +661,7 @@ describe("VbaFormService", () => {
         service.generateForm({
           spec: { name: "Form_Fail", kind: "Form", controls: [] },
           destinationRoot: "/fake",
+          apply: true,
         }),
       ).rejects.toThrow("disk full");
     });

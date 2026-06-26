@@ -606,7 +606,10 @@ describe("VbaSyncAdapter Orchestrator", () => {
       env: {},
     });
 
-    const result = await service.execute("import_modules", { moduleNames: ["Module1"] });
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Module1"],
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected structured failure");
@@ -692,7 +695,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
         env: {},
       });
 
-      const result = await service.execute(toolName, params);
+      const result = await service.execute(toolName, { ...params, apply: true });
 
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("expected runner protocol failure");
@@ -723,7 +726,10 @@ describe("VbaSyncAdapter Orchestrator", () => {
       env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
     });
 
-    const result = await service.execute("import_modules", { moduleNames: ["Module1"] });
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Module1"],
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected structured failure");
@@ -1119,7 +1125,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
         }),
       });
 
-      const result = await service.execute(toolName, params);
+      const result = await service.execute(toolName, { ...params, apply: true });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error(`expected ${toolName} success`);

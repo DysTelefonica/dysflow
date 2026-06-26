@@ -161,7 +161,7 @@ export async function handleMcpAccessOrphanCleanup(
 
   if (request.confirmPid === undefined) {
     return translateCoreResultToMcpContent(
-      successResult(await services.orphanCleanupService.listOrphans(request)),
+      await services.orphanCleanupService.listOrphans(request),
     );
   }
 

@@ -79,11 +79,14 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
 
-    expect(orphans).toHaveLength(1);
-    expect(orphans[0]?.pid).toBe(12345);
-    expect(orphans[0]?.mainWindowHandle).toBe(0);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]?.pid).toBe(12345);
+      expect(result.data[0]?.mainWindowHandle).toBe(0);
+    }
   });
 
   it("excludes an MSACCESS that has a non-zero mainWindowHandle (interactive session)", async () => {
@@ -103,9 +106,12 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
 
-    expect(orphans).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(0);
+    }
   });
 
   it("excludes an MSACCESS that holds a DIFFERENT accessPath", async () => {
@@ -122,9 +128,12 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
 
-    expect(orphans).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(0);
+    }
   });
 
   it("excludes a headless MSACCESS whose commandLine is unavailable", async () => {
@@ -138,9 +147,12 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
 
-    expect(orphans).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(0);
+    }
   });
 
   it("excludes a PID that the registry marks as running (owned process)", async () => {
@@ -155,12 +167,15 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    const orphans = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
 
-    expect(orphans).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(0);
+    }
   });
 
-  it("returns empty when processScanner.listProcesses() throws — must not throw, must not crash", async () => {
+  it("returns PROCESS_SCAN_FAILED when processScanner.listProcesses() throws", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     const { killer } = makeKiller();
     const failingScanner: ProcessScanner = {
@@ -175,9 +190,11 @@ describe("AccessOrphanCleanupService — listOrphans", () => {
       processKiller: killer,
     });
 
-    await expect(
-      svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT }),
-    ).resolves.toEqual([]);
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("PROCESS_SCAN_FAILED");
+    }
   });
 });
 
