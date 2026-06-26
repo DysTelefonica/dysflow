@@ -644,12 +644,14 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
 #### 4. GUI & Forms
 * **`validate_form_spec`**: Parse and lint a JSON specification for form generation.
   - Parameters: `specPath` (string, optional), `spec` (object, optional)
-* **`generate_form`**: Compile a form spec into a live Access form.
+* **`generate_form`**: Write a `.form.json` stub from a form spec. Does not create or compile a live Access form.
   - Parameters: `specPath` (string, optional), `spec` (object, optional), `kind` (string, optional), `name` (string, optional), `replace` (boolean, optional), `dryRun`
 * **`catalog_add_control`**: Insert controls into a UI catalog definition.
   - Parameters: `catalogPath` (string, optional), `controlName` (string, optional), `controlType` (string, optional)
 * **`harvest_form_catalog`**: Index controls from existing forms into a catalog.
   - Parameters: `catalogPath` (string, optional), `filter` (string, optional)
+* **`inspect_form`**: Parse a version-controlled `.form.txt` (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only.
+  - Parameters: `sourcePath` (string, path to the `.form.txt` file), `path` (string, alias for `sourcePath`)
 
 ### MCP protocol and maintenance
 
