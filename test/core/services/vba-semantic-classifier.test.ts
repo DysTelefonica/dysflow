@@ -1532,3 +1532,53 @@ describe("report.txt — code-behind is ignored (verified through the .cls)", ()
     expect(result.actionable).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T14b/T13b — report.txt shares the form serialization-noise and toggle rules.
+// The classifier routes both form.txt and report.txt through FORM_FILE_TYPES, so
+// these guard that report files get the same noise/toggle treatment (#554).
+// ---------------------------------------------------------------------------
+
+describe("report.txt — serialization noise and toggle equivalence", () => {
+  it("treats a Checksum-only difference in a report.txt as non-actionable", () => {
+    const src = `Version =21\nChecksum =-111\nBegin Report\n    Caption ="Test"\nEnd`;
+    const bin = `Version =21\nChecksum =-999\nBegin Report\n    Caption ="Test"\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("treats `Visible = NotDefault` vs `Visible =0` in a report.txt as non-actionable", () => {
+    const src = `Version =21\nBegin Report\n    Begin Label\n        Visible =0\n    End\nEnd`;
+    const bin = `Version =21\nBegin Report\n    Begin Label\n        Visible = NotDefault\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("still flags a real non-toggle property change in a report.txt", () => {
+    const src = `Version =21\nBegin Report\n    Width =9070\nEnd`;
+    const bin = `Version =21\nBegin Report\n    Width =5000\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+});
