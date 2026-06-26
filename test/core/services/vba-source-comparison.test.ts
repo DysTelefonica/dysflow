@@ -727,6 +727,23 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     expect(result).toHaveProperty("sourceRoot", "src");
   });
 
+  it("always includes a vbeCacheNote, even when source and binary match (#559)", async () => {
+    // Identical source and binary -> actionableOk, the false-confidence case the
+    // consumer hit: disk matches but the user's live VBE cache may be stale.
+    const form = 'Begin Form\n   Caption = "Test"\nEnd';
+    const fs = makeSemanticFs({
+      "src/Form1.form.txt": form,
+      "bin/Form1.form.txt": form,
+    });
+
+    const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+    expect(result.actionableOk).toBe(true);
+    expect(result).toHaveProperty("vbeCacheNote");
+    expect(result.vbeCacheNote).toMatch(/VBE/);
+    expect(result.vbeCacheNote).toMatch(/reopen Access/i);
+  });
+
   // ---- T03: ok is preserved (backward compat) — noise diffs still set ok=false ----
 
   it("ok=false even for nonActionable differences (backward compat)", async () => {

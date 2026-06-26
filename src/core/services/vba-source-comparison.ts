@@ -77,6 +77,14 @@ export type VbaVerifyResult = {
   recommendation?: string;
   /** Machine key for the aggregated recommendation (semantic mode). */
   recommendedAction?: VbaRecommendation;
+  /**
+   * Always-present caveat. verify_code compares on-disk source against the
+   * on-disk binary only; it cannot observe the user's live Access/VBE in-memory
+   * cache, which may hold a stale compiled image even when disk content matches.
+   * A consumer that gets a clean result but the user still reports errors should
+   * advise closing and reopening Access.
+   */
+  vbeCacheNote: string;
   /** Runtime package version that produced this result (e.g. "1.2.53"). */
   dysflowVersion?: string;
   /** Fingerprint of the active semantic-classification rule set. */
@@ -254,6 +262,18 @@ export async function compareSourceAgainstBinary(
 
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
+/**
+ * Always-present advisory on every verify_code result. verify_code is a
+ * disk-vs-disk comparison and is blind to the user's live Access/VBE in-memory
+ * cache, so a clean result does not rule out stale-cache errors in an open
+ * session. See issue #559.
+ */
+export const VBE_CACHE_NOTE =
+  "verify_code compares on-disk source against the on-disk binary only; it cannot " +
+  "see the user's live Access/VBE in-memory cache. If the user still hits " +
+  "'method or member not found' errors after this check passes, advise File > Close " +
+  "and reopen Access to clear the stale VBE cache.";
+
 export async function compareVbaSourceTrees(
   sourceRoot: string,
   binaryExportRoot: string,
@@ -384,6 +404,7 @@ export async function compareVbaSourceTrees(
     dryRun: true,
     willModifyAccess: false,
     sourceRoot,
+    vbeCacheNote: VBE_CACHE_NOTE,
     dysflowVersion: runtimeDiagnostics.dysflowVersion,
     classifierRules: SEMANTIC_CLASSIFIER_RULES,
     runtimeDiagnostics,
