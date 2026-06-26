@@ -532,11 +532,12 @@ function normalizeModuleHeaders(wsNorm: string, fileType: string, keepVbName: bo
 
 function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boolean): string {
   let t = wsNorm;
-  // Drop the embedded CodeBehindForm section first: dysflow syncs a form's
-  // code-behind from its forms/*.cls on import, so that code is verified through
-  // the .cls — never through the .form.txt. The .form.txt is compared for its
-  // UI/layout only. (See stripCodeBehindForm.)
-  if (FORM_FILE_TYPES.has(fileType)) t = stripCodeBehindForm(t, fileType);
+  // Drop the embedded CodeBehindForm/CodeBehindReport section first: dysflow syncs
+  // a form's/report's code-behind from its forms|reports/*.cls on import, so that
+  // code is verified through the .cls — never through the .form.txt/.report.txt.
+  // The .form.txt/.report.txt is compared for its UI/layout only.
+  // (See stripCodeBehindSection.)
+  if (FORM_FILE_TYPES.has(fileType)) t = stripCodeBehindSection(t, fileType);
   t = normalizeModuleHeaders(t, fileType, keepVbName);
   if (FORM_FILE_TYPES.has(fileType)) {
     t = stripFormSerializationNoise(t, fileType);
@@ -546,23 +547,31 @@ function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boo
 }
 
 /**
- * Removes the `CodeBehindForm` section (and everything after it) from a
- * form/report serialization document, leaving only the UI/layout definition.
+ * Removes the `CodeBehindForm` / `CodeBehindReport` section (and everything after
+ * it) from a form/report serialization document, leaving only the UI/layout
+ * definition.
  *
- * A form's code-behind lives canonically in its `forms/*.cls` (dysflow's export
- * writes it there from `CodeModule.Lines`, and import syncs it back into the
- * document module). The same code is also serialized — via a different path,
- * `SaveAsText` — into the `.form.txt` `CodeBehindForm` section, so comparing it
- * here only double-counts the code and re-introduces serialization noise the
- * `.cls` comparison already owns. We therefore verify form code through the
- * `.cls` and form UI through the `.form.txt`.
+ * A form's/report's code-behind lives canonically in its `forms|reports/*.cls`
+ * (dysflow's export writes it there from `CodeModule.Lines`, and import syncs it
+ * back into the document module). The same code is also serialized — via a
+ * different path, `SaveAsText` — into the `.form.txt` `CodeBehindForm` section or
+ * the `.report.txt` `CodeBehindReport` section, so comparing it here only
+ * double-counts the code and re-introduces serialization noise the `.cls`
+ * comparison already owns. We therefore verify form/report code through the
+ * `.cls` and UI through the `.form.txt`/`.report.txt`.
  *
- * No-op for non-form file types and for forms with no code-behind marker.
+ * Reports use the `CodeBehindReport` marker, the symmetric counterpart of a
+ * form's `CodeBehindForm` (mirrors the PowerShell `Split-CodeBehindSection`
+ * `CodeBehind\w*` match).
+ *
+ * No-op for non-form file types and for documents with no code-behind marker.
  */
-export function stripCodeBehindForm(text: string, fileType: string): string {
+export function stripCodeBehindSection(text: string, fileType: string): string {
   if (!FORM_FILE_TYPES.has(fileType)) return text;
   const lines = text.split("\n");
-  const markerIndex = lines.findIndex((line) => line.trim() === "CodeBehindForm");
+  const markerIndex = lines.findIndex(
+    (line) => line.trim() === "CodeBehindForm" || line.trim() === "CodeBehindReport",
+  );
   if (markerIndex === -1) return text;
   return lines.slice(0, markerIndex).join("\n");
 }
