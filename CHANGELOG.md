@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.9.1] - 2026-06-26
+
+### Fixed
+
+- **Reworded null-PID close warning to prevent false-alarm unsafe reports.** The previous console message "OwnedPid is null; cannot kill by path/CommandLine. Running ROT/lock fallback only" was misread by downstream agents as an unsafe multi-instance process kill. The notice has been extracted into `Get-NullPidCloseNotice` and clearly states that dysflow kills nothing on this path and other Access instances are unaffected.
+
 ## [v1.9.0] - 2026-06-26
 
 Forms/reports semantic-diff and sync correctness pass, plus consuming-agent ergonomics on `verify_code` and `list_access_operations` (issues #549–#554, #559, #561).
