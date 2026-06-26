@@ -516,6 +516,7 @@ describe("VbaFormService", () => {
       return {
         mkdir: vi.fn().mockResolvedValue(undefined),
         readdir: vi.fn().mockResolvedValue([]),
+        readFile: vi.fn().mockRejectedValue(new Error("not found")),
         readJson: vi.fn().mockRejectedValue(new Error("not found")),
         writeFile: vi.fn().mockResolvedValue(undefined),
         ...overrides,

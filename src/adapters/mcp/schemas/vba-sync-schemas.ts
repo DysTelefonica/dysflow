@@ -224,6 +224,15 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       filter: SCHEMA_PROPS.filter,
     },
   },
+  inspect_form: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,

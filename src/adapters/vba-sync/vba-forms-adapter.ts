@@ -3,7 +3,14 @@ import {
   createDysflowError,
   failureResult,
   type OperationResult,
+  successResult,
 } from "../../core/contracts/index.js";
+import type { FormIR } from "../../core/models/form-ir.js";
+import {
+  collectControls,
+  collectFormEvents,
+  parseFormTxt,
+} from "../../core/services/form-ir-service.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
@@ -26,6 +33,7 @@ const FORMS_MAPPINGS = {
 const nodeFormFileSystem: FormFileSystemPort = {
   mkdir: (path, options) => mkdir(path, options),
   readdir: (path) => readdir(path),
+  readFile: (path) => readFile(path, "utf8"),
   readJson: async <T>(path: string): Promise<T> => {
     const raw = await readFile(path, "utf8");
     try {
@@ -55,11 +63,21 @@ export interface VbaFormsOrchestrator {
 
 export class VbaFormsAdapter {
   private readonly formService: VbaFormService;
+  private readonly fileSystem: FormFileSystemPort;
 
-  constructor(private readonly orchestrator: VbaFormsOrchestrator) {
+  /**
+   * @param orchestrator - Provides VBA manager execution context.
+   * @param fileSystem   - Optional injectable filesystem port. Defaults to the real Node.js fs.
+   *                       Inject a mock in tests to avoid real I/O.
+   */
+  constructor(
+    private readonly orchestrator: VbaFormsOrchestrator,
+    fileSystem?: FormFileSystemPort,
+  ) {
+    this.fileSystem = fileSystem ?? nodeFormFileSystem;
     this.formService = new VbaFormService({
       cwd: this.orchestrator.cwd,
-      fileSystem: nodeFormFileSystem,
+      fileSystem: this.fileSystem,
     });
   }
 
@@ -69,7 +87,8 @@ export class VbaFormsAdapter {
       toolName === "validate_form_spec" ||
       toolName === "generate_form" ||
       toolName === "catalog_add_control" ||
-      toolName === "harvest_form_catalog"
+      toolName === "harvest_form_catalog" ||
+      toolName === "inspect_form"
     );
   }
 
@@ -81,6 +100,7 @@ export class VbaFormsAdapter {
     if (toolName === "generate_form") return this.formService.generateForm(params);
     if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
+    if (toolName === "inspect_form") return this.inspectForm(params);
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
     }
@@ -90,5 +110,66 @@ export class VbaFormsAdapter {
         `Tool ${toolName} not supported by VbaFormsAdapter.`,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // inspect_form — read-only, source-path-first (Option C from design)
+  // ---------------------------------------------------------------------------
+
+  private async inspectForm(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+    if (!sourcePath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "inspect_form requires sourcePath (path to the .form.txt file).",
+        ),
+      );
+    }
+
+    // Read from disk — adapter owns the I/O, core is pure
+    let text: string;
+    try {
+      text = await this.fileSystem.readFile(sourcePath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read form file at "${sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    // Derive the form name from the filename
+    const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
+    const name = basename
+      .replace(/^Form_/, "")
+      .replace(/^Report_/, "")
+      .replace(/\.form\.txt$/i, "")
+      .replace(/\.report\.txt$/i, "");
+
+    // Parse — pure, no I/O
+    let ir: FormIR;
+    try {
+      ir = parseFormTxt(text, { name });
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_PARSE_ERROR",
+          `Failed to parse "${sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    // Extract controls and events from the IR
+    const controls = collectControls(ir.root);
+    const events = collectFormEvents(ir.root);
+
+    return successResult({
+      name: ir.name,
+      kind: ir.kind,
+      controls,
+      events,
+    });
   }
 }

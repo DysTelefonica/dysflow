@@ -44,6 +44,8 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   generate_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
   catalog_add_control: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
   harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  // inspect_form reads from the version-controlled source tree; no binary or filesystem mutation.
+  inspect_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // query maintenance (9)

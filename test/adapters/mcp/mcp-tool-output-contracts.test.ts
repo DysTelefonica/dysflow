@@ -36,6 +36,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "generate_form",
     "catalog_add_control",
     "harvest_form_catalog",
+    "inspect_form",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

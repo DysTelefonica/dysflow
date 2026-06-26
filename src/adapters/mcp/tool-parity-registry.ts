@@ -43,6 +43,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "generate_form",
   "catalog_add_control",
   "harvest_form_catalog",
+  "inspect_form",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -131,6 +132,8 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Add a control definition to a form-generation catalog. Edits the catalog file, not the Access binary. Write-gated (filesystem mutation).",
   harvest_form_catalog:
     "Harvest control definitions from existing forms into a catalog (optionally filtered), to seed form generation. Read-only on the binary.",
+  inspect_form:
+    "Parse a version-controlled .form.txt (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only. sourcePath must point to the on-disk source file (e.g. forms/Form_MyForm.form.txt).",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

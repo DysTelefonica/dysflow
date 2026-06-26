@@ -16,6 +16,7 @@ import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 export interface FormFileSystemPort {
   mkdir(path: string, options: { recursive: true }): Promise<string | undefined>;
   readdir(path: string): Promise<string[]>;
+  readFile(path: string): Promise<string>;
   readJson<T>(path: string): Promise<T>;
   writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
 }
@@ -41,6 +42,7 @@ export type VbaFormServiceOptions = {
 const nodeFileSystem: FormFileSystemPort = {
   mkdir: (path, options) => mkdir(path, options),
   readdir: (path) => readdir(path),
+  readFile: (path) => readFile(path, "utf8"),
   readJson: async <T>(path: string): Promise<T> => {
     const raw = await readFile(path, "utf8");
     try {
