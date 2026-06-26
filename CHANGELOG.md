@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.9.0] - 2026-06-26
+
+Forms/reports semantic-diff and sync correctness pass, plus consuming-agent ergonomics on `verify_code` and `list_access_operations` (issues #549–#554, #559, #561).
+
+### Fixed
+
+- **`verify_code` now strips report code-behind from `.report.txt` comparisons (#549).** The semantic classifier hard-coded the `CodeBehindForm` marker, so for a `.report.txt` (which Access serializes with `CodeBehindReport`) the code-behind section was never stripped and was compared, double-counting report VBA code that the sibling `.cls` already owns and producing false `actionableDifferent` results. The marker match now covers both forms and reports (`stripCodeBehindSection`), mirroring the PowerShell `Split-CodeBehindSection`.
+- **`fix_encoding` now repairs `.report.txt` files in bulk mode (#550).** `Fix-EncodingInSrc`'s bulk glob included `*.bas`/`*.cls`/`*.frm`/`*.form.txt` but not `*.report.txt`, so a BOM-corrupted report source was silently skipped and later failed to import with an opaque `LoadFromText` error.
+- **`.cls`-only forms are detected as document modules on `import_modules` (#551).** `importIncludesDocumentModule` only matched `.form.txt`/`.report.txt`, so a form whose source tree held only its code-behind `.cls` (layout not re-exported) was not recognized, the headless `IsCompiled=False` compile-bypass guard (#543) was skipped, and an expected unverified-compile downgrade became a hard failure. A `.cls` in `forms/` or `reports/` is now treated as a document-module marker (scoped to those folders, so a class in `classes/` cannot be misclassified).
+- **`Resolve-FormCodeBehindFile` no longer builds impossible cross-prefix candidates (#553).** It derived the other-prefix candidate from the full module name, producing names like `Report_Form_MyForm.cls` that can never exist (one wasted `Test-Path` per import). Candidates are now derived from the prefix-stripped base via `Get-FormCodeBehindCandidateNames`.
+
+### Added
+
+- **`verify_code` always surfaces a VBE-cache caveat (#559).** `verify_code` compares on-disk source against the on-disk binary only; it cannot see the user's live Access/VBE in-memory cache. The result now carries a stable `vbeCacheNote` so a consuming agent that gets a match still knows to advise closing/reopening Access if the user keeps seeing "method or member not found" errors.
+- **`list_access_operations` marks stale entries (#561).** Each entry now carries a read-time `isStale` flag (computed, never persisted, never auto-deleted): failed/timed-out/unattributed operations with no owned PID, idle past the staleness window, or interrupted-before-PID records. This lets an agent distinguish stale bookkeeping from genuinely active operations without a separate cleanup call.
+
+### Tests / internal
+
+- Report-context coverage for the semantic classifier (code-behind strip, serialization noise, toggle equivalence) and `.form.txt`+`.cls` pair dedup on import dry-run (#554).
+- The form/report toggle collapse is pinned as **value-token scoped by design** (#552, closed): any property whose value is `0`/`-1`/`NotDefault` present-vs-absent folds as serialization churn regardless of property name; a boolean-name allowlist was rejected because a missed name would re-introduce that churn as a false positive.
+
 ## [v1.8.0] - 2026-06-25
 
 Consuming-agent ergonomics pass over the MCP surface (issues #543, #533, #544, #545, #546, #548).
