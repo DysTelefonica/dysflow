@@ -2330,7 +2330,7 @@ function Fix-EncodingInSrc {
             if ($f) { $targets += $f }
         }
     } else {
-        $targets = @(Get-ChildItem -Path $ModulesPath -Recurse -File -Include "*.bas", "*.cls", "*.frm", "*.form.txt" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+        $targets = @(Get-ChildItem -Path $ModulesPath -Recurse -File -Include "*.bas", "*.cls", "*.frm", "*.form.txt", "*.report.txt" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
     }
 
     $fixed = 0
