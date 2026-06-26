@@ -203,6 +203,37 @@ describe("VbaSyncAdapter Orchestrator", () => {
     });
   });
 
+  it("execution error: triggers process reaping on executor failures in executeMappedTool", async () => {
+    const preflight: AccessOperationPreflightCleanup = {
+      cleanup: vi.fn(async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      })),
+    };
+    const executor: VbaManagerExecutor = async () => {
+      throw new Error("PowerShell process crashed unexpectedly");
+    };
+    const service = new VbaSyncAdapter({
+      executor,
+      preflightCleanup: preflight,
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo",
+    });
+
+    await expect(
+      service.execute("exists", {
+        accessPath: "C:/db/front.accdb",
+        projectRoot: "C:/repo",
+        destinationRoot: "C:/repo/src",
+        moduleName: "Module1",
+      }),
+    ).rejects.toThrow("PowerShell process crashed unexpectedly");
+
+    expect(preflight.cleanup).toHaveBeenCalledTimes(2);
+  });
+
   it("timeout: slow executor resolves VBA_MANAGER_TIMEOUT — authoritative timeout is the executor's own timer", async () => {
     // The executor layer (spawnPowerShellProcess) is the single authoritative timeout:
     // it owns the kill and sets timedOut=true in the result.  The adapter no longer

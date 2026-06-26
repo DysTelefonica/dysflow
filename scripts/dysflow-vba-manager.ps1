@@ -1594,6 +1594,11 @@ function Remove-AccessObjectOrComponent {
         $objectType = if ($objectInfo.Kind -eq "Report") { 3 } else { 2 } # acReport=3, acForm=2
         try {
             $AccessApplication.DoCmd.DeleteObject($objectType, $objectInfo.Name)
+            # Post-deletion verification
+            $checkObject = Resolve-AccessObjectInfo -AccessApplication $AccessApplication -ModuleName $ModuleName
+            if ($checkObject.Exists) {
+                throw "Active lock detected: the object '$ModuleName' remains in the database after deletion attempt."
+            }
             return [pscustomobject]@{
                 module = $ModuleName
                 status = "ok"
@@ -1610,6 +1615,11 @@ function Remove-AccessObjectOrComponent {
                     try {
                         $AccessApplication.RunCommand(4) # acCmdCompactDatabase = 4
                         $AccessApplication.DoCmd.DeleteObject($objectType, $objectInfo.Name)
+                        # Post-deletion verification
+                        $checkObject = Resolve-AccessObjectInfo -AccessApplication $AccessApplication -ModuleName $ModuleName
+                        if ($checkObject.Exists) {
+                            throw "Active lock detected: the object '$ModuleName' remains in the database after deletion attempt."
+                        }
                         return [pscustomobject]@{
                             module = $ModuleName
                             status = "ok"
@@ -1641,6 +1651,11 @@ function Remove-AccessObjectOrComponent {
         $component = $components.Item($componentName)
         $components.Remove($component)
         try { $AccessApplication.RunCommand(126) } catch { Write-Debug "Diagnostics: $_" }
+        # Post-deletion verification
+        $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+        if ($checkCompName) {
+            throw "Active lock detected: the VBA component '$ModuleName' remains in the project after deletion attempt."
+        }
         return [pscustomobject]@{
             module = $ModuleName
             status = "ok"
@@ -1662,6 +1677,11 @@ function Remove-AccessObjectOrComponent {
 
                     $cleanName = $componentName -replace '^(Form_|Report_)', ''
                     $AccessApplication.DoCmd.DeleteObject($objectType, $cleanName)
+                    # Post-deletion verification
+                    $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+                    if ($checkCompName) {
+                        throw "Active lock detected: the VBA component '$ModuleName' remains in the project after deletion attempt."
+                    }
                     return [pscustomobject]@{
                         module = $ModuleName
                         status = "ok"
@@ -1673,6 +1693,11 @@ function Remove-AccessObjectOrComponent {
                         $AccessApplication.RunCommand(4) # acCmdCompactDatabase = 4
                         $components.Remove($component)
                         try { $AccessApplication.RunCommand(126) } catch {}
+                        # Post-deletion verification
+                        $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+                        if ($checkCompName) {
+                            throw "Active lock detected: the VBA component '$ModuleName' remains in the project after deletion attempt."
+                        }
                         return [pscustomobject]@{
                             module = $ModuleName
                             status = "ok"
@@ -2036,36 +2061,111 @@ function Get-ActiveVbeLocation {
 
     try {
         $vbe = $AccessApplication.VBE
-        $pane = $vbe.ActiveCodePane
-        if ($pane) {
-            $startLine = 0
-            $startColumn = 0
-            $selectedEndLine = 0
-            $selectedEndColumn = 0
+        if ($vbe) {
+            $originalVisible = $false
+            $visibilityToggled = $false
             try {
-                $pane.GetSelection([ref]$startLine, [ref]$startColumn, [ref]$selectedEndLine, [ref]$selectedEndColumn)
-                $line = [int]$startLine
-                $column = [int]$startColumn
-                $endLine = [int]$selectedEndLine
-                $endColumn = [int]$selectedEndColumn
-            } catch { Write-Debug "Diagnostics: $_" }
-
-            try {
-                $codeModule = $pane.CodeModule
-                if ($codeModule) {
-                    try { $componentName = [string]$codeModule.Parent.Name } catch { Write-Debug "Diagnostics: $_" }
-                    if ($line -and $line -gt 0) {
-                        try { $sourceLine = [string]$codeModule.Lines($line, 1) } catch { Write-Debug "Diagnostics: $_" }
+                if ($vbe.MainWindow) {
+                    $originalVisible = $vbe.MainWindow.Visible
+                    if (-not $originalVisible) {
+                        $vbe.MainWindow.Visible = $true
+                        $visibilityToggled = $true
                     }
                 }
             } catch { Write-Debug "Diagnostics: $_" }
-        }
 
-        if (-not $componentName) {
             try {
-                $selected = $vbe.SelectedVBComponent
-                if ($selected) { $componentName = [string]$selected.Name }
-            } catch { Write-Debug "Diagnostics: $_" }
+                $pane = $vbe.ActiveCodePane
+                if ($pane) {
+                    $startLine = 0
+                    $startColumn = 0
+                    $selectedEndLine = 0
+                    $selectedEndColumn = 0
+                    try {
+                        $pane.GetSelection([ref]$startLine, [ref]$startColumn, [ref]$selectedEndLine, [ref]$selectedEndColumn)
+                        $line = [int]$startLine
+                        $column = [int]$startColumn
+                        $endLine = [int]$selectedEndLine
+                        $endColumn = [int]$selectedEndColumn
+                    } catch { Write-Debug "Diagnostics: $_" }
+
+                    try {
+                        $codeModule = $pane.CodeModule
+                        if ($codeModule) {
+                            try { $componentName = [string]$codeModule.Parent.Name } catch { Write-Debug "Diagnostics: $_" }
+                            if ($line -and $line -gt 0) {
+                                try { $sourceLine = [string]$codeModule.Lines($line, 1) } catch { Write-Debug "Diagnostics: $_" }
+                            }
+                        }
+                    } catch { Write-Debug "Diagnostics: $_" }
+                }
+
+                if (-not $componentName) {
+                    try {
+                        $selected = $vbe.SelectedVBComponent
+                        if ($selected) { $componentName = [string]$selected.Name }
+                    } catch { Write-Debug "Diagnostics: $_" }
+                }
+            } finally {
+                try {
+                    if ($visibilityToggled -and $vbe.MainWindow) {
+                        $vbe.MainWindow.Visible = $originalVisible
+                    }
+                } catch { Write-Debug "Diagnostics: $_" }
+            }
+
+            # Fallback 1.2: Scan VBComponents for Saved = $false
+            if (-not $componentName -and $vbe.ActiveVBProject) {
+                try {
+                    foreach ($comp in $vbe.ActiveVBProject.VBComponents) {
+                        if ($comp.Saved -eq $false) {
+                            $componentName = $comp.Name
+                            $codeModule = $comp.CodeModule
+                            if ($codeModule -and $codeModule.CountOfLines -gt 0) {
+                                $count = $codeModule.CountOfLines
+                                # Scan lines for comment-aware syntax errors
+                                for ($i = 1; $i -le $count; $i++) {
+                                    $lineText = $codeModule.Lines($i, 1)
+                                    $inString = $false
+                                    $stringStartCol = 0
+                                    $len = $lineText.Length
+                                    for ($col = 1; $col -le $len; $col++) {
+                                        $char = $lineText[$col - 1]
+                                        if ($char -eq '"') {
+                                            if ($inString) {
+                                                if ($col -lt $len -and $lineText[$col] -eq '"') {
+                                                    $col++ # skip escaped quote
+                                                } else {
+                                                    $inString = $false
+                                                }
+                                            } else {
+                                                $inString = $true
+                                                $stringStartCol = $col
+                                            }
+                                        } elseif ($char -eq "'" -and -not $inString) {
+                                            break # comment, ignore rest of line
+                                        }
+                                    }
+                                    # If the line is not continued and has an unclosed string, we found a syntax error
+                                    if ($inString -and -not $lineText.TrimEnd().EndsWith("_")) {
+                                        $line = $i
+                                        $column = $stringStartCol
+                                        $sourceLine = $lineText
+                                        break
+                                    }
+                                }
+                                # Default to line 1 if no syntax error line identified
+                                if (-not $line) {
+                                    $line = 1
+                                    $column = 1
+                                    $sourceLine = $codeModule.Lines(1, 1)
+                                }
+                            }
+                            break # found the dirty module, stop component scan
+                        }
+                    }
+                } catch { Write-Debug "Diagnostics: $_" }
+            }
         }
     } catch { Write-Debug "Diagnostics: $_" }
 
@@ -2899,6 +2999,43 @@ function Invoke-AccessProcedure {
         $metadata = @()
         if ($null -ne $VbProject) {
             $metadata = @(Get-VbaProcedureParameterMetadata -VbProject $VbProject -ProcedureName $ProcedureName)
+        }
+
+        # Issue #2: Guard for parameterless execution
+        if ($ProcedureArgs.Count -eq 0 -and $metadata.Count -eq 0) {
+            try {
+                $result = $AccessApplication.Run($ProcedureName)
+                $returnType = if ($null -eq $result) { $null } else { $result.GetType().FullName }
+                $returnValue = Convert-RunReturnValue -Value $result
+                $decoded = Convert-RunReturnPayload -ReturnValue $returnValue
+                $ok = $true
+                if ($null -ne $decoded.payloadOk) { $ok = [bool]$decoded.payloadOk }
+                $errorText = $null
+                if (-not $ok) { $errorText = $decoded.payloadError }
+                return [pscustomobject]@{
+                    ok          = $ok
+                    procedure   = $ProcedureName
+                    argsCount   = 0
+                    returnValue = $returnValue
+                    returnType  = $returnType
+                    byref_values = [pscustomobject]@{}
+                    payload     = $decoded.payload
+                    logs        = @($decoded.logs)
+                    error       = $errorText
+                }
+            } catch {
+                return [pscustomobject]@{
+                    ok          = $false
+                    procedure   = $ProcedureName
+                    argsCount   = 0
+                    returnValue = $null
+                    returnType  = $null
+                    byref_values = [pscustomobject]@{}
+                    payload     = $null
+                    logs        = @()
+                    error       = $_.Exception.Message
+                }
+            }
         }
 
         # VBA permite omitir Optional ByRef desde la Ventana Inmediata, pero

@@ -215,6 +215,7 @@ describe.skipIf(skipReason !== undefined)(
         const importClass = await service.execute("import_modules", {
           moduleNames: ["TempVerifyClass"],
           importMode: "Code",
+          apply: true,
         });
         expect(importClass.ok).toBe(true);
 

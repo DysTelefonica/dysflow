@@ -281,6 +281,11 @@ export class VbaSyncAdapter implements VbaSyncPort {
       result = await this.executor(trackedRequest);
     } catch (error) {
       await this.finishTrackedOperation(trackedOperation, { status: "failed" });
+      try {
+        await reapOrphanedAccessOnTimeout(() => this.runPreflightCleanup(target.data));
+      } catch {
+        // Ignore errors during cleanup
+      }
       throw error;
     }
     await this.finishTrackedOperation(trackedOperation, {

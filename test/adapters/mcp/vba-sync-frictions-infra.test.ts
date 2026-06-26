@@ -357,7 +357,12 @@ describe("vba_inline_execution tool behavior", () => {
       validateStrictContext: () => ({ ok: true }),
       executeMappedTool: async (name: string, params: any) => {
         executedTools.push({ name, params });
-        if (name === "import_modules" || name === "run_vba" || name === "delete_module") {
+        if (
+          name === "import_modules" ||
+          name === "run_vba" ||
+          name === "delete_module" ||
+          name === "compile_vba"
+        ) {
           return { ok: true, data: { status: "success" } };
         }
         return { ok: false };
@@ -380,17 +385,19 @@ describe("vba_inline_execution tool behavior", () => {
 
     expect(result.ok).toBe(true);
 
-    // Expecting 3 tools to be executed in sequence
-    expect(executedTools.length).toBe(3);
-    expect(executedTools[0]?.name).toBe("import_modules");
-    expect(executedTools[1]?.name).toBe("run_vba");
-    expect(executedTools[2]?.name).toBe("delete_module");
+    // Expecting 5 tools to be executed in sequence (delete pre-cleanup, import, compile, run, delete post-cleanup)
+    expect(executedTools.length).toBe(5);
+    expect(executedTools[0]?.name).toBe("delete_module");
+    expect(executedTools[1]?.name).toBe("import_modules");
+    expect(executedTools[2]?.name).toBe("compile_vba");
+    expect(executedTools[3]?.name).toBe("run_vba");
+    expect(executedTools[4]?.name).toBe("delete_module");
 
-    // The generated module name should be like _inline_<uuid>
-    const importParams = executedTools[0]?.params;
+    // The generated module name is __dysflow_inline__
+    const importParams = executedTools[1]?.params;
     expect(importParams?.moduleNames?.length).toBe(1);
     const generatedModuleName = importParams?.moduleNames?.[0];
-    expect(generatedModuleName).toMatch(/^_inline_[a-f0-9_]+$/);
+    expect(generatedModuleName).toBe("__dysflow_inline__");
 
     // Verify written file and content (separator-agnostic: CI runs on Linux)
     expect(writtenFiles[0]?.path?.replace(/\\/g, "/")).toContain(
@@ -401,17 +408,17 @@ describe("vba_inline_execution tool behavior", () => {
     expect(writtenFiles[0]?.content).toContain("MsgBox 123");
 
     // Verify run_vba params
-    const runParams = executedTools[1]?.params;
+    const runParams = executedTools[3]?.params;
     expect(runParams?.moduleNames).toContain(generatedModuleName);
     expect(runParams?.procedureName).toBe(`${generatedModuleName}.ExecuteInline`);
 
     // Verify delete_module params
-    const deleteParams = executedTools[2]?.params;
+    const deleteParams = executedTools[4]?.params;
     expect(deleteParams?.moduleName).toBe(generatedModuleName);
 
-    // Verify file removal
-    expect(removedFiles.length).toBe(1);
-    expect(removedFiles[0]?.replace(/\\/g, "/")).toContain(`modules/${generatedModuleName}.bas`);
+    // Verify file removal (pre-cleanup and post-cleanup)
+    expect(removedFiles.length).toBe(2);
+    expect(removedFiles[1]?.replace(/\\/g, "/")).toContain(`modules/${generatedModuleName}.bas`);
   });
 
   it("cleans up even if execution fails", async () => {
@@ -427,7 +434,7 @@ describe("vba_inline_execution tool behavior", () => {
       validateStrictContext: () => ({ ok: true }),
       executeMappedTool: async (name: string, params: any) => {
         executedTools.push({ name, params });
-        if (name === "import_modules") {
+        if (name === "import_modules" || name === "compile_vba") {
           return { ok: true };
         }
         if (name === "run_vba") {
@@ -458,8 +465,8 @@ describe("vba_inline_execution tool behavior", () => {
     const deleteCall = executedTools.find((x) => x.name === "delete_module");
     expect(deleteCall).toBeDefined();
 
-    // Verify file was still removed
-    expect(removedFiles.length).toBe(1);
+    // Verify file was still removed (pre-cleanup and post-cleanup)
+    expect(removedFiles.length).toBe(2);
   });
 });
 

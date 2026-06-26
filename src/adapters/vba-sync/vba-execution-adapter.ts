@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
@@ -183,8 +182,7 @@ export class VbaExecutionAdapter {
         : INLINE_TIMEOUT_CEILING_MS;
     const inlineParams = { ...params, timeoutMs: clampedTimeout };
 
-    const uuid = randomUUID().replace(/-/g, "_");
-    const moduleName = `_inline_${uuid}`;
+    const moduleName = "__dysflow_inline__";
 
     const folder = resolve(destinationRoot, "modules");
     const filePath = resolve(folder, `${moduleName}.bas`);
@@ -195,6 +193,23 @@ ${rawCode}
 End Sub
 `;
 
+    // 1. Delete pre-existing database module and file on disk
+    try {
+      await this.orchestrator.executeMappedTool(
+        "delete_module",
+        { ...inlineParams, moduleName, force: true },
+        EXECUTION_MAPPINGS.delete_module,
+      );
+    } catch {
+      // Suppress pre-cleanup failures
+    }
+    try {
+      await this.fileSystem.rm(filePath, { force: true });
+    } catch {
+      // Suppress pre-cleanup failures
+    }
+
+    // 2. Write file
     try {
       await this.fileSystem.writeFile(filePath, wrapper);
     } catch (err) {
@@ -210,6 +225,7 @@ End Sub
       createDysflowError("EXECUTION_ERROR", "Inline execution did not produce a result."),
     );
     try {
+      // 3. Import module
       const importRes = await this.orchestrator.executeMappedTool(
         "import_modules",
         { ...inlineParams, moduleNames: [moduleName], dryRun: false },
@@ -218,15 +234,26 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
-        inlineResult = await this.orchestrator.executeMappedTool(
-          "run_vba",
-          {
-            ...inlineParams,
-            moduleNames: [moduleName],
-            procedureName: `${moduleName}.ExecuteInline`,
-          },
-          EXECUTION_MAPPINGS.run_vba,
+        // 4. Compile VBA
+        const compileRes = await this.orchestrator.executeMappedTool(
+          "compile_vba",
+          inlineParams,
+          EXECUTION_MAPPINGS.compile_vba,
         );
+        if (!compileRes.ok) {
+          inlineResult = compileRes;
+        } else {
+          // 5. Run procedure
+          inlineResult = await this.orchestrator.executeMappedTool(
+            "run_vba",
+            {
+              ...inlineParams,
+              moduleNames: [moduleName],
+              procedureName: `${moduleName}.ExecuteInline`,
+            },
+            EXECUTION_MAPPINGS.run_vba,
+          );
+        }
       }
     } catch (err) {
       inlineResult = failureResult(
@@ -236,10 +263,8 @@ End Sub
         ),
       );
     } finally {
+      // 6. Clean up
       try {
-        // force:true so a temp module that hits the corruption HRESULT
-        // (0x800ADEB9, e.g. VBE open) still gets removed instead of leaking
-        // an orphan _inline_* module into the binary on every failed cleanup.
         await this.orchestrator.executeMappedTool(
           "delete_module",
           { ...inlineParams, moduleName, force: true },
@@ -389,9 +414,27 @@ function normalizeTestPlan(value: unknown): VbaTestPlanEntry[] {
   });
 }
 
+function sanitizeProceduresJson(jsonStr: string): string {
+  let cleaned = jsonStr;
+  if (cleaned.startsWith("\uFEFF")) {
+    cleaned = cleaned.substring(1);
+  }
+  cleaned = cleaned.trim();
+  const markdownFenceRegex = /^```(?:json)?\s*([\s\S]*?)\s*```$/i;
+  const match = markdownFenceRegex.exec(cleaned);
+  if (match) {
+    cleaned = (match[1] ?? "").trim();
+  }
+  if (cleaned.startsWith("\uFEFF")) {
+    cleaned = cleaned.substring(1);
+  }
+  return cleaned.trim();
+}
+
 function validateTestProceduresJson(proceduresJson: string): OperationResult<string> {
   try {
-    const procedures = normalizeTestPlan(JSON.parse(proceduresJson));
+    const sanitized = sanitizeProceduresJson(proceduresJson);
+    const procedures = normalizeTestPlan(JSON.parse(sanitized));
     if (procedures.length === 0) {
       return failureResult(
         createDysflowError(
