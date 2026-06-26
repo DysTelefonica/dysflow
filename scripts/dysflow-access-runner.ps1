@@ -221,6 +221,18 @@ function Resolve-ReadActionDatabase {
   return [ordered]@{ Database = $targetDb; Owned = $true; TargetPath = $targetPath }
 }
 
+function Resolve-QueryActionTargetPath {
+  param(
+    [Parameter(Mandatory = $true)] $Payload,
+    [Parameter(Mandatory = $false)] [string] $AccessDbPath
+  )
+  $targetPath = [string]$Payload.databasePath
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.backendPath }
+  if ([string]::IsNullOrWhiteSpace($targetPath) -and -not [string]::IsNullOrWhiteSpace($AccessDbPath)) { $targetPath = $AccessDbPath }
+  return $targetPath
+}
+
 function ConvertTo-IsoStartTime {
   param($CreationDate)
   if ($null -eq $CreationDate) { return $null }
@@ -1116,6 +1128,29 @@ function Invoke-WriteAction {
 # relink_directory helpers — file enumeration, classification, dry-run JSON
 # ---------------------------------------------------------------------------
 
+function ConvertTo-CanonicalFullPath {
+  param([Parameter(Mandatory = $true)] [string]$Path)
+  $full = [System.IO.Path]::GetFullPath($Path).Replace([System.IO.Path]::AltDirectorySeparatorChar, [System.IO.Path]::DirectorySeparatorChar)
+  $root = [System.IO.Path]::GetPathRoot($full).Replace([System.IO.Path]::AltDirectorySeparatorChar, [System.IO.Path]::DirectorySeparatorChar)
+  while ($full.Length -gt $root.Length -and $full.EndsWith([string][System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::Ordinal)) {
+    $full = $full.Substring(0, $full.Length - 1)
+  }
+  return $full
+}
+
+function Test-CanonicalPathContained {
+  param(
+    [Parameter(Mandatory = $true)] [string]$CandidatePath,
+    [Parameter(Mandatory = $true)] [string]$RootPath
+  )
+  $candidate = ConvertTo-CanonicalFullPath -Path $CandidatePath
+  $root = ConvertTo-CanonicalFullPath -Path $RootPath
+  if ($candidate.Equals($root, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+  $separator = [string][System.IO.Path]::DirectorySeparatorChar
+  $prefix = if ($root.EndsWith($separator, [System.StringComparison]::Ordinal)) { $root } else { $root + $separator }
+  return $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-AccessFilesRecursive {
   param(
     [string]$RootPath,
@@ -1176,8 +1211,8 @@ function Get-LinkClassification {
     [hashtable]$FileIndex
   )
 
-  # Already local if path starts under RootPath
-  if ($BackendPath.StartsWith($RootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+  # Already local if the canonical backend path is inside the canonical root.
+  if (Test-CanonicalPathContained -CandidatePath $BackendPath -RootPath $RootPath) {
     return @{ classification = "alreadyLocal"; resolvedLocalPath = $BackendPath }
   }
 
@@ -1284,7 +1319,7 @@ function Test-LinkExternal {
     [string]$RootPath,
     [string[]]$DenyPrefixes = @()
   )
-  $external = -not $BackendPath.StartsWith($RootPath, [System.StringComparison]::OrdinalIgnoreCase)
+  $external = -not (Test-CanonicalPathContained -CandidatePath $BackendPath -RootPath $RootPath)
   $broken   = $external -and -not (Test-Path -LiteralPath $BackendPath -PathType Leaf)
   $denied   = $false
   foreach ($prefix in $DenyPrefixes) {
@@ -1694,10 +1729,7 @@ try {
   $before = Get-MsAccessProcesses
   $payload = ConvertFrom-JsonCompat $PayloadJson
   $action = [string]$payload.action
-  $targetPath = [string]$payload.databasePath
-  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.sourcePath }
-  if ([string]::IsNullOrWhiteSpace($targetPath) -and -not [string]::IsNullOrWhiteSpace($AccessDbPath)) { $targetPath = $AccessDbPath }
-  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$payload.backendPath }
+  $targetPath = Resolve-QueryActionTargetPath -Payload $payload -AccessDbPath $AccessDbPath
   $dryRun = $true
   if ($null -ne $payload.dryRun) { $dryRun = [bool]$payload.dryRun }
   $isDirectTargetQuery = $Operation -eq 'query' -and -not [string]::IsNullOrWhiteSpace($targetPath) -and -not $dryRun -and (
@@ -2063,5 +2095,3 @@ try {
 }
 
 exit $script:exitCode
-
-

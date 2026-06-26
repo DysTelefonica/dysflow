@@ -788,6 +788,37 @@ Describe "Resolve-WriteActionDatabase — behavioral (issue #380)" {
     }
 }
 
+Describe "Resolve-QueryActionTargetPath — behavioral (issue #568)" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Resolve-QueryActionTargetPath' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Resolve-QueryActionTargetPath not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    It "prefers backendPath over AccessDbPath when only backendPath is provided" {
+        $payload = [PSCustomObject]@{
+            databasePath = $null
+            sourcePath = $null
+            backendPath = "C:\backend.accdb"
+        }
+
+        $result = Resolve-QueryActionTargetPath -Payload $payload -AccessDbPath "C:\frontend.accdb"
+
+        $result | Should -Be "C:\backend.accdb"
+    }
+}
+
 Describe "Resolve-ReadActionDatabase — behavioral (issue #380)" {
     BeforeAll {
         $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
@@ -1053,6 +1084,59 @@ Describe "Access query write dry-run contract — behavioral" {
         $result.imported | Should -Be 0
         $result.queries.Count | Should -Be 1
         $result.queries[0].name | Should -Be "q_people"
+    }
+}
+
+Describe "relink_directory local path containment — behavioral" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        foreach ($name in @('ConvertTo-CanonicalFullPath', 'Test-CanonicalPathContained', 'Resolve-LocalPath', 'Get-LinkClassification', 'Test-LinkExternal')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $name },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$name not found in $($script:RunnerPath)" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
+    }
+
+    It "does not classify a sibling path prefix as already local" {
+        $result = Get-LinkClassification `
+            -BackendPath "C:\data\project2\backend.accdb" `
+            -RootPath "C:\data\project" `
+            -AliasMap @{} `
+            -FileIndex @{}
+
+        $result.classification | Should -Be "unresolved"
+    }
+
+    It "classifies contained paths and the root itself as local across trailing separator variants" {
+        $child = Get-LinkClassification `
+            -BackendPath "C:\data\project\backend.accdb" `
+            -RootPath "C:\data\project\" `
+            -AliasMap @{} `
+            -FileIndex @{}
+        $root = Get-LinkClassification `
+            -BackendPath "C:\data\project" `
+            -RootPath "C:\data\project\" `
+            -AliasMap @{} `
+            -FileIndex @{}
+
+        $child.classification | Should -Be "alreadyLocal"
+        $root.classification | Should -Be "alreadyLocal"
+    }
+
+    It "reports sibling prefix links as external while accepting trailing separator containment" {
+        $sibling = Test-LinkExternal -BackendPath "C:\data\project2\backend.accdb" -RootPath "C:\data\project"
+        $root = Test-LinkExternal -BackendPath "C:\data\project" -RootPath "C:\data\project\"
+
+        $sibling.external | Should -Be $true
+        $root.external | Should -Be $false
     }
 }
 

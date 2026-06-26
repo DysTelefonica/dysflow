@@ -1430,6 +1430,24 @@ function Export-VbaModule {
     }
 }
 
+function Assert-SafeVbaModuleName {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    $moduleNameText = [string]$ModuleName
+    if ([string]::IsNullOrWhiteSpace($moduleNameText)) {
+        throw "Invalid moduleName: value cannot be empty."
+    }
+
+    if ($moduleNameText -eq "." -or $moduleNameText -eq ".." -or
+        $moduleNameText.IndexOfAny(@([char]'\', [char]'/', [char]':')) -ge 0 -or
+        [System.IO.Path]::IsPathRooted($moduleNameText)) {
+        throw ("Invalid moduleName '{0}': module names must not contain path separators, drive qualifiers, or traversal segments." -f $moduleNameText)
+    }
+}
+
 function Resolve-ImportFileForModule {
     [CmdletBinding()]
     Param(
@@ -1437,6 +1455,8 @@ function Resolve-ImportFileForModule {
         [Parameter(Mandatory = $true)][string]$ModuleName,
         [string]$ImportMode = "Auto"
     )
+
+    Assert-SafeVbaModuleName -ModuleName $ModuleName
 
     $modulesPathText = [string]$ModulesPath
     $moduleNameText = [string]$ModuleName
@@ -2545,6 +2565,10 @@ function Fix-EncodingInAccess {
                 try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
             }
         }
+    }
+
+    foreach ($n in $names) {
+        Assert-SafeVbaModuleName -ModuleName $n
     }
 
     $fixed = 0

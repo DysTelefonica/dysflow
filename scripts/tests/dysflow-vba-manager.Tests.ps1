@@ -140,6 +140,10 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
 
 Describe "dysflow-vba-manager.ps1 — pure helper functions" {
     BeforeAll {
+        if (-not $script:ScriptPath) {
+            $script:ScriptPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        }
+
         # Dot-source only the helper functions by extracting them via AST
         # We mock the Param block's mandatory parameters to avoid execution
         # by loading helper functions that don't require COM or Access.
@@ -205,6 +209,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Get-PreferredNewline',
             'Normalize-Newlines',
             'Get-AccessLockFilePath',
+            'Assert-SafeVbaModuleName',
+            'Resolve-ImportFileForModule',
             'Resolve-FormCodeBehindFile',
             'Resolve-ImportModeValue'
         )
@@ -415,6 +421,31 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             Set-Content -Path (Join-Path $root "reports" "Report_Inv.cls") -Value "Option Explicit"
             $result = Resolve-FormCodeBehindFile -ModulesPath $root -ModuleName "Report_Inv"
             $result | Should -Be (Join-Path $root "reports" "Report_Inv.cls")
+        }
+    }
+
+    Context "Resolve-ImportFileForModule path safety (#569)" {
+        It "rejects traversal, absolute, drive-qualified, and separator-bearing module names" {
+            $root = Join-Path $TestDrive "safe-src"
+            $outside = Join-Path $TestDrive "outside"
+            New-Item -ItemType Directory -Path (Join-Path $root "modules") -Force | Out-Null
+            New-Item -ItemType Directory -Path $outside -Force | Out-Null
+            Set-Content -Path (Join-Path $outside "Escaped.bas") -Value "Attribute VB_Name = `"Escaped`""
+            Set-Content -Path (Join-Path $root "modules" "Nested.bas") -Value "Attribute VB_Name = `"Nested`""
+
+            $absoluteBase = Join-Path $outside "Escaped"
+            $attempts = @(
+                "..\outside\Escaped",
+                "..\..\outside\Escaped",
+                $absoluteBase,
+                "C:\outside\Escaped",
+                "modules\Nested"
+            )
+
+            foreach ($attempt in $attempts) {
+                { Resolve-ImportFileForModule -ModulesPath $root -ModuleName $attempt -ImportMode "Auto" } |
+                    Should -Throw -Because "moduleName must be a VBA module name, not a filesystem path"
+            }
         }
     }
 
@@ -1762,7 +1793,8 @@ Describe "Invoke-FixEncodingAction encoding — byte-level (decompose S6)" {
 
         $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
         $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
-        $requiredFunctions = @('Invoke-FixEncodingAction', 'Fix-EncodingInSrc', 'Get-FileEncodingInfo', 'Write-Utf8NoBom', 'Convert-AnsiToUtf8NoBom', 'Resolve-ImportFileForModule', 'Get-ComponentExtension', 'Get-ComponentFolder')
+        $requiredFunctions = @('Invoke-FixEncodingAction', 'Fix-EncodingInSrc', 'Get-FileEncodingInfo', 'Write-Utf8NoBom', 'Convert-AnsiToUtf8NoBom', 'Assert-SafeVbaModuleName',
+            'Resolve-ImportFileForModule', 'Get-ComponentExtension', 'Get-ComponentFolder')
         $allFunctionsText = ($ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -in $requiredFunctions }, $true) | ForEach-Object { $_.Extent.Text }) -join "`n`n"
         Invoke-Expression $allFunctionsText
         function script:Write-Status { param([string]$Message, $Color) }
@@ -1811,6 +1843,48 @@ Describe "Invoke-FixEncodingAction encoding — byte-level (decompose S6)" {
         } finally {
             if ([System.IO.Directory]::Exists($sandbox)) { [System.IO.Directory]::Delete($sandbox, $true) }
         }
+    }
+}
+
+Describe "Fix-EncodingInAccess moduleName path safety (#569)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $requiredFunctions = @('Assert-SafeVbaModuleName', 'Fix-EncodingInAccess')
+        $allFunctionsText = ($ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -in $requiredFunctions }, $true) | ForEach-Object { $_.Extent.Text }) -join "`n`n"
+        Invoke-Expression $allFunctionsText
+    }
+
+    BeforeEach {
+        $script:ExportCalls = [System.Collections.Generic.List[string]]::new()
+        $script:ImportCalls = [System.Collections.Generic.List[string]]::new()
+        function script:Export-VbaModule {
+            param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication)
+            $script:ExportCalls.Add($ModuleName)
+        }
+        function script:Import-VbaModule {
+            param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication)
+            $script:ImportCalls.Add($ModuleName)
+        }
+        function script:Write-Status { param([string]$Message, $Color) }
+    }
+
+    It "rejects malicious module names before exporting from Access" {
+        $attempts = @(
+            "..\outside\Escaped",
+            "..\..\outside\Escaped",
+            "C:\outside\Escaped",
+            "forms\Nested"
+        )
+
+        foreach ($attempt in $attempts) {
+            {
+                Fix-EncodingInAccess -VbProject ([pscustomobject]@{}) -ModulesPath "C:\safe\modules" -ModuleName @($attempt)
+            } | Should -Throw -Because "fix_encoding must reject moduleName paths before export/import filesystem work"
+        }
+
+        $script:ExportCalls.Count | Should -Be 0
+        $script:ImportCalls.Count | Should -Be 0
     }
 }
 
