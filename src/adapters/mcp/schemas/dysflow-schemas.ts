@@ -100,6 +100,8 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
       enum: ["read", "write"],
       description: "Execution mode: read or write.",
     },
+    dryRun: SCHEMA_PROPS.dryRun,
+    apply: SCHEMA_PROPS.apply,
   },
 };
 

@@ -197,6 +197,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       name: SCHEMA_PROPS.name,
       replace: SCHEMA_PROPS.replace,
       dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
     },
   },
   catalog_add_control: {

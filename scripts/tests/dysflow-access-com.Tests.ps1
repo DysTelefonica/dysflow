@@ -582,6 +582,25 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
         }
     }
 
+    Context "OpenCurrentDatabase failures are surfaced" {
+        It "throws instead of returning an apparently opened session when OpenCurrentDatabase fails" {
+            $fakeApp = New-FakeAccessApp -hWndAccessApp 7778
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Force -Value {
+                param($Path, $Exclusive, $Password)
+                throw "password rejected"
+            }
+
+            {
+                Open-CanonicalAccess `
+                    -DbPath            "C:\protected.accdb" `
+                    -Password          "wrong-password" `
+                    -ComSpawnAction    { $fakeApp } `
+                    -HwndToPidAction   { param($Hwnd) 44001 } `
+                    -WmiSnapshotAction { @() }
+            } | Should -Throw "*OpenCurrentDatabase failed*"
+        }
+    }
+
     # -----------------------------------------------------------------------
     # Session shape — Open-CanonicalAccess returns required fields
     # -----------------------------------------------------------------------

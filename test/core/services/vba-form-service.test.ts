@@ -539,6 +539,62 @@ describe("VbaFormService", () => {
       });
     });
 
+    it("generateForm with dryRun:true returns a plan without writing through the fileSystem port", async () => {
+      const fs = makeFs();
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.generateForm({
+        spec: { name: "Form_DryRun", kind: "Form", controls: [{ name: "txt", type: "TextBox" }] },
+        destinationRoot: "/fake/root",
+        dryRun: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toMatchObject({
+          dryRun: true,
+          generated: false,
+          wouldGenerate: true,
+          outputPath: expect.stringContaining("Form_DryRun.form.json"),
+          name: "Form_DryRun",
+          kind: "Form",
+          controlCount: 1,
+        });
+      }
+      expect(fs.mkdir).not.toHaveBeenCalled();
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+
+    it("generateForm with dryRun:true and apply:true writes through the fileSystem port", async () => {
+      const writtenFiles: Array<{ path: string; data: string }> = [];
+      const fs = makeFs({
+        writeFile: async (path: string, data: string) => {
+          writtenFiles.push({ path, data });
+        },
+      });
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.generateForm({
+        spec: { name: "Form_ApplyDryRun", kind: "Form", controls: [] },
+        destinationRoot: "/fake/root",
+        dryRun: true,
+        apply: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toMatchObject({
+          generated: true,
+          outputPath: expect.stringContaining("Form_ApplyDryRun.form.json"),
+        });
+      }
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining("forms"), {
+        recursive: true,
+      });
+      expect(writtenFiles).toHaveLength(1);
+      expect(writtenFiles[0]?.path).toContain("Form_ApplyDryRun.form.json");
+    });
+
     it("generateForm uses clock.nowIso() for deterministic generatedAt timestamp", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
       const fs = makeFs({

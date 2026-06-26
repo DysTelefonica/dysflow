@@ -61,6 +61,8 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("backendPath");
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("databasePath");
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("sourcePath");
+    expect(queryExecute?.inputSchema?.properties).toHaveProperty("dryRun");
+    expect(queryExecute?.inputSchema?.properties).toHaveProperty("apply");
 
     // Verify read-only sql query
     const querySql = tools.find((t) => t.name === "query_sql");

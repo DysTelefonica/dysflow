@@ -38,11 +38,13 @@ export function createDispatchTool(
   // while the import still writes to the binary. Which tools mutate the binary is
   // declared on the route (`mutatesBinary`), not duplicated here (#405).
   const isBinaryWrite = route.kind === "vba-sync" && route.mutatesBinary;
+  const isFilesystemWrite = route.kind === "vba-sync" && route.mutatesFilesystem;
 
   const isWriteGated =
     route.kind === "query-write-fixture" ||
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
-    isBinaryWrite;
+    isBinaryWrite ||
+    isFilesystemWrite;
 
   return {
     name,
@@ -52,7 +54,13 @@ export function createDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
-      const isDryRun = isBinaryWrite ? false : resolveIsDryRun(input);
+      const isDryRun = isBinaryWrite
+        ? false
+        : isFilesystemWrite
+          ? name === "generate_form" && hasOwn(input, "dryRun")
+            ? resolveIsDryRun(input)
+            : false
+          : resolveIsDryRun(input);
       if (
         isWriteGated &&
         !isDryRun &&
@@ -111,4 +119,8 @@ export function createDispatchTool(
       }
     },
   };
+}
+
+function hasOwn(value: unknown, key: string): boolean {
+  return typeof value === "object" && value !== null && Object.hasOwn(value, key);
 }

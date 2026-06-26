@@ -266,6 +266,114 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
+  it("advertises dryRun/apply on modern query execution", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const properties = tools.find((tool) => tool.name === "dysflow_query_execute")?.inputSchema
+      ?.properties;
+
+    expect(properties).toHaveProperty("dryRun");
+    expect(properties).toHaveProperty("apply");
+  });
+
+  it("treats modern write query with omitted flags as dry-run plan and bypasses write gate", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
+    ).resolves.toMatchObject({ isError: false });
+
+    expect(query.requests).toEqual([
+      { sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true },
+    ]);
+  });
+
+  it("treats modern write query with dryRun:true as plan and bypasses write gate", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true }),
+    ).resolves.toMatchObject({ isError: false });
+
+    expect(query.requests).toEqual([
+      { sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true },
+    ]);
+  });
+
+  it("blocks modern write query with apply:true when writes are disabled", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(query.requests).toEqual([]);
+  });
+
+  it("blocks modern write query with dryRun:false when writes are disabled", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: false });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(query.requests).toEqual([]);
+  });
+
+  it("commits modern write query with apply:true when writes are enabled", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
+
+    await expect(
+      tools
+        .find((tool) => tool.name === "dysflow_query_execute")
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
+    ).resolves.toMatchObject({ isError: false });
+
+    expect(query.requests).toEqual([
+      { sql: "UPDATE People SET name='Ada'", mode: "write", apply: true, dryRun: false },
+    ]);
+  });
+
   it("forwards explicit database targets on read-only query_sql", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
@@ -406,7 +514,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "dysflow_query_execute")
-        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toEqual({
       content: [
         {
@@ -453,13 +561,15 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "dysflow_query_execute")
-        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
     });
 
-    expect(query.requests).toEqual([{ sql: "UPDATE People SET name='Ada'", mode: "write" }]);
+    expect(query.requests).toEqual([
+      { sql: "UPDATE People SET name='Ada'", mode: "write", apply: true, dryRun: false },
+    ]);
   });
 
   it("allows write tool when project-scoped allowWrites resolver grants access", async () => {

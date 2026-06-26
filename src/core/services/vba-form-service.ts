@@ -6,7 +6,7 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
-import { isRecord, stringValue } from "../utils/index.js";
+import { isRecord, stringValue, truthy } from "../utils/index.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 // ---------------------------------------------------------------------------
@@ -91,10 +91,22 @@ export class VbaFormService {
     const destinationRoot =
       stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const formsDir = resolve(destinationRoot, "forms");
-    await this.fileSystem.mkdir(formsDir, { recursive: true });
-
     const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
     const outputPath = resolve(formsDir, fileName);
+
+    if (truthy(params.dryRun) && !truthy(params.apply)) {
+      return successResult({
+        dryRun: true,
+        generated: false,
+        wouldGenerate: true,
+        outputPath,
+        name: spec.data.name,
+        kind: spec.data.kind,
+        controlCount: spec.data.controls.length,
+      });
+    }
+
+    await this.fileSystem.mkdir(formsDir, { recursive: true });
     const payload = JSON.stringify(
       {
         name: spec.data.name,

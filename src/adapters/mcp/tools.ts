@@ -4,6 +4,7 @@ import {
   createDysflowError,
   failureResult,
 } from "../../core/contracts/index.js";
+import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
   handleMcpAccessCleanup,
@@ -110,7 +111,11 @@ export function createDysflowMcpTools(
           services,
           writesEnabled,
           writeAccessResolver,
-          (validatedInput) => validatedInput as AccessQueryRequest,
+          (validatedInput) => {
+            const request = validatedInput as AccessQueryRequest;
+            if (request.mode !== "write") return request;
+            return { ...request, dryRun: resolveIsDryRun(validatedInput) };
+          },
           context,
         ),
     },
@@ -156,6 +161,8 @@ export function createDysflowMcpTools(
           input,
           ORPHAN_CLEANUP_SCHEMA,
           services,
+          writesEnabled,
+          writeAccessResolver,
           async (validatedInput) => {
             const request = validatedInput as { confirmPid?: number };
             const context = await accessContextResolver(validatedInput);

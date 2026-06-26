@@ -506,7 +506,35 @@ function Open-CanonicalAccess {
         try {
             $access.OpenCurrentDatabase($DbPath, $false, $Password)
         } catch {
-            Write-Debug "Open-CanonicalAccess: OpenCurrentDatabase threw: $_"
+            $openError = $_
+            Write-Debug "Open-CanonicalAccess: OpenCurrentDatabase failed: $openError"
+
+            try {
+                if ($SetAutomationSecurityLow) {
+                    $access.AutomationSecurity = $originalAutomationSecurity
+                }
+            } catch { Write-Debug "Open-CanonicalAccess: AutomationSecurity restore after failed open threw: $_" }
+
+            try { $access.Quit(2) } catch { Write-Debug "Open-CanonicalAccess: Quit after failed open threw: $_" }
+            try {
+                if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
+                    [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access)
+                }
+            } catch { Write-Debug "Open-CanonicalAccess: FinalReleaseComObject after failed open threw: $_" }
+            try {
+                [System.GC]::Collect()
+                [System.GC]::WaitForPendingFinalizers()
+            } catch { Write-Debug "Open-CanonicalAccess: GC after failed open threw: $_" }
+
+            $message = "OpenCurrentDatabase failed for '$DbPath': $($openError.Exception.Message)"
+            $exception = [System.InvalidOperationException]::new($message, $openError.Exception)
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $exception,
+                "DYSFLOW_OPEN_CURRENT_DATABASE_FAILED",
+                [System.Management.Automation.ErrorCategory]::OpenError,
+                $DbPath
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
 
         # --- layer 2: hWnd retry after open (only if layer 1 was empty) ----

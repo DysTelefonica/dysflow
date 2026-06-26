@@ -9,13 +9,13 @@ import {
 // ─── Route table ──────────────────────────────────────────────────────────────
 
 export type McpToolRoute =
-  // `mutatesBinary` is the single source of truth for whether a VBA-sync tool
-  // mutates the Access .accdb binary (and must therefore pass the write-gate).
-  // It is REQUIRED so a new VBA tool cannot be registered without deciding —
-  // omitting it is a compile error, never a silently un-gated write.
-  // NOTE: this means "mutates the binary", NOT "writes any file" — export tools
-  // write source files to disk yet are `false` because they never touch the binary.
-  | { kind: "vba-sync"; mutatesBinary: boolean }
+  // `mutatesBinary` and `mutatesFilesystem` are the single source of truth for
+  // whether a VBA-sync tool must pass the write-gate. `mutatesFilesystem` tracks
+  // non-export filesystem writes that are user-facing mutations; source export
+  // tools remain false by design. Both flags are REQUIRED so a new VBA tool
+  // cannot be registered without deciding — omitting either is a compile error,
+  // never a silently un-gated write.
+  | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean }
   | { kind: "query-read" }
   | { kind: "query-maintenance"; queryMode: "read" | "write" }
   | { kind: "query-write-fixture" };
@@ -24,28 +24,28 @@ export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolNam
 
 export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = {
   // VBA sync — mutatesBinary:true tools always pass the write-gate (they mutate the .accdb).
-  export_modules: { kind: "vba-sync", mutatesBinary: false },
-  export_all: { kind: "vba-sync", mutatesBinary: false },
-  import_modules: { kind: "vba-sync", mutatesBinary: true },
-  import_all: { kind: "vba-sync", mutatesBinary: true },
-  list_objects: { kind: "vba-sync", mutatesBinary: false },
-  exists: { kind: "vba-sync", mutatesBinary: false },
-  test_vba: { kind: "vba-sync", mutatesBinary: false },
-  compile_vba: { kind: "vba-sync", mutatesBinary: true },
+  export_modules: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  export_all: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  import_modules: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
+  import_all: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
+  list_objects: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  test_vba: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  compile_vba: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // verify_code is the single source/binary compare tool (read-only dry-run): it
   // does whole-project AND single-module comparison and only RECOMMENDS an
   // explicit import/export — it never mutates the .accdb. Keep mutatesBinary:false.
   // See src/core/services/vba-source-comparison.ts (compareSourceAgainstBinary).
-  verify_code: { kind: "vba-sync", mutatesBinary: false },
-  delete_module: { kind: "vba-sync", mutatesBinary: true },
-  generate_erd: { kind: "vba-sync", mutatesBinary: false },
-  fix_encoding: { kind: "vba-sync", mutatesBinary: false },
-  validate_form_spec: { kind: "vba-sync", mutatesBinary: false },
-  generate_form: { kind: "vba-sync", mutatesBinary: false },
-  catalog_add_control: { kind: "vba-sync", mutatesBinary: false },
-  harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false },
-  vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false },
-  vba_inline_execution: { kind: "vba-sync", mutatesBinary: true },
+  verify_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  delete_module: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
+  generate_erd: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  fix_encoding: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  validate_form_spec: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  generate_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
+  catalog_add_control: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
+  harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // query maintenance (9)
   list_links: { kind: "query-maintenance", queryMode: "read" },
   export_queries: { kind: "query-maintenance", queryMode: "read" },

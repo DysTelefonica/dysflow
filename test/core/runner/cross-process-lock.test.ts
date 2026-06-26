@@ -83,7 +83,7 @@ describe("cross-process-lock module API", () => {
           dbPath,
           async () => {
             events.push(`start:${label}`);
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 100));
             events.push(`end:${label}`);
             return label;
           },

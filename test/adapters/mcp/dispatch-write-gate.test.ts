@@ -16,7 +16,9 @@ class FakeQueryService {
   }
 }
 class FakeVbaService {
-  async execute() {
+  public requests: unknown[] = [];
+  async execute(...args: unknown[]) {
+    this.requests.push(args.length > 1 ? args[1] : args[0]);
     return successResult({ returnValue: "ok" });
   }
 }
@@ -26,14 +28,143 @@ class FakeDiagnosticsService {
   }
 }
 
-const services = {
+function makeServices() {
+  const vbaSyncToolService = new FakeVbaService();
+  return {
+    vbaService: new FakeVbaService(),
+    vbaSyncToolService,
+    queryService: new FakeQueryService(),
+    diagnosticsService: new FakeDiagnosticsService(),
+  };
+}
+
+function toolByName(name: string, writesEnabled = false) {
+  const localServices = makeServices();
+  const tools = createDysflowMcpTools(localServices, writesEnabled);
+  const tool = tools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`Tool not registered: ${name}`);
+  return { tool, vbaSyncToolService: localServices.vbaSyncToolService };
+}
+
+describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
+  it("flags form generation and catalog mutation as filesystem-mutating tools", () => {
+    const filesystemWriters = Object.entries(MCP_TOOL_ROUTES)
+      .filter(([, route]) => route.kind === "vba-sync" && route.mutatesFilesystem)
+      .map(([name]) => name);
+
+    expect([...filesystemWriters].sort()).toEqual(["catalog_add_control", "generate_form"].sort());
+  });
+
+  it("blocks generate_form when writes are disabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_form", false);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      projectRoot: "C:/project",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("allows generate_form dryRun:true without the write-gate when writes are disabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_form", false);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      projectRoot: "C:/project",
+      dryRun: true,
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([
+      expect.objectContaining({ dryRun: true, projectRoot: "C:/project" }),
+    ]);
+  });
+
+  it("blocks generate_form dryRun:false when writes are disabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_form", false);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      projectRoot: "C:/project",
+      dryRun: false,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("blocks generate_form dryRun:true with apply:true when writes are disabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_form", false);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      projectRoot: "C:/project",
+      dryRun: true,
+      apply: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("blocks catalog_add_control when writes are disabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("catalog_add_control", false);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      controlName: "txtName",
+      controlType: "TextBox",
+      catalogPath: "C:/project/forms/catalog.json",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("keeps read-only form tools outside the write-gate", async () => {
+    for (const name of ["validate_form_spec", "harvest_form_catalog"] as const) {
+      const { tool, vbaSyncToolService } = toolByName(name, false);
+
+      const result = await tool.handler(
+        name === "validate_form_spec"
+          ? { spec: { name: "CustomerEntry", kind: "Form", controls: [] } }
+          : { catalogPath: "C:/project/forms/catalog.json" },
+      );
+
+      expect(result.isError, name).toBe(false);
+      expect(result.content[0]?.text, name).not.toContain("MCP_WRITES_DISABLED");
+      expect(vbaSyncToolService.requests, name).toHaveLength(1);
+    }
+  });
+
+  it("allows form filesystem writers when writes are enabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_form", true);
+
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      projectRoot: "C:/project",
+    });
+
+    expect(result.isError).toBe(false);
+    expect(vbaSyncToolService.requests).toHaveLength(1);
+  });
+});
+
+const binaryGateServices = {
   vbaService: new FakeVbaService(),
   queryService: new FakeQueryService(),
   diagnosticsService: new FakeDiagnosticsService(),
 };
 
 describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () => {
-  const tools = createDysflowMcpTools(services, false); // writesEnabled=false → gate active
+  const tools = createDysflowMcpTools(binaryGateServices, false); // writesEnabled=false → gate active
 
   const binaryWriters = Object.entries(MCP_TOOL_ROUTES)
     .filter(([, route]) => route.kind === "vba-sync" && route.mutatesBinary)

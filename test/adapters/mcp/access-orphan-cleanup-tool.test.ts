@@ -99,7 +99,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         ...makeBaseServices(),
         orphanCleanupService: fakeOrphan,
       } as DysflowMcpServices,
-      false,
+      true,
       undefined,
       process.env,
       undefined,
@@ -121,6 +121,39 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         confirmPid: 12345,
       },
     ]);
+  });
+
+  it("handler blocks confirmed cleanup when writes are disabled", async () => {
+    const fakeOrphan = new FakeOrphanCleanupService(
+      [],
+      successResult({
+        killed: [12345],
+        refused: [],
+        syntheticOperationId: "orphan-12345-000000",
+        errors: [],
+      }),
+    );
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
+
+    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const result = await tool?.handler({
+      accessPath: "C:/project/app.accdb",
+      confirmPid: 12345,
+    });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(fakeOrphan.cleanupOrphanRequests).toEqual([]);
   });
 
   it("handler returns ORPHAN_CLEANUP_NOT_CONFIGURED when orphanCleanupService is undefined", async () => {
@@ -155,6 +188,38 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         orphanCleanupService: fakeOrphan,
       } as DysflowMcpServices,
       false,
+      undefined,
+      process.env,
+      undefined,
+      resolveAccessContext(),
+    );
+
+    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
+
+    expect(result?.isError).toBe(false);
+    expect(result?.content[0]?.text).toContain("12345");
+    expect(fakeOrphan.listOrphansRequests).toEqual([
+      { accessPath: "C:/project/app.accdb", projectRoot: process.cwd() },
+    ]);
+    expect(fakeOrphan.cleanupOrphanRequests).toEqual([]);
+  });
+
+  it("handler lists orphan candidates when writes are enabled and confirmPid is missing", async () => {
+    const fakeOrphan = new FakeOrphanCleanupService([
+      {
+        pid: 12345,
+        accessPath: "C:/project/app.accdb",
+        startTime: "2026-06-08T10:00:00.000Z",
+        mainWindowHandle: 0,
+      },
+    ]);
+    const tools = createDysflowMcpTools(
+      {
+        ...makeBaseServices(),
+        orphanCleanupService: fakeOrphan,
+      } as DysflowMcpServices,
+      true,
       undefined,
       process.env,
       undefined,
@@ -253,7 +318,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         ...makeBaseServices(),
         orphanCleanupService: fakeOrphan,
       } as DysflowMcpServices,
-      false,
+      true,
       undefined,
       process.env,
       undefined,
@@ -291,7 +356,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         ...makeBaseServices(),
         orphanCleanupService: fakeOrphan,
       } as DysflowMcpServices,
-      false,
+      true,
       undefined,
       process.env,
       undefined,

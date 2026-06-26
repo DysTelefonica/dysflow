@@ -75,6 +75,7 @@ export async function handleMcpQueryExecute(
   const request = buildRequest(input);
   if (
     request.mode === "write" &&
+    request.dryRun !== true &&
     !(await isWriteAllowed(request, writesEnabled, writeAccessResolver))
   ) {
     return writesDisabled();
@@ -132,6 +133,8 @@ export async function handleMcpAccessOrphanCleanup(
   input: unknown,
   schema: JsonObjectSchema,
   services: DysflowMcpServices,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
   buildRequest: (
     input: unknown,
   ) =>
@@ -160,6 +163,10 @@ export async function handleMcpAccessOrphanCleanup(
     return translateCoreResultToMcpContent(
       successResult(await services.orphanCleanupService.listOrphans(request)),
     );
+  }
+
+  if (!(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
+    return writesDisabled();
   }
 
   return translateCoreResultToMcpContent(
