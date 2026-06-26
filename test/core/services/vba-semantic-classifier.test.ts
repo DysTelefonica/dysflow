@@ -1242,6 +1242,29 @@ describe("formSerializationOnly — NotDefault toggle equivalence", () => {
 
     expect(result.actionable).toBe(true);
   });
+
+  // Characterization test (issue #552, closed by-design): the toggle collapse is
+  // value-token scoped, NOT property-name scoped. Any property whose value is
+  // `0`/`-1`/`NotDefault` present on one side and absent on the other collapses to
+  // non-actionable. This is intentional: Access serializes a toggle only when it
+  // is non-default and does so non-deterministically across repeated exports, so
+  // present-vs-absent of such a line is churn, not a functional change. Narrowing
+  // this to an allowlist of boolean property names was rejected: a missed name
+  // would re-introduce exactly that churn as a false positive. This test pins the
+  // documented behavior so it is not "fixed" by accident.
+  it("collapses a `=0` line present on one side regardless of property name (by design, #552)", () => {
+    const src = `Version =21\nBegin Form\n    Width =9070\n    DecimalPlaces =0\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Width =9070\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
