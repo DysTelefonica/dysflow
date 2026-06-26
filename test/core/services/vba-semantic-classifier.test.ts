@@ -1425,3 +1425,87 @@ describe("form.txt — code-behind is ignored (verified through the .cls)", () =
     expect(result.actionable).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T16b — .report.txt CodeBehindReport is verified via the .cls, not the .report.txt
+// Reports use the "CodeBehindReport" marker (Access SaveAsText), the symmetric
+// counterpart of a form's "CodeBehindForm". The same invariant applies: code is
+// verified through the sibling .cls, so the report.txt code-behind must be stripped.
+// ---------------------------------------------------------------------------
+
+describe("report.txt — code-behind is ignored (verified through the .cls)", () => {
+  const reportWith = (code: string) =>
+    [
+      "Version =21",
+      "Begin Report",
+      '    Caption ="Test"',
+      "    Begin Label",
+      '        Name ="lblX"',
+      "    End",
+      "End",
+      "CodeBehindReport",
+      "Attribute VB_GlobalNameSpace = False",
+      "Attribute VB_Creatable = True",
+      "Option Compare Database",
+      "Option Explicit",
+      code,
+    ].join("\n");
+
+  it("ignores a code-behind-only difference (case) in a report.txt", () => {
+    const src = reportWith('Private Sub Run()\n    Me.lblX.Caption = "Hola"\nEnd Sub');
+    const bin = reportWith('Private Sub Run()\n    Me.lblX.caption = "Hola"\nEnd Sub');
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("ignores even a REAL code-behind change in a report.txt (the .cls owns it)", () => {
+    const src = reportWith("Private Sub Run()\n    DoThing 1\nEnd Sub");
+    const bin = reportWith("Private Sub Run()\n    DoThing 2\nEnd Sub");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+  });
+
+  it("still flags a real UI/layout change in the report.txt", () => {
+    const src = [
+      "Version =21",
+      "Begin Report",
+      '    Caption ="Original"',
+      "End",
+      "CodeBehindReport",
+      "Option Compare Database",
+      "Private Sub Run()\nEnd Sub",
+    ].join("\n");
+    const bin = [
+      "Version =21",
+      "Begin Report",
+      '    Caption ="Changed"',
+      "End",
+      "CodeBehindReport",
+      "Option Compare Database",
+      "Private Sub Run()\nEnd Sub",
+    ].join("\n");
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "report.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+});
