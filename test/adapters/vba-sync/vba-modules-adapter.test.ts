@@ -1107,6 +1107,32 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
+  it("import_all dry-run dedupes a form's .form.txt + .cls pair into a single module entry — #554", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-scan-dedup-"));
+    await mkdir(join(root, "src", "forms"), { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+
+    // A form exported as BOTH artifacts: layout (.form.txt) and code-behind (.cls).
+    await writeFile(join(root, "src", "forms", "Form_Main.form.txt"), "", "utf8");
+    await writeFile(join(root, "src", "forms", "Form_Main.cls"), "", "utf8");
+
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "dedup-project", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+
+    const result = await service.execute("import_all", { dryRun: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run success");
+    const planned = (result.data as { modulesPlanned: string[] }).modulesPlanned;
+    // The pair must collapse to exactly one module, not two.
+    expect(planned).toEqual(["Form_Main"]);
+  });
+
   it("export_all --prune deletes disk modules absent from the exported set after a clean export", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-prune-clean-"));
     const sourceRoot = join(root, "src");
