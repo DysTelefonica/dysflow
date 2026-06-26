@@ -588,6 +588,19 @@ function Open-CanonicalAccess {
 .OUTPUTS
     PSCustomObject { OwnedPidKilled([bool]), PidWasAttributed([bool]), UnattributedKilled([bool]=always $false) }
 #>
+function Get-NullPidCloseNotice {
+    # Human/agent-facing notice for the null-PID close path. Worded so the SAFE
+    # invariant is unambiguous: this operation owns no Access PID, so dysflow
+    # kills NOTHING here, and only closes this database's own COM handle. A
+    # consuming agent must NOT read this as a risky fallback — it cannot affect
+    # other Access instances, other dysflow operations, or other .accdb files.
+    # (A vaguely-worded earlier notice — "Running ROT/lock fallback only" — was
+    # mis-read by a consuming agent as an unsafe multi-instance process kill.)
+    return "INFO: Close-CanonicalAccess: this operation owns no Access PID, so dysflow kills nothing here " +
+        "(it never terminates Access by path, name, or CommandLine). Closing only this database's own COM " +
+        "handle via the Running Object Table; other Access instances and other dysflow operations are unaffected."
+}
+
 function Close-CanonicalAccess {
     [CmdletBinding()]
     Param(
@@ -644,9 +657,7 @@ function Close-CanonicalAccess {
         } else {
             # No attributed PID: NEVER kill by path/name/CommandLine.
             # UnattributedKilled is an INVARIANT $false.
-            [Console]::Error.WriteLine(
-                "WARN: Close-CanonicalAccess: OwnedPid is null; cannot kill by path/CommandLine. " +
-                "Running ROT/lock fallback only.")
+            [Console]::Error.WriteLine((Get-NullPidCloseNotice))
 
             # Optional ROT close injected by the caller
             if ($null -ne $RotCloseAction -and $DbPath) {

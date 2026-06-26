@@ -1374,3 +1374,28 @@ Describe "Slice 5 fix — null-PID close runs ROT fallback (behavior at the port
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Null-PID close notice wording — must not mislead a consuming agent into
+# thinking the null-PID path is a dangerous fallback (root cause of a
+# false-positive "unsafe process kill" report). The notice must make the SAFE
+# invariant unambiguous: nothing is killed and other instances are unaffected.
+# ---------------------------------------------------------------------------
+
+Describe "Get-NullPidCloseNotice — reassuring, non-alarming wording" {
+    BeforeAll {
+        $modulePath = Join-Path $PSScriptRoot ".." "lib" "dysflow-access-com.ps1"
+        . (Resolve-Path $modulePath).Path
+    }
+
+    It "states plainly that no process is killed and other instances are unaffected" {
+        $notice = Get-NullPidCloseNotice
+        $notice | Should -Match '(?i)kills? nothing|never (kills|terminates)|no .*process.*killed'
+        $notice | Should -Match '(?i)unaffected|other .*instances?'
+    }
+
+    It "does not read as a risky fallback that could touch other instances" {
+        $notice = Get-NullPidCloseNotice
+        $notice | Should -Not -Match '(?i)fallback only'
+    }
+}
