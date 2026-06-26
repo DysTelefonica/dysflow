@@ -49,6 +49,14 @@ export type AccessOperationRegistry = {
   listRecent(options?: { limit?: number }): Promise<AccessOperationRecord[]>;
 };
 
+/**
+ * A listed operation enriched with a computed `isStale` marker. The flag is
+ * derived at read time (never persisted) so a consumer can tell lingering,
+ * unattributed records apart from genuinely active ones. See
+ * {@link isStaleAccessOperation}.
+ */
+export type AccessOperationListEntry = AccessOperationRecord & { isStale: boolean };
+
 export type InMemoryAccessOperationRegistryOptions = {
   maxRecords?: number;
 };
@@ -83,10 +91,13 @@ export function resolveAccessOperationRegistry(
   return registry ?? createFallback();
 }
 
-export function listRecentAccessOperations(
+export async function listRecentAccessOperations(
   registry: AccessOperationRegistry,
-): Promise<AccessOperationRecord[]> {
-  return registry.listRecent({ limit: DEFAULT_RECENT_ACCESS_OPERATION_LIMIT });
+  options: { nowMs?: number } = {},
+): Promise<AccessOperationListEntry[]> {
+  const records = await registry.listRecent({ limit: DEFAULT_RECENT_ACCESS_OPERATION_LIMIT });
+  const nowMs = options.nowMs ?? Date.now();
+  return records.map((record) => ({ ...record, isStale: isStaleAccessOperation(record, nowMs) }));
 }
 
 export function evictOldestRecordsFromMap(
@@ -437,6 +448,48 @@ export function isInterruptedStartingRecord(
   if (Number.isNaN(updatedMs)) return false;
   return nowMs - updatedMs >= Math.max(0, thresholdMs);
 }
+
+/**
+ * Default idle window after which a lingering, unattributed operation is
+ * reported as stale by {@link isStaleAccessOperation}. One hour: long enough to
+ * never flag a genuinely in-flight operation, short enough that day-old failures
+ * read as stale.
+ */
+export const DEFAULT_STALE_OPERATION_MS = 3_600_000;
+
+/**
+ * True when a listed operation is lingering, unattributed state that a consumer
+ * can safely treat as no longer active. This is a READ-TIME marker only — it
+ * never deletes or mutates the record.
+ *
+ * An operation is stale when EITHER:
+ * - it is an interrupted "starting" record (see {@link isInterruptedStartingRecord}), OR
+ * - it is in a terminal/unresolved status (`failed`, `timed_out`, `pid_unknown`,
+ *   `cleanup_pending`) with NO owned PID (`accessPid === null`) and has been idle
+ *   longer than `thresholdMs`.
+ *
+ * Active states (`running`, `running_untracked`), any record that still owns a
+ * PID, and records with an unparseable `updatedAt` are never stale.
+ */
+export function isStaleAccessOperation(
+  record: Pick<AccessOperationRecord, "status" | "accessPid" | "processStartTime" | "updatedAt">,
+  nowMs: number,
+  thresholdMs: number = DEFAULT_STALE_OPERATION_MS,
+): boolean {
+  if (isInterruptedStartingRecord(record, nowMs, thresholdMs)) return true;
+  if (record.accessPid !== null) return false;
+  if (!LINGERING_STALE_STATUSES.has(record.status)) return false;
+  const updatedMs = Date.parse(record.updatedAt);
+  if (Number.isNaN(updatedMs)) return false;
+  return nowMs - updatedMs >= Math.max(0, thresholdMs);
+}
+
+const LINGERING_STALE_STATUSES = new Set<AccessOperationStatus>([
+  "failed",
+  "timed_out",
+  "pid_unknown",
+  "cleanup_pending",
+]);
 
 export function toOperationMetadata(record: AccessOperationRecord): AccessOperationMetadata {
   return {

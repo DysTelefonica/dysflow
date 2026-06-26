@@ -53,7 +53,9 @@ describe("VbaOperationsAdapter", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.data).toEqual(records);
+        // Each entry is the record enriched with a read-time isStale marker.
+        // The record is running + owns a PID + recent, so it is not stale.
+        expect(result.data).toEqual(records.map((r) => ({ ...r, isStale: false })));
       }
     });
 
