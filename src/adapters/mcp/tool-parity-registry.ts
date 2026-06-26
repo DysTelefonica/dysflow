@@ -126,9 +126,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   validate_form_spec:
     "Validate a form/report spec (inline spec or specPath) against the form schema without creating anything. Read-only.",
   generate_form:
-    "Generate a form or report from a spec (spec or specPath). replace:true overwrites an existing object; dryRun:true validates and plans without writing. Write-gated.",
+    "Generate a form or report from a spec (spec or specPath). replace:true overwrites an existing object; dryRun:true validates and plans without writing. Write-gated (filesystem mutation).",
   catalog_add_control:
-    "Add a control definition to a form-generation catalog. Edits the catalog file, not the Access binary.",
+    "Add a control definition to a form-generation catalog. Edits the catalog file, not the Access binary. Write-gated (filesystem mutation).",
   harvest_form_catalog:
     "Harvest control definitions from existing forms into a catalog (optionally filtered), to seed form generation. Read-only on the binary.",
   vba_orphan_audit:

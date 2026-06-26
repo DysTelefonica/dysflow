@@ -145,7 +145,7 @@ Use this when a teammate wants to install from GitHub on another machine, withou
 
 ```bash
 # Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.2.15"
+pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.9.2"
 # or if you prefer the latest main branch
 pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
 ```
@@ -729,8 +729,7 @@ Use `--force` to reinstall the latest release even when versions match:
 dysflow update --force
 ```
 
-The updater builds the release source in a temporary workspace, so local `git`,
-`pnpm`, and network access to GitHub must be available.
+The updater downloads the production release archive (`tar.gz`) directly from GitHub, verifies its integrity against the release's SHA-256 checksum (and optionally verifies authenticity via an Ed25519 signature), and extracts it. There is no source-build or git-clone fallback, protecting the update path from supply-chain risks.
 
 `dysflow update` uses the same runtime directory resolution as install:
 

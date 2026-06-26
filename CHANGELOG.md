@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.9.2] - 2026-06-26
+
+Filesystem write-gates for forms/catalog tooling, PowerShell security hardening against path traversal, and core dependency refactoring (issues #565, #566, #568, #569, #570, #577, #579).
+
+### Fixed
+
+- **VBA form generation dry-run honors write-gates (#565, #566).** `generate_form` and `catalog_add_control` are now classified under a new `mutatesFilesystem: true` route property in the MCP tool route registry. When writes are disabled, `generate_form` no longer touches the disk, honoring the `dryRun` flag. `VbaFormService` was updated to support `dryRun: true` natively on form generation.
+- **PowerShell import/fix_encoding script path-traversal prevention (#569).** Added `Assert-SafeVbaModuleName` to block module names containing path traversal sequences (`..`, `/`, `\`) or drive qualifiers, protecting local file imports and encoding fixes.
+- **PowerShell relink_directory uses canonical path containment (#570).** Replaced simple `.StartsWith` comparison with a robust `Test-CanonicalPathContained` helper that evaluates absolute canonical path containment, preventing directory traversal or bypasses during backend table relinking.
+- **Access runner write target ordering (#568).** `Resolve-QueryActionTargetPath` now extracts and evaluates write query database targets in the same order as read actions, ensuring consistent permission checks and paths.
+
+### Refactored
+
+- **Centralized MCP write policy metadata (#579).** Expanded the dispatch route registry table (`MCP_TOOL_ROUTES`) to split `mutatesBinary` and `mutatesFilesystem` properties, ensuring unified compilation-enforced check gates for all filesystem mutations.
+- **Decoupled Node filesystem from VbaFormService core (#577).** Moved Node.js standard filesystem package imports out of `VbaFormService` to favor dependency injection via `FormFileSystemPort`, keeping the core service domain pure.
+
+### Tests / internal
+
+- Added comprehensive test suites in `test/adapters/mcp/dispatch-write-gate.test.ts` to assert that write-gate overrides block filesystem-mutating tools when disabled.
+- Stabilized the `cross-process-lock.test.ts` parallel concurrency test against Windows scheduler resolution.
+
 ## [v1.9.1] - 2026-06-26
 
 ### Fixed
