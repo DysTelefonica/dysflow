@@ -284,7 +284,10 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         metadata: { ...record.metadata, interruptedReason: INTERRUPTED_BEFORE_PID_REASON },
         updatedAt: (this.options.clock ?? (() => new Date().toISOString()))(),
       });
-      (result.transitioned ??= []).push(record.operationId);
+      if (result.transitioned === undefined) {
+        result.transitioned = [];
+      }
+      result.transitioned.push(record.operationId);
     } catch (error) {
       result.errors.push({
         operationId: record.operationId,
