@@ -2599,3 +2599,37 @@ Describe "Fix-EncodingInSrc — bulk-mode managed extensions" {
         }
     }
 }
+
+Describe "Get-FormCodeBehindCandidateNames — no cross-prefix candidates (#553)" {
+    BeforeAll {
+        $scriptPath = (Resolve-Path (Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1")).Path
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$null)
+        $def = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Get-FormCodeBehindCandidateNames' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $def.Extent.Text
+    }
+
+    It "for a Form_-prefixed module probes the bare-base prefixed variants, not Report_Form_*" {
+        $names = @(Get-FormCodeBehindCandidateNames -ModuleName 'Form_MyForm')
+        $names | Should -Contain 'Form_MyForm'
+        $names | Should -Contain 'Report_MyForm'
+        $names | Should -Not -Contain 'Report_Form_MyForm'
+    }
+
+    It "for a Report_-prefixed module does not build Form_Report_* candidates" {
+        $names = @(Get-FormCodeBehindCandidateNames -ModuleName 'Report_MyRep')
+        $names | Should -Contain 'Report_MyRep'
+        $names | Should -Contain 'Form_MyRep'
+        $names | Should -Not -Contain 'Form_Report_MyRep'
+    }
+
+    It "for a bare module name probes the name plus both prefixed variants" {
+        $names = @(Get-FormCodeBehindCandidateNames -ModuleName 'MyForm')
+        $names | Should -Contain 'MyForm'
+        $names | Should -Contain 'Form_MyForm'
+        $names | Should -Contain 'Report_MyForm'
+    }
+}
