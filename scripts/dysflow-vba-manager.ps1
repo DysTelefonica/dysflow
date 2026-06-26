@@ -1487,6 +1487,27 @@ function Resolve-ImportFileForModule {
     return $null
 }
 
+function Get-FormCodeBehindCandidateNames {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    # Candidate base names for a form/report code-behind `.cls`. A module may be
+    # named bare (`MyForm`), Form_-prefixed (`Form_MyForm`) or Report_-prefixed
+    # (`Report_MyForm`). We probe the name as-is plus each prefixed variant of its
+    # base. The base is the name with any leading `Form_`/`Report_` stripped, so we
+    # never build a cross-prefix candidate like `Report_Form_MyForm`.
+    $moduleNameText = [string]$ModuleName
+    $baseName = $moduleNameText -replace '^(Form_|Report_)', ''
+
+    return @(
+        $moduleNameText,
+        ("Form_" + $baseName),
+        ("Report_" + $baseName)
+    ) | Select-Object -Unique
+}
+
 function Resolve-FormCodeBehindFile {
     [CmdletBinding()]
     Param(
@@ -1505,11 +1526,7 @@ function Resolve-FormCodeBehindFile {
     $modulesPathText = [string]$ModulesPath
     $moduleNameText  = [string]$ModuleName
 
-    $candidateNames = @(
-        $moduleNameText,
-        ("Form_" + ($moduleNameText -replace '^Form_', '')),
-        ("Report_" + ($moduleNameText -replace '^Report_', ''))
-    ) | Select-Object -Unique
+    $candidateNames = Get-FormCodeBehindCandidateNames -ModuleName $moduleNameText
 
     foreach ($folder in @('forms', 'reports')) {
         $searchPath = Join-Path -Path $modulesPathText -ChildPath $folder
