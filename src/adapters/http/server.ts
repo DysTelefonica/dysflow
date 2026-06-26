@@ -14,7 +14,7 @@ import {
 } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import {
-  type AccessOperationRecord,
+  type AccessOperationListEntry,
   type AccessOperationRegistry,
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
@@ -177,7 +177,9 @@ async function routeRequest(
     const registry = resolveAccessOperationRegistry(context.services.operationRegistry);
     sendOperationResult(
       response,
-      successResult<readonly AccessOperationRecord[]>(await listRecentAccessOperations(registry)),
+      successResult<readonly AccessOperationListEntry[]>(
+        await listRecentAccessOperations(registry),
+      ),
     );
     return;
   }

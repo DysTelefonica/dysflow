@@ -1,6 +1,6 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
-import type { AccessOperationRecord } from "../../core/operations/access-operation-registry.js";
+import type { AccessOperationListEntry } from "../../core/operations/access-operation-registry.js";
 import {
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
@@ -90,7 +90,7 @@ export async function handleMcpAccessOperationsList(
 ): Promise<McpToolResult> {
   const registry = resolveAccessOperationRegistry(services.operationRegistry);
   return translateCoreResultToMcpContent(
-    successResult<readonly AccessOperationRecord[]>(await listRecentAccessOperations(registry)),
+    successResult<readonly AccessOperationListEntry[]>(await listRecentAccessOperations(registry)),
   );
 }
 
