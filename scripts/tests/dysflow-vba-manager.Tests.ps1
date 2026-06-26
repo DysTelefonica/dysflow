@@ -2513,3 +2513,89 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
         }
     }
 }
+
+Describe "Fix-EncodingInSrc — bulk-mode managed extensions" {
+    BeforeAll {
+        $script:FixEncScriptPath = (Resolve-Path (Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1")).Path
+        # Load the real Fix-EncodingInSrc plus the pure helpers it depends on in
+        # bulk mode (no COM). The bulk path only touches Get-ChildItem (real),
+        # Get-FileEncodingInfo and Write-Utf8NoBom.
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $script:FixEncScriptPath, [ref]$null, [ref]$null
+        )
+        # Helpers it calls internally in bulk mode (not stubbed anywhere): keep
+        # their real names so the extracted Fix-EncodingInSrc resolves them.
+        foreach ($helper in @('Get-FileEncodingInfo', 'Write-Utf8NoBom')) {
+            $def = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $helper },
+                $true
+            ) | Select-Object -First 1
+            Invoke-Expression $def.Extent.Text
+        }
+        # Another Describe installs a stub `function script:Fix-EncodingInSrc`
+        # (returns 0) into the shared script scope via its BeforeEach, which would
+        # shadow the real function here. Extract the real one under a unique,
+        # collision-proof name and call THAT in the tests.
+        $fixDef = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Fix-EncodingInSrc' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression ($fixDef.Extent.Text -replace "^function\s+Fix-EncodingInSrc", "function Invoke-RealFixEncodingInSrc")
+
+        # Sandbox helpers use absolute paths + .NET APIs so they are independent of
+        # the process current location (a prior Describe may leave the CWD on a
+        # deleted temp dir, which breaks provider-based New-Item). Works on both
+        # Windows PowerShell 5.1 (Server 2016) and PowerShell 7.
+        function script:New-FixEncSandbox {
+            $dir = [System.IO.Path]::Combine(
+                [System.IO.Path]::GetTempPath(),
+                "fix-enc-" + [System.Guid]::NewGuid().ToString("N")
+            )
+            [System.IO.Directory]::CreateDirectory($dir) | Out-Null
+            return $dir
+        }
+        function script:Write-FixEncBomFile([string]$Dir, [string]$RelPath, [string]$Text) {
+            $full = [System.IO.Path]::Combine($Dir, $RelPath)
+            [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($full)) | Out-Null
+            $utf8WithBom = New-Object System.Text.UTF8Encoding($true)
+            [System.IO.File]::WriteAllText($full, $Text, $utf8WithBom)
+            return $full
+        }
+    }
+
+    It "strips a UTF-8 BOM from a .report.txt in bulk mode" {
+        $sandbox = New-FixEncSandbox
+        try {
+            # Write WITH a UTF-8 BOM (the corruption fix_encoding is meant to repair).
+            $file = Write-FixEncBomFile $sandbox "reports/Report_Sales.report.txt" "Version =21`r`nBegin Report`r`nEnd`r`n"
+
+            (Get-FileEncodingInfo -Path $file).HasUtf8Bom | Should -Be $true `
+                -Because "the fixture must start corrupted for the test to be meaningful"
+
+            $fixed = Invoke-RealFixEncodingInSrc -ModulesPath $sandbox
+
+            $fixed | Should -Be 1 -Because ".report.txt is a managed source extension and must be repaired in bulk mode"
+            (Get-FileEncodingInfo -Path $file).HasUtf8Bom | Should -Be $false
+        }
+        finally {
+            [System.IO.Directory]::Delete($sandbox, $true)
+        }
+    }
+
+    It "still strips a UTF-8 BOM from a .form.txt in bulk mode (regression guard)" {
+        $sandbox = New-FixEncSandbox
+        try {
+            $file = Write-FixEncBomFile $sandbox "forms/Form_Main.form.txt" "Version =21`r`nBegin Form`r`nEnd`r`n"
+
+            $fixed = Invoke-RealFixEncodingInSrc -ModulesPath $sandbox
+
+            $fixed | Should -Be 1
+            (Get-FileEncodingInfo -Path $file).HasUtf8Bom | Should -Be $false
+        }
+        finally {
+            [System.IO.Directory]::Delete($sandbox, $true)
+        }
+    }
+}
