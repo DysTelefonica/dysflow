@@ -700,6 +700,64 @@ describe("VbaModulesAdapter", () => {
     expect(compileResult?.ok).toBe(false);
   });
 
+  it("import_modules of a .cls-only FORM with compile:true downgrades a compile failure to unverified — #551", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-clsform-compile-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await mkdir(join(root, "src", "forms"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    // A form whose source tree currently has ONLY its code-behind .cls (layout not
+    // re-exported). It is still a document module, so a headless compile failure
+    // must be downgraded, not hard-failed. No .form.txt is written on purpose.
+    await writeFile(join(root, "src", "forms", "Form_Probe.cls"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "clsform-compile-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        if (request.action === "Import") {
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        // Compile reports IsCompiled=False (the headless document-module limitation).
+        return {
+          exitCode: 1,
+          stdout:
+            'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_COMPILE_ERROR","message":"VBA project failed to compile"},"phase":"compile"}',
+          stderr: "",
+          durationMs: 3,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Form_Probe"],
+      compile: true,
+    });
+
+    // A .cls-only form is still a document module — must NOT hard-fail on the gate.
+    expect(result.ok).toBe(true);
+    if (!result.ok)
+      throw new Error("expected import success for a .cls-only form compile downgrade");
+    const compileResult = (result.data as { compileResult?: { ok?: boolean; verified?: boolean } })
+      .compileResult;
+    expect(compileResult?.verified).toBe(false);
+    expect(compileResult?.ok).toBe(false);
+  });
+
   it("import_modules with compile:false (default) does NOT call compile", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-no-compile-adapter-"));
     await mkdir(join(root, ".dysflow"), { recursive: true });

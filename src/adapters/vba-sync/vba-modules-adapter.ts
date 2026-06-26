@@ -294,11 +294,18 @@ export class VbaModulesAdapter {
       for (const entry of entries) {
         const entryName = typeof entry === "string" ? entry : entry.name;
         const lower = entryName.toLowerCase();
+        // Any file in forms/ or reports/ belongs to a document module: a .form.txt
+        // /.report.txt is the layout, a .cls is its code-behind. A form whose source
+        // currently has only the .cls (layout not re-exported) is still a document
+        // module, so detect it too. This is scoped to forms/ and reports/ — a normal
+        // class in classes/ is never scanned here, so it cannot be misclassified.
         const base = lower.endsWith(".form.txt")
           ? lower.slice(0, -".form.txt".length)
           : lower.endsWith(".report.txt")
             ? lower.slice(0, -".report.txt".length)
-            : null;
+            : lower.endsWith(".cls")
+              ? lower.slice(0, -".cls".length)
+              : null;
         if (base !== null && moduleNames.includes(base)) return true;
       }
     }
