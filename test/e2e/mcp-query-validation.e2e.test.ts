@@ -17,18 +17,19 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
 import { startWithSdkServer } from "../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools.js";
+import { successResult } from "../../src/core/contracts/index.js";
 
 function makeServices() {
   // queryService MUST NOT be invoked when sql is empty — the dispatcher must
   // short-circuit before any runner is touched.
   return {
-    vbaService: { execute: vi.fn(async () => ({ ok: true, data: { returnValue: "ok" } })) },
+    vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
     queryService: {
       execute: vi.fn(async () => {
         throw new Error("queryService.execute MUST NOT be called for empty sql");
       }),
     },
-    diagnosticsService: { run: vi.fn(async () => ({ ok: true, data: { checks: [] } })) },
+    diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
   };
 }
 
@@ -61,7 +62,7 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
         arguments: { sql: "" },
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       // Either the schema's minLength guard ("sql must be at least 1
       // non-whitespace character") or the typed builder's empty-sql guard
       // ("query_sql requires sql or query") is acceptable — both are
@@ -84,7 +85,7 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
         arguments: { sql: "   " },
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).toContain("MCP_INPUT_INVALID");
       expect(services.queryService.execute).not.toHaveBeenCalled();
     } finally {
@@ -103,7 +104,7 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
         arguments: {},
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).toContain("MCP_INPUT_INVALID");
       expect(services.queryService.execute).not.toHaveBeenCalled();
     } finally {
@@ -113,11 +114,11 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
 
   it("query_sql with valid sql:'SELECT 1' executes the runner (positive control)", async () => {
     const services = {
-      vbaService: { execute: vi.fn(async () => ({ ok: true, data: { returnValue: "ok" } })) },
+      vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
       queryService: {
-        execute: vi.fn(async () => ({ ok: true, data: { rows: [] } })),
+        execute: vi.fn(async () => successResult({ rows: [] })),
       },
-      diagnosticsService: { run: vi.fn(async () => ({ ok: true, data: { checks: [] } })) },
+      diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
     };
     const tools = createDysflowMcpTools(services, true);
 

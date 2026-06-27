@@ -204,7 +204,8 @@ export async function startWithSdkServer(
 
     const progressToken = _meta?.progressToken;
     const sendProgress = createProgressNotifier(progressToken, {
-      sendNotification: (n) => extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
+      sendNotification: (n) =>
+        extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
     });
 
     const context: McpToolContext = { progressToken, sendProgress };

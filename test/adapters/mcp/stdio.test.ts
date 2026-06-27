@@ -18,8 +18,7 @@ import {
   resolveProjectOperationRegistryPath,
   startWithSdkServer,
 } from "../../../src/adapters/mcp/stdio.js";
-import { createDysflowMcpTools, type DysflowMcpTool } from "../../../src/adapters/mcp/tools.js";
-import type { McpToolContext, McpToolResult } from "../../../src/adapters/mcp/types.js";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
@@ -949,7 +948,7 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
     expect(vbaSyncToolService.execute).not.toHaveBeenCalled();
   });
 
-it("tools with NO_INPUT_SCHEMA (e.g. list_access_operations) remain exempt from empty-input rejection", async () => {
+  it("tools with NO_INPUT_SCHEMA (e.g. list_access_operations) remain exempt from empty-input rejection", async () => {
     const services = {
       vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
       queryService: { execute: async () => successResult({ rows: [] }) },
@@ -991,8 +990,8 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
       const sendProgress = createProgressNotifier("tok-1", rejectingExtra);
       expect(sendProgress).toBeDefined();
       // Trigger several notifications — each must catch the rejection.
-      sendProgress!(40, 100, "test");
-      sendProgress!(60);
+      sendProgress?.(40, 100, "test");
+      sendProgress?.(60);
 
       // Allow microtasks to settle.
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1007,10 +1006,10 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
     process.env.DYSFLOW_DEBUG_PROGRESS = "true";
 
     const stderrWrites: string[] = [];
-    const originalWrite = process.stderr.write.bind(process.stderr);
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
       stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
       return (originalWrite as any)(chunk, ...rest);
     }) as typeof process.stderr.write;
 
@@ -1019,7 +1018,7 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
         sendNotification: () => Promise.reject(new Error("notification rejected")),
       };
       const sendProgress = createProgressNotifier("tok-2", rejectingExtra);
-      sendProgress!(40, 100, "log-test");
+      sendProgress?.(40, 100, "log-test");
 
       await new Promise((resolve) => setTimeout(resolve, 30));
 
@@ -1041,10 +1040,10 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
     delete process.env.DYSFLOW_DEBUG_PROGRESS;
 
     const stderrWrites: string[] = [];
-    const originalWrite = process.stderr.write.bind(process.stderr);
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
       stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
       return (originalWrite as any)(chunk, ...rest);
     }) as typeof process.stderr.write;
 
@@ -1053,7 +1052,7 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
         sendNotification: () => Promise.reject(new Error("notification rejected")),
       };
       const sendProgress = createProgressNotifier("tok-3", rejectingExtra);
-      sendProgress!(40, 100, "silent");
+      sendProgress?.(40, 100, "silent");
 
       await new Promise((resolve) => setTimeout(resolve, 30));
 
@@ -1117,7 +1116,7 @@ describe("DELTA-009 — serviceCache uses LRU eviction, not FIFO", () => {
 
     // Access keyA (dbPaths[0]) — re-inserts it at the end of insertion order
     // in the LRU cache. With FIFO this would NOT move it.
-    const keyA = dbPaths[0]!;
+    const keyA = dbPaths[0] ?? "";
     await services.vbaService.execute({
       accessPath: keyA,
       moduleName: "Mod",
@@ -1145,7 +1144,7 @@ describe("DELTA-009 — serviceCache uses LRU eviction, not FIFO", () => {
     // because it must be evicted under LRU.
     const factoryCallsBefore = createdConfigs.length;
     await services.vbaService.execute({
-      accessPath: dbPaths[1]!,
+      accessPath: dbPaths[1] ?? "",
       moduleName: "Mod",
       procedureName: "Proc",
     });

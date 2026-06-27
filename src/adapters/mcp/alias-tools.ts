@@ -94,8 +94,7 @@ export function buildCleanupRequest(input: unknown): CleanupRequest {
     projectId: typeof obj.projectId === "string" ? obj.projectId : undefined,
     contextId: typeof obj.contextId === "string" ? obj.contextId : undefined,
     backendPath: typeof obj.backendPath === "string" ? obj.backendPath : undefined,
-    destinationRoot:
-      typeof obj.destinationRoot === "string" ? obj.destinationRoot : undefined,
+    destinationRoot: typeof obj.destinationRoot === "string" ? obj.destinationRoot : undefined,
     projectRoot: typeof obj.projectRoot === "string" ? obj.projectRoot : undefined,
     timeoutMs: typeof obj.timeoutMs === "number" ? obj.timeoutMs : undefined,
     strictContext: obj.strictContext === true ? true : undefined,
@@ -104,9 +103,7 @@ export function buildCleanupRequest(input: unknown): CleanupRequest {
     expectedProjectRoot:
       typeof obj.expectedProjectRoot === "string" ? obj.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof obj.expectedDestinationRoot === "string"
-        ? obj.expectedDestinationRoot
-        : undefined,
+      typeof obj.expectedDestinationRoot === "string" ? obj.expectedDestinationRoot : undefined,
   };
 }
 
@@ -119,9 +116,7 @@ export function buildCleanupRequest(input: unknown): CleanupRequest {
  */
 export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolResult {
   const obj = isRecord(input) ? input : {};
-  const parsedArgs = parseMcpArgsJson(
-    typeof obj.argsJson === "string" ? obj.argsJson : undefined,
-  );
+  const parsedArgs = parseMcpArgsJson(typeof obj.argsJson === "string" ? obj.argsJson : undefined);
   if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
 
   return {
@@ -141,9 +136,7 @@ export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolRe
     expectedProjectRoot:
       typeof obj.expectedProjectRoot === "string" ? obj.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof obj.expectedDestinationRoot === "string"
-        ? obj.expectedDestinationRoot
-        : undefined,
+      typeof obj.expectedDestinationRoot === "string" ? obj.expectedDestinationRoot : undefined,
   };
 }
 
@@ -225,24 +218,31 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.cleanup_access_operation,
       inputSchema: cleanupSchema,
       handler: async (input) =>
-        handleMcpAccessCleanup(input, cleanupSchema, services, writesEnabled, writeAccessResolver, (validatedInput) => {
-          const request = buildCleanupRequest(validatedInput);
-          return {
-            operationId: request.operationId,
-            accessPath: request.accessPath,
-            force: request.force,
-            projectId: request.projectId,
-            contextId: request.contextId,
-            backendPath: request.backendPath,
-            destinationRoot: request.destinationRoot,
-            projectRoot: request.projectRoot,
-            timeoutMs: request.timeoutMs,
-            strictContext: request.strictContext,
-            expectedAccessPath: request.expectedAccessPath,
-            expectedProjectRoot: request.expectedProjectRoot,
-            expectedDestinationRoot: request.expectedDestinationRoot,
-          };
-        }),
+        handleMcpAccessCleanup(
+          input,
+          cleanupSchema,
+          services,
+          writesEnabled,
+          writeAccessResolver,
+          (validatedInput) => {
+            const request = buildCleanupRequest(validatedInput);
+            return {
+              operationId: request.operationId,
+              accessPath: request.accessPath,
+              force: request.force,
+              projectId: request.projectId,
+              contextId: request.contextId,
+              backendPath: request.backendPath,
+              destinationRoot: request.destinationRoot,
+              projectRoot: request.projectRoot,
+              timeoutMs: request.timeoutMs,
+              strictContext: request.strictContext,
+              expectedAccessPath: request.expectedAccessPath,
+              expectedProjectRoot: request.expectedProjectRoot,
+              expectedDestinationRoot: request.expectedDestinationRoot,
+            };
+          },
+        ),
     },
     {
       name: "run_vba",
