@@ -1064,3 +1064,105 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-009 (mcp-reliability-fix) — serviceCache LRU eviction
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-009 — serviceCache uses LRU eviction, not FIFO", () => {
+  it("recently-accessed entry survives eviction (LRU vs FIFO)", async () => {
+    // Drive createDynamicServices with 16 distinct cache keys, then access
+    // the FIRST key and insert a 17th entry. With LRU, the first key survives
+    // (most recently accessed). With FIFO, the first key is evicted (oldest
+    // insertion).
+    const root = await mkdtemp(join(tmpdir(), "dysflow-lru-"));
+    mkdirSync(join(root, ".dysflow"), { recursive: true });
+    const dbPath = join(root, "front.accdb");
+    writeFileSync(dbPath, "", "utf8");
+
+    // Service factory that counts invocations and exposes the resolved config
+    // so we can detect which cache entries get evicted.
+    const createdConfigs: string[] = [];
+    const services = createDynamicServices(
+      undefined,
+      { code: "STARTUP_ERR", message: "no startup", retryable: false },
+      {
+        cwd: root,
+        env: {},
+        serviceFactory: (config) => {
+          createdConfigs.push(config.accessDbPath);
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    // Populate 16 cache entries by issuing 16 requests with distinct accessPaths.
+    // Each accessPath has a normalized identity; different paths → different keys.
+    const dbPaths: string[] = [];
+    for (let i = 0; i < 16; i++) {
+      const p = join(root, `db-${String(i).padStart(2, "0")}.accdb`);
+      writeFileSync(p, "", "utf8");
+      dbPaths.push(p);
+      await services.vbaService.execute({
+        accessPath: p,
+        moduleName: "Mod",
+        procedureName: "Proc",
+      });
+    }
+    expect(createdConfigs.length).toBe(16);
+
+    // Access keyA (dbPaths[0]) — re-inserts it at the end of insertion order
+    // in the LRU cache. With FIFO this would NOT move it.
+    const keyA = dbPaths[0]!;
+    await services.vbaService.execute({
+      accessPath: keyA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // Insert a 17th entry — triggers eviction. With LRU, the LEAST recently
+    // accessed is dbPaths[1] (since keyA was just re-inserted). With FIFO,
+    // the LRU candidate would be dbPaths[0] (oldest insertion, not accessed
+    // since insert) — but with LRU it's no longer the oldest because we
+    // re-inserted it.
+    const keyNew = join(root, "db-NEW.accdb");
+    writeFileSync(keyNew, "", "utf8");
+    await services.vbaService.execute({
+      accessPath: keyNew,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // At this point the cache holds 16 entries. Re-access dbPaths[1] (which
+    // should have been the LRU victim if LRU is working) — if it survived,
+    // the serviceFactory was NOT called again (still cached). If FIFO is
+    // in effect, dbPaths[0] (keyA) would have been evicted and re-accessing
+    // it would invoke the factory again. We test dbPaths[1] specifically
+    // because it must be evicted under LRU.
+    const factoryCallsBefore = createdConfigs.length;
+    await services.vbaService.execute({
+      accessPath: dbPaths[1]!,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // dbPaths[1] should have been evicted by LRU (it was the oldest
+    // non-accessed entry after keyA's re-insertion), so the factory ran
+    // once more.
+    expect(createdConfigs.length).toBe(factoryCallsBefore + 1);
+
+    // Conversely, keyA (re-inserted) MUST still be cached. Re-access
+    // and confirm factory was NOT called again.
+    const factoryCallsAfterKeyA = createdConfigs.length;
+    await services.vbaService.execute({
+      accessPath: keyA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+    expect(createdConfigs.length).toBe(factoryCallsAfterKeyA);
+  });
+});
