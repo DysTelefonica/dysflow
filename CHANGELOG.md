@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.9.5] - 2026-06-27
+
+Offline form and control tree inspection, validation, serialization, and round-trip integration testing capabilities (issues #543).
+
+### Added
+
+- **Form UI offline serialization & parsing.** Added `serializeFormTxt` and `parseFormTxt` to compile/decompile `.form.txt` layouts without running Access.
+- **Form IR verification & round-tripping.** Implemented validation and round-tripping tests to ensure generated form layout files conform strictly to the properties that Access expects.
+- **Resilient inline compile checks.** Inline VBA execution now ignores unrelated pre-existing compile errors in the database, verifying only errors in the imported temporary inline module.
+
 ## [v1.9.4] - 2026-06-27
 
 VBA manager hardening: active-lock verification on deletion, arity-0 run_vba fixes, stable inline modules, zombie Access process cleanup, compiler component identification, trailing character JSON tolerance, and unowned zombie process reaping (issues #601, #602, #603, #604, #605, #606, #607).
