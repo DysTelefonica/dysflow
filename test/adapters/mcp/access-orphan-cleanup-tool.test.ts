@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
@@ -431,22 +434,27 @@ describe("DELTA-005 — orphanCleanupService.listOrphans returns failureResult o
   it("returns failureResult with SERVICE_UNAVAILABLE when orphanCleanupService is undefined in resolved config", async () => {
     // Build a custom service factory that returns services WITHOUT
     // orphanCleanupService — the wrapper MUST return failureResult, not throw.
-    const services = createDynamicServices(
-      undefined,
-      undefined,
-      {
-        serviceFactory: () => {
-          const base = makeBaseServices() as DysflowMcpServices;
-          // Intentionally do NOT set orphanCleanupService — it is undefined.
-          return base;
-        },
+    // We need a real on-disk accessPath because resolveService enforces
+    // existsSync before delegating to the factory.
+    const root = mkdtempSync(join(tmpdir(), "dysflow-orphan-undefined-"));
+    const frontend = join(root, "front.accdb");
+    writeFileSync(frontend, "", "utf8");
+    mkdirSync(join(root, ".dysflow"), { recursive: true });
+
+    const services = createDynamicServices(undefined, undefined, {
+      cwd: root,
+      env: {},
+      serviceFactory: () => {
+        // Intentionally do NOT set orphanCleanupService — it is undefined.
+        return makeBaseServices() as DysflowMcpServices;
       },
-    );
-    const result = await services.orphanCleanupService?.listOrphans({});
+    });
+    const result = await services.orphanCleanupService?.listOrphans({ accessPath: frontend });
     expect(result).toBeDefined();
     expect(result?.ok).toBe(false);
     if (result && !result.ok) {
-      expect(result.error.message).toMatch(/not available|undefined/i);
+      expect(result.error.message).toMatch(/not available/i);
+      expect(result.error.code).toBe("SERVICE_UNAVAILABLE");
     }
   });
 });

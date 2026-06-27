@@ -354,10 +354,17 @@ export function createDynamicServices(
     },
     orphanCleanupService: {
       listOrphans: async (request) => {
+        // DELTA-005 — mirror cleanupOrphan: return failureResult, never throw.
+        // A raw throw breaks symmetry with cleanupOrphan and reaches the SDK
+        // as an unhandled exception instead of a structured error frame.
         const res = await resolveService(request);
-        if (!res.ok) throw new Error(res.error.message);
+        if (!res.ok) return failureResult(res.error);
         if (res.services.orphanCleanupService === undefined) {
-          throw new Error("Orphan cleanup service is not available.");
+          return failureResult({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Orphan cleanup service is not available.",
+            retryable: false,
+          });
         }
         return res.services.orphanCleanupService.listOrphans(request);
       },
