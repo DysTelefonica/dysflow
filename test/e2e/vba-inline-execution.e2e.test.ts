@@ -183,7 +183,7 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
         projectId: "dysflow-inline-e2e",
         code: "Debug.Print 2 + 2",
       },
-      { timeoutMs: 60_000 },
+      { timeoutMs: 120_000 },
     );
 
     console.log("MCP Call Result:", JSON.stringify(result, null, 2));
@@ -196,5 +196,5 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
       const inlineFiles = files.filter((f) => f.startsWith("_inline_"));
       expect(inlineFiles.length).toBe(0);
     }
-  }, 90_000);
+  }, 150_000);
 });

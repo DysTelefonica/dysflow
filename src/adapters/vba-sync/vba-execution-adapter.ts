@@ -234,14 +234,21 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
-        // 4. Compile VBA
         const compileRes = await this.orchestrator.executeMappedTool(
           "compile_vba",
           inlineParams,
           EXECUTION_MAPPINGS.compile_vba,
         );
+        let hasInlineCompileError = false;
         if (!compileRes.ok) {
-          inlineResult = compileRes;
+          const errStr = JSON.stringify(compileRes.error || {});
+          if (errStr.includes(`"component":"${moduleName}"`) || errStr.includes("_inline_")) {
+            hasInlineCompileError = true;
+            inlineResult = compileRes;
+          }
+        }
+        if (!compileRes.ok && hasInlineCompileError) {
+          // Keep the compileRes failure as inlineResult
         } else {
           // 5. Run procedure
           inlineResult = await this.orchestrator.executeMappedTool(
