@@ -111,7 +111,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       }
 
       if (record.status === "running" && record.accessPid !== null) {
-        await this.reconcileRunningRecord(record, result);
+        await this.reconcileRunningRecord(record, result, handledPids);
         continue;
       }
 
@@ -206,6 +206,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
   private async reconcileRunningRecord(
     record: AccessOperationRecord,
     result: AccessOperationPreflightCleanupResult,
+    handledPids: Set<number>,
   ): Promise<void> {
     // record.accessPid is guaranteed non-null by the call site.
     const pid = record.accessPid as number;
@@ -237,7 +238,8 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     }
 
     // Process is alive, correct name, correct startTime — a legitimately running operation.
-    // Leave it completely untouched.
+    // Register active process PID
+    handledPids.add(pid);
   }
 
   private async scanAndCleanOrphans(
@@ -267,10 +269,27 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       if (process.commandLine === undefined) continue;
       if (!pathMatchesAccessPath(process.commandLine, request.accessPath)) continue;
 
-      result.errors.push({
-        operationId: "orphan",
-        message: `Blocked cleanup because PID ${process.pid} is an unattributed MSACCESS process for the requested accessPath.`,
-      });
+      const isHeadless = process.commandLine.toLowerCase().includes("-embedding");
+      if (isHeadless) {
+        try {
+          await withTimeout(
+            this.options.processKiller.kill(process.pid),
+            this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+          );
+          result.orphanedKilled.push(process.pid);
+          handledPids.add(process.pid);
+        } catch (error) {
+          result.errors.push({
+            operationId: "orphan",
+            message: `Failed to kill unattributed headless process ${process.pid}: ${formatError(error)}`,
+          });
+        }
+      } else {
+        result.errors.push({
+          operationId: "orphan",
+          message: `Blocked cleanup because PID ${process.pid} is an unattributed MSACCESS process for the requested accessPath.`,
+        });
+      }
     }
   }
 
@@ -350,11 +369,28 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     );
     if (matchingProcess !== undefined) {
       handledPids.add(matchingProcess.pid);
-      result.errors.push({
-        operationId: record.operationId,
-        message: `Refused to mark operation cleaned because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
-      });
-      return;
+      const isHeadless = matchingProcess.commandLine?.toLowerCase().includes("-embedding") ?? false;
+      if (isHeadless) {
+        try {
+          await withTimeout(
+            this.options.processKiller.kill(matchingProcess.pid),
+            this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+          );
+          result.killed.push(matchingProcess.pid);
+        } catch (error) {
+          result.errors.push({
+            operationId: record.operationId,
+            message: `Failed to kill unowned headless process ${matchingProcess.pid}: ${formatError(error)}`,
+          });
+          return;
+        }
+      } else {
+        result.errors.push({
+          operationId: record.operationId,
+          message: `Refused to mark operation cleaned because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+        });
+        return;
+      }
     }
 
     await this.markCleaned(record, result);

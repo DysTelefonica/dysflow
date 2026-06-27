@@ -1,7 +1,7 @@
 # SDD Init — dysflow
 
-Detected: 2026-06-18
-Persistence mode: openspec
+Detected: 2026-06-26
+Persistence mode: hybrid
 Project root: C:\Proyectos\dysflow
 
 ## Repository State

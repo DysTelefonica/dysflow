@@ -158,6 +158,45 @@ describe("VbaExecutionAdapter", () => {
     }
   });
 
+  it("executes inline code using a stable __dysflow_inline__ module name, compiles, runs, and cleans up", async () => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+
+    executeMappedTool.mockImplementation((toolName, _params) => {
+      if (toolName === "delete_module") return Promise.resolve(successResult({ ok: true }));
+      if (toolName === "import_modules") return Promise.resolve(successResult({ ok: true }));
+      if (toolName === "compile_vba") return Promise.resolve(successResult({ ok: true }));
+      if (toolName === "run_vba") return Promise.resolve(successResult("success return"));
+      return Promise.resolve(successResult({ ok: true }));
+    });
+
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'Debug.Print "Hello World"',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toBe("success return");
+    }
+
+    expect(fileSystem.writeFile).toHaveBeenCalledWith(
+      expect.stringContaining("__dysflow_inline__.bas"),
+      expect.stringContaining('Attribute VB_Name = "__dysflow_inline__"'),
+    );
+    expect(fileSystem.rm).toHaveBeenCalledWith(
+      expect.stringContaining("__dysflow_inline__.bas"),
+      expect.objectContaining({ force: true }),
+    );
+
+    const callNames = executeMappedTool.mock.calls.map((c) => c[0]);
+    expect(callNames).toEqual([
+      "delete_module",
+      "import_modules",
+      "compile_vba",
+      "run_vba",
+      "delete_module",
+    ]);
+  });
+
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {
     const executeMappedTool = vi
       .fn()
@@ -521,6 +560,38 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+  });
+
+  it("sanitizes proceduresJson by stripping leading BOM, whitespace, and markdown code blocks", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Sanitized" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const payloads = [
+      '\uFEFF[\n  "Test_Sanitized"\n]',
+      '   \n\t   ["Test_Sanitized"]  \n  ',
+      '```json\n[\n  "Test_Sanitized"\n]\n```',
+      '```\n["Test_Sanitized"]\n```',
+      ' \n\t  ```json\n["Test_Sanitized"]\n```\t ',
+    ];
+
+    for (const payload of payloads) {
+      const result = await adapter.execute("test_vba", {
+        proceduresJson: payload,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(executeMappedTool).toHaveBeenCalledWith(
+        "test_vba",
+        expect.objectContaining({
+          proceduresJson: JSON.stringify([{ procedure: "Test_Sanitized", args: [] }]),
+        }),
+        expect.any(Object),
+      );
+      vi.clearAllMocks();
+    }
   });
 
   it("returns VBA_INVALID_TEST_PLAN when proceduresJson has entries that are neither strings nor objects", async () => {

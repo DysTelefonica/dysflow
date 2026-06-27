@@ -703,6 +703,83 @@ describe("AccessOperationPreflightCleanupService", () => {
       });
       expect(killed).toEqual([]);
     });
+
+    it("scanAndCleanOrphans terminates a headless process with -Embedding and adds to orphanedKilled", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 5555,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([5555]);
+      expect(result.errors).toEqual([]);
+      expect(killed).toEqual([5555]);
+    });
+
+    it("retireUnownedRecord terminates a headless process with -Embedding, kills it and marks record cleaned", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 6666,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.cleaned).toContain("op-unowned");
+      expect(result.killed).toEqual([6666]);
+      expect(result.errors).toEqual([]);
+      expect(killed).toEqual([6666]);
+    });
   });
 
   describe("dead-PID reconciliation for running records", () => {
@@ -794,6 +871,40 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(result.killed).not.toContain(1234);
       expect(killed).toEqual([]);
       await expect(registry.get("op-stale")).resolves.toMatchObject({ status: "running" });
+    });
+
+    it("does NOT block cleanup or treat as orphan when running record's process is alive and scanner lists it", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({ ...baseRecord, status: "running" });
+      const killed: number[] = [];
+      const liveProcess: OsProcessInfo = {
+        pid: 1234,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T10:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => liveProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: {
+          listProcesses: async () => [liveProcess],
+        },
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.errors).toEqual([]);
+      expect(result.orphanedKilled).toEqual([]);
+      expect(killed).toEqual([]);
     });
   });
 

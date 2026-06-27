@@ -43,6 +43,7 @@ interface DysflowResultPayload {
   ok?: boolean;
   exported?: string[];
   warnings?: Array<Record<string, unknown>>;
+  error?: string;
 }
 
 function parseDysflowResult(stdout: string): DysflowResultPayload | null {
@@ -221,6 +222,112 @@ describe.skipIf(skipReason !== undefined)(
       expect(payload?.warnings?.[0]?.error).toContain("Mock SaveAsText COM error");
 
       await rm(tempExportDir, { recursive: true, force: true });
+    });
+
+    it("Remove-AccessObjectOrComponent throws active lock error if component persists after Remove call", async () => {
+      const testScript = `
+        $ErrorActionPreference = 'Stop'
+        $content = Get-Content -Path '${SCRIPT_PATH.replace(/'/g, "''")}' -Raw
+        $index = $content.IndexOf('$session = $null')
+        if ($index -lt 0) { throw "Could not find routing block start" }
+        $functions = $content.Substring(0, $index)
+        $libPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-com.ps1").replace(/\\/g, "/")}'
+        $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-com.ps1''', "'$libPath'"
+        $sb = [scriptblock]::Create($functions)
+        . $sb -Action "List-Objects" -AccessPath "dummy" -DestinationRoot "dummy"
+        
+        $mockVbProject = [pscustomobject]@{
+            VBComponents = [pscustomobject]@{}
+        }
+        $mockVbProject.VBComponents | Add-Member -MemberType ScriptMethod -Name Item -Value {
+            param($name)
+            return [pscustomobject]@{
+                Name = "LockedModule"
+                Type = 1
+            }
+        }
+        $mockVbProject.VBComponents | Add-Member -MemberType ScriptMethod -Name Remove -Value {
+            param($comp)
+        }
+        
+        $env:TEMP_RESOLVE = "LockedModule"
+        function Resolve-ExistingComponentName { return $env:TEMP_RESOLVE }
+        
+        $mockAccessApp = [pscustomobject]@{
+            # Mock Resolve-AccessObjectInfo
+        }
+        $mockAccessApp | Add-Member -MemberType ScriptMethod -Name RunCommand -Value {
+            param($cmd)
+        }
+        
+        try {
+            $r = Remove-AccessObjectOrComponent -AccessApplication $mockAccessApp -VbProject $mockVbProject -ModuleName "LockedModule"
+            Write-DysflowResult -Result $r -Depth 2
+        } catch {
+            Write-DysflowResult -Result ([ordered]@{ ok = $false; error = $_.Exception.Message }) -Depth 2
+        }
+      `;
+
+      const child = spawn("pwsh", ["-NoProfile", "-NonInteractive", "-Command", testScript], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString("utf8");
+      });
+      await new Promise((res) => child.on("close", res));
+
+      const payload = parseDysflowResult(stdout);
+      expect(payload?.ok).toBe(false);
+      expect(payload?.error).toContain("Active lock detected");
+    });
+
+    it("Invoke-AccessProcedure executes arity 0 procedure directly", async () => {
+      const testScript = `
+        $ErrorActionPreference = 'Stop'
+        $content = Get-Content -Path '${SCRIPT_PATH.replace(/'/g, "''")}' -Raw
+        $index = $content.IndexOf('$session = $null')
+        if ($index -lt 0) { throw "Could not find routing block start" }
+        $functions = $content.Substring(0, $index)
+        $libPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-com.ps1").replace(/\\/g, "/")}'
+        $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-com.ps1''', "'$libPath'"
+        $sb = [scriptblock]::Create($functions)
+        . $sb -Action "List-Objects" -AccessPath "dummy" -DestinationRoot "dummy"
+        
+        $runCalled = $false
+        $mockAccessApp = [pscustomobject]@{}
+        $mockAccessApp | Add-Member -MemberType ScriptMethod -Name Run -Value {
+            param($procName)
+            $script:runCalled = $true
+            return "arity-0-success"
+        }
+        
+        function Get-VbaProcedureParameterMetadata {
+            return @()
+        }
+        
+        $result = Invoke-AccessProcedure -AccessApplication $mockAccessApp -ProcedureName "Arity0Proc" -ProcedureArgs @() -VbProject $null
+        
+        Write-DysflowResult -Result ([ordered]@{
+            ok = $result.ok
+            runCalled = $script:runCalled
+            returnValue = $result.returnValue
+        }) -Depth 2
+      `;
+
+      const child = spawn("pwsh", ["-NoProfile", "-NonInteractive", "-Command", testScript], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString("utf8");
+      });
+      await new Promise((res) => child.on("close", res));
+
+      const payload = parseDysflowResult(stdout) as Record<string, unknown>;
+      expect(payload?.ok).toBe(true);
+      expect(payload?.runCalled).toBe(true);
+      expect(payload?.returnValue).toBe("arity-0-success");
     });
   },
 );

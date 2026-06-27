@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.9.4] - 2026-06-27
+
+VBA manager hardening: active-lock verification on deletion, arity-0 run_vba fixes, stable inline modules, zombie Access process cleanup, compiler component identification, trailing character JSON tolerance, and unowned zombie process reaping (issues #601, #602, #603, #604, #605, #606, #607).
+
+### Fixed
+
+- **Active-lock verification on delete_module (#601).** Verified post-deletion check prevents false success reporting when VBA components are locked by active databases.
+- **Arity-0 run_vba execution without ref requirement (#606).** Parameterless procedure calls bypass PowerShell dynamic ByRef wrapping, allowing direct invocation.
+- **Stable module name for inline executions (#602).** Inline compilation uses a single stable module name (`__dysflow_inline__`) and purges previous runs instead of leaving unique random module structures.
+- **Zombie MSACCESS.EXE reaping on timeouts (#603).** Reaps the exact associated Access COM instance when test/execution runs trigger timeouts.
+- **Compiler component error location parsing (#604).** Toggles VBE visibility temporarily on compile errors so headless Access sessions can locate the compiler failure component.
+- **Tolerant JSON parsing of proceduresJson (#607).** Trims trailing whitespace and control characters from the test procedures plan JSON array.
+- **Unowned process reaping in preflight (#605).** Cleans up unregistered headless Access processes locking the current project path during preflight.
+
 ## [v1.9.3] - 2026-06-26
 
 VBA inline execution sanitization, standardized dryRun defaults, size-limit stream destruction, and listOrphans OperationResult integration.
