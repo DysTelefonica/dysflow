@@ -331,7 +331,16 @@ export function createDynamicServices(
 
     const cacheKey = resolvedConfigCacheKey(configResult.data);
     let services = serviceCache.get(cacheKey);
-    if (services === undefined) {
+    if (services !== undefined) {
+      // DELTA-009 — LRU eviction. Re-insert the entry on get so the
+      // insertion-order iterator's head always points at the LEAST recently
+      // accessed key. The side-effect (re-set) is acceptable because
+      // serviceCache stores unavailable-service references (the wrappers),
+      // not the underlying services themselves — see
+      // dysflow/mcp-reliability-fix/lru-strategy.
+      serviceCache.delete(cacheKey);
+      serviceCache.set(cacheKey, services);
+    } else {
       services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
       if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
         const oldestKey = serviceCache.keys().next().value;
