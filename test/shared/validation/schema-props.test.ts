@@ -71,13 +71,17 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
     });
   });
 
-  it("contains moduleNames array with maxItems constraint", () => {
-    expect(SCHEMA_PROPS.moduleNames).toEqual({
-      type: "array",
-      maxItems: 100,
-      items: { type: "string" },
-      description: "VBA module names.",
-    });
+  it("contains moduleNames array with no hard length cap (R1 consumer request)", () => {
+    // R1 of the consumer request: long lists (20-30+) must reach the
+    // PowerShell runner untruncated. The legacy maxItems:100 cap is removed
+    // (commit 2026-06-27 consumer-request hardening); the test pins that
+    // there is no maxItems constraint and that the description explains
+    // the contract to schema readers (consumers and consuming LLMs).
+    const schema = SCHEMA_PROPS.moduleNames as Record<string, unknown>;
+    expect(schema.type).toBe("array");
+    expect(schema).not.toHaveProperty("maxItems");
+    expect(schema.items).toEqual({ type: "string" });
+    expect(schema.description as string).toMatch(/no hard length cap|long lists|empty array/i);
   });
 
   it("contains importMode with enum values", () => {

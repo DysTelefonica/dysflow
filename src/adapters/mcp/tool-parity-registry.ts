@@ -102,9 +102,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   export_all:
     "Mirror ALL VBA modules from the binary to the source tree. diff:true reports per-file drift without writing. prune:true DELETES orphaned managed source files (.bas/.cls/.form.txt/.report.txt) absent from the binary; prune is rejected together with filter. Read-only on the binary.",
   import_modules:
-    "Import specific source modules INTO the Access binary (mutates the binary; write-gated). importMode controls merge vs replace. compile:true compiles after import and fails on a real compile error in standard/class modules; dryRun:true returns a plan without writing.",
+    "Import specific source modules INTO the Access binary (mutates the binary; write-gated). USE THIS whenever you know the exact list of modules you want to import — accepts long lists (20-30+ modules, no hard cap) and emits a STRUCTURED PER-MODULE report so callers can pinpoint which entry failed and why. Each module entry carries {module, status, phase (locate-source|remove-existing|import|compile), error:{code, message, machine, user}, durationMs, rollbackApplied}. importMode controls merge vs replace. compile:true compiles after import and fails on a real compile error in standard/class modules; dryRun:true returns a plan without writing. An empty moduleNames array is treated as an explicit no-op plan (NOT a silent fallback to import-all). When Access holds an exclusive lock on the .accdb, the per-module error.code surfaces ACCESS_DATABASE_LOCKED with machine/user when parseable.",
   import_all:
-    "Import the entire source tree into the Access binary (mutates the binary; write-gated). Heavier than import_modules — prefer that for a targeted change. Supports compile:true and dryRun:true (plan mode).",
+    "Import the entire source tree into the Access binary (mutates the binary; write-gated). RESERVED for whole-project resync (initial setup, disaster recovery, post-fork reconciliation). NOT a fallback for import_modules — if you have an explicit list of modules, use import_modules with moduleNames; if you pass moduleNames: [] to import_modules, it is a no-op plan, it does NOT expand to this tool. Supports compile:true and dryRun:true (plan mode).",
   list_objects:
     "List the VBA project's modules, classes, forms and reports, optionally filtered by name. Read-only.",
   exists: "Check whether a named module/object exists in the VBA project. Read-only.",
@@ -116,7 +116,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   compile_vba:
     "Compile and save all VBA modules headless. Reports a structured VBA_COMPILE_ERROR when standard/class modules fail to compile (via Application.IsCompiled); mutates only the binary's compiled state. Form/report document modules cannot be verified headless.",
   verify_code:
-    "Compare the on-disk source against the VBA source exported live from the binary. Read-only and dry-run. Act on actionableDifferent / recommendedAction, NOT raw different[] (most diffs are non-functional export noise). Folding is string-aware. strict:true does a byte-exact compare; diff:true adds per-module snippets.",
+    "Compare the on-disk source against the VBA source exported live from the binary. Read-only and dry-run. USE BEFORE AND AFTER import_modules / import_all to confirm Unicode characters round-trip cleanly (no mojibake drift) and that the per-module result matches the binary. Act on actionableDifferent / recommendedAction, NOT raw different[] (most diffs are non-functional export noise). Folding is string-aware. strict:true does a byte-exact compare; diff:true adds per-module snippets.",
   delete_module:
     "Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.",
   generate_erd:

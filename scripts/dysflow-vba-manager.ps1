@@ -1085,6 +1085,67 @@ function Assert-AccessDocumentTextLooksLoadable {
 # Close-TargetAccessDbIfOpen is provided by the shared module dot-sourced above.
 # Moved to scripts/lib/dysflow-access-com.ps1 in Slice 5 — single source of truth.
 
+# ===========================================================================
+# Access exclusive-lock detection (R5 of the consumer request).
+# When another user holds an exclusive lock on the .accdb, Access surfaces
+# COM exceptions with HRESULT 0x800A09D5 ("Can't open any more tables") and
+# text like "The database has been placed in a state by another user on
+# machine 'X' (user 'Y') that prevents it from being opened or locked.".
+# The MCP layer needs a structured error code (ACCESS_DATABASE_LOCKED) plus
+# the machine/user attribution so consumers can render an actionable message.
+# These helpers stay pure (no COM, no side effects) so Pester can exercise
+# them with synthetic strings.
+# ===========================================================================
+
+function Test-IsAccessDatabaseLockedError {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message
+    )
+    if ([string]::IsNullOrWhiteSpace($Message)) { return $false }
+    $msg = $Message.ToLowerInvariant()
+    # The canonical patterns emitted by Access / DAO when an exclusive lock
+    # blocks the open. We keep the patterns additive: when Access ships new
+    # wording we extend the list, we do not narrow it.
+    return ($msg -match '0x800a09d5' `
+        -or $msg -match 'already in use' `
+        -or $msg -match 'cannot be opened or locked' `
+        -or $msg -match 'placed in a state by another' `
+        -or $msg -match 'opened exclusively by')
+}
+
+function Get-AccessDatabaseLockedOwner {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message
+    )
+    $result = [ordered]@{
+        code = "ACCESS_DATABASE_LOCKED"
+        message = if ([string]::IsNullOrEmpty($Message)) { "" } else { $Message }
+        machine = $null
+        user = $null
+    }
+    if ([string]::IsNullOrWhiteSpace($Message)) { return $result }
+    # Try the canonical quoted form first (Access: machine 'X', user 'Y'),
+    # then fall back to the bareword form some DAO variants emit.
+    $mMatch = [regex]::Match(
+        $Message,
+        '(?i)machine\s+(?:[`"'']|'')?(?<machine>[^`"''\s,]+)(?:[`"'']|'')?'
+    )
+    if ($mMatch.Success) {
+        $result.machine = $mMatch.Groups["machine"].Value
+    }
+    $uMatch = [regex]::Match(
+        $Message,
+        '(?i)user\s+(?:[`"'']|'')?(?<user>[^`"''\s,)]+)(?:[`"'']|'')?'
+    )
+    if ($uMatch.Success) {
+        $result.user = $uMatch.Groups["user"].Value
+    }
+    return $result
+}
+
 function Open-AccessDatabase {
     [CmdletBinding()]
     Param(
@@ -2309,6 +2370,11 @@ function Import-VbaModule {
         [string]$ImportMode = "Auto"
     )
 
+    # Per-module phase tracking (R2 of the consumer request). The script-
+    # scoped variable survives the throw back to the Invoke-ImportAction
+    # catch block, which turns it into structured per-module reporting.
+    # Valid values: locate-source | remove-existing | import | compile.
+    $script:ImportCurrentPhase = "locate-source"
     $src = Resolve-ImportFileForModule -ModulesPath $ModulesPath -ModuleName $ModuleName -ImportMode $ImportMode
     if (-not $src) { throw ("No se encontro archivo para el modulo '{0}' en {1}" -f $ModuleName, $ModulesPath) }
 
@@ -2327,6 +2393,7 @@ function Import-VbaModule {
             if (-not $AccessApplication) { throw "Se necesita -AccessApplication para importar documentos (.form.txt/.report.txt)" }
             $objectName = $ModuleName -replace '^(Form|Report)_', ''
             $objectType = if ($isReportTxt -or $ModuleName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
+            $script:ImportCurrentPhase = "remove-existing"
             $importDocumentText = [System.IO.File]::ReadAllText($src, [System.Text.Encoding]::UTF8)
 
             $documentExistsInAccess = $false
@@ -2377,6 +2444,7 @@ function Import-VbaModule {
                 }
             } catch { Write-Debug "Diagnostics: $_" }
 
+            $script:ImportCurrentPhase = "import"
             try {
                 $AccessApplication.LoadFromText($objectType, $objectName, $tmpAnsi)
             } catch {
@@ -2405,6 +2473,13 @@ function Import-VbaModule {
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
+                # R2 consumer-request fields. Keep CreatedNewComponent /
+                # RequiresExplicitSave intact for backward compatibility with
+                # existing tests; phase is null on the happy path (no failure).
+                Phase                = $null
+                Error                = $null
+                DurationMs           = 0
+                RollbackApplied      = $false
             }
         }
 
@@ -2413,6 +2488,7 @@ function Import-VbaModule {
         Convert-Utf8ToAnsiTempFile -InputPath $src -TempPath $tmpAnsi
         $tmpAnsiSanitized = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_import_sanitized_{0}{1}" -f @([guid]::NewGuid().ToString("N"), $ext))
         Convert-Utf8CodeImportToAnsiTempFile -InputPath $src -TempPath $tmpAnsiSanitized
+        $script:ImportCurrentPhase = "remove-existing"
         $actualComponentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
         $looksLikeDocumentCode = ($ext -ieq '.cls') -and (Test-LooksLikeDocumentCodeTarget -ModuleName $ModuleName -SourcePath $src -ModulesPath $ModulesPath)
         try {
@@ -2430,10 +2506,15 @@ function Import-VbaModule {
             $codeModule = $component.CodeModule
             $count = $codeModule.CountOfLines
             if ($count -gt 0) { $codeModule.DeleteLines(1, $count) }
+            $script:ImportCurrentPhase = "import"
             $codeModule.AddFromFile($tmpAnsiSanitized)
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
+                Phase                = $null
+                Error                = $null
+                DurationMs           = 0
+                RollbackApplied      = $false
             }
         } catch {
             if ($_.Exception.Message -ne 'COMPONENTE_NO_ENCONTRADO') {
@@ -2448,7 +2529,19 @@ function Import-VbaModule {
 
             # El componente no existe aun — crear explícitamente SOLO para clases/modulos normales.
             # Evita prompts/modales de VBE asociados a VBComponents.Import() y mantiene control del nombre final.
-            return (New-VbComponentFromCodeFile -AccessApplication $AccessApplication -VbProject $VbProject -ModuleName $ModuleName -SourcePath $src -SanitizedAnsiPath $tmpAnsiSanitized)
+            $script:ImportCurrentPhase = "import"
+            $newResult = New-VbComponentFromCodeFile -AccessApplication $AccessApplication -VbProject $VbProject -ModuleName $ModuleName -SourcePath $src -SanitizedAnsiPath $tmpAnsiSanitized
+            # Augment the existing return with the consumer-request fields so the
+            # upstream caller (Invoke-ImportAction) sees the same shape it sees for
+            # the update path. CreatedNewComponent / RequiresExplicitSave stay as-is.
+            return [pscustomobject]@{
+                CreatedNewComponent  = $newResult.CreatedNewComponent
+                RequiresExplicitSave = $newResult.RequiresExplicitSave
+                Phase                = $null
+                Error                = $null
+                DurationMs           = 0
+                RollbackApplied      = $false
+            }
         }
 
     } finally {
@@ -3612,6 +3705,12 @@ function Invoke-ImportAction {
         [string[]]$NormalizedModules,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         [Parameter(Mandatory = $true)][string]$ImportMode,
+        # R4: when bound, an empty NormalizedModules list is treated as an
+        # explicit no-op plan (no Get-ChildItem discovery fallback, no
+        # import-all expansion). When NOT bound (legacy call paths), the
+        # absence of moduleNames keeps the historical "import everything
+        # under ModulesPath" behavior.
+        [switch]$ModuleNamesExplicit,
         [switch]$Json
     )
 
@@ -3620,6 +3719,10 @@ function Invoke-ImportAction {
     $targets = @()
     if ($NormalizedModules.Count -gt 0) {
         $targets = $NormalizedModules
+    } elseif ($ModuleNamesExplicit) {
+        # R4: explicit-empty. Do NOT fall back to Get-ChildItem. The caller
+        # is asking for a plan with zero modules; respect that.
+        $targets = @()
     } else {
         # FIX: incluir *.form.txt y *.report.txt y extraer nombre correctamente
         $targets = @(Get-ChildItem -Path $ModulesPath -File -Recurse `
@@ -3636,7 +3739,11 @@ function Invoke-ImportAction {
     $createdComponentNames = New-Object System.Collections.Generic.List[string]
     $pendingTargets = @($targets)
     $pass = 0
-    $lastErrors = @{}
+    # R2: per-module structured result. Keys are module names, values are
+    # pscustomobject with {status, phase, error:{code,message,machine,user},
+    # durationMs, rollbackApplied}. Keeping these keyed by module name lets
+    # the retry loop preserve the last known good/bad state for each module.
+    $lastResults = @{}
     $maxPasses = if ($useRetryImport) { [Math]::Max(2, $targets.Count) } else { 1 }
 
     do {
@@ -3653,6 +3760,8 @@ function Invoke-ImportAction {
                 Write-Status -Message ("[{0}/{1}] Importando: {2}" -f $idx, $total, $name) -Color Cyan
             }
 
+            $moduleStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            $script:ImportCurrentPhase = "locate-source"
             try {
                 $beforeExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
                 $importResult = Import-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -ImportMode $ImportMode
@@ -3662,46 +3771,120 @@ function Invoke-ImportAction {
                         $createdComponentNames.Add([string]$afterExists) | Out-Null
                     }
                 }
+                $moduleStopwatch.Stop()
                 $progressThisPass = $true
-                if ($lastErrors.ContainsKey($name)) { $lastErrors.Remove($name) }
+                # R2 success record. Phase is null on the happy path because
+                # nothing failed. DurationMs is captured per-module (not just
+                # total). rollbackApplied is always false on success because
+                # no rollback is needed.
+                $lastResults[$name] = [pscustomobject]@{
+                    module          = [string]$name
+                    status          = "ok"
+                    phase           = $null
+                    error           = $null
+                    durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
+                    rollbackApplied = $false
+                }
+                if ($lastResults[$name].error) {
+                    # Defensive: never let a non-null error slip into an ok entry.
+                    $lastResults[$name].error = $null
+                }
             } catch {
+                $moduleStopwatch.Stop()
                 $failedThisPass.Add($name) | Out-Null
                 # Coerce $_.Exception.Message defensively to a string (issue #496). When
                 # the VBE raises a COM error (e.g. 0x800A09D5), .Exception.Message can be
                 # a COM property reference rather than a plain string, which later breaks
                 # ConvertTo-Json inside Write-DysflowResult.
                 $rawMessage = $_.Exception.Message
-                $lastErrors[$name] = if ($null -eq $rawMessage) { "<empty VBE error>" }
-                                    elseif ($rawMessage -is [string]) { $rawMessage }
-                                    else { [string]$rawMessage }
+                $messageString = if ($null -eq $rawMessage) { "<empty VBE error>" }
+                                 elseif ($rawMessage -is [string]) { $rawMessage }
+                                 else { [string]$rawMessage }
+                # R2 structured error. machine/user are populated only when the
+                # message text matches a recognizable Access lock pattern;
+                # otherwise null. We deliberately do NOT try to be cleverer
+                # than the message text — guessing would mislead consumers.
+                $machine = $null
+                $user = $null
+                $errorCode = "VBA_IMPORT_PHASE_FAILED"
+                # Guard the helper call so legacy AST-extracted unit tests that
+                # do not pre-load these helpers can still invoke the function
+                # without a CommandNotFoundException. In production, both
+                # helpers are defined in the same script and always present.
+                if (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
+                    if (Test-IsAccessDatabaseLockedError -Message $messageString) {
+                        $errorCode = "ACCESS_DATABASE_LOCKED"
+                        if (Get-Command -Name Get-AccessDatabaseLockedOwner -ErrorAction SilentlyContinue) {
+                            $locked = Get-AccessDatabaseLockedOwner -Message $messageString
+                            $machine = $locked.machine
+                            $user = $locked.user
+                        }
+                    }
+                }
+                $lastResults[$name] = [pscustomobject]@{
+                    module          = [string]$name
+                    status          = "error"
+                    phase           = [string]$script:ImportCurrentPhase
+                    error           = [ordered]@{
+                        code    = $errorCode
+                        message = $messageString
+                        machine = $machine
+                        user    = $user
+                    }
+                    durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
+                    # R2: rollback is a no-op for now. Modules imported earlier in
+                    # the same call remain imported. We surface this explicitly so
+                    # consumers can decide whether to retry, prune, or rollback
+                    # manually. Documented in the consumer-request commit message.
+                    rollbackApplied = $false
+                }
             }
         }
 
         $pendingTargets = @($failedThisPass)
     } while ($useRetryImport -and $pendingTargets.Count -gt 0 -and $progressThisPass -and $pass -lt $maxPasses)
 
+    # R2: emit per-module entries in the order the caller requested, with the
+    # rich shape {module, status, phase, error:{...}, durationMs, rollbackApplied}.
+    # Preserve the existing happy-path emit shape (top-level array) so existing
+    # consumers parsing the DYSFLOW_RESULT sentinel still see a JSON array of
+    # module entries.
     $moduleResults = New-Object System.Collections.Generic.List[object]
     foreach ($t in $targets) {
-        if ($lastErrors.ContainsKey($t)) {
-            $moduleResults.Add([pscustomobject]@{
-                module = [string]$t
-                status = "error"
-                error  = [string]$lastErrors[$t]
-            }) | Out-Null
+        if ($lastResults.ContainsKey([string]$t)) {
+            $moduleResults.Add($lastResults[[string]$t]) | Out-Null
         } else {
+            # Should not happen, but defend against an entry that was never
+            # processed (e.g. empty NormalizedModules explicit case).
             $moduleResults.Add([pscustomobject]@{
-                module = [string]$t
-                status = "ok"
+                module          = [string]$t
+                status          = "ok"
+                phase           = $null
+                error           = $null
+                durationMs      = 0
+                rollbackApplied = $false
             }) | Out-Null
         }
     }
+
     if ($pendingTargets.Count -gt 0) {
         $details = @($pendingTargets | ForEach-Object {
-            if ($lastErrors.ContainsKey($_)) { "{0}: {1}" -f $_, $lastErrors[$_] } else { $_ }
+            $n = [string]$_
+            if ($lastResults.ContainsKey($n) -and $lastResults[$n].error) {
+                $msg = [string]$lastResults[$n].error.message
+                "{0}: {1}" -f $n, $msg
+            } else {
+                $n
+            }
         }) -join "; "
-        $scopeLabel = if ($NormalizedModules.Count -eq 0) { "Import-all" } else { "Import" }
+        $scopeLabel = if ($ModuleNamesExplicit -and $NormalizedModules.Count -eq 0) { "Import-plan" }
+                      elseif ($NormalizedModules.Count -eq 0) { "Import-all" }
+                      else { "Import" }
         $errorMessage = "{0} no pudo completar algunos modulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details
         $modulesArray = @($moduleResults.ToArray())
+        # The top-level error code stays VBA_IMPORT_FAILED for backward
+        # compatibility with existing consumers; per-module error.code carries
+        # the fine-grained signal (ACCESS_DATABASE_LOCKED, VBA_IMPORT_PHASE_FAILED).
         Write-DysflowResult -Result ([ordered]@{
             ok = $false
             error = [ordered]@{
@@ -3752,17 +3935,29 @@ try {
 
     # Prefer JSON transport to preserve nombres con comas u otros caracteres.
     $inputModules = $ModuleName
-    if (-not [string]::IsNullOrWhiteSpace($ModuleNamesJson)) {
+    # R4: track whether the caller explicitly passed -ModuleNamesJson (even if
+    # the resulting array is empty). PowerShell $PSBoundParameters distinguishes
+    # "parameter not bound" from "bound with []". We forward this signal into
+    # Invoke-ImportAction so an explicit empty list does NOT trigger the
+    # import-all fallback.
+    $moduleNamesExplicit = $false
+    if ($PSBoundParameters.ContainsKey("ModuleNamesJson") -and -not [string]::IsNullOrWhiteSpace($ModuleNamesJson)) {
         try {
             $jsonModules = ConvertFrom-Json -InputObject $ModuleNamesJson -ErrorAction Stop
             if ($jsonModules -is [System.Collections.IEnumerable] -and -not ($jsonModules -is [string])) {
                 $inputModules = @($jsonModules | ForEach-Object { [string]$_ })
+                $moduleNamesExplicit = $true
             } elseif ($null -ne $jsonModules) {
                 $inputModules = @([string]$jsonModules)
+                $moduleNamesExplicit = $true
             }
         } catch {
             throw ("No se pudo interpretar -ModuleNamesJson: {0}" -f $_.Exception.Message)
         }
+    } elseif ($PSBoundParameters.ContainsKey("ModuleNamesJson")) {
+        # Bound with whitespace-only — treat as explicit empty (caller intentionally
+        # passed the flag) but the resulting list is empty.
+        $moduleNamesExplicit = $true
     }
     $normalizedModules = @($inputModules | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($Action -eq "Import") {
@@ -3775,7 +3970,7 @@ try {
 
     } elseif ($Action -eq "Import") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -Json:$Json
+        $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -ModuleNamesExplicit:$moduleNamesExplicit -Json:$Json
         if ($importResult.HasErrors) { exit 1 }
         if ($importResult.CreatedComponentNames.Count -gt 0) {
             Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($importResult.CreatedComponentNames)
@@ -3822,13 +4017,42 @@ try {
     }
 } catch {
     if (-not $script:HasDysflowResultEmitted) {
-        Write-DysflowResult -Result ([ordered]@{
-            ok = $false
-            error = [ordered]@{
-                code = "VBA_MANAGER_FAILED"
-                message = [string]$_.Exception.Message
+        # R5: detect Access exclusive-lock COM errors and surface them with a
+        # dedicated structured envelope (ACCESS_DATABASE_LOCKED) so consumers
+        # can render an actionable remediation message ("close interactive
+        # Access on machine X / user Y"). Falls back to the legacy
+        # VBA_MANAGER_FAILED envelope when the pattern does not match.
+        $caughtMessage = if ($_.Exception) { [string]$_.Exception.Message } else { [string]$_ }
+        if (Test-IsAccessDatabaseLockedError -Message $caughtMessage) {
+            $locked = Get-AccessDatabaseLockedOwner -Message $caughtMessage
+            $remediation = "Close the interactive Access session that holds the lock"
+            if ($locked.machine -or $locked.user) {
+                $remediation += " ("
+                $bits = @()
+                if ($locked.machine) { $bits += "machine '$($locked.machine)'" }
+                if ($locked.user) { $bits += "user '$($locked.user)'" }
+                $remediation += ($bits -join ", ") + ")"
             }
-        }) -Depth 6
+            $remediation += ", then retry."
+            Write-DysflowResult -Result ([ordered]@{
+                ok = $false
+                error = [ordered]@{
+                    code = "ACCESS_DATABASE_LOCKED"
+                    message = $caughtMessage
+                    machine = $locked.machine
+                    user = $locked.user
+                    remediation = $remediation
+                }
+            }) -Depth 6
+        } else {
+            Write-DysflowResult -Result ([ordered]@{
+                ok = $false
+                error = [ordered]@{
+                    code = "VBA_MANAGER_FAILED"
+                    message = $caughtMessage
+                }
+            }) -Depth 6
+        }
     }
     exit 1
 } finally {

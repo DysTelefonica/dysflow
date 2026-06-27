@@ -2042,9 +2042,9 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         $payload.error.message | Should -Match "Module2: second module error"
         @($payload.modules).Count | Should -Be 2
         ($payload.modules | Where-Object { $_.module -eq "Module1" }).status | Should -Be "error"
-        ($payload.modules | Where-Object { $_.module -eq "Module1" }).error | Should -Be "first module error"
+        ($payload.modules | Where-Object { $_.module -eq "Module1" }).error.message | Should -Be "first module error"
         ($payload.modules | Where-Object { $_.module -eq "Module2" }).status | Should -Be "error"
-        ($payload.modules | Where-Object { $_.module -eq "Module2" }).error | Should -Be "second module error"
+        ($payload.modules | Where-Object { $_.module -eq "Module2" }).error.message | Should -Be "second module error"
     }
 
     It "returns an empty CreatedComponentNames list when no component is created" {
@@ -2459,7 +2459,10 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             $captured.Payload.error.message | Should -Match 'ModA: vbe rejected: line 42'
         }
 
-        It "per-module error is a plain string, not an Exception object" {
+        It "per-module error is a structured object {code, message, machine, user}, not an Exception object" {
+            # R2 of the consumer request: the per-module error is a PSCustomObject
+            # with code/message/machine/user fields, not a raw string and not an
+            # Exception. This is the contract the MCP layer relies on.
             $script:FailOn = @{
                 ModA = @("plain text error", "plain text error", "plain text error")
             }
@@ -2468,8 +2471,12 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             }
             $mod = $captured.Payload.modules | Where-Object { $_.module -eq "ModA" }
             $mod.status | Should -Be "error"
-            $mod.error | Should -BeOfType [string]
-            $mod.error | Should -Be "plain text error"
+            $mod.error | Should -Not -BeNullOrEmpty
+            $mod.error.code | Should -Be "VBA_IMPORT_PHASE_FAILED"
+            $mod.error.message | Should -BeOfType [string]
+            $mod.error.message | Should -Be "plain text error"
+            $mod.error.machine | Should -Be $null
+            $mod.error.user | Should -Be $null
         }
 
         It "handles a VBE exception whose .Exception.Message is a COM wrapper (0x800A09D5 simulation)" {

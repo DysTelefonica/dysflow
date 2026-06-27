@@ -48,6 +48,14 @@ export type VbaManagerExecutionRequest = {
   accessPath?: string;
   destinationRoot: string;
   moduleNames: readonly string[];
+  /**
+   * Set to true when the upstream caller explicitly provided a moduleNames
+   * list (including an empty array). Lets the PowerShell script distinguish
+   * "explicit empty" (R4 no-op plan) from "not provided" (import-all
+   * fallback). When undefined or false, the script applies the legacy
+   * "ModuleNamesJson absent -> import everything under ModulesPath" rule.
+   */
+  moduleNamesProvided?: boolean;
   password?: string;
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
@@ -232,12 +240,19 @@ export class VbaSyncAdapter implements VbaSyncPort {
     const explicitTimeoutMs =
       typeof params.timeoutMs === "number" && params.timeoutMs > 0 ? params.timeoutMs : undefined;
     const effectiveTimeoutMs = explicitTimeoutMs ?? target.data.timeoutMs;
+    const moduleNames = mapping.moduleNames(params);
+    // moduleNamesProvided is the consumer-request signal: true iff the upstream
+    // caller actually populated the moduleNames field, even if the resulting
+    // array is empty. Lets the PowerShell side distinguish "explicit empty"
+    // (R4 no-op plan) from "field omitted" (import-all fallback).
+    const moduleNamesProvided = Object.hasOwn(params, "moduleNames");
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
       accessPath,
       destinationRoot,
-      moduleNames: mapping.moduleNames(params),
+      moduleNames,
+      moduleNamesProvided,
       password,
       json: mapping.json ?? false,
       extra: mapping.extra(params),
@@ -553,7 +568,21 @@ function failureFromStructuredRunnerResult(
       outputDetails.displayOutput.trim().length > 0
         ? ` Output: ${outputDetails.displayOutput}`
         : "";
-    return createDysflowError(code, `${message}${suffix}`, { details: outputDetails.details });
+    // Forward the fine-grained error metadata (machine, user, remediation)
+    // when the script's structured envelope carries them. ACCESS_DATABASE_LOCKED
+    // (R5 of the consumer request) relies on this so the MCP caller can
+    // render an actionable remediation message ("close interactive Access on
+    // machine 'X' (user 'Y')"). Keys are intentionally narrow — unknown
+    // fields stay in the raw envelope under data.result.error, not in the
+    // DysflowError contract.
+    const extraDetails: Record<string, unknown> = { ...outputDetails.details };
+    const machine = stringValue(parsedOutput.error.machine);
+    const user = stringValue(parsedOutput.error.user);
+    const remediation = stringValue(parsedOutput.error.remediation);
+    if (machine !== undefined) extraDetails.machine = machine;
+    if (user !== undefined) extraDetails.user = user;
+    if (remediation !== undefined) extraDetails.remediation = remediation;
+    return createDysflowError(code, `${message}${suffix}`, { details: extraDetails });
   }
 
   return createDysflowError(
@@ -665,8 +694,14 @@ export const spawnVbaManager: VbaManagerExecutor = async (request) => {
     request.destinationRoot,
   ];
   if (request.accessPath) args.push("-AccessPath", request.accessPath);
-  if (request.moduleNames.length > 0)
+  // Always forward moduleNames when the caller provided it, including an empty
+  // array — that is the consumer-request contract: an explicit `moduleNames: []`
+  // is a "no-op plan" (R4) and must NOT be silently expanded to import-all.
+  // The script distinguishes "explicit empty" via $PSBoundParameters on
+  // -ModuleNamesJson (bound with "[]") from "not provided" (parameter absent).
+  if (request.moduleNamesProvided) {
     args.push("-ModuleNamesJson", JSON.stringify(request.moduleNames));
+  }
   if (request.json) args.push("-Json");
   if (request.operationId !== undefined) args.push("-OperationId", request.operationId);
   if (request.operationFile !== undefined) args.push("-OperationFile", request.operationFile);

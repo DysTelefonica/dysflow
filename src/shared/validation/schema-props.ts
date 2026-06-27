@@ -123,9 +123,9 @@ export const SCHEMA_PROPS = {
   moduleName: { type: "string", description: "VBA module name." } as JsonSchemaProperty,
   moduleNames: {
     type: "array",
-    maxItems: 100,
     items: { type: "string" },
-    description: "VBA module names.",
+    description:
+      "VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.",
   } as JsonSchemaProperty,
   procedureName: {
     type: "string",
