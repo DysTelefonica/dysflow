@@ -5,9 +5,10 @@ import { basename, join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDynamicServices,
+  createProgressNotifier,
   createUnavailableServices,
   DEFAULT_MAX_REQUEST_BYTES,
   inputTargetsConfig,
@@ -17,7 +18,8 @@ import {
   resolveProjectOperationRegistryPath,
   startWithSdkServer,
 } from "../../../src/adapters/mcp/stdio.js";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
+import { createDysflowMcpTools, type DysflowMcpTool } from "../../../src/adapters/mcp/tools.js";
+import type { McpToolContext, McpToolResult } from "../../../src/adapters/mcp/types.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
@@ -947,11 +949,11 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
     expect(vbaSyncToolService.execute).not.toHaveBeenCalled();
   });
 
-  it("tools with NO_INPUT_SCHEMA (e.g. list_access_operations) remain exempt from empty-input rejection", async () => {
+it("tools with NO_INPUT_SCHEMA (e.g. list_access_operations) remain exempt from empty-input rejection", async () => {
     const services = {
-      vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
-      queryService: { execute: vi.fn(async () => successResult({ rows: [] })) },
-      diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
+      vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+      queryService: { execute: async () => successResult({ rows: [] }) },
+      diagnosticsService: { run: async () => successResult({ checks: [] }) },
     };
     const tools = createDysflowMcpTools(services, false);
     const tool = tools.find((t) => t.name === "list_access_operations");
@@ -960,5 +962,105 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
     // Should not throw MCP_INPUT_INVALID — list_access_operations uses NO_INPUT_SCHEMA.
     const result = await tool?.handler({});
     expect(result?.isError).toBeFalsy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-008 (mcp-reliability-fix) — sendProgress .catch + DYSFLOW_DEBUG_PROGRESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-008 — createProgressNotifier catches sendNotification rejection; logs only when DYSFLOW_DEBUG_PROGRESS=true", () => {
+  const originalEnv = process.env.DYSFLOW_DEBUG_PROGRESS;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.DYSFLOW_DEBUG_PROGRESS;
+    else process.env.DYSFLOW_DEBUG_PROGRESS = originalEnv;
+  });
+
+  it("does NOT throw unhandledRejection when sendNotification rejects and DYSFLOW_DEBUG_PROGRESS is absent", async () => {
+    delete process.env.DYSFLOW_DEBUG_PROGRESS;
+
+    const rejections: unknown[] = [];
+    const onRejection = (err: unknown) => rejections.push(err);
+    process.on("unhandledRejection", onRejection);
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-1", rejectingExtra);
+      expect(sendProgress).toBeDefined();
+      // Trigger several notifications — each must catch the rejection.
+      sendProgress!(40, 100, "test");
+      sendProgress!(60);
+
+      // Allow microtasks to settle.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect(rejections).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
+  });
+
+  it("logs to process.stderr when DYSFLOW_DEBUG_PROGRESS=true and sendNotification rejects", async () => {
+    process.env.DYSFLOW_DEBUG_PROGRESS = "true";
+
+    const stderrWrites: string[] = [];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (originalWrite as any)(chunk, ...rest);
+    }) as typeof process.stderr.write;
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-2", rejectingExtra);
+      sendProgress!(40, 100, "log-test");
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const dysflowLines = stderrWrites.filter((line) => line.includes("[dysflow] sendProgress"));
+      expect(dysflowLines.length).toBeGreaterThan(0);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("createProgressNotifier returns undefined when progressToken is undefined", () => {
+    const sendProgress = createProgressNotifier(undefined, {
+      sendNotification: () => Promise.resolve(),
+    });
+    expect(sendProgress).toBeUndefined();
+  });
+
+  it("createProgressNotifier does NOT log when DYSFLOW_DEBUG_PROGRESS is absent and sendNotification rejects", async () => {
+    delete process.env.DYSFLOW_DEBUG_PROGRESS;
+
+    const stderrWrites: string[] = [];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (originalWrite as any)(chunk, ...rest);
+    }) as typeof process.stderr.write;
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-3", rejectingExtra);
+      sendProgress!(40, 100, "silent");
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const dysflowLines = stderrWrites.filter((line) => line.includes("[dysflow] sendProgress"));
+      expect(dysflowLines).toEqual([]);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
   });
 });
