@@ -124,6 +124,12 @@ export async function startMcpStdioAdapter(
  * @param transport - Optional transport override. When provided, the SizeLimitTransform
  *   and StdioServerTransport are skipped. Used in tests with InMemoryTransport.
  */
+type SendNotificationFn = (n: unknown) => Promise<unknown>;
+
+interface ProgressExtra {
+  sendNotification: SendNotificationFn;
+}
+
 /**
  * Build a progress notifier that catches sendNotification rejections so they
  * never escape as unhandledRejection. Logs only when DYSFLOW_DEBUG_PROGRESS
@@ -137,7 +143,7 @@ export async function startMcpStdioAdapter(
  */
 export function createProgressNotifier(
   progressToken: string | number | undefined,
-  extra: { sendNotification: (n: unknown) => Promise<void> },
+  extra: ProgressExtra,
 ): McpToolContext["sendProgress"] {
   if (progressToken === undefined) return undefined;
   return (progress, total, message) => {
@@ -197,7 +203,9 @@ export async function startWithSdkServer(
     }
 
     const progressToken = _meta?.progressToken;
-    const sendProgress = createProgressNotifier(progressToken, extra);
+    const sendProgress = createProgressNotifier(progressToken, {
+      sendNotification: (n) => extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
+    });
 
     const context: McpToolContext = { progressToken, sendProgress };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
