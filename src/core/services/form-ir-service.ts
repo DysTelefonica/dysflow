@@ -1,7 +1,14 @@
 // Pure domain service for parsing Access .form.txt (SaveAsText format) files into FormIR.
 // No I/O. All functions are synchronous and deterministic.
 
-import type { BlobEntry, FormIR, FormNode, PropertyEntry, ScalarEntry } from "../models/form-ir.js";
+import type {
+  BlobEntry,
+  EmptyLineEntry,
+  FormIR,
+  FormNode,
+  PropertyEntry,
+  ScalarEntry,
+} from "../models/form-ir.js";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -73,8 +80,11 @@ function parseNode(lines: string[], startIdx: number): { node: FormNode; nextIdx
     const line = lines[i] ?? "";
     const trimmed = line.trim();
 
-    // Skip empty lines
+    // Empty line inside a node — preserve for byte-perfect round-trip.
+    // Access occasionally emits blank lines between entries (e.g. after a blob block).
     if (trimmed === "") {
+      const emptyEntry: EmptyLineEntry = { kind: "empty" };
+      entries.push(emptyEntry);
       i++;
       continue;
     }
@@ -123,6 +133,21 @@ function parseNode(lines: string[], startIdx: number): { node: FormNode; nextIdx
       continue;
     }
 
+    // String continuation line: Access wraps long quoted string values across
+    // multiple lines. The continuation starts with optional whitespace then ".
+    // e.g.   RowSource ="Part 1"
+    //            "Part 2"
+    // Store the raw line (with original indentation) appended to the preceding
+    // scalar's value so the serializer can reproduce it verbatim.
+    if (trimmed.startsWith('"') && entries.length > 0) {
+      const lastEntry = entries[entries.length - 1] ?? null;
+      if (lastEntry !== null && lastEntry.kind === "scalar") {
+        lastEntry.value += `\n${line}`;
+        i++;
+        continue;
+      }
+    }
+
     // Unrecognized line — skip (defensive)
     i++;
   }
@@ -149,6 +174,9 @@ function parsePreamble(lines: string[]): {
     const trimmed = (lines[i] ?? "").trim();
 
     if (trimmed === "") {
+      // Preamble rarely has blank lines, but preserve for round-trip fidelity.
+      const emptyEntry: EmptyLineEntry = { kind: "empty" };
+      entries.push(emptyEntry);
       i++;
       continue;
     }
@@ -289,4 +317,82 @@ export function collectFormEvents(node: FormNode): string[] {
   }
 
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Serialization
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize line endings to LF (\n).
+ * Used by the round-trip guarantee: serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x).
+ */
+export function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
+/**
+ * Serialize a single PropertyEntry at the given indent level.
+ * Blob lines are emitted verbatim (they already carry their original indentation).
+ */
+function serializeEntry(out: string[], entry: PropertyEntry, indent: number): void {
+  if (entry.kind === "empty") {
+    out.push("");
+    return;
+  }
+  const pad = " ".repeat(indent);
+  if (entry.kind === "scalar") {
+    out.push(`${pad}${entry.key} =${entry.value}`);
+  } else {
+    // blob
+    out.push(`${pad}${entry.key} = Begin`);
+    for (const blobLine of entry.lines) {
+      out.push(blobLine); // verbatim — carries original absolute indentation
+    }
+    out.push(`${pad}End`);
+  }
+}
+
+/**
+ * Serialize a FormNode and its descendants recursively.
+ * Entries are always emitted before children (the structure guaranteed by the parser).
+ * indent is the number of leading spaces for the Begin/End lines of this node.
+ */
+function serializeNode(out: string[], node: FormNode, indent: number): void {
+  const pad = " ".repeat(indent);
+  out.push(node.blockType ? `${pad}Begin ${node.blockType}` : `${pad}Begin`);
+  for (const entry of node.entries) {
+    serializeEntry(out, entry, indent + 4);
+  }
+  for (const child of node.children) {
+    serializeNode(out, child, indent + 4);
+  }
+  out.push(`${pad}End`);
+}
+
+/**
+ * Serialize a FormIR back to a .form.txt string.
+ *
+ * Round-trip guarantee: serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)
+ * for every real Access SaveAsText fixture (ordered arrays + verbatim blob lines +
+ * EmptyLineEntry preservation make this hold by construction).
+ *
+ * @param ir - The FormIR produced by parseFormTxt.
+ * @returns A UTF-8 string in Access SaveAsText format, with LF line endings.
+ */
+export function serializeFormTxt(ir: FormIR): string {
+  const out: string[] = [];
+  // Preamble at indent 0
+  for (const entry of ir.preamble) {
+    serializeEntry(out, entry, 0);
+  }
+  // Root node (Begin Form / Begin Report) at indent 0
+  serializeNode(out, ir.root, 0);
+  // CodeBehindForm section
+  if (ir.codeBehind !== null) {
+    out.push("CodeBehindForm");
+    // codeBehind was stored as lines.slice(cbIdx+1).join("\n"), so split back and push
+    out.push(...ir.codeBehind.split("\n"));
+  }
+  return out.join("\n");
 }

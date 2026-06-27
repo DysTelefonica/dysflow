@@ -13,9 +13,17 @@ export type ScalarEntry = { kind: "scalar"; key: string; value: string };
 export type BlobEntry = { kind: "blob"; key: string; lines: string[] };
 
 /**
- * A form property entry — either a scalar key=value or an opaque blob.
+ * An empty line inside a form node. Access SaveAsText occasionally emits blank
+ * lines between entries (e.g. after a blob block). Storing them here is the
+ * only way to achieve a byte-for-byte round-trip via serializeFormTxt.
  */
-export type PropertyEntry = ScalarEntry | BlobEntry;
+export type EmptyLineEntry = { kind: "empty" };
+
+/**
+ * A form property entry — either a scalar key=value, an opaque blob, or an
+ * empty line (whitespace separator emitted by Access between some entries).
+ */
+export type PropertyEntry = ScalarEntry | BlobEntry | EmptyLineEntry;
 
 /**
  * A recursive form node representing a Begin...End block.

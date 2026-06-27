@@ -41,11 +41,13 @@ describe("parseFormTxt", () => {
     const text = fixture("Form_frmSplash.form.txt");
     const ir: FormIR = parseFormTxt(text, { name: "frmSplash" });
 
-    const guidEntry = ir.root.entries.find((e) => e.key === "GUID");
+    const guidEntry = ir.root.entries.find((e) => e.kind !== "empty" && e.key === "GUID");
     expect(guidEntry).toBeDefined();
     expect(guidEntry?.kind).toBe("blob");
 
-    const prtDevModeEntry = ir.root.entries.find((e) => e.key === "PrtDevMode");
+    const prtDevModeEntry = ir.root.entries.find(
+      (e) => e.kind !== "empty" && e.key === "PrtDevMode",
+    );
     expect(prtDevModeEntry).toBeDefined();
     expect(prtDevModeEntry?.kind).toBe("blob");
     // Blob lines must be non-empty (the file has hundreds of hex lines)
