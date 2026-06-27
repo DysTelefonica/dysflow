@@ -500,6 +500,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         destinationRoot: tempRoot,
         controlName: "txtName",
         controlType: "TextBox",
+        apply: true,
       }),
     ).resolves.toMatchObject({
       ok: true,

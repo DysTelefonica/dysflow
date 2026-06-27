@@ -330,3 +330,8 @@ Chain strategy: feature-branch-chain
 | `28e2a76` | 1.3 DELTA-012 GREEN — bump reviewedAt + inline comment | src/adapters/mcp/stdio.ts | pnpm test 1606/1606 ✅; 3/3 protocol-review | n/a |
 | `deba728` | 1.4 doc-fix RED — SizeLimitTransform JSDoc (test) | test/adapters/mcp/stdio-size-guard-jsdoc.test.ts | RED 1/2 fail on offending phrase | n/a |
 | `efc8075` | 1.4 doc-fix GREEN — refresh JSDoc to match destroy() | src/adapters/mcp/stdio-size-guard.ts | pnpm test 1608/1608 ✅; 2/2 jsdoc | n/a |
+| `7ef1cc7` | 2.1 DELTA-006 + DELTA-010 RED — typed mappers + empty sql (test) | test/adapters/mcp/alias-tools.test.ts | RED 5/5 fail with "is not a function" | n/a |
+| `ded0b2e` | 2.1 DELTA-006 + DELTA-010 GREEN — typed builders + schema validation | src/adapters/mcp/alias-tools.ts | pnpm test 1613/1613 ✅; 5/5 alias-tools | n/a |
+| `80af33b` | 2.2 DELTA-007 RED — catalogAddControl dryRun/apply parity (test) | test/adapters/mcp/dispatch-write-gate.test.ts, test/core/services/vba-form-service.test.ts | RED 8/8 fail | n/a |
+| `e3a668e` | 2.2 DELTA-007 GREEN — schema + service + dispatch | src/adapters/mcp/schemas/vba-sync-schemas.ts, src/core/services/vba-form-service.ts, src/adapters/mcp/dispatch-factory.ts (+ 4 test files updated for apply:true) | pnpm test 1621/1621 ✅ | n/a |
+| `85a1734` | 2.2 E2E coverage for DELTA-007 catalog_add_control dryRun/apply | test/e2e/mcp-catalog-dryrun.e2e.test.ts | integration: 4/4 ✅ | n/a |

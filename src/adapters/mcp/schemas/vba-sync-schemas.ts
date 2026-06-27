@@ -212,6 +212,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       type: SCHEMA_PROPS.type,
       spec: SCHEMA_PROPS.spec,
       specPath: SCHEMA_PROPS.specPath,
+      // DELTA-007 — dryRun/apply parity with generate_form. Both default-dry-run
+      // semantics and apply wins; see vba-form-service.ts:catalogAddControl
+      // and dispatch-factory.ts isFilesystemWrite branch.
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
     },
   },
   harvest_form_catalog: {

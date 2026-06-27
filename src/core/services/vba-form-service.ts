@@ -135,10 +135,9 @@ export class VbaFormService {
     const spec = await this.resolveFormSpec(params);
     if (!spec.ok) return spec;
 
-    const destinationRoot =
-      stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
-    const catalogPath =
-      stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
+    // Validate controlName/controlType FIRST so missing identifiers always
+    // surface as FORM_SPEC_INVALID (per the spec scenario for missing names)
+    // regardless of the dryRun/apply decision below.
     const controlName = stringValue(params.controlName) ?? stringValue(params.name);
     if (controlName === undefined) {
       return failureResult(
@@ -151,6 +150,27 @@ export class VbaFormService {
         createDysflowError("FORM_SPEC_INVALID", "catalog_add_control requires controlType."),
       );
     }
+
+    const destinationRoot =
+      stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+    const catalogPath =
+      stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
+
+    // DELTA-007 — dryRun/apply parity with generateForm (line 99). Default to
+    // dry-run unless apply:true is explicit; dryRun:false also disables.
+    // apply:true takes precedence over dryRun:true.
+    const dryRun = params.apply === true ? false : params.dryRun !== false;
+    if (dryRun) {
+      return successResult({
+        dryRun: true,
+        written: false,
+        catalogPath,
+        formName: spec.data.name,
+        controlName,
+        controlType,
+      });
+    }
+
     let catalog: Record<string, unknown> = {};
     try {
       catalog = (await this.fileSystem.readJson<Record<string, unknown>>(catalogPath)) as Record<
