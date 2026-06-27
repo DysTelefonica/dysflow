@@ -16,20 +16,24 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
 import { startWithSdkServer } from "../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools.js";
+import { successResult } from "../../src/core/contracts/index.js";
 
 type ToolsInput = Parameters<typeof startWithSdkServer>[0];
 
 function makeServices() {
   return {
-    vbaService: { execute: vi.fn(async () => ({ ok: true, data: { returnValue: "ok" } })) },
-    queryService: { execute: vi.fn(async () => ({ ok: true, data: { rows: [] } })) },
-    diagnosticsService: { run: vi.fn(async () => ({ ok: true, data: { checks: [] } })) },
+    vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
+    queryService: { execute: vi.fn(async () => successResult({ rows: [] })) },
+    diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
     // vbaSyncToolService MUST receive dryRun:true when caller omits both
     // dryRun and apply. Pin the args the mock sees — that's the actual
     // contract for DELTA-007 default-dry-run.
     vbaSyncToolService: {
       execute: vi.fn(async (toolName: string, input: unknown) => {
-        return { ok: true, data: { toolName, dryRun: (input as { dryRun?: boolean })?.dryRun } };
+        return successResult({
+          toolName,
+          dryRun: (input as { dryRun?: boolean })?.dryRun,
+        });
       }),
     },
   };
@@ -68,7 +72,7 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
         },
       });
       expect(result.isError).toBe(false);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       // Default-dry-run does NOT trip the write-gate — the dispatch resolves
       // resolveIsDryRun=true so the service runs in plan mode. The mock
       // returns a generic success, so we assert the write-gate did NOT fire
@@ -105,7 +109,7 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
         },
       });
       expect(result.isError).toBe(false);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).not.toContain("MCP_WRITES_DISABLED");
       const lastCall = (
         services.vbaSyncToolService?.execute.mock.calls.at(-1) as unknown[] | undefined
@@ -132,7 +136,7 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
         },
       });
       expect(result.isError).toBe(false);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).not.toContain("MCP_WRITES_DISABLED");
       const lastCall = (
         services.vbaSyncToolService?.execute.mock.calls.at(-1) as unknown[] | undefined
@@ -159,7 +163,7 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
         },
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).toContain("MCP_WRITES_DISABLED");
     } finally {
       await close();

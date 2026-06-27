@@ -16,29 +16,39 @@ import { describe, expect, it } from "vitest";
 
 describe("DELTA-006 — typed alias-tool request builders (read only declared fields)", () => {
   it("buildCleanupRequest ignores undeclared fields and returns the typed request", async () => {
-    const { buildCleanupRequest } = await import("../../../src/adapters/mcp/alias-tools.js");
+    const { buildCleanupRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
     const request = buildCleanupRequest({
       operationId: "op-1",
       accessPath: "C:/repo/front.accdb",
       force: true,
       unknownField: "garbage",
     });
-    expect(request.operationId).toBe("op-1");
-    expect(request.accessPath).toBe("C:/repo/front.accdb");
-    expect(request.force).toBe(true);
-    expect((request as Record<string, unknown>).unknownField).toBeUndefined();
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.operationId).toBe("op-1");
+      expect(request.accessPath).toBe("C:/repo/front.accdb");
+      expect(request.force).toBe(true);
+      expect((request as unknown as Record<string, unknown>).unknownField).toBeUndefined();
+    }
   });
 
   it("buildRunVbaRequest ignores extra fields and parses argsJson", async () => {
-    const { buildRunVbaRequest } = await import("../../../src/adapters/mcp/alias-tools.js");
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
     const request = buildRunVbaRequest({
       procedureName: "Test",
       argsJson: "[1, 2, 3]",
       extra: "garbage",
     });
-    expect(request.procedureName).toBe("Test");
-    expect(request.arguments).toEqual([1, 2, 3]);
-    expect((request as Record<string, unknown>).extra).toBeUndefined();
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.procedureName).toBe("Test");
+      expect(request.arguments).toEqual([1, 2, 3]);
+      expect((request as Record<string, unknown>).extra).toBeUndefined();
+    }
   });
 
   it("buildRunVbaRequest returns McpToolResult for invalid argsJson (not throws)", async () => {

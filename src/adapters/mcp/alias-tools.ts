@@ -99,9 +99,7 @@ export function buildCleanupRequest(input: unknown): CleanupRequest | McpToolRes
     expectedProjectRoot:
       typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string"
-        ? input.expectedDestinationRoot
-        : undefined,
+      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
   };
 }
 
@@ -133,9 +131,7 @@ export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolRe
     expectedProjectRoot:
       typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string"
-        ? input.expectedDestinationRoot
-        : undefined,
+      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
   };
 }
 
@@ -176,9 +172,7 @@ export function buildQuerySqlRequest(input: unknown): AccessQueryRequest | McpTo
     expectedProjectRoot:
       typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string"
-        ? input.expectedDestinationRoot
-        : undefined,
+      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
   };
 }
 
@@ -216,37 +210,40 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.cleanup_access_operation,
       inputSchema: cleanupSchema,
       handler: async (input) =>
-        handleMcpAccessCleanup(input, cleanupSchema, services, writesEnabled, writeAccessResolver, (validatedInput) => {
-          const request = buildCleanupRequest(validatedInput);
-          if (isMcpToolResult(request)) return request;
-          return {
-            operationId: request.operationId,
-            accessPath: request.accessPath,
-            force: request.force,
-            projectId: request.projectId,
-            contextId: request.contextId,
-            backendPath: request.backendPath,
-            destinationRoot: request.destinationRoot,
-            projectRoot: request.projectRoot,
-            timeoutMs: request.timeoutMs,
-            strictContext: request.strictContext,
-            expectedAccessPath: request.expectedAccessPath,
-            expectedProjectRoot: request.expectedProjectRoot,
-            expectedDestinationRoot: request.expectedDestinationRoot,
-          };
-        }),
+        handleMcpAccessCleanup(
+          input,
+          cleanupSchema,
+          services,
+          writesEnabled,
+          writeAccessResolver,
+          (validatedInput) => {
+            const request = buildCleanupRequest(validatedInput);
+            if (isMcpToolResult(request)) return request;
+            return {
+              operationId: request.operationId,
+              accessPath: request.accessPath,
+              force: request.force,
+              projectId: request.projectId,
+              contextId: request.contextId,
+              backendPath: request.backendPath,
+              destinationRoot: request.destinationRoot,
+              projectRoot: request.projectRoot,
+              timeoutMs: request.timeoutMs,
+              strictContext: request.strictContext,
+              expectedAccessPath: request.expectedAccessPath,
+              expectedProjectRoot: request.expectedProjectRoot,
+              expectedDestinationRoot: request.expectedDestinationRoot,
+            };
+          },
+        ),
     },
     {
       name: "run_vba",
       description: TOOL_DESCRIPTIONS.run_vba,
       inputSchema: runVbaSchema,
       handler: async (input) =>
-        handleMcpVbaExecute(
-          input,
-          runVbaSchema,
-          services,
-          allowedProcedures,
-          (validatedInput) => buildRunVbaRequest(validatedInput),
+        handleMcpVbaExecute(input, runVbaSchema, services, allowedProcedures, (validatedInput) =>
+          buildRunVbaRequest(validatedInput),
         ),
     },
     {

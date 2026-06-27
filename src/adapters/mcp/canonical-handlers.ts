@@ -101,7 +101,9 @@ export async function handleMcpAccessCleanup(
   services: DysflowMcpServices,
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
-  buildRequest: (input: unknown) => { operationId: string; accessPath: string; force?: boolean },
+  buildRequest: (
+    input: unknown,
+  ) => RequestBuildResult<{ operationId: string; accessPath: string; force?: boolean }>,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) return invalidInput(validation);
@@ -117,6 +119,7 @@ export async function handleMcpAccessCleanup(
     };
   }
   const request = buildRequest(input);
+  if (isMcpToolResult(request)) return request;
   // `force: true` escalates cleanup to a destructive operation (it retires operations with an
   // unknown/null PID and bypasses the eligible-status guard to kill processes). Gate that
   // escalation behind the MCP write-gate. The non-force path stays open as a safe recovery route.
