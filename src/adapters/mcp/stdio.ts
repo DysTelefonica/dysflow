@@ -73,7 +73,11 @@ export const MCP_PROTOCOL_VERSION_LATEST_SUPPORTED = LATEST_PROTOCOL_VERSION;
  */
 export const MCP_PROTOCOL_VERSION_REVIEW = {
   version: MCP_PROTOCOL_VERSION,
-  reviewedAt: "2026-06-10",
+  // DELTA-012 — bump reviewedAt on each upstream MCP spec cross-check. The
+  // Vitest age gate in test/adapters/mcp/stdio-protocol-review.test.ts
+  // fails when this is older than 90 days; see
+  // docs/testing/mcp-protocol-maintenance.md.
+  reviewedAt: "2026-06-27",
   specRef: "https://modelcontextprotocol.io/specification/2025-03-26",
 } as const;
 
