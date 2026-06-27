@@ -494,7 +494,7 @@ async function resolveConfigForInput(
   });
 }
 
-function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
+export function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
   const params = isRecord(input) ? input : {};
   const requestedProjectId =
     stringOrUndefined(params.projectId) ?? stringOrUndefined(params.contextId);
@@ -508,7 +508,7 @@ function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
     return pathsMatch(projectRoot, config.projectRoot);
   }
 
-  return Object.keys(params).length === 0;
+  return false;
 }
 
 function resolvedConfigCacheKey(config: DysflowConfig): string {
