@@ -124,6 +124,41 @@ export async function startMcpStdioAdapter(
  * @param transport - Optional transport override. When provided, the SizeLimitTransform
  *   and StdioServerTransport are skipped. Used in tests with InMemoryTransport.
  */
+/**
+ * Build a progress notifier that catches sendNotification rejections so they
+ * never escape as unhandledRejection. Logs only when DYSFLOW_DEBUG_PROGRESS
+ * is set (opt-in verbose mode); silently swallows otherwise.
+ *
+ * Extracted as a pure helper (DELTA-008) so it can be unit-tested directly
+ * with a mock `sendNotification` that rejects — the SDK's InMemoryTransport
+ * does not propagate client-side onprogress throws back to the server's
+ * sendNotification, so the only way to exercise the .catch path is to
+ * invoke the closure with a rejecting notifier.
+ */
+export function createProgressNotifier(
+  progressToken: string | number | undefined,
+  extra: { sendNotification: (n: unknown) => Promise<void> },
+): McpToolContext["sendProgress"] {
+  if (progressToken === undefined) return undefined;
+  return (progress, total, message) => {
+    extra
+      .sendNotification({
+        method: "notifications/progress",
+        params: {
+          progressToken,
+          progress,
+          ...(total !== undefined ? { total } : {}),
+          ...(message !== undefined ? { message } : {}),
+        },
+      })
+      .catch((err: unknown) => {
+        if (process.env.DYSFLOW_DEBUG_PROGRESS === "true") {
+          process.stderr.write(`[dysflow] sendProgress error: ${String(err)}\n`);
+        }
+      });
+  };
+}
+
 export async function startWithSdkServer(
   tools: DysflowMcpTool[],
   transport?: import("@modelcontextprotocol/sdk/shared/transport.js").Transport,
@@ -162,20 +197,7 @@ export async function startWithSdkServer(
     }
 
     const progressToken = _meta?.progressToken;
-    const sendProgress: McpToolContext["sendProgress"] =
-      progressToken !== undefined
-        ? (progress, total, message) => {
-            void extra.sendNotification({
-              method: "notifications/progress",
-              params: {
-                progressToken,
-                progress,
-                ...(total !== undefined ? { total } : {}),
-                ...(message !== undefined ? { message } : {}),
-              },
-            });
-          }
-        : undefined;
+    const sendProgress = createProgressNotifier(progressToken, extra);
 
     const context: McpToolContext = { progressToken, sendProgress };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
