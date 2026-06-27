@@ -50,7 +50,10 @@ async function createHarness(tools: DysflowMcpToolsInput): Promise<{
 }> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const serverDone = startWithSdkServer(tools, serverTransport);
-  const client = new Client({ name: "e2e-input-validation", version: "0.0.1" }, { capabilities: {} });
+  const client = new Client(
+    { name: "e2e-input-validation", version: "0.0.1" },
+    { capabilities: {} },
+  );
   await client.connect(clientTransport);
   return {
     client,
@@ -75,7 +78,7 @@ describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch t
         arguments: {},
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).toContain("MCP_INPUT_INVALID");
       expect(services.vbaSyncToolService?.execute).not.toHaveBeenCalled();
     } finally {
@@ -94,7 +97,7 @@ describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch t
         arguments: {},
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).toContain("MCP_INPUT_INVALID");
       expect(services.vbaSyncToolService?.execute).not.toHaveBeenCalled();
     } finally {
@@ -113,7 +116,7 @@ describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch t
         arguments: {},
       });
       // Should NOT be MCP_INPUT_INVALID — list_access_operations has no schema.
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).not.toContain("MCP_INPUT_INVALID");
     } finally {
       await close();

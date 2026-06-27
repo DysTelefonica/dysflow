@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createDynamicServices } from "../../../src/adapters/mcp/stdio.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 import {
@@ -14,7 +15,6 @@ import type {
   AccessOrphanCandidate,
   AccessOrphanCleanupResult,
 } from "../../../src/core/operations/access-orphan-cleanup";
-import { createDynamicServices } from "../../../src/adapters/mcp/stdio.js";
 
 class FakeOrphanCleanupService {
   public listOrphansRequests: unknown[] = [];

@@ -8,8 +8,8 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -21,7 +21,9 @@ describe("DELTA-012 — SizeLimitTransform JSDoc reflects destroy() on size viol
 
     // Extract the class JSDoc — the comment block immediately preceding
     // `export class SizeLimitTransform`.
-    const jsdocMatch = source.match(/\/\*\*\s*([\s\S]*?)\s*\*\/\s*\nexport class SizeLimitTransform/);
+    const jsdocMatch = source.match(
+      /\/\*\*\s*([\s\S]*?)\s*\*\/\s*\nexport class SizeLimitTransform/,
+    );
     expect(jsdocMatch, "SizeLimitTransform class JSDoc must exist").not.toBeNull();
     const jsdoc = jsdocMatch?.[1] ?? "";
 
@@ -31,7 +33,9 @@ describe("DELTA-012 — SizeLimitTransform JSDoc reflects destroy() on size viol
 
   it("JSDoc describes the destroy/close behavior on size violation", async () => {
     const source = await readFile(SIZE_GUARD_PATH, "utf8");
-    const jsdocMatch = source.match(/\/\*\*\s*([\s\S]*?)\s*\*\/\s*\nexport class SizeLimitTransform/);
+    const jsdocMatch = source.match(
+      /\/\*\*\s*([\s\S]*?)\s*\*\/\s*\nexport class SizeLimitTransform/,
+    );
     const jsdoc = jsdocMatch?.[1] ?? "";
 
     // The JSDoc must describe that the transform is destroyed when a line

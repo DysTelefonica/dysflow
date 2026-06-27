@@ -18,6 +18,7 @@ import {
   startWithSdkServer,
 } from "../../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
+import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import { type OperationResult, successResult } from "../../../src/core/contracts/index.js";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service.js";
@@ -829,12 +830,14 @@ describe("E2E mock transport — multiple database targeting with overrides", ()
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("DELTA-003 — inputTargetsConfig rejects empty input targeting startup config", () => {
-  const startupConfig = {
+  const startupConfig: DysflowConfig = {
+    configSource: "runtime-default",
     projectId: "dysflow",
     accessDbPath: "C:/repo/front.accdb",
     projectRoot: "C:/repo",
     allowWrites: false,
-  } as const;
+    timeoutMs: 30_000,
+  };
 
   it("returns false when input is an empty object (does NOT silently target startup config)", () => {
     expect(inputTargetsConfig({}, startupConfig)).toBe(false);
@@ -863,17 +866,13 @@ describe("DELTA-003 — inputTargetsConfig rejects empty input targeting startup
     // the startupError path. The point is: empty input MUST NOT be treated as
     // "matches startup config and inheriting allowWrites".
     const root = await mkdtemp(join(tmpdir(), "dysflow-empty-input-"));
-    const services = createUnavailableServices(
-      { code: "STARTUP_ERR", message: "no startup config", retryable: false },
-      { cwd: root, env: {} },
-    );
 
     // Spy on the service factory: it should NOT be invoked for empty input.
     let factoryCalls = 0;
     const wrapped = createDynamicServices(undefined, undefined, {
       cwd: root,
       env: {},
-      serviceFactory: (config) => {
+      serviceFactory: (_config) => {
         factoryCalls += 1;
         return {
           vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -889,10 +888,12 @@ describe("DELTA-003 — inputTargetsConfig rejects empty input targeting startup
     const result = await resolveMcpWriteAccessForInput(
       {},
       {
+        configSource: "runtime-default",
         projectId: "dysflow",
         accessDbPath: "C:/repo/front.accdb",
         projectRoot: "C:/repo",
         allowWrites: true, // Even with allowWrites:true, empty input must NOT inherit it
+        timeoutMs: 30_000,
       },
     );
     expect(result).toBe(false);

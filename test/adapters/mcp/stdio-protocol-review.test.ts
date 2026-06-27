@@ -54,14 +54,9 @@ describe("DELTA-012 — MCP_PROTOCOL_VERSION_REVIEW reviewedAt age gate", () => 
       // maintenance doc. The test only PASSES if the gate would surface an
       // actionable error — which is the whole point of this guardrail.
       const gateExpression = () => {
-        if (
-          !expect(
-            ageDays,
-            `MCP_PROTOCOL_VERSION_REVIEW is ${ageDays.toFixed(1)} days old (window: ${AGE_WINDOW_DAYS}); refresh and bump reviewedAt — see ${MAINTENANCE_DOC}`,
-          ).toBeLessThanOrEqual(AGE_WINDOW_DAYS)
-        ) {
+        if (ageDays > AGE_WINDOW_DAYS) {
           throw new Error(
-            `MCP_PROTOCOL_VERSION_REVIEW is ${ageDays.toFixed(1)} days old; see ${MAINTENANCE_DOC}`,
+            `MCP_PROTOCOL_VERSION_REVIEW is ${ageDays.toFixed(1)} days old (window: ${AGE_WINDOW_DAYS}); refresh and bump reviewedAt — see ${MAINTENANCE_DOC}`,
           );
         }
       };

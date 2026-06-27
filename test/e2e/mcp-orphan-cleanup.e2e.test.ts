@@ -62,7 +62,7 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
         arguments: { accessPath: "C:/nonexistent/never.accdb" },
       });
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { text: string } | undefined)?.text ?? "";
+      const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       // The wrapper's failureResult must surface as a structured error code
       // (SERVICE_UNAVAILABLE or ORPHAN_CLEANUP_NOT_CONFIGURED), NOT as an
       // unhandled exception that breaks the SDK protocol.
@@ -85,7 +85,7 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
     const tools = createDysflowMcpTools(services, false);
     const { client, close } = await createHarness(tools);
     try {
-      let result;
+      let result: Awaited<ReturnType<typeof client.callTool>> | undefined;
       // Wrap in try/catch to assert NO exception escapes the SDK boundary.
       try {
         result = await client.callTool({
