@@ -74,9 +74,17 @@ export function createDispatchTool(
       const isDryRun = isBinaryWrite
         ? false
         : isFilesystemWrite
-          ? name === "generate_form" && hasOwn(input, "dryRun")
+          ? // DELTA-007 — catalog_add_control defaults to dry-run at the service
+            // level (same as generateForm), so the dispatch must always evaluate
+            // resolveIsDryRun for catalog_add_control (regardless of `hasOwn`
+            // — service defaults dryRun to true when both flags are absent).
+            // generate_form preserves the legacy `hasOwn` gate because the
+            // service-level default there is different.
+            name === "catalog_add_control"
             ? resolveIsDryRun(input)
-            : false
+            : name === "generate_form" && hasOwn(input, "dryRun")
+              ? resolveIsDryRun(input)
+              : false
           : resolveIsDryRun(input);
       if (
         isWriteGated &&

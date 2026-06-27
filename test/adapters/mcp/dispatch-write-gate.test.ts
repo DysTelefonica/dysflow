@@ -121,6 +121,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
       controlName: "txtName",
       controlType: "TextBox",
       catalogPath: "C:/project/forms/catalog.json",
+      apply: true,
     });
 
     expect(result.isError).toBe(true);

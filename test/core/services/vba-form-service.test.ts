@@ -221,109 +221,6 @@ describe("VbaFormService", () => {
     if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_INVALID");
   });
 
-  // ─── DELTA-007 (mcp-reliability-fix) — dryRun/apply parity with generateForm ───
-
-  it("catalogAddControl defaults to dry-run when both flags absent (does NOT write)", async () => {
-    const writtenFiles: Array<{ path: string; data: string }> = [];
-    const fs = makeFs({
-      writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
-        writtenFiles.push({ path: p, data: d });
-      }),
-    });
-    const service = new VbaFormService({ fileSystem: fs });
-
-    const result = await service.catalogAddControl({
-      spec: { name: "Form_DefaultDry", kind: "Form", controls: [] },
-      controlName: "ctrl1",
-      controlType: "TextBox",
-      catalogPath: "/fake/forms/catalog.json",
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const data = result.data as { dryRun: boolean };
-      expect(data.dryRun).toBe(true);
-    }
-    expect(writtenFiles).toHaveLength(0);
-    expect(fs.writeFile).not.toHaveBeenCalled();
-  });
-
-  it("catalogAddControl apply:true disables dry-run and writes the catalog", async () => {
-    const writtenFiles: Array<{ path: string; data: string }> = [];
-    const fs = makeFs({
-      writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
-        writtenFiles.push({ path: p, data: d });
-      }),
-    });
-    const service = new VbaFormService({ fileSystem: fs });
-
-    const result = await service.catalogAddControl({
-      spec: { name: "Form_Apply", kind: "Form", controls: [] },
-      controlName: "ctrl1",
-      controlType: "TextBox",
-      catalogPath: "/fake/forms/catalog.json",
-      apply: true,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const data = result.data as { controlCount: number };
-      expect(data.controlCount).toBe(1);
-    }
-    expect(writtenFiles).toHaveLength(1);
-  });
-
-  it("catalogAddControl dryRun:true explicit does NOT write", async () => {
-    const writtenFiles: Array<{ path: string; data: string }> = [];
-    const fs = makeFs({
-      writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
-        writtenFiles.push({ path: p, data: d });
-      }),
-    });
-    const service = new VbaFormService({ fileSystem: fs });
-
-    const result = await service.catalogAddControl({
-      spec: { name: "Form_ExplicitDry", kind: "Form", controls: [] },
-      controlName: "ctrl1",
-      controlType: "TextBox",
-      catalogPath: "/fake/forms/catalog.json",
-      dryRun: true,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const data = result.data as { dryRun: boolean };
-      expect(data.dryRun).toBe(true);
-    }
-    expect(writtenFiles).toHaveLength(0);
-  });
-
-  it("catalogAddControl apply:true takes precedence over dryRun:true", async () => {
-    const writtenFiles: Array<{ path: string; data: string }> = [];
-    const fs = makeFs({
-      writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
-        writtenFiles.push({ path: p, data: d });
-      }),
-    });
-    const service = new VbaFormService({ fileSystem: fs });
-
-    const result = await service.catalogAddControl({
-      spec: { name: "Form_ApplyPrevails", kind: "Form", controls: [] },
-      controlName: "ctrl1",
-      controlType: "TextBox",
-      catalogPath: "/fake/forms/catalog.json",
-      apply: true,
-      dryRun: true,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const data = result.data as { controlCount: number };
-      expect(data.controlCount).toBe(1);
-    }
-    expect(writtenFiles).toHaveLength(1);
-  });
-
   it("uses params.name as controlName fallback and params.type as controlType fallback", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-fallback-"));
     const service = new VbaFormService({ cwd: root });
@@ -332,6 +229,7 @@ describe("VbaFormService", () => {
       name: "fallbackCtrl",
       type: "Label",
       catalogPath: join(root, "forms", "catalog.json"),
+      apply: true,
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -351,6 +249,7 @@ describe("VbaFormService", () => {
       controlName: "ctrl1",
       controlType: "TextBox",
       catalogPath,
+      apply: true,
     });
 
     // Add second control
@@ -359,6 +258,7 @@ describe("VbaFormService", () => {
       controlName: "ctrl2",
       controlType: "ComboBox",
       catalogPath,
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -541,6 +441,7 @@ describe("VbaFormService", () => {
       catalogPath,
       controlName: "txtUser",
       controlType: "TextBox",
+      apply: true,
     });
 
     expect(result).toMatchObject({
@@ -569,6 +470,7 @@ describe("VbaFormService", () => {
       catalogPath,
       controlName: "btnOK",
       controlType: "CommandButton",
+      apply: true,
     });
 
     expect(result).toMatchObject({
@@ -770,6 +672,110 @@ describe("VbaFormService", () => {
       ).rejects.toThrow("disk full");
     });
 
+    // ─── DELTA-007 (mcp-reliability-fix) — dryRun/apply parity with generateForm ───
+
+    it("catalogAddControl defaults to dry-run when both flags absent (does NOT write)", async () => {
+      const writtenFiles: Array<{ path: string; data: string }> = [];
+      const fs = makeFs({
+        writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
+          writtenFiles.push({ path: p, data: d });
+        }),
+      });
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_DefaultDry", kind: "Form", controls: [] },
+        controlName: "ctrl1",
+        controlType: "TextBox",
+        catalogPath: "/fake/forms/catalog.json",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const data = result.data as { dryRun: boolean; written: boolean };
+        expect(data.dryRun).toBe(true);
+        expect(data.written).toBe(false);
+      }
+      expect(writtenFiles).toHaveLength(0);
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+
+    it("catalogAddControl apply:true disables dry-run and writes the catalog", async () => {
+      const writtenFiles: Array<{ path: string; data: string }> = [];
+      const fs = makeFs({
+        writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
+          writtenFiles.push({ path: p, data: d });
+        }),
+      });
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_Apply", kind: "Form", controls: [] },
+        controlName: "ctrl1",
+        controlType: "TextBox",
+        catalogPath: "/fake/forms/catalog.json",
+        apply: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const data = result.data as { controlCount: number };
+        expect(data.controlCount).toBe(1);
+      }
+      expect(writtenFiles).toHaveLength(1);
+    });
+
+    it("catalogAddControl dryRun:true explicit does NOT write", async () => {
+      const writtenFiles: Array<{ path: string; data: string }> = [];
+      const fs = makeFs({
+        writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
+          writtenFiles.push({ path: p, data: d });
+        }),
+      });
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_ExplicitDry", kind: "Form", controls: [] },
+        controlName: "ctrl1",
+        controlType: "TextBox",
+        catalogPath: "/fake/forms/catalog.json",
+        dryRun: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const data = result.data as { dryRun: boolean };
+        expect(data.dryRun).toBe(true);
+      }
+      expect(writtenFiles).toHaveLength(0);
+    });
+
+    it("catalogAddControl apply:true takes precedence over dryRun:true", async () => {
+      const writtenFiles: Array<{ path: string; data: string }> = [];
+      const fs = makeFs({
+        writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
+          writtenFiles.push({ path: p, data: d });
+        }),
+      });
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_ApplyPrevails", kind: "Form", controls: [] },
+        controlName: "ctrl1",
+        controlType: "TextBox",
+        catalogPath: "/fake/forms/catalog.json",
+        apply: true,
+        dryRun: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const data = result.data as { controlCount: number };
+        expect(data.controlCount).toBe(1);
+      }
+      expect(writtenFiles).toHaveLength(1);
+    });
+
     // --- Task 1.3: catalogAddControl fake-port tests ---
 
     it("catalogAddControl appends to existing catalog via fileSystem port", async () => {
@@ -789,6 +795,7 @@ describe("VbaFormService", () => {
         controlName: "newCtrl",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        apply: true,
       });
 
       expect(result.ok).toBe(true);
@@ -820,6 +827,7 @@ describe("VbaFormService", () => {
         controlName: "btn",
         controlType: "Button",
         catalogPath: "/fake/forms/catalog.json",
+        apply: true,
       });
 
       expect(result.ok).toBe(true);
@@ -843,6 +851,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl",
         controlType: "Label",
         catalogPath: "/fake/forms/catalog.json",
+        apply: true,
       });
 
       expect(result.ok).toBe(false);

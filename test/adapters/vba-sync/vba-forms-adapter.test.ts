@@ -101,6 +101,7 @@ describe("VbaFormsAdapter", () => {
       catalogPath,
       controlName: "btnOK",
       controlType: "CommandButton",
+      apply: true,
     });
 
     expect(result).toMatchObject({
