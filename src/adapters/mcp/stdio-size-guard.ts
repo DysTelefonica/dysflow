@@ -11,13 +11,15 @@ export const DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024; // 1 MiB
  * Behavior:
  * - Lines under or at the limit pass through with the trailing `\n` stripped.
  * - Lines over the limit are dropped silently; a JSON-RPC -32700 error frame is
- *   written to `errorOutput` (process.stdout in production).
+ *   written to `errorOutput` (process.stdout in production) and the transform
+ *   is destroyed (`this.destroy()` in `emitSizeError()`) — the stream is
+ *   closed and will not process any subsequent lines. This is the destructive
+ *   safety net: a single oversized line is enough to terminate the transport.
  * - A trailing `\r` (CRLF line endings) is stripped before the limit check and
  *   before passing the line downstream.
  * - Blank/whitespace-only lines pass through unchanged (let downstream decide).
  * - If the stream closes with buffered data (no final `\n`), the buffer is
  *   dispatched if under the limit, or dropped with an error frame if over.
- * - Processing continues after an oversized line — the transform does NOT close.
  */
 export class SizeLimitTransform extends Transform {
   private readonly maxBytes: number;
