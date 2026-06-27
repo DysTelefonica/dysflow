@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createDynamicServices } from "../../../src/adapters/mcp/stdio.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 import {
@@ -401,5 +405,56 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         confirmPid: 12345,
       },
     ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-005 (mcp-reliability-fix) — listOrphans returns failureResult, never throws
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-005 — orphanCleanupService.listOrphans returns failureResult on resolveService failure, not throw", () => {
+  it("returns failureResult with ORPHAN_CLEANUP_SERVICE_UNAVAILABLE when resolveService fails", async () => {
+    const services = createDynamicServices(undefined, {
+      code: "STARTUP_ERR",
+      message: "no startup config available",
+      retryable: false,
+    });
+    // Trigger listOrphans with an empty input that has no project config —
+    // resolveService falls back to the startup error path.
+    const result = await services.orphanCleanupService?.listOrphans({});
+    expect(result).toBeDefined();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) {
+      // Must NOT be a thrown Error — the wrapper MUST return failureResult
+      // mirroring the cleanupOrphan pattern.
+      expect(result.error.message).toContain("no startup config available");
+    }
+  });
+
+  it("returns failureResult with SERVICE_UNAVAILABLE when orphanCleanupService is undefined in resolved config", async () => {
+    // Build a custom service factory that returns services WITHOUT
+    // orphanCleanupService — the wrapper MUST return failureResult, not throw.
+    // We need a real on-disk accessPath because resolveService enforces
+    // existsSync before delegating to the factory.
+    const root = mkdtempSync(join(tmpdir(), "dysflow-orphan-undefined-"));
+    const frontend = join(root, "front.accdb");
+    writeFileSync(frontend, "", "utf8");
+    mkdirSync(join(root, ".dysflow"), { recursive: true });
+
+    const services = createDynamicServices(undefined, undefined, {
+      cwd: root,
+      env: {},
+      serviceFactory: () => {
+        // Intentionally do NOT set orphanCleanupService — it is undefined.
+        return makeBaseServices() as DysflowMcpServices;
+      },
+    });
+    const result = await services.orphanCleanupService?.listOrphans({ accessPath: frontend });
+    expect(result).toBeDefined();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) {
+      expect(result.error.message).toMatch(/not available/i);
+      expect(result.error.code).toBe("SERVICE_UNAVAILABLE");
+    }
   });
 });

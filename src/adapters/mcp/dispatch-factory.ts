@@ -4,6 +4,7 @@ import {
   buildWriteFixtureRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
+import { isRecord } from "../../core/utils/index.js";
 
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -54,6 +55,22 @@ export function createDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
+      // DELTA-003 — filesystem-mutating dispatch tools reject arguments:{} with
+      // MCP_INPUT_INVALID. Empty input does NOT silently target the startup
+      // config (inputTargetsConfig returns false for {}), so a filesystem write
+      // like catalog_add_control/generate_form would otherwise bypass
+      // identification and either short-circuit to startup.allowWrites or fail
+      // ambiguously. Binary-mutating tools (compile_vba, delete_module, ...)
+      // are gated by MCP_WRITES_DISABLED instead — the binary IS the startup
+      // binary, so empty input is still meaningful there.
+      if (isWriteGated && isFilesystemWrite) {
+        const inputRecord = isRecord(input) ? input : {};
+        if (Object.keys(inputRecord).length === 0) {
+          return invalidInput(
+            `${name} requires explicit projectId, accessPath, projectRoot, or another identifying field — empty input does not target the startup config.`,
+          );
+        }
+      }
       const isDryRun = isBinaryWrite
         ? false
         : isFilesystemWrite

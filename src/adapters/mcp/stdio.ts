@@ -73,7 +73,11 @@ export const MCP_PROTOCOL_VERSION_LATEST_SUPPORTED = LATEST_PROTOCOL_VERSION;
  */
 export const MCP_PROTOCOL_VERSION_REVIEW = {
   version: MCP_PROTOCOL_VERSION,
-  reviewedAt: "2026-06-10",
+  // DELTA-012 — bump reviewedAt on each upstream MCP spec cross-check. The
+  // Vitest age gate in test/adapters/mcp/stdio-protocol-review.test.ts
+  // fails when this is older than 90 days; see
+  // docs/testing/mcp-protocol-maintenance.md.
+  reviewedAt: "2026-06-27",
   specRef: "https://modelcontextprotocol.io/specification/2025-03-26",
 } as const;
 
@@ -354,10 +358,17 @@ export function createDynamicServices(
     },
     orphanCleanupService: {
       listOrphans: async (request) => {
+        // DELTA-005 — mirror cleanupOrphan: return failureResult, never throw.
+        // A raw throw breaks symmetry with cleanupOrphan and reaches the SDK
+        // as an unhandled exception instead of a structured error frame.
         const res = await resolveService(request);
-        if (!res.ok) throw new Error(res.error.message);
+        if (!res.ok) return failureResult(res.error);
         if (res.services.orphanCleanupService === undefined) {
-          throw new Error("Orphan cleanup service is not available.");
+          return failureResult({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Orphan cleanup service is not available.",
+            retryable: false,
+          });
         }
         return res.services.orphanCleanupService.listOrphans(request);
       },
@@ -494,7 +505,7 @@ async function resolveConfigForInput(
   });
 }
 
-function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
+export function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
   const params = isRecord(input) ? input : {};
   const requestedProjectId =
     stringOrUndefined(params.projectId) ?? stringOrUndefined(params.contextId);
@@ -508,7 +519,7 @@ function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
     return pathsMatch(projectRoot, config.projectRoot);
   }
 
-  return Object.keys(params).length === 0;
+  return false;
 }
 
 function resolvedConfigCacheKey(config: DysflowConfig): string {
