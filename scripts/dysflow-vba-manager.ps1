@@ -716,7 +716,11 @@ function Normalize-VbaImportText {
     )
 
     $normalized = $Text -replace "`r`n", "`n" -replace "`r", "`n"
-    $lines = @($normalized -split "`n", -1)
+    # FIX: -split "`n", -1 returns a single-element array on PowerShell 7
+    # (PS5.x treated -1 as "no limit"; PS7 changed semantics and returns 1 element).
+    # Omitting the limit parameter restores the documented "no limit" behaviour on
+    # both runtimes, which is what this function needs to scan a multi-line VBA module.
+    $lines = @($normalized -split "`n")
     if ($lines.Count -eq 0) { return "" }
 
     if ($lines[0].Length -gt 0 -and [int][char]$lines[0][0] -eq 0xFEFF) {
@@ -838,7 +842,9 @@ function Split-VbaHeaderAndBody {
     )
 
     $normalized = Normalize-Newlines -Text $Text -Newline "`n"
-    $lines = @($normalized -split "`n", -1)
+    # FIX: -split "`n", -1 returns a single-element array on PowerShell 7. Omit the
+    # limit parameter to keep the documented "no limit" behaviour across PS5.x/PS7.
+    $lines = @($normalized -split "`n")
     if ($lines.Count -gt 0 -and $lines[0].Length -gt 0 -and [int][char]$lines[0][0] -eq 0xFEFF) {
         $lines[0] = $lines[0].Substring(1)
     }
@@ -988,7 +994,9 @@ function Normalize-AccessDocumentOrphanCodeBehindSection {
     $normalized = Normalize-Newlines -Text $DocumentText -Newline "`n"
     $suffix = if ($normalized -match '(?im)^\s*Begin\s+Report\b') { "Report" } else { "Form" }
     $lines = [System.Collections.Generic.List[string]]::new()
-    foreach ($line in ($normalized -split "`n", -1)) { $lines.Add([string]$line) }
+    # FIX: -split "`n", -1 returns a single-element array on PowerShell 7. Omit the
+    # limit parameter to keep the documented "no limit" behaviour across PS5.x/PS7.
+    foreach ($line in ($normalized -split "`n")) { $lines.Add([string]$line) }
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if (([string]$lines[$i]).Trim() -ne "End") { continue }
