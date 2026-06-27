@@ -15,6 +15,7 @@ import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba
 import { stringValue } from "../../core/utils/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
+import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 
 const FORMS_MAPPINGS = {
   generate_erd: mapping(
@@ -88,7 +89,8 @@ export class VbaFormsAdapter {
       toolName === "generate_form" ||
       toolName === "catalog_add_control" ||
       toolName === "harvest_form_catalog" ||
-      toolName === "inspect_form"
+      toolName === "inspect_form" ||
+      toolName === "lint_form_code"
     );
   }
 
@@ -101,6 +103,7 @@ export class VbaFormsAdapter {
     if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
     if (toolName === "inspect_form") return this.inspectForm(params);
+    if (toolName === "lint_form_code") return this.lintFormCode(params);
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
     }
@@ -170,6 +173,30 @@ export class VbaFormsAdapter {
       kind: ir.kind,
       controls,
       events,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // lint_form_code — read-only form-level audit (no binary mutation)
+  // ---------------------------------------------------------------------------
+
+  private async lintFormCode(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const lintAdapter = new VbaFormsLintAdapter(this.fileSystem);
+    return lintAdapter.lintFormCode({
+      destinationRoot: stringValue(params.destinationRoot),
+      sourceRoot: stringValue(params.sourceRoot),
+      formName: stringValue(params.formName),
+      moduleNames: Array.isArray(params.moduleNames)
+        ? params.moduleNames.filter((m): m is string => typeof m === "string")
+        : undefined,
+      rules: Array.isArray(params.rules)
+        ? params.rules.filter((r): r is import("../../core/services/form-lint-types.js").LintRuleId =>
+            typeof r === "string",
+          )
+        : undefined,
+      strict: params.strict === true,
     });
   }
 }

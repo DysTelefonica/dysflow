@@ -18,8 +18,8 @@ describe("advertised MCP tool surface", () => {
   const hidden = buildHiddenToolRegistry(tools);
   const advertised = tools.filter((tool) => !hidden.has(tool.name)).map((tool) => tool.name);
 
-  it("advertises exactly 52 non-hidden tools (matches the MCP server tools/list)", () => {
-    expect(advertised).toHaveLength(52);
+  it("advertises exactly 53 non-hidden tools (matches the MCP server tools/list)", () => {
+    expect(advertised).toHaveLength(53);
   });
 
   it("advertises a duplicate-free set", () => {

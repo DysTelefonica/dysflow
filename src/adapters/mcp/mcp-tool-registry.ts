@@ -19,6 +19,7 @@ export const VBA_SYNC_TOOL_NAMES = [
   "catalog_add_control",
   "harvest_form_catalog",
   "inspect_form",
+  "lint_form_code",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

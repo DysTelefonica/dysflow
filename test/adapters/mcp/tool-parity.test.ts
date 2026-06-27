@@ -43,10 +43,10 @@ class FakeDiagnosticsService {
 
 describe("Dysflow MCP tool parity inventory", () => {
   it("declares the complete 46-tool inventory", () => {
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(22);
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(23);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(46);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(46);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(47);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(47);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -55,8 +55,8 @@ describe("Dysflow MCP tool parity inventory", () => {
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(46);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(46);
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(47);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(47);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

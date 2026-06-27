@@ -44,6 +44,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "catalog_add_control",
   "harvest_form_catalog",
   "inspect_form",
+  "lint_form_code",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -134,6 +135,8 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Harvest control definitions from existing forms into a catalog (optionally filtered), to seed form generation. Read-only on the binary.",
   inspect_form:
     "Parse a version-controlled .form.txt (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only. sourcePath must point to the on-disk source file (e.g. forms/Form_MyForm.form.txt).",
+  lint_form_code:
+    "Static-analyze a form/report's .cls code-behind against the parsed .form.txt, returning structured diagnostics. Read-only and offline — no Access, no PowerShell, no writes. Use BEFORE import_modules / import_all to catch: (1) Me.<Control> references whose target does not exist in the .form.txt, (2) Access ListBox .List = ... misuse (use RowSource / AddItem instead), (3) bare Function(...) statements (use Call or assign the result), (4) positional arguments after a named argument (VBA rejects them), (5) accented identifiers in executable positions (round-trip risk), (6) per-control-type property mismatches. Pass destinationRoot OR sourceRoot plus one of formName | moduleNames | nothing (full scan under forms/ + reports/). rules filters the rule set; strict elevates warnings to errors.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

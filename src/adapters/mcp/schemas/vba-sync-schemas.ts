@@ -238,6 +238,51 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       path: SCHEMA_PROPS.path,
     },
   },
+  lint_form_code: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      destinationRoot: SCHEMA_PROPS.destinationRoot,
+      sourceRoot: {
+        type: "string",
+        description:
+          "Optional override for the source root (path that contains forms/ and reports/). Mirrors destinationRoot semantics for read-only tools.",
+      },
+      formName: {
+        type: "string",
+        description:
+          "Single form/report name to lint (e.g. 'Form_FormExpedientesGestion' or 'Form_MyForm'). Mutually exclusive with moduleNames.",
+      },
+      moduleNames: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "List of form/report names to lint. Each must start with 'Form_' or 'Report_'. Mutually exclusive with formName.",
+      },
+      rules: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: [
+            "form-control-binding",
+            "access-listbox-no-list-assignment",
+            "bare-function-call-with-parens",
+            "named-and-positional-args-mixing",
+            "unicode-sensitive-executable-tokens",
+            "control-property-support",
+          ],
+        },
+        description:
+          "Subset of lint rule IDs to run; defaults to all six. Use this to scope CI on the slow rules only.",
+      },
+      strict: {
+        type: "boolean",
+        description:
+          "When true, lint warnings are elevated to errors (CI hardening).",
+      },
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,
