@@ -198,3 +198,64 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-007 (mcp-reliability-fix) — catalog_add_control schema parity +
+// dryRun/apply resolution + write-gate dispatch.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-007 — catalog_add_control schema parity (dryRun/apply)", () => {
+  it("catalog_add_control schema includes dryRun and apply properties", async () => {
+    const { VBA_SYNC_TOOL_SCHEMAS } = await import(
+      "../../../src/adapters/mcp/schemas/vba-sync-schemas.js"
+    );
+    const schema = VBA_SYNC_TOOL_SCHEMAS.catalog_add_control;
+    expect(schema).toBeDefined();
+    expect(schema?.properties?.dryRun).toBeDefined();
+    expect(schema?.properties?.apply).toBeDefined();
+  });
+});
+
+describe("DELTA-007 — catalog_add_control dry-run dispatch parity", () => {
+  it("catalog_add_control with dryRun:true (writes disabled) does NOT trigger write-gate", async () => {
+    const { tool, vbaSyncToolService } = toolByName("catalog_add_control", false);
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      controlName: "txtName",
+      controlType: "TextBox",
+      catalogPath: "C:/project/forms/catalog.json",
+      dryRun: true,
+    });
+    expect(result.isError).toBe(false);
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toHaveLength(1);
+  });
+
+  it("catalog_add_control with apply:true bypasses write-gate when writes are enabled", async () => {
+    const { tool, vbaSyncToolService } = toolByName("catalog_add_control", true);
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      controlName: "txtName",
+      controlType: "TextBox",
+      catalogPath: "C:/project/forms/catalog.json",
+      apply: true,
+    });
+    expect(result.isError).toBe(false);
+    expect(vbaSyncToolService.requests).toHaveLength(1);
+  });
+
+  it("catalog_add_control with no dryRun/apply defaults to dry-run (no write-gate trip)", async () => {
+    const { tool, vbaSyncToolService } = toolByName("catalog_add_control", false);
+    const result = await tool.handler({
+      spec: { name: "CustomerEntry", kind: "Form", controls: [] },
+      controlName: "txtName",
+      controlType: "TextBox",
+      catalogPath: "C:/project/forms/catalog.json",
+    });
+    // Default-dry-run means writes are NOT enabled — service runs in plan
+    // mode but is not gated by MCP_WRITES_DISABLED.
+    expect(result.isError).toBe(false);
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toHaveLength(1);
+  });
+});
