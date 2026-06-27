@@ -11,6 +11,7 @@ import type {
   AccessOrphanCandidate,
   AccessOrphanCleanupResult,
 } from "../../../src/core/operations/access-orphan-cleanup";
+import { createDynamicServices } from "../../../src/adapters/mcp/stdio.js";
 
 class FakeOrphanCleanupService {
   public listOrphansRequests: unknown[] = [];
@@ -401,5 +402,51 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
         confirmPid: 12345,
       },
     ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-005 (mcp-reliability-fix) — listOrphans returns failureResult, never throws
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-005 — orphanCleanupService.listOrphans returns failureResult on resolveService failure, not throw", () => {
+  it("returns failureResult with ORPHAN_CLEANUP_SERVICE_UNAVAILABLE when resolveService fails", async () => {
+    const services = createDynamicServices(undefined, {
+      code: "STARTUP_ERR",
+      message: "no startup config available",
+      retryable: false,
+    });
+    // Trigger listOrphans with an empty input that has no project config —
+    // resolveService falls back to the startup error path.
+    const result = await services.orphanCleanupService?.listOrphans({});
+    expect(result).toBeDefined();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) {
+      // Must NOT be a thrown Error — the wrapper MUST return failureResult
+      // mirroring the cleanupOrphan pattern.
+      expect(result.error.message).toContain("no startup config available");
+    }
+  });
+
+  it("returns failureResult with SERVICE_UNAVAILABLE when orphanCleanupService is undefined in resolved config", async () => {
+    // Build a custom service factory that returns services WITHOUT
+    // orphanCleanupService — the wrapper MUST return failureResult, not throw.
+    const services = createDynamicServices(
+      undefined,
+      undefined,
+      {
+        serviceFactory: () => {
+          const base = makeBaseServices() as DysflowMcpServices;
+          // Intentionally do NOT set orphanCleanupService — it is undefined.
+          return base;
+        },
+      },
+    );
+    const result = await services.orphanCleanupService?.listOrphans({});
+    expect(result).toBeDefined();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) {
+      expect(result.error.message).toMatch(/not available|undefined/i);
+    }
   });
 });
