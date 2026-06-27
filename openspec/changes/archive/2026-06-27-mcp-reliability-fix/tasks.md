@@ -335,3 +335,9 @@ Chain strategy: feature-branch-chain
 | `80af33b` | 2.2 DELTA-007 RED — catalogAddControl dryRun/apply parity (test) | test/adapters/mcp/dispatch-write-gate.test.ts, test/core/services/vba-form-service.test.ts | RED 8/8 fail | n/a |
 | `e3a668e` | 2.2 DELTA-007 GREEN — schema + service + dispatch | src/adapters/mcp/schemas/vba-sync-schemas.ts, src/core/services/vba-form-service.ts, src/adapters/mcp/dispatch-factory.ts (+ 4 test files updated for apply:true) | pnpm test 1621/1621 ✅ | n/a |
 | `85a1734` | 2.2 E2E coverage for DELTA-007 catalog_add_control dryRun/apply | test/e2e/mcp-catalog-dryrun.e2e.test.ts | integration: 4/4 ✅ | n/a |
+| `9926b03` | 3.1 DELTA-008 RED — createProgressNotifier .catch (test) | test/adapters/mcp/stdio.test.ts | RED 2/4 fail with unhandledRejection + missing stderr log | n/a |
+| `41c65fe` | 3.1 DELTA-008 GREEN — extract createProgressNotifier + .catch + DYSFLOW_DEBUG_PROGRESS | src/adapters/mcp/stdio.ts | pnpm test 1625/1625 ✅ | n/a |
+| `e5ae563` | 3.2 DELTA-009 RED — serviceCache LRU eviction (test) | test/adapters/mcp/stdio.test.ts | RED 1/1 fail (dbPaths[1] not evicted under FIFO) | n/a |
+| `6d2a4e9` | 3.2 DELTA-009 GREEN — Map.delete + Map.set on get for LRU | src/adapters/mcp/stdio.ts | pnpm test 1626/1626 ✅ | n/a |
+| `becc7f3` | 3.3 E2E coverage for DELTA-010 query_sql empty sql rejection | test/e2e/mcp-query-validation.e2e.test.ts | integration: 4/4 ✅ | n/a |
+| `e09d745` | 3.x build fixes — alias-tools.ts + createProgressNotifier type narrowing | src/adapters/mcp/alias-tools.ts, src/adapters/mcp/stdio.ts | pnpm build green; tests 1626/1626 ✅; 13/13 E2E ✅ | n/a |

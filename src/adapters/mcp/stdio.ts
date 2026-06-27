@@ -124,6 +124,47 @@ export async function startMcpStdioAdapter(
  * @param transport - Optional transport override. When provided, the SizeLimitTransform
  *   and StdioServerTransport are skipped. Used in tests with InMemoryTransport.
  */
+type SendNotificationFn = (n: unknown) => Promise<unknown>;
+
+interface ProgressExtra {
+  sendNotification: SendNotificationFn;
+}
+
+/**
+ * Build a progress notifier that catches sendNotification rejections so they
+ * never escape as unhandledRejection. Logs only when DYSFLOW_DEBUG_PROGRESS
+ * is set (opt-in verbose mode); silently swallows otherwise.
+ *
+ * Extracted as a pure helper (DELTA-008) so it can be unit-tested directly
+ * with a mock `sendNotification` that rejects — the SDK's InMemoryTransport
+ * does not propagate client-side onprogress throws back to the server's
+ * sendNotification, so the only way to exercise the .catch path is to
+ * invoke the closure with a rejecting notifier.
+ */
+export function createProgressNotifier(
+  progressToken: string | number | undefined,
+  extra: ProgressExtra,
+): McpToolContext["sendProgress"] {
+  if (progressToken === undefined) return undefined;
+  return (progress, total, message) => {
+    extra
+      .sendNotification({
+        method: "notifications/progress",
+        params: {
+          progressToken,
+          progress,
+          ...(total !== undefined ? { total } : {}),
+          ...(message !== undefined ? { message } : {}),
+        },
+      })
+      .catch((err: unknown) => {
+        if (process.env.DYSFLOW_DEBUG_PROGRESS === "true") {
+          process.stderr.write(`[dysflow] sendProgress error: ${String(err)}\n`);
+        }
+      });
+  };
+}
+
 export async function startWithSdkServer(
   tools: DysflowMcpTool[],
   transport?: import("@modelcontextprotocol/sdk/shared/transport.js").Transport,
@@ -162,20 +203,10 @@ export async function startWithSdkServer(
     }
 
     const progressToken = _meta?.progressToken;
-    const sendProgress: McpToolContext["sendProgress"] =
-      progressToken !== undefined
-        ? (progress, total, message) => {
-            void extra.sendNotification({
-              method: "notifications/progress",
-              params: {
-                progressToken,
-                progress,
-                ...(total !== undefined ? { total } : {}),
-                ...(message !== undefined ? { message } : {}),
-              },
-            });
-          }
-        : undefined;
+    const sendProgress = createProgressNotifier(progressToken, {
+      sendNotification: (n) =>
+        extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
+    });
 
     const context: McpToolContext = { progressToken, sendProgress };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
@@ -309,7 +340,16 @@ export function createDynamicServices(
 
     const cacheKey = resolvedConfigCacheKey(configResult.data);
     let services = serviceCache.get(cacheKey);
-    if (services === undefined) {
+    if (services !== undefined) {
+      // DELTA-009 — LRU eviction. Re-insert the entry on get so the
+      // insertion-order iterator's head always points at the LEAST recently
+      // accessed key. The side-effect (re-set) is acceptable because
+      // serviceCache stores unavailable-service references (the wrappers),
+      // not the underlying services themselves — see
+      // dysflow/mcp-reliability-fix/lru-strategy.
+      serviceCache.delete(cacheKey);
+      serviceCache.set(cacheKey, services);
+    } else {
       services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
       if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
         const oldestKey = serviceCache.keys().next().value;

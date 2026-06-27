@@ -64,6 +64,10 @@ export { isMcpToolResult };
 /**
  * Build a typed request for `cleanup_access_operation`. Reads only declared
  * fields; unknown inputs are dropped at the type boundary, not propagated.
+ *
+ * Schema validation (`mcpSchemaFor("cleanup_access_operation")`) is run by
+ * the canonical handler BEFORE the builder, so missing required fields
+ * (`operationId`, `accessPath`) are already filtered out at this point.
  */
 export interface CleanupRequest {
   operationId: string;
@@ -81,63 +85,67 @@ export interface CleanupRequest {
   expectedDestinationRoot?: string;
 }
 
-export function buildCleanupRequest(input: unknown): CleanupRequest | McpToolResult {
-  if (!isRecord(input)) return invalidInput("cleanup_access_operation requires an object input.");
+export function buildCleanupRequest(input: unknown): CleanupRequest {
+  const obj = isRecord(input) ? input : {};
   return {
-    operationId: typeof input.operationId === "string" ? input.operationId : "",
-    accessPath: typeof input.accessPath === "string" ? input.accessPath : "",
-    force: input.force === true ? true : undefined,
-    projectId: typeof input.projectId === "string" ? input.projectId : undefined,
-    contextId: typeof input.contextId === "string" ? input.contextId : undefined,
-    backendPath: typeof input.backendPath === "string" ? input.backendPath : undefined,
-    destinationRoot: typeof input.destinationRoot === "string" ? input.destinationRoot : undefined,
-    projectRoot: typeof input.projectRoot === "string" ? input.projectRoot : undefined,
-    timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
-    strictContext: input.strictContext === true ? true : undefined,
+    operationId: typeof obj.operationId === "string" ? obj.operationId : "",
+    accessPath: typeof obj.accessPath === "string" ? obj.accessPath : "",
+    force: obj.force === true ? true : undefined,
+    projectId: typeof obj.projectId === "string" ? obj.projectId : undefined,
+    contextId: typeof obj.contextId === "string" ? obj.contextId : undefined,
+    backendPath: typeof obj.backendPath === "string" ? obj.backendPath : undefined,
+    destinationRoot: typeof obj.destinationRoot === "string" ? obj.destinationRoot : undefined,
+    projectRoot: typeof obj.projectRoot === "string" ? obj.projectRoot : undefined,
+    timeoutMs: typeof obj.timeoutMs === "number" ? obj.timeoutMs : undefined,
+    strictContext: obj.strictContext === true ? true : undefined,
     expectedAccessPath:
-      typeof input.expectedAccessPath === "string" ? input.expectedAccessPath : undefined,
+      typeof obj.expectedAccessPath === "string" ? obj.expectedAccessPath : undefined,
     expectedProjectRoot:
-      typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
+      typeof obj.expectedProjectRoot === "string" ? obj.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
+      typeof obj.expectedDestinationRoot === "string" ? obj.expectedDestinationRoot : undefined,
   };
 }
 
 /**
  * Build a typed request for `run_vba`. Parses `argsJson` via the shared helper
  * and returns an `McpToolResult` (not throws) when argsJson is malformed.
+ *
+ * Schema validation runs BEFORE the builder via `handleMcpVbaExecute`, so
+ * missing required fields (`procedureName`) are filtered out at this point.
  */
 export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolResult {
-  if (!isRecord(input)) return invalidInput("run_vba requires an object input.");
-  const parsedArgs = parseMcpArgsJson(
-    typeof input.argsJson === "string" ? input.argsJson : undefined,
-  );
+  const obj = isRecord(input) ? input : {};
+  const parsedArgs = parseMcpArgsJson(typeof obj.argsJson === "string" ? obj.argsJson : undefined);
   if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
 
   return {
     moduleName: "",
-    procedureName: typeof input.procedureName === "string" ? input.procedureName : "",
+    procedureName: typeof obj.procedureName === "string" ? obj.procedureName : "",
     arguments: parsedArgs.value,
-    projectId: typeof input.projectId === "string" ? input.projectId : undefined,
-    contextId: typeof input.contextId === "string" ? input.contextId : undefined,
-    accessPath: typeof input.accessPath === "string" ? input.accessPath : undefined,
-    backendPath: typeof input.backendPath === "string" ? input.backendPath : undefined,
-    destinationRoot: typeof input.destinationRoot === "string" ? input.destinationRoot : undefined,
-    projectRoot: typeof input.projectRoot === "string" ? input.projectRoot : undefined,
-    timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
-    strictContext: input.strictContext === true ? true : undefined,
+    projectId: typeof obj.projectId === "string" ? obj.projectId : undefined,
+    contextId: typeof obj.contextId === "string" ? obj.contextId : undefined,
+    accessPath: typeof obj.accessPath === "string" ? obj.accessPath : undefined,
+    backendPath: typeof obj.backendPath === "string" ? obj.backendPath : undefined,
+    destinationRoot: typeof obj.destinationRoot === "string" ? obj.destinationRoot : undefined,
+    projectRoot: typeof obj.projectRoot === "string" ? obj.projectRoot : undefined,
+    timeoutMs: typeof obj.timeoutMs === "number" ? obj.timeoutMs : undefined,
+    strictContext: obj.strictContext === true ? true : undefined,
     expectedAccessPath:
-      typeof input.expectedAccessPath === "string" ? input.expectedAccessPath : undefined,
+      typeof obj.expectedAccessPath === "string" ? obj.expectedAccessPath : undefined,
     expectedProjectRoot:
-      typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
+      typeof obj.expectedProjectRoot === "string" ? obj.expectedProjectRoot : undefined,
     expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
+      typeof obj.expectedDestinationRoot === "string" ? obj.expectedDestinationRoot : undefined,
   };
 }
 
 /**
  * Build a typed request for `query_sql`. Rejects empty / whitespace-only
- * `sql` or `query` (DELTA-010) before constructing the request.
+ * `sql` or `query` (DELTA-010) before constructing the request. Schema
+ * validation runs BEFORE the builder (in the alias handler wrapper), so
+ * `sql` types are already filtered; we only need to handle the
+ * empty/whitespace case here.
  */
 export function buildQuerySqlRequest(input: unknown): AccessQueryRequest | McpToolResult {
   if (!isRecord(input)) return invalidInput("query_sql requires an object input.");
@@ -218,7 +226,6 @@ export function buildAliasTools(
           writeAccessResolver,
           (validatedInput) => {
             const request = buildCleanupRequest(validatedInput);
-            if (isMcpToolResult(request)) return request;
             return {
               operationId: request.operationId,
               accessPath: request.accessPath,

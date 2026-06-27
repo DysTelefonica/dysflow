@@ -5,9 +5,10 @@ import { basename, join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDynamicServices,
+  createProgressNotifier,
   createUnavailableServices,
   DEFAULT_MAX_REQUEST_BYTES,
   inputTargetsConfig,
@@ -949,9 +950,9 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
 
   it("tools with NO_INPUT_SCHEMA (e.g. list_access_operations) remain exempt from empty-input rejection", async () => {
     const services = {
-      vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
-      queryService: { execute: vi.fn(async () => successResult({ rows: [] })) },
-      diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
+      vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+      queryService: { execute: async () => successResult({ rows: [] }) },
+      diagnosticsService: { run: async () => successResult({ checks: [] }) },
     };
     const tools = createDysflowMcpTools(services, false);
     const tool = tools.find((t) => t.name === "list_access_operations");
@@ -960,5 +961,207 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
     // Should not throw MCP_INPUT_INVALID — list_access_operations uses NO_INPUT_SCHEMA.
     const result = await tool?.handler({});
     expect(result?.isError).toBeFalsy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-008 (mcp-reliability-fix) — sendProgress .catch + DYSFLOW_DEBUG_PROGRESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-008 — createProgressNotifier catches sendNotification rejection; logs only when DYSFLOW_DEBUG_PROGRESS=true", () => {
+  const originalEnv = process.env.DYSFLOW_DEBUG_PROGRESS;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.DYSFLOW_DEBUG_PROGRESS;
+    else process.env.DYSFLOW_DEBUG_PROGRESS = originalEnv;
+  });
+
+  it("does NOT throw unhandledRejection when sendNotification rejects and DYSFLOW_DEBUG_PROGRESS is absent", async () => {
+    delete process.env.DYSFLOW_DEBUG_PROGRESS;
+
+    const rejections: unknown[] = [];
+    const onRejection = (err: unknown) => rejections.push(err);
+    process.on("unhandledRejection", onRejection);
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-1", rejectingExtra);
+      expect(sendProgress).toBeDefined();
+      // Trigger several notifications — each must catch the rejection.
+      sendProgress?.(40, 100, "test");
+      sendProgress?.(60);
+
+      // Allow microtasks to settle.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect(rejections).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
+  });
+
+  it("logs to process.stderr when DYSFLOW_DEBUG_PROGRESS=true and sendNotification rejects", async () => {
+    process.env.DYSFLOW_DEBUG_PROGRESS = "true";
+
+    const stderrWrites: string[] = [];
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
+      return (originalWrite as any)(chunk, ...rest);
+    }) as typeof process.stderr.write;
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-2", rejectingExtra);
+      sendProgress?.(40, 100, "log-test");
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const dysflowLines = stderrWrites.filter((line) => line.includes("[dysflow] sendProgress"));
+      expect(dysflowLines.length).toBeGreaterThan(0);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("createProgressNotifier returns undefined when progressToken is undefined", () => {
+    const sendProgress = createProgressNotifier(undefined, {
+      sendNotification: () => Promise.resolve(),
+    });
+    expect(sendProgress).toBeUndefined();
+  });
+
+  it("createProgressNotifier does NOT log when DYSFLOW_DEBUG_PROGRESS is absent and sendNotification rejects", async () => {
+    delete process.env.DYSFLOW_DEBUG_PROGRESS;
+
+    const stderrWrites: string[] = [];
+    const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
+      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
+      return (originalWrite as any)(chunk, ...rest);
+    }) as typeof process.stderr.write;
+
+    try {
+      const rejectingExtra = {
+        sendNotification: () => Promise.reject(new Error("notification rejected")),
+      };
+      const sendProgress = createProgressNotifier("tok-3", rejectingExtra);
+      sendProgress?.(40, 100, "silent");
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      const dysflowLines = stderrWrites.filter((line) => line.includes("[dysflow] sendProgress"));
+      expect(dysflowLines).toEqual([]);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELTA-009 (mcp-reliability-fix) — serviceCache LRU eviction
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("DELTA-009 — serviceCache uses LRU eviction, not FIFO", () => {
+  it("recently-accessed entry survives eviction (LRU vs FIFO)", async () => {
+    // Drive createDynamicServices with 16 distinct cache keys, then access
+    // the FIRST key and insert a 17th entry. With LRU, the first key survives
+    // (most recently accessed). With FIFO, the first key is evicted (oldest
+    // insertion).
+    const root = await mkdtemp(join(tmpdir(), "dysflow-lru-"));
+    mkdirSync(join(root, ".dysflow"), { recursive: true });
+    const dbPath = join(root, "front.accdb");
+    writeFileSync(dbPath, "", "utf8");
+
+    // Service factory that counts invocations and exposes the resolved config
+    // so we can detect which cache entries get evicted.
+    const createdConfigs: string[] = [];
+    const services = createDynamicServices(
+      undefined,
+      { code: "STARTUP_ERR", message: "no startup", retryable: false },
+      {
+        cwd: root,
+        env: {},
+        serviceFactory: (config) => {
+          createdConfigs.push(config.accessDbPath);
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    // Populate 16 cache entries by issuing 16 requests with distinct accessPaths.
+    // Each accessPath has a normalized identity; different paths → different keys.
+    const dbPaths: string[] = [];
+    for (let i = 0; i < 16; i++) {
+      const p = join(root, `db-${String(i).padStart(2, "0")}.accdb`);
+      writeFileSync(p, "", "utf8");
+      dbPaths.push(p);
+      await services.vbaService.execute({
+        accessPath: p,
+        moduleName: "Mod",
+        procedureName: "Proc",
+      });
+    }
+    expect(createdConfigs.length).toBe(16);
+
+    // Access keyA (dbPaths[0]) — re-inserts it at the end of insertion order
+    // in the LRU cache. With FIFO this would NOT move it.
+    const keyA = dbPaths[0] ?? "";
+    await services.vbaService.execute({
+      accessPath: keyA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // Insert a 17th entry — triggers eviction. With LRU, the LEAST recently
+    // accessed is dbPaths[1] (since keyA was just re-inserted). With FIFO,
+    // the LRU candidate would be dbPaths[0] (oldest insertion, not accessed
+    // since insert) — but with LRU it's no longer the oldest because we
+    // re-inserted it.
+    const keyNew = join(root, "db-NEW.accdb");
+    writeFileSync(keyNew, "", "utf8");
+    await services.vbaService.execute({
+      accessPath: keyNew,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // At this point the cache holds 16 entries. Re-access dbPaths[1] (which
+    // should have been the LRU victim if LRU is working) — if it survived,
+    // the serviceFactory was NOT called again (still cached). If FIFO is
+    // in effect, dbPaths[0] (keyA) would have been evicted and re-accessing
+    // it would invoke the factory again. We test dbPaths[1] specifically
+    // because it must be evicted under LRU.
+    const factoryCallsBefore = createdConfigs.length;
+    await services.vbaService.execute({
+      accessPath: dbPaths[1] ?? "",
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+
+    // dbPaths[1] should have been evicted by LRU (it was the oldest
+    // non-accessed entry after keyA's re-insertion), so the factory ran
+    // once more.
+    expect(createdConfigs.length).toBe(factoryCallsBefore + 1);
+
+    // Conversely, keyA (re-inserted) MUST still be cached. Re-access
+    // and confirm factory was NOT called again.
+    const factoryCallsAfterKeyA = createdConfigs.length;
+    await services.vbaService.execute({
+      accessPath: keyA,
+      moduleName: "Mod",
+      procedureName: "Proc",
+    });
+    expect(createdConfigs.length).toBe(factoryCallsAfterKeyA);
   });
 });
