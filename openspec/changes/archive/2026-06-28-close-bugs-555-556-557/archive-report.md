@@ -17,14 +17,15 @@ Archived after implementing and verifying three bug/reliability fixes:
 | `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
 | `eb6d042` + `f4490f9` + `f49b387` | Archive and closeout traceability | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28337548849` and `28337612052` green; issues #555/#556/#557 closed with evidence comments; Engram #14823 updated | N/A — documentation/traceability |
 | `4eecf29` | Fresh-review blocker follow-up: import prune safety, TempScc snapshot cleanup, Vitest `forbidOnly`, trace seed | A–E | RED evidence: focused Vitest/Pester blocker tests failed first; GREEN: `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28338286641` green | N/A — runner-level/product code change |
+| `ccf2254` | Residual #555 blocker follow-up: fail `import_all prune:true` when a managed source subfolder is unreadable | F | RED: `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts --testNamePattern "managed subfolder cannot be read"` failed before implementation; GREEN: focused test, `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28338833804` green | N/A — runner-level/product code change |
 
 ## Final verification
 
-- `pnpm test` — passed, 137 files / 1740 tests.
+- `pnpm test` — passed, 137 files / 1746 tests.
 - `pnpm build` — passed.
 - `pnpm lint` — passed.
 - `pwsh -Command "Invoke-Pester scripts/tests/"` — passed, 379 passed / 0 failed / 4 skipped.
-- Latest follow-up CI: `28338286641` — success.
+- Latest follow-up CI: `28338833804` — success.
 
 ## Fresh-review blocker follow-up
 
@@ -32,6 +33,7 @@ Archived after implementing and verifying three bug/reliability fixes:
 - C: `delete_module` snapshots `TempSccObj*` artifacts before target deletion and removes only newly-created after-state artifacts.
 - D: both Vitest configs set `forbidOnly: true`; `test/quality-gates/ci-workflow.test.ts` guards against regression.
 - E: this archive now records final closeout commit `f49b387` / CI `28337612052` and follow-up commit `4eecf29` / CI `28338286641`.
+- F: residual #555 review found incomplete source discovery could still proceed when one managed subfolder was unreadable. Commit `ccf2254` makes prune discovery all-or-fail for unreadable managed folders while preserving missing-folder compatibility; CI `28338833804` is green.
 
 ## Scope and compatibility notes
 
