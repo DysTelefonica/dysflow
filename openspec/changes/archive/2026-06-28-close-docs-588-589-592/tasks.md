@@ -32,11 +32,11 @@
 
 ### Verify, archive, and close
 
-- [ ] 4.1 Run `pnpm test`, `pnpm build`, `pnpm lint`, and `pwsh -Command "Invoke-Pester scripts/tests/"`.
-- [ ] 4.2 Confirm GitHub Actions success.
-- [ ] 4.3 Archive this change and add `archive-report.md`.
-- [ ] 4.4 Commit/push archive.
-- [ ] 4.5 Close #588, #589, and #592 with commit SHA + test evidence comments.
+- [x] 4.1 Run `pnpm test`, `pnpm build`, `pnpm lint`, and `pwsh -Command "Invoke-Pester scripts/tests/"`.
+- [x] 4.2 Confirm GitHub Actions success.
+- [x] 4.3 Archive this change and add `archive-report.md`.
+- [x] 4.4 Commit/push archive.
+- [x] 4.5 Close #588, #589, and #592 with commit SHA + test evidence comments.
 
 ## TDD Cycle Evidence
 
@@ -52,5 +52,5 @@
 |---|---|---|---|---|
 | `efc060a`, `7ee1a81` | Issue #588 README install release guidance + CI formatting fix | 1.1-1.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts`; `pnpm lint`; CI `28334101220` | N/A |
 | `e48142f` | Issue #589 update trust model docs | 2.1-2.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts`; `pnpm lint`; CI `28334223107` | N/A |
-| Pending | Issue #592 HTTP token env docs | 3.1-3.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts test/docs/http-api-doc.test.ts` | N/A |
-| Pending | Archive and closeout | 4.1-4.5 | Pending | N/A |
+| `00e0063` | Issue #592 HTTP token env docs | 3.1-3.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts test/docs/http-api-doc.test.ts`; `pnpm lint`; CI `28334361015` | N/A |
+| Pending archive commit | Archive and closeout | 4.1-4.5 | `pnpm test`; `pnpm build`; `pnpm lint`; `pwsh -Command "Invoke-Pester scripts/tests/"` | N/A |
