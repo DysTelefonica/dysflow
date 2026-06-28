@@ -23,4 +23,15 @@ describe("HTTP API documentation", () => {
     expect(doc).toContain("Node fetch example");
     expect(doc).toContain("--enable-writes");
   });
+
+  it("documents env-first HTTP token authentication (#592)", () => {
+    const doc = readFileSync(docPath, "utf8");
+
+    expect(doc).toContain("httpTokenEnv");
+    expect(doc).toContain("DYSFLOW_HTTP_TOKEN");
+    expect(doc).toContain("env-first");
+    expect(doc).toContain("env var value takes precedence");
+    expect(doc).toContain("inline `httpToken` is local-only");
+    expect(doc).toContain("must not be committed");
+  });
 });

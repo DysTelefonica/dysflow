@@ -416,9 +416,11 @@ Runtime directory resolution order:
   "passwordEnv": "PROJECTABC_ACCESS_PASSWORD",
   "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD",
   "allowedProcedures": ["Refresh", "ExportReport", "RunMigration"],
-  "httpToken": "your-secret-token"
+  "httpTokenEnv": "DYSFLOW_HTTP_TOKEN"
 }
 ```
+
+HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
 Bootstrap a repo-local config explicitly:
 

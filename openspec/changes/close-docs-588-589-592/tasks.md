@@ -25,10 +25,10 @@
 
 ### Issue #592 — HTTP token env docs
 
-- [ ] 3.1 Read `gh issue view 592` and identify env-token documentation gaps.
-- [ ] 3.2 Add a RED docs gate for `httpTokenEnv` / `DYSFLOW_HTTP_TOKEN` guidance.
-- [ ] 3.3 Update README and HTTP API docs minimally.
-- [ ] 3.4 Run focused docs gate and commit/push the issue work unit.
+- [x] 3.1 Read `gh issue view 592` and identify env-token documentation gaps.
+- [x] 3.2 Add a RED docs gate for `httpTokenEnv` / `DYSFLOW_HTTP_TOKEN` guidance.
+- [x] 3.3 Update README and HTTP API docs minimally.
+- [x] 3.4 Run focused docs gate and commit/push the issue work unit.
 
 ### Verify, archive, and close
 
@@ -44,13 +44,13 @@
 |------|-----------|-------|------------|-----|-------|-------------|----------|
 | 1.x | `test/docs/readme-release-doc.test.ts` | Docs gate | Existing README docs gate failed as expected after new test | RED: focused test failed before README edit | GREEN: `pnpm vitest run test/docs/readme-release-doc.test.ts` | Single docs contract for issue #588 | None needed |
 | 2.x | `test/docs/readme-release-doc.test.ts` | Docs gate | Existing #588 gate passed | RED: focused test failed before README/security docs edit | GREEN: `pnpm vitest run test/docs/readme-release-doc.test.ts` | README + security trust model checked | None needed |
-| 3.x | Pending | Docs gate | Pending | Pending | Pending | Pending | Pending |
+| 3.x | `test/docs/readme-release-doc.test.ts`, `test/docs/http-api-doc.test.ts` | Docs gate | Existing #588/#589 gates passed | RED: focused tests failed before README/API docs edit | GREEN: `pnpm vitest run test/docs/readme-release-doc.test.ts test/docs/http-api-doc.test.ts` | README + HTTP API docs checked | None needed |
 
 ## Implementation commits
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | `efc060a`, `7ee1a81` | Issue #588 README install release guidance + CI formatting fix | 1.1-1.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts`; `pnpm lint`; CI `28334101220` | N/A |
-| Pending | Issue #589 update trust model docs | 2.1-2.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts` | N/A |
-| Pending | Issue #592 HTTP token env docs | 3.1-3.4 | Pending | N/A |
+| `e48142f` | Issue #589 update trust model docs | 2.1-2.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts`; `pnpm lint`; CI `28334223107` | N/A |
+| Pending | Issue #592 HTTP token env docs | 3.1-3.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts test/docs/http-api-doc.test.ts` | N/A |
 | Pending | Archive and closeout | 4.1-4.5 | Pending | N/A |

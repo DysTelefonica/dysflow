@@ -12,13 +12,15 @@ dysflow serve --host 127.0.0.1 --port 17321
 
 ## Authentication
 
-By default the server has no authentication. To require a Bearer token, set `httpToken` in `.dysflow/project.json`:
+By default the server has no authentication. To require a Bearer token, use the env-first `httpTokenEnv` path in `.dysflow/project.json` and set `DYSFLOW_HTTP_TOKEN` in the runtime environment:
 
 ```json
 {
-  "httpToken": "your-secret-token"
+  "httpTokenEnv": "DYSFLOW_HTTP_TOKEN"
 }
 ```
+
+`httpTokenEnv` is preferred because the secret stays outside the repository. If both `httpTokenEnv` and inline `httpToken` are configured, the env var value takes precedence. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
 When configured, every request must include the header:
 
@@ -39,7 +41,7 @@ Missing or incorrect token — response `401`:
 }
 ```
 
-When `httpToken` is absent, all requests pass through without authentication (backwards-compatible default).
+When neither `httpTokenEnv` nor `httpToken` resolves a token, all requests pass through without authentication (backwards-compatible default).
 
 ## Routes
 
@@ -178,7 +180,7 @@ dysflow serve --enable-writes
 const base = "http://127.0.0.1:17321";
 const headers = {
   "content-type": "application/json",
-  authorization: "Bearer your-secret-token", // omit if httpToken is not configured
+  authorization: "Bearer your-secret-token", // omit if no HTTP token is configured
 };
 
 const health = await fetch(`${base}/health`, { headers }).then((r) => r.json());

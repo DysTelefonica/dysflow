@@ -27,6 +27,20 @@ describe("README release and update guidance", () => {
       expect(doc).toContain("abort");
     }
   });
+
+  it("uses env-first HTTP token configuration in the project config example (#592)", async () => {
+    const readme = await readFile("README.md", "utf8");
+    const configSection = sectionBetween(
+      readme,
+      "### Project config examples",
+      "### Runtime operation state",
+    );
+
+    expect(configSection).toContain('"httpTokenEnv": "DYSFLOW_HTTP_TOKEN"');
+    expect(configSection).toContain("env-first");
+    expect(configSection).toContain("inline `httpToken` is local-only");
+    expect(configSection).toContain("must not be committed");
+  });
 });
 
 function sectionBetween(content: string, startHeading: string, endHeading: string): string {
