@@ -15,6 +15,9 @@ export default defineConfig({
       // (errno -4094) on Windows. Only the pure file-reading contract test, which
       // spawns nothing, stays in the fast unit run.
       "test/integration/dysflow-result-writer-contract.test.ts",
+      // Pure-filesystem sweep helper test (#562). No Access, no PowerShell,
+      // no COM — runs in the fast unit suite, not the integration pool.
+      "test/integration/global-setup-temp-sweep.test.ts",
       "test/shared/**/*.test.ts",
       "test/scripts-vba-manager.test.ts",
     ],
