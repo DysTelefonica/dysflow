@@ -316,7 +316,11 @@ export class VbaModulesAdapter {
     const sourceModules = new Set(
       (await discoverImportModules(target.data.destinationRoot)).map((name) => name.toLowerCase()),
     );
-    const listResult = await this.orchestrator.executeMappedTool("list_objects", params, listMapping);
+    const listResult = await this.orchestrator.executeMappedTool(
+      "list_objects",
+      params,
+      listMapping,
+    );
     if (!listResult.ok) return listResult;
 
     const binaryModules = listObjectModuleNames(listResult.data);
