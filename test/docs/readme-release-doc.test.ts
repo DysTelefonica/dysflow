@@ -9,7 +9,9 @@ describe("README release and update guidance", () => {
     expect(installSection).toContain("https://github.com/DysTelefonica/dysflow/releases/latest");
     expect(installSection).toContain("release asset");
     expect(installSection).not.toMatch(/Latest version from GitHub remote/i);
-    expect(installSection).not.toMatch(/git\+https:\/\/github\.com\/DysTelefonica\/dysflow\.git#v\d+\.\d+\.\d+/i);
+    expect(installSection).not.toMatch(
+      /git\+https:\/\/github\.com\/DysTelefonica\/dysflow\.git#v\d+\.\d+\.\d+/i,
+    );
   });
 });
 
