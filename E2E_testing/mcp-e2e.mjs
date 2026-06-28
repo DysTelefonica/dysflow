@@ -3,6 +3,7 @@ import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
+import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -13,6 +14,10 @@ const destinationRoot = join(scriptDir, "src");
 const tempRoot = join(scriptDir, ".dysflow", "mcp-e2e-temp");
 const reportPath = join(tempRoot, "mcp-e2e-report.md");
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
+// #583: when a response is captured but the child never emits 'close' (some
+// hosts do not when the process is killed by signal), the harness forces a
+// settle after this many milliseconds so the suite cannot hang indefinitely.
+const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD;
 
 // Resolve the dysflow command the E2E harness is allowed to spawn (#582).
@@ -88,78 +93,24 @@ function normalize(text) {
 }
 
 async function callMcp(method, params = {}, options = {}) {
-  return await new Promise((resolveCall) => {
-    const child = spawn(cliCommand, ["mcp"], {
-      cwd: scriptDir,
-      shell: true,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        ACCESS_VBA_PASSWORD: password,
-        DYSFLOW_ACCESS_PASSWORD: password,
-        DYSFLOW_BACKEND_PASSWORD: password,
-      },
-    });
-    let stdout = "";
-    let stderr = "";
-    let buffer = "";
-    let response;
-    let settled = false;
-
-    const requestId = 2;
-    let resultPending = null;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try { child.stdin.end(); } catch {}
-      try { child.kill(); } catch {}
-      resolveCall({ ...result, childPid: child.pid });
-    };
-    const timer = setTimeout(() => {
-      finish({ response, exit: { code: null, signal: "TIMEOUT" }, stdout, stderr, timedOut: true, isError: true, text: "Timed out waiting for MCP response" });
-    }, options.timeoutMs ?? timeoutMs);
-
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString("utf8");
-      stdout += text;
-      buffer += text;
-      for (;;) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) break;
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        if (!line) continue;
-        let message;
-        try { message = JSON.parse(line); } catch { continue; }
-        if (message.id !== requestId) continue;
-        response = message;
-        const isError = Boolean(response?.error || response?.result?.isError);
-        resultPending = { response, exit: { code: null, signal: null }, stdout, stderr, timedOut: false, isError, text: toolText(response) };
-        clearTimeout(timer);
-        try { child.stdin.end(); } catch {}
-        try { child.kill(); } catch {}
-      }
-    });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
-    child.on("error", (error) => finish({ response, exit: { code: null, signal: "SPAWN_ERROR" }, stdout, stderr, timedOut: false, isError: true, text: error.message }));
-    child.on("close", (code, signal) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (resultPending) {
-        resultPending.exit = { code, signal };
-        resolveCall({ ...resultPending, childPid: child.pid });
-      } else {
-        resolveCall({ response, exit: { code, signal }, stdout, stderr, timedOut: false, isError: true, text: response ? toolText(response) : "MCP process closed before response", childPid: child.pid });
-      }
-    });
-
-    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "dysflow-mcp-e2e", version: "1" } } }) + "\n");
-    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }) + "\n");
-    child.stdin.write(JSON.stringify(method === "tools/list"
-      ? { jsonrpc: "2.0", id: requestId, method: "tools/list", params: {} }
-      : { jsonrpc: "2.0", id: requestId, method: "tools/call", params }) + "\n");
+  const child = spawn(cliCommand, ["mcp"], {
+    cwd: scriptDir,
+    shell: true,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      ACCESS_VBA_PASSWORD: password,
+      DYSFLOW_ACCESS_PASSWORD: password,
+      DYSFLOW_BACKEND_PASSWORD: password,
+    },
+  });
+  return await runMcpHarness({
+    child,
+    requestId: 2,
+    method,
+    params,
+    timeoutMs: options.timeoutMs ?? timeoutMs,
+    closeWatchdogMs: options.closeWatchdogMs ?? closeWatchdogMs,
   });
 }
 
