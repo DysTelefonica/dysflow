@@ -171,10 +171,7 @@ async function routeRequest(
   // every response sent by this request, so service-result errors AND
   // validation errors AND body-read failures all get the same sanitization.
   const secrets = collectSecrets(context);
-  const send = <TData>(
-    result: OperationResult<TData>,
-    failureStatus?: number,
-  ): void => {
+  const send = <TData>(result: OperationResult<TData>, failureStatus?: number): void => {
     // sendOperationResult's 4th parameter is `secrets` (defaults to []).
     // Pass them so the failure branch goes through `sanitizeOperationResult`.
     sendOperationResult(response, result, failureStatus, secrets);
@@ -359,10 +356,7 @@ async function routeRequest(
     return;
   }
 
-  send(
-    failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)),
-    404,
-  );
+  send(failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)), 404);
 }
 
 function handleValidation(

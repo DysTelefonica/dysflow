@@ -687,7 +687,10 @@ describe("Dysflow HTTP adapter", () => {
 
     const response = await readJson<{
       ok: true;
-      data: { cleanup: { operationId: string; status: string }; registryHealth: { status: string } };
+      data: {
+        cleanup: { operationId: string; status: string };
+        registryHealth: { status: string };
+      };
     }>(`${server.url}/access/cleanup`, {
       method: "POST",
       headers: { "content-type": "application/json" },
