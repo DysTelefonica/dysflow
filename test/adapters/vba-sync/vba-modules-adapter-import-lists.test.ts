@@ -74,9 +74,11 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
 
     expect(result.ok).toBe(true);
     expect(captured).toHaveLength(1);
-    expect(captured[0].action).toBe("Import");
-    expect(captured[0].moduleNames).toEqual(names);
-    expect(captured[0].moduleNames).toHaveLength(30);
+    const [firstCall] = captured;
+    expect(firstCall).toBeDefined();
+    expect(firstCall?.action).toBe("Import");
+    expect(firstCall?.moduleNames).toEqual(names);
+    expect(firstCall?.moduleNames).toHaveLength(30);
   });
 
   it("R2 — round-trips the rich per-module payload (phase, durationMs, rollbackApplied) through the sentinel", async () => {
@@ -153,8 +155,10 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
         message: "synthetic import failure",
       },
     });
-    expect(modules[1].error?.machine).toBeNull();
-    expect(modules[1].error?.user).toBeNull();
+    const failedModule = modules[1];
+    expect(failedModule).toBeDefined();
+    expect(failedModule?.error?.machine).toBeNull();
+    expect(failedModule?.error?.user).toBeNull();
   });
 
   it("R4 — empty moduleNames list is dispatched as Import with [], NOT expanded to import-all", async () => {
@@ -184,10 +188,12 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
 
     expect(result.ok).toBe(true);
     expect(captured).toHaveLength(1);
-    expect(captured[0].action).toBe("Import");
+    const [emptyCall] = captured;
+    expect(emptyCall).toBeDefined();
+    expect(emptyCall?.action).toBe("Import");
     // Critical: the array reaches the runner EXACTLY as [], not as undefined
     // (which would mean "import everything") and not as a synthesized full list.
-    expect(captured[0].moduleNames).toEqual([]);
+    expect(emptyCall?.moduleNames).toEqual([]);
   });
 
   it("R5 — ACCESS_DATABASE_LOCKED envelope from the script is surfaced unchanged", async () => {

@@ -244,7 +244,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
     // moduleNamesProvided is the consumer-request signal: true iff the upstream
     // caller actually populated the moduleNames field, even if the resulting
     // array is empty. Lets the PowerShell side distinguish "explicit empty"
-    // (R4 no-op plan) from "field omitted" (import-all fallback).
+    // (R4 no-op plan) from "field omitted" (import-all fallback). The presence
+    // check IS the contract here — a value check (params.moduleNames !== undefined)
+    // would conflate "explicit empty array" with "field omitted".
+    // optional-presence-guard: allow
     const moduleNamesProvided = Object.hasOwn(params, "moduleNames");
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,

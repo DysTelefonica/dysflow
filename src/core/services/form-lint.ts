@@ -389,7 +389,8 @@ function findFirstNonAsciiIdentifier(line: string): { identifier: string; column
   let start = -1;
   for (let i = 0; i < line.length; i++) {
     const code = line.charCodeAt(i) ?? 0;
-    const isAsciiIdent = (code >= 0x30 && code <= 0x39) || // 0-9
+    const isAsciiIdent =
+      (code >= 0x30 && code <= 0x39) || // 0-9
       (code >= 0x41 && code <= 0x5a) || // A-Z
       (code >= 0x61 && code <= 0x7a) || // a-z
       code === 0x5f; // _
@@ -436,7 +437,9 @@ function ruleUnicodeSensitiveExecutableTokens(
       line: i + 1,
       column: found.column,
       message: `Non-ASCII identifier '${found.identifier}' in executable position: round-trip through the import pipeline may mutate Unicode characters (commit 3fbd60a fixed the regression, but accented members remain a risk surface).`,
-      suggestedFix: strict ? `Replace with ASCII-only name and translate via a constant.` : undefined,
+      suggestedFix: strict
+        ? `Replace with ASCII-only name and translate via a constant.`
+        : undefined,
     });
   }
   return diagnostics;

@@ -13,9 +13,9 @@ import {
 } from "../../core/services/form-ir-service.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
-import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 
 const FORMS_MAPPINGS = {
   generate_erd: mapping(
@@ -180,9 +180,7 @@ export class VbaFormsAdapter {
   // lint_form_code — read-only form-level audit (no binary mutation)
   // ---------------------------------------------------------------------------
 
-  private async lintFormCode(
-    params: Record<string, unknown>,
-  ): Promise<OperationResult<unknown>> {
+  private async lintFormCode(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
     const lintAdapter = new VbaFormsLintAdapter(this.fileSystem);
     return lintAdapter.lintFormCode({
       destinationRoot: stringValue(params.destinationRoot),
@@ -192,8 +190,9 @@ export class VbaFormsAdapter {
         ? params.moduleNames.filter((m): m is string => typeof m === "string")
         : undefined,
       rules: Array.isArray(params.rules)
-        ? params.rules.filter((r): r is import("../../core/services/form-lint-types.js").LintRuleId =>
-            typeof r === "string",
+        ? params.rules.filter(
+            (r): r is import("../../core/services/form-lint-types.js").LintRuleId =>
+              typeof r === "string",
           )
         : undefined,
       strict: params.strict === true,

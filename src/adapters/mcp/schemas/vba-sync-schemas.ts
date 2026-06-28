@@ -278,8 +278,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       },
       strict: {
         type: "boolean",
-        description:
-          "When true, lint warnings are elevated to errors (CI hardening).",
+        description: "When true, lint warnings are elevated to errors (CI hardening).",
       },
     },
   },

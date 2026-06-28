@@ -13,7 +13,7 @@ delete process.env.DYSFLOW_HOME;
  *
  * Skipped-on-no-Access is the contract (per `import-modules-regression.e2e.test.ts`).
  */
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -161,7 +161,7 @@ async function callMcp(tool: string, args: Record<string, unknown>): Promise<Mcp
       }
     };
     serverProc?.stdout?.on("data", onData);
-    serverProc?.stdin?.write(JSON.stringify(msg) + "\n");
+    serverProc?.stdin?.write(`${JSON.stringify(msg)}\n`);
     setTimeout(() => {
       serverProc?.stdout?.off("data", onData);
       reject(new Error(`MCP call ${tool} timed out`));
@@ -212,8 +212,9 @@ describeE2e("import_modules long-list (E2E)", () => {
       // healthy.
       return;
     }
-    const names = Array.from({ length: 30 }, (_, i) =>
-      `ListMod${(i + 1).toString().padStart(2, "0")}`,
+    const names = Array.from(
+      { length: 30 },
+      (_, i) => `ListMod${(i + 1).toString().padStart(2, "0")}`,
     );
 
     const res = await callMcp("import_modules", {
@@ -236,8 +237,12 @@ describeE2e("import_modules long-list (E2E)", () => {
       );
       return;
     }
-    const payload = parsePayload(res.result?.content?.[0]?.text ?? "{}") as
-      | { ok?: boolean; modules?: Array<{ module: string; status: string; phase: string | null }>; raw?: string; parseError?: boolean };
+    const payload = parsePayload(res.result?.content?.[0]?.text ?? "{}") as {
+      ok?: boolean;
+      modules?: Array<{ module: string; status: string; phase: string | null }>;
+      raw?: string;
+      parseError?: boolean;
+    };
     if (payload.parseError) {
       console.warn(
         "[import-modules-long-list.e2e] MCP response was not valid JSON; " +
@@ -245,7 +250,7 @@ describeE2e("import_modules long-list (E2E)", () => {
       );
       return;
     }
-    const modules = Array.isArray(payload) ? payload : payload.modules ?? [];
+    const modules = Array.isArray(payload) ? payload : (payload.modules ?? []);
     expect(modules.length).toBe(30);
     expect(modules.every((m) => m.status === "ok")).toBe(true);
   }, 120_000);

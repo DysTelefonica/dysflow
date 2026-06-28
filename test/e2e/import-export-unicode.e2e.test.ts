@@ -211,15 +211,15 @@ function setupWorkspace(): void {
     "End Enum",
     "",
     "Public Function GreetSi() As String",
-    "    GreetSi = \"Sí\"",
+    '    GreetSi = "Sí"',
     "End Function",
     "",
     "Public Function GreetNumero() As String",
-    "    GreetNumero = \"nº \" & CStr(42)",
+    '    GreetNumero = "nº " & CStr(42)',
     "End Function",
     "",
     "Public Function GreetSection() As String",
-    "    GreetSection = \"§\"",
+    '    GreetSection = "§"',
     "End Function",
     "",
     "Public Sub ShowEmDash()",
@@ -270,12 +270,7 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
       expect(exportResp.ok).toBe(true);
 
       // 3. Read the exported file (written as UTF-8 no BOM by the export path).
-      const exportedPath = join(
-        workspaceRoot,
-        "src",
-        "modules",
-        "TestUnicodeRoundTrip.bas",
-      );
+      const exportedPath = join(workspaceRoot, "src", "modules", "TestUnicodeRoundTrip.bas");
       const exportedBytes = (await import("node:fs")).readFileSync(exportedPath, "utf8");
 
       // Mojibake sentinels: any of these appearing means the round-trip broke.
