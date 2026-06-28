@@ -33,8 +33,8 @@ Closed documentation/security-docs issues #588, #589, and #592 with strict docs-
 | `28334101220` | `7ee1a81` | Success. |
 | `28334223107` | `e48142f` | Success. |
 | `28334361015` | `00e0063` | Success. |
-| Pending | `d7a1c07` | Awaiting follow-up CI. |
+| `28335039291` | `b75624c` (includes `d7a1c07`) | Success. |
 
 ## Outstanding items
 
-- Fresh review follow-up CI must pass before treating the blocker fix as closed.
+- None for implementation. Fresh review follow-up CI `28335039291` passed.
