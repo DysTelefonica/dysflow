@@ -1138,6 +1138,101 @@ describe("VbaModulesAdapter", () => {
     expect(actions).toEqual([]);
   });
 
+  it("import_all prune:true fails safely before delete when a managed subfolder cannot be read", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-subfolder-fails-"));
+    const sourceRoot = join(root, "src");
+    const modulesRoot = join(sourceRoot, "modules");
+    const formsRoot = join(sourceRoot, "forms");
+    await mkdir(modulesRoot, { recursive: true });
+    await mkdir(formsRoot, { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(modulesRoot, "Live.bas"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "subfolder-fails", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const adapter = new VbaModulesAdapter(
+      {
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        cwd: root,
+        env: {},
+        executor: async () => ({
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        }),
+        resolveExecutionTarget: async () => ({
+          ok: true,
+          data: {
+            configSource: "explicit-request",
+            accessDbPath: join(root, "front.accdb"),
+            accessPath: join(root, "front.accdb"),
+            destinationRoot: sourceRoot,
+            projectRoot: root,
+          },
+          diagnostics: [],
+          durationMs: 0,
+        }),
+        validateStrictContext: () => ({
+          ok: true,
+          data: undefined,
+          diagnostics: [],
+          durationMs: 0,
+        }),
+        runPreflightCleanup: async () => ({
+          cleaned: [],
+          killed: [],
+          orphanedKilled: [],
+          errors: [],
+          diagnostics: [],
+        }),
+        executeMappedTool: async (toolName) => {
+          actions.push(toolName);
+          return {
+            ok: true,
+            data: {
+              modules: ["Live"],
+              classes: [],
+              forms: ["Main"],
+              reports: [],
+              documentModules: ["Form_Main"],
+            },
+            diagnostics: [],
+            durationMs: 0,
+          };
+        },
+      },
+      {
+        mkdtemp: async () => root,
+        readdir: async (path) => {
+          if (path === sourceRoot) return [];
+          if (path === modulesRoot)
+            return [{ name: "Live.bas", isDirectory: () => false, isFile: () => true }];
+          if (path === formsRoot) throw new Error("permission denied reading forms");
+          return [];
+        },
+        readFile: async () => "",
+        readFileBytes: async () => new Uint8Array(),
+        rm: async () => undefined,
+        tmpdir: () => tmpdir(),
+      },
+    );
+
+    const result = await adapter.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected managed subfolder discovery failure");
+    expect(result.error.code).toBe("IMPORT_PRUNE_SOURCE_UNSAFE");
+    expect(result.error.message).toContain("permission denied reading forms");
+    expect(actions).toEqual([]);
+  });
+
   it("import_all prune:true treats form/report source aliases as protecting Access objects and document modules", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-doc-aliases-"));
     const sourceRoot = join(root, "src");

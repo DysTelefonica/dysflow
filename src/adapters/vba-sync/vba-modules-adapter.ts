@@ -331,6 +331,7 @@ export class VbaModulesAdapter {
       this.fileSystem,
       {
         failOnRootReadError: true,
+        failOnManagedFolderReadError: true,
       },
     );
     if (!sourceDiscovery.ok) {
@@ -678,6 +679,7 @@ function normalizeImportMode(importMode: string | undefined): string | undefined
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {
   const discovered = await discoverManagedSource(destinationRoot, nodeComparisonFileSystem, {
     failOnRootReadError: false,
+    failOnManagedFolderReadError: false,
   });
   return discovered.ok ? discovered.data.modules : [];
 }
@@ -690,7 +692,7 @@ type ManagedSourceDiscovery = {
 async function discoverManagedSource(
   destinationRoot: string,
   fileSystem: Pick<ComparisonFileSystemPort, "readdir">,
-  options: { failOnRootReadError: boolean },
+  options: { failOnRootReadError: boolean; failOnManagedFolderReadError: boolean },
 ): Promise<OperationResult<ManagedSourceDiscovery>> {
   const modules = new Set<string>();
   const protectedNames = new Set<string>();
@@ -711,6 +713,19 @@ async function discoverManagedSource(
         const message = error instanceof Error ? error.message : String(error);
         return failureResult(createDysflowError("SOURCE_DISCOVERY_FAILED", message));
       }
+      if (
+        folder.kind !== "root" &&
+        options.failOnManagedFolderReadError &&
+        !isMissingDirectoryError(error)
+      ) {
+        const message = error instanceof Error ? error.message : String(error);
+        return failureResult(
+          createDysflowError(
+            "SOURCE_DISCOVERY_FAILED",
+            `Cannot read managed source folder ${folder.path}: ${message}`,
+          ),
+        );
+      }
       continue;
     }
 
@@ -729,6 +744,15 @@ async function discoverManagedSource(
     modules: [...modules].sort((a, b) => a.localeCompare(b)),
     protectedNames: [...protectedNames].sort((a, b) => a.localeCompare(b)),
   });
+}
+
+function isMissingDirectoryError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }
 
 function addDocumentAliases(names: Set<string>, moduleName: string, prefix: "Form_" | "Report_") {
