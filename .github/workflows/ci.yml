@@ -83,4 +83,4 @@ jobs:
           if ($result.FailedCount -gt 0) { exit 1 }
 
       - name: Run Access/PowerShell integration tests
-        run: pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts test/scripts-access-runner.test.ts test/scripts-vba-manager.test.ts
+        run: pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts

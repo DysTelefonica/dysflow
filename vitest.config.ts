@@ -19,11 +19,9 @@ export default defineConfig({
       // no COM — runs in the fast unit suite, not the integration pool.
       "test/integration/global-setup-temp-sweep.test.ts",
       "test/shared/**/*.test.ts",
-      "test/scripts-vba-manager.test.ts",
     ],
     exclude: [
       "test/e2e/**",
-      "test/scripts-access-runner.test.ts",
     ],
     environment: "node",
     // Headroom for tests that coordinate real async barriers (lock serialization,

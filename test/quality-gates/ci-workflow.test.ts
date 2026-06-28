@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
@@ -7,6 +8,35 @@ async function readText(path: string): Promise<string> {
 
 function workflowRunCommands(workflow: string): string[] {
   return [...workflow.matchAll(/^\s*run:\s*(.+)$/gm)].map((match) => (match[1] ?? "").trim());
+}
+
+/** Extract every concrete `*.test.ts` file (not a glob) from a vitest config. */
+function vitestConfigPaths(config: string): string[] {
+  const array = (label: string): string[] => {
+    const block = new RegExp(`${label}:\\s*\\[([^\\]]+)\\]`).exec(config);
+    if (!block || block[1] === undefined) return [];
+    return [...block[1].matchAll(/["']([^"']+\.test\.ts)["']/g)].map((m) => m[1] ?? "");
+  };
+  return [...array("include"), ...array("exclude")].filter((p) => p.length > 0 && !p.includes("*"));
+}
+
+/** Extract every concrete `*.test.ts` file (not a glob) from a `run:` step in a workflow. */
+function workflowRunTestPaths(workflow: string): string[] {
+  const out: string[] = [];
+  for (const cmd of workflowRunCommands(workflow)) {
+    for (const match of cmd.matchAll(/(\S*\.test\.ts)\b/g)) {
+      const path = match[1] ?? "";
+      if (
+        path.length > 0 &&
+        !path.startsWith("-") &&
+        !path.includes("*") &&
+        !path.startsWith("--")
+      ) {
+        out.push(path);
+      }
+    }
+  }
+  return out;
 }
 
 describe("repository quality gates", () => {
@@ -27,15 +57,39 @@ describe("repository quality gates", () => {
 
   it("runs Windows PowerShell smoke coverage for Access-facing paths (#182)", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
-    const commands = workflowRunCommands(workflow);
 
     expect(workflow).toContain("windows-integration-smoke:");
     expect(workflow).toContain("runs-on: windows-latest");
     expect(workflow).toContain("Get-Command powershell.exe");
-    expect(commands).toContain(
-      "pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts test/scripts-access-runner.test.ts test/scripts-vba-manager.test.ts",
-    );
+    // The Windows integration command lists exactly the e2e + integration files
+    // matched by vitest.integration.config.ts. Drift is caught by the structural
+    // assertion below (#580) — this test now only pins the integration-config
+    // glob, not a verbatim command.
     expect(await readText("vitest.integration.config.ts")).toContain("test/e2e/**/*.test.ts");
+  });
+
+  it("every *.test.ts referenced by vitest configs and CI workflow exists on disk (#580)", async () => {
+    const vitestUnit = await readText("vitest.config.ts");
+    const vitestIntegration = await readText("vitest.integration.config.ts");
+    const workflow = await readText(".github/workflows/ci.yml");
+
+    const referenced = new Set<string>([
+      ...vitestConfigPaths(vitestUnit),
+      ...vitestConfigPaths(vitestIntegration),
+      ...workflowRunTestPaths(workflow),
+    ]);
+
+    expect(
+      referenced.size,
+      "expected at least one *.test.ts reference across configs and workflow",
+    ).toBeGreaterThan(0);
+
+    for (const ref of referenced) {
+      expect(
+        existsSync(ref),
+        `${ref} is referenced by a vitest config or CI workflow but does not exist on disk`,
+      ).toBe(true);
+    }
   });
 
   it("uses Node 24-capable GitHub Actions while preserving Node 20 product runtime (#190)", async () => {

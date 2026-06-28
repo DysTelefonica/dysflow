@@ -7,8 +7,6 @@ export default defineConfig({
     include: [
       "test/e2e/**/*.test.ts",
       "test/integration/**/*.test.ts",
-      "test/scripts-access-runner.test.ts",
-      "test/scripts-vba-manager.test.ts",
     ],
     exclude: [
       // Pure contract test (reads scripts as text, spawns nothing) — it runs in
