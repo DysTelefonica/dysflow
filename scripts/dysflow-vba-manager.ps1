@@ -1971,6 +1971,51 @@ function Get-FrontendInventory {
     }
 }
 
+function Remove-TempSccObjects {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$AccessApplication,
+        [Parameter(Mandatory = $true)]$VbProject
+    )
+
+    $deleted = New-Object System.Collections.Generic.List[string]
+
+    foreach ($kind in @('Forms', 'Reports')) {
+        $objectType = if ($kind -eq 'Reports') { 3 } else { 2 } # acReport=3, acForm=2
+        foreach ($name in @(Get-AccessObjectNames -AccessApplication $AccessApplication -Kind $kind)) {
+            if ($name -notmatch '^(Form_|Report_)?TempSccObj\d+$') { continue }
+            try {
+                $AccessApplication.DoCmd.DeleteObject($objectType, $name)
+                $deleted.Add([string]$name) | Out-Null
+            } catch {
+                Write-Debug "Diagnostics: $_"
+            }
+        }
+    }
+
+    $components = $VbProject.VBComponents
+    try {
+        for ($i = $components.Count; $i -ge 1; $i--) {
+            $component = $null
+            try {
+                $component = $components.Item($i)
+                $name = [string]$component.Name
+                if ($name -notmatch '^(Form_|Report_)?TempSccObj\d+$') { continue }
+                $components.Remove($component)
+                $deleted.Add($name) | Out-Null
+            } catch {
+                Write-Debug "Diagnostics: $_"
+            } finally {
+                if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+            }
+        }
+    } finally {
+        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+    }
+
+    return @($deleted | Sort-Object -Unique)
+}
+
 function Get-ExistsInfo {
     [CmdletBinding()]
     Param(
@@ -3610,6 +3655,8 @@ function Invoke-DeleteAction {
         Write-Status -Message ("[{0}/{1}] Eliminando: {2}" -f $idx, $NormalizedModules.Count, $name) -Color Cyan
         try {
             $result = Remove-AccessObjectOrComponent -AccessApplication $Session.AccessApplication -VbProject $vbProject -ModuleName $name -Force:$Force
+            $tempSccObjectsCleaned = @(Remove-TempSccObjects -AccessApplication $Session.AccessApplication -VbProject $vbProject)
+            $result | Add-Member -MemberType NoteProperty -Name tempSccObjectsCleaned -Value $tempSccObjectsCleaned -Force
             $moduleResults.Add($result) | Out-Null
         } catch {
             $moduleResults.Add([pscustomobject]@{

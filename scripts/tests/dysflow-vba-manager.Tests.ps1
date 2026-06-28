@@ -1320,6 +1320,14 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             }
         }
 
+        $script:TempCleanupCalls = [System.Collections.Generic.List[string]]::new()
+        $script:TempCleanupResult = @()
+        function script:Remove-TempSccObjects {
+            param($AccessApplication, $VbProject)
+            $script:TempCleanupCalls.Add("cleanup")
+            return @($script:TempCleanupResult)
+        }
+
         $script:FakeSession = [PSCustomObject]@{
             VbProject          = [PSCustomObject]@{ }
             AccessApplication  = [PSCustomObject]@{ }
@@ -1350,6 +1358,18 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             $results[1].status | Should -Be "ok"
 
             $script:StatusMessages | Should -Contain "OK Delete completado (2)"
+        }
+
+        It "cleans TempSccObj artifacts after a successful delete and reports them — #556" {
+            $script:TempCleanupResult = @("Form_TempSccObj1", "Form_TempSccObj2")
+
+            Invoke-DeleteAction -Session $script:FakeSession -NormalizedModules @("Form_Main")
+
+            $script:TempCleanupCalls.Count | Should -Be 1
+            $script:HostMessages.Count | Should -Be 1
+            $json = $script:HostMessages[0] -replace "^DYSFLOW_RESULT ", ""
+            $results = ConvertFrom-Json $json
+            $results[0].tempSccObjectsCleaned | Should -Be @("Form_TempSccObj1", "Form_TempSccObj2")
         }
     }
 
