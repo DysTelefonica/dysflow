@@ -28,15 +28,15 @@
 - [x] 2.3 RED: add a runner/Pester behavior test that simulates `TempSccObj*` artifacts after delete.
 - [x] 2.4 GREEN: clean `TempSccObj*` artifacts after successful delete without hiding target deletion failures.
 - [x] 2.5 REFACTOR: report cleaned artifacts additively and keep no-temp behavior a no-op.
-- [ ] 2.6 Commit and push one conventional commit with SDD/Test/Ref body for #556.
+- [x] 2.6 Commit and push one conventional commit with SDD/Test/Ref body for #556.
 
 ## Slice 3: #557 — `compile_vba` error context
 
-- [ ] 3.1 Read `gh issue view 557` and confirm feasible best-effort contract.
-- [ ] 3.2 Use CodeGraph to inspect compile action, result shape, and compile tests.
-- [ ] 3.3 RED: add a behavior test for `VBA_COMPILE_ERROR` carrying first-error context when the runner can observe it.
-- [ ] 3.4 GREEN: implement minimal best-effort compile context extraction and preserve generic fallback.
-- [ ] 3.5 REFACTOR: keep error shape compatible and document unsupported/fallback behavior in tests.
+- [x] 3.1 Read `gh issue view 557` and confirm feasible best-effort contract.
+- [x] 3.2 Use CodeGraph to inspect compile action, result shape, and compile tests.
+- [x] 3.3 RED: add a behavior test for `VBA_COMPILE_ERROR` carrying first-error context when the runner can observe it.
+- [x] 3.4 GREEN: implement minimal best-effort compile context extraction and preserve generic fallback.
+- [x] 3.5 REFACTOR: keep error shape compatible and document unsupported/fallback behavior in tests.
 - [ ] 3.6 Commit and push one conventional commit with SDD/Test/Ref body for #557.
 
 ## Slice 4: Verify, archive, and close
@@ -59,13 +59,13 @@
 |---|---|---|---|---|
 | #555 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#555"` failed before implementation: observed only `Import`, expected `List-Objects`, `Delete`, `Import`. | Added `import_all prune:true` pre-import binary prune. Focused test passes. | Kept default merge behavior covered by a companion test. | `test/adapters/vba-sync/vba-modules-adapter.test.ts` |
 | #556 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter '*#556*'` failed before implementation: cleanup was not called. | Added `Remove-TempSccObjects` and invoked it after successful deletes. Focused Pester test passes. | Cleanup is additive: result gets `tempSccObjectsCleaned`; target delete failures still remain in the existing catch path. | `scripts/tests/dysflow-vba-manager.Tests.ps1` |
-| #557 | Pending | Pending | Pending | Pending |
+| #557 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"` failed before implementation: `details.firstError` was missing even when runner output had component/line/sourceLine. | Added adapter mapping from structured compile runner output to `error.details.firstError`. Focused test passes. | Preserved fallback: details stay limited to runner output when context fields are absent; no fabricated module/line. | `test/adapters/vba-sync/vba-modules-adapter.test.ts` |
 
 ## Implementation commits
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | `8eff908` + `dd0dc53` | #555 import_all replace/prune semantics | 1.1–1.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#555"`; `pnpm lint`; CI `28337020840` green | N/A — runner-level/product code change |
-| _pending_ | #556 delete_module TempSccObj cleanup | 2.1–2.6 | Pending | N/A — runner-level/product code change |
+| `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
 | _pending_ | #557 compile_vba error context | 3.1–3.6 | Pending | N/A — runner-level/product code change |
 | _pending_ | Archive and closeout | 4.1–4.9 | Pending | N/A |

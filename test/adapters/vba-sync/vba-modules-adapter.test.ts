@@ -679,6 +679,38 @@ describe("VbaModulesAdapter", () => {
     expect(result.error.code).toBe("VBA_COMPILE_ERROR");
   });
 
+  it("compile_vba failure forwards module and line context from the runner — #557", async () => {
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 1,
+        stdout:
+          'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_COMPILE_ERROR","message":"Sub or Function not defined"},"phase":"compile","component":"ModuloError1","line":7,"column":5,"sourceLine":"    Call MissingThing()"}',
+        stderr: "",
+        durationMs: 3,
+        timedOut: false,
+      }),
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("compile_vba", {});
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected compile failure");
+    expect(result.error).toMatchObject({
+      code: "VBA_COMPILE_ERROR",
+      details: {
+        firstError: {
+          module: "ModuloError1",
+          line: 7,
+          column: 5,
+          sourceLine: "    Call MissingThing()",
+        },
+      },
+    });
+  });
+
   it("import_modules of a FORM with compile:true downgrades a compile failure to unverified (does NOT hard-fail) — #543", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-form-compile-adapter-"));
     await mkdir(join(root, ".dysflow"), { recursive: true });

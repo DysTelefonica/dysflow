@@ -585,6 +585,10 @@ function failureFromStructuredRunnerResult(
     if (machine !== undefined) extraDetails.machine = machine;
     if (user !== undefined) extraDetails.user = user;
     if (remediation !== undefined) extraDetails.remediation = remediation;
+    const firstCompileError = compileErrorContextFromRunnerResult(parsedOutput);
+    if (firstCompileError !== undefined) {
+      extraDetails.firstError = firstCompileError;
+    }
     return createDysflowError(code, `${message}${suffix}`, { details: extraDetails });
   }
 
@@ -593,6 +597,44 @@ function failureFromStructuredRunnerResult(
     `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${outputDetails.displayOutput}`,
     { details: outputDetails.details },
   );
+}
+
+function compileErrorContextFromRunnerResult(
+  parsedOutput: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const component = stringValue(parsedOutput.component);
+  const line = numberValue(parsedOutput.line);
+  const column = numberValue(parsedOutput.column);
+  const endLine = numberValue(parsedOutput.endLine);
+  const endColumn = numberValue(parsedOutput.endColumn);
+  const sourceLine = rawStringValue(parsedOutput.sourceLine);
+  if (
+    component === undefined &&
+    line === undefined &&
+    column === undefined &&
+    endLine === undefined &&
+    endColumn === undefined &&
+    sourceLine === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(component !== undefined ? { module: component, component } : {}),
+    ...(line !== undefined ? { line } : {}),
+    ...(column !== undefined ? { column } : {}),
+    ...(endLine !== undefined ? { endLine } : {}),
+    ...(endColumn !== undefined ? { endColumn } : {}),
+    ...(sourceLine !== undefined ? { sourceLine } : {}),
+  };
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function rawStringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function failureFromUnexpectedRunnerExit(
