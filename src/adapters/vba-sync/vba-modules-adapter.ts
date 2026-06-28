@@ -16,6 +16,7 @@ import {
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
+import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
@@ -94,6 +95,7 @@ export interface VbaModulesOrchestrator {
   scriptPath: string;
   accessPassword?: string;
   cwd: string;
+  env?: Record<string, string | undefined>;
   resolveExecutionTarget(
     params: Record<string, unknown>,
   ): Promise<OperationResult<VbaModulesExecutionTarget>>;
@@ -191,7 +193,24 @@ export class VbaModulesAdapter {
 
     // For export_modules/export_all: exportPath overrides destinationRoot so the export goes to
     // the caller-specified directory instead of the project's default src/ folder (issue #185).
+    // Guardrail (#574): an exportPath that points inside the dysflow production runtime would
+    // overwrite installed code under AGENTS.md hard rule. Refuse BEFORE invoking the runner.
     const exportPath = stringValue(params.exportPath);
+    if (
+      (toolName === "export_modules" || toolName === "export_all") &&
+      exportPath !== undefined &&
+      isWithinRuntime(
+        exportPath,
+        this.orchestrator.env ?? (process.env as Record<string, string | undefined>),
+      )
+    ) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Refusing to export to exportPath '${exportPath}' inside the dysflow production runtime. Point exportPath at your project, not the installed runtime.`,
+        ),
+      );
+    }
     const effectiveParams =
       (toolName === "export_modules" || toolName === "export_all") && exportPath !== undefined
         ? { ...params, destinationRoot: exportPath }
@@ -348,6 +367,23 @@ export class VbaModulesAdapter {
     const target = await this.orchestrator.resolveExecutionTarget(params);
     if (!target.ok) return target;
     const destinationRoot = target.data.destinationRoot;
+
+    // Guardrail (#574): export_all prune deletes managed source files under destinationRoot.
+    // Refuse if the resolved destinationRoot is inside the dysflow production runtime,
+    // BEFORE the rm loop runs.
+    if (
+      isWithinRuntime(
+        destinationRoot,
+        this.orchestrator.env ?? (process.env as Record<string, string | undefined>),
+      )
+    ) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Refusing to run export_all prune inside the dysflow production runtime (destinationRoot='${destinationRoot}'). Point destinationRoot at your project, not the installed runtime.`,
+        ),
+      );
+    }
 
     const exported = Array.isArray(data.exported) ? data.exported.map(String) : [];
     const keep = new Set(exported.map((name) => name.toLowerCase()));

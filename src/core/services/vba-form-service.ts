@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import {
   createDysflowError,
   failureResult,
@@ -33,6 +34,9 @@ export type VbaFormServiceOptions = {
   cwd?: string;
   fileSystem?: FormFileSystemPort;
   clock?: FormClockPort;
+  // Override `process.env` for runtime-dir resolution (#574). Tests use this to point
+  // isWithinRuntime at a synthetic runtime directory without polluting the host env.
+  env?: Record<string, string | undefined>;
 };
 
 // ---------------------------------------------------------------------------
@@ -66,11 +70,13 @@ export class VbaFormService {
   private readonly cwd: string;
   private readonly fileSystem: FormFileSystemPort;
   private readonly clock: FormClockPort;
+  private readonly env: Record<string, string | undefined>;
 
   constructor(options: VbaFormServiceOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.fileSystem = options.fileSystem ?? nodeFileSystem;
     this.clock = options.clock ?? nodeClock;
+    this.env = options.env ?? (process.env as Record<string, string | undefined>);
   }
 
   async validateFormSpec(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
@@ -92,6 +98,19 @@ export class VbaFormService {
 
     const destinationRoot =
       stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+
+    // Guardrail (#574): generateForm writes the form/report JSON spec under destinationRoot.
+    // Refuse if the resolved destinationRoot is inside the dysflow production runtime,
+    // BEFORE mkdir/writeFile — AGENTS.md hard rule against mutating the installed runtime.
+    if (isWithinRuntime(destinationRoot, this.env)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Refusing to generate form into a destinationRoot inside the dysflow production runtime ('${destinationRoot}'). Point destinationRoot at your project, not the installed runtime.`,
+        ),
+      );
+    }
+
     const formsDir = resolve(destinationRoot, "forms");
     const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
     const outputPath = resolve(formsDir, fileName);
