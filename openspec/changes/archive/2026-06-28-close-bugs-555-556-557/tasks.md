@@ -37,16 +37,16 @@
 - [x] 3.3 RED: add a behavior test for `VBA_COMPILE_ERROR` carrying first-error context when the runner can observe it.
 - [x] 3.4 GREEN: implement minimal best-effort compile context extraction and preserve generic fallback.
 - [x] 3.5 REFACTOR: keep error shape compatible and document unsupported/fallback behavior in tests.
-- [ ] 3.6 Commit and push one conventional commit with SDD/Test/Ref body for #557.
+- [x] 3.6 Commit and push one conventional commit with SDD/Test/Ref body for #557.
 
 ## Slice 4: Verify, archive, and close
 
-- [ ] 4.1 Run `pnpm test`.
-- [ ] 4.2 Run `pnpm build`.
-- [ ] 4.3 Run `pnpm lint`.
-- [ ] 4.4 Run `pwsh -Command "Invoke-Pester scripts/tests/"`.
-- [ ] 4.5 Confirm GitHub Actions success after pushed implementation commits.
-- [ ] 4.6 Archive the change under `openspec/changes/archive/2026-06-28-close-bugs-555-556-557/` and add `archive-report.md`.
+- [x] 4.1 Run `pnpm test`.
+- [x] 4.2 Run `pnpm build`.
+- [x] 4.3 Run `pnpm lint`.
+- [x] 4.4 Run `pwsh -Command "Invoke-Pester scripts/tests/"`.
+- [x] 4.5 Confirm GitHub Actions success after pushed implementation commits.
+- [x] 4.6 Archive the change under `openspec/changes/archive/2026-06-28-close-bugs-555-556-557/` and add `archive-report.md`.
 - [ ] 4.7 Commit and push the archive.
 - [ ] 4.8 Close #555, #556, and #557 with evidence comments containing commit SHA(s) and test references.
 - [ ] 4.9 Save Engram observation `sdd/close-bugs-555-556-557` with `capture_prompt: false`.
@@ -67,5 +67,5 @@
 |---|---|---|---|---|
 | `8eff908` + `dd0dc53` | #555 import_all replace/prune semantics | 1.1–1.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#555"`; `pnpm lint`; CI `28337020840` green | N/A — runner-level/product code change |
 | `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
-| _pending_ | #557 compile_vba error context | 3.1–3.6 | Pending | N/A — runner-level/product code change |
-| _pending_ | Archive and closeout | 4.1–4.9 | Pending | N/A |
+| `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
+| _pending_ | Archive and closeout | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; archive CI pending | N/A |
