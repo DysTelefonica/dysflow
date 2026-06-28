@@ -195,7 +195,7 @@ export const SCHEMA_PROPS = {
   prune: {
     type: "boolean",
     description:
-      "export_all only: after a fully clean export, delete on-disk source files (.bas/.cls/.form.txt/.report.txt) whose module no longer exists in the binary, so the destination mirrors the binary. Deletes directly and reports what was removed. NEVER prunes if the export reported any warning (a module that failed to serialize is still live). Saved queries are never pruned. Default false.",
+      "Mirror mode. For export_all: after a fully clean export, delete on-disk source files (.bas/.cls/.form.txt/.report.txt) whose module no longer exists in the binary, so the destination mirrors the binary. NEVER prunes if the export reported any warning. For import_all: before importing, delete binary modules absent from managed source so the binary mirrors source. Saved queries are never pruned. Default false.",
   } as JsonSchemaProperty,
   limit: {
     type: "number",

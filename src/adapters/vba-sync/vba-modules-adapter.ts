@@ -228,12 +228,28 @@ export class VbaModulesAdapter {
       return this.exportAllWithPrune(effectiveParams);
     }
 
+    const importPruneResult =
+      toolName === "import_all" && truthy(params.prune)
+        ? await this.pruneBinaryModulesAbsentFromSource(effectiveParams)
+        : successResult({ applied: false, deleted: [] as string[] });
+    if (!importPruneResult.ok) return importPruneResult;
+
     const importResult = await this.orchestrator.executeMappedTool(
       toolName,
       effectiveParams,
       mapping,
     );
     if (!importResult.ok) return importResult;
+    const resultWithPrune =
+      toolName === "import_all" && truthy(params.prune)
+        ? {
+            ...importResult,
+            data: {
+              ...(importResult.data as Record<string, unknown>),
+              prune: importPruneResult.data,
+            },
+          }
+        : importResult;
 
     // If compile:true is requested, run acCmdCompileAndSaveAllModules after a successful import.
     // Skip compile on dry-run (already handled above), on import failure, or when compile is falsy.
@@ -259,9 +275,9 @@ export class VbaModulesAdapter {
           (await this.importIncludesDocumentModule(toolName, params));
         if (!untrustworthy) return compileResult;
         return {
-          ...importResult,
+          ...resultWithPrune,
           data: {
-            ...(importResult.data as Record<string, unknown>),
+            ...(resultWithPrune.data as Record<string, unknown>),
             compileResult: {
               ok: false,
               verified: false,
@@ -274,15 +290,47 @@ export class VbaModulesAdapter {
 
       // Merge compileResult into the import result data so callers can inspect it.
       return {
-        ...importResult,
+        ...resultWithPrune,
         data: {
-          ...(importResult.data as Record<string, unknown>),
+          ...(resultWithPrune.data as Record<string, unknown>),
           compileResult: { ...(compileResult.data as Record<string, unknown>), verified: true },
         },
       };
     }
 
-    return importResult;
+    return resultWithPrune;
+  }
+
+  private async pruneBinaryModulesAbsentFromSource(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<{ applied: boolean; deleted: string[] }>> {
+    const listMapping = MODULE_MAPPINGS.list_objects;
+    const deleteMapping = MODULE_MAPPINGS.delete_module;
+    if (!listMapping || !deleteMapping) {
+      return failureResult(createDysflowError("MAPPING_ERROR", "Missing VBA module mapping."));
+    }
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+
+    const sourceModules = new Set(
+      (await discoverImportModules(target.data.destinationRoot)).map((name) => name.toLowerCase()),
+    );
+    const listResult = await this.orchestrator.executeMappedTool("list_objects", params, listMapping);
+    if (!listResult.ok) return listResult;
+
+    const binaryModules = listObjectModuleNames(listResult.data);
+    const deleteNames = binaryModules.filter((name) => !sourceModules.has(name.toLowerCase()));
+    if (deleteNames.length === 0) return successResult({ applied: true, deleted: [] });
+
+    const deleteResult = await this.orchestrator.executeMappedTool(
+      "delete_module",
+      { ...params, moduleNames: deleteNames, force: true },
+      deleteMapping,
+    );
+    if (!deleteResult.ok) return deleteResult;
+
+    return successResult({ applied: true, deleted: deleteNames });
   }
 
   /**
@@ -609,4 +657,17 @@ async function discoverImportModules(destinationRoot: string): Promise<string[]>
     }
   }
   return Array.from(new Set(modules)).sort();
+}
+
+function listObjectModuleNames(data: unknown): string[] {
+  const record = data as Record<string, unknown> | null | undefined;
+  const names = new Set<string>();
+  for (const key of ["modules", "classes", "forms", "reports", "documentModules"]) {
+    const value = record?.[key];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (typeof item === "string" && item.length > 0) names.add(item);
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }

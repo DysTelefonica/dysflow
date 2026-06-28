@@ -890,6 +890,92 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
+  it("import_all with prune:true deletes binary modules absent from source before import — #555", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-all-prune-adapter-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "import-prune", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const deletedBatches: string[][] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "List-Objects") {
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT {"modules":["Live","Ghost"],"classes":[],"forms":[],"reports":[],"documentModules":[]}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        if (request.action === "Delete") {
+          deletedBatches.push([...request.moduleNames]);
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true,"deleted":["Ghost"]}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import_all prune success");
+    expect(actions).toEqual(["List-Objects", "Delete", "Import"]);
+    expect(deletedBatches).toEqual([["Ghost"]]);
+    expect(result.data).toMatchObject({
+      operation: "import_all",
+      prune: { applied: true, deleted: ["Ghost"] },
+    });
+  });
+
+  it("import_all without prune keeps historical merge behavior — #555", async () => {
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        actions.push(request.action);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("import_all", { apply: true });
+
+    expect(result.ok).toBe(true);
+    expect(actions).toEqual(["Import"]);
+  });
+
   it("maps list/exists tools with JSON output enabled", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
