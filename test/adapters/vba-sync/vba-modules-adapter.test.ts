@@ -984,6 +984,221 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
+  it("import_all prune:true fails safely before delete when destinationRoot is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-missing-root-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "missing-src", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        return {
+          exitCode: 0,
+          stdout:
+            'DYSFLOW_RESULT {"modules":["Ghost"],"classes":[],"forms":[],"reports":[],"documentModules":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected missing source root failure");
+    expect(result.error.code).toBe("IMPORT_PRUNE_SOURCE_UNSAFE");
+    expect(actions).toEqual([]);
+  });
+
+  it("import_all prune:true fails safely before delete when source root has no managed source files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-empty-root-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(sourceRoot, { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "empty-src", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        return {
+          exitCode: 0,
+          stdout:
+            'DYSFLOW_RESULT {"modules":["Ghost"],"classes":[],"forms":[],"reports":[],"documentModules":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected empty source root failure");
+    expect(result.error.code).toBe("IMPORT_PRUNE_SOURCE_UNSAFE");
+    expect(actions).toEqual([]);
+  });
+
+  it("import_all prune:true fails safely before delete when source discovery fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-discovery-fails-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(sourceRoot, { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(sourceRoot, "Live.bas"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "discovery-fails", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const adapter = new VbaModulesAdapter(
+      {
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        cwd: root,
+        env: {},
+        executor: async () => ({
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        }),
+        resolveExecutionTarget: async () => ({
+          ok: true,
+          data: {
+            configSource: "explicit-request",
+            accessDbPath: join(root, "front.accdb"),
+            accessPath: join(root, "front.accdb"),
+            destinationRoot: sourceRoot,
+            projectRoot: root,
+          },
+          diagnostics: [],
+          durationMs: 0,
+        }),
+        validateStrictContext: () => ({
+          ok: true,
+          data: undefined,
+          diagnostics: [],
+          durationMs: 0,
+        }),
+        runPreflightCleanup: async () => ({
+          cleaned: [],
+          killed: [],
+          orphanedKilled: [],
+          errors: [],
+          diagnostics: [],
+        }),
+        executeMappedTool: async (toolName) => {
+          actions.push(toolName);
+          return {
+            ok: true,
+            data: { modules: ["Ghost"], classes: [], forms: [], reports: [], documentModules: [] },
+            diagnostics: [],
+            durationMs: 0,
+          };
+        },
+      },
+      {
+        mkdtemp: async () => root,
+        readdir: async (path) => {
+          if (path === sourceRoot) throw new Error("permission denied");
+          return [];
+        },
+        readFile: async () => "",
+        readFileBytes: async () => new Uint8Array(),
+        rm: async () => undefined,
+        tmpdir: () => tmpdir(),
+      },
+    );
+
+    const result = await adapter.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected discovery failure");
+    expect(result.error.code).toBe("IMPORT_PRUNE_SOURCE_UNSAFE");
+    expect(actions).toEqual([]);
+  });
+
+  it("import_all prune:true treats form/report source aliases as protecting Access objects and document modules", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-doc-aliases-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "forms"), { recursive: true });
+    await mkdir(join(sourceRoot, "reports"), { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(join(sourceRoot, "forms", "Form_Main.form.txt"), "", "utf8");
+    await writeFile(join(sourceRoot, "reports", "Report_Invoice.report.txt"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "doc-aliases", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const deletedBatches: string[][] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "List-Objects") {
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT {"modules":["Ghost"],"classes":[],"forms":["Main"],"reports":["Invoice"],"documentModules":["Form_Main","Report_Invoice"]}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        if (request.action === "Delete") {
+          deletedBatches.push([...request.moduleNames]);
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true,"deleted":["Ghost"]}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected import_all prune success");
+    expect(actions).toEqual(["List-Objects", "Delete", "Import"]);
+    expect(deletedBatches).toEqual([["Ghost"]]);
+    expect(result.data).toMatchObject({ prune: { applied: true, deleted: ["Ghost"] } });
+  });
+
   it("import_all without prune keeps historical merge behavior — #555", async () => {
     const actions: string[] = [];
     const service = new VbaSyncAdapter({

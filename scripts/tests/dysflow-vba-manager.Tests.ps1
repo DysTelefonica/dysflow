@@ -1322,8 +1322,12 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
 
         $script:TempCleanupCalls = [System.Collections.Generic.List[string]]::new()
         $script:TempCleanupResult = @()
-        function script:Remove-TempSccObjects {
+        function script:Get-TempSccObjectNames {
             param($AccessApplication, $VbProject)
+            return @()
+        }
+        function script:Remove-TempSccObjects {
+            param($AccessApplication, $VbProject, $ExistingNames)
             $script:TempCleanupCalls.Add("cleanup")
             return @($script:TempCleanupResult)
         }
@@ -1396,6 +1400,108 @@ Describe "Invoke-DeleteAction — behavioral (decompose S4)" {
             $results[1].status | Should -Be "error"
             $results[1].error | Should -Be "failed to remove component"
         }
+    }
+}
+
+Describe "Remove-TempSccObjects — real cleanup behavior (#556 follow-up)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        foreach ($fnName in @('Remove-TempSccObjects')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $fnName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$fnName not found in $($script:VbaManagerPath)" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
+
+        function script:Get-AccessObjectNames {
+            param($AccessApplication, [string]$Kind)
+            if ($Kind -eq 'Forms') { return @($AccessApplication.Forms) }
+            if ($Kind -eq 'Reports') { return @($AccessApplication.Reports) }
+            return @()
+        }
+
+        function script:New-FakeVbComponents {
+            param([string[]]$Names)
+            $list = [System.Collections.Generic.List[object]]::new()
+            foreach ($name in $Names) {
+                $list.Add([pscustomobject]@{ Name = $name; Type = 100 }) | Out-Null
+            }
+            $components = [pscustomobject]@{ Items = $list }
+            $components | Add-Member -MemberType ScriptProperty -Name Count -Value { $this.Items.Count }
+            $components | Add-Member -MemberType ScriptMethod -Name Item -Value { param([int]$Index) return $this.Items[$Index - 1] }
+            $components | Add-Member -MemberType ScriptMethod -Name Remove -Value { param($Component) [void]$this.Items.Remove($Component) }
+            return $components
+        }
+
+        function script:New-FakeAccessApplication {
+            param([string[]]$Forms, [string[]]$Reports)
+            $doCmd = [pscustomobject]@{
+                Forms = [System.Collections.Generic.List[string]]::new()
+                Reports = [System.Collections.Generic.List[string]]::new()
+                Deleted = [System.Collections.Generic.List[string]]::new()
+            }
+            foreach ($name in $Forms) { $doCmd.Forms.Add($name) | Out-Null }
+            foreach ($name in $Reports) { $doCmd.Reports.Add($name) | Out-Null }
+            $doCmd | Add-Member -MemberType ScriptMethod -Name DeleteObject -Value {
+                param([int]$ObjectType, [string]$Name)
+                if ($ObjectType -eq 2) { [void]$this.Forms.Remove($Name) }
+                if ($ObjectType -eq 3) { [void]$this.Reports.Remove($Name) }
+                $this.Deleted.Add($Name) | Out-Null
+            }
+            return [pscustomobject]@{ DoCmd = $doCmd; Forms = $doCmd.Forms; Reports = $doCmd.Reports }
+        }
+    }
+
+    It "preserves pre-existing TempScc form artifacts" {
+        $access = New-FakeAccessApplication -Forms @('TempSccObj1', 'Form_TempSccObj2') -Reports @()
+        $vbProject = [pscustomobject]@{ VBComponents = (New-FakeVbComponents -Names @()) }
+
+        $deleted = Remove-TempSccObjects -AccessApplication $access -VbProject $vbProject -ExistingNames @('TempSccObj1', 'Form_TempSccObj2')
+
+        $deleted | Should -BeNullOrEmpty
+        @($access.Forms) | Should -Be @('TempSccObj1', 'Form_TempSccObj2')
+    }
+
+    It "removes only newly-created TempScc forms and reports" {
+        $access = New-FakeAccessApplication -Forms @('TempSccObj1', 'Form_TempSccObj2') -Reports @('Report_TempSccObj3')
+        $vbProject = [pscustomobject]@{ VBComponents = (New-FakeVbComponents -Names @()) }
+
+        $deleted = Remove-TempSccObjects -AccessApplication $access -VbProject $vbProject -ExistingNames @('TempSccObj1')
+
+        $deleted | Should -Be @('Form_TempSccObj2', 'Report_TempSccObj3')
+        @($access.Forms) | Should -Be @('TempSccObj1')
+        @($access.Reports) | Should -BeNullOrEmpty
+    }
+
+    It "removes only newly-created TempScc VBComponents" {
+        $access = New-FakeAccessApplication -Forms @() -Reports @()
+        $components = New-FakeVbComponents -Names @('Form_TempSccObj1', 'Report_TempSccObj2', 'TempSccObj3')
+        $vbProject = [pscustomobject]@{ VBComponents = $components }
+
+        $deleted = Remove-TempSccObjects -AccessApplication $access -VbProject $vbProject -ExistingNames @('Form_TempSccObj1')
+
+        $deleted | Should -Be @('Report_TempSccObj2', 'TempSccObj3')
+        @($components.Items | ForEach-Object { $_.Name }) | Should -Be @('Form_TempSccObj1')
+    }
+
+    It "is a no-op when no TempScc artifacts exist" {
+        $access = New-FakeAccessApplication -Forms @('Main') -Reports @('Invoice')
+        $components = New-FakeVbComponents -Names @('Module1')
+        $vbProject = [pscustomobject]@{ VBComponents = $components }
+
+        $deleted = Remove-TempSccObjects -AccessApplication $access -VbProject $vbProject -ExistingNames @()
+
+        $deleted | Should -BeNullOrEmpty
+        @($access.Forms) | Should -Be @('Main')
+        @($access.Reports) | Should -Be @('Invoice')
+        @($components.Items | ForEach-Object { $_.Name }) | Should -Be @('Module1')
     }
 }
 

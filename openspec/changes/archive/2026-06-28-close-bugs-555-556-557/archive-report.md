@@ -15,6 +15,7 @@ Archived after implementing and verifying three bug/reliability fixes:
 | `8eff908` + `dd0dc53` | #555 import_all replace/prune semantics + formatting follow-up | 1.1–1.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#555"`; `pnpm lint`; CI `28337020840` green | N/A — runner-level/product code change |
 | `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
 | `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
+| `eb6d042` + `f4490f9` + `f49b387` | Archive and closeout traceability | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28337548849` and `28337612052` green; issues #555/#556/#557 closed with evidence comments; Engram #14823 updated | N/A — documentation/traceability |
 
 ## Final verification
 
@@ -22,7 +23,7 @@ Archived after implementing and verifying three bug/reliability fixes:
 - `pnpm build` — passed.
 - `pnpm lint` — passed.
 - `pwsh -Command "Invoke-Pester scripts/tests/"` — passed, 375 passed / 0 failed / 4 skipped.
-- Latest implementation CI: `28337306063` — success.
+- Latest closeout trace CI: `28337612052` — success.
 
 ## Scope and compatibility notes
 

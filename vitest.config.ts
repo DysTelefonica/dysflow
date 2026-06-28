@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    forbidOnly: true,
     include: [
       "test/cli/**/*.test.ts",
       "test/core/**/*.test.ts",

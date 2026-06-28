@@ -313,8 +313,47 @@ export class VbaModulesAdapter {
     const target = await this.orchestrator.resolveExecutionTarget(params);
     if (!target.ok) return target;
 
+    const sourceRootStatus = await stat(target.data.destinationRoot)
+      .then((stats) => (stats.isDirectory() ? "directory" : "not-directory"))
+      .catch(() => "missing");
+    if (sourceRootStatus !== "directory") {
+      return failureResult(
+        createDysflowError(
+          "IMPORT_PRUNE_SOURCE_UNSAFE",
+          `Refusing import_all prune because destinationRoot is not a readable source directory: ${target.data.destinationRoot}`,
+          { details: { destinationRoot: target.data.destinationRoot, reason: sourceRootStatus } },
+        ),
+      );
+    }
+
+    const sourceDiscovery = await discoverManagedSource(
+      target.data.destinationRoot,
+      this.fileSystem,
+      {
+        failOnRootReadError: true,
+      },
+    );
+    if (!sourceDiscovery.ok) {
+      return failureResult(
+        createDysflowError(
+          "IMPORT_PRUNE_SOURCE_UNSAFE",
+          `Refusing import_all prune because source discovery failed: ${sourceDiscovery.error.message}`,
+          { details: { destinationRoot: target.data.destinationRoot } },
+        ),
+      );
+    }
+    if (sourceDiscovery.data.modules.length === 0) {
+      return failureResult(
+        createDysflowError(
+          "IMPORT_PRUNE_SOURCE_UNSAFE",
+          `Refusing import_all prune because destinationRoot contains no managed VBA source files: ${target.data.destinationRoot}`,
+          { details: { destinationRoot: target.data.destinationRoot } },
+        ),
+      );
+    }
+
     const sourceModules = new Set(
-      (await discoverImportModules(target.data.destinationRoot)).map((name) => name.toLowerCase()),
+      sourceDiscovery.data.protectedNames.map((name) => name.toLowerCase()),
     );
     const listResult = await this.orchestrator.executeMappedTool(
       "list_objects",
@@ -637,30 +676,67 @@ function normalizeImportMode(importMode: string | undefined): string | undefined
 }
 
 async function discoverImportModules(destinationRoot: string): Promise<string[]> {
-  const modules: string[] = [];
-  for (const folder of [
-    destinationRoot,
-    resolve(destinationRoot, "modules"),
-    resolve(destinationRoot, "classes"),
-    resolve(destinationRoot, "forms"),
-    resolve(destinationRoot, "reports"),
-  ]) {
-    const entries = await readdir(folder).catch(() => []);
-    for (const entry of entries) {
-      const lower = entry.toLowerCase();
-      if (lower.endsWith(".form.txt")) {
-        modules.push(entry.slice(0, -".form.txt".length));
-      } else if (lower.endsWith(".report.txt")) {
-        modules.push(entry.slice(0, -".report.txt".length));
-      } else {
-        const extension = extname(entry).toLowerCase();
-        if ([".bas", ".cls", ".frm"].includes(extension)) {
-          modules.push(parse(entry).name);
-        }
+  const discovered = await discoverManagedSource(destinationRoot, nodeComparisonFileSystem, {
+    failOnRootReadError: false,
+  });
+  return discovered.ok ? discovered.data.modules : [];
+}
+
+type ManagedSourceDiscovery = {
+  modules: string[];
+  protectedNames: string[];
+};
+
+async function discoverManagedSource(
+  destinationRoot: string,
+  fileSystem: Pick<ComparisonFileSystemPort, "readdir">,
+  options: { failOnRootReadError: boolean },
+): Promise<OperationResult<ManagedSourceDiscovery>> {
+  const modules = new Set<string>();
+  const protectedNames = new Set<string>();
+  const folders = [
+    { path: destinationRoot, kind: "root" },
+    { path: resolve(destinationRoot, "modules"), kind: "module" },
+    { path: resolve(destinationRoot, "classes"), kind: "class" },
+    { path: resolve(destinationRoot, "forms"), kind: "form" },
+    { path: resolve(destinationRoot, "reports"), kind: "report" },
+  ] as const;
+
+  for (const folder of folders) {
+    let entries: readonly { name: string }[] | readonly string[];
+    try {
+      entries = await fileSystem.readdir(folder.path);
+    } catch (error) {
+      if (folder.kind === "root" && options.failOnRootReadError) {
+        const message = error instanceof Error ? error.message : String(error);
+        return failureResult(createDysflowError("SOURCE_DISCOVERY_FAILED", message));
       }
+      continue;
+    }
+
+    for (const entry of entries) {
+      const entryName = typeof entry === "string" ? entry : entry.name;
+      const moduleName = managedDiskModuleName(entryName);
+      if (moduleName === null) continue;
+      modules.add(moduleName);
+      protectedNames.add(moduleName);
+      if (folder.kind === "form") addDocumentAliases(protectedNames, moduleName, "Form_");
+      if (folder.kind === "report") addDocumentAliases(protectedNames, moduleName, "Report_");
     }
   }
-  return Array.from(new Set(modules)).sort();
+
+  return successResult({
+    modules: [...modules].sort((a, b) => a.localeCompare(b)),
+    protectedNames: [...protectedNames].sort((a, b) => a.localeCompare(b)),
+  });
+}
+
+function addDocumentAliases(names: Set<string>, moduleName: string, prefix: "Form_" | "Report_") {
+  if (moduleName.toLowerCase().startsWith(prefix.toLowerCase())) {
+    names.add(moduleName.slice(prefix.length));
+  } else {
+    names.add(`${prefix}${moduleName}`);
+  }
 }
 
 function listObjectModuleNames(data: unknown): string[] {

@@ -4,6 +4,7 @@ delete process.env.DYSFLOW_HOME;
 
 export default defineConfig({
   test: {
+    forbidOnly: true,
     include: [
       "test/e2e/**/*.test.ts",
       "test/integration/**/*.test.ts",

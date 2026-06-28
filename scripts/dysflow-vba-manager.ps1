@@ -1975,15 +1975,21 @@ function Remove-TempSccObjects {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)]$AccessApplication,
-        [Parameter(Mandatory = $true)]$VbProject
+        [Parameter(Mandatory = $true)]$VbProject,
+        [string[]]$ExistingNames = @()
     )
 
     $deleted = New-Object System.Collections.Generic.List[string]
+    $existing = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($existingName in @($ExistingNames)) {
+        if (-not [string]::IsNullOrWhiteSpace($existingName)) { [void]$existing.Add([string]$existingName) }
+    }
 
     foreach ($kind in @('Forms', 'Reports')) {
         $objectType = if ($kind -eq 'Reports') { 3 } else { 2 } # acReport=3, acForm=2
         foreach ($name in @(Get-AccessObjectNames -AccessApplication $AccessApplication -Kind $kind)) {
             if ($name -notmatch '^(Form_|Report_)?TempSccObj\d+$') { continue }
+            if ($existing.Contains([string]$name)) { continue }
             try {
                 $AccessApplication.DoCmd.DeleteObject($objectType, $name)
                 $deleted.Add([string]$name) | Out-Null
@@ -2001,6 +2007,7 @@ function Remove-TempSccObjects {
                 $component = $components.Item($i)
                 $name = [string]$component.Name
                 if ($name -notmatch '^(Form_|Report_)?TempSccObj\d+$') { continue }
+                if ($existing.Contains($name)) { continue }
                 $components.Remove($component)
                 $deleted.Add($name) | Out-Null
             } catch {
@@ -2014,6 +2021,41 @@ function Remove-TempSccObjects {
     }
 
     return @($deleted | Sort-Object -Unique)
+}
+
+function Get-TempSccObjectNames {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$AccessApplication,
+        [Parameter(Mandatory = $true)]$VbProject
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($kind in @('Forms', 'Reports')) {
+        foreach ($name in @(Get-AccessObjectNames -AccessApplication $AccessApplication -Kind $kind)) {
+            if ($name -match '^(Form_|Report_)?TempSccObj\d+$') { $names.Add([string]$name) | Out-Null }
+        }
+    }
+
+    $components = $VbProject.VBComponents
+    try {
+        for ($i = 1; $i -le $components.Count; $i++) {
+            $component = $null
+            try {
+                $component = $components.Item($i)
+                $name = [string]$component.Name
+                if ($name -match '^(Form_|Report_)?TempSccObj\d+$') { $names.Add($name) | Out-Null }
+            } catch {
+                Write-Debug "Diagnostics: $_"
+            } finally {
+                if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+            }
+        }
+    } finally {
+        if ($components) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+    }
+
+    return @($names | Sort-Object -Unique)
 }
 
 function Get-ExistsInfo {
@@ -3654,8 +3696,9 @@ function Invoke-DeleteAction {
         $idx++
         Write-Status -Message ("[{0}/{1}] Eliminando: {2}" -f $idx, $NormalizedModules.Count, $name) -Color Cyan
         try {
+            $existingTempSccObjects = @(Get-TempSccObjectNames -AccessApplication $Session.AccessApplication -VbProject $vbProject)
             $result = Remove-AccessObjectOrComponent -AccessApplication $Session.AccessApplication -VbProject $vbProject -ModuleName $name -Force:$Force
-            $tempSccObjectsCleaned = @(Remove-TempSccObjects -AccessApplication $Session.AccessApplication -VbProject $vbProject)
+            $tempSccObjectsCleaned = @(Remove-TempSccObjects -AccessApplication $Session.AccessApplication -VbProject $vbProject -ExistingNames $existingTempSccObjects)
             $result | Add-Member -MemberType NoteProperty -Name tempSccObjectsCleaned -Value $tempSccObjectsCleaned -Force
             $moduleResults.Add($result) | Out-Null
         } catch {

@@ -172,4 +172,12 @@ describe("repository quality gates", () => {
       expect(value, `threshold for ${label} must be > 0`).toBeGreaterThan(0);
     }
   });
+
+  it("forbids committed test.only/test.describe.only in both Vitest suites", async () => {
+    const unitConfig = await readText("vitest.config.ts");
+    const integrationConfig = await readText("vitest.integration.config.ts");
+
+    expect(unitConfig).toContain("forbidOnly: true");
+    expect(integrationConfig).toContain("forbidOnly: true");
+  });
 });
