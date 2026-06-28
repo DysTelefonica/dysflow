@@ -1,5 +1,31 @@
 # Changelog
 
+## [v1.10.0] - 2026-06-28
+
+Per-module VBA import reporting, Unicode preservation on PowerShell 7, pre-import form code audit, and CI baseline repair.
+
+### Added
+
+- **`dysflow_lint_form_code` MCP tool (#563 partial).** Read-only pre-import form code audit with 6 rules: form-control-binding, access-listbox-no-list-assignment, bare-function-call-with-parens, named-and-positional-args-mixing, unicode-sensitive-executable-tokens, control-property-support. Pure Node static analysis, no Access required.
+- **Per-module `import_modules` reporting (`e4b358b`).** Long-list imports return structured per-module results (module, phase, error, durationMs, rollbackApplied). No fallback to `import_all`. Detects `ACCESS_DATABASE_LOCKED` explicitly via `Test-IsAccessDatabaseLockedError` / `Get-AccessDatabaseLockedOwner`. Treats explicit empty `moduleNames` as a no-op plan (R4), not a silent `import_all` expansion.
+- **Filesystem mutation gates + dry-run/apply parity (`495cf5b`).** `dysflow_query_execute` now exposes `dryRun` and `apply` (`src/adapters/mcp/schemas/dysflow-schemas.ts:103-104`), resolving the contract divergence that was blocking real writes (closes #567).
+- **MCP write-gate for orphan process cleanup (`495cf5b`).** `dysflow_access_force_cleanup_orphaned` now refuses to kill a PID when MCP writes are disabled, returning `MCP_WRITES_DISABLED`. The list-only branch remains read-only (closes #564).
+
+### Fixed
+
+- **Unicode preservation in import round-trip on PowerShell 7 (`3fbd60a`).** `Normalize-VbaImportText` and `Split-CodeBehindSection` use default `-split` (no `-1` limit) which had a regression on PS7, silently dropping non-ASCII codepoints (S, í, ó, ñ) and the Windows-1252 byte sequence on multi-line imports.
+- **`Fix-EncodingInSrc` bulk mode coverage for `.report.txt` and `.form.txt`.** Restored BOM stripping for managed source extensions after a Pester test isolation regression (`13b2228`).
+- **`Resolve-FormCodeBehindFile` candidate extraction (`9913b5b`).** Test setup now extracts `Get-FormCodeBehindCandidateNames` alongside the helper, resolving 5 `CommandNotFoundException` failures in the pure-helpers describe.
+- **`Close-AccessDatabase` null-PID notice extraction (`a009c29`).** Test setup now extracts `Get-NullPidCloseNotice`, resolving the `CommandNotFoundException` in the null-PID branch of `Close-CanonicalAccess`.
+- **`Remove-AccessObjectOrComponent` Force fallback (`fdbfb1c`).** Test mock for `Resolve-ExistingComponentName` is now stateful — flips to `$null` once `DoCmd.DeleteObject` has fired — so the production post-deletion verification path is reachable.
+- **`Invoke-CompileAction` return-shape alignment with `-Json` contract (`5becab1`).** Removed the unconditional `return $compileResult`. The `-Json` branch now relies on the file-level `Write-DysflowResult` stub to emit a JSON string the caller can `ConvertFrom-Json`; the non-`-Json` branch writes status messages only. Test mocks for compile failure results now match the production `New-CompileFailureResult` structured shape `{ code, message }`.
+- **Optional presence-guard on `Object.hasOwn(params, "moduleNames")` (`20b7cca`).** Added the `optional-presence-guard: allow` marker for the legitimate `moduleNamesProvided` presence check that distinguishes "explicit empty" from "field omitted" (R4). Downstream, also resolved 6 pre-existing `Object is possibly 'undefined'` TS errors that were masked by the earlier lint failure.
+
+### Issues closed
+
+- #567 `fix(query): align dysflow_query_execute write mode with dryRun/apply contract` (commit `495cf5b`)
+- #564 `fix(mcp): gate orphan process cleanup behind MCP write access` (commit `495cf5b`)
+
 ## [v1.9.5] - 2026-06-27
 
 Offline form and control tree inspection, validation, serialization, and round-trip integration testing capabilities (issues #543).
