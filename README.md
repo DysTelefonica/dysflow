@@ -137,27 +137,20 @@ A call to a procedure not in the list is rejected before any COM automation is s
 
 ## Installation (remote-ready)
 
-### Install directly from GitHub (recommended)
+### Install from the current GitHub Release (recommended)
 
-Use this when a teammate wants to install from GitHub on another machine, without cloning manually.
+Use the current release asset from https://github.com/DysTelefonica/dysflow/releases/latest for production/runtime installs. The release page carries the versioned `dysflow-<tag>.tar.gz` asset and `SHA256SUMS`; avoid README-pinned "latest" tags because they drift after every release.
 
-> Note: this repository is not published as an npm package yet, so Git URL install is the official remote path.
-
-```bash
-# Latest version from GitHub remote
-pnpm add -g "git+https://github.com/DysTelefonica/dysflow.git#v1.10.0"
-# or if you prefer the latest main branch
-pnpm add -g git+https://github.com/DysTelefonica/dysflow.git
-```
-
-Then verify:
+After installing or updating the runtime, verify:
 
 ```powershell
 dysflow setup
 dysflow doctor
 ```
 
-### Install from source (full control)
+### Developer source checkout
+
+Use a source checkout only for local development, tests, and preparing releases. It is not the production update path.
 
 ```powershell
 pnpm install

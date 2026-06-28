@@ -1,0 +1,56 @@
+# close-docs-588-589-592 Tasks
+
+## Review Workload Forecast
+
+- 400-line budget risk: Low
+- Chained PRs recommended: No
+- Decision needed before apply: No
+- Delivery path: single direct-to-main work-unit commits, per user instruction.
+
+## Tasks
+
+### Issue #588 — README install release guidance
+
+- [x] 1.1 Read `gh issue view 588` and identify stale/fixed install guidance.
+- [x] 1.2 Add a RED docs gate for release guidance drift.
+- [x] 1.3 Update README install guidance minimally.
+- [x] 1.4 Run focused docs gate and commit/push the issue work unit.
+
+### Issue #589 — update trust model docs
+
+- [ ] 2.1 Read `gh issue view 589` and identify trust-model drift.
+- [ ] 2.2 Add a RED docs gate for release tarball/checksum/no-fallback guidance.
+- [ ] 2.3 Update README/security docs minimally.
+- [ ] 2.4 Run focused docs gate and commit/push the issue work unit.
+
+### Issue #592 — HTTP token env docs
+
+- [ ] 3.1 Read `gh issue view 592` and identify env-token documentation gaps.
+- [ ] 3.2 Add a RED docs gate for `httpTokenEnv` / `DYSFLOW_HTTP_TOKEN` guidance.
+- [ ] 3.3 Update README and HTTP API docs minimally.
+- [ ] 3.4 Run focused docs gate and commit/push the issue work unit.
+
+### Verify, archive, and close
+
+- [ ] 4.1 Run `pnpm test`, `pnpm build`, `pnpm lint`, and `pwsh -Command "Invoke-Pester scripts/tests/"`.
+- [ ] 4.2 Confirm GitHub Actions success.
+- [ ] 4.3 Archive this change and add `archive-report.md`.
+- [ ] 4.4 Commit/push archive.
+- [ ] 4.5 Close #588, #589, and #592 with commit SHA + test evidence comments.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 1.x | `test/docs/readme-release-doc.test.ts` | Docs gate | Existing README docs gate failed as expected after new test | RED: focused test failed before README edit | GREEN: `pnpm vitest run test/docs/readme-release-doc.test.ts` | Single docs contract for issue #588 | None needed |
+| 2.x | Pending | Docs gate | Pending | Pending | Pending | Pending | Pending |
+| 3.x | Pending | Docs gate | Pending | Pending | Pending | Pending | Pending |
+
+## Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+|---|---|---|---|---|
+| Pending | Issue #588 README install release guidance | 1.1-1.4 | `pnpm vitest run test/docs/readme-release-doc.test.ts` | N/A |
+| Pending | Issue #589 update trust model docs | 2.1-2.4 | Pending | N/A |
+| Pending | Issue #592 HTTP token env docs | 3.1-3.4 | Pending | N/A |
+| Pending | Archive and closeout | 4.1-4.5 | Pending | N/A |
