@@ -1367,8 +1367,18 @@ Describe "Remove-AccessObjectOrComponent — behavioral" {
 
     It "falls back to DoCmd.DeleteObject when HRESULT 0x800ADEB9 occurs and Force is true" {
         function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
-        function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName) return "Form_MyForm" }
-        
+        # Stateful mock: returns "Form_MyForm" while the component is in the project,
+        # then $null once DoCmd.DeleteObject has fired (simulating real Access
+        # post-deletion state). The production code's post-deletion verification
+        # re-calls Resolve-ExistingComponentName; without this flip it always sees
+        # "Form_MyForm" still present and throws "Active lock detected", masking
+        # the success path the test is verifying.
+        $script:FormMyFormDeleted = $false
+        function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName)
+            if ($script:FormMyFormDeleted) { return $null }
+            return "Form_MyForm"
+        }
+
         $script:DeleteObjectCalled = $false
         $script:DeleteObjectType = $null
         $script:DeleteObjectName = $null
@@ -1381,6 +1391,10 @@ Describe "Remove-AccessObjectOrComponent — behavioral" {
             $script:DeleteObjectCalled = $true
             $script:DeleteObjectType = $type
             $script:DeleteObjectName = $name
+            # Mark the component as gone so the production post-deletion
+            # verification (which re-calls Resolve-ExistingComponentName) sees
+            # the same null the real Access COM would report.
+            $script:FormMyFormDeleted = $true
         }
 
         $fakeComponents = [PSCustomObject]@{}
