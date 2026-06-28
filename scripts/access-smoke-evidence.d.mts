@@ -1,4 +1,13 @@
-export type AccessSmokeEvidenceStatus = "executed" | "skipped" | "failed";
+export type AccessSmokeEvidenceStatus = "executed" | "skipped" | "access-skipped" | "failed";
+
+export type AccessSmokeEvidenceAssertionResult = {
+  status?: string;
+};
+
+export type AccessSmokeEvidenceTestResult = {
+  name?: string;
+  assertionResults?: AccessSmokeEvidenceAssertionResult[];
+};
 
 export type AccessSmokeEvidenceReport = {
   numTotalTests?: number;
@@ -6,6 +15,11 @@ export type AccessSmokeEvidenceReport = {
   numFailedTests?: number;
   numPendingTests?: number;
   success?: boolean;
+  testResults?: AccessSmokeEvidenceTestResult[];
+};
+
+export type AccessSmokeEvidenceOptions = {
+  releaseMode?: boolean;
 };
 
 export type AccessSmokeEvidenceSummary = {
@@ -16,4 +30,5 @@ export type AccessSmokeEvidenceSummary = {
 
 export function summarizeAccessSmokeEvidence(
   report: AccessSmokeEvidenceReport,
+  options?: AccessSmokeEvidenceOptions,
 ): AccessSmokeEvidenceSummary;

@@ -3,7 +3,7 @@ import {
   getMcpToolContract,
   MCP_TOOL_CONTRACTS,
 } from "../../../src/adapters/mcp/mcp-tool-contracts";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 class FakeVbaService {
@@ -41,16 +41,28 @@ describe("MCP tool contract metadata", () => {
     });
   });
 
-  it("guards modern descriptions with shared safety wording", () => {
+  it("defines contract metadata for every modern tool", () => {
+    for (const toolName of MODERN_TOOL_NAMES) {
+      expect(getMcpToolContract(toolName), `${toolName} contract`).toMatchObject({
+        access: expect.any(String),
+        writeGate: expect.any(String),
+        summary: expect.stringContaining("MCP contract"),
+      });
+    }
+  });
+
+  it("advertises each modern tool contract in its description", () => {
     const tools = createDysflowMcpTools({
       vbaService: new FakeVbaService(),
       queryService: new FakeQueryService(),
       diagnosticsService: new FakeDiagnosticsService(),
     });
-    const queryExecute = tools.find((tool) => tool.name === "dysflow_query_execute");
-    const cleanup = tools.find((tool) => tool.name === "dysflow_access_cleanup");
 
-    expect(queryExecute?.description).toContain(MCP_TOOL_CONTRACTS.dysflow_query_execute.summary);
-    expect(cleanup?.description).toContain(MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary);
+    for (const toolName of MODERN_TOOL_NAMES) {
+      const advertised = tools.find((tool) => tool.name === toolName);
+      expect(advertised?.description, `${toolName} description`).toContain(
+        MCP_TOOL_CONTRACTS[toolName].summary,
+      );
+    }
   });
 });

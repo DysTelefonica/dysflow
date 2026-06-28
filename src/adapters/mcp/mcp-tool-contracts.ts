@@ -50,7 +50,8 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
   cleanup_access_operation: {
     access: "conditional-write",
     writeGate: "conditional",
-    summary: "Cleanup is read-only without force and write-gated when force can kill a process.",
+    summary:
+      "Conditional-write MCP contract; cleanup is read-only without force and write-gated when force can kill a process.",
   },
   run_vba: {
     access: "read-only",
@@ -129,7 +130,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
-      "Orphan cleanup is read-only when listing and write-gated when confirmPid can kill a process.",
+      "Conditional-write MCP contract; orphan cleanup is read-only when listing and write-gated when confirmPid can kill a process.",
   },
 };
 

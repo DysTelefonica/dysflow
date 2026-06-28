@@ -46,8 +46,10 @@ Cleanup behavior:
 - Successful runs remove the sandbox by default.
 - Failed runs preserve the sandbox and print its path for diagnosis.
 - Set `DYSFLOW_E2E_PRESERVE_SANDBOX=1` to preserve the sandbox even after success.
-- Set `DYSFLOW_E2E_SANDBOX_ROOT=<absolute path>` only when you need a deterministic sandbox path for
-  local debugging.
+- Set `DYSFLOW_E2E_SANDBOX_ROOT=<absolute path>` only when you need a deterministic sandbox parent
+  for local debugging. The value is validated as a parent directory only; the harness always creates
+  and deletes a generated `dysflow-mcp-e2e-*` child beneath it. Parents inside the repo/fixtures,
+  drive roots, the home directory, and `%LOCALAPPDATA%\dysflow` are rejected.
 
 ## MCP E2E — local test-runtime
 

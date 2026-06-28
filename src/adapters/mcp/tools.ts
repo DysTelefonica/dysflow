@@ -122,7 +122,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_doctor",
-      description: "Run core diagnostic checks through Dysflow services.",
+      description: `Run core diagnostic checks through Dysflow services. ${MCP_TOOL_CONTRACTS.dysflow_doctor.summary}`,
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DOCTOR_SCHEMA);
@@ -133,7 +133,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_operations_list",
-      description: "List recent Dysflow Access operation records.",
+      description: `List recent Dysflow Access operation records. ${MCP_TOOL_CONTRACTS.dysflow_access_operations_list.summary}`,
       inputSchema: NO_INPUT_SCHEMA,
       handler: async () => handleMcpAccessOperationsList(services),
     },
@@ -154,8 +154,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_force_cleanup_orphaned",
-      description:
-        "List orphaned headless MSACCESS processes holding the project's accessPath, or kill one only when confirmPid is explicitly provided. Refuses to kill any process that is not headless, does not hold the accessPath, or is owned by a running Dysflow operation.",
+      description: `List orphaned headless MSACCESS processes holding the project's accessPath, or kill one only when confirmPid is explicitly provided. Refuses to kill any process that is not headless, does not hold the accessPath, or is owned by a running Dysflow operation. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(
