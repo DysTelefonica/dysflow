@@ -37,6 +37,12 @@
 - [x] 4.3 Archive the change to `openspec/changes/archive/2026-06-28-close-batch-584-586-587/` with `archive-report.md`.
 - [ ] 4.4 Close #584, #586, and #587 with commit SHA(s) and test references.
 
+## Follow-up: fresh review blockers
+
+- [x] F.1 BLOCKER A: sandbox override is treated as a parent only; cleanup always targets a generated `dysflow-mcp-e2e-*` child and rejects unsafe parents.
+- [x] F.2 BLOCKER B: Windows Access smoke evidence distinguishes Access-dependent suites from fake/non-Access tests and fails release mode when required Access suites are skipped.
+- [x] F.3 WARNING C: modern MCP tool contract metadata is table-driven and every modern advertised description includes contract metadata.
+
 ---
 
 ## Implementation commits
@@ -48,3 +54,4 @@
 | `f7ea0b3` | #587 MCP contract surface metadata | 3.1–3.3 | RED: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` failed on missing metadata module; GREEN: MCP focused tests 22/22, `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, Pester 374/0/4; CI `28332370495` success | N/A |
 | `e4b475a` | tasks traceability | 4.1–4.2 | local final: `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped; CI `28332466372` success | N/A |
 | _pending_ | archive and issue closeout | 4.3–4.4 | archive commit pending | N/A |
+| `15383a3` | review blocker follow-up fixes | F.1–F.3 | RED: focused Vitest suites failed on unsafe sandbox parent, fake-tests-plus-Access-skipped evidence, and incomplete modern metadata descriptions; GREEN: focused suites 11/11, `pnpm test` 1724/1724, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |
