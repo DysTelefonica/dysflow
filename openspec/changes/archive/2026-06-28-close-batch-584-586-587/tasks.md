@@ -34,7 +34,7 @@
 
 - [x] 4.1 Run final local verification: `pnpm test`, `pnpm build`, `pnpm lint`, `pwsh -Command "Invoke-Pester scripts/tests/"`.
 - [x] 4.2 Confirm GitHub Actions success for all pushed commits.
-- [ ] 4.3 Archive the change to `openspec/changes/archive/2026-06-28-close-batch-584-586-587/` with `archive-report.md`.
+- [x] 4.3 Archive the change to `openspec/changes/archive/2026-06-28-close-batch-584-586-587/` with `archive-report.md`.
 - [ ] 4.4 Close #584, #586, and #587 with commit SHA(s) and test references.
 
 ---
@@ -46,5 +46,5 @@
 | `5a891c2` | #584 Windows Access smoke evidence | 1.1–1.3 | RED: `pnpm vitest run test/quality-gates/windows-access-smoke-evidence.test.ts` failed on missing helper; GREEN: focused test 3/3, `pnpm test` 1716/1716, `pnpm build`, `pnpm lint`; CI `28331939189` success | N/A |
 | `9ad8987` | #586 MCP E2E fixture isolation | 2.1–2.3 | RED: `pnpm vitest run test/quality-gates/mcp-e2e-sandbox.test.ts` failed on missing helper; GREEN: focused tests 14/14, `pnpm test` 1718/1718, `pnpm build`, `pnpm lint`; CI `28332128649` success | N/A |
 | `f7ea0b3` | #587 MCP contract surface metadata | 3.1–3.3 | RED: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` failed on missing metadata module; GREEN: MCP focused tests 22/22, `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, Pester 374/0/4; CI `28332370495` success | N/A |
-| _pending_ | tasks traceability | 4.1–4.2 | local final: `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |
-| _pending_ | archive and issue closeout | 4.3–4.4 | CI pending | N/A |
+| `e4b475a` | tasks traceability | 4.1–4.2 | local final: `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped; CI `28332466372` success | N/A |
+| _pending_ | archive and issue closeout | 4.3–4.4 | archive commit pending | N/A |
