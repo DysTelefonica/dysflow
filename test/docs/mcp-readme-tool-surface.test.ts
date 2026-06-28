@@ -30,7 +30,9 @@ describe("README MCP tool surface", () => {
       Number(match[1]),
     );
 
-    expect(statedCounts.length, "README should state the visible MCP tool count").toBeGreaterThan(0);
+    expect(statedCounts.length, "README should state the visible MCP tool count").toBeGreaterThan(
+      0,
+    );
     expect(new Set(statedCounts)).toEqual(new Set([visibleCount]));
   });
 
