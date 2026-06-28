@@ -26,10 +26,39 @@ E2E_testing\.dysflow\mcp-e2e-temp\mcp-e2e-report.md
 | Frontend | `E2E_testing\NoConformidades.accdb` |
 | Backend | `E2E_testing\NoConformidades_Datos.accdb` |
 | Project config | `E2E_testing\.dysflow\project.json` |
-| Runner | installed runtime launcher: `%LOCALAPPDATA%\dysflow\bin\dysflow.cmd mcp` |
+| Runner | resolved by `resolveMcpE2eCommand` — see [MCP E2E — local test-runtime](#mcp-e2e--local-test-runtime) |
 | Harness | `E2E_testing\mcp-e2e.mjs` |
 
 The E2E harness performs JSON-RPC MCP handshakes and calls the advertised tools through the real stdio MCP server. It is intentionally closer to normal agent usage than direct TypeScript unit tests.
+
+## MCP E2E — local test-runtime
+
+The harness does **not** default to the production install at `%LOCALAPPDATA%\dysflow\bin\dysflow.cmd` — that install is the host's live runtime, and silently spawning it under E2E mixes the wrong scripts, the wrong `DYSFLOW_HOME`, and the wrong `Update` path into the test environment. The production install is refused by default; the harness aborts with `MCP_E2E_REFUSES_PRODUCTION_RUNTIME` if no explicit `DYSFLOW_E2E_COMMAND` is set and only the production install is on disk (#582).
+
+Resolution priority (handled by `E2E_testing/_helpers/resolve-mcp-e2e-command.mjs`):
+
+1. **`DYSFLOW_E2E_COMMAND` env var** (operator override, always honored). If set to a non-existent path the harness aborts with `MCP_E2E_OVERRIDE_NOT_FOUND`.
+2. **`<repoRoot>/test-runtime/bin/dysflow.cmd`** (the local build produced by `pnpm build`). This is the preferred default and what the E2E suite expects.
+3. **`%LOCALAPPDATA%\dysflow\bin\dysflow.cmd`** (the production install). Only reached if there is no override and no test-runtime; the harness then aborts with `MCP_E2E_REFUSES_PRODUCTION_RUNTIME` and lists the paths it searched. It never spawns the production install without an explicit override.
+4. **Nothing on disk anywhere** → `MCP_E2E_NO_RUNTIME_AVAILABLE`.
+
+Quick path to a green E2E run:
+
+```powershell
+# From the repo root.
+$env:ACCESS_VBA_PASSWORD = "<fixture password>"
+pnpm build                                       # produces test-runtime/bin/dysflow.cmd
+pnpm run test:e2e:mcp                            # the harness auto-uses the test-runtime
+```
+
+If you need to point the E2E at a different runtime (e.g. a packaged build under test, or the production install for a debugging session), set `DYSFLOW_E2E_COMMAND` explicitly:
+
+```powershell
+$env:DYSFLOW_E2E_COMMAND = "C:\path\to\other\dysflow.cmd"
+pnpm run test:e2e:mcp
+```
+
+If the harness ever aborts before any tool call, the message names the resolution code (`MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE`, or `MCP_E2E_OVERRIDE_NOT_FOUND`) and the candidates it searched. Run `pnpm build` first or fix `DYSFLOW_E2E_COMMAND`.
 
 ## Rules for maintainers
 

@@ -2,6 +2,7 @@ import { spawn, execSync } from "node:child_process";
 import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -11,9 +12,20 @@ const backendPath = join(scriptDir, "NoConformidades_Datos.accdb");
 const destinationRoot = join(scriptDir, "src");
 const tempRoot = join(scriptDir, ".dysflow", "mcp-e2e-temp");
 const reportPath = join(tempRoot, "mcp-e2e-report.md");
-const cliCommand = process.env.DYSFLOW_E2E_COMMAND ?? join(process.env.LOCALAPPDATA ?? "", "dysflow", "bin", "dysflow.cmd");
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD;
+
+// Resolve the dysflow command the E2E harness is allowed to spawn (#582).
+// The default is the repo-local test-runtime; the production install under
+// %LOCALAPPDATA%\dysflow is REFUSED without an explicit DYSFLOW_E2E_COMMAND.
+const resolvedCommand = resolveMcpE2eCommand({ env: process.env, repoRoot });
+if (!resolvedCommand.ok) {
+  console.error(`[mcp-e2e] ${resolvedCommand.code}: ${resolvedCommand.message}`);
+  console.error(`[mcp-e2e] Searched: ${resolvedCommand.candidates.join(", ")}`);
+  process.exit(1);
+}
+const cliCommand = resolvedCommand.command;
+console.log(`[mcp-e2e] Using dysflow runtime: ${cliCommand} (source: ${resolvedCommand.source})`);
 
 // Force the runner to use the test-runtime copy of `dysflow-access-runner.ps1`
 // instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
