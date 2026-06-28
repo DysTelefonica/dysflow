@@ -529,7 +529,7 @@ Describe "Close-AccessDatabase — owned Access PID cleanup" {
             [ref]$null,
             [ref]$null
         )
-        foreach ($fnName in @('Stop-AccessPidAndWait', 'Close-CanonicalAccess')) {
+        foreach ($fnName in @('Stop-AccessPidAndWait', 'Close-CanonicalAccess', 'Get-NullPidCloseNotice')) {
             $fnAst = $moduleAst.FindAll(
                 { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq $fnName },
                 $true
