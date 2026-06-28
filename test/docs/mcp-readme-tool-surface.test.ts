@@ -38,12 +38,26 @@ describe("README MCP tool surface", () => {
 
   it("documents every visible tools/list name in the README inventory (#590)", async () => {
     const readme = await readFile("README.md", "utf8");
-    const missing = advertisedTools()
-      .filter((tool) => !tool.hidden)
-      .map((tool) => tool.name)
-      .filter((toolName) => !readme.includes(`\`${toolName}\``));
+    const inventoryToolNames = readmeInventoryToolNames(readme);
+    const missing = visibleToolNames().filter((toolName) => !inventoryToolNames.has(toolName));
 
     expect(missing).toEqual([]);
+  });
+
+  it("documents visible tools/list names only as shaped entries in the MCP inventory (#590)", async () => {
+    const readme = await readFile("README.md", "utf8");
+    const expected = new Set(visibleToolNames());
+    const inventoryToolNames = readmeInventoryToolNames(readme);
+
+    expect(inventoryToolNames).toEqual(expected);
+  });
+
+  it("describes --enable-writes as enabling guarded MCP writes, not only SQL writes", async () => {
+    const readme = await readFile("README.md", "utf8");
+    const cliSection = sectionBetween(readme, "## CLI", "### Common flow");
+
+    expect(cliSection).toContain("enables guarded MCP writes");
+    expect(cliSection).not.toContain("enables guarded SQL writes");
   });
 });
 
@@ -53,4 +67,33 @@ function advertisedTools() {
     queryService: new FakeQueryService(),
     diagnosticsService: new FakeDiagnosticsService(),
   });
+}
+
+function visibleToolNames() {
+  return advertisedTools()
+    .filter((tool) => !tool.hidden)
+    .map((tool) => tool.name);
+}
+
+function readmeInventoryToolNames(readme: string): Set<string> {
+  const inventory = sectionBetween(
+    readme,
+    "### Core MCP Tools",
+    "### MCP protocol and maintenance",
+  );
+  return new Set(
+    [...inventory.matchAll(/^\s*(?:####|\*)\s+(?:\*\*)?`([^`]+)`(?:\*\*)?\s*(?::)?/gm)].flatMap(
+      (match) => (match[1] === undefined ? [] : [match[1]]),
+    ),
+  );
+}
+
+function sectionBetween(content: string, startMarker: string, endMarker: string): string {
+  const start = content.indexOf(startMarker);
+  const end = content.indexOf(endMarker, start + startMarker.length);
+
+  expect(start, `README should include ${startMarker}`).toBeGreaterThanOrEqual(0);
+  expect(end, `README should include ${endMarker} after ${startMarker}`).toBeGreaterThan(start);
+
+  return content.slice(start, end);
 }

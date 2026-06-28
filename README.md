@@ -571,8 +571,12 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
 * **`list_access_operations`**: Alias for listing tracked Access operations and their current registry status.
   - Parameters: none
+* **`cleanup_access_operation`**: Alias for safely reconciling or force-cleaning a tracked Access operation.
+  - Parameters: `operationId` (string, required), `force` (boolean, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
+* **`run_vba`**: Alias for executing a public VBA procedure in an already compiled project.
+  - Parameters: `procedureName` (string, required), `argsJson` (string, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
   - Parameters: none (uses the active project context)
 * **`vba_inline_execution`**: Run a throwaway VBA snippet in one call — writes a temporary module, imports it, executes its public entry point, captures the result, and guarantees cleanup of both the binary component and the temp file. Write-gated.
@@ -611,8 +615,10 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `tableName` (string, optional), `definition` (string, optional), `dryRun`, `apply`
 * **`drop_table`**: Drop a table.
   - Parameters: `tableName` (string, optional), `dryRun`, `apply`
-* **`seed_fixture` / `teardown_fixture`**: Populates or clears mock rows in a table.
+* **`seed_fixture`**: Populates mock rows in a table.
   - Parameters: `tableName` (string, optional), `rows` (array of objects, optional), `dryRun`, `apply`
+* **`teardown_fixture`**: Clears fixture rows from a table.
+  - Parameters: `tableName` (string, optional), `dryRun`, `apply`
 
 #### 3. Database Schema & Links
 * **`list_tables`**: List all tables in the active databases.
@@ -635,14 +641,18 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `rootPath` (string, optional), `directory` (string, optional)
 * **`list_links`**: Get target connections of all linked tables.
   - Parameters: `accessPath` (optional)
-* **`link_tables` / `relink_tables`**: Link or rebind tables to a backend file.
+* **`link_tables`**: Link tables to a backend file.
+  - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
+* **`relink_tables`**: Rebind existing linked tables to a backend file.
   - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
 * **`localize_backend_links`**: Convert absolute linked paths to local relative links.
   - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
 * **`unlink_table`**: Delete a linked table definition.
   - Parameters: `tableName` (string, optional), `accessPath` (optional), `dryRun`
-* **`export_queries` / `import_queries`**: Export or bulk import Access QueryDefs.
+* **`export_queries`**: Export Access QueryDefs.
   - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
+* **`import_queries`**: Bulk import Access QueryDefs.
+  - Parameters: `queryDefinitions`/`queries` (optional), `accessPath` (optional), `dryRun`
 * **`compact_repair`**: Execute compact and repair operations.
   - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
 * **`relink_directory`**: Bulk relink table references recursively under a directory root.
@@ -711,7 +721,7 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | Command           | Description                                   |
 | ----------------- | --------------------------------------------- |
 | `dysflow`         | Open the Dysflow TUI dashboard                |
-| `dysflow mcp`     | Start MCP stdio adapter (`--enable-writes` enables guarded SQL writes) |
+| `dysflow mcp`     | Start MCP stdio adapter (`--enable-writes` enables guarded MCP writes) |
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |
