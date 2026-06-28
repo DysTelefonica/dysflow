@@ -5,7 +5,7 @@ PowerShell process spawn boundary.
 
 ## Update mechanism
 
-The only supported update mechanism is downloading a GitHub Release tar.gz archive and
+The only supported update mechanism is downloading a GitHub Release archive (`tar.gz`) and
 verifying it against the SHA-256 checksums published in the same release.
 
 | Property | Detail |
@@ -15,6 +15,8 @@ verifying it against the SHA-256 checksums published in the same release.
 | HTTP 404 | If the archive is not available for the requested tag, the downloader throws immediately. There is no silent fallback. |
 | No gh CLI fallback | The latest-release lookup uses only the GitHub REST API. There is no `gh` CLI fallback when the API returns non-OK. |
 | Checksum bypass | `--skip-checksum` is available for development/testing. It MUST NOT be used in production installs. |
+
+If the release archive is missing, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum is fixed or report the broken release; there is no source-build or git-clone fallback.
 
 **No git-clone / source-build fallback exists.** The git-clone update path was removed in
 commit `499d5e4`. Any attempt to introduce a source-build fallback reintroduces the

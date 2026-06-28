@@ -13,6 +13,20 @@ describe("README release and update guidance", () => {
       /git\+https:\/\/github\.com\/DysTelefonica\/dysflow\.git#v\d+\.\d+\.\d+/i,
     );
   });
+
+  it("aligns update instructions with the release tarball trust model (#589)", async () => {
+    const readme = await readFile("README.md", "utf8");
+    const trustModel = await readFile("docs/security/update-trust-model.md", "utf8");
+    const updateSection = sectionBetween(readme, "### Updating Dysflow", "## OpenCode MCP config");
+
+    for (const doc of [updateSection, trustModel]) {
+      expect(doc).toContain("GitHub Release archive");
+      expect(doc).toContain("SHA-256");
+      expect(doc).toContain("no source-build or git-clone fallback");
+      expect(doc).toContain("release asset/checksum");
+      expect(doc).toContain("abort");
+    }
+  });
 });
 
 function sectionBetween(content: string, startHeading: string, endHeading: string): string {
