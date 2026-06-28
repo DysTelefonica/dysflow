@@ -12,6 +12,7 @@ Closed MCP documentation issues #590, #593, and #594 with strict docs-gate TDD. 
 | `ee1457e` | #590 | Biome formatting follow-up for the README tool-surface docs gate after CI lint failure. | `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts`; `pnpm lint`; CI `28335656038` |
 | `7d220b9` | #593 | Modern `dysflow_*` MCP tool descriptions now mention key args, write-gate behavior, dry-run/apply semantics, and cleanup footguns. | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts`; `pnpm lint`; CI `28335759252` |
 | `fedc9df` | #594 | `AGENTS.md` now includes agent-facing MCP workflow recipes for bootstrap, sync, recovery, write enablement, target selection, and form/report ownership. | RED/GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts`; `pnpm lint`; CI `28335879017` |
+| `9c78356` | #590/#594 | Review follow-up: README now describes `--enable-writes` as enabling guarded MCP writes, and the README tool-surface gate only accepts inventory-shaped entries inside the MCP inventory section. | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts`; full gate: `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/` |
 
 ## Test summary
 
@@ -22,6 +23,7 @@ Closed MCP documentation issues #590, #593, and #594 with strict docs-gate TDD. 
 - `pnpm build` — passed.
 - `pnpm lint` — passed.
 - `pwsh -Command "Invoke-Pester scripts/tests/"` — passed, 374 passed / 0 failed / 4 skipped.
+- Review follow-up full gate — passed on 2026-06-28: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts`; `pnpm test` (137 files / 1737 tests); `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/` (374 passed / 0 failed / 4 skipped).
 
 ## CI runs
 

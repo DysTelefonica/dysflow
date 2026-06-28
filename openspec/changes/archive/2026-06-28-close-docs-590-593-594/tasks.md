@@ -54,3 +54,4 @@
 | `7d220b9` | Issue #593 modern MCP tool descriptions | 2.1-2.4 | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts`; `pnpm lint`; CI `28335759252` | N/A |
 | `fedc9df` | Issue #594 MCP workflow recipes | 3.1-3.4 | RED/GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts`; `pnpm lint`; CI `28335879017` | N/A |
 | Pending archive commit | Archive and closeout | 4.1-4.5 | `pnpm test`; `pnpm build`; `pnpm lint`; `pwsh -Command "Invoke-Pester scripts/tests/"` | N/A |
+| `9c78356` | Review warning follow-up: tighten README inventory guard and clarify `--enable-writes` scope | #590/#594 closure hardening | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts`; full gate: `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/` | N/A |
