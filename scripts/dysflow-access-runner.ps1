@@ -464,7 +464,8 @@ function Invoke-GetSchemaAction {
 function Invoke-CountRowsAction {
   param($Database, $TableName)
   if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for count_rows." }
-  $rs = $Database.OpenRecordset("SELECT COUNT(*) AS RowCount FROM [$([string]$TableName)]")
+  $quotedTable = Format-AccessIdentifier -Name ([string]$TableName) -Label "table"
+  $rs = $Database.OpenRecordset("SELECT COUNT(*) AS RowCount FROM $quotedTable")
   try {
     return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
   } finally {
@@ -477,7 +478,9 @@ function Invoke-DistinctValuesAction {
   param($Database, $TableName, $ColumnName)
   if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for distinct_values." }
   if ([string]::IsNullOrWhiteSpace($ColumnName)) { throw "columnName is required for distinct_values." }
-  $rs = $Database.OpenRecordset("SELECT DISTINCT [$([string]$ColumnName)] AS [Value] FROM [$([string]$TableName)]")
+  $quotedTable = Format-AccessIdentifier -Name ([string]$TableName) -Label "table"
+  $quotedColumn = Format-AccessIdentifier -Name ([string]$ColumnName) -Label "column"
+  $rs = $Database.OpenRecordset("SELECT DISTINCT $quotedColumn AS [Value] FROM $quotedTable")
   try {
     return [ordered]@{ rows = @(Convert-RecordsetRows $rs) }
   } finally {
@@ -975,6 +978,25 @@ function Format-SqlLiteral {
   return "'" + ($Value.ToString().Replace("'", "''")) + "'"
 }
 
+# Centralized Access identifier quoting (issue #573). Validates the name against
+# the ASCII identifier grammar and returns the bracket-wrapped form. Every SQL
+# interpolation site (count_rows, distinct_values, create_table, drop_table,
+# seed_fixture, teardown_fixture) must go through this helper so an unsafe
+# name can never reach the SQL string — bracket-escape attacks via `]` and SQL
+# separator injection via `;`, quotes, or whitespace are rejected with a
+# descriptive error that names the offending value.
+function Format-AccessIdentifier {
+  param(
+    [Parameter(Mandatory = $true)] [AllowEmptyString()] [string] $Name,
+    [Parameter(Mandatory = $false)] [string] $Label = "identifier"
+  )
+  if ([string]::IsNullOrWhiteSpace($Name)) { throw "$Label name is required." }
+  if ($Name -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') {
+    throw "Invalid $Label name: $Name. Names must start with a letter or underscore and contain only letters, digits, or underscores."
+  }
+  return "[$Name]"
+}
+
 function Split-SqlStatements {
   param([string] $Sql)
   $statements = New-Object System.Collections.ArrayList
@@ -1073,7 +1095,8 @@ function Invoke-WriteAction {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for create_table." }
       if ([string]::IsNullOrWhiteSpace([string]$Payload.definition)) { throw "definition is required for create_table." }
       Assert-TableAllowed ([string]$Payload.tableName)
-      $sql = "CREATE TABLE [$([string]$Payload.tableName)] ($([string]$Payload.definition))"
+      $quotedTable = Format-AccessIdentifier -Name ([string]$Payload.tableName) -Label "table"
+      $sql = "CREATE TABLE $quotedTable ($([string]$Payload.definition))"
       if ($dryRun) { return [ordered]@{ dryRun = $true; sql = $sql } }
       $Database.Execute($sql, 128)
       return [ordered]@{ dryRun = $false; sql = $sql; affectedRows = $Database.RecordsAffected }
@@ -1081,7 +1104,8 @@ function Invoke-WriteAction {
     "drop_table" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for drop_table." }
       Assert-TableAllowed ([string]$Payload.tableName)
-      $sql = "DROP TABLE [$([string]$Payload.tableName)]"
+      $quotedTable = Format-AccessIdentifier -Name ([string]$Payload.tableName) -Label "table"
+      $sql = "DROP TABLE $quotedTable"
       if ($dryRun) { return [ordered]@{ dryRun = $true; sql = $sql } }
       $Database.Execute($sql, 128)
       return [ordered]@{ dryRun = $false; sql = $sql; affectedRows = $Database.RecordsAffected }
@@ -1089,8 +1113,8 @@ function Invoke-WriteAction {
     "seed_fixture" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for seed_fixture." }
       Assert-TableAllowed ([string]$Payload.tableName)
+      $quotedTable = Format-AccessIdentifier -Name ([string]$Payload.tableName) -Label "table"
       $tableName = [string]$Payload.tableName
-      if ($tableName -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') { throw "Invalid table name: $tableName" }
       $rows = @($Payload.rows)
       if ($rows.Count -eq 0) { throw "rows are required for seed_fixture." }
       $count = 0
@@ -1099,12 +1123,12 @@ function Invoke-WriteAction {
         $values = @()
         foreach ($property in $row.PSObject.Properties) {
           $colName = $property.Name
-          if ($colName -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') { throw "Invalid column name: $colName" }
-          $columns += "[$colName]"
+          $quotedColumn = Format-AccessIdentifier -Name $colName -Label "column"
+          $columns += $quotedColumn
           $value = $property.Value
           $values += Format-SqlLiteral $value
         }
-        $sql = "INSERT INTO [$tableName] (" + ($columns -join ", ") + ") VALUES (" + ($values -join ", ") + ")"
+        $sql = "INSERT INTO $quotedTable (" + ($columns -join ", ") + ") VALUES (" + ($values -join ", ") + ")"
         if (-not $dryRun) { $Database.Execute($sql, 128) }
         $count++
       }
@@ -1113,7 +1137,8 @@ function Invoke-WriteAction {
     "teardown_fixture" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for teardown_fixture." }
       Assert-TableAllowed ([string]$Payload.tableName)
-      $sql = "DELETE FROM [$([string]$Payload.tableName)]"
+      $quotedTable = Format-AccessIdentifier -Name ([string]$Payload.tableName) -Label "table"
+      $sql = "DELETE FROM $quotedTable"
       if ($dryRun) { return [ordered]@{ dryRun = $true; sql = $sql } }
       $Database.Execute($sql, 128)
       return [ordered]@{ dryRun = $false; sql = $sql; affectedRows = $Database.RecordsAffected }
