@@ -674,4 +674,106 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
             $script:Slice3FunctionNames | Should -Contain "Close-CanonicalAccess"
         }
     }
+
+    # -----------------------------------------------------------------------
+    # Issue #571: diagnostics must distinguish "COM app created" from "DB
+    # opened". Without this, a caller cannot tell whether a returned session
+    # represents a successfully opened database or just an Access.Application
+    # whose OpenCurrentDatabase was skipped / failed in a previous attempt.
+    # -----------------------------------------------------------------------
+    Context "DatabaseOpened session flag (#571)" {
+        It "Session.DatabaseOpened is true after a successful OpenCurrentDatabase" {
+            $fakeApp = New-FakeAccessApp -hWndAccessApp 8800
+
+            $session = Open-CanonicalAccess `
+                -DbPath            "C:\fake.accdb" `
+                -Password          "" `
+                -ComSpawnAction    { $fakeApp } `
+                -HwndToPidAction   { param($Hwnd) 47000 } `
+                -WmiSnapshotAction { @() }
+
+            $session.DatabaseOpened | Should -Be $true
+        }
+
+        It "Session.DatabaseOpened is false when -OpenDatabase was explicitly skipped" {
+            $fakeApp = New-FakeAccessApp -hWndAccessApp 8801
+
+            $session = Open-CanonicalAccess `
+                -DbPath            "C:\fake.accdb" `
+                -Password          "" `
+                -OpenDatabase      $false `
+                -ComSpawnAction    { $fakeApp } `
+                -HwndToPidAction   { param($Hwnd) 47001 } `
+                -WmiSnapshotAction { @() }
+
+            $session.DatabaseOpened | Should -Be $false `
+                -Because "caller passed -OpenDatabase:$false, so no DB was opened"
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    # Issue #571: failed DB open must surface as a structured error (not a
+    # swallowed exception that lets the caller report "opened" anyway).
+    # Specifically:
+    #   - the error must carry the unique id DYSFLOW_OPEN_CURRENT_DATABASE_FAILED
+    #     so callers can branch on it (vs. other COM failures)
+    #   - the error message must name the database path so the operator can
+    #     identify which file failed
+    # -----------------------------------------------------------------------
+    Context "OpenCurrentDatabase failures carry structured error information (#571)" {
+        It "ErrorRecord id is DYSFLOW_OPEN_CURRENT_DATABASE_FAILED when password is rejected" {
+            $fakeApp = New-FakeAccessApp -hWndAccessApp 8802
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Force -Value {
+                param($Path, $Exclusive, $Password)
+                throw "password rejected"
+            }
+
+            $threw = $false
+            $errorId = $null
+            $errorMessage = $null
+            try {
+                Open-CanonicalAccess `
+                    -DbPath            "C:\protected.accdb" `
+                    -Password          "wrong-password" `
+                    -ComSpawnAction    { $fakeApp } `
+                    -HwndToPidAction   { param($Hwnd) 47002 } `
+                    -WmiSnapshotAction { @() }
+            } catch {
+                $threw = $true
+                $errorId = $_.FullyQualifiedErrorId
+                $errorMessage = $_.Exception.Message
+            }
+
+            $threw | Should -Be $true
+            $errorId | Should -Be "DYSFLOW_OPEN_CURRENT_DATABASE_FAILED,Open-CanonicalAccess" `
+                -Because "issue #571 acceptance: failed DB open returns a structured error the caller can branch on"
+            $errorMessage | Should -Match "C:\\protected\.accdb" `
+                -Because "operator must see WHICH file failed"
+        }
+
+        It "ErrorRecord id is DYSFLOW_OPEN_CURRENT_DATABASE_FAILED when path is missing" {
+            $fakeApp = New-FakeAccessApp -hWndAccessApp 8803
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Force -Value {
+                param($Path, $Exclusive, $Password)
+                throw "could not find file '$Path'"
+            }
+
+            $threw = $false
+            $errorId = $null
+            try {
+                Open-CanonicalAccess `
+                    -DbPath            "C:\missing.accdb" `
+                    -Password          "" `
+                    -ComSpawnAction    { $fakeApp } `
+                    -HwndToPidAction   { param($Hwnd) 47003 } `
+                    -WmiSnapshotAction { @() }
+            } catch {
+                $threw = $true
+                $errorId = $_.FullyQualifiedErrorId
+            }
+
+            $threw | Should -Be $true
+            $errorId | Should -Be "DYSFLOW_OPEN_CURRENT_DATABASE_FAILED,Open-CanonicalAccess"
+        }
+    }
 }

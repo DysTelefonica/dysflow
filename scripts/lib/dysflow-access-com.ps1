@@ -566,11 +566,18 @@ function Open-CanonicalAccess {
 
     $pidAttributed = ($null -ne $ownedPid)
 
+    # DatabaseOpened (issue #571): true when the function reached a successful
+    # OpenCurrentDatabase. false when -OpenDatabase:$false was used. A failed
+    # open never reaches this return — it throws DYSFLOW_OPEN_CURRENT_DATABASE_FAILED.
+    # Callers use this flag to distinguish "COM app spawned" from "DB opened".
+    $databaseOpened = [bool]$OpenDatabase
+
     return [PSCustomObject]@{
         AccessApplication          = $access
         OwnedPid                   = $ownedPid
         OriginalAutomationSecurity = $originalAutomationSecurity
         PidAttributed              = $pidAttributed
+        DatabaseOpened             = $databaseOpened
     }
 }
 
