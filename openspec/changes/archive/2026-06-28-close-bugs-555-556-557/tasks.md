@@ -69,3 +69,14 @@
 | `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
 | `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
 | `eb6d042` + `f4490f9` + `f49b387` | Archive and closeout traceability | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28337548849` and `28337612052` green; issues #555/#556/#557 closed with evidence comments; Engram #14823 updated | N/A |
+| `4eecf29` | Fresh-review blocker follow-up: import prune safety, TempScc snapshot cleanup, Vitest `forbidOnly`, trace seed | A–E | RED evidence: focused Vitest/Pester blockers failed first; GREEN: `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28338286641` green | N/A — runner-level/product code change |
+
+## Follow-up Review Blockers — 2026-06-29
+
+| Blocker | RED | GREEN / Verification | Status |
+|---|---|---|---|
+| A — `import_all prune:true` unsafe empty/missing discovery | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "import_all prune:true"` failed on missing/empty/discovery-failure guard tests before implementation. | Added pre-delete source-root validation and safe `IMPORT_PRUNE_SOURCE_UNSAFE` failure. `pnpm test`; CI `28338286641`. | Fixed |
+| B — form/report alias false positives | Same focused Vitest run failed because `Main` / `Invoice` were selected for deletion despite `Form_Main.form.txt` / `Report_Invoice.report.txt` source. | Added source alias protection for `Form_`/`Report_` document objects and modules. `pnpm test`; CI `28338286641`. | Fixed |
+| C — TempScc pre-existing artifact deletion | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter '*Remove-TempSccObjects*'` failed before implementation because `-ExistingNames` snapshot protection was absent. | Snapshot before target deletion; cleanup removes only after-state TempScc artifacts. `Invoke-Pester scripts/tests/`; CI `28338286641`. | Fixed |
+| D — `test.only` CI escape | `pnpm vitest run test/quality-gates/ci-workflow.test.ts -t "forbids committed"` failed before implementation because Vitest configs lacked `forbidOnly`. | Added `forbidOnly: true` to unit and integration configs plus quality-gate evidence. `pnpm lint`; CI `28338286641`. | Fixed |
+| E — traceability omission | Archive trace omitted `f49b387` / CI `28337612052`. | Added `f49b387`, CI `28337612052`, and follow-up commit/CI trace in this artifact. | Fixed |

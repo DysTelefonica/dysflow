@@ -16,14 +16,22 @@ Archived after implementing and verifying three bug/reliability fixes:
 | `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
 | `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
 | `eb6d042` + `f4490f9` + `f49b387` | Archive and closeout traceability | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28337548849` and `28337612052` green; issues #555/#556/#557 closed with evidence comments; Engram #14823 updated | N/A — documentation/traceability |
+| `4eecf29` | Fresh-review blocker follow-up: import prune safety, TempScc snapshot cleanup, Vitest `forbidOnly`, trace seed | A–E | RED evidence: focused Vitest/Pester blocker tests failed first; GREEN: `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28338286641` green | N/A — runner-level/product code change |
 
 ## Final verification
 
 - `pnpm test` — passed, 137 files / 1740 tests.
 - `pnpm build` — passed.
 - `pnpm lint` — passed.
-- `pwsh -Command "Invoke-Pester scripts/tests/"` — passed, 375 passed / 0 failed / 4 skipped.
-- Latest closeout trace CI: `28337612052` — success.
+- `pwsh -Command "Invoke-Pester scripts/tests/"` — passed, 379 passed / 0 failed / 4 skipped.
+- Latest follow-up CI: `28338286641` — success.
+
+## Fresh-review blocker follow-up
+
+- A/B: `import_all prune:true` now refuses destructive deletion when the source root is missing, unreadable, or contains no managed source files, and source form/report aliases protect both Access object names (`Main`, `Invoice`) and document modules (`Form_Main`, `Report_Invoice`).
+- C: `delete_module` snapshots `TempSccObj*` artifacts before target deletion and removes only newly-created after-state artifacts.
+- D: both Vitest configs set `forbidOnly: true`; `test/quality-gates/ci-workflow.test.ts` guards against regression.
+- E: this archive now records final closeout commit `f49b387` / CI `28337612052` and follow-up commit `4eecf29` / CI `28338286641`.
 
 ## Scope and compatibility notes
 
