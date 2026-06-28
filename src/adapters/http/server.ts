@@ -508,7 +508,10 @@ function sendOperationResult<TData>(
   // `sanitizeMcpErrorMessage(secrets)` so HTTP envelopes match MCP parity.
   // The structured error.code/retryable stay byte-exact; only message is
   // touched (and only when sanitization actually changes it).
-  const sanitized = secrets.length > 0 ? sanitizeOperationResult(result, secrets) : result;
+  // Always run sanitization, even when no explicit secrets are configured:
+  // `sanitizeMcpErrorMessage` still applies heuristic redaction for ;PWD= fragments,
+  // ;*** patterns, and Windows/UNC paths, so the envelope stays safe in all cases.
+  const sanitized = sanitizeOperationResult(result, secrets);
   sendJson(response, sanitized.ok ? 200 : failureStatus, sanitized);
 }
 
