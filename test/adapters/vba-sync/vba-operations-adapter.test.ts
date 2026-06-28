@@ -56,10 +56,12 @@ describe("VbaOperationsAdapter", () => {
       if (result.ok) {
         // DELTA-001 (#575): response wraps the records list AND the registry
         // health so callers can tell "no operations" from "registry was corrupt".
-        expect(result.data.operations).toEqual(
-          records.map((r) => ({ ...r, isStale: false })),
-        );
-        expect(result.data.registryHealth).toEqual({ status: "ok" });
+        const data = result.data as {
+          operations: Array<Record<string, unknown>>;
+          registryHealth: { status: string };
+        };
+        expect(data.operations).toEqual(records.map((r) => ({ ...r, isStale: false })));
+        expect(data.registryHealth).toEqual({ status: "ok" });
       }
     });
 
@@ -103,8 +105,12 @@ describe("VbaOperationsAdapter", () => {
         // DELTA-001 (#575): cleanup result now wraps the cleanup payload AND the
         // registry health so callers can tell whether the registry was healthy
         // at cleanup time.
-        expect(result.data.cleanup).toMatchObject({ operationId: "op-1", status: "cleaned" });
-        expect(result.data.registryHealth).toEqual({ status: "ok" });
+        const data = result.data as {
+          cleanup: { operationId: string; status: string };
+          registryHealth: { status: string };
+        };
+        expect(data.cleanup).toMatchObject({ operationId: "op-1", status: "cleaned" });
+        expect(data.registryHealth).toEqual({ status: "ok" });
       }
     });
 

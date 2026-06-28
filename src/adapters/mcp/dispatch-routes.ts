@@ -1,10 +1,6 @@
 import type { AccessQueryAction } from "../../core/mapping/access-query-request-mapper.js";
 import type { AliasToolName } from "./alias-tools.js";
-import {
-  type DysflowMcpToolName,
-  QUERY_TOOL_NAMES,
-  type QueryToolName,
-} from "./mcp-tool-registry.js";
+import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
 
 // ─── Route table ──────────────────────────────────────────────────────────────
 
@@ -76,18 +72,49 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
 /**
  * Typed binding of MCP query tool names to their domain `AccessQueryRequest`
  * action. This REPLACES the former `name as AccessQueryRequest["action"]` cast:
- * the `Record<QueryToolName, AccessQueryAction>` type makes a missing entry a
- * COMPILE error (every query tool must be listed) and an out-of-union value a
- * COMPILE error (the action must be a valid `AccessQueryRequest["action"]`).
+ * the `satisfies Record<QueryToolName, AccessQueryAction>` annotation (DELTA-003
+ * / #578) keeps the literal type narrow so each key is checked individually
+ * AND the whole object is verified to be assignable to the Record — a missing
+ * `QUERY_TOOL_NAMES` entry becomes a TS2322/TS2741 COMPILE error, not a silent
+ * drift hidden behind an `as Record<...>` cast.
  *
  * The binding is an identity map (tool name === action) but is written
  * explicitly rather than derived, so the type checker — not a runtime cast —
- * guarantees coverage. The companion test mcp-tool-action-map.test.ts asserts
- * coverage against MCP_TOOL_ROUTES at runtime as a second net.
+ * guarantees coverage. The companion tests assert coverage at runtime:
+ *   - test/adapters/mcp/mcp-tool-action-map.test.ts (coverage of every
+ *     query-routed tool AND no vba-sync leak)
+ *   - test/adapters/mcp/mcp-tool-action-map-source.test.ts (the construction
+ *     uses `satisfies`, not `as Record<...>`).
  */
-export const MCP_TOOL_QUERY_ACTIONS: Record<QueryToolName, AccessQueryAction> = Object.fromEntries(
-  QUERY_TOOL_NAMES.map((name) => [name, name]),
-) as Record<QueryToolName, AccessQueryAction>;
+export const MCP_TOOL_QUERY_ACTIONS = {
+  // query alias tools (7) — routed via alias-tools.ts
+  query_sql: "query_sql",
+  exec_sql: "exec_sql",
+  run_script: "run_script",
+  create_table: "create_table",
+  drop_table: "drop_table",
+  seed_fixture: "seed_fixture",
+  teardown_fixture: "teardown_fixture",
+  // query maintenance (9) — routed via dispatch.ts
+  list_links: "list_links",
+  export_queries: "export_queries",
+  link_tables: "link_tables",
+  relink_tables: "relink_tables",
+  localize_backend_links: "localize_backend_links",
+  unlink_table: "unlink_table",
+  import_queries: "import_queries",
+  compact_repair: "compact_repair",
+  relink_directory: "relink_directory",
+  // query read (8)
+  list_tables: "list_tables",
+  list_linked_tables: "list_linked_tables",
+  get_schema: "get_schema",
+  count_rows: "count_rows",
+  distinct_values: "distinct_values",
+  compare_backends: "compare_backends",
+  list_access_files: "list_access_files",
+  get_relationships: "get_relationships",
+} as const satisfies Record<QueryToolName, AccessQueryAction>;
 
 export function queryActionFor(name: DysflowMcpToolName): AccessQueryAction {
   const action = MCP_TOOL_QUERY_ACTIONS[name as QueryToolName];

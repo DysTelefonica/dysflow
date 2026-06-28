@@ -1,10 +1,5 @@
-import {
-  createServer,
-  type IncomingMessage,
-  type Server,
-  type ServerResponse,
-} from "node:http";
 import { mkdtemp } from "node:fs/promises";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,8 +7,8 @@ import { startDysflowHttpServer } from "../../../src/adapters/http/server.js";
 import {
   createDysflowError,
   failureResult,
-  successResult,
   type OperationResult,
+  successResult,
 } from "../../../src/core/contracts/index.js";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 
@@ -89,11 +84,7 @@ describe("HTTP error envelope sanitization — DELTA-002 (#576)", () => {
       queryService: {
         execute: async () =>
           failureResult(
-            createDysflowError(
-              "RUNNER_FAILED",
-              "open failed for db using pwd super-secret",
-              false,
-            ),
+            createDysflowError("RUNNER_FAILED", "open failed for db using pwd super-secret", {}),
           ),
       },
     });
@@ -119,11 +110,7 @@ describe("HTTP error envelope sanitization — DELTA-002 (#576)", () => {
       cleanupService: {
         cleanup: async () =>
           failureResult(
-            createDysflowError(
-              "CLEANUP_FAILED",
-              "relink failed: backend-secret invalid",
-              false,
-            ),
+            createDysflowError("CLEANUP_FAILED", "relink failed: backend-secret invalid", {}),
           ),
       },
     });
@@ -149,7 +136,7 @@ describe("HTTP error envelope sanitization — DELTA-002 (#576)", () => {
       queryService: {
         execute: async () =>
           failureResult(
-            createDysflowError("RUNNER_FAILED", "auth failed for token tok-abc-123", false),
+            createDysflowError("RUNNER_FAILED", "auth failed for token tok-abc-123", {}),
           ),
       },
     });
@@ -181,7 +168,7 @@ describe("HTTP error envelope sanitization — DELTA-002 (#576)", () => {
             createDysflowError(
               "ODBC_CONNECT_FAILED",
               "Provider=MSDASQL;PWD=hunter2;Database=foo",
-              false,
+              {},
             ),
           ),
       },
@@ -234,10 +221,7 @@ describe("HTTP error envelope sanitization — DELTA-002 (#576)", () => {
     const services = createFakeServices({
       queryService: {
         execute: async () =>
-          successResult(
-            { rows: [{ id: 1, label: "secret-token-kept" }] },
-            { durationMs: 1 },
-          ),
+          successResult({ rows: [{ id: 1, label: "secret-token-kept" }] }, { durationMs: 1 }),
       },
     });
     const { url } = await startTestServer({ services });

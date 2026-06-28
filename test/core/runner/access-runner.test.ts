@@ -608,6 +608,7 @@ describe("AccessPowerShellRunner", () => {
         update: async () => undefined,
         get: async () => undefined,
         listRecent: async () => [],
+        getHealth: () => ({ status: "ok" as const }),
       },
       operationIdFactory: () => "op-roots",
       preflightCleanup: preflight,
@@ -647,6 +648,7 @@ describe("AccessPowerShellRunner", () => {
         update: async () => undefined,
         get: async () => undefined,
         listRecent: async () => [],
+        getHealth: () => ({ status: "ok" as const }),
       },
       operationIdFactory: () => "op-preflight-error",
       preflightCleanup: {
@@ -708,6 +710,7 @@ describe("AccessPowerShellRunner", () => {
         },
         get: async () => undefined,
         listRecent: async () => [],
+        getHealth: () => ({ status: "ok" as const }),
       },
       operationIdFactory: () => "op",
       preflightCleanup: noOpPreflight,

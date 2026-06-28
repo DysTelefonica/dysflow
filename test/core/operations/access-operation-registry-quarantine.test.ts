@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  FileAccessOperationRegistry,
   type AccessOperationRecord,
+  FileAccessOperationRegistry,
   InMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
 
@@ -36,8 +36,10 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
       const registry = new InMemoryAccessOperationRegistry();
       const health = registry.getHealth();
       expect(health.status).toBe("ok");
-      expect(health.quarantinePath).toBeUndefined();
-      expect(health.reason).toBeUndefined();
+      // The ok variant of `AccessOperationRegistryHealth` is the bare object;
+      // degraded-only fields (`quarantinePath`, `reason`) are simply not present.
+      expect((health as { quarantinePath?: string }).quarantinePath).toBeUndefined();
+      expect((health as { reason?: string }).reason).toBeUndefined();
     });
 
     it("stays ok after creating records", async () => {
@@ -84,7 +86,10 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
       const siblings = await readdir(dirname(registryPath));
       const quarantine = siblings.find((name) => /\.quarantine-.*\.json$/.test(name));
       expect(quarantine).toBeDefined();
-      const quarantinePath = join(dirname(registryPath), quarantine!);
+      if (quarantine === undefined) {
+        throw new Error("expected at least one quarantine sidecar to exist");
+      }
+      const quarantinePath = join(dirname(registryPath), quarantine);
       expect(readFileSync(quarantinePath, "utf8")).toBe(garbage);
     });
 
@@ -101,13 +106,16 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
 
       const health = registry.getHealth();
       expect(health.status).toBe("degraded");
+      if (health.status !== "degraded") {
+        throw new Error("expected degraded health");
+      }
       expect(health.reason).toBe("corrupt-json");
       expect(health.quarantinePath).toBeDefined();
       expect(health.quarantinedAt).toBeDefined();
       // quarantinedAt is ISO 8601
-      expect(() => new Date(health.quarantinedAt!).toISOString()).not.toThrow();
+      expect(() => new Date(health.quarantinedAt).toISOString()).not.toThrow();
       // quarantinePath is an absolute path that exists
-      expect(existsSync(health.quarantinePath!)).toBe(true);
+      expect(existsSync(health.quarantinePath)).toBe(true);
     });
 
     it("does not quarantine when the registry file is missing (ENOENT is not corruption)", async () => {
