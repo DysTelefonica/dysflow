@@ -32,11 +32,11 @@
 
 ### Verify, archive, and close
 
-- [ ] 4.1 Run `pnpm test`, `pnpm build`, `pnpm lint`, and `pwsh -Command "Invoke-Pester scripts/tests/"`.
-- [ ] 4.2 Confirm GitHub Actions success.
-- [ ] 4.3 Archive this change and add `archive-report.md`.
-- [ ] 4.4 Commit/push archive.
-- [ ] 4.5 Close #590, #593, and #594 with commit SHA + test evidence comments.
+- [x] 4.1 Run `pnpm test`, `pnpm build`, `pnpm lint`, and `pwsh -Command "Invoke-Pester scripts/tests/"`.
+- [x] 4.2 Confirm GitHub Actions success.
+- [x] 4.3 Archive this change and add `archive-report.md`.
+- [x] 4.4 Commit/push archive.
+- [x] 4.5 Close #590, #593, and #594 with commit SHA + test evidence comments.
 
 ## TDD Cycle Evidence
 
@@ -50,7 +50,7 @@
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| Pending | Issue #590 README MCP tool surface validation | 1.1-1.4 | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts` | N/A |
-| Pending | Issue #593 modern MCP tool descriptions | 2.1-2.4 | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` | N/A |
-| Pending | Issue #594 MCP workflow recipes | 3.1-3.4 | RED/GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts` | N/A |
-| Pending archive commit | Archive and closeout | 4.1-4.5 | Pending | N/A |
+| `83beffe`, `ee1457e` | Issue #590 README MCP tool surface validation + Biome formatting follow-up | 1.1-1.4 | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts`; `pnpm lint`; CI `28335656038` | N/A |
+| `7d220b9` | Issue #593 modern MCP tool descriptions | 2.1-2.4 | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts`; `pnpm lint`; CI `28335759252` | N/A |
+| `fedc9df` | Issue #594 MCP workflow recipes | 3.1-3.4 | RED/GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts`; `pnpm lint`; CI `28335879017` | N/A |
+| Pending archive commit | Archive and closeout | 4.1-4.5 | `pnpm test`; `pnpm build`; `pnpm lint`; `pwsh -Command "Invoke-Pester scripts/tests/"` | N/A |
