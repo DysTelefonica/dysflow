@@ -21,6 +21,19 @@ function extractRootPath(args: readonly string[]): string | undefined {
 
 export const handleAccessCommand: CommandHandler = async (args, context) => {
   const [subcommand, ...rest] = args;
+
+  // Defense in depth (#591): `--help` / `-h` is a usage request, NOT a
+  // subcommand name. Short-circuit before any config / runner wiring so help
+  // is side-effect-free and never produces "Unknown access subcommand: --help".
+  if (subcommand === "--help" || subcommand === "-h") {
+    return {
+      exitCode: 0,
+      stdout:
+        "Usage: dysflow access <subcommand> [options]\n\nSubcommands:\n  relink-directory  Batch-relink Access frontends to local backends",
+      stderr: "",
+    };
+  }
+
   if (subcommand === "relink-directory") {
     // Wire the AccessQueryService for relink-directory.
     // Per ADR-2: rootPath is passed as accessDbPath; the PS dispatch branches

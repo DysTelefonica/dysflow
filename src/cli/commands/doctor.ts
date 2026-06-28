@@ -18,9 +18,20 @@ import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.
 import type { CliCommandContext, CliResult } from "./types.js";
 
 export async function handleDoctorCommand(
-  _args: readonly string[],
+  args: readonly string[],
   context: CliCommandContext = {},
 ): Promise<CliResult> {
+  // Defense in depth (#591): `--help` / `-h` is a usage request, NOT a
+  // diagnostics trigger. Short-circuit before any PowerShell / Access / config
+  // load so help is side-effect-free.
+  if (args[0] === "--help" || args[0] === "-h") {
+    return {
+      exitCode: 0,
+      stdout: "Usage: dysflow doctor\n\nCheck local Dysflow requirements.",
+      stderr: "",
+    };
+  }
+
   try {
     const diagnosticsService =
       context.diagnosticsService ?? (await createDiagnosticsService(context));

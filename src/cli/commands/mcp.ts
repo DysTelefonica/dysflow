@@ -8,6 +8,13 @@ export async function handleMcpCommand(
   args: readonly string[],
   context: CliCommandContext = {},
 ): Promise<CliResult> {
+  // Defense in depth (#591): if `--help` / `-h` reaches the handler (e.g.
+  // called directly from a test or future caller), return usage without
+  // touching config or the MCP adapter.
+  if (args[0] === "--help" || args[0] === "-h") {
+    return { exitCode: 0, stdout: MCP_USAGE, stderr: "" };
+  }
+
   const writesEnabled = args.includes("--enable-writes");
   const unknownArg = args.find((arg) => arg !== "--enable-writes");
   if (unknownArg !== undefined) {
