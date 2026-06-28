@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**48 visible MCP tools · Windows / Node 20+**
+**53 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -29,7 +29,7 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 48 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 53 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -525,6 +525,12 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - `accessPath` (string, **required**): Database file path associated with the target operation.
   - `force` (boolean, optional): Terminate immediately. Requires writes to be enabled (`MCP_WRITES_DISABLED` is returned when writes are off); non-force cleanup is always allowed.
 
+#### `dysflow_access_force_cleanup_orphaned`
+List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
+* **Parameters**:
+  - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
+  - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
+
 ---
 
 ### MCP Tools
@@ -544,6 +550,8 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`compile_vba`**: Trigger VBA compilation inside the Access database.
   - Parameters: `timeoutMs` (number, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
+* **`fix_encoding`**: Normalize leading UTF-8 BOM artifacts in source files and round-trip affected module encoding in the binary. It does not restore lossy mojibake characters.
+  - Parameters: `location` (string, optional), `timeoutMs` (number, optional)
 * **`test_vba`**: Execute VBA unit tests.
   - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
@@ -561,6 +569,8 @@ Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
   - Parameters: `moduleNames` (array, optional), `moduleName` (string, optional — single-module shorthand), `force` (boolean, optional — applies to the whole batch), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
+* **`list_access_operations`**: Alias for listing tracked Access operations and their current registry status.
+  - Parameters: none
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
 * **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
@@ -617,6 +627,8 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `tableName` (string, optional), `columnName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional)
 * **`compare_backends`**: Compare structural differences between two backends.
   - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional)
+* **`generate_erd`**: Generate an entity-relationship document for the database schema.
+  - Parameters: `erdPath` (string, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional)
 * **`get_relationships`**: List foreign keys and relation constraints.
   - Parameters: `accessPath` (optional)
 * **`list_access_files`**: Search for `.accdb` files recursively in a directory.
@@ -647,6 +659,8 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `catalogPath` (string, optional), `filter` (string, optional)
 * **`inspect_form`**: Parse a version-controlled `.form.txt` (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only.
   - Parameters: `sourcePath` (string, path to the `.form.txt` file), `path` (string, alias for `sourcePath`)
+* **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
+  - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional)
 
 ### MCP protocol and maintenance
 
