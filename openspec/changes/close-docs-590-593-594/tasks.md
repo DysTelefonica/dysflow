@@ -25,10 +25,10 @@
 
 ### Issue #594 — MCP agent workflow recipes
 
-- [ ] 3.1 Read `gh issue view 594` and identify missing workflow recipes.
-- [ ] 3.2 Add a RED docs gate for setup, sync, recovery, write enablement, target selection, and form/report recipes.
-- [ ] 3.3 Update agent-facing docs minimally.
-- [ ] 3.4 Run the focused docs gate and commit/push the issue work unit.
+- [x] 3.1 Read `gh issue view 594` and identify missing workflow recipes.
+- [x] 3.2 Add a RED docs gate for setup, sync, recovery, write enablement, target selection, and form/report recipes.
+- [x] 3.3 Update agent-facing docs minimally.
+- [x] 3.4 Run the focused docs gate and commit/push the issue work unit.
 
 ### Verify, archive, and close
 
@@ -44,7 +44,7 @@
 |------|-----------|-------|------------|-----|-------|-------------|----------|
 | 1.x | `test/docs/mcp-readme-tool-surface.test.ts` | Docs gate | New gate; existing README failed before docs edit | RED: focused test failed with count `48` vs runtime `53` and missing five tool names | GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts` passed | Count + inventory scenarios cover future count and name drift | None needed |
 | 2.x | `test/adapters/mcp/mcp-tool-contracts.test.ts` | MCP contract gate | Existing contract tests passed before new gate | RED: focused test failed because `dysflow_vba_execute` lacked `procedureName` and other key safety wording | GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` passed | Six modern tools covered for required args, write-gate, and cleanup/listing footguns | None needed |
-| 3.x | Pending | Docs gate | Pending | Pending | Pending | Pending | Pending |
+| 3.x | `test/docs/agents-mcp-workflow-recipes.test.ts` | Docs gate | New gate; existing AGENTS guide failed before docs edit | RED: focused test failed because `## MCP workflow recipes` did not exist | GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts` passed | Six recipe headings plus key tool/safety phrases covered | None needed |
 
 ## Implementation commits
 
@@ -52,5 +52,5 @@
 |---|---|---|---|---|
 | Pending | Issue #590 README MCP tool surface validation | 1.1-1.4 | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts` | N/A |
 | Pending | Issue #593 modern MCP tool descriptions | 2.1-2.4 | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` | N/A |
-| Pending | Issue #594 MCP workflow recipes | 3.1-3.4 | Pending | N/A |
+| Pending | Issue #594 MCP workflow recipes | 3.1-3.4 | RED/GREEN: `pnpm vitest run test/docs/agents-mcp-workflow-recipes.test.ts` | N/A |
 | Pending archive commit | Archive and closeout | 4.1-4.5 | Pending | N/A |

@@ -94,6 +94,68 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   filtered export would make every non-matching file look orphaned. Never weaken these when editing
   `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`.
 
+## MCP workflow recipes
+
+Use these recipes before calling individual MCP tools. They keep Access automation auditable,
+recoverable, and aligned with the write-gate contract.
+
+### Bootstrap / doctor / config verification
+
+1. Confirm the repo has `.dysflow/project.json`; if it does not, ask the human for frontend/backend
+   paths and run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>`
+   with `--backend-path <backend.accdb>` when the project is split.
+2. Keep secrets in environment variables, never in committed config.
+3. Run `dysflow doctor` before tool calls and prefer short MCP payloads with `projectId` once the
+   project is configured.
+
+### Daily VBA sync loop
+
+1. Inspect drift with `verify_code` or export the current binary with `export_all` when the binary is
+   the source to mirror.
+2. Edit disk source.
+3. Import only the touched modules with `import_modules` when possible; use `import_all` only for a
+   whole-tree resync.
+4. Compile with `compile_vba` after standard/class module edits.
+5. Re-run `verify_code` and the focused `test_vba` plan before trusting the binary.
+
+### Timeout and orphan recovery
+
+1. Start with `dysflow_access_operations_list` to see tracked operationId, PID, status, and target
+   path.
+2. Use `dysflow_access_cleanup` without `force` to reconcile stale terminal records; this path kills
+   nothing.
+3. Use `dysflow_access_force_cleanup_orphaned` without `confirmPid` to list orphan candidates.
+4. Pass `confirmPid` only after verifying the process is headless, holds the same `accessPath`, and
+   is not owned by a running Dysflow operation.
+5. Never kill `MSACCESS.EXE` by process name.
+
+### Safe write enablement
+
+1. Run write-capable tools with `dryRun` first whenever the tool supports it.
+2. Enable writes per repo with `allowWrites` only after explicit human authorization, or start MCP
+   process-wide with `--enable-writes` for trusted local maintenance sessions.
+3. Use `apply: true` only for intentional writes after reviewing the dry-run plan.
+4. Treat `MCP_WRITES_DISABLED` as a safety stop, not as a reason to bypass the adapter.
+
+### Frontend vs backend target selection
+
+- Use `accessPath` for the frontend `.accdb` that owns VBA/forms/reports and linked table defs.
+- Use `backendPath` for the split data backend when relinking or comparing backend data.
+- Use `databasePath` or its alias `sourcePath` for SQL/schema tools when you need an explicit target
+  and do not want project config fallback to choose for you.
+- Explicit per-call overrides win over `.dysflow/project.json`; use them when diagnosing context
+  skew.
+
+### Form/report sync ownership
+
+- Code-behind lives in `.cls`; layout lives in `.form.txt` or `.report.txt`.
+- Edit behavior in the `.cls`, then `import_modules` and `compile_vba` where headless compilation can
+  verify the module.
+- Edit controls/layout in `.form.txt`, then `import_modules`; ask the user to manually compile forms
+  or reports when Access cannot verify document modules headlessly.
+- Verify form behavior through the `.cls` with `verify_code`; do not treat embedded
+  `CodeBehindForm` serialization as the source of truth.
+
 ## Form inspection and generation — agent guide
 
 These MCP tools let agents read and author Access forms offline, without opening Access.
