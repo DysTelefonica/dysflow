@@ -55,3 +55,4 @@
 | `e4b475a` | tasks traceability | 4.1–4.2 | local final: `pnpm test` 1721/1721, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped; CI `28332466372` success | N/A |
 | _pending_ | archive and issue closeout | 4.3–4.4 | archive commit pending | N/A |
 | `15383a3` | review blocker follow-up fixes | F.1–F.3 | RED: focused Vitest suites failed on unsafe sandbox parent, fake-tests-plus-Access-skipped evidence, and incomplete modern metadata descriptions; GREEN: focused suites 11/11, `pnpm test` 1724/1724, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |
+| `9ea2642` | Access smoke release-claim hardening | F.2 | RED: added partial Access execution + skipped suite regression; GREEN: focused suites 12/12, `pnpm test` 1725/1725, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |

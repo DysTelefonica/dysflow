@@ -13,11 +13,13 @@ Archived SDD change `close-batch-584-586-587` after implementing and verifying i
 | `f7ea0b3` | #587 | Shared MCP tool contract metadata and modern description guards | RED missing metadata module; GREEN focused 3/3, MCP focused 22/22; `pnpm test` 1721/1721; `pnpm build`; `pnpm lint`; Pester 374/0/4 | `28332370495` success |
 | `e4b475a` | #584/#586/#587 | SDD traceability artifacts | `pnpm test` 1721/1721; `pnpm build`; `pnpm lint`; Pester 374/0/4 | `28332466372` success |
 | `15383a3` | #584/#586/#587 | Fresh review blocker follow-up: generated-child E2E sandbox cleanup, release-mode Access evidence gate, and table-driven modern MCP contract metadata descriptions | RED focused blockers; GREEN focused 11/11; `pnpm test` 1724/1724; `pnpm build`; `pnpm lint`; Pester 374/0/4 | pending |
+| `9ea2642` | #584 | Access smoke release-claim hardening for partial Access execution with skipped fixture suites | RED partial Access execution + skipped suite regression; GREEN focused 12/12; `pnpm test` 1725/1725; `pnpm build`; `pnpm lint`; Pester 374/0/4 | pending |
 
 ## Final Local Verification
 
 - `pnpm test` — 1721 passed / 0 failed.
 - Follow-up `pnpm test` — 1724 passed / 0 failed.
+- Final follow-up `pnpm test` — 1725 passed / 0 failed.
 - `pnpm build` — passed.
 - `pnpm lint` — passed.
 - `pwsh -Command "Invoke-Pester scripts/tests/"` — 374 passed / 0 failed / 4 skipped.
@@ -25,7 +27,7 @@ Archived SDD change `close-batch-584-586-587` after implementing and verifying i
 ## Fresh Review Blockers Resolved
 
 - **BLOCKER A**: `DYSFLOW_E2E_SANDBOX_ROOT` is now a validated parent only; cleanup targets only a generated `dysflow-mcp-e2e-*` child and rejects repo, fixture, drive-root, home, and production-runtime parents.
-- **BLOCKER B**: Access smoke evidence separates Access-dependent suites from fake/non-Access executions; release mode fails when required Access suites are skipped.
+- **BLOCKER B**: Access smoke evidence separates Access-dependent suites from fake/non-Access executions; any skipped required Access suite is non-release-grade, and explicit release mode fails the gate.
 - **WARNING C**: modern MCP contract metadata is asserted table-wise, and every modern advertised tool description includes the shared contract summary.
 
 ## Notes
