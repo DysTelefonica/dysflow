@@ -1478,9 +1478,13 @@ Describe "Invoke-CompileAction — behavioral (decompose S5)" {
 
     Context "compilation failure" {
         It "outputs detailed red error messages and does not throw when -Json is absent" {
+            # `error` is the structured DysflowError shape that New-CompileFailureResult
+            # emits in production (see dysflow-vba-manager.ps1 ~line 2251). The
+            # production code accesses $compileResult.error.message to render the
+            # status line, so the mock must mirror that contract.
             $script:CompileVbaProjectResult = [PSCustomObject]@{
                 ok = $false
-                error = "Syntax error"
+                error = [ordered]@{ code = "VBA_COMPILE_ERROR"; message = "Syntax error" }
                 component = "Module1"
                 line = 12
                 column = 4
@@ -1498,13 +1502,15 @@ Describe "Invoke-CompileAction — behavioral (decompose S5)" {
         It "returns failure details as JSON without throwing when -Json is present" {
             $script:CompileVbaProjectResult = [PSCustomObject]@{
                 ok = $false
-                error = "Syntax error"
+                error = [ordered]@{ code = "VBA_COMPILE_ERROR"; message = "Syntax error" }
             }
 
             $res = Invoke-CompileAction -Session $script:FakeSession -Json
             $obj = $res | ConvertFrom-Json
             $obj.ok | Should -Be $false
-            $obj.error | Should -Be "Syntax error"
+            # error is the structured DysflowError shape (code + message), per
+            # production New-CompileFailureResult. The TS adapter reads .message.
+            $obj.error.message | Should -Be "Syntax error"
         }
     }
 }

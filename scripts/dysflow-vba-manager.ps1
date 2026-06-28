@@ -3594,6 +3594,11 @@ function Invoke-CompileAction {
 
     $compileResult = Invoke-CompileVbaProject -AccessApplication $Session.AccessApplication
     if ($Json) {
+        # -Json mode: Write-DysflowResult emits the structured sentinel and
+        # also writes the JSON to the success output stream (test stub at the
+        # top of the test file, real implementation writes to [Console]::Out
+        # only). The caller's $res receives the JSON string the stub emits,
+        # which ConvertFrom-Json then parses into an object.
         Write-DysflowResult -Result $compileResult -Depth 6
     } else {
         if ($compileResult.ok) {
@@ -3604,8 +3609,11 @@ function Invoke-CompileAction {
             if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
             if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
         }
+        # No -Json mode: status messages carry the result. No value is
+        # returned (the previous behavior leaked the PSCustomObject to the
+        # caller, which is neither empty nor a JSON string and broke the
+        # contract).
     }
-    return $compileResult
 }
 
 function Invoke-RunProcedureAction {
