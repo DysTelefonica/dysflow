@@ -30,6 +30,12 @@ Archived SDD change `close-batch-584-586-587` after implementing and verifying i
 - **BLOCKER B**: Access smoke evidence separates Access-dependent suites from fake/non-Access executions; any skipped required Access suite is non-release-grade, and explicit release mode fails the gate.
 - **WARNING C**: modern MCP contract metadata is asserted table-wise, and every modern advertised tool description includes the shared contract summary.
 
+## Follow-up Issue Comments
+
+- #584: https://github.com/DysTelefonica/dysflow/issues/584#issuecomment-4827158356
+- #586: https://github.com/DysTelefonica/dysflow/issues/586#issuecomment-4827158937
+- #587: https://github.com/DysTelefonica/dysflow/issues/587#issuecomment-4827159492
+
 ## Notes
 
 - No Access binary import/export was required; this batch touched TypeScript, CI workflow, E2E harness JavaScript, README, and SDD artifacts only.

@@ -42,6 +42,7 @@
 - [x] F.1 BLOCKER A: sandbox override is treated as a parent only; cleanup always targets a generated `dysflow-mcp-e2e-*` child and rejects unsafe parents.
 - [x] F.2 BLOCKER B: Windows Access smoke evidence distinguishes Access-dependent suites from fake/non-Access tests and fails release mode when required Access suites are skipped.
 - [x] F.3 WARNING C: modern MCP tool contract metadata is table-driven and every modern advertised description includes contract metadata.
+- [x] F.4 Add follow-up issue comments to #584, #586, and #587 with follow-up commit SHA(s), test references, and CI evidence.
 
 ---
 
@@ -56,3 +57,9 @@
 | _pending_ | archive and issue closeout | 4.3–4.4 | archive commit pending | N/A |
 | `15383a3` | review blocker follow-up fixes | F.1–F.3 | RED: focused Vitest suites failed on unsafe sandbox parent, fake-tests-plus-Access-skipped evidence, and incomplete modern metadata descriptions; GREEN: focused suites 11/11, `pnpm test` 1724/1724, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |
 | `9ea2642` | Access smoke release-claim hardening | F.2 | RED: added partial Access execution + skipped suite regression; GREEN: focused suites 12/12, `pnpm test` 1725/1725, `pnpm build`, `pnpm lint`, `Invoke-Pester scripts/tests/` 374 passed / 0 failed / 4 skipped | N/A |
+
+## Follow-up issue comments
+
+- #584: https://github.com/DysTelefonica/dysflow/issues/584#issuecomment-4827158356
+- #586: https://github.com/DysTelefonica/dysflow/issues/586#issuecomment-4827158937
+- #587: https://github.com/DysTelefonica/dysflow/issues/587#issuecomment-4827159492
