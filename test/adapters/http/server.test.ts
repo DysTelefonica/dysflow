@@ -216,7 +216,7 @@ describe("Dysflow HTTP adapter", () => {
       ok: false,
       error: {
         code: "HTTP_READ_ONLY_SQL_REQUIRED",
-        message: "The /query/read route only accepts read-only SELECT queries.",
+        message: "The query/read route only accepts read-only SELECT queries.",
         retryable: false,
       },
       diagnostics: [],

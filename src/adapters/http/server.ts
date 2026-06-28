@@ -23,7 +23,7 @@ import {
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { sanitizeSecrets } from "../../core/utils/index.js";
+import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
 import {
   CLEANUP_SCHEMA,
   HTTP_QUERY_SCHEMA,
@@ -71,6 +71,18 @@ export type StartDysflowHttpServerOptions = {
   cwd?: string;
   httpToken?: string;
   allowedProcedures?: readonly string[];
+  /**
+   * Caller-supplied Access (frontend) password. Wins over env-derived
+   * `DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`. Forwarded to every
+   * HTTP error envelope so the response sanitizer can redact it.
+   */
+  accessPassword?: string;
+  /**
+   * Caller-supplied backend password. Wins over env-derived
+   * `DYSFLOW_BACKEND_PASSWORD`. Forwarded to every HTTP error envelope so
+   * the response sanitizer can redact it.
+   */
+  backendPassword?: string;
 };
 
 export type StartedDysflowHttpServer = {
@@ -95,17 +107,24 @@ export async function startDysflowHttpServer(
   const envSource = options.env ?? process.env;
   let httpToken = options.httpToken;
   let allowedProcedures = options.allowedProcedures;
-  let accessPassword = envSource.DYSFLOW_ACCESS_PASSWORD ?? envSource.ACCESS_VBA_PASSWORD;
-  let backendPassword = envSource.DYSFLOW_BACKEND_PASSWORD;
+  // Options (caller-supplied) win over env. This makes `options.accessPassword`
+  // and `options.backendPassword` first-class for tests AND for callers that
+  // already resolved the password from a vault or a higher-level config.
+  let accessPassword =
+    options.accessPassword ?? envSource.DYSFLOW_ACCESS_PASSWORD ?? envSource.ACCESS_VBA_PASSWORD;
+  let backendPassword = options.backendPassword ?? envSource.DYSFLOW_BACKEND_PASSWORD;
 
   const configResult = await loadDysflowConfigAsync({ env: options.env, cwd: options.cwd });
   if (configResult.ok) {
     if (httpToken === undefined) httpToken = configResult.data.httpToken;
     if (allowedProcedures === undefined) allowedProcedures = configResult.data.allowedProcedures;
-    if (configResult.data.accessPassword !== undefined) {
+    // Caller-supplied options win over configResult: a higher-level caller
+    // (test harness, vault-backed resolver, CLI override) should not have
+    // its password silently replaced by .dysflow/project.json.
+    if (accessPassword === undefined && configResult.data.accessPassword !== undefined) {
       accessPassword = configResult.data.accessPassword;
     }
-    if (configResult.data.backendPassword !== undefined) {
+    if (backendPassword === undefined && configResult.data.backendPassword !== undefined) {
       backendPassword = configResult.data.backendPassword;
     }
   }
@@ -148,8 +167,20 @@ async function routeRequest(
     backendPassword?: string;
   },
 ): Promise<void> {
+  // DELTA-002 (#576): build the secrets list once and thread it through
+  // every response sent by this request, so service-result errors AND
+  // validation errors AND body-read failures all get the same sanitization.
+  const secrets = collectSecrets(context);
+  const send = <TData>(
+    result: OperationResult<TData>,
+    failureStatus?: number,
+  ): void => {
+    // sendOperationResult's 4th parameter is `secrets` (defaults to []).
+    // Pass them so the failure branch goes through `sanitizeOperationResult`.
+    sendOperationResult(response, result, failureStatus, secrets);
+  };
   const sendBodyReadFailure = (body: OperationResult<JsonBody>): void => {
-    sendOperationResult(response, body, bodyReadFailureStatus(body));
+    send(body, bodyReadFailureStatus(body));
   };
   const method = request.method ?? "GET";
   const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
@@ -179,8 +210,7 @@ async function routeRequest(
     // DELTA-001 (#575): include `registryHealth` alongside the list so callers
     // can distinguish "no operations" from "registry was corrupt and is now empty by design".
     const operations = await listRecentAccessOperations(registry);
-    sendOperationResult(
-      response,
+    send(
       successResult<{
         operations: readonly AccessOperationListEntry[];
         registryHealth: AccessOperationRegistryHealth;
@@ -207,8 +237,7 @@ async function routeRequest(
     }
     const cleanupService = context.services.cleanupService;
     if (cleanupService === undefined) {
-      sendOperationResult(
-        response,
+      send(
         failureResult(
           createDysflowError("SERVICE_UNAVAILABLE", "Cleanup service is not configured."),
         ),
@@ -226,8 +255,7 @@ async function routeRequest(
     // contract; downstream parsers depend on it).
     if (cleanupResult.ok) {
       const registry = resolveAccessOperationRegistry(context.services.operationRegistry);
-      sendOperationResult(
-        response,
+      send(
         successResult<{
           cleanup: typeof cleanupResult.data;
           registryHealth: AccessOperationRegistryHealth;
@@ -237,16 +265,13 @@ async function routeRequest(
         }),
       );
     } else {
-      sendOperationResult(response, cleanupResult);
+      send(cleanupResult);
     }
     return;
   }
 
   if (method === "GET" && path === "/diagnostics") {
-    sendOperationResult(
-      response,
-      await context.services.diagnosticsService.run({ includeEnvironment: true }),
-    );
+    send(await context.services.diagnosticsService.run({ includeEnvironment: true }));
     return;
   }
 
@@ -263,19 +288,21 @@ async function routeRequest(
       buildQueryReadRequest("query_sql", body.data),
     );
     if (!result.ok && result.error.code === "INVALID_READ_ONLY_QUERY") {
-      sendOperationResult(
-        response,
+      // DELTA-002 (#576): avoid slash-prefixed route names in user-facing
+      // messages — `sanitizeMcpErrorMessage` strips path-like tokens so the
+      // wire output stays stable across redaction.
+      send(
         failureResult(
           createDysflowError(
             "HTTP_READ_ONLY_SQL_REQUIRED",
-            "The /query/read route only accepts read-only SELECT queries.",
+            "The query/read route only accepts read-only SELECT queries.",
           ),
         ),
         400,
       );
       return;
     }
-    sendOperationResult(response, result);
+    send(result);
     return;
   }
 
@@ -292,8 +319,7 @@ async function routeRequest(
     if (!handleValidation(body.data, HTTP_WRITE_QUERY_SCHEMA, context, response)) {
       return;
     }
-    sendOperationResult(
-      response,
+    send(
       await context.services.queryService.execute(buildWriteFixtureRequest("exec_sql", body.data)),
     );
     return;
@@ -318,8 +344,7 @@ async function routeRequest(
       context.allowedProcedures.length > 0 &&
       !context.allowedProcedures.includes(vbaRequest.procedureName)
     ) {
-      sendOperationResult(
-        response,
+      send(
         failureResult(
           createDysflowError(
             "HTTP_PROCEDURE_NOT_ALLOWED",
@@ -330,12 +355,11 @@ async function routeRequest(
       );
       return;
     }
-    sendOperationResult(response, await context.services.vbaService.execute(vbaRequest));
+    send(await context.services.vbaService.execute(vbaRequest));
     return;
   }
 
-  sendOperationResult(
-    response,
+  send(
     failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)),
     404,
   );
@@ -349,18 +373,51 @@ function handleValidation(
 ): boolean {
   const error = validateInput(bodyData, schema);
   if (error !== undefined) {
-    const secrets = [context.httpToken, context.accessPassword, context.backendPassword].filter(
-      (s): s is string => typeof s === "string" && s.length > 0,
+    const secrets = collectSecrets(context);
+    // DELTA-002 (#576): use the same sanitizer as service-result errors so
+    // HTTP error envelopes stay consistent (secrets redacted, ;PWD=...
+    // fragments stripped, paths sanitized).
+    const failureResultValue = failureResult(
+      createDysflowError("HTTP_INVALID_INPUT", sanitizeMcpErrorMessage(error, secrets)),
     );
-    const sanitized = sanitizeSecrets(error, secrets);
-    sendOperationResult(
-      response,
-      failureResult(createDysflowError("HTTP_INVALID_INPUT", sanitized)),
-      400,
-    );
+    sendOperationResult(response, failureResultValue, 400, secrets);
     return false;
   }
   return true;
+}
+
+/**
+ * Returns the active secrets list (httpToken, accessPassword, backendPassword)
+ * filtered to non-empty strings, in that order. Shared by validation and
+ * service-result sanitization so both paths use the same input set.
+ */
+function collectSecrets(context: {
+  httpToken?: string;
+  accessPassword?: string;
+  backendPassword?: string;
+}): string[] {
+  return [context.httpToken, context.accessPassword, context.backendPassword].filter(
+    (s): s is string => typeof s === "string" && s.length > 0,
+  );
+}
+
+/**
+ * Returns a shallow copy of `result` with the error message sanitized via
+ * `sanitizeMcpErrorMessage(secrets)` when the result is a failure. Successful
+ * results are returned untouched (we do not redact user payloads). The
+ * structured `error.code` and `error.retryable` fields are preserved exactly.
+ */
+function sanitizeOperationResult<T>(
+  result: OperationResult<T>,
+  secrets: readonly string[],
+): OperationResult<T> {
+  if (result.ok) return result;
+  const sanitizedMessage = sanitizeMcpErrorMessage(result.error.message, secrets);
+  if (sanitizedMessage === result.error.message) return result;
+  return {
+    ...result,
+    error: { ...result.error, message: sanitizedMessage },
+  };
 }
 
 function toVbaRequest(body: JsonBody): AccessVbaRequest {
@@ -451,8 +508,14 @@ function sendOperationResult<TData>(
   response: ServerResponse,
   result: OperationResult<TData>,
   failureStatus = 500,
+  secrets: readonly string[] = [],
 ): void {
-  sendJson(response, result.ok ? 200 : failureStatus, result);
+  // DELTA-002 (#576): on the failure branch, redact the error message with
+  // `sanitizeMcpErrorMessage(secrets)` so HTTP envelopes match MCP parity.
+  // The structured error.code/retryable stay byte-exact; only message is
+  // touched (and only when sanitization actually changes it).
+  const sanitized = secrets.length > 0 ? sanitizeOperationResult(result, secrets) : result;
+  sendJson(response, sanitized.ok ? 200 : failureStatus, sanitized);
 }
 
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
