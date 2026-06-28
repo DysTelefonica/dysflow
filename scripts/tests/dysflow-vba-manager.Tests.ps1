@@ -212,6 +212,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Assert-SafeVbaModuleName',
             'Resolve-ImportFileForModule',
             'Resolve-FormCodeBehindFile',
+            'Get-FormCodeBehindCandidateNames',
             'Resolve-ImportModeValue'
         )
 
