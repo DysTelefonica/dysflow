@@ -18,10 +18,10 @@
 
 ### Issue #593 — modern MCP tool descriptions
 
-- [ ] 2.1 Read `gh issue view 593` and identify weak modern tool descriptions.
-- [ ] 2.2 Add a RED MCP description gate for write-gate, dry-run/apply, cleanup, and key-argument wording.
-- [ ] 2.3 Update modern tool descriptions minimally.
-- [ ] 2.4 Run the focused MCP description gate and commit/push the issue work unit.
+- [x] 2.1 Read `gh issue view 593` and identify weak modern tool descriptions.
+- [x] 2.2 Add a RED MCP description gate for write-gate, dry-run/apply, cleanup, and key-argument wording.
+- [x] 2.3 Update modern tool descriptions minimally.
+- [x] 2.4 Run the focused MCP description gate and commit/push the issue work unit.
 
 ### Issue #594 — MCP agent workflow recipes
 
@@ -43,7 +43,7 @@
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 |------|-----------|-------|------------|-----|-------|-------------|----------|
 | 1.x | `test/docs/mcp-readme-tool-surface.test.ts` | Docs gate | New gate; existing README failed before docs edit | RED: focused test failed with count `48` vs runtime `53` and missing five tool names | GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts` passed | Count + inventory scenarios cover future count and name drift | None needed |
-| 2.x | Pending | MCP contract gate | Pending | Pending | Pending | Pending | Pending |
+| 2.x | `test/adapters/mcp/mcp-tool-contracts.test.ts` | MCP contract gate | Existing contract tests passed before new gate | RED: focused test failed because `dysflow_vba_execute` lacked `procedureName` and other key safety wording | GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` passed | Six modern tools covered for required args, write-gate, and cleanup/listing footguns | None needed |
 | 3.x | Pending | Docs gate | Pending | Pending | Pending | Pending | Pending |
 
 ## Implementation commits
@@ -51,6 +51,6 @@
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | Pending | Issue #590 README MCP tool surface validation | 1.1-1.4 | RED/GREEN: `pnpm vitest run test/docs/mcp-readme-tool-surface.test.ts` | N/A |
-| Pending | Issue #593 modern MCP tool descriptions | 2.1-2.4 | Pending | N/A |
+| Pending | Issue #593 modern MCP tool descriptions | 2.1-2.4 | RED/GREEN: `pnpm vitest run test/adapters/mcp/mcp-tool-contracts.test.ts` | N/A |
 | Pending | Issue #594 MCP workflow recipes | 3.1-3.4 | Pending | N/A |
 | Pending archive commit | Archive and closeout | 4.1-4.5 | Pending | N/A |

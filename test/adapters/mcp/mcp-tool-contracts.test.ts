@@ -65,4 +65,52 @@ describe("MCP tool contract metadata", () => {
       );
     }
   });
+
+  it("advertises modern tool safety footguns and key arguments (#593)", () => {
+    const descriptions = modernToolDescriptions();
+
+    expect(descriptions.dysflow_vba_execute).toContain("procedureName");
+    expect(descriptions.dysflow_vba_execute).toContain("allowedProcedures");
+    expect(descriptions.dysflow_vba_execute).toContain("compiled project");
+
+    expect(descriptions.dysflow_query_execute).toContain('mode: "read"');
+    expect(descriptions.dysflow_query_execute).toContain('mode: "write"');
+    expect(descriptions.dysflow_query_execute).toContain("dryRun");
+    expect(descriptions.dysflow_query_execute).toContain("apply");
+    expect(descriptions.dysflow_query_execute).toContain("MCP_WRITES_DISABLED");
+
+    expect(descriptions.dysflow_doctor).toContain("projectId");
+    expect(descriptions.dysflow_doctor).toContain("includeEnvironment");
+    expect(descriptions.dysflow_doctor).toContain("accessPath");
+
+    expect(descriptions.dysflow_access_operations_list).toContain("operationId");
+    expect(descriptions.dysflow_access_operations_list).toContain("PID");
+    expect(descriptions.dysflow_access_operations_list).toContain("read-only");
+
+    expect(descriptions.dysflow_access_cleanup).toContain("operationId");
+    expect(descriptions.dysflow_access_cleanup).toContain("force: true");
+    expect(descriptions.dysflow_access_cleanup).toContain("MCP_WRITES_DISABLED");
+    expect(descriptions.dysflow_access_cleanup).toContain("kills nothing");
+
+    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("confirmPid");
+    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("list");
+    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("headless");
+    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
+  });
 });
+
+function modernToolDescriptions() {
+  const tools = createDysflowMcpTools({
+    vbaService: new FakeVbaService(),
+    queryService: new FakeQueryService(),
+    diagnosticsService: new FakeDiagnosticsService(),
+  });
+
+  return Object.fromEntries(
+    MODERN_TOOL_NAMES.map((toolName) => {
+      const tool = tools.find((candidate) => candidate.name === toolName);
+      expect(tool, `${toolName} must be advertised`).toBeDefined();
+      return [toolName, tool?.description ?? ""];
+    }),
+  ) as Record<(typeof MODERN_TOOL_NAMES)[number], string>;
+}

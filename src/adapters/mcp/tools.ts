@@ -89,7 +89,7 @@ export function createDysflowMcpTools(
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow_vba_execute",
-      description: `Execute a VBA procedure through Dysflow core services. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
+      description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Enforces allowedProcedures when configured and requires an already compiled project before test/run calls. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
       inputSchema: VBA_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpVbaExecute(
@@ -103,7 +103,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_query_execute",
-      description: `Execute a query action through Dysflow core services. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,
+      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpQueryExecute(
@@ -122,7 +122,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_doctor",
-      description: `Run core diagnostic checks through Dysflow services. ${MCP_TOOL_CONTRACTS.dysflow_doctor.summary}`,
+      description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.dysflow_doctor.summary}`,
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DOCTOR_SCHEMA);
@@ -133,13 +133,13 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_operations_list",
-      description: `List recent Dysflow Access operation records. ${MCP_TOOL_CONTRACTS.dysflow_access_operations_list.summary}`,
+      description: `List recent Dysflow Access operation records, including operationId, PID/process metadata when known, status, and target path. This is read-only and kills nothing. ${MCP_TOOL_CONTRACTS.dysflow_access_operations_list.summary}`,
       inputSchema: NO_INPUT_SCHEMA,
       handler: async () => handleMcpAccessOperationsList(services),
     },
     {
       name: "dysflow_access_cleanup",
-      description: `Clean up resources associated with a recent Access operation. ${MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary}`,
+      description: `Reconcile or clean a tracked Access operation by operationId and accessPath. Without force it only inspects/reconciles eligible terminal records and kills nothing; force: true may kill a Dysflow-owned process and is write-gated with MCP_WRITES_DISABLED when writes are off. ${MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary}`,
       inputSchema: CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessCleanup(
@@ -154,7 +154,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_force_cleanup_orphaned",
-      description: `List orphaned headless MSACCESS processes holding the project's accessPath, or kill one only when confirmPid is explicitly provided. Refuses to kill any process that is not headless, does not hold the accessPath, or is owned by a running Dysflow operation. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
+      description: `List orphaned headless MSACCESS processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(
