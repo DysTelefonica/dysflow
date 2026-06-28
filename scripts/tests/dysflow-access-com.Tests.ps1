@@ -34,41 +34,45 @@ Describe "dysflow-access-com.ps1 — module structure" {
         }
     }
 
-    Context "Exported function definitions" {
+    Context "Exported function is-callable contracts (#585)" {
         BeforeAll {
-            $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-                (Resolve-Path $script:ModulePath).Path,
-                [ref]$null,
-                [ref]$null
-            )
-            $script:FunctionNames = $ast.FindAll(
-                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] },
-                $true
-            ) | Select-Object -ExpandProperty Name
+            # #585: replace the legacy "defines X" source-text assertions with
+            # behavior contracts. AST extraction is loader-only: we dot-source
+            # the module so the functions are callable in the test scope, then
+            # assert each function is reachable via Get-Command. A behavior
+            # test that survives a refactor that renames or moves functions
+            # around as long as the function remains callable under its name.
+            . (Resolve-Path $script:ModulePath).Path
         }
 
-        It "defines Get-ProcessIdFromHwnd" {
-            $script:FunctionNames | Should -Contain "Get-ProcessIdFromHwnd"
+        It "Get-ProcessIdFromHwnd is callable after dot-source" {
+            { Get-Command Get-ProcessIdFromHwnd -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Get-ProcessIdFromHwnd).CommandType | Should -Be "Function"
         }
 
-        It "defines Get-MsAccessProcessesBounded" {
-            $script:FunctionNames | Should -Contain "Get-MsAccessProcessesBounded"
+        It "Get-MsAccessProcessesBounded is callable after dot-source" {
+            { Get-Command Get-MsAccessProcessesBounded -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Get-MsAccessProcessesBounded).CommandType | Should -Be "Function"
         }
 
-        It "defines Get-MsAccessProcesses" {
-            $script:FunctionNames | Should -Contain "Get-MsAccessProcesses"
+        It "Get-MsAccessProcesses is callable after dot-source" {
+            { Get-Command Get-MsAccessProcesses -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Get-MsAccessProcesses).CommandType | Should -Be "Function"
         }
 
-        It "defines Stop-AccessPidAndWait" {
-            $script:FunctionNames | Should -Contain "Stop-AccessPidAndWait"
+        It "Stop-AccessPidAndWait is callable after dot-source" {
+            { Get-Command Stop-AccessPidAndWait -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Stop-AccessPidAndWait).CommandType | Should -Be "Function"
         }
 
-        It "defines Get-AccessLockFilePath (moved from vba-manager in Slice 5)" {
-            $script:FunctionNames | Should -Contain "Get-AccessLockFilePath"
+        It "Get-AccessLockFilePath is callable after dot-source (moved from vba-manager in Slice 5)" {
+            { Get-Command Get-AccessLockFilePath -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Get-AccessLockFilePath).CommandType | Should -Be "Function"
         }
 
-        It "defines Close-TargetAccessDbIfOpen (moved from vba-manager in Slice 5)" {
-            $script:FunctionNames | Should -Contain "Close-TargetAccessDbIfOpen"
+        It "Close-TargetAccessDbIfOpen is callable after dot-source (moved from vba-manager in Slice 5)" {
+            { Get-Command Close-TargetAccessDbIfOpen -ErrorAction Stop } | Should -Not -Throw
+            (Get-Command Close-TargetAccessDbIfOpen).CommandType | Should -Be "Function"
         }
     }
 }

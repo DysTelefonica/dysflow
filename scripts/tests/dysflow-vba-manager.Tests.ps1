@@ -41,45 +41,94 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         }
     }
 
-    Context "New-VbComponentFromCodeFile — Unicode-safe name assignment (issue: CopyObject non-ASCII)" {
+    Context "New-VbComponentFromCodeFile — Unicode-safe name assignment (behavior contracts #585)" {
         BeforeAll {
+            # AST extraction is LOADER-ONLY (#585). We use the parsed AST to find
+            # the functions and dot-source them into the test scope; we do NOT
+            # assert on the extracted source body text.
             $ast = [System.Management.Automation.Language.Parser]::ParseFile(
                 (Resolve-Path $script:ScriptPath).Path, [ref]$null, [ref]$null
             )
-            $fnAst = $ast.FindAll(
+            $newVbFnAst = $ast.FindAll(
                 { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                   $args[0].Name -eq 'New-VbComponentFromCodeFile' },
                 $true
             ) | Select-Object -First 1
-            $script:NewVbFnText = if ($fnAst) { $fnAst.Extent.Text } else { "" }
+
+            $setEncodingFn = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq 'Set-ScriptOutputEncodingUtf8' },
+                $true
+            ) | Select-Object -First 1
+            $setNameFn = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq 'Set-VbComponentNameSafe' },
+                $true
+            ) | Select-Object -First 1
+
+            $script:NewVbFnAst = $newVbFnAst
+            $script:SetEncodingFnAst = $setEncodingFn
+            $script:SetNameFnAst = $setNameFn
+
+            # Dot-source the helpers into the test scope so the It blocks can
+            # call them directly. The helpers are pure (no Access COM) so
+            # loading them at Describe time is safe.
+            if ($setEncodingFn) { Invoke-Expression $setEncodingFn.Extent.Text }
+            if ($setNameFn) { Invoke-Expression $setNameFn.Extent.Text }
         }
 
-        It "New-VbComponentFromCodeFile is defined in the script" {
-            $script:NewVbFnText | Should -Not -BeNullOrEmpty
+        It "Set-ScriptOutputEncodingUtf8 sets [Console]::OutputEncoding to UTF-8" {
+            # powershell.exe (5.1) defaults stdout to the active console code page
+            # (e.g. CP1252). Node.js reads the child's stdout as UTF-8 — any
+            # non-ASCII char (e.g. ó) arrives as U+FFFD. The script's helper
+            # must set [Console]::OutputEncoding = UTF8 so ConvertTo-Json output
+            # round-trips correctly through list_objects JSON.
+            $script:SetEncodingFnAst | Should -Not -BeNullOrEmpty `
+                -Because "dysflow-vba-manager.ps1 must define Set-ScriptOutputEncodingUtf8 as an extractable helper (#585)"
+
+            $previous = [Console]::OutputEncoding
+            try {
+                [Console]::OutputEncoding = [System.Text.Encoding]::ASCII
+                Set-ScriptOutputEncodingUtf8
+                [Console]::OutputEncoding.CodePage | Should -Be 65001
+                [Console]::OutputEncoding.WebName | Should -Be "utf-8"
+            } finally {
+                [Console]::OutputEncoding = $previous
+            }
         }
 
-        It "sets Console.OutputEncoding to UTF-8 early in the script body (guards non-ASCII names in JSON stdout)" {
-            # powershell.exe (5.1) writes stdout through the active console code page (e.g.
-            # CP1252). Node.js reads it as UTF-8 — any non-ASCII char (e.g. ó) arrives as
-            # U+FFFD. Setting [Console]::OutputEncoding = UTF8 early ensures all Write-Output
-            # and ConvertTo-Json output is emitted as valid UTF-8.
-            $source = Get-Content -Raw (Resolve-Path $script:ScriptPath).Path
-            $source | Should -Match '\[Console\]::OutputEncoding\s*=.*UTF8' `
-                -Because "stdout must be UTF-8 so non-ASCII VBA module names round-trip correctly through list_objects JSON"
+        It "Set-VbComponentNameSafe assigns .Name to the component (Unicode-safe)" {
+            # DoCmd.CopyObject is not Unicode-safe: it mangles non-ASCII chars in
+            # the new object name (e.g. Módulo1 -> Mód×lo1). The fix is to force
+            # VBComponent.Name via COM *inside* the CopyObject branch — the same
+            # Unicode-safe setter used by the VBE F4 Properties pane. The fix
+            # is now a tiny pure helper that any mock component can exercise.
+            $script:SetNameFnAst | Should -Not -BeNullOrEmpty `
+                -Because "dysflow-vba-manager.ps1 must define Set-VbComponentNameSafe as an extractable helper (#585)"
+
+            # PSCustomObject with a Name property setter acts as a fake
+            # VBComponent. Set-VbComponentNameSafe just assigns the property.
+            $mock = [PSCustomObject]@{ Name = $null }
+            Set-VbComponentNameSafe -Component $mock -Name "Módulo1"
+            $mock.Name | Should -Be "Módulo1"
         }
 
-        It "assigns newComponent.Name = ModuleName in BOTH the CopyObject branch and the Add branch (guards against CopyObject non-ASCII mangling)" {
-            # DoCmd.CopyObject is not Unicode-safe: it mangles non-ASCII chars in the new object
-            # name (e.g. Módulo1 -> Mód×lo1). The fix is to force VBComponent.Name via COM
-            # *inside* the CopyObject branch — the same Unicode-safe setter used by the VBE F4
-            # Properties pane. Without this, delete_module + import_modules re-creates the
-            # component with the same mojibake name every time.
-            $assignments = [regex]::Matches(
-                $script:NewVbFnText,
-                [regex]::Escape('$newComponent.Name = $ModuleName')
+        It "New-VbComponentFromCodeFile calls Set-VbComponentNameSafe in BOTH branches (#585 AST contract)" {
+            # Structural metadata check via AST: count the call nodes to
+            # Set-VbComponentNameSafe inside New-VbComponentFromCodeFile. This
+            # is NOT a source-text assertion — it walks the call graph and
+            # survives a refactor that renames $newComponent or splits the
+            # function into helpers. The risk is the same as the legacy
+            # `$newComponent.Name = $ModuleName` count test: both branches
+            # (CopyObject + Add) must set the Unicode-safe name.
+            $script:NewVbFnAst | Should -Not -BeNullOrEmpty
+            $callNodes = $script:NewVbFnAst.Body.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] -and
+                  $args[0].GetCommandName() -eq 'Set-VbComponentNameSafe' },
+                $true
             )
-            $assignments.Count | Should -BeGreaterOrEqual 2 `
-                -Because "both the CopyObject branch and the VBComponents.Add branch must set .Name via the Unicode-safe COM property; a single assignment only in the else branch leaves the CopyObject path uncovered"
+            $callNodes.Count | Should -BeGreaterOrEqual 2 `
+                -Because "both the CopyObject branch and the VBComponents.Add branch must call Set-VbComponentNameSafe; a single call in only the else branch leaves the CopyObject path uncovered"
         }
     }
 

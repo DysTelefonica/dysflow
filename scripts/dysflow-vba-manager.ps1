@@ -111,7 +111,9 @@ $ErrorActionPreference = "Stop"
 # Node.js reads the child's stdout as UTF-8, so non-ASCII chars (e.g. ó, í) arrive as
 # U+FFFD replacement characters. Force UTF-8 output so VBA module names and any other
 # user-supplied strings round-trip correctly through JSON.
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# Extracted into Set-ScriptOutputEncodingUtf8 (#585) so the Pester test can exercise
+# the helper directly without running the full script (no Access COM required).
+Set-ScriptOutputEncodingUtf8
 $script:QuietOutput = [bool]$Json
 $script:HasDysflowResultEmitted = $false
 
@@ -125,6 +127,46 @@ $script:HasDysflowResultEmitted = $false
 # regional settings. CurrentUICulture is left untouched (error messages stay in
 # the OS language).
 Set-DysflowThreadCulture
+
+# Extracted helpers (#585). These are pure (no Access COM, no filesystem
+# side effects beyond what is passed in) so the Pester test can dot-source
+# them and exercise them with mock components.
+
+function Set-ScriptOutputEncodingUtf8 {
+    <#
+    .SYNOPSIS
+        Force the script's stdout encoding to UTF-8 so non-ASCII characters
+        round-trip through Node.js JSON consumers without mojibake.
+    .DESCRIPTION
+        powershell.exe (5.1) writes stdout through the active console code
+        page (typically CP1252 on Western Windows). Node.js reads the child
+        process's stdout as UTF-8, so any non-ASCII character (e.g. ó, í, ñ)
+        would otherwise arrive as U+FFFD. Setting [Console]::OutputEncoding
+        to UTF-8 makes Write-Output and ConvertTo-Json emit valid UTF-8.
+    #>
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+}
+
+function Set-VbComponentNameSafe {
+    <#
+    .SYNOPSIS
+        Assign VBComponent.Name via the COM property setter (Unicode-safe).
+    .DESCRIPTION
+        DoCmd.CopyObject is NOT Unicode-safe: it mangles non-ASCII characters
+        in the new object name (e.g. "Módulo1" -> "Mód×lo1"). The fix is to
+        force VBComponent.Name via the COM property setter — the same
+        Unicode-safe path the VBE F4 → Properties pane uses. Extracted from
+        New-VbComponentFromCodeFile so the Pester test can exercise it
+        with a PSCustomObject mock and assert the assignment is preserved
+        end-to-end (#585).
+    #>
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)] $Component,
+        [Parameter(Mandatory = $true)] [string] $Name
+    )
+    $Component.Name = $Name
+}
 
 function Write-DysflowOperationMarker {
     [CmdletBinding()]
@@ -2056,10 +2098,10 @@ function New-VbComponentFromCodeFile {
             # are mangled by the ANSI codepage (e.g. "Módulo1" becomes "Mód×lo1"). Force the
             # correct name via the COM property setter, which is Unicode-safe (same path as VBE
             # F4 → Name). This is a no-op when CopyObject happened to produce the right name.
-            $newComponent.Name = $ModuleName
+            Set-VbComponentNameSafe -Component $newComponent -Name $ModuleName
         } else {
             $newComponent = $VbProject.VBComponents.Add($componentType)
-            $newComponent.Name = $ModuleName
+            Set-VbComponentNameSafe -Component $newComponent -Name $ModuleName
         }
 
         $newCodeModule = $newComponent.CodeModule

@@ -211,14 +211,25 @@ function Resolve-ReadActionDatabase {
     [Parameter(Mandatory = $true)] $CurrentDb,
     [Parameter(Mandatory = $true)] $Payload
   )
-  $targetPath = [string]$Payload.databasePath
-  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.sourcePath }
-  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.backendPath }
+  $targetPath = Resolve-ReadActionTargetPath -Payload $Payload
   if ([string]::IsNullOrWhiteSpace($targetPath)) {
     return [ordered]@{ Database = $CurrentDb; Owned = $false; TargetPath = $targetPath }
   }
   $targetDb = Open-DatabaseWithBackendPassword -DbEngine $DbEngine -DatabasePath $targetPath -ReadOnly $true
   return [ordered]@{ Database = $targetDb; Owned = $true; TargetPath = $targetPath }
+}
+
+# Extracted from Resolve-ReadActionDatabase (#585): a pure path resolver with no
+# I/O, exercised directly by the Pester test instead of by reading the
+# function body text. The priority order (databasePath > sourcePath >
+# backendPath) is the issue-18 regression contract; keeping it in a
+# standalone function makes the contract testable without Access COM.
+function Resolve-ReadActionTargetPath {
+  param([Parameter(Mandatory = $true)] $Payload)
+  $targetPath = [string]$Payload.databasePath
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.sourcePath }
+  if ([string]::IsNullOrWhiteSpace($targetPath)) { $targetPath = [string]$Payload.backendPath }
+  return $targetPath
 }
 
 function Resolve-QueryActionTargetPath {

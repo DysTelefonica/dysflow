@@ -828,6 +828,9 @@ Describe "Resolve-ReadActionDatabase — behavioral (issue #380)" {
             [ref]$null, [ref]$null
         )
 
+        # #585: Resolve-ReadActionDatabase now delegates path resolution to
+        # the pure helper Resolve-ReadActionTargetPath. AST extraction is
+        # loader-only; load both into the test scope.
         $fnAst = $ast.FindAll(
             { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
               $args[0].Name -eq 'Resolve-ReadActionDatabase' },
@@ -835,6 +838,14 @@ Describe "Resolve-ReadActionDatabase — behavioral (issue #380)" {
         ) | Select-Object -First 1
         if (-not $fnAst) { throw "Resolve-ReadActionDatabase not found in $($script:RunnerPath)" }
         Invoke-Expression $fnAst.Extent.Text
+
+        $helperAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Resolve-ReadActionTargetPath' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $helperAst) { throw "Resolve-ReadActionTargetPath not found in $($script:RunnerPath)" }
+        Invoke-Expression $helperAst.Extent.Text
 
         $script:SentinelDb = [PSCustomObject]@{ IsSentinel = $true }
     }
