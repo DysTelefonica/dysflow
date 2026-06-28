@@ -43,7 +43,44 @@ describe("Windows Access smoke evidence", () => {
     expect(summary.message).toContain("not release-grade Access smoke evidence");
   });
 
-  it("fails release mode when fake tests run but Access fixture suites are skipped", () => {
+  it("reports fake tests plus skipped Access fixture suites as non-release-grade in advisory mode", () => {
+    const summary = summarizeAccessSmokeEvidence({
+      numTotalTests: 17,
+      numPassedTests: 2,
+      numPendingTests: 15,
+      numFailedTests: 0,
+      success: true,
+      testResults: [
+        {
+          name: "test/e2e/access-relink-directory.test.ts",
+          assertionResults: [
+            { status: "passed" },
+            ...Array.from({ length: 6 }, () => ({ status: "pending" })),
+          ],
+        },
+        {
+          name: "test/e2e/access-relink-directory-apply.test.ts",
+          assertionResults: [
+            { status: "passed" },
+            ...Array.from({ length: 3 }, () => ({ status: "pending" })),
+          ],
+        },
+        {
+          name: "test/e2e/access-fixture.e2e.test.ts",
+          assertionResults: Array.from({ length: 6 }, () => ({ status: "pending" })),
+        },
+      ],
+    });
+
+    expect(summary.status).toBe("access-skipped");
+    expect(summary.exitCode).toBe(0);
+    expect(summary.message).toContain("accessExecuted=2");
+    expect(summary.message).toContain("accessSkipped=15");
+    expect(summary.message).toContain("not release-grade Access smoke evidence");
+    expect(summary.message).not.toContain("This is release-grade Access smoke evidence");
+  });
+
+  it("fails release mode when any required Access fixture suites are skipped", () => {
     const summary = summarizeAccessSmokeEvidence(
       {
         numTotalTests: 17,
@@ -53,12 +90,22 @@ describe("Windows Access smoke evidence", () => {
         success: true,
         testResults: [
           {
-            name: "test/e2e/fake-service.e2e.test.ts",
-            assertionResults: [{ status: "passed" }, { status: "passed" }],
+            name: "test/e2e/access-relink-directory.test.ts",
+            assertionResults: [
+              { status: "passed" },
+              ...Array.from({ length: 6 }, () => ({ status: "pending" })),
+            ],
+          },
+          {
+            name: "test/e2e/access-relink-directory-apply.test.ts",
+            assertionResults: [
+              { status: "passed" },
+              ...Array.from({ length: 3 }, () => ({ status: "pending" })),
+            ],
           },
           {
             name: "test/e2e/access-fixture.e2e.test.ts",
-            assertionResults: Array.from({ length: 15 }, () => ({ status: "pending" })),
+            assertionResults: Array.from({ length: 6 }, () => ({ status: "pending" })),
           },
         ],
       },
@@ -67,7 +114,7 @@ describe("Windows Access smoke evidence", () => {
 
     expect(summary.status).toBe("access-skipped");
     expect(summary.exitCode).toBe(1);
-    expect(summary.message).toContain("accessExecuted=0");
+    expect(summary.message).toContain("accessExecuted=2");
     expect(summary.message).toContain("accessSkipped=15");
     expect(summary.message).toContain("not release-grade Access smoke evidence");
     expect(summary.message).not.toContain("This is release-grade Access smoke evidence");

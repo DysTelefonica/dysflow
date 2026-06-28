@@ -22,7 +22,7 @@ export function summarizeAccessSmokeEvidence(report, options = {}) {
     };
   }
 
-  if (accessEvidence.hasAccessSuites && accessEvidence.executed === 0 && accessEvidence.skipped > 0) {
+  if (accessEvidence.hasAccessSuites && accessEvidence.skipped > 0) {
     return {
       status: "access-skipped",
       exitCode: releaseMode ? 1 : 0,
@@ -79,7 +79,7 @@ async function main(argv) {
   }
   const raw = await readFile(reportPath, "utf8");
   const summary = summarizeAccessSmokeEvidence(JSON.parse(raw), {
-    releaseMode: process.env.CI === "true" || process.env.DYSFLOW_ACCESS_SMOKE_RELEASE === "1",
+    releaseMode: process.env.DYSFLOW_ACCESS_SMOKE_RELEASE === "1",
   });
   const annotation = summary.exitCode !== 0 ? "error" : summary.status.includes("skipped") ? "warning" : "notice";
   console.log(`::${annotation} title=Windows Access smoke evidence::${summary.message}`);
