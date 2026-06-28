@@ -674,7 +674,15 @@ Defaults:
 - port: `17321`
 - writes: disabled by default
 
-**Bearer token auth**: set `httpToken` in `.dysflow/project.json` to require `Authorization: Bearer <token>` on every request. Requests without a valid token return `401`. When `httpToken` is absent, all requests pass through (default).
+**Bearer token auth**: prefer the env-first `httpTokenEnv` path in `.dysflow/project.json` and set `DYSFLOW_HTTP_TOKEN` in the runtime environment to require `Authorization: Bearer <token>` on every request:
+
+```json
+{
+  "httpTokenEnv": "DYSFLOW_HTTP_TOKEN"
+}
+```
+
+Keeping the token in the environment avoids committing secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed. Requests without a valid token return `401`. When neither `httpTokenEnv` nor a local-only inline token resolves a token, all requests pass through (default).
 
 **Procedure allowlist**: `allowedProcedures` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
 

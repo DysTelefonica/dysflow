@@ -166,7 +166,7 @@ Invoke-RestMethod -Method Post -Uri "$base/query/read" `
   -Body (@{ sql = "SELECT id, name FROM People" } | ConvertTo-Json)
 ```
 
-Omit `-Headers $headers` if `httpToken` is not configured.
+Omit `-Headers $headers` if no HTTP token is configured.
 
 To enable write routes explicitly:
 
