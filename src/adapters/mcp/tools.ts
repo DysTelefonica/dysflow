@@ -14,6 +14,7 @@ import {
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
+import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -88,7 +89,7 @@ export function createDysflowMcpTools(
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow_vba_execute",
-      description: "Execute a VBA procedure through Dysflow core services.",
+      description: `Execute a VBA procedure through Dysflow core services. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
       inputSchema: VBA_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpVbaExecute(
@@ -102,7 +103,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_query_execute",
-      description: "Execute a query action through Dysflow core services.",
+      description: `Execute a query action through Dysflow core services. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpQueryExecute(
@@ -138,7 +139,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_cleanup",
-      description: "Clean up resources associated with a recent Access operation.",
+      description: `Clean up resources associated with a recent Access operation. ${MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary}`,
       inputSchema: CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessCleanup(
