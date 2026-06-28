@@ -39,6 +39,26 @@ export type AccessOperationMetadata = Pick<
 export type CreateAccessOperationRecord = AccessOperationRecord;
 export type UpdateAccessOperationRecord = Partial<Omit<AccessOperationRecord, "operationId">>;
 
+/**
+ * Health snapshot for an `AccessOperationRegistry`. The `degraded` variant is
+ * set by `FileAccessOperationRegistry` when the on-disk JSON cannot be parsed
+ * (see DELTA-001 / #575): the corrupt file is quarantined to a `.quarantine-<ISO>.json`
+ * sidecar so the original bytes are preserved for forensics, and the registry
+ * reports its degraded state so list/cleanup callers can distinguish between
+ * "no operations" and "registry was corrupt and is now empty by design".
+ *
+ * `InMemoryAccessOperationRegistry` always reports `ok` (the in-memory map
+ * cannot be corrupted by definition).
+ */
+export type AccessOperationRegistryHealth =
+  | { status: "ok" }
+  | {
+      status: "degraded";
+      reason: "corrupt-json";
+      quarantinePath: string;
+      quarantinedAt: string;
+    };
+
 export type AccessOperationRegistry = {
   create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord>;
   update(
@@ -47,6 +67,13 @@ export type AccessOperationRegistry = {
   ): Promise<AccessOperationRecord | undefined>;
   get(operationId: string): Promise<AccessOperationRecord | undefined>;
   listRecent(options?: { limit?: number }): Promise<AccessOperationRecord[]>;
+  /**
+   * Snapshot of the registry's health. `degraded` means the on-disk file was
+   * corrupt at last read and has been moved aside; subsequent reads return an
+   * empty list. New `create`/`update` calls after a quarantine are still allowed
+   * and will eventually overwrite the (now empty) registry file.
+   */
+  getHealth(): AccessOperationRegistryHealth;
 };
 
 /**
@@ -125,6 +152,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private readonly maxRecords: number;
   private readonly lockTimeoutMs: number;
   private readonly staleLockMs: number;
+  private lastHealth: AccessOperationRegistryHealth = { status: "ok" };
 
   constructor(options: FileAccessOperationRegistryOptions) {
     this.filePath = resolve(options.filePath);
@@ -179,6 +207,10 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
       .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
       .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+  }
+
+  getHealth(): AccessOperationRegistryHealth {
+    return this.lastHealth;
   }
 
   private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -315,7 +347,58 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
       );
     } catch (err) {
       logSwallowedIoError("access-operation-registry:parse", err);
+      // DELTA-001 (#575): a corrupt registry must be quarantined, not silently
+      // treated as empty. The original bytes are preserved at a `.quarantine-<ISO>.json`
+      // sidecar so the operator can inspect/recover them, and `getHealth()` reports
+      // the degraded state so list/cleanup callers can distinguish "no operations"
+      // from "registry was corrupt and is now empty by design".
+      const quarantine = await this.quarantineCorruptFile(raw).catch(() => undefined);
+      if (quarantine !== undefined) {
+        this.lastHealth = quarantine;
+      }
       return new Map();
+    }
+  }
+
+  /**
+   * Renames the current `this.filePath` to `<filePath>.quarantine-<ISO>.json`
+   * alongside the original location. If the rename fails (e.g. cross-device or
+   * permission denied) the file is left in place and the caller falls back to
+   * returning an empty map without surfacing a quarantine. Returns the health
+   * snapshot to stamp on the registry instance.
+   */
+  private async quarantineCorruptFile(
+    raw: string,
+  ): Promise<Extract<AccessOperationRegistryHealth, { status: "degraded" }> | undefined> {
+    const isoStamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const quarantinePath = `${this.filePath}.quarantine-${isoStamp}.json`;
+    try {
+      await mkdir(dirname(this.filePath), { recursive: true });
+      await rename(this.filePath, quarantinePath);
+      return {
+        status: "degraded",
+        reason: "corrupt-json",
+        quarantinePath,
+        quarantinedAt: new Date().toISOString(),
+      };
+    } catch (renameErr) {
+      logSwallowedIoError("access-operation-registry:quarantine", renameErr);
+      // Last-resort: try to copy the bytes to the quarantine sidecar so the
+      // operator at least has the corrupt content available, even if the
+      // original could not be moved.
+      try {
+        const tempPath = `${this.filePath}.quarantine-${isoStamp}.json.partial`;
+        await writeFile(tempPath, raw, "utf8");
+        await rename(tempPath, quarantinePath);
+        return {
+          status: "degraded",
+          reason: "corrupt-json",
+          quarantinePath,
+          quarantinedAt: new Date().toISOString(),
+        };
+      } catch {
+        return undefined;
+      }
     }
   }
 
@@ -384,6 +467,13 @@ export class InMemoryAccessOperationRegistry implements AccessOperationRegistry 
       .sort((a, b) => (b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0))
       .slice(0, limit)
       .map((record) => ({ ...record, metadata: { ...record.metadata } }));
+  }
+
+  getHealth(): AccessOperationRegistryHealth {
+    // The in-memory registry cannot be corrupted by definition — every record
+    // passed through `create`/`update` is held only in JS, with no JSON
+    // serialization that could fail to parse later. Always ok.
+    return { status: "ok" };
   }
 
   private evictOldestRecords(): void {

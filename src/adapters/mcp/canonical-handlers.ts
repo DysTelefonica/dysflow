@@ -2,6 +2,7 @@ import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/
 import { successResult } from "../../core/contracts/index.js";
 import type { AccessOperationListEntry } from "../../core/operations/access-operation-registry.js";
 import {
+  type AccessOperationRegistryHealth,
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
@@ -90,8 +91,17 @@ export async function handleMcpAccessOperationsList(
   services: DysflowMcpServices,
 ): Promise<McpToolResult> {
   const registry = resolveAccessOperationRegistry(services.operationRegistry);
+  // DELTA-001 (#575): include `registryHealth` alongside the list so callers
+  // can distinguish "no operations" from "registry was corrupt and is now empty by design".
+  const operations = await listRecentAccessOperations(registry);
   return translateCoreResultToMcpContent(
-    successResult<readonly AccessOperationListEntry[]>(await listRecentAccessOperations(registry)),
+    successResult<{
+      operations: readonly AccessOperationListEntry[];
+      registryHealth: AccessOperationRegistryHealth;
+    }>({
+      operations,
+      registryHealth: registry.getHealth(),
+    }),
   );
 }
 
@@ -129,7 +139,24 @@ export async function handleMcpAccessCleanup(
   ) {
     return writesDisabled();
   }
-  return translateCoreResultToMcpContent(await services.cleanupService.cleanup(request));
+  const cleanupResult = await services.cleanupService.cleanup(request);
+  // DELTA-001 (#575): on success, include `registryHealth` so the caller can
+  // see whether the registry itself was in a degraded state when the cleanup
+  // ran. Failure envelopes keep their existing shape (`error.code` is the
+  // contract; downstream parsers depend on it).
+  if (cleanupResult.ok) {
+    const registry = resolveAccessOperationRegistry(services.operationRegistry);
+    return translateCoreResultToMcpContent(
+      successResult<{
+        cleanup: typeof cleanupResult.data;
+        registryHealth: AccessOperationRegistryHealth;
+      }>({
+        cleanup: cleanupResult.data,
+        registryHealth: registry.getHealth(),
+      }),
+    );
+  }
+  return translateCoreResultToMcpContent(cleanupResult);
 }
 
 export async function handleMcpAccessOrphanCleanup(

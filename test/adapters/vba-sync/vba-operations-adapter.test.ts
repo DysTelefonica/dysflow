@@ -22,6 +22,7 @@ function makeRegistry(records = [makeRecord()]): AccessOperationRegistry {
     update: vi.fn(),
     get: vi.fn(),
     listRecent: vi.fn().mockResolvedValue(records),
+    getHealth: vi.fn().mockReturnValue({ status: "ok" as const }),
   };
 }
 
@@ -44,7 +45,7 @@ describe("VbaOperationsAdapter", () => {
   });
 
   describe("list_access_operations", () => {
-    it("returns records from the injected registry", async () => {
+    it("returns records + registryHealth from the injected registry (#575)", async () => {
       const records = [makeRecord({ operationId: "op-abc" })];
       const registry = makeRegistry(records);
       const adapter = new VbaOperationsAdapter({ operationRegistry: registry });
@@ -53,9 +54,12 @@ describe("VbaOperationsAdapter", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        // Each entry is the record enriched with a read-time isStale marker.
-        // The record is running + owns a PID + recent, so it is not stale.
-        expect(result.data).toEqual(records.map((r) => ({ ...r, isStale: false })));
+        // DELTA-001 (#575): response wraps the records list AND the registry
+        // health so callers can tell "no operations" from "registry was corrupt".
+        expect(result.data.operations).toEqual(
+          records.map((r) => ({ ...r, isStale: false })),
+        );
+        expect(result.data.registryHealth).toEqual({ status: "ok" });
       }
     });
 
@@ -96,7 +100,11 @@ describe("VbaOperationsAdapter", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.data).toMatchObject({ operationId: "op-1", status: "cleaned" });
+        // DELTA-001 (#575): cleanup result now wraps the cleanup payload AND the
+        // registry health so callers can tell whether the registry was healthy
+        // at cleanup time.
+        expect(result.data.cleanup).toMatchObject({ operationId: "op-1", status: "cleaned" });
+        expect(result.data.registryHealth).toEqual({ status: "ok" });
       }
     });
 

@@ -1650,7 +1650,7 @@ describe("AccessOperationRegistry explicit injection", () => {
     });
   }
 
-  it("dysflow_access_operations_list and list_access_operations list operations from the injected registry", async () => {
+  it("dysflow_access_operations_list and list_access_operations list operations + registryHealth from the injected registry (#575)", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({
       operationId: "op-test-mcp",
@@ -1685,8 +1685,16 @@ describe("AccessOperationRegistry explicit injection", () => {
     const result = await listTool.handler({});
     const aliasResult = await aliasListTool.handler({});
 
+    // DELTA-001 (#575): the response now includes registryHealth so callers
+    // can tell "no operations" from "registry was corrupt and is now empty".
+    // The in-memory registry is always ok.
     const expectedContent = {
-      content: [{ type: "text", text: expect.stringContaining("op-test-mcp") }],
+      content: [
+        {
+          type: "text",
+          text: expect.stringMatching(/op-test-mcp[\s\S]*registryHealth[\s\S]*"status":\s*"ok"/),
+        },
+      ],
       isError: false,
     };
 

@@ -12,6 +12,7 @@ import {
 } from "../../core/operations/access-operation-preflight.js";
 import {
   type AccessOperationRegistry,
+  type AccessOperationRegistryHealth,
   createProjectAccessOperationRegistry,
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
@@ -54,8 +55,16 @@ export class VbaOperationsAdapter {
       const registry = resolveAccessOperationRegistry(this.operationRegistry, () =>
         createProjectAccessOperationRegistry({ projectRoot: this.cwd }),
       );
-      const records = await listRecentAccessOperations(registry);
-      return successResult(records);
+      // DELTA-001 (#575): include `registryHealth` alongside the list so callers
+      // can distinguish "no operations" from "registry was corrupt and is now empty by design".
+      const operations = await listRecentAccessOperations(registry);
+      return successResult<{
+        operations: Awaited<ReturnType<typeof listRecentAccessOperations>>;
+        registryHealth: AccessOperationRegistryHealth;
+      }>({
+        operations,
+        registryHealth: registry.getHealth(),
+      });
     }
 
     if (toolName === "cleanup_access_operation") {
@@ -69,11 +78,27 @@ export class VbaOperationsAdapter {
         accessPath?: string;
         force?: boolean;
       };
-      return this.cleanupService.cleanup({
+      const cleanupResult = await this.cleanupService.cleanup({
         operationId,
         accessPath: accessPath ?? "",
         force,
       });
+      // DELTA-001 (#575): include `registryHealth` on success so the caller can
+      // see whether the registry itself was in a degraded state when the cleanup
+      // ran. Failure envelopes keep their existing shape.
+      if (cleanupResult.ok) {
+        const registry = resolveAccessOperationRegistry(this.operationRegistry, () =>
+          createProjectAccessOperationRegistry({ projectRoot: this.cwd }),
+        );
+        return successResult<{
+          cleanup: AccessCleanupResult;
+          registryHealth: AccessOperationRegistryHealth;
+        }>({
+          cleanup: cleanupResult.data,
+          registryHealth: registry.getHealth(),
+        });
+      }
+      return cleanupResult;
     }
 
     return failureResult(

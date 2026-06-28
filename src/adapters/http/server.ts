@@ -16,6 +16,7 @@ import type { AccessCleanupResult } from "../../core/operations/access-operation
 import {
   type AccessOperationListEntry,
   type AccessOperationRegistry,
+  type AccessOperationRegistryHealth,
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
@@ -175,11 +176,18 @@ async function routeRequest(
 
   if (method === "GET" && path === "/access/operations") {
     const registry = resolveAccessOperationRegistry(context.services.operationRegistry);
+    // DELTA-001 (#575): include `registryHealth` alongside the list so callers
+    // can distinguish "no operations" from "registry was corrupt and is now empty by design".
+    const operations = await listRecentAccessOperations(registry);
     sendOperationResult(
       response,
-      successResult<readonly AccessOperationListEntry[]>(
-        await listRecentAccessOperations(registry),
-      ),
+      successResult<{
+        operations: readonly AccessOperationListEntry[];
+        registryHealth: AccessOperationRegistryHealth;
+      }>({
+        operations,
+        registryHealth: registry.getHealth(),
+      }),
     );
     return;
   }
@@ -207,14 +215,30 @@ async function routeRequest(
       );
       return;
     }
-    sendOperationResult(
-      response,
-      await cleanupService.cleanup({
-        operationId: getStringParam(body.data, "operationId"),
-        accessPath: getStringParam(body.data, "accessPath"),
-        force: body.data.force === true,
-      }),
-    );
+    const cleanupResult = await cleanupService.cleanup({
+      operationId: getStringParam(body.data, "operationId"),
+      accessPath: getStringParam(body.data, "accessPath"),
+      force: body.data.force === true,
+    });
+    // DELTA-001 (#575): on success, include `registryHealth` so the caller can
+    // see whether the registry itself was in a degraded state when the cleanup
+    // ran. Failure envelopes keep their existing shape (`error.code` is the
+    // contract; downstream parsers depend on it).
+    if (cleanupResult.ok) {
+      const registry = resolveAccessOperationRegistry(context.services.operationRegistry);
+      sendOperationResult(
+        response,
+        successResult<{
+          cleanup: typeof cleanupResult.data;
+          registryHealth: AccessOperationRegistryHealth;
+        }>({
+          cleanup: cleanupResult.data,
+          registryHealth: registry.getHealth(),
+        }),
+      );
+    } else {
+      sendOperationResult(response, cleanupResult);
+    }
     return;
   }
 

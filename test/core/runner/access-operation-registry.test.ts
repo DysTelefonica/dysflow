@@ -489,13 +489,14 @@ describe("Access operation registry and cleanup safety", () => {
 });
 
 describe("FileAccessOperationRegistry — swallowed-I/O diagnostics (#478)", () => {
-  it("returns empty Map for a corrupt registry file (behavior preserved) and logs the parse error", async () => {
+  it("quarantines a corrupt registry file (#575) and logs the parse error", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-registry-corrupt-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
       // Write garbage — the file exists but is not valid JSON
       await mkdir(dirname(registryPath), { recursive: true });
-      await writeFile(registryPath, "{ not valid json {{{", "utf8");
+      const garbage = "{ not valid json {{{";
+      await writeFile(registryPath, garbage, "utf8");
 
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
       const registry = new FileAccessOperationRegistry({ filePath: registryPath });
@@ -507,6 +508,17 @@ describe("FileAccessOperationRegistry — swallowed-I/O diagnostics (#478)", () 
       );
       expect(loggedCall).toBeDefined();
       expect(loggedCall?.[0]).toMatch(/\[dysflow:swallowed-io:access-operation-registry:parse\]/);
+
+      // DELTA-001 (#575): original is moved to a `.quarantine-<ISO>.json` sidecar
+      // alongside the original path, and the registry reports degraded health.
+      expect(existsSync(registryPath)).toBe(false);
+      const health = registry.getHealth();
+      expect(health.status).toBe("degraded");
+      if (health.status === "degraded") {
+        expect(health.reason).toBe("corrupt-json");
+        expect(health.quarantinePath.startsWith(registryPath)).toBe(true);
+        expect(readFileSync(health.quarantinePath, "utf8")).toBe(garbage);
+      }
       spy.mockRestore();
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -1129,21 +1141,25 @@ describe("Access operation registry additional branches", () => {
     }
   });
 
-  it("FileRegistry.readRecords handles malformed JSON gracefully", async () => {
+  it("FileRegistry.readRecords handles malformed JSON by quarantining the file (#575)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-malformed-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
       await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
       await writeFile(registryPath, "{ not valid json }", "utf8");
+      vi.spyOn(console, "debug").mockImplementation(() => {});
       const registry = new FileAccessOperationRegistry({ filePath: registryPath });
       const records = await registry.listRecent();
       expect(records).toEqual([]);
+      // DELTA-001 (#575): corrupt registry is quarantined and health is degraded
+      expect(existsSync(registryPath)).toBe(false);
+      expect(registry.getHealth().status).toBe("degraded");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  it("FileRegistry.readRecords handles objects without records array (uses empty fallback)", async () => {
+  it("FileRegistry.readRecords handles objects without records array (uses empty fallback, no quarantine)", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-no-records-key-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
@@ -1152,6 +1168,10 @@ describe("Access operation registry additional branches", () => {
       const registry = new FileAccessOperationRegistry({ filePath: registryPath });
       const records = await registry.listRecent();
       expect(records).toEqual([]);
+      // Valid JSON without the `records` key is a structural mismatch, NOT a
+      // corruption. The registry stays ok and the file is NOT quarantined.
+      expect(existsSync(registryPath)).toBe(true);
+      expect(registry.getHealth().status).toBe("ok");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

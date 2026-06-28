@@ -485,6 +485,20 @@ export function createDynamicServices(
         const limit = opts?.limit ?? 50;
         return sorted.slice(0, limit);
       },
+      // DELTA-001 (#575): aggregate `registryHealth` across every cached service
+      // (and the default registry). If ANY of them is degraded, the aggregate is
+      // degraded — corrupt-registry detection must not be hidden behind
+      // fan-out. The first degraded entry wins so the caller gets a concrete
+      // quarantinePath to inspect.
+      getHealth: () => {
+        for (const service of serviceCache.values()) {
+          if (service.operationRegistry) {
+            const health = service.operationRegistry.getHealth();
+            if (health.status === "degraded") return health;
+          }
+        }
+        return defaultRegistry.getHealth();
+      },
     },
     vbaSyncToolService: {
       execute: async (toolName, input) => {

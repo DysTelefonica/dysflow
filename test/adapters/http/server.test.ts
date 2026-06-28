@@ -541,7 +541,7 @@ describe("Dysflow HTTP adapter", () => {
     ]);
   });
 
-  it("exposes operations from an injected FileAccessOperationRegistry via GET /access/operations (#176)", async () => {
+  it("exposes operations + registryHealth from an injected FileAccessOperationRegistry via GET /access/operations (#176, #575)", async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), "dysflow-http-registry-"));
     const registryPath = join(tmpDir, "operations.json");
     const operationRegistry = new FileAccessOperationRegistry({ filePath: registryPath });
@@ -566,11 +566,22 @@ describe("Dysflow HTTP adapter", () => {
     startedServers.push(server.server);
 
     const { response, body } = await readJson(`${server.url}/access/operations`);
-    const result = body as { ok: boolean; data: Array<{ operationId: string }> };
+    const result = body as {
+      ok: boolean;
+      data: {
+        operations: Array<{ operationId: string }>;
+        registryHealth: { status: "ok" | "degraded" };
+      };
+    };
 
     expect(response.status).toBe(200);
     expect(result.ok).toBe(true);
-    expect(result.data.some((op) => op.operationId === "op-test-http-shared-registry")).toBe(true);
+    expect(
+      result.data.operations.some((op) => op.operationId === "op-test-http-shared-registry"),
+    ).toBe(true);
+    // DELTA-001 (#575): registryHealth is always present in the response so
+    // consumers do not have to branch on its existence.
+    expect(result.data.registryHealth.status).toBe("ok");
   });
 
   it("rejects INSERT followed by DELETE separated by a top-level semicolon via the core guard", async () => {
@@ -674,25 +685,29 @@ describe("Dysflow HTTP adapter", () => {
     const services = createFakeServices({ cleanupService: fakeCleanupService });
     const server = await startTestServer({ services, writesEnabled: true });
 
-    const response = await readJson<{ ok: true; data: { operationId: string; status: string } }>(
-      `${server.url}/access/cleanup`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          operationId: "op-force-enabled",
-          accessPath: "C:/db/front.accdb",
-          force: true,
-        }),
-      },
-    );
+    const response = await readJson<{
+      ok: true;
+      data: { cleanup: { operationId: string; status: string }; registryHealth: { status: string } };
+    }>(`${server.url}/access/cleanup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationId: "op-force-enabled",
+        accessPath: "C:/db/front.accdb",
+        force: true,
+      }),
+    });
 
     expect(response.response.status).toBe(200);
     expect(response.body.ok).toBe(true);
-    expect(response.body.data).toMatchObject({
+    // DELTA-001 (#575): cleanup response wraps the cleanup payload AND the
+    // registry health so callers can see whether the registry was degraded
+    // when the cleanup ran.
+    expect(response.body.data.cleanup).toMatchObject({
       operationId: "op-force-enabled",
       status: "cleaned",
     });
+    expect(response.body.data.registryHealth).toEqual({ status: "ok" });
     expect(cleanupCalls).toEqual([
       { operationId: "op-force-enabled", accessPath: "C:/db/front.accdb", force: true },
     ]);
