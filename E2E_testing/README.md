@@ -13,23 +13,41 @@ node .\dist\cli\index.js install --runtime-dir "$env:LOCALAPPDATA\dysflow" --age
 pnpm run test:e2e:mcp
 ```
 
-Expected result: the script prints a PASS/FAIL table and writes a report to:
+Expected result: the script prints a PASS/FAIL table. The harness writes its working report inside
+the temporary sandbox and removes the sandbox after a fully successful run unless preservation is
+requested.
 
 ```text
-E2E_testing\.dysflow\mcp-e2e-temp\mcp-e2e-report.md
+%TEMP%\dysflow-mcp-e2e-*\mcp-e2e-report.md
 ```
 
 ## What this test uses
 
 | Item | Canonical value |
 |---|---|
-| Frontend | `E2E_testing\NoConformidades.accdb` |
-| Backend | `E2E_testing\NoConformidades_Datos.accdb` |
+| Frontend | copied from `E2E_testing\NoConformidades.accdb` to a temp sandbox before writes |
+| Backend | copied from `E2E_testing\NoConformidades_Datos.accdb` to a temp sandbox before writes |
 | Project config | `E2E_testing\.dysflow\project.json` |
 | Runner | resolved by `resolveMcpE2eCommand` — see [MCP E2E — local test-runtime](#mcp-e2e--local-test-runtime) |
 | Harness | `E2E_testing\mcp-e2e.mjs` |
 
 The E2E harness performs JSON-RPC MCP handshakes and calls the advertised tools through the real stdio MCP server. It is intentionally closer to normal agent usage than direct TypeScript unit tests.
+
+## Fixture isolation and sandbox cleanup
+
+The repository fixture databases and `E2E_testing\src` tree are read-only inputs for the MCP E2E
+harness (#586). At startup, `mcp-e2e.mjs` creates a sandbox under `%TEMP%\dysflow-mcp-e2e-*`, copies
+the frontend database, backend database, and source fixture tree there, and points every mutable MCP
+argument (`accessPath`, `backendPath`, `databasePath`, `destinationRoot`, `rootPath`, export paths,
+catalog paths, and generated script/spec paths) at the sandbox copy.
+
+Cleanup behavior:
+
+- Successful runs remove the sandbox by default.
+- Failed runs preserve the sandbox and print its path for diagnosis.
+- Set `DYSFLOW_E2E_PRESERVE_SANDBOX=1` to preserve the sandbox even after success.
+- Set `DYSFLOW_E2E_SANDBOX_ROOT=<absolute path>` only when you need a deterministic sandbox path for
+  local debugging.
 
 ## MCP E2E — local test-runtime
 
@@ -67,6 +85,8 @@ If the harness ever aborts before any tool call, the message names the resolutio
 - Do not copy Dysflow TypeScript source into `E2E_testing`.
 - Do not hardcode fixture passwords. Use `ACCESS_VBA_PASSWORD`.
 - This fixture is allowed to be destructive: the backend/frontend are test assets.
+- Destructive tool calls must run against the temporary sandbox copies, never the repository fixture
+  databases directly.
 - Generated reports, Access locks, temp files, and local binary fixtures are not PR artifacts unless explicitly needed for diagnosis.
 
 ## Optional knobs
@@ -78,6 +98,9 @@ $env:DYSFLOW_E2E_COMMAND = "C:\Users\adm.DEFENSA\AppData\Local\dysflow\bin\dysfl
 # Increase per-tool response timeout only when debugging a known slow operation.
 # Normal runs use a short 30s guard and stop each MCP process as soon as it replies.
 $env:DYSFLOW_E2E_TIMEOUT_MS = "30000"
+
+# Preserve the copied sandbox for post-run inspection.
+$env:DYSFLOW_E2E_PRESERVE_SANDBOX = "1"
 ```
 
 ## Boundary

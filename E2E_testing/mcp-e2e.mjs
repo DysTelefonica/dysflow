@@ -2,17 +2,22 @@ import { spawn, execSync } from "node:child_process";
 import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const projectId = "noconformidades-e2e";
-const accessPath = join(scriptDir, "NoConformidades.accdb");
-const backendPath = join(scriptDir, "NoConformidades_Datos.accdb");
-const destinationRoot = join(scriptDir, "src");
-const tempRoot = join(scriptDir, ".dysflow", "mcp-e2e-temp");
-const reportPath = join(tempRoot, "mcp-e2e-report.md");
+const sandboxPlan = buildMcpE2eSandboxPlan({
+  scriptDir,
+  sandboxRoot: process.env.DYSFLOW_E2E_SANDBOX_ROOT,
+});
+const tempRoot = sandboxPlan.sandbox.root;
+const accessPath = sandboxPlan.sandbox.accessPath;
+const backendPath = sandboxPlan.sandbox.backendPath;
+const destinationRoot = sandboxPlan.sandbox.destinationRoot;
+const reportPath = sandboxPlan.sandbox.reportPath;
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 // #583: when a response is captured but the child never emits 'close' (some
 // hosts do not when the process is killed by signal), the harness forces a
@@ -46,29 +51,32 @@ if (!password) {
   process.exit(1);
 }
 
-for (const [label, fixturePath] of [["accessPath", accessPath], ["backendPath", backendPath]]) {
+for (const [label, fixturePath] of [["accessPath", sandboxPlan.source.accessPath], ["backendPath", sandboxPlan.source.backendPath], ["destinationRoot", sandboxPlan.source.destinationRoot]]) {
   try { await access(fixturePath); } catch {
     console.error(`Missing E2E fixture: ${label}=${fixturePath}`);
-    console.error("Copy the NoConformidades.accdb and NoConformidades_Datos.accdb files into E2E_testing/ before running the suite.");
+    console.error("Copy the NoConformidades.accdb, NoConformidades_Datos.accdb, and src fixture tree into E2E_testing/ before running the suite.");
     process.exit(1);
   }
 }
 
 await rm(tempRoot, { recursive: true, force: true });
 await mkdir(tempRoot, { recursive: true });
-await mkdir(join(tempRoot, "exports"), { recursive: true });
-await mkdir(join(tempRoot, "exports", "prune"), { recursive: true });
-await mkdir(join(tempRoot, "ERD"), { recursive: true });
+await cp(sandboxPlan.source.accessPath, accessPath);
+await cp(sandboxPlan.source.backendPath, backendPath);
+await cp(sandboxPlan.source.destinationRoot, destinationRoot, { recursive: true });
+await mkdir(sandboxPlan.sandbox.exportsRoot, { recursive: true });
+await mkdir(sandboxPlan.sandbox.pruneExportPath, { recursive: true });
+await mkdir(sandboxPlan.sandbox.erdPath, { recursive: true });
 
-const sqlScript = join(tempRoot, "script.sql");
-const formSpec = join(tempRoot, "form-spec.json");
-const queriesExportPath = join(tempRoot, "exports", "queries.json");
-const pruneExportPath = join(tempRoot, "exports", "prune");
+const sqlScript = sandboxPlan.sandbox.sqlScript;
+const formSpec = sandboxPlan.sandbox.formSpec;
+const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
+const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = `ZZZ_DysflowMcpE2E_${Date.now()}`;
 await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
 await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
 
-const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: scriptDir };
+const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: tempRoot };
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
 const rows = [];
 const existingModuleName = "Funciones Generales";
@@ -166,7 +174,7 @@ await record("query", "list_linked_tables", { projectId, accessPath, backendPath
 await record("query", "list_links", { projectId, accessPath });
 await record("query", "get_relationships", { projectId, ...backendTarget });
 await record("query", "compare_backends", { projectId, accessPath, backendPath, comparePath: backendPath });
-await record("query", "list_access_files", { projectId, rootPath: scriptDir });
+await record("query", "list_access_files", { projectId, rootPath: tempRoot });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], dryRun: false });
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, dryRun: true, backupFirst: false });
@@ -180,7 +188,7 @@ await record("links", "link_tables", { projectId, accessPath, backendPath, dryRu
 await record("links", "relink_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "localize_backend_links", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "unlink_table", { projectId, accessPath, tableName: "DysflowMcpE2EMissing", dryRun: false });
-await record("links", "relink_directory", { projectId, rootPath: scriptDir, apply: true, recursive: false, strictLocal: false });
+await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
 
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", dryRun: false });
 await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, dryRun: false, allowTable: probeTable });
@@ -244,8 +252,8 @@ await record("vba-sync", "generate_erd", { ...ctx, backendPath, erdPath: join(te
 
 await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
 await record("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", dryRun: true, replace: true });
-await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: join(tempRoot, "catalog.json"), controlName: "txtProbe", controlType: "TextBox" });
-await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: join(tempRoot, "catalog.json"), filter: "DysflowMcpE2E" });
+await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
+await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
 
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
@@ -333,4 +341,10 @@ const failed = rows.filter((row) => !row.pass);
 const report = `# Dysflow MCP E2E Report\n\nProject: ${projectId}\nFrontend: ${accessPath}\nBackend: ${backendPath}\nTools advertised: ${advertised.length}\nPassed: ${passed}\nFailed: ${failed.length}\n\n| Result | Area | Tool | Expected | ms | Summary |\n|---|---|---|---|---:|---|\n${rows.map((row) => `| ${row.pass ? "PASS" : "FAIL"} | ${row.area} | ${row.tool} | ${row.expected} | ${row.ms} | ${String(row.summary).replace(/\|/g, "\\|")} |`).join("\n")}\n\n## Advertised tools\n${advertised.map((name) => `- ${name}`).join("\n")}\n`;
 await writeFile(reportPath, report, "utf8");
 console.log(`\nReport: ${reportPath}`);
+if (failed.length === 0 && process.env.DYSFLOW_E2E_PRESERVE_SANDBOX !== "1") {
+  await rm(tempRoot, { recursive: true, force: true });
+  console.log("Sandbox cleaned after successful MCP E2E run. Set DYSFLOW_E2E_PRESERVE_SANDBOX=1 to keep it for inspection.");
+} else {
+  console.log(`Sandbox preserved: ${tempRoot}`);
+}
 process.exitCode = failed.length > 0 ? 1 : 0;
