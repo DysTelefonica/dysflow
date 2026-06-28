@@ -83,4 +83,12 @@ jobs:
           if ($result.FailedCount -gt 0) { exit 1 }
 
       - name: Run Access/PowerShell integration tests
-        run: pnpm vitest run --config vitest.integration.config.ts test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP "windows-access-smoke-vitest.json"
+          pnpm vitest run --config vitest.integration.config.ts --reporter=default --reporter=json --outputFile=$report test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts
+          $vitestExit = $LASTEXITCODE
+          node scripts/access-smoke-evidence.mjs $report
+          $evidenceExit = $LASTEXITCODE
+          if ($vitestExit -ne 0) { exit $vitestExit }
+          if ($evidenceExit -ne 0) { exit $evidenceExit }
