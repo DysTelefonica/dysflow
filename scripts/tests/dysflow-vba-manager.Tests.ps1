@@ -2404,10 +2404,14 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             param($VbProject, [string]$ModuleName)
             return $null
         }
-        function script:Get-ChildItem {
-            param($Path, [switch]$File, [switch]$Recurse, $Include, $ErrorAction)
-            return @()
-        }
+        # NOTE: no `function script:Get-ChildItem` mock here. Pester 5's `script:`
+        # scope is the file's script scope, not container-scoped, so defining it
+        # here leaks into every Describe that runs after this one (notably the
+        # Fix-EncodingInSrc bulk-mode tests, whose extracted real
+        # Fix-EncodingInSrc calls Get-ChildItem via the cmdlet pipeline).
+        # Every test in this Describe passes -NormalizedModules explicitly, so
+        # the Invoke-ImportAction production code never reaches the Get-ChildItem
+        # fallback branch — the mock was defensive but unnecessary.
 
         $script:FakeVbProject = [pscustomobject]@{ Id = "fake-vbproject" }
         $script:FakeSession = [pscustomobject]@{
@@ -2604,6 +2608,27 @@ Describe "Fix-EncodingInSrc — bulk-mode managed extensions" {
         $ast = [System.Management.Automation.Language.Parser]::ParseFile(
             $script:FixEncScriptPath, [ref]$null, [ref]$null
         )
+        # Pester 5's `script:` scope is the file's actual script scope (not a
+        # container-scoped mock), so earlier Describes' `function script:Get-ChildItem`
+        # stubs persist and shadow the real cmdlet. Re-define Get-ChildItem here
+        # to delegate to the real cmdlet via its fully-qualified module path so
+        # the bulk-mode tests see real filesystem listings. Re-define with the
+        # [CmdletBinding] + common parameters (which is how the real cmdlet
+        # binds), then forward every bound parameter to the real cmdlet.
+        function script:Get-ChildItem {
+            [CmdletBinding()]
+            Param(
+                [Parameter(Position=0)][string]$Path,
+                [switch]$File,
+                [switch]$Recurse,
+                [string[]]$Include,
+                [string]$Filter,
+                [switch]$Directory,
+                [switch]$Hidden,
+                [switch]$Force
+            )
+            Microsoft.PowerShell.Management\Get-ChildItem @PSBoundParameters
+        }
         # Helpers it calls internally in bulk mode (not stubbed anywhere): keep
         # their real names so the extracted Fix-EncodingInSrc resolves them.
         foreach ($helper in @('Get-FileEncodingInfo', 'Write-Utf8NoBom')) {
