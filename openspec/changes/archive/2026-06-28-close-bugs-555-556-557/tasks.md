@@ -47,8 +47,8 @@
 - [x] 4.4 Run `pwsh -Command "Invoke-Pester scripts/tests/"`.
 - [x] 4.5 Confirm GitHub Actions success after pushed implementation commits.
 - [x] 4.6 Archive the change under `openspec/changes/archive/2026-06-28-close-bugs-555-556-557/` and add `archive-report.md`.
-- [ ] 4.7 Commit and push the archive.
-- [ ] 4.8 Close #555, #556, and #557 with evidence comments containing commit SHA(s) and test references.
+- [x] 4.7 Commit and push the archive.
+- [x] 4.8 Close #555, #556, and #557 with evidence comments containing commit SHA(s) and test references.
 - [ ] 4.9 Save Engram observation `sdd/close-bugs-555-556-557` with `capture_prompt: false`.
 
 ---
@@ -68,4 +68,4 @@
 | `8eff908` + `dd0dc53` | #555 import_all replace/prune semantics | 1.1–1.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#555"`; `pnpm lint`; CI `28337020840` green | N/A — runner-level/product code change |
 | `62a4096` | #556 delete_module TempSccObj cleanup | 2.1–2.6 | `Invoke-Pester scripts/tests/dysflow-vba-manager.Tests.ps1 -FullNameFilter 'Invoke-DeleteAction*'`; `pnpm lint`; CI `28337173160` green | N/A — runner-level/product code change |
 | `62b946b` | #557 compile_vba error context | 3.1–3.6 | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts -t "#557"`; `pnpm lint`; CI `28337306063` green | N/A — runner-level/product code change |
-| _pending_ | Archive and closeout | 4.1–4.9 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; archive CI pending | N/A |
+| `eb6d042` | Archive and closeout | 4.1–4.8 | `pnpm test`; `pnpm build`; `pnpm lint`; `Invoke-Pester scripts/tests/`; CI `28337440835` green; issues #555/#556/#557 closed with evidence comments | N/A |
