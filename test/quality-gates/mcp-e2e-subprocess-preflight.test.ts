@@ -11,6 +11,8 @@
 //   - The thrown error message names the offending tool
 //   - The process.exitCode is set to 1
 
+// @ts-nocheck — the imported helpers have no .d.mts yet; the runtime
+// contract is exercised by vitest and pinned by these tests.
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,11 +35,7 @@ function isOwnPidAlive(pid) {
   }
 }
 
-async function waitForNoOwnPids(
-  suiteOwnPids,
-  timeoutMs = 500,
-  pollMs = 100,
-) {
+async function waitForNoOwnPids(suiteOwnPids, timeoutMs = 500, pollMs = 100) {
   const start = Date.now();
   const watched = Array.from(suiteOwnPids);
   while (true) {

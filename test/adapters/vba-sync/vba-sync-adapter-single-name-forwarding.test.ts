@@ -62,7 +62,7 @@ function makeCapturingExecutor(captured: CapturedCall[]): VbaManagerExecutor {
     // Return the sentinel-format stdout the parseOutput contract expects.
     return {
       exitCode: 0,
-      stdout: "DYSFLOW_RESULT {\"ok\":true,\"data\":{\"exists\":false}}",
+      stdout: 'DYSFLOW_RESULT {"ok":true,"data":{"exists":false}}',
       stderr: "",
       durationMs: 1,
       timedOut: false,

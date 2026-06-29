@@ -24,6 +24,8 @@
 //         from `suiteOwnPids` so the next preflight does not wait on a
 //         dead PID.
 
+// @ts-nocheck — the imported `record` helper has no .d.mts yet; the
+// runtime contract is exercised by vitest and pinned by these tests.
 import { describe, expect, it } from "vitest";
 import { record } from "../../E2E_testing/_helpers/mcp-e2e-record.mjs";
 
@@ -36,7 +38,13 @@ interface FakeOptions {
   exit?: unknown;
 }
 
-function makeCtx(opts: { harness?: FakeOptions; preflight?: { found: boolean; pids?: number[] }; childAlive?: boolean } = {}) {
+function makeCtx(
+  opts: {
+    harness?: FakeOptions;
+    preflight?: { found: boolean; pids?: number[] };
+    childAlive?: boolean;
+  } = {},
+) {
   const harness = {
     childPid: opts.harness?.childPid ?? 0,
     timedOut: opts.harness?.timedOut ?? false,
@@ -45,7 +53,14 @@ function makeCtx(opts: { harness?: FakeOptions; preflight?: { found: boolean; pi
     stderr: opts.harness?.stderr ?? "",
     exit: opts.harness?.exit ?? 0,
   };
-  const rows: Array<{ area: string; tool: string; pass: boolean; expected: string; ms: number; summary: string }> = [];
+  const rows: Array<{
+    area: string;
+    tool: string;
+    pass: boolean;
+    expected: string;
+    ms: number;
+    summary: string;
+  }> = [];
   const suiteOwnPids = new Set<number>();
   const processObj = { exitCode: null as number | null };
   const logs: string[] = [];
@@ -60,7 +75,10 @@ function makeCtx(opts: { harness?: FakeOptions; preflight?: { found: boolean; pi
     waitForNoOwnPids: async (_timeoutMs?: number, _pollMs?: number) => {
       // First call (preflight) returns preflightResult; subsequent calls
       // (post-tool zombie check) return found:false so the row is pushed.
-      if (rows.filter((r) => r.tool.endsWith(":zombie-check") || r.tool.endsWith(":preflight")).length === 0) {
+      if (
+        rows.filter((r) => r.tool.endsWith(":zombie-check") || r.tool.endsWith(":preflight"))
+          .length === 0
+      ) {
         return { found: preflightResult.found, pids: preflightResult.pids ?? [], elapsed: 0 };
       }
       return postToolZombie;

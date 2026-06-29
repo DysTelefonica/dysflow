@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
-import { record as recordImpl } from "./_helpers/mcp-e2e-record.mjs";
+import {
+  isPidOrDescendantAlive,
+  record as recordImpl,
+} from "./_helpers/mcp-e2e-record.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -252,17 +255,15 @@ await record("legacy", "cleanup_access_operation", { operationId: "missing-opera
 await record("legacy", "list_access_operations", {});
 }
 
-// isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`. The
-// OS rejects the signal (ESRCH) when the process is gone. We never scan
-// global MSACCESS.EXE — only the PIDs this E2E itself spawned.
+// isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,
+// and if the parent is gone, walks its descendant tree via wmic to detect
+// grandchildren (e.g. an MSACCESS.EXE spawned by a PowerShell that the
+// harness itself spawned). The OS rejects the signal (ESRCH) when the
+// process is gone. We never scan global MSACCESS.EXE — only the PIDs this
+// E2E itself spawned. The descendant walk is delegated to the helper so
+// vitest tests and the E2E suite share the same implementation.
 function isOwnPidAlive(pid) {
-  if (!pid || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return isPidOrDescendantAlive(pid);
 }
 
 async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {

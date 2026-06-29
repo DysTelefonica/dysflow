@@ -60,10 +60,7 @@ describe("mcp-e2e final lingering-access-check — primitive contract (H6)", () 
   function spawnLongLivedChild(): number {
     const child = spawn(
       process.execPath,
-      [
-        "-e",
-        "setInterval(() => {}, 1000); setTimeout(() => {}, 60000);",
-      ],
+      ["-e", "setInterval(() => {}, 1000); setTimeout(() => {}, 60000);"],
       {
         stdio: "ignore",
         detached: false,

@@ -260,8 +260,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
     // dysflow-vba-manager.ps1:4150.
     // optional-presence-guard: allow
     const moduleNamesProvided =
-      (toolName === "import_all" && Object.hasOwn(params, "moduleNames")) ||
-      moduleNames.length > 0;
+      // optional-presence-guard: allow
+      (toolName === "import_all" && Object.hasOwn(params, "moduleNames")) || moduleNames.length > 0;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
