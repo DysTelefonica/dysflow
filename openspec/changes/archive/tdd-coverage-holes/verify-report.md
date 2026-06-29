@@ -104,3 +104,16 @@
 **READY TO ARCHIVE** ✅
 
 The SDD change `tdd-coverage-holes` is implemented and verified at the unit, integration, build, lint, and Pester gates. The single E2E failure (sandbox `compile_vba` after `export_all --prune`) is a pre-existing test-infra bug with a documented root cause and filed follow-up. Every SDD requirement (H1–H10) has at least one passing test that exercises the real code path.
+
+---
+
+## Post-archive closures (2026-06-29 follow-up session)
+
+After the initial archive, additional open loops were closed in the same working session:
+
+| Open loop | Status | Evidence |
+|-----------|--------|----------|
+| **Cross-platform CI failure** — `mcp-e2e-grandchild-zombie.test.ts:110` asserted the production wmic-backed `walkDescendantsPids` finds a grandchild. Passed on Windows dev, failed on Ubuntu CI because wmic is Windows-only. | ✅ Closed | Commit `0b9ae33 fix(test): make mcp-e2e-grandchild-zombie cross-platform`. The test now injects `() => [grandchildPid]` as the walker so the helper's contract is exercised everywhere. The wmic walker stays in place and is exercised by the production mcp-e2e suite on Windows hosts. |
+| **Released broken v1.11.0** — release tag pushed before CI concluded; release workflow is `push: tags: 'v*'` (decoupled from CI on main by design). | ✅ Closed | v1.11.0 release + tag deleted (local + remote); v1.11.1 published after CI run `28375308047` reached `conclusion: success`. |
+| **Process gap** (release workflow decoupled from CI — anyone could push a tag and ship broken code) | ✅ Closed | Commit `01918d4 feat(scripts): release-prepare.ps1 with CI-gating`. The script wraps the full release workflow (bump → commit → push → wait-CI → tag → push-tag) and refuses to tag unless `gh run list --workflow ci.yml --json ... headSha` returns `conclusion: success` for the release commit's SHA. 15 Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin the contract so future refactors cannot regress silently. |
+| **E2E sandbox `compile_vba` fails** — the fixture binary's `Form_FormNCAuditoriaGeneral` class has a real VBA compile error (column 1 line 1 reports as the offender; actual issue is downstream). | ⚠️ Open as follow-up | Root cause documented in Engram topic `dysflow/e2e/compile-vba-prune-corruption-2026-06-29`. Not a regression from this SDD. Fix path: (a) re-export the fixture binary from a known-good source after fixing the underlying class, or (b) replace the fixture with a release-grade copy. Out of scope for `tdd-coverage-holes` — belongs to a fixture-hygiene SDD or a one-shot hotfix. |
