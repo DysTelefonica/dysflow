@@ -132,6 +132,133 @@ Describe "dysflow-vba-manager.ps1 — script structure" {
         }
     }
 
+    Context "Early helpers — defined before use (regression for pwsh 7+ script-load order)" {
+        # Background: Windows PowerShell 5.1 used to tolerate calling a function
+        # before its `function` definition executed as long as both lived at the
+        # script top level (the engine walked the script twice on a first hit).
+        # pwsh 7+ enforces the script-load order strictly: a top-level call to a
+        # function defined later in the file raises CommandNotFoundException, and
+        # our sentinel `trap` wraps that into DYSFLOW_RESULT code
+        # VBA_MANAGER_UNEXPECTED_EXIT (trap_kind: CommandNotFoundException).
+        #
+        # The fix is to define each helper the script invokes at top level in an
+        # "early helpers" block placed BEFORE its first call site. This context
+        # locks that contract with AST-level checks so the order cannot regress.
+        BeforeAll {
+            $script:ScriptPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+            $script:ScriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
+                (Resolve-Path $script:ScriptPath).Path,
+                [ref]$null,
+                [ref]$null
+            )
+
+            # Map: function name -> first definition line (1-based).
+            $script:FunctionDefs = @{}
+            $script:ScriptAst.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] },
+                $true
+            ) | ForEach-Object {
+                if (-not $script:FunctionDefs.ContainsKey($_.Name)) {
+                    $script:FunctionDefs[$_.Name] = $_.Extent.StartLineNumber
+                }
+            }
+        }
+
+        It "defines Set-ScriptOutputEncodingUtf8" {
+            $script:FunctionDefs.ContainsKey('Set-ScriptOutputEncodingUtf8') | Should -Be $true
+        }
+
+        It "defines Set-VbComponentNameSafe" {
+            $script:FunctionDefs.ContainsKey('Set-VbComponentNameSafe') | Should -Be $true
+        }
+
+        It "defines Write-DysflowOperationMarker" {
+            $script:FunctionDefs.ContainsKey('Write-DysflowOperationMarker') | Should -Be $true
+        }
+
+        It "Set-ScriptOutputEncodingUtf8 lives in the early helpers block (line <= 200)" {
+            # The early helpers block lives right after the trap and before any
+            # first call site. If the helper is pushed past the top-level call
+            # (was line 116, helper was line 135), pwsh 7+ throws
+            # CommandNotFoundException; the consumer sees
+            # VBA_MANAGER_UNEXPECTED_EXIT with trap_kind: CommandNotFoundException
+            # and a useless stack trace. Pinning the helper to line <= 200 keeps
+            # it ahead of every top-level call site in this script and matches
+            # the early-block convention used by the surrounding COM helpers.
+            $script:FunctionDefs['Set-ScriptOutputEncodingUtf8'] | Should -BeLessOrEqual 200 `
+                -Because "Set-ScriptOutputEncodingUtf8 is invoked at the top level (line ~116) so its definition must precede that call site"
+        }
+
+        It "Set-VbComponentNameSafe lives in the early helpers block (line <= 200)" {
+            # Moved up alongside Set-ScriptOutputEncodingUtf8 so the Unicode-safe
+            # name setter is available before New-VbComponentFromCodeFile runs.
+            $script:FunctionDefs['Set-VbComponentNameSafe'] | Should -BeLessOrEqual 200
+        }
+
+        It "Write-DysflowOperationMarker lives in the early helpers block (line <= 200)" {
+            # Moved up alongside Set-ScriptOutputEncodingUtf8 so the operation
+            # marker is available before Open-AccessDatabase runs.
+            $script:FunctionDefs['Write-DysflowOperationMarker'] | Should -BeLessOrEqual 200
+        }
+
+        It "every top-level invocation of a script-defined function comes AFTER its definition" {
+            # Walk every CommandAst in the script and keep only the ones that
+            # are NOT nested inside any function body (a top-level call runs
+            # during script load; a call inside a function body only runs when
+            # that outer function is invoked, by which time the whole top-level
+            # pass — including every `function` statement — has completed).
+            #
+            # For each remaining call whose command name matches a function
+            # defined in this script, the call line MUST be >= the function's
+            # first definition line. Violations list the offending function and
+            # both line numbers so a regression is debuggable from the test
+            # output alone.
+            $allCommands = $script:ScriptAst.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.CommandAst] },
+                $true
+            )
+
+            $topLevelCommands = $allCommands | Where-Object {
+                $node = $_.Parent
+                while ($null -ne $node) {
+                    if ($node -is [System.Management.Automation.Language.FunctionDefinitionAst]) {
+                        return $false
+                    }
+                    $node = $node.Parent
+                }
+                return $true
+            }
+
+            $violations = foreach ($cmd in $topLevelCommands) {
+                $name = $cmd.GetCommandName()
+                if ($name -and $script:FunctionDefs.ContainsKey($name)) {
+                    $defLine = $script:FunctionDefs[$name]
+                    $invLine = $cmd.Extent.StartLineNumber
+                    if ($invLine -lt $defLine) {
+                        [pscustomobject]@{
+                            Function  = $name
+                            DefinedAt = $defLine
+                            InvokedAt = $invLine
+                        }
+                    }
+                }
+            }
+
+            $violations = @($violations)
+            if ($violations.Count -gt 0) {
+                $detail = ($violations | ForEach-Object {
+                    "{0} defined L{1} but invoked at L{2}" -f $_.Function, $_.DefinedAt, $_.InvokedAt
+                }) -join '; '
+                $violations.Count | Should -Be 0 `
+                    -Because "top-level invocations must come AFTER the function's first definition line. Violations: $detail"
+            } else {
+                $violations.Count | Should -Be 0 `
+                    -Because "no top-level invocation precedes its function definition"
+            }
+        }
+    }
+
     Context "COM cleanup function definitions" {
         BeforeAll {
             # Parse the AST to verify function definitions without executing the script

@@ -107,30 +107,30 @@ trap {
 }
 
 $ErrorActionPreference = "Stop"
-# powershell.exe (5.1) defaults stdout to the active console code page (e.g. CP1252).
-# Node.js reads the child's stdout as UTF-8, so non-ASCII chars (e.g. ó, í) arrive as
-# U+FFFD replacement characters. Force UTF-8 output so VBA module names and any other
-# user-supplied strings round-trip correctly through JSON.
-# Extracted into Set-ScriptOutputEncodingUtf8 (#585) so the Pester test can exercise
-# the helper directly without running the full script (no Access COM required).
-Set-ScriptOutputEncodingUtf8
-$script:QuietOutput = [bool]$Json
-$script:HasDysflowResultEmitted = $false
 
-# Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
-# Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
-# and allows the Add-Type Win32.NativeMethods guard to work correctly.
-. (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
-
-# Pin a deterministic culture before any Access/DAO/COM work so SQL date
-# literals, decimal and list separators do not depend on the host's Windows
-# regional settings. CurrentUICulture is left untouched (error messages stay in
-# the OS language).
-Set-DysflowThreadCulture
-
-# Extracted helpers (#585). These are pure (no Access COM, no filesystem
-# side effects beyond what is passed in) so the Pester test can dot-source
-# them and exercise them with mock components.
+# ===========================================================================
+# Early helpers block — pwsh 7+ script-load order contract.
+#
+# PowerShell 7+ honors the script's top-level statement order literally:
+# a call to a function whose `function` definition appears LATER in the file
+# raises CommandNotFoundException immediately, and the sentinel `trap` (see
+# lines 81-107 above) wraps that into a DYSFLOW_RESULT line with code
+# VBA_MANAGER_UNEXPECTED_EXIT, trap_kind=CommandNotFoundException, and a
+# near-useless "no se reconoce como nombre de un cmdlet" message.
+#
+# Windows PowerShell 5.1 used to tolerate this ordering (the engine walked the
+# script twice on first hit, so a top-level call to a later-defined function
+# still worked). pwsh 7+ does NOT — order is honored as written.
+#
+# Rule: every helper invoked at the script's top level (i.e. NOT nested
+# inside another function body) MUST be defined BEFORE its call site. The
+# helpers below are invoked at the top level (Set-ScriptOutputEncodingUtf8
+# right after this block, Set-VbComponentNameSafe / Write-DysflowOperationMarker
+# from inside action handlers but pulled forward for safety), so they live
+# here. The Pester suite `dysflow-vba-manager.Tests.ps1` walks the AST and
+# fails if a future regression pushes any top-level call above its helper's
+# definition.
+# ===========================================================================
 
 function Set-ScriptOutputEncodingUtf8 {
     <#
@@ -204,6 +204,26 @@ function Write-DysflowOperationMarker {
         Write-Status -Message ("WARN: no se pudo escribir marker de operación dysflow: {0}" -f $_.Exception.Message) -Color DarkYellow
     }
 }
+
+# powershell.exe (5.1) defaults stdout to the active console code page (e.g. CP1252).
+# Node.js reads the child's stdout as UTF-8, so non-ASCII chars (e.g. ó, í) arrive as
+# U+FFFD replacement characters. Force UTF-8 output so VBA module names and any other
+# user-supplied strings round-trip correctly through JSON. The helper definition lives
+# in the early helpers block above so pwsh 7+ finds it before this top-level call.
+Set-ScriptOutputEncodingUtf8
+$script:QuietOutput = [bool]$Json
+$script:HasDysflowResultEmitted = $false
+
+# Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
+# Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
+# and allows the Add-Type Win32.NativeMethods guard to work correctly.
+. (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+
+# Pin a deterministic culture before any Access/DAO/COM work so SQL date
+# literals, decimal and list separators do not depend on the host's Windows
+# regional settings. CurrentUICulture is left untouched (error messages stay in
+# the OS language).
+Set-DysflowThreadCulture
 
 if (-not $Password) { $Password = $env:ACCESS_VBA_PASSWORD }
 if (-not $Password) {
