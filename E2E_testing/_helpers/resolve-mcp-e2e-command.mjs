@@ -16,6 +16,8 @@
 // so the unit test (test/quality-gates/resolve-mcp-e2e-command.test.ts)
 // can exercise every branch without touching the real filesystem.
 
+import { existsSync as fsExistsSync } from "node:fs";
+
 /**
  * Returns true when the given path lives under %LOCALAPPDATA%\dysflow,
  * i.e. the production install that the harness must refuse by default.
@@ -47,16 +49,12 @@ export function isProductionRuntimePath(candidatePath) {
 export function resolveMcpE2eCommand(options) {
   const env = options.env ?? {};
   const repoRoot = options.repoRoot ?? "";
-  const existsSync =
-    options.fs?.existsSync ?? ((p) => {
-      try {
-        // Lazy import so the helper stays pure when an fs is injected.
-        // eslint-disable-next-line global-require
-        return require("node:fs").existsSync(p);
-      } catch {
-        return false;
-      }
-    });
+  // Use the statically-imported existsSync as the default fs probe. The
+  // previous `require("node:fs")` lazy fallback returned false in real ESM
+  // contexts on Windows (the binding the `require` returns does not behave
+  // like the native one), which silently broke the harness whenever the
+  // caller (mcp-e2e.mjs) did not inject an `fs` option.
+  const existsSync = options.fs?.existsSync ?? fsExistsSync;
 
   // 1. Operator override.
   const override = env.DYSFLOW_E2E_COMMAND;

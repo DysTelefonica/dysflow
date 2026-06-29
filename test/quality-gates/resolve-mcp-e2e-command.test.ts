@@ -98,6 +98,29 @@ describe("resolveMcpE2eCommand (#582)", () => {
     });
     expect(result).toEqual({ ok: true, command: testRuntime, source: "test-runtime" });
   });
+
+  // Regression for the default-path branch: when the helper is called WITHOUT
+  // an injected fs (as `mcp-e2e.mjs` does in production), it must still
+  // observe files on disk via the lazy `require("node:fs")` fallback. Today
+  // the lazy `require` inside an ESM module returns a binding that always
+  // answers false on Windows, so any consumer invoking the helper from
+  // `mcp-e2e.mjs` hits MCP_E2E_OVERRIDE_NOT_FOUND / MCP_E2E_NO_RUNTIME_AVAILABLE
+  // even when the runtime is present.
+  //
+  // We cannot inject fs here — that defeats the point. We assert the
+  // observable contract on the real default path by pointing
+  // DYSFLOW_E2E_COMMAND at this very test file, which we know exists.
+  it("uses the lazy fs fallback when no fs is injected (default branch)", () => {
+    // The default lazy `require("node:fs")` must agree with the actual fs
+    // on disk; if it disagrees, the helper is broken for every consumer that
+    // calls it from real ESM (which is the only shape `mcp-e2e.mjs` has).
+    const override = __filename;
+    const result = resolveMcpE2eCommand({
+      env: { DYSFLOW_E2E_COMMAND: override },
+      repoRoot: process.cwd(),
+    });
+    expect(result).toEqual({ ok: true, command: override, source: "env-override" });
+  });
 });
 
 describe("isProductionRuntimePath (#582)", () => {
