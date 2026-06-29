@@ -21,7 +21,7 @@
 - [x] 1.5 Ensure release workflow/tooling/docs explicitly state public-key-only repository storage, private-key secret handling, and no source fallback.
 - [x] 1.6 Run focused tests and complete strict TDD evidence.
 - [x] 1.7 Run full verification (`pnpm test`, `pnpm build`, `pnpm lint`, `pwsh -Command "Invoke-Pester scripts/tests/"`).
-- [ ] 1.8 Commit and push the implementation with SDD/Tests/Ref traceability.
+- [x] 1.8 Commit and push the implementation with SDD/Tests/Ref traceability.
 - [ ] 1.9 Archive the change only after CI is green.
 - [ ] 1.10 Close issue #572 with implementation commit SHA(s) and test references.
 
@@ -54,4 +54,4 @@ The user approved generating and using a new Ed25519 keypair because no prior re
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| Pending | Release checksum authenticity | 1.3-1.10 | Pending | N/A |
+| `f90d09f` | `feat(update): enforce signed release checksums` | 1.3-1.8 | Focused Vitest; `pnpm test`; `pnpm build`; `pnpm lint`; Pester | N/A |
