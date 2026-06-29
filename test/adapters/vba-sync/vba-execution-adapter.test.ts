@@ -831,4 +831,266 @@ describe("VbaExecutionAdapter", () => {
     expect(failure?.payload).toBe("<<not-json>>");
     expect(failure?.error).toBeUndefined();
   });
+
+  // --- Hotfix: resolveTestProceduresJson guardrails + default discovery -------------
+  //
+  // Regression coverage for the bug where dysflow_test_vba returned
+  //   `VBA_INVALID_TEST_PLAN: ENOENT: no such file or directory ... [PATH]`
+  // because `resolveTestProceduresJson` had no guard on projectRoot/cwd and
+  // never searched the `tests/tests.vba.json` location real projects use.
+
+  it("discovers tests/tests.vba.json at project root when testsPath is omitted (hotfix default-search)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-default-discovery-tests-subdir-"));
+    await mkdir(join(root, "tests"), { recursive: true });
+    await writeFile(
+      join(root, "tests", "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_FromTestsSubdir", args: [] }]),
+      "utf8",
+    );
+
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromTestsSubdir" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {}); // no testsPath
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_FromTestsSubdir" }],
+    });
+  });
+
+  it("discovers tests.vba.json at project root when testsPath is omitted (hotfix default-search)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-default-discovery-root-"));
+    await writeFile(
+      join(root, "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_FromRootManifest", args: [] }]),
+      "utf8",
+    );
+
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromRootManifest" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {}); // no testsPath
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_FromRootManifest" }],
+    });
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN with details.candidates when default discovery finds no manifest (hotfix)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-default-discovery-none-"));
+    // intentionally do NOT create any tests.vba.json anywhere
+
+    const executeMappedTool = vi.fn();
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", {}); // no testsPath
+
+    expect(result).toMatchObject({ ok: false, error: { code: "VBA_INVALID_TEST_PLAN" } });
+    if (result.ok) return;
+    const details = result.error.details as { candidates?: unknown };
+    expect(Array.isArray(details?.candidates)).toBe(true);
+    const candidates = details?.candidates as string[];
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.some((c) => c.includes("tests.vba.json"))).toBe(true);
+    expect(result.error.message).toContain("Provide proceduresJson");
+    // Must not have invoked the runner with no manifest.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("uses an absolute testsPath literally and does not fall back to default discovery (hotfix)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-abs-tests-path-"));
+    // Create a manifest at the default-discovery location so default search WOULD find it.
+    await writeFile(
+      join(root, "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_DefaultDiscovery", args: [] }]),
+      "utf8",
+    );
+
+    const absolutePath = join(root, "elsewhere", "my-tests.json");
+    const executeMappedTool = vi.fn();
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { testsPath: absolutePath });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+    // Absolute path is passed literally; default discovery must NOT substitute the root manifest.
+    if (result.ok) return;
+    const details = result.error.details as { candidates?: unknown };
+    expect(Array.isArray(details?.candidates)).toBe(true);
+    const candidates = details?.candidates as string[];
+    expect(candidates).toContain(absolutePath);
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("returns VBA_INVALID_TEST_PLAN with details.candidates when an explicit relative testsPath is missing (hotfix)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-rel-tests-missing-"));
+
+    const executeMappedTool = vi.fn();
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { testsPath: "missing.json" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+    if (result.ok) return;
+    const details = result.error.details as { candidates?: unknown };
+    expect(Array.isArray(details?.candidates)).toBe(true);
+    const candidates = details?.candidates as string[];
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toBe(join(root, "missing.json"));
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("falls back to orchestrator cwd when params.projectRoot is empty (hotfix)", async () => {
+    // Explicit empty projectRoot means "no projectRoot provided" — fall back to cwd.
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-empty-projectroot-"));
+    await writeFile(
+      join(root, "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_FromCwd", args: [] }]),
+      "utf8",
+    );
+
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromCwd" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { projectRoot: "" });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_FromCwd" }],
+    });
+  });
+
+  it("returns a clear VBA_INVALID_TEST_PLAN error when both projectRoot and orchestrator cwd are empty (hotfix)", async () => {
+    const executeMappedTool = vi.fn();
+    // Cast to bypass the `cwd: string` interface contract while exercising the defensive guardrail.
+    const orchestrator = {
+      executeMappedTool,
+      cwd: "",
+    } as unknown as VbaSyncOrchestrator;
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { projectRoot: "" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_INVALID_TEST_PLAN" },
+    });
+    if (result.ok) return;
+    expect(result.error.message).toMatch(/projectRoot|orchestrator cwd|cannot be located/);
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("uses an absolute testsPath literally and succeeds when the file exists (hotfix absolute-success)", async () => {
+    // Regression test: the existing absolute-path hotfix tests only the FAILURE
+    // branch (absolute path missing). This test proves the SUCCESS branch: when
+    // the absolute path points to a real manifest, the adapter MUST use it
+    // literally and MUST NOT silently fall back to default discovery at
+    // projectRoot — even when a same-named default-discovery file exists.
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-abs-tests-path-exists-"));
+    // Same-named default-discovery file at projectRoot MUST NOT win.
+    await writeFile(
+      join(root, "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_DefaultDiscovery_NotUsed", args: [] }]),
+      "utf8",
+    );
+
+    const absoluteDir = join(root, "absolute-manifest-folder");
+    await mkdir(absoluteDir, { recursive: true });
+    const absolutePath = join(absoluteDir, "absolute-manifest.json");
+    await writeFile(
+      absolutePath,
+      JSON.stringify([{ procedure: "Test_FromAbsolutePath", args: ["abs"] }]),
+      "utf8",
+    );
+
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromAbsolutePath" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    const result = await adapter.execute("test_vba", { testsPath: absolutePath });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_FromAbsolutePath" }],
+    });
+    // The proceduresJson MUST derive from the absolute manifest — if the
+    // adapter had silently fallen back to default discovery at projectRoot,
+    // it would carry "Test_DefaultDiscovery_NotUsed" instead.
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_FromAbsolutePath", args: ["abs"] }]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("falls back to destinationRoot when it differs from projectRoot and carries tests/tests.vba.json (hotfix dest-root-fallback)", async () => {
+    // Regression test: `buildTestManifestCandidates` MUST search destinationRoot
+    // when it differs from projectRoot and the default-discovery file lives
+    // there. Without this branch, real projects whose projectRoot is bare
+    // (e.g. only sources) but whose manifest lives under a different
+    // destinationRoot would still get VBA_INVALID_TEST_PLAN.
+    const projectRoot = await mkdtemp(
+      join(tmpdir(), "dysflow-vba-destroot-fallback-project-root-"),
+    );
+    const destinationRoot = await mkdtemp(
+      join(tmpdir(), "dysflow-vba-destroot-fallback-destination-root-"),
+    );
+    // Intentionally do NOT seed any manifest under projectRoot.
+    // Seed `tests/tests.vba.json` (the new location) under destinationRoot only.
+    await mkdir(join(destinationRoot, "tests"), { recursive: true });
+    await writeFile(
+      join(destinationRoot, "tests", "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_FromDestinationRoot", args: ["dest"] }]),
+      "utf8",
+    );
+
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromDestinationRoot" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectRoot };
+    const adapter = new VbaExecutionAdapter(orchestrator);
+
+    // No testsPath: adapter must walk projectRoot first (no manifest there),
+    // then fall back to destinationRoot and find the manifest there.
+    const result = await adapter.execute("test_vba", {
+      projectRoot,
+      destinationRoot,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: [{ ok: true, procedure: "Test_FromDestinationRoot" }],
+    });
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_FromDestinationRoot", args: ["dest"] }]),
+      }),
+      expect.any(Object),
+    );
+  });
 });

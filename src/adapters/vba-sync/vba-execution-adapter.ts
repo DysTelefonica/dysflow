@@ -336,9 +336,24 @@ End Sub
         return successResult(JSON.stringify([{ procedure: procedureName, args: parsed.value }]));
       }
 
-      const projectRoot = stringValue(params.projectRoot) || this.orchestrator.cwd;
-      const testsPath = stringValue(params.testsPath) ?? "tests.vba.json";
-      const resolvedPath = isAbsolutePath(testsPath) ? testsPath : resolve(projectRoot, testsPath);
+      // Hotfix (post-v1.10.1): resolve the manifest path with guardrails so the
+      // adapter never returns an opaque `ENOENT ... [PATH]` error when neither
+      // projectRoot nor orchestrator cwd is wired up, and so the default search
+      // covers the `tests/tests.vba.json` location real projects (e.g.
+      // gestion_riesgos) actually use.
+      const baseDir = resolveTestBaseDir(params, this.orchestrator.cwd);
+      if (!baseDir.ok) return baseDir;
+
+      const candidates = buildTestManifestCandidates(stringValue(params.testsPath), {
+        projectRoot: baseDir.data,
+        destinationRoot: stringValue(params.destinationRoot),
+        cwd: this.orchestrator.cwd,
+      });
+
+      const foundManifest = await findExistingManifest(candidates);
+      if (!foundManifest.ok) return foundManifest;
+      const resolvedPath = foundManifest.data;
+
       const parsed = await readJsonFileAsync<unknown>(resolvedPath);
       const tests = normalizeTestPlan(parsed);
       const filterParts = parseTestFilter(params.filter);
@@ -366,6 +381,138 @@ End Sub
       );
     }
   }
+}
+
+/**
+ * Resolve the base directory for test-manifest resolution.
+ *
+ * Priority: `params.projectRoot` (non-empty after trim) → orchestrator's
+ * `cwd` (non-empty) → error. Returns a non-empty string when OK.
+ *
+ * The defensive `cwd ?? process.cwd()` step is intentionally NOT applied here:
+ * an empty/missing cwd IS a configuration problem the agent should see, and
+ * silently swapping `process.cwd()` would mask real wiring bugs.
+ */
+function resolveTestBaseDir(
+  params: Record<string, unknown>,
+  cwd: unknown,
+): OperationResult<string> {
+  const explicit = stringValue(params.projectRoot);
+  const fallback = stringValue(cwd);
+  const base = explicit ?? fallback ?? "";
+  if (!base) {
+    return failureResult(
+      createDysflowError(
+        "VBA_INVALID_TEST_PLAN",
+        "Test plan manifest cannot be located: neither projectRoot nor orchestrator cwd is available. Provide proceduresJson, procedureName+argsJson, or supply an absolute testsPath.",
+      ),
+    );
+  }
+  return successResult(base);
+}
+
+/**
+ * Build the ordered list of manifest paths to try.
+ *
+ * - When `testsPath` is absolute: it is used literally as the single candidate.
+ * - When `testsPath` is relative: it is resolved against `projectRoot` only —
+ *   mirroring the existing contract that `testsPath` is project-root relative
+ *   (not destinationRoot or cwd relative).
+ * - When `testsPath` is absent: search `tests/tests.vba.json` and
+ *   `tests.vba.json` across projectRoot, destinationRoot and cwd (deduped) so
+ *   real projects that keep the manifest under `tests/` are discovered without
+ *   a parameter.
+ */
+function buildTestManifestCandidates(
+  testsPathInput: string | undefined,
+  dirs: { projectRoot: string; destinationRoot?: string; cwd?: string },
+): string[] {
+  if (testsPathInput !== undefined) {
+    return [
+      isAbsolutePath(testsPathInput) ? testsPathInput : resolve(dirs.projectRoot, testsPathInput),
+    ];
+  }
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const basenames = ["tests/tests.vba.json", "tests.vba.json"];
+
+  const pushCandidate = (base: string | undefined, basename: string): void => {
+    if (!base) return;
+    const candidate = resolve(base, basename);
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
+      out.push(candidate);
+    }
+  };
+
+  const bases: Array<string | undefined> = [dirs.projectRoot];
+  if (dirs.destinationRoot && dirs.destinationRoot !== dirs.projectRoot) {
+    bases.push(dirs.destinationRoot);
+  }
+  if (dirs.cwd && dirs.cwd !== dirs.projectRoot && dirs.cwd !== dirs.destinationRoot) {
+    bases.push(dirs.cwd);
+  }
+
+  for (const base of bases) {
+    for (const basename of basenames) {
+      pushCandidate(base, basename);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Iterate the candidate list and return the first readable manifest.
+ *
+ * - ENOENT (missing file) is expected → try the next candidate.
+ * - Other failures (e.g. malformed JSON) are surfaced immediately because the
+ *   manifest IS at the candidate path; silently swallowing them would mask the
+ *   real root cause.
+ *
+ * When ALL candidates are missing, returns `VBA_INVALID_TEST_PLAN` with the
+ * exact set of paths the caller can sanity-check, plus a message pointing at
+ * the explicit overrides (`proceduresJson`, `procedureName+argsJson`,
+ * `testsPath`).
+ */
+async function findExistingManifest(
+  candidates: readonly string[],
+): Promise<OperationResult<string>> {
+  for (const candidate of candidates) {
+    try {
+      await readJsonFileAsync<unknown>(candidate);
+      return successResult(candidate);
+    } catch (err) {
+      if (isFsMissingError(err)) continue;
+      return failureResult(
+        createDysflowError(
+          "VBA_INVALID_TEST_PLAN",
+          `${err instanceof Error ? err.message : String(err)} (at ${candidate})`,
+          { details: { candidates: [...candidates] } },
+        ),
+      );
+    }
+  }
+
+  return failureResult(
+    createDysflowError(
+      "VBA_INVALID_TEST_PLAN",
+      `Test plan manifest not found. Tried: ${candidates.join(", ")}. Provide proceduresJson, procedureName+argsJson, or testsPath (absolute or relative to projectRoot).`,
+      { details: { candidates: [...candidates] } },
+    ),
+  );
+}
+
+function isFsMissingError(err: unknown): boolean {
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return true;
+    // `readJsonFileAsync` wraps ENOENT as a generic Error after the underlying
+    // node call; surface any error whose message carries ENOENT regardless.
+    if (typeof err.message === "string" && err.message.includes("ENOENT")) return true;
+  }
+  return false;
 }
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
