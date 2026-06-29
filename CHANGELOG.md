@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.10.3] - 2026-06-29
+
+Hotfix for PowerShell 7+ (`pwsh`) script-load order in `dysflow-vba-manager.ps1`.
+
+### Fixed
+
+- **`Set-ScriptOutputEncodingUtf8` used before defined under `pwsh` 7+ (`678a67d`).** The script invoked `Set-ScriptOutputEncodingUtf8` at line 116 but defined it at line 135. Windows PowerShell 5.1 tolerated the order; `pwsh` 7+ raises `CommandNotFoundException` and the `trap` block returned `VBA_MANAGER_UNEXPECTED_EXIT` with `trap_kind: CommandNotFoundException`, blocking every downstream action (test_vba, compile_vba, etc.). The helper is now defined in an explicit early-helpers block placed before the first call site. `Set-VbComponentNameSafe` and `Write-DysflowOperationMarker` are moved alongside for the same reason.
+
+### Tests
+
+- **AST regression test pins the new contract.** A new Pester context walks every top-level `CommandAst` and asserts each invocation comes after the line where the function is defined, catching the regression in both `powershell.exe` 5.1 and `pwsh` 7+.
+
 ## [v1.10.2] - 2026-06-29
 
 Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and clearer diagnostics.
