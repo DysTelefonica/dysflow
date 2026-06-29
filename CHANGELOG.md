@@ -1,6 +1,16 @@
 # Changelog
 
-## [v1.10.1] - 2026-06-29
+## [v1.10.2] - 2026-06-29
+
+Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and clearer diagnostics.
+
+### Fixed
+
+- **`dysflow_test_vba` manifest path resolution (`f7e47ac`).** When neither `proceduresJson` nor `procedureName`+`argsJson` was provided, `VbaExecutionAdapter.resolveTestProceduresJson` used `resolve(undefined, "tests.vba.json")` and produced degenerate paths surfaced externally as `ENOENT: open '[PATH]<\projectRoot>\tests.vba.json'`. The adapter now resolves a sensible base directory (`params.projectRoot` → `orchestrator.cwd`) with a guardrail, builds an ordered candidate list for the manifest across `projectRoot`, `destinationRoot`, and `cwd` (with `tests/tests.vba.json` and `tests.vba.json`), iterates them safely, and on failure returns `VBA_INVALID_TEST_PLAN` with `details.candidates` plus an actionable hint to pass `proceduresJson`, `procedureName`+`argsJson`, or an absolute `testsPath`.
+
+### Changed
+
+- **Hotfix rationale persisted as Engram lesson.** Memory observation `lessons/test-vba-manifest-default-path` documents why this contract slipped past TDD/E2E (no tests covered the default-discovery branch, internal e2e harnesses always provided a real `cwd`, and the external sanitizer redacted the diagnostic to `[PATH]`).
 
 Hotfix release for MCP Access path resolution and signed update hardening.
 
