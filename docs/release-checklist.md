@@ -3,6 +3,41 @@
 This checklist must be reviewed before tagging a new dysflow release. It exists
 to make manual maintenance decisions auditable and visible in CI.
 
+## Automation
+
+The canonical release workflow is `scripts/release-prepare.ps1`. It:
+
+  1. Refuses to start on a dirty working tree (so the release commit cannot
+     bundle unrelated work).
+  2. Refuses if local `main` is ahead of `origin/main` (so no un-CI'd commits
+     land in the release).
+  3. Bumps `package.json` and pre-pends a `## [vX.Y.Z] - YYYY-MM-DD` block to
+     `CHANGELOG.md` from `git log <last-tag>..HEAD`.
+  4. Pushes the `chore(release): prepare vX.Y.Z` commit to `origin/main`.
+  5. **Polls `gh run list --workflow ci.yml` filtered by the release commit's
+     SHA** — not by `latest run` — and refuses to tag unless the conclusion
+     is `success`. The CI workflow (`pnpm test` + `pnpm test:ps1` + `pnpm build`
+     + `pnpm lint`) does NOT run the heavy `node E2E_testing/mcp-e2e.mjs`
+     battery, which takes ~30 minutes; see the E2E row below.
+  6. On CI green: creates an annotated `vX.Y.Z` tag and pushes it. The
+     `.github/workflows/release.yml` workflow fires on the tag push, builds
+     the tarball, signs `SHA256SUMS` with Ed25519, and publishes the
+     GitHub Release.
+
+15 Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract
+so a future refactor cannot regress to "tag unconditionally". Run them with:
+
+    pwsh -NoProfile -Command "Invoke-Pester -Path scripts/tests/release-prepare.Tests.ps1"
+
+**Operator workflow**:
+
+    pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4
+    pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0
+    pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+
+The script exits with a non-zero status if any step fails, including the CI
+gate. Watch progress with `gh run watch <id>`.
+
 ## MCP protocol compatibility
 
 Dysflow's MCP server runs on the official `@modelcontextprotocol/sdk`, which
@@ -36,9 +71,36 @@ Reference: `docs/testing/mcp-protocol-maintenance.md`.
 - [ ] Real MCP E2E (`node E2E_testing/mcp-e2e.mjs`) passes against the safe
   `test-runtime/` build, with `DYSFLOW_E2E_COMMAND` pointing at it. Never run
   E2E against `%LOCALAPPDATA%\dysflow` or `~/.config/opencode/opencode.json`.
+  **Run the heavy E2E only at the very end, after every other issue on this
+  checklist is closed and `release-prepare.ps1` is the next thing to run.**
+  The full battery takes ~30 minutes; it is NOT run by CI.
 - [ ] The optional-presence guard passes:
   `node scripts/check-optional-presence-guards.mjs`.
 - [ ] `biome check src/ test/` passes.
+
+### Cheap e2e-suite contract tests (run in <100ms total, in CI)
+
+The mcp-e2e suite's structural invariants are pinned by cheap vitest tests
+so the heavy E2E never has to catch a regression that could have been caught
+in 100ms:
+
+- `test/quality-gates/mcp-e2e-suite-contracts.test.ts` (9 tests) — pins
+  `verify_code` timeout (≥180s), `compile_vba expected:"error"` (the
+  documented mojibake state), `tools/list` called before advertised, count =
+  54, sandbox isolation, final lingering-access-check row, STOP-ON-FAIL
+  invariant, `suiteOwnPids.add(childPid)`, ACCESS_VBA_PASSWORD pre-flight.
+- `test/quality-gates/mcp-e2e-tool-existence.test.ts` (3 tests) — pins that
+  every `record(area, tool, …)` call in `mcp-e2e.mjs` references a tool
+  that exists in `createDysflowMcpTools()` (catches renames, removals,
+  moves to the hidden registry).
+- `test/quality-gates/mcp-e2e-compile-vba-mojibake-pin.test.ts` (2 tests) —
+  pins the mojibake-state explanation in `mcp-e2e.mjs` so the comment
+  block cannot be deleted without the test catching it.
+
+If any of these cheap tests fail, fix them BEFORE running the heavy E2E.
+If they pass and the heavy E2E still fails, the regression is in a runtime
+contract these tests don't yet pin — extend the cheap tests, fix the
+regression, then re-run.
 
 ## Release hygiene
 

@@ -23,6 +23,28 @@ See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
+## Releases
+
+Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`, which wraps
+the full workflow (bump version, update CHANGELOG, push, **wait for CI green on
+the release commit's SHA**, tag, push tag) and refuses to tag unless CI concludes
+`success`. The release workflow then builds the tarball, signs `SHA256SUMS` with
+Ed25519, and publishes the GitHub Release.
+
+The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md).
+Heavy MCP E2E (`node E2E_testing/mcp-e2e.mjs`) is run by humans only at the very end
+of a release — it is NOT run by CI — and its structural contracts are pinned by
+cheap vitest tests in `test/quality-gates/mcp-e2e-*` so the 30-minute battery
+rarely surprises you.
+
+Operator commands:
+
+```powershell
+pwsh -File scripts/release-prepare.ps1 -Bump patch    # v1.10.3 → v1.10.4
+pwsh -File scripts/release-prepare.ps1 -Bump minor    # v1.10.x → v1.11.0
+pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+```
+
 ## What Dysflow is (and is not)
 
 ### It is
