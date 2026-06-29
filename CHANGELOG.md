@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.10.1] - 2026-06-29
+
+Hotfix release for MCP Access path resolution and signed update hardening.
+
+### Fixed
+
+- **MCP `accessPath` override precedence (`0b3d985`).** Explicit `accessPath` / `databasePath` values passed to MCP tools now win over `.dysflow/project.json` when a `projectId` is also provided, fixing false `CONFIG_TARGET_NOT_FOUND` failures for existing Access databases in consumer projects such as `gestion_riesgos`.
+- **Relative project config path diagnostics (`0b3d985`).** Missing-target errors now carry structured diagnostic details (`accessDbPath`, `configPath`, `projectRoot`) for internal/debug consumers while preserving external sanitization.
+
+### Security
+
+- **Signed release checksum verification (`f90d09f`).** The updater now requires an Ed25519 signature over `SHA256SUMS` before trusting release checksums.
+
 ## [v1.10.0] - 2026-06-28
 
 Per-module VBA import reporting, Unicode preservation on PowerShell 7, pre-import form code audit, and CI baseline repair.
