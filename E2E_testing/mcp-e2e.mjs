@@ -146,10 +146,16 @@ try {
 }
 
 async function runBattery() {
+// #586 — `tools/list` MUST be called via `record()` so the suite-owned
+// child PID is tracked; do NOT call it via a separate `callMcp`. The
+// returned row also feeds the advertised-tool-count preflight check
+// below. `list.response.result.tools` is the MCP server's `tools/list`
+// payload (filtered to non-hidden by startWithSdkServer).
+const list = await record("protocol", "tools/list");
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
 // test/adapters/mcp/advertised-tool-count.test.ts — update both together.
-rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 51, expected: "51 tools", ms: 0, summary: `advertised=${advertised.length}` });
+rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 54, expected: "54 tools", ms: 0, summary: `advertised=${advertised.length}` });
 
 await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
 await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
