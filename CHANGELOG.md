@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.11.1] - 2026-06-29
+
+- chore(openspec): archive 23 stale SDD changes - docs(sdd): retroactive SDD for release-process-automation - chore: ignore .codegraph/ (codegraph MCP cache, not source) - test(quality-gates): pin every mcp-e2e suite contract the heavy battery would otherwise catch 30 minutes in - test(e2e): pin compile_vba expectation to the documented mojibake state - docs(sdd): close the loop on tdd-coverage-holes verify-report - feat(scripts): release-prepare.ps1 with CI-gating
+
+
 ## [v1.11.0] - 2026-06-29
 
 `dysflow_compare_form` source-vs-source drift tool, formal closure of the Form UI Factory epic (#595), and the `tdd-coverage-holes` MCP E2E + VBA module forwarding guardrail battery (H1–H10).
