@@ -22,7 +22,7 @@
 - [x] 1.6 Run focused tests and complete strict TDD evidence.
 - [x] 1.7 Run full verification (`pnpm test`, `pnpm build`, `pnpm lint`, `pwsh -Command "Invoke-Pester scripts/tests/"`).
 - [x] 1.8 Commit and push the implementation with SDD/Tests/Ref traceability.
-- [ ] 1.9 Archive the change only after CI is green.
+- [x] 1.9 Archive the change only after CI is green.
 - [ ] 1.10 Close issue #572 with implementation commit SHA(s) and test references.
 
 ## Keypair decision
@@ -43,6 +43,7 @@ The user approved generating and using a new Ed25519 keypair because no prior re
 - ✅ Build: `pnpm build`
 - ✅ Lint: `pnpm lint`
 - ✅ Pester: `pwsh -Command "Invoke-Pester scripts/tests/"` — 379 passed / 4 skipped
+- ✅ CI: `https://github.com/DysTelefonica/dysflow/actions/runs/28351832798` — green on `f5680c9`
 
 ## Key material status
 
@@ -55,3 +56,4 @@ The user approved generating and using a new Ed25519 keypair because no prior re
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
 | `f90d09f` | `feat(update): enforce signed release checksums` | 1.3-1.8 | Focused Vitest; `pnpm test`; `pnpm build`; `pnpm lint`; Pester | N/A |
+| `f5680c9` | `chore(sdd): trace signed checksum implementation` | 1.8 | Trace-only; CI run 28351832798 green | N/A |
