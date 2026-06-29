@@ -45,12 +45,13 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
     // #405 / #510 / form-ui-factory: these counts are the invariant for MCP tool registration.
     // Any edit that moves one of these numbers MUST justify the change in that PR.
-    // Expected breakdown: 47 dispatch names (DYSFLOW_MCP_TOOL_NAMES, +1 inspect_form, +1 lint_form_code) -
-    //   0 hidden stubs (zero-hidden-tools policy) + 6 modern (dysflow_*) = 53 visible.
-    expect(toolCount).toBe(47);
+    // Expected breakdown: 48 dispatch names (DYSFLOW_MCP_TOOL_NAMES, +1 inspect_form, +1
+    //   compare_form, +1 lint_form_code) - 0 hidden stubs (zero-hidden-tools policy)
+    //   + 6 modern (dysflow_*) = 54 visible.
+    expect(toolCount).toBe(48);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(6);
-    expect(visibleCount).toBe(53);
+    expect(visibleCount).toBe(54);
   });
 
   it("verifies split-mode coverage explicitly", () => {

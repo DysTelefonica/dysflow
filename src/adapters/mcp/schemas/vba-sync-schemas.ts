@@ -238,6 +238,24 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       path: SCHEMA_PROPS.path,
     },
   },
+  compare_form: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      targetPath: {
+        type: "string",
+        description:
+          "Path to the right-side .form.txt (compared against sourcePath). Required unless 'target' alias is provided.",
+      },
+      target: {
+        type: "string",
+        description: "Alias for targetPath.",
+      },
+    },
+  },
   lint_form_code: {
     type: "object",
     additionalProperties: false,

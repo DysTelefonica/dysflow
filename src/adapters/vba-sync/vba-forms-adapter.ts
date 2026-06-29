@@ -6,6 +6,7 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import type { FormIR } from "../../core/models/form-ir.js";
+import { compareForms, type FormDriftReport } from "../../core/services/form-ir-compare-service.js";
 import {
   collectControls,
   collectFormEvents,
@@ -45,6 +46,21 @@ const nodeFormFileSystem: FormFileSystemPort = {
   },
   writeFile: (path, data, encoding) => writeFile(path, data, encoding),
 };
+
+/**
+ * Derive the canonical form/report name from a source path by stripping
+ * `Form_` / `Report_` prefix and `.form.txt` / `.report.txt` suffix.
+ * Mirrors the slice-1 `inspect_form` rule so the consumer-facing names
+ * stay consistent across both tools.
+ */
+function deriveFormName(sourcePath: string): string {
+  const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
+  return basename
+    .replace(/^Form_/, "")
+    .replace(/^Report_/, "")
+    .replace(/\.form\.txt$/i, "")
+    .replace(/\.report\.txt$/i, "");
+}
 
 export interface VbaFormsOrchestrator {
   executor: VbaManagerExecutor;
@@ -90,6 +106,7 @@ export class VbaFormsAdapter {
       toolName === "catalog_add_control" ||
       toolName === "harvest_form_catalog" ||
       toolName === "inspect_form" ||
+      toolName === "compare_form" ||
       toolName === "lint_form_code"
     );
   }
@@ -103,6 +120,7 @@ export class VbaFormsAdapter {
     if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
     if (toolName === "inspect_form") return this.inspectForm(params);
+    if (toolName === "compare_form") return this.compareForm(params);
     if (toolName === "lint_form_code") return this.lintFormCode(params);
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
@@ -174,6 +192,97 @@ export class VbaFormsAdapter {
       controls,
       events,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // compare_form — read-only, source-vs-source drift (Option C, source-path)
+  // ---------------------------------------------------------------------------
+
+  private async compareForm(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    // Source/target path resolution. `path` is accepted as an alias for
+    // `sourcePath`, and `target` is accepted as an alias for `targetPath`,
+    // mirroring the slice-1 `inspect_form` parity.
+    const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+    const targetPath = stringValue(params.targetPath) ?? stringValue(params.target);
+
+    if (!sourcePath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "compare_form requires sourcePath (path to the left .form.txt file).",
+        ),
+      );
+    }
+    if (!targetPath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "compare_form requires targetPath (path to the right .form.txt file).",
+        ),
+      );
+    }
+
+    // Read both files via the injectable port (no Access, no COM).
+    let leftText: string;
+    let rightText: string;
+    try {
+      leftText = await this.fileSystem.readFile(sourcePath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read source form file at "${sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+    try {
+      rightText = await this.fileSystem.readFile(targetPath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read target form file at "${targetPath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    // Derive form names from filenames (mirror inspect_form derivation).
+    const leftName = deriveFormName(sourcePath);
+    const rightName = deriveFormName(targetPath);
+
+    // Parse both via the slice-1 pure parser. A malformed input fails closed
+    // with FORM_PARSE_ERROR so the caller never sees a partial report.
+    let leftIR: FormIR;
+    let rightIR: FormIR;
+    try {
+      leftIR = parseFormTxt(leftText, { name: leftName });
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_PARSE_ERROR",
+          `Failed to parse source "${sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+    try {
+      rightIR = parseFormTxt(rightText, { name: rightName });
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_PARSE_ERROR",
+          `Failed to parse target "${targetPath}": ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    // Pure diff — no I/O, no Access.
+    const report: FormDriftReport = compareForms({
+      left: leftIR,
+      right: rightIR,
+      leftName,
+      rightName,
+    });
+    return successResult(report);
   }
 
   // ---------------------------------------------------------------------------

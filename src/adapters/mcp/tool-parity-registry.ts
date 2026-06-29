@@ -44,6 +44,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "catalog_add_control",
   "harvest_form_catalog",
   "inspect_form",
+  "compare_form",
   "lint_form_code",
   "vba_orphan_audit",
   "vba_inline_execution",
@@ -135,6 +136,8 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Harvest control definitions from existing forms into a catalog (optionally filtered), to seed form generation. Read-only on the binary.",
   inspect_form:
     "Parse a version-controlled .form.txt (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only. sourcePath must point to the on-disk source file (e.g. forms/Form_MyForm.form.txt).",
+  compare_form:
+    "Compare two version-controlled .form.txt files (sourcePath/source + targetPath/target) and return a structured drift report: added/removed controls, changed properties (with oldValue/newValue), and layout-bounds changes (Left/Top/Width/Height). Each drift carries actionable:bool classified against the canonical FORM_NOISE_KEYS noise floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap). Read-only and offline — no Access, no PowerShell, no writes. Accepts 'path' as alias for sourcePath and 'target' as alias for targetPath.",
   lint_form_code:
     "Static-analyze a form/report's .cls code-behind against the parsed .form.txt, returning structured diagnostics. Read-only and offline — no Access, no PowerShell, no writes. Use BEFORE import_modules / import_all to catch: (1) Me.<Control> references whose target does not exist in the .form.txt, (2) Access ListBox .List = ... misuse (use RowSource / AddItem instead), (3) bare Function(...) statements (use Call or assign the result), (4) positional arguments after a named argument (VBA rejects them), (5) accented identifiers in executable positions (round-trip risk), (6) per-control-type property mismatches. Pass destinationRoot OR sourceRoot plus one of formName | moduleNames | nothing (full scan under forms/ + reports/). rules filters the rule set; strict elevates warnings to errors.",
   vba_orphan_audit:

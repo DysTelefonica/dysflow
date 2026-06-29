@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**53 visible MCP tools · Windows / Node 20+**
+**54 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -29,7 +29,7 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 53 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 54 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -669,6 +669,8 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `catalogPath` (string, optional), `filter` (string, optional)
 * **`inspect_form`**: Parse a version-controlled `.form.txt` (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only.
   - Parameters: `sourcePath` (string, path to the `.form.txt` file), `path` (string, alias for `sourcePath`)
+* **`compare_form`**: Compare two version-controlled `.form.txt` files and return a structured drift report (added/removed controls, changed properties, layout-bound changes), each classified as actionable or noise against the FORM_NOISE_KEYS floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap). Works offline — Access is not required. Read-only.
+  - Parameters: `sourcePath`/`path` (string, left `.form.txt` file), `targetPath`/`target` (string, right `.form.txt` file)
 * **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
   - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional)
 

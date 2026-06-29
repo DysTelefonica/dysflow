@@ -42,6 +42,9 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   // inspect_form reads from the version-controlled source tree; no binary or filesystem mutation.
   inspect_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  // compare_form reads two version-controlled source trees and runs a pure IR-level
+  // diff; no binary, no filesystem mutation. The write-gate must never fire.
+  compare_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   // lint_form_code is a static analyzer over the source tree. It opens no
   // .accdb, spawns no Access process, and writes nothing. Mutations are
   // explicitly false so the write-gate never fires for this tool.
