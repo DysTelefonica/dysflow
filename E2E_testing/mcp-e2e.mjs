@@ -1,10 +1,11 @@
-import { spawn, execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
+import { record as recordImpl } from "./_helpers/mcp-e2e-record.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -81,16 +82,13 @@ const backendTarget = { accessPath, backendPath, databasePath: backendPath };
 const rows = [];
 const existingModuleName = "Funciones Generales";
 
-// Baseline PIDs: Access processes already running before the suite starts.
-// Per-call zombie checks exclude these so pre-existing instances don't cause false failures.
-const suiteBaselinePids = new Set();
-try {
-  const baselineOut = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
-  for (const line of baselineOut.trim().split(/\r?\n/).filter(Boolean)) {
-    const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
-    if (!isNaN(pid)) suiteBaselinePids.add(pid);
-  }
-} catch {}
+// Stop-on-fail scope: the E2E only watches MSACCESS.EXE processes it
+// spawned itself. PIDs from other Dysflow consumers (e.g. gestion_riesgos
+// running concurrently on the same host) are out of scope. The driver
+// records the `childPid` returned by every `callMcp` and the zombie
+// checks verify only those PIDs — never a global MSACCESS.EXE scan.
+const suiteOwnPids = new Set();
+let advertised = [];
 
 function toolText(message) {
   return message?.result?.content?.map((item) => item.text ?? "").join("\n") ?? message?.error?.message ?? "";
@@ -122,35 +120,29 @@ async function callMcp(method, params = {}, options = {}) {
   });
 }
 
+// Context handed to the extracted `record()` helper. The helper is the
+// single source of truth for REFUSE-START / STOP-ON-FAIL / per-tool
+// zombie check; vitest imports the same helper with fakes to pin the
+// contract (test/quality-gates/mcp-e2e-stop-on-fail.test.ts).
+const recordCtx = { callMcp, suiteOwnPids, rows, waitForNoOwnPids, isOwnPidAlive, normalize };
+
 async function record(area, tool, args = {}, options = {}) {
-  const started = Date.now();
-  const method = tool === "tools/list" ? "tools/list" : "tools/call";
-  const params = tool === "tools/list" ? {} : { name: tool, arguments: args };
-  const result = await callMcp(method, params, options);
-  const ms = Date.now() - started;
-  const expectedError = options.expected === "error";
-  const pass = result.timedOut ? false : expectedError ? result.isError : !result.isError;
-  rows.push({ area, tool, pass, expected: options.expected ?? "success", ms, summary: normalize(result.text || result.stderr || JSON.stringify(result.exit)) });
-  console.log(`${pass ? "PASS" : "FAIL"}\t${tool}\t${ms}ms\t${rows.at(-1).summary}`);
-
-  const zombie = await waitForNoZombies(result.childPid, 5000, 200);
-  const zombiePass = !zombie.found;
-  const zombieTool = `${tool}:zombie-check`;
-  rows.push({
-    area,
-    tool: zombieTool,
-    pass: zombiePass,
-    expected: "no MSACCESS.EXE",
-    ms: zombie.elapsed,
-    summary: zombie.found ? `Zombie MSACCESS.EXE lingered after ${tool}` : "clean",
-  });
-  console.log(`${zombiePass ? "PASS" : "FAIL"}\t${zombieTool}\t${zombie.elapsed}ms\t${rows.at(-1).summary}`);
-
-  return result;
+  // Thin wrapper that hands the suite's dependencies to the extracted
+  // helper. All preflight / stop-on-fail / zombie-check logic now lives
+  // in `_helpers/mcp-e2e-record.mjs` so vitest can exercise the real
+  // driver against injected fakes (see test/quality-gates/mcp-e2e-stop-on-fail.test.ts).
+  return recordImpl(recordCtx, { area, tool, args, options });
 }
 
-const list = await record("protocol", "tools/list");
-let advertised = [];
+let abortedDueToFailure = false;
+try {
+  await runBattery();
+} catch (err) {
+  abortedDueToFailure = true;
+  console.error(`[mcp-e2e] Battery aborted: ${(err && err.message) || err}`);
+}
+
+async function runBattery() {
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
 // test/adapters/mcp/advertised-tool-count.test.ts — update both together.
@@ -258,93 +250,77 @@ await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
-
-function checkAccessProcesses(childPid) {
-  try {
-    const stdout = execSync('wmic process get ProcessId,ParentProcessId,Name /format:csv', { encoding: "utf8" });
-    const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
-    const parentMap = new Map();
-    const nameMap = new Map();
-    for (const line of lines) {
-      const parts = line.split(",");
-      if (parts.length < 4) continue;
-      const name = parts[1];
-      const parent = parseInt(parts[2], 10);
-      const pid = parseInt(parts[3], 10);
-      if (!isNaN(pid) && !isNaN(parent)) {
-        parentMap.set(pid, parent);
-        nameMap.set(pid, name);
-      }
-    }
-
-    for (const [pid, name] of nameMap.entries()) {
-      if (name.toUpperCase() === "MSACCESS.EXE") {
-        if (childPid) {
-          let current = pid;
-          let visited = new Set();
-          while (current && current !== 0 && !visited.has(current)) {
-            visited.add(current);
-            const parent = parentMap.get(current);
-            if (parent === childPid) {
-              return true;
-            }
-            current = parent;
-          }
-        } else {
-          if (!suiteBaselinePids.has(pid)) {
-            return true;
-          }
-        }
-      }
-    }
-  } catch (err) {
-    try {
-      const stdout = execSync('tasklist /FI "IMAGENAME eq MSACCESS.EXE" /FO CSV /NH', { encoding: "utf8" });
-      const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
-      return lines.some((line) => {
-        const pid = parseInt(line.split(",")[1]?.replace(/"/g, "") ?? "", 10);
-        return !isNaN(pid) && !suiteBaselinePids.has(pid);
-      });
-    } catch (fallbackErr) {
-      console.error("Failed to check processes:", fallbackErr);
-    }
-  }
-  return false;
 }
 
-async function waitForNoZombies(childPid, timeoutMs = 30000, pollMs = 200) {
+// isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`. The
+// OS rejects the signal (ESRCH) when the process is gone. We never scan
+// global MSACCESS.EXE — only the PIDs this E2E itself spawned.
+function isOwnPidAlive(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
   const start = Date.now();
+  // Check all known suite-owned PIDs (a single tool may leave more than
+  // one — e.g. a child PowerShell that itself spawned MSACCESS.EXE).
+  const watched = Array.from(suiteOwnPids);
   while (true) {
-    const found = checkAccessProcesses(childPid);
-    if (!found) return { found: false, elapsed: Date.now() - start };
-    if (Date.now() - start >= timeoutMs) return { found: true, elapsed: Date.now() - start };
+    const survivors = watched.filter((p) => isOwnPidAlive(p));
+    if (survivors.length === 0) return { found: false, elapsed: Date.now() - start };
+    if (Date.now() - start >= timeoutMs) return { found: true, pids: survivors, elapsed: Date.now() - start };
     await new Promise((r) => setTimeout(r, pollMs));
   }
 }
 
-const hasLingeringAccess = checkAccessProcesses();
+// Final lingering-access check: ONLY the suite's own PIDs. After a 1s
+// prudent delay (where an -Embedding COM server that was just started
+// materializes), poll our own child PIDs. Other Dysflow consumers'
+// MSACCESS.EXE instances on the host are out of scope.
+const PRUDENT_ZOMBIE_DELAY_MS = 1000;
+const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
+const LINGERING_OWN_PID_POLL_MS = 100;
+let hasLingeringAccess = false;
+let finalZombieMs = 0;
+if (!abortedDueToFailure) {
+  console.error(`prudentDelayMs=${PRUDENT_ZOMBIE_DELAY_MS} (waiting before final lingering-access check on suite-owned PIDs)`);
+  await new Promise((r) => setTimeout(r, PRUDENT_ZOMBIE_DELAY_MS));
+  const finalZombie = await waitForNoOwnPids(LINGERING_OWN_PID_TIMEOUT_MS, LINGERING_OWN_PID_POLL_MS);
+  hasLingeringAccess = finalZombie.found;
+  finalZombieMs = finalZombie.elapsed;
+}
 rows.push({
   area: "zombies",
   tool: "lingering-access-check",
   pass: !hasLingeringAccess,
-  expected: "no MSACCESS.EXE processes running",
-  ms: 0,
-  summary: hasLingeringAccess ? "Lingering MSACCESS.EXE processes detected!" : "No lingering MSACCESS.EXE processes found.",
+  expected: "no suite-owned MSACCESS.EXE lingering (1s prudent delay + 2s poll on suite-owned PIDs only)",
+  ms: finalZombieMs,
+  summary: hasLingeringAccess
+    ? `Suite-owned MSACCESS.EXE pids=${(finalZombie.pids || []).join(",")} still alive after final recheck!`
+    : "No suite-owned MSACCESS.EXE lingering.",
 });
 
 if (hasLingeringAccess) {
-  console.error("Assertion failed: Lingering MSACCESS.EXE processes detected at the end of the E2E execution!");
+  console.error("Assertion failed: suite-owned MSACCESS.EXE processes detected at the end of the E2E execution!");
 }
 
 const passed = rows.filter((row) => row.pass).length;
 const failed = rows.filter((row) => !row.pass);
-const report = `# Dysflow MCP E2E Report\n\nProject: ${projectId}\nFrontend: ${accessPath}\nBackend: ${backendPath}\nTools advertised: ${advertised.length}\nPassed: ${passed}\nFailed: ${failed.length}\n\n| Result | Area | Tool | Expected | ms | Summary |\n|---|---|---|---|---:|---|\n${rows.map((row) => `| ${row.pass ? "PASS" : "FAIL"} | ${row.area} | ${row.tool} | ${row.expected} | ${row.ms} | ${String(row.summary).replace(/\|/g, "\\|")} |`).join("\n")}\n\n## Advertised tools\n${advertised.map((name) => `- ${name}`).join("\n")}\n`;
+const report = `# Dysflow MCP E2E Report\n\nProject: ${projectId}\nFrontend: ${accessPath}\nBackend: ${backendPath}\nTools advertised: ${advertised.length}\nPassed: ${passed}\nFailed: ${failed.length}\nAborted due to failure: ${abortedDueToFailure}\n\n| Result | Area | Tool | Expected | ms | Summary |\n|---|---|---|---|---:|---|\n${rows.map((row) => `| ${row.pass ? "PASS" : "FAIL"} | ${row.area} | ${row.tool} | ${row.expected} | ${row.ms} | ${String(row.summary).replace(/\|/g, "\\|")} |`).join("\n")}\n\n## Advertised tools\n${advertised.map((name) => `- ${name}`).join("\n")}\n`;
 await writeFile(reportPath, report, "utf8");
 console.log(`\nReport: ${reportPath}`);
-if (failed.length === 0 && process.env.DYSFLOW_E2E_PRESERVE_SANDBOX !== "1") {
+// When the battery was aborted early we PRESERVE the sandbox unconditionally
+// so the user can inspect whatever state the suite left behind. The zombie
+// check is the only way to learn which PIDs were orphaned.
+if (abortedDueToFailure || failed.length > 0 || process.env.DYSFLOW_E2E_PRESERVE_SANDBOX === "1") {
+  console.log(`Sandbox preserved: ${tempRoot}`);
+} else {
   await rm(tempRoot, { recursive: true, force: true });
   console.log("Sandbox cleaned after successful MCP E2E run. Set DYSFLOW_E2E_PRESERVE_SANDBOX=1 to keep it for inspection.");
-} else {
-  console.log(`Sandbox preserved: ${tempRoot}`);
 }
-process.exitCode = failed.length > 0 ? 1 : 0;
+process.exitCode = failed.length > 0 || abortedDueToFailure ? 1 : 0;
