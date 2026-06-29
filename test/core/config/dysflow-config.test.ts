@@ -244,6 +244,60 @@ describe("dysflow configuration", () => {
     }
   });
 
+  it("resolves projectRoot dot and relative accessPath from the project config directory", () => {
+    const workspace = createTempWorkspace();
+    try {
+      writeRepoProjectConfig(workspace.root, {
+        id: "relative-access-project",
+        projectRoot: ".",
+        accessPath: "Gestion_Riesgos.accdb",
+        backendPath: "Gestion_Riesgos_Datos.accdb",
+      });
+      writeFileSync(join(workspace.root, "Gestion_Riesgos.accdb"), "", "utf8");
+      writeFileSync(join(workspace.root, "Gestion_Riesgos_Datos.accdb"), "", "utf8");
+
+      const result = loadDysflowConfig({
+        cwd: join(workspace.root, "src"),
+        projectId: "relative-access-project",
+        env: {},
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected project config to load");
+      expect(result.data.accessDbPath).toBe(resolve(workspace.root, "Gestion_Riesgos.accdb"));
+      expect(result.data.backendPath).toBe(resolve(workspace.root, "Gestion_Riesgos_Datos.accdb"));
+      expect(result.data.projectRoot).toBe(resolve(workspace.root));
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it("lets an explicit absolute accessDbPath override a stale repo config accessPath", async () => {
+    const workspace = createTempWorkspace();
+    try {
+      writeRepoProjectConfig(workspace.root, {
+        id: "override-access-project",
+        accessPath: "missing-front.accdb",
+      });
+      const overrideAccessPath = join(workspace.root, "Gestion_Riesgos.accdb");
+      writeFileSync(overrideAccessPath, "", "utf8");
+
+      const result = await loadDysflowConfigAsync({
+        cwd: workspace.root,
+        projectId: "override-access-project",
+        accessDbPath: overrideAccessPath,
+        env: {},
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected explicit access path to load");
+      expect(result.data.accessDbPath).toBe(overrideAccessPath);
+      expect(result.data.projectId).toBe("override-access-project");
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   it("resolves matching projectId from the repo-local config so project allowWrites can apply", () => {
     const workspace = createTempWorkspace();
     try {

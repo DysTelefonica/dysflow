@@ -267,6 +267,13 @@ export class AccessPowerShellRunner implements AccessRunner {
               createDysflowError(
                 "CONFIG_TARGET_NOT_FOUND",
                 `Configured accessPath does not exist on disk: ${config.accessDbPath}. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.`,
+                {
+                  details: {
+                    accessDbPath: config.accessDbPath,
+                    configPath: config.configPath,
+                    projectRoot: config.projectRoot,
+                  },
+                },
               ),
             );
           }

@@ -221,6 +221,60 @@ describe("AccessPowerShellRunner", () => {
     });
   });
 
+  it("returns CONFIG_TARGET_NOT_FOUND details when the resolved accessPath target is missing", async () => {
+    let executorCalled = false;
+    const executor: PowerShellExecutor = async () => {
+      executorCalled = true;
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"rows":[]}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const missingAccessDbPath = "C:/missing/project/frontend.accdb";
+    const projectRoot = "C:/missing/project";
+    const configPath = "C:/missing/project/.dysflow/project.json";
+
+    const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+      fileExists: () => false,
+    });
+
+    const result = await runner.run(
+      {
+        kind: "query",
+        request: {
+          sql: "SELECT 1",
+          mode: "read",
+          action: "query_sql",
+        },
+      },
+      {
+        ...config,
+        accessDbPath: missingAccessDbPath,
+        accessPassword: "missing-db-secret",
+        configPath,
+        projectRoot,
+      },
+    );
+
+    expect(executorCalled).toBe(false);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Expected CONFIG_TARGET_NOT_FOUND failure");
+    expect(result.error.code).toBe("CONFIG_TARGET_NOT_FOUND");
+    expect(result.error.details).toEqual({
+      accessDbPath: missingAccessDbPath,
+      configPath,
+      projectRoot,
+    });
+    expect(JSON.stringify(result.error.details)).not.toContain("missing-db-secret");
+  });
+
   it("does fallback to config.backendPath when query request.backendPath is missing", async () => {
     const calls: {
       cmd: string;

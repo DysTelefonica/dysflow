@@ -271,6 +271,127 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(capturedDestinationRoot).toBe(worktreeSrc);
   });
 
+  it("resolves projectRoot dot and relative accessPath before MCP service validation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-relative-access-"));
+    const project = join(root, "gestion_riesgos");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    writeFileSync(join(project, "Gestion_Riesgos.accdb"), "", "utf8");
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "00-gestion-riesgos-develop",
+        projectRoot: ".",
+        accessPath: "Gestion_Riesgos.accdb",
+      }),
+      "utf8",
+    );
+
+    let capturedAccessPath: string | undefined;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: join(project, "src"),
+        env: {},
+        serviceFactory: (config) => {
+          capturedAccessPath = config.accessDbPath;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    const result = await services.vbaService.execute({
+      projectId: "00-gestion-riesgos-develop",
+      procedureName: "Test_Smoke",
+    } as unknown as Parameters<typeof services.vbaService.execute>[0]);
+
+    expect(result.ok).toBe(true);
+    expect(capturedAccessPath).toBe(resolve(project, "Gestion_Riesgos.accdb"));
+  });
+
+  it("honors an absolute accessPath override over repo config when projectId is present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-access-override-"));
+    const project = join(root, "gestion_riesgos");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    const overrideAccessPath = join(project, "Gestion_Riesgos.accdb");
+    writeFileSync(overrideAccessPath, "", "utf8");
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "00-gestion-riesgos-develop",
+        accessPath: "Missing.accdb",
+      }),
+      "utf8",
+    );
+
+    let capturedAccessPath: string | undefined;
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_MISSING_ACCESS_PATH",
+        message: "startup cwd has no project",
+        retryable: false,
+      },
+      {
+        cwd: project,
+        env: {},
+        serviceFactory: (config) => {
+          capturedAccessPath = config.accessDbPath;
+          return {
+            vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+            queryService: new FakeQueryService(),
+            diagnosticsService: new FakeDiagnosticsService(),
+          };
+        },
+      },
+    );
+
+    const result = await services.diagnosticsService.run({
+      projectId: "00-gestion-riesgos-develop",
+      accessPath: overrideAccessPath,
+    } as unknown as Parameters<typeof services.diagnosticsService.run>[0]);
+
+    expect(result.ok).toBe(true);
+    expect(capturedAccessPath).toBe(overrideAccessPath);
+  });
+
+  it("returns CONFIG_TARGET_NOT_FOUND details with the resolved accessPath", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-missing-access-"));
+    const project = join(root, "gestion_riesgos");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "00-gestion-riesgos-develop",
+        projectRoot: ".",
+        accessPath: "Missing.accdb",
+      }),
+      "utf8",
+    );
+
+    const services = createDynamicServices(undefined, undefined, { cwd: project, env: {} });
+
+    const result = await services.vbaService.execute({
+      projectId: "00-gestion-riesgos-develop",
+      procedureName: "Test_Smoke",
+    } as unknown as Parameters<typeof services.vbaService.execute>[0]);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected missing target failure");
+    expect(result.error.code).toBe("CONFIG_TARGET_NOT_FOUND");
+    expect(result.error.details).toMatchObject({
+      accessDbPath: resolve(project, "Missing.accdb"),
+      projectRoot: resolve(project),
+      configPath: join(project, ".dysflow", "project.json"),
+    });
+  });
+
   it("reuses unavailable-path services when resolved config is unchanged", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-cache-same-"));
     const frontend = join(root, "front.accdb");

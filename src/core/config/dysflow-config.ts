@@ -258,7 +258,10 @@ function buildProjectConfig(
   const configDir = dirname(resolvedPath);
   const projectRoot = resolveProjectRoot(raw, configDir, input.projectRoot);
   const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
-  const accessDbPath = resolveProjectPath(raw.accessPath ?? input.accessDbPath, projectRoot);
+  // Explicit request paths are caller intent and must win over repo config defaults.
+  // This mirrors backendPath/destinationRoot and lets MCP callers override a stale
+  // project config by passing an absolute accessPath together with projectId.
+  const accessDbPath = resolveProjectPath(input.accessDbPath ?? raw.accessPath, projectRoot);
   if (accessDbPath === undefined) {
     return failureResult(
       createDysflowError(

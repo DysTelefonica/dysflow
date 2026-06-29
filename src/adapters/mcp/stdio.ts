@@ -334,6 +334,11 @@ export function createDynamicServices(
           code: "CONFIG_TARGET_NOT_FOUND",
           message: `Configured accessPath does not exist on disk: ${configResult.data.accessDbPath}.`,
           retryable: false,
+          details: {
+            accessDbPath: configResult.data.accessDbPath,
+            configPath: configResult.data.configPath,
+            projectRoot: configResult.data.projectRoot,
+          },
         },
       };
     }
