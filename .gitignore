@@ -4,6 +4,7 @@ build/
 test-runtime/
 coverage/
 temp-runtime/
+.codegraph/
 .env
 .env.*
 .secrets.json
