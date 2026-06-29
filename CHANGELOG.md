@@ -1,5 +1,39 @@
 # Changelog
 
+## [v1.11.0] - 2026-06-29
+
+`dysflow_compare_form` source-vs-source drift tool, formal closure of the Form UI Factory epic (#595), and the `tdd-coverage-holes` MCP E2E + VBA module forwarding guardrail battery (H1–H10).
+
+### Added
+
+- **`dysflow_compare_form` MCP tool (#597, slice 2 of epic #595).** Read-only source-vs-source drift detection for form/report `.form.txt` files: takes two paths, parses both to FormIR, classifies the diff (matched, whitespaceOnly, attributeOnly, caseOnly, formSerializationOnly, encodingOnly, sourceNewer, binaryNewer, bothChanged), and returns an actionable `recommendedAction` (`no_action`, `import_to_binary`, `export_to_src`, `manual_merge`). Pure offline static analysis, no Access required. Closes the compare half of consumer issue #563. Implementation `37a5177`; SDD `openspec/changes/archive/forms-ui-factory-slice-2/`.
+- **Form UI Factory epic formal closure.** `dysflow_lint_form_code` (shipped in v1.10.0) and `dysflow_compare_form` together close epic #595. The slice-1 SDD (`openspec/changes/archive/forms-ui-factory-slice-1/`) was already shipped in v1.9.5 + v1.10.0; this release formalizes the closure with three contract specs, a doc-anchor test, and the `archive` move. Commits `6b26b1c`, `6fedf15`, `cca3002`, `e7c53bc`, `f639a81`.
+
+### Fixed
+
+- **`exists` / `delete_module` single-name forwarding (`ea9c0af`, RED `7c2a344`).** `VbaSyncAdapter.execute("exists", { moduleName:"Foo" })` and `("delete_module", { moduleName:"Foo", force:true })` now correctly forward `["Foo"]` to the runner. Root cause: `moduleNamesProvided` was derived from `Object.hasOwn(params, "moduleNames")`, which only saw the literal plural key. Now `(import_all && Object.hasOwn(params, "moduleNames")) || moduleNames.length > 0`, preserving R4 for `import_all` explicit-empty while making the single-name path visible.
+- **WU-F descendant walker missing implementation (`640c173`).** The `fix(e2e): watch suite-owned descendant tree (W5-F)` commit (`90f4867`) imported `isPidOrDescendantAlive` from `_helpers/mcp-e2e-record.mjs` but never implemented the helper. Without this fix, the entire mcp-e2e suite would fail to import. Restores `walkDescendantsPids` (WMIC parent→children BFS) and `isPidOrDescendantAlive` (fast-path `process.kill(pid,0)` plus walker fallback), with fail-open semantics so a missing `wmic` degrades to parent-only detection rather than crashing the suite.
+- **ESM `require("node:fs")` lazy fallback (`58412f1`).** `resolveMcpE2eCommand`'s default `existsSync` was a lazy `require("node:fs")` inside an ESM module. On Windows that binding silently answers false for every path, so every consumer invoking the helper from real ESM (the only shape `mcp-e2e.mjs` has) hit `MCP_E2E_OVERRIDE_NOT_FOUND` / `MCP_E2E_NO_RUNTIME_AVAILABLE` even when the runtime was present on disk. Hoists the import to a top-level static import; preserves the test injection surface (`options.fs.existsSync`).
+- **WU-D regression in `mcp-e2e.mjs` (`ae80b2e`).** The `refactor(e2e): wire mcp-e2e.mjs through extracted record()` commit (`da254b4`) accidentally deleted `const list = await record("protocol", "tools/list")`. Without that line, the try/catch around `advertised = list.response...` silently swallowed the `ReferenceError`, and the advertised-tool-count preflight always reported 0 tools. Restores the line and bumps the expected count from 51 to 54 to match `test/adapters/mcp/advertised-tool-count.test.ts`.
+
+### Tests
+
+- **`tdd-coverage-holes` MCP E2E + VBA module forwarding battery (H1–H10).** Strict-TDD work unit battery that exercises every contract the previous in-memory simulation hid. SDD `openspec/changes/archive/tdd-coverage-holes/`.
+  - H1 `exists` single-name forwarding — `vba-sync-adapter-exists-forwarding.test.ts` (real adapter, fake executor).
+  - H2 `delete_module` single-name forwarding — `vba-sync-adapter-delete-forwarding.test.ts`.
+  - H3 stop-on-fail after tool — `mcp-e2e-stop-on-fail.test.ts` (4 cases: expected error + isError false/true, expected success + isError true).
+  - H4 preflight REFUSE-START on leaked PID — `mcp-e2e-subprocess-preflight.test.ts` (2 real subprocess tests).
+  - H5 descendant walk — `mcp-e2e-grandchild-zombie.test.ts` (4 real subprocess tests: outer spawns detached grandchild, outer exits, walker detects via wmic).
+  - H6 final lingering-access-check — `mcp-e2e-final-lingering-check.test.ts` (3 real subprocess tests including the 1s prudent delay before first poll, issue #574).
+  - H7 zombie-check row + suite-owned PID eviction — `mcp-e2e-stop-on-fail.test.ts` (3 cases: clean exit, lingering child, leaked PID at preflight).
+  - H8 `resolveMcpE2eCommand` default lazy-fs branch — `resolve-mcp-e2e-command.test.ts` (in-process) + `resolve-mcp-e2e-command-esm.test.ts` (real ESM subprocess repro).
+  - H9 orphan count after battery — G.6 manual `Get-Process -Name MSACCESS` (0 lingering after the run).
+  - H10 advertised tool count — `advertised-tool-count.test.ts` (54 non-hidden) + e2e preflight now PASS.
+
+### Verification
+
+All gates green except G.5 (E2E) which is partial: every H1–H10 contract exercised by the e2e suite passes (advertised count, REFUSE-START, per-tool zombie, stop-on-fail, final lingering check, descendant walk). The single sandbox `compile_vba` failure is a pre-existing `export_all` enumeration bug (`Form_FormNCAuditoriaGeneral` not in the `exported` list) that causes `export_all --prune:true` to delete its `.cls` from the sandbox `destinationRoot`. Filed as follow-up; not a regression from this SDD change. `pnpm test` 1809/1809, `pnpm test:ps1` 386/386, `pnpm build` clean, `pnpm lint` clean, 0 MSACCESS orphans. Full evidence in `openspec/changes/archive/tdd-coverage-holes/verify-report.md`.
+
 ## [v1.10.3] - 2026-06-29
 
 Hotfix for PowerShell 7+ (`pwsh`) script-load order in `dysflow-vba-manager.ps1`.
