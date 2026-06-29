@@ -302,32 +302,73 @@ async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
     await new Promise((r) => setTimeout(r, pollMs));
   }
 }
-
 // Final lingering-access check: ONLY the suite's own PIDs. After a 1s
 // prudent delay (where an -Embedding COM server that was just started
 // materializes), poll our own child PIDs. Other Dysflow consumers'
 // MSACCESS.EXE instances on the host are out of scope.
+//
+// We ALSO sample the global MSACCESS.EXE count before and after the
+// battery. If it grows by more than 1, the e2e leaked a process that
+// escaped the suiteOwnPids watch list (e.g. a PS script that spawned
+// MSACCESS.EXE outside the harness child process). Cheap global check
+// — no extra run, no extra tools, just `(Get-Process -Name MSACCESS
+// -ErrorAction SilentlyContinue).Count` at start and end.
 const PRUDENT_ZOMBIE_DELAY_MS = 1000;
 const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
 const LINGERING_OWN_PID_POLL_MS = 100;
 let hasLingeringAccess = false;
 let finalZombieMs = 0;
+let globalMsAccessLeak = 0;
+const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCESS_COUNT ?? ""}`) || (() => {
+  try { return Number(`${spawnSync("powershell.exe", ["-NoProfile", "-Command", "(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count"], { encoding: "utf8" }).stdout?.trim()}`) || 0; } catch { return 0; }
+})();
+
 if (!abortedDueToFailure) {
   console.error(`prudentDelayMs=${PRUDENT_ZOMBIE_DELAY_MS} (waiting before final lingering-access check on suite-owned PIDs)`);
   await new Promise((r) => setTimeout(r, PRUDENT_ZOMBIE_DELAY_MS));
   const finalZombie = await waitForNoOwnPids(LINGERING_OWN_PID_TIMEOUT_MS, LINGERING_OWN_PID_POLL_MS);
   hasLingeringAccess = finalZombie.found;
   finalZombieMs = finalZombie.elapsed;
+
+  // Global MSACCESS.EXE count comparison: cheap, runs once per battery.
+  // The suite intentionally leaves the global count out of scope for
+  // in-suite checks (other consumers may legitimately run MSACCESS.EXE).
+  // For the battery's own leak detection, we only flag a DELTA from start
+  // to end-of-battery — not the absolute count. A delta of 0 is the
+  // happy path; a delta > 0 means WE leaked a process that escaped
+  // suiteOwnPids (e.g. PS spawned MSACCESS.EXE outside the harness).
+  try {
+    const postOut = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-Command", "(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count"],
+      { encoding: "utf8" },
+    ).stdout?.trim() ?? "";
+    const postCount = Number(postOut) || 0;
+    globalMsAccessLeak = Math.max(0, postCount - globalMsAccessCountAtStart);
+  } catch {
+    globalMsAccessLeak = 0;
+  }
+  console.error(
+    `globalMsAccessCount: start=${globalMsAccessCountAtStart} ` +
+      `end=${globalMsAccessCountAtStart + globalMsAccessLeak} ` +
+      `leakDelta=${globalMsAccessLeak}`,
+  );
 }
 rows.push({
   area: "zombies",
   tool: "lingering-access-check",
-  pass: !hasLingeringAccess,
-  expected: "no suite-owned MSACCESS.EXE lingering (1s prudent delay + 2s poll on suite-owned PIDs only)",
+  pass: !hasLingeringAccess && globalMsAccessLeak === 0,
+  expected: "no suite-owned MSACCESS.EXE lingering AND global MSACCESS.EXE delta=0 over the battery",
   ms: finalZombieMs,
-  summary: hasLingeringAccess
-    ? `Suite-owned MSACCESS.EXE pids=${(finalZombie.pids || []).join(",")} still alive after final recheck!`
-    : "No suite-owned MSACCESS.EXE lingering.",
+  summary: (() => {
+    if (hasLingeringAccess) {
+      return `Suite-owned MSACCESS.EXE pids=${(finalZombie?.pids || []).join(",")} still alive after final recheck!`;
+    }
+    if (globalMsAccessLeak > 0) {
+      return `Global MSACCESS.EXE grew by ${globalMsAccessLeak} during the battery (start=${globalMsAccessCountAtStart}, end=${globalMsAccessCountAtStart + globalMsAccessLeak}); a process escaped the suiteOwnPids watch list.`;
+    }
+    return "No suite-owned MSACCESS.EXE lingering; no global MSACCESS.EXE leak.";
+  })(),
 });
 
 if (hasLingeringAccess) {
