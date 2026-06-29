@@ -241,14 +241,27 @@ export class VbaSyncAdapter implements VbaSyncPort {
       typeof params.timeoutMs === "number" && params.timeoutMs > 0 ? params.timeoutMs : undefined;
     const effectiveTimeoutMs = explicitTimeoutMs ?? target.data.timeoutMs;
     const moduleNames = mapping.moduleNames(params);
-    // moduleNamesProvided is the consumer-request signal: true iff the upstream
-    // caller actually populated the moduleNames field, even if the resulting
-    // array is empty. Lets the PowerShell side distinguish "explicit empty"
-    // (R4 no-op plan) from "field omitted" (import-all fallback). The presence
-    // check IS the contract here — a value check (params.moduleNames !== undefined)
-    // would conflate "explicit empty array" with "field omitted".
+    // moduleNamesProvided is the consumer-request signal that the upstream
+    // caller actually wanted PowerShell to receive `-ModuleNamesJson`.
+    //
+    // Two valid shapes collapse into one rule:
+    //   1. `import_all` with an explicit empty `moduleNames: []` payload
+    //      (R4 no-op plan) — preserve the explicit-empty contract by checking
+    //      the literal key presence only for `import_all`.
+    //   2. Any other tool whose mapping produced a non-empty `moduleNames`
+    //      array (singular `moduleName`/`name` aliases for `exists` and
+    //      `delete_module` resolve to an array inside the mapping).
+    //
+    // Before this rule the check was `Object.hasOwn(params, "moduleNames")`,
+    // which only saw the literal plural key. Singular inputs returned
+    // `false` even when the mapping produced a non-empty array, sending
+    // PowerShell an empty module list and triggering the `Exists requiere
+    // exactamente un nombre de módulo/objeto.` throw from
+    // dysflow-vba-manager.ps1:4150.
     // optional-presence-guard: allow
-    const moduleNamesProvided = Object.hasOwn(params, "moduleNames");
+    const moduleNamesProvided =
+      (toolName === "import_all" && Object.hasOwn(params, "moduleNames")) ||
+      moduleNames.length > 0;
     const request: VbaManagerExecutionRequest = {
       scriptPath: this.scriptPath,
       action: mapping.action,
