@@ -233,7 +233,12 @@ await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: tru
 // flip this back to `expected: "success"` and the test will catch it.
 await record("vba-sync", "compile_vba", { ...ctx, timeoutMs: 60000 }, { timeoutMs: 60000, expected: "error" });
 await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expected: "error" });
-const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: false });
+// verify_code exports every requested module to a temp dir and compares line
+// by line against the binary's VBA source. On the 131-component fixture
+// (`E2E_testing/NoConformidades.accdb`) the round-trip plus 131 module
+// exports runs well over the 30s default — 180s leaves headroom for the
+// Access COM open / export / close cycle per module.
+const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: false, timeoutMs: 180000 }, { timeoutMs: 180000 });
 // Semantic path assertion: verify_code now runs in semantic mode by default.
 // The result JSON must include the additive semantic fields introduced in vba-semantic-diff.
 try {
@@ -246,7 +251,10 @@ try {
   console.log(`FAIL\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 }
 // verify_code single-module: the unified tool covers the old compare_module via a moduleNames filter.
-const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true });
+// Same 180s budget as the full pass above (line 241) — even a single-module
+// call walks the module + runs semantic diff + serializes the per-module
+// diff payload, which on a 600-line module clears the 30s default.
+const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true, timeoutMs: 180000 }, { timeoutMs: 180000 });
 // Validate the unified single-module response shape, including the aggregated recommendation.
 try {
   const smData = JSON.parse(singleModuleResult.text ?? "{}");
