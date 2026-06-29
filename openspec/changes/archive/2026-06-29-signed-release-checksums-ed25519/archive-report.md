@@ -32,4 +32,4 @@ Archived after implementation and green CI.
 
 ## Issue closure evidence
 
-Issue #572 should be closed with commits `f90d09f` and `f5680c9`, tests listed above, and the note that `RELEASE_SIGNING_KEY` is installed for `DysTelefonica/dysflow`; if it is rotated before the next release, the operator must update the secret and matching public key together.
+Issue #572 was closed on 2026-06-29 with commits `f90d09f`, `f5680c9`, and `d9a5bf3`, tests listed above, CI run links, and the note that `RELEASE_SIGNING_KEY` is installed for `DysTelefonica/dysflow`; if it is rotated before the next release, the operator must update the secret and matching public key together.

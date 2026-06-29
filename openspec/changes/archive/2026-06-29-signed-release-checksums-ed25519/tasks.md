@@ -23,7 +23,7 @@
 - [x] 1.7 Run full verification (`pnpm test`, `pnpm build`, `pnpm lint`, `pwsh -Command "Invoke-Pester scripts/tests/"`).
 - [x] 1.8 Commit and push the implementation with SDD/Tests/Ref traceability.
 - [x] 1.9 Archive the change only after CI is green.
-- [ ] 1.10 Close issue #572 with implementation commit SHA(s) and test references.
+- [x] 1.10 Close issue #572 with implementation commit SHA(s) and test references.
 
 ## Keypair decision
 
