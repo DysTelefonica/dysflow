@@ -4,6 +4,8 @@
 // function) so vitest can exercise the real driver against injected
 // fakes. The body's behavior is byte-for-byte identical to the in-suite
 // version; only the dependency surface becomes explicit.
+
+import { execSync } from "node:child_process";
 //
 // The hard rules pinned here:
 //   1. REFUSE-START before every tool — refuse to start a new tool when
@@ -163,4 +165,93 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// H5 descendant walk (WU-F). Windows-only: enumerates descendant PIDs of a
+// given root via `wmic process get ProcessId,ParentProcessId /format:csv`.
+// BFS over the parent → children map. Returns an empty array on any error
+// (timeout, missing wmic, malformed output) — fail-open so the suite's
+// preflight/post-tool checks degrade to "parent-only" detection rather
+// than crash. Exports here are public so the test suite (`vitest`) and
+// `mcp-e2e.mjs` share the same walker implementation.
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect all descendant PIDs of `rootPid` via the Windows `wmic` tool.
+ * Returns an empty array if `wmic` is unavailable or returns no parseable
+ * data. The returned list does NOT include `rootPid` itself.
+ *
+ * @param {number} rootPid
+ * @returns {number[]}
+ */
+export function walkDescendantsPids(rootPid) {
+  if (!rootPid || rootPid <= 0) return [];
+  let stdout;
+  try {
+    stdout = execSync("wmic process get ProcessId,ParentProcessId /format:csv", {
+      encoding: "utf8",
+      timeout: 5000,
+    });
+  } catch {
+    return [];
+  }
+  // CSV format: "Node,<ParentProcessId>,<ProcessId>" - one header line first.
+  // Build a parent → [children] map, then BFS from rootPid.
+  const childrenOf = new Map();
+  for (const line of stdout.trim().split(/\r?\n/).filter(Boolean)) {
+    const parts = line.split(",");
+    if (parts.length < 3) continue;
+    if (parts[0] === "Node") continue;
+    const parent = Number.parseInt(parts[1], 10);
+    const pid = Number.parseInt(parts[2], 10);
+    if (!Number.isFinite(parent) || !Number.isFinite(pid)) continue;
+    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+    childrenOf.get(parent).push(pid);
+  }
+  const descendants = [];
+  const queue = [rootPid];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) break;
+    const children = childrenOf.get(current);
+    if (children === undefined) continue;
+    for (const child of children) {
+      descendants.push(child);
+      queue.push(child);
+    }
+  }
+  return descendants;
+}
+
+/**
+ * Return true if `pid` itself OR any of its descendants is alive.
+ * Fast path: `process.kill(pid, 0)` succeeds → return true (no wmic call).
+ * Slow path: parent is gone → walk descendants and `process.kill` each.
+ *
+ * @param {number} pid
+ * @param {(rootPid: number) => number[]} [walkDescendantsFn] - injection
+ *   point so tests can replace the wmic-backed walk with a fake.
+ * @returns {boolean}
+ */
+export function isPidOrDescendantAlive(
+  pid,
+  walkDescendantsFn = walkDescendantsPids,
+) {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    const descendants = walkDescendantsFn(pid);
+    for (const d of descendants) {
+      try {
+        process.kill(d, 0);
+        return true;
+      } catch {
+        /* descendant also gone — keep checking */
+      }
+    }
+    return false;
+  }
 }
