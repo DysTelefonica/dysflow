@@ -4,6 +4,7 @@ import {
   assertSafeArchiveEntries,
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
+  RELEASE_SIGNING_PUBLIC_KEY_PEM,
   validateReleaseTagName,
   verifyChecksumsSignature,
 } from "../../../../src/cli/commands/install/downloader";
@@ -143,6 +144,39 @@ describe("verifyChecksumsSignature", () => {
 });
 
 describe("createGitHubReleaseUpdateProvider — signature verification (fail-closed)", () => {
+  it("ships with a configured Ed25519 release signing public key", () => {
+    expect(RELEASE_SIGNING_PUBLIC_KEY_PEM).toContain("BEGIN PUBLIC KEY");
+    expect(RELEASE_SIGNING_PUBLIC_KEY_PEM.trim().length).toBeGreaterThan(80);
+  });
+
+  it("rejects the update when the required release signature is missing", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      const archiveHash = createHash("sha256").update(archiveBytes).digest("hex");
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => `${archiveHash}  dysflow-v1.0.0.tar.gz\n`,
+      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+      const provider = createGitHubReleaseUpdateProvider();
+      await expect(
+        provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }),
+      ).rejects.toThrow(/signature/i);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("rejects the update when a signing key is configured and the signature is invalid", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
@@ -178,7 +212,70 @@ describe("createGitHubReleaseUpdateProvider — signature verification (fail-clo
     }
   });
 
-  it("does NOT fetch a signature when no signing key is configured (default)", async () => {
+  it("accepts a valid Ed25519 signature before extracting a checksum-matched archive", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const pubPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      const archiveHash = createHash("sha256").update(archiveBytes).digest("hex");
+      const checksumsText = `${archiveHash}  dysflow-v1.0.0.tar.gz\n`;
+      const signature = cryptoSign(null, Buffer.from(checksumsText, "utf8"), privateKey).toString(
+        "base64",
+      );
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      mockFetch.mockResolvedValueOnce({ ok: true, text: async () => checksumsText });
+      mockFetch.mockResolvedValueOnce({ ok: true, text: async () => signature });
+
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: pubPem });
+      const pkg = await provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" });
+      expect(pkg.packageRoot).toContain("dysflow-update-");
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      await pkg.cleanup?.();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("refuses to trust checksum entries before signature verification succeeds", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+    const { publicKey } = generateKeyPairSync("ed25519");
+    const pubPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+    try {
+      const archiveBytes = Buffer.from("FAKE_ARCHIVE");
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array(archiveBytes).slice().buffer,
+        status: 200,
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () =>
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  other-tool-v1.0.0.tar.gz\n",
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => Buffer.from("not-the-real-signature").toString("base64"),
+      });
+
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: pubPem });
+      await expect(
+        provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }),
+      ).rejects.toThrow(/signature/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does NOT fetch a signature when the caller explicitly opts into checksum-only verification", async () => {
     const originalFetch = globalThis.fetch;
     const mockFetch = vi.fn();
     globalThis.fetch = mockFetch;
@@ -194,7 +291,7 @@ describe("createGitHubReleaseUpdateProvider — signature verification (fail-clo
         ok: true,
         text: async () => `${archiveHash}  dysflow-v1.0.0.tar.gz\n`,
       });
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
       // tar is mocked to empty stdout, so extraction proceeds; the point is only TWO fetches
       // (archive + checksums), never a third for the signature.
       await provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }).catch(() => {});
@@ -363,7 +460,7 @@ describe("createGitHubReleaseUpdateProvider — preparePackage", () => {
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  other-tool-v1.0.0.tar.gz\n",
       });
 
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
       await expect(
         provider.preparePackage({ version: "1.0.0", tagName: "v1.0.0" }),
       ).rejects.toThrow("Expected hash");

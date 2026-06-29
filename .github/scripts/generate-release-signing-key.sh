@@ -14,9 +14,18 @@
 # self-updater verifies it fail-closed. See docs/security/update-trust-model.md.
 #
 # Usage: .github/scripts/generate-release-signing-key.sh [output-dir]
+#
+# Without [output-dir], the keypair is written to a new temp directory instead of
+# the repository root. This makes the safe path the default: the private key is
+# generated outside git, then installed into GitHub Secrets and deleted locally.
 set -euo pipefail
 
-OUT_DIR="${1:-.}"
+if [ "${1:-}" = "" ]; then
+  OUT_DIR="$(mktemp -d)"
+else
+  OUT_DIR="$1"
+  mkdir -p "$OUT_DIR"
+fi
 KEY="$OUT_DIR/dysflow-release.key"
 PUB="$OUT_DIR/dysflow-release.pub"
 

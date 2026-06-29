@@ -5,18 +5,19 @@ PowerShell process spawn boundary.
 
 ## Update mechanism
 
-The only supported update mechanism is downloading a GitHub Release archive (`tar.gz`) and
-verifying it against the SHA-256 checksums published in the same release.
+The only supported update mechanism is downloading a GitHub Release archive (`tar.gz`),
+verifying the Ed25519 signature over `SHA256SUMS`, and then verifying the archive against
+the signed SHA-256 checksum entry.
 
 | Property | Detail |
 |----------|--------|
 | Release source | `https://github.com/DysTelefonica/dysflow/releases/download/<tag>/dysflow-<tag>.tar.gz` |
-| Integrity check | SHA-256 of the downloaded archive is compared against the matching entry in `SHA256SUMS` (fetched from the same release). Mismatch is a hard error — the install does not proceed. |
+| Integrity check | SHA-256 of the downloaded archive is compared against the matching entry in `SHA256SUMS` only after `SHA256SUMS.sig` verifies against the embedded Ed25519 public key. Mismatch is a hard error — the install does not proceed. |
 | HTTP 404 | If the archive is not available for the requested tag, the downloader throws immediately. There is no silent fallback. |
 | No gh CLI fallback | The latest-release lookup uses only the GitHub REST API. There is no `gh` CLI fallback when the API returns non-OK. |
 | Checksum bypass | `--skip-checksum` is available for development/testing. It MUST NOT be used in production installs. |
 
-If the release archive is missing, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum is fixed or report the broken release; there is no source-build or git-clone fallback.
+If the release archive is missing, the signature asset is missing/invalid, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum/signature is fixed or report the broken release; there is no source-build or git-clone fallback.
 
 **No git-clone / source-build fallback exists.** The git-clone update path was removed in
 commit `499d5e4`. Any attempt to introduce a source-build fallback reintroduces the
@@ -39,11 +40,11 @@ detached **Ed25519 signature** over `SHA256SUMS`:
 
 | Property | Detail |
 |----------|--------|
-| Trust anchor | `RELEASE_SIGNING_PUBLIC_KEY_PEM` (SPKI PEM) embedded in `downloader.ts`. Empty by default. |
+| Trust anchor | `RELEASE_SIGNING_PUBLIC_KEY_PEM` (SPKI PEM) embedded in `downloader.ts`. This public key is safe to version. |
 | Signature asset | `SHA256SUMS.sig` (base64 detached Ed25519 signature) published in the same release. |
 | Verification | `verifyChecksumsSignature(checksums, signatureBase64, publicKeyPem)` — verifies before the hash is matched. |
-| Fail-closed | When the key is configured, a missing or invalid signature is a hard error; the update aborts. |
-| Disabled state | While the key is empty, verification is skipped and the model is checksum-only (unchanged behavior). |
+| Fail-closed | A missing signature, invalid signature, or invalid configured public key is a hard error; the update aborts before checksum entries are trusted. |
+| Checksum-only escape hatch | Tests and development-only callers may inject an empty signing key or use the explicit insecure checksum bypass. Production updates use the embedded public key. |
 
 **To enable release signing (maintainer action required):**
 
@@ -51,21 +52,26 @@ detached **Ed25519 signature** over `SHA256SUMS`:
    ```
    .github/scripts/generate-release-signing-key.sh
    ```
-   This writes `dysflow-release.key` (private, keep offline) and `dysflow-release.pub`
-   (public, SPKI PEM), and self-verifies the pair.
+   By default this writes `dysflow-release.key` (private, keep offline) and
+   `dysflow-release.pub` (public, SPKI PEM) to a new temporary directory, not to
+   the repository. It self-verifies the pair before printing next steps. You may
+   pass an explicit output directory. Do not commit the private key.
 2. Store the private key as the GitHub Actions secret `RELEASE_SIGNING_KEY`:
    ```
    gh secret set RELEASE_SIGNING_KEY < dysflow-release.key
    ```
-   The release workflow (`.github/workflows/release.yml`) already has a **Sign checksums
-   (Ed25519)** step that runs only when this secret is present; it signs `SHA256SUMS`,
-   self-verifies the signature, and publishes `SHA256SUMS.sig`.
+   The release workflow (`.github/workflows/release.yml`) requires this secret before
+   publishing; it signs `SHA256SUMS`, self-verifies the signature, and publishes
+   `SHA256SUMS.sig`.
 3. Paste the contents of `dysflow-release.pub` into `RELEASE_SIGNING_PUBLIC_KEY_PEM`
-   (`src/cli/commands/install/downloader.ts`), commit, and cut a release.
+   (`src/cli/commands/install/downloader.ts`), commit, and cut a release. The public
+   key may be committed; the private key must only live in GitHub Secrets / offline
+   operator storage.
 
-Until step 3 is done the embedded key is empty and the gate is inert by design. Steps 2 and
-3 must land together for the first signed release: the secret enables signing, the embedded
-public key enables verification. Then delete the local private key copy.
+The current repository key was generated specifically for issue #572, and the matching
+private key was installed as the `RELEASE_SIGNING_KEY` GitHub Actions secret. If the secret
+is ever rotated, update the embedded public key in the same change. Then delete any local
+private key copy.
 
 ## Authentication for GitHub API requests
 

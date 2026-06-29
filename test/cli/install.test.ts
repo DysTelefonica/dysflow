@@ -1375,7 +1375,7 @@ describe("checksum verification during update", () => {
         text: async () => `${expectedHash}  dysflow-v1.2.3.tar.gz\n`,
       });
 
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
       const prep = await provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" });
 
       expect(prep.packageRoot).toBeDefined();
@@ -1407,7 +1407,7 @@ describe("checksum verification during update", () => {
         text: async () => `${badHash}  dysflow-v1.2.3.tar.gz\n`,
       });
 
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
 
       await expect(
         provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
@@ -1429,7 +1429,7 @@ describe("checksum verification during update", () => {
         status: 500,
       });
 
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
       await expect(
         provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
       ).rejects.toThrow("HTTP 500");
@@ -1514,7 +1514,7 @@ describe("checksum verification during update", () => {
         text: async () => `${badHash}  dysflow-v1.2.3.tar.gz\n`,
       });
 
-      const provider = createGitHubReleaseUpdateProvider();
+      const provider = createGitHubReleaseUpdateProvider({ signingPublicKeyPem: "" });
       await expect(
         provider.preparePackage({ version: "1.2.3", tagName: "v1.2.3" }),
       ).rejects.toThrow("Checksum mismatch");

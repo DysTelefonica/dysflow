@@ -47,13 +47,18 @@ jobs:
       - name: Generate checksums
         run: sha256sum dysflow-*.tar.gz > SHA256SUMS
 
-      # Authenticity: when RELEASE_SIGNING_KEY is configured, sign SHA256SUMS with the
-      # Ed25519 release key and publish a detached base64 signature (SHA256SUMS.sig). The
-      # self-updater verifies it fail-closed against RELEASE_SIGNING_PUBLIC_KEY_PEM. When no
-      # key is configured the step is skipped and the release is checksum-only (unchanged).
+      - name: Require release signing key
+        if: ${{ env.HAS_SIGNING_KEY != 'true' }}
+        run: |
+          echo "RELEASE_SIGNING_KEY is required to publish signed Dysflow releases." >&2
+          echo "Generate a keypair with .github/scripts/generate-release-signing-key.sh and store the private key as the GitHub Actions secret." >&2
+          exit 1
+
+      # Authenticity: sign SHA256SUMS with the Ed25519 release key and publish a
+      # detached base64 signature (SHA256SUMS.sig). The self-updater verifies it
+      # fail-closed against RELEASE_SIGNING_PUBLIC_KEY_PEM before trusting checksums.
       # See docs/security/update-trust-model.md.
       - name: Sign checksums (Ed25519)
-        if: ${{ env.HAS_SIGNING_KEY == 'true' }}
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
@@ -78,7 +83,7 @@ jobs:
             dysflow-*.tar.gz
             SHA256SUMS
             SHA256SUMS.sig
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
         env:

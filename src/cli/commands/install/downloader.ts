@@ -14,20 +14,14 @@ const FETCH_TIMEOUT_MS = 30_000;
  * signature published alongside a release. This is the supply-chain trust anchor that
  * raises the update model from "integrity vs transport" to "authenticity vs publisher".
  *
- * EMPTY until the maintainer enables release signing:
- *   1. Generate a keypair (kept offline / in a release secret):
- *        openssl genpkey -algorithm ed25519 -out dysflow-release.key
- *        openssl pkey -in dysflow-release.key -pubout -out dysflow-release.pub
- *   2. Sign SHA256SUMS in the release pipeline and publish SHA256SUMS.sig (base64):
- *        openssl pkeyutl -sign -inkey dysflow-release.key -rawin -in SHA256SUMS \
- *          | base64 -w0 > SHA256SUMS.sig
- *   3. Paste the PEM public key here.
- *
- * While empty, signature verification is skipped and the model is checksum-only
- * (unchanged behavior). Once set, a missing or invalid signature is a hard failure.
+ * The matching private key is stored only as the GitHub Actions secret
+ * `RELEASE_SIGNING_KEY`. It must never be committed. A missing or invalid
+ * `SHA256SUMS.sig` is a hard failure before checksum entries are trusted.
  * See docs/security/update-trust-model.md.
  */
-const RELEASE_SIGNING_PUBLIC_KEY_PEM = "";
+export const RELEASE_SIGNING_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAG2eAN4jw+x3t90a3ct/spwyMkc3q59M9AvBGtylLO/U=
+-----END PUBLIC KEY-----`;
 
 export type ReleaseInfo = {
   version: string;

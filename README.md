@@ -758,9 +758,9 @@ Use `--force` to reinstall the latest release even when versions match:
 dysflow update --force
 ```
 
-The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies its integrity against the release's SHA-256 checksum (and optionally verifies authenticity via an Ed25519 signature), and extracts it. There is no source-build or git-clone fallback, protecting the update path from supply-chain risks.
+The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it. There is no source-build or git-clone fallback, protecting the update path from supply-chain risks.
 
-If the release asset is missing, the SHA-256 checksum does not match, or signature verification fails when signing is enabled, the update aborts. Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
+If the release asset is missing, the signature is missing/invalid, or the SHA-256 checksum does not match, the update aborts. Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
 
 `dysflow update` uses the same runtime directory resolution as install:
 
