@@ -1,4 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -8,12 +9,17 @@ import {
 import type { FormIR } from "../../core/models/form-ir.js";
 import { compareForms, type FormDriftReport } from "../../core/services/form-ir-compare-service.js";
 import {
+  addControl,
   collectControls,
   collectFormEvents,
+  FormMutationError,
+  moveControl,
   parseFormTxt,
+  renameControl,
 } from "../../core/services/form-ir-service.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
@@ -27,6 +33,15 @@ const FORMS_MAPPINGS = {
       backendPath: stringValue(input.backendPath),
       erdPath: stringValue(input.erdPath),
     }),
+  ),
+  import_modules_gate: mapping(
+    "Import",
+    true,
+    (input) =>
+      Array.isArray(input.moduleNames)
+        ? input.moduleNames.filter((value): value is string => typeof value === "string")
+        : [],
+    (input) => ({ importMode: stringValue(input.importMode) }),
   ),
 };
 
@@ -54,12 +69,36 @@ const nodeFormFileSystem: FormFileSystemPort = {
  * stay consistent across both tools.
  */
 function deriveFormName(sourcePath: string): string {
-  const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
-  return basename
+  const fileName = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
+  return fileName
     .replace(/^Form_/, "")
     .replace(/^Report_/, "")
     .replace(/\.form\.txt$/i, "")
     .replace(/\.report\.txt$/i, "");
+}
+
+type FormsExecutionTarget = {
+  destinationRoot: string;
+  projectRoot?: string;
+};
+
+type ManagedFormSource = {
+  sourcePath: string;
+  destinationRoot: string;
+  moduleName: string;
+};
+
+function hasManagedFormExtension(sourcePath: string): boolean {
+  return /\.form\.txt$/i.test(sourcePath) || /\.report\.txt$/i.test(sourcePath);
+}
+
+function isPathInside(childPath: string, parentPath: string): boolean {
+  const rel = relative(resolve(parentPath), resolve(childPath));
+  return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function normalizePathForDetails(path: string): string {
+  return resolve(path);
 }
 
 export interface VbaFormsOrchestrator {
@@ -107,7 +146,10 @@ export class VbaFormsAdapter {
       toolName === "harvest_form_catalog" ||
       toolName === "inspect_form" ||
       toolName === "compare_form" ||
-      toolName === "lint_form_code"
+      toolName === "lint_form_code" ||
+      toolName === "dysflow_form_add_control" ||
+      toolName === "dysflow_form_move_control" ||
+      toolName === "dysflow_form_rename_control"
     );
   }
 
@@ -122,6 +164,13 @@ export class VbaFormsAdapter {
     if (toolName === "inspect_form") return this.inspectForm(params);
     if (toolName === "compare_form") return this.compareForm(params);
     if (toolName === "lint_form_code") return this.lintFormCode(params);
+    if (
+      toolName === "dysflow_form_add_control" ||
+      toolName === "dysflow_form_move_control" ||
+      toolName === "dysflow_form_rename_control"
+    ) {
+      return this.mutateForm(toolName, params);
+    }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
     }
@@ -307,4 +356,234 @@ export class VbaFormsAdapter {
       strict: params.strict === true,
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // dysflow_form_* — source mutation with import_modules LoadFromText gate
+  // ---------------------------------------------------------------------------
+
+  private async resolveManagedMutationSource(
+    toolName: string,
+    params: Record<string, unknown>,
+    rawSourcePath: string,
+  ): Promise<OperationResult<ManagedFormSource>> {
+    if (!hasManagedFormExtension(rawSourcePath)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `${toolName} requires sourcePath to end with .form.txt or .report.txt.`,
+        ),
+      );
+    }
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target as OperationResult<ManagedFormSource>;
+    const targetData = target.data as FormsExecutionTarget;
+    const strict = this.orchestrator.validateStrictContext(params, targetData);
+    if (!strict.ok) return strict as OperationResult<ManagedFormSource>;
+
+    const destinationRoot = normalizePathForDetails(targetData.destinationRoot);
+    const projectRoot =
+      targetData.projectRoot !== undefined
+        ? normalizePathForDetails(targetData.projectRoot)
+        : undefined;
+    const sourcePath = normalizePathForDetails(
+      isAbsolute(rawSourcePath) ? rawSourcePath : resolve(destinationRoot, rawSourcePath),
+    );
+
+    if (isWithinRuntime(sourcePath, this.orchestrator.env ?? process.env)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "Refusing to mutate a form/report source inside the dysflow production runtime.",
+        ),
+      );
+    }
+    if (isWithinRuntime(destinationRoot, this.orchestrator.env ?? process.env)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "Refusing to import form/report source from a destinationRoot inside the dysflow production runtime.",
+        ),
+      );
+    }
+
+    if (!isPathInside(sourcePath, destinationRoot)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `sourcePath must be inside the resolved destinationRoot used by import_modules. sourcePath=${sourcePath}; destinationRoot=${destinationRoot}.`,
+        ),
+      );
+    }
+    if (projectRoot !== undefined && !isPathInside(sourcePath, projectRoot)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `sourcePath must be inside the resolved projectRoot. sourcePath=${sourcePath}; projectRoot=${projectRoot}.`,
+        ),
+      );
+    }
+
+    return successResult({
+      sourcePath,
+      destinationRoot,
+      moduleName: deriveFormName(sourcePath),
+    });
+  }
+
+  private async mutateForm(
+    toolName:
+      | "dysflow_form_add_control"
+      | "dysflow_form_move_control"
+      | "dysflow_form_rename_control",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+    if (!sourcePath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          `${toolName} requires sourcePath (path to the .form.txt file).`,
+        ),
+      );
+    }
+
+    const source = await this.resolveManagedMutationSource(toolName, params, sourcePath);
+    if (!source.ok) return source;
+
+    let originalSource: string;
+    try {
+      originalSource = await this.fileSystem.readFile(source.data.sourcePath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    let ir: FormIR;
+    try {
+      ir = parseFormTxt(originalSource, { name: source.data.moduleName });
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_PARSE_ERROR",
+          `Failed to parse "${source.data.sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    try {
+      const mutation =
+        toolName === "dysflow_form_add_control"
+          ? addControl(ir, {
+              targetSectionName: stringValue(params.targetSectionName),
+              control: {
+                name: stringValue(params.controlName) ?? stringValue(params.name) ?? "",
+                type: stringValue(params.controlType) ?? stringValue(params.type) ?? "",
+                properties: readProperties(params.properties),
+              },
+            })
+          : toolName === "dysflow_form_move_control"
+            ? moveControl(ir, {
+                controlName: stringValue(params.controlName) ?? "",
+                left: numberValue(params.left),
+                top: numberValue(params.top),
+              })
+            : renameControl(ir, {
+                controlName: stringValue(params.controlName) ?? "",
+                newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
+              });
+
+      const apply = params.apply === true || params.dryRun === false;
+      if (!apply) {
+        return successResult({
+          mode: "dry-run",
+          sourcePath: source.data.sourcePath,
+          source: mutation.source,
+          changedControlName: mutation.changedControlName,
+          preservedKeys: mutation.preservedKeys,
+          importGate: "not-run",
+        });
+      }
+
+      try {
+        await this.fileSystem.writeFile(source.data.sourcePath, mutation.source, "utf8");
+      } catch (err) {
+        return failureResult(
+          createDysflowError(
+            "FORM_WRITE_FAILED",
+            `Cannot write mutated form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
+      }
+
+      const importParams = {
+        ...params,
+        sourcePath: source.data.sourcePath,
+        destinationRoot: source.data.destinationRoot,
+        moduleNames: [source.data.moduleName],
+        importMode: "Auto",
+        apply: true,
+        dryRun: false,
+      };
+      const importResult = await this.orchestrator.executeMappedTool(
+        "import_modules",
+        importParams,
+        FORMS_MAPPINGS.import_modules_gate,
+      );
+      if (!importResult.ok) {
+        await Promise.resolve(
+          this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
+        ).catch(() => undefined);
+        return failureResult(
+          createDysflowError(
+            "FORM_IMPORT_GATE_FAILED",
+            `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
+            { details: { cause: importResult.error } },
+          ),
+        );
+      }
+
+      return successResult({
+        mode: "apply",
+        sourcePath: source.data.sourcePath,
+        changedControlName: mutation.changedControlName,
+        preservedKeys: mutation.preservedKeys,
+        importGate: "passed",
+        importResult: importResult.data,
+      });
+    } catch (err) {
+      if (err instanceof FormMutationError) {
+        return failureResult(createDysflowError(err.code, err.message));
+      }
+      return failureResult(
+        createDysflowError(
+          "FORM_MUTATION_INVALID",
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
+    }
+  }
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readProperties(value: unknown): Record<string, string | number | boolean> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, propertyValue] of Object.entries(value)) {
+    if (
+      typeof propertyValue === "string" ||
+      typeof propertyValue === "number" ||
+      typeof propertyValue === "boolean"
+    ) {
+      out[key] = propertyValue;
+    }
+  }
+  return out;
 }

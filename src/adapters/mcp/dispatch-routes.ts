@@ -49,6 +49,9 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   // .accdb, spawns no Access process, and writes nothing. Mutations are
   // explicitly false so the write-gate never fires for this tool.
   lint_form_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  dysflow_form_add_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  dysflow_form_move_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  dysflow_form_rename_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // query maintenance (9)

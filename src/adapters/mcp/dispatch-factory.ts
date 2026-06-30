@@ -40,6 +40,10 @@ export function createDispatchTool(
   // declared on the route (`mutatesBinary`), not duplicated here (#405).
   const isBinaryWrite = route.kind === "vba-sync" && route.mutatesBinary;
   const isFilesystemWrite = route.kind === "vba-sync" && route.mutatesFilesystem;
+  const isDryRunCapableBinaryWrite =
+    name === "dysflow_form_add_control" ||
+    name === "dysflow_form_move_control" ||
+    name === "dysflow_form_rename_control";
 
   const isWriteGated =
     route.kind === "query-write-fixture" ||
@@ -71,21 +75,25 @@ export function createDispatchTool(
           );
         }
       }
-      const isDryRun = isBinaryWrite
-        ? false
-        : isFilesystemWrite
-          ? // DELTA-007 — catalog_add_control defaults to dry-run at the service
-            // level (same as generateForm), so the dispatch must always evaluate
-            // resolveIsDryRun for catalog_add_control (regardless of `hasOwn`
-            // — service defaults dryRun to true when both flags are absent).
-            // generate_form preserves the legacy `hasOwn` gate because the
-            // service-level default there is different.
-            name === "catalog_add_control"
-            ? resolveIsDryRun(input)
-            : name === "generate_form" && hasOwn(input, "dryRun")
+      const isDryRun =
+        isBinaryWrite && !isDryRunCapableBinaryWrite
+          ? false
+          : isDryRunCapableBinaryWrite || isFilesystemWrite
+            ? // DELTA-007 — catalog_add_control defaults to dry-run at the service
+              // level (same as generateForm), so the dispatch must always evaluate
+              // resolveIsDryRun for catalog_add_control (regardless of `hasOwn`
+              // — service defaults dryRun to true when both flags are absent).
+              // generate_form preserves the legacy `hasOwn` gate because the
+              // service-level default there is different.
+              name === "catalog_add_control" ||
+              name === "dysflow_form_add_control" ||
+              name === "dysflow_form_move_control" ||
+              name === "dysflow_form_rename_control"
               ? resolveIsDryRun(input)
-              : false
-          : resolveIsDryRun(input);
+              : name === "generate_form" && hasOwn(input, "dryRun")
+                ? resolveIsDryRun(input)
+                : false
+            : resolveIsDryRun(input);
       if (
         isWriteGated &&
         !isDryRun &&

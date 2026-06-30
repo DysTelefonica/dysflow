@@ -56,3 +56,32 @@ export type FormIR = {
   root: FormNode;
   codeBehind: string | null;
 };
+
+export type FormControlMutationSpec = {
+  name: string;
+  type: string;
+  properties?: Record<string, string | number | boolean>;
+};
+
+export type AddControlInput = {
+  targetSectionName?: string;
+  control: FormControlMutationSpec;
+};
+
+export type MoveControlInput = {
+  controlName: string;
+  left?: number;
+  top?: number;
+};
+
+export type RenameControlInput = {
+  controlName: string;
+  newName: string;
+};
+
+export type FormMutationResult = {
+  ir: FormIR;
+  source: string;
+  changedControlName: string;
+  preservedKeys: string[];
+};

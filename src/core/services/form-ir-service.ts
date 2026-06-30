@@ -2,11 +2,15 @@
 // No I/O. All functions are synchronous and deterministic.
 
 import type {
+  AddControlInput,
   BlobEntry,
   EmptyLineEntry,
   FormIR,
+  FormMutationResult,
   FormNode,
+  MoveControlInput,
   PropertyEntry,
+  RenameControlInput,
   ScalarEntry,
 } from "../models/form-ir.js";
 
@@ -22,6 +26,22 @@ export class FormParseError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "FormParseError";
+  }
+}
+
+export class FormMutationError extends Error {
+  constructor(
+    readonly code:
+      | "FORM_DUPLICATE_CONTROL"
+      | "FORM_CONTROL_NOT_FOUND"
+      | "FORM_SECTION_NOT_FOUND"
+      | "FORM_MUTATION_INVALID"
+      | "FORM_METADATA_LOSS"
+      | "FORM_CONTROL_HAS_EVENT_BINDING",
+    message: string,
+  ) {
+    super(message);
+    this.name = "FormMutationError";
   }
 }
 
@@ -395,4 +415,241 @@ export function serializeFormTxt(ir: FormIR): string {
     out.push(...ir.codeBehind.split("\n"));
   }
   return out.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Mutation primitives
+// ---------------------------------------------------------------------------
+
+const PRESERVED_METADATA_KEYS = ["Checksum", "Format", "PrtDevMode"] as const;
+
+function cloneEntry(entry: PropertyEntry): PropertyEntry {
+  if (entry.kind === "empty") return { kind: "empty" };
+  if (entry.kind === "blob") return { kind: "blob", key: entry.key, lines: [...entry.lines] };
+  return { kind: "scalar", key: entry.key, value: entry.value };
+}
+
+function cloneNode(node: FormNode): FormNode {
+  return {
+    blockType: node.blockType,
+    entries: node.entries.map(cloneEntry),
+    children: node.children.map(cloneNode),
+  };
+}
+
+function cloneIr(ir: FormIR): FormIR {
+  return {
+    name: ir.name,
+    kind: ir.kind,
+    preamble: ir.preamble.map(cloneEntry),
+    root: cloneNode(ir.root),
+    codeBehind: ir.codeBehind,
+  };
+}
+
+function unquoteScalar(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
+}
+
+function quoteName(name: string): string {
+  return `"${name}"`;
+}
+
+function normalizeMutationValue(value: string | number | boolean): string {
+  if (typeof value === "boolean") return value ? " NotDefault" : "0";
+  return String(value);
+}
+
+function findNameEntry(node: FormNode): ScalarEntry | undefined {
+  return node.entries.find(
+    (entry): entry is ScalarEntry => entry.kind === "scalar" && entry.key === "Name",
+  );
+}
+
+function hasControlNamed(node: FormNode, name: string): boolean {
+  const nameEntry = findNameEntry(node);
+  if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === name) return true;
+  return node.children.some((child) => hasControlNamed(child, name));
+}
+
+function findControlNode(node: FormNode, name: string): FormNode | undefined {
+  const nameEntry = findNameEntry(node);
+  if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === name) return node;
+  for (const child of node.children) {
+    const found = findControlNode(child, name);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function hasEventProcedureBinding(node: FormNode): boolean {
+  return node.entries.some(
+    (entry) => entry.kind === "scalar" && entry.value.includes("[Event Procedure]"),
+  );
+}
+
+function findTargetContainer(node: FormNode, targetSectionName?: string): FormNode | undefined {
+  if (targetSectionName === undefined) {
+    return node.children.find((child) => child.blockType === "") ?? node;
+  }
+  const nameEntry = findNameEntry(node);
+  if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === targetSectionName) return node;
+  for (const child of node.children) {
+    const found = findTargetContainer(child, targetSectionName);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function upsertScalar(node: FormNode, key: string, value: string): void {
+  const entry = node.entries.find(
+    (candidate): candidate is ScalarEntry => candidate.kind === "scalar" && candidate.key === key,
+  );
+  if (entry !== undefined) {
+    entry.value = value;
+    return;
+  }
+  node.entries.push({ kind: "scalar", key, value });
+}
+
+function metadataSnapshot(ir: FormIR): string[] {
+  const out: string[] = [];
+  const visitEntry = (entry: PropertyEntry): void => {
+    if (entry.kind === "empty") return;
+    if (!PRESERVED_METADATA_KEYS.some((key) => entry.key === key || entry.key.startsWith(key))) {
+      return;
+    }
+    if (entry.kind === "blob") out.push(`${entry.key}=Begin\n${entry.lines.join("\n")}\nEnd`);
+    else out.push(`${entry.key}=${entry.value}`);
+  };
+  const visitNode = (node: FormNode): void => {
+    node.entries.forEach(visitEntry);
+    node.children.forEach(visitNode);
+  };
+  ir.preamble.forEach(visitEntry);
+  visitNode(ir.root);
+  return out;
+}
+
+function preservedKeys(ir: FormIR): string[] {
+  const keys = new Set<string>();
+  const visitEntry = (entry: PropertyEntry): void => {
+    if (entry.kind === "empty") return;
+    for (const key of PRESERVED_METADATA_KEYS) {
+      if (entry.key === key || entry.key.startsWith(key)) keys.add(key);
+    }
+  };
+  const visitNode = (node: FormNode): void => {
+    node.entries.forEach(visitEntry);
+    node.children.forEach(visitNode);
+  };
+  ir.preamble.forEach(visitEntry);
+  visitNode(ir.root);
+  return [...keys].sort();
+}
+
+function assertMetadataPreserved(before: FormIR, after: FormIR): void {
+  const beforeSnapshot = metadataSnapshot(before);
+  const afterSnapshot = metadataSnapshot(after);
+  if (JSON.stringify(beforeSnapshot) !== JSON.stringify(afterSnapshot)) {
+    throw new FormMutationError(
+      "FORM_METADATA_LOSS",
+      "Form mutation would lose or rewrite opaque Access metadata.",
+    );
+  }
+}
+
+function mutationResult(
+  before: FormIR,
+  after: FormIR,
+  changedControlName: string,
+): FormMutationResult {
+  assertMetadataPreserved(before, after);
+  return {
+    ir: after,
+    source: serializeFormTxt(after),
+    changedControlName,
+    preservedKeys: preservedKeys(after),
+  };
+}
+
+export function addControl(ir: FormIR, input: AddControlInput): FormMutationResult {
+  const name = input.control.name?.trim();
+  const type = input.control.type?.trim();
+  if (!name || !type) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "addControl requires control.name and control.type.",
+    );
+  }
+  if (hasControlNamed(ir.root, name)) {
+    throw new FormMutationError("FORM_DUPLICATE_CONTROL", `Control "${name}" already exists.`);
+  }
+
+  const next = cloneIr(ir);
+  const target = findTargetContainer(next.root, input.targetSectionName);
+  if (target === undefined) {
+    throw new FormMutationError(
+      "FORM_SECTION_NOT_FOUND",
+      `Target section "${input.targetSectionName ?? ""}" was not found.`,
+    );
+  }
+
+  const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: quoteName(name) }];
+  for (const [key, value] of Object.entries(input.control.properties ?? {})) {
+    if (key === "Name") continue;
+    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value) });
+  }
+  target.children.push({ blockType: type, entries, children: [] });
+  return mutationResult(ir, next, name);
+}
+
+export function moveControl(ir: FormIR, input: MoveControlInput): FormMutationResult {
+  if (input.left === undefined && input.top === undefined) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "moveControl requires at least one of left or top.",
+    );
+  }
+  const next = cloneIr(ir);
+  const control = findControlNode(next.root, input.controlName);
+  if (control === undefined) {
+    throw new FormMutationError(
+      "FORM_CONTROL_NOT_FOUND",
+      `Control "${input.controlName}" was not found.`,
+    );
+  }
+  if (input.left !== undefined) upsertScalar(control, "Left", String(input.left));
+  if (input.top !== undefined) upsertScalar(control, "Top", String(input.top));
+  return mutationResult(ir, next, input.controlName);
+}
+
+export function renameControl(ir: FormIR, input: RenameControlInput): FormMutationResult {
+  const newName = input.newName.trim();
+  if (!input.controlName.trim() || !newName) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "renameControl requires controlName and newName.",
+    );
+  }
+  if (hasControlNamed(ir.root, newName)) {
+    throw new FormMutationError("FORM_DUPLICATE_CONTROL", `Control "${newName}" already exists.`);
+  }
+  const next = cloneIr(ir);
+  const control = findControlNode(next.root, input.controlName);
+  if (control === undefined) {
+    throw new FormMutationError(
+      "FORM_CONTROL_NOT_FOUND",
+      `Control "${input.controlName}" was not found.`,
+    );
+  }
+  if (hasEventProcedureBinding(control)) {
+    throw new FormMutationError(
+      "FORM_CONTROL_HAS_EVENT_BINDING",
+      `Control "${input.controlName}" has [Event Procedure] bindings. Rename is refused because Access event procedure names are control-name convention-bound.`,
+    );
+  }
+  upsertScalar(control, "Name", quoteName(newName));
+  return mutationResult(ir, next, newName);
 }

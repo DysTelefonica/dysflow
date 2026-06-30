@@ -52,7 +52,15 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
       .filter(([, route]) => route.kind === "vba-sync" && route.mutatesFilesystem)
       .map(([name]) => name);
 
-    expect([...filesystemWriters].sort()).toEqual(["catalog_add_control", "generate_form"].sort());
+    expect([...filesystemWriters].sort()).toEqual(
+      [
+        "catalog_add_control",
+        "dysflow_form_add_control",
+        "dysflow_form_move_control",
+        "dysflow_form_rename_control",
+        "generate_form",
+      ].sort(),
+    );
   });
 
   it("blocks generate_form when writes are disabled", async () => {
@@ -173,6 +181,24 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
 
   // Minimal valid input per tool; only tools with `required` fields need an override.
   const minimalInput: Record<string, Record<string, unknown>> = {
+    dysflow_form_add_control: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmd",
+      controlType: "CommandButton",
+      apply: true,
+    },
+    dysflow_form_move_control: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmd",
+      left: 0,
+      apply: true,
+    },
+    dysflow_form_rename_control: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmd",
+      newName: "cmdSave",
+      apply: true,
+    },
     vba_inline_execution: { code: "Sub T()\r\nEnd Sub" },
   };
 
@@ -183,6 +209,9 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "delete_module",
         "import_all",
         "import_modules",
+        "dysflow_form_add_control",
+        "dysflow_form_move_control",
+        "dysflow_form_rename_control",
         "vba_inline_execution",
       ].sort(),
     );

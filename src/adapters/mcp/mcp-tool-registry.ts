@@ -21,6 +21,9 @@ export const VBA_SYNC_TOOL_NAMES = [
   "inspect_form",
   "compare_form",
   "lint_form_code",
+  "dysflow_form_add_control",
+  "dysflow_form_move_control",
+  "dysflow_form_rename_control",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

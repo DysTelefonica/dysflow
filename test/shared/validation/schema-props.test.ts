@@ -63,6 +63,11 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
     expect(apply.description).toMatch(/precedence|default/i);
   });
 
+  it("allows zero-valued form coordinates", () => {
+    expect(SCHEMA_PROPS.left).toMatchObject({ type: "number", minimum: 0 });
+    expect(SCHEMA_PROPS.top).toMatchObject({ type: "number", minimum: 0 });
+  });
+
   it("contains timeoutMs with minimum constraint", () => {
     expect(SCHEMA_PROPS.timeoutMs).toEqual({
       type: "number",
@@ -167,6 +172,10 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "controlName",
       "controlType",
       "type",
+      "newName",
+      "targetSectionName",
+      "properties",
+      "left",
       "location",
       "top",
       "testsPath",

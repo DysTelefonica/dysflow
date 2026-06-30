@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**54 visible MCP tools · Windows / Node 20+**
+**57 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 54 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 57 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -695,6 +695,12 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `sourcePath`/`path` (string, left `.form.txt` file), `targetPath`/`target` (string, right `.form.txt` file)
 * **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
   - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional)
+* **`dysflow_form_add_control`**: Add one control to a version-controlled `.form.txt` through FormIR. Defaults to dry-run; `apply:true` writes the source and requires the `import_modules` LoadFromText gate to pass.
+  - Parameters: `sourcePath`, `controlName`, `controlType`, `properties` (optional), `targetSectionName` (optional), `dryRun`, `apply`
+* **`dysflow_form_move_control`**: Move one existing control by updating `Left` and/or `Top` only. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
+  - Parameters: `sourcePath`, `controlName`, `left` (optional), `top` (optional), `dryRun`, `apply`
+* **`dysflow_form_rename_control`**: Rename one existing control while preserving its type, properties, and opaque metadata. Controls with `[Event Procedure]` bindings are rejected rather than silently breaking Access event procedure names. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
+  - Parameters: `sourcePath`, `controlName`, `newName`, `dryRun`, `apply`
 
 ### MCP protocol and maintenance
 

@@ -46,6 +46,9 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "inspect_form",
   "compare_form",
   "lint_form_code",
+  "dysflow_form_add_control",
+  "dysflow_form_move_control",
+  "dysflow_form_rename_control",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -140,6 +143,12 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Compare two version-controlled .form.txt files (sourcePath/source + targetPath/target) and return a structured drift report: added/removed controls, changed properties (with oldValue/newValue), and layout-bounds changes (Left/Top/Width/Height). Each drift carries actionable:bool classified against the canonical FORM_NOISE_KEYS noise floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap). Read-only and offline — no Access, no PowerShell, no writes. Accepts 'path' as alias for sourcePath and 'target' as alias for targetPath.",
   lint_form_code:
     "Static-analyze a form/report's .cls code-behind against the parsed .form.txt, returning structured diagnostics. Read-only and offline — no Access, no PowerShell, no writes. Use BEFORE import_modules / import_all to catch: (1) Me.<Control> references whose target does not exist in the .form.txt, (2) Access ListBox .List = ... misuse (use RowSource / AddItem instead), (3) bare Function(...) statements (use Call or assign the result), (4) positional arguments after a named argument (VBA rejects them), (5) accented identifiers in executable positions (round-trip risk), (6) per-control-type property mismatches. Pass destinationRoot OR sourceRoot plus one of formName | moduleNames | nothing (full scan under forms/ + reports/). rules filters the rule set; strict elevates warnings to errors.",
+  dysflow_form_add_control:
+    "Add one control to a version-controlled .form.txt through the FormIR mutation pipeline. Defaults to dry-run and returns mutated source; apply:true writes the source file and then requires the import_modules LoadFromText gate to pass before reporting success. Write-gated.",
+  dysflow_form_move_control:
+    "Move one existing .form.txt control by updating Left and/or Top only. Defaults to dry-run and preserves control identity, event bindings, and opaque metadata; apply:true writes the source and validates through import_modules/LoadFromText. Write-gated.",
+  dysflow_form_rename_control:
+    "Rename one existing .form.txt control while preserving its type, properties, event bindings, and opaque metadata. Defaults to dry-run; apply:true writes the source and validates through import_modules/LoadFromText before success. Write-gated.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

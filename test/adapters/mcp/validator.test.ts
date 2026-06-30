@@ -134,15 +134,15 @@ describe("SCHEMA_PROPS — bounded numeric fields (#432)", () => {
     });
   });
 
-  describe("top (minimum: 1)", () => {
+  describe("top (minimum: 0)", () => {
     const schema = wrapProp(SCHEMA_PROPS.top);
 
-    it("rejects top: 0", () => {
-      expect(validateInput({ value: 0 }, schema)).toBe("value must be at least 1.");
+    it("accepts top: 0", () => {
+      expect(validateInput({ value: 0 }, schema)).toBeUndefined();
     });
 
     it("rejects top: -5", () => {
-      expect(validateInput({ value: -5 }, schema)).toBe("value must be at least 1.");
+      expect(validateInput({ value: -5 }, schema)).toBe("value must be at least 0.");
     });
 
     it("accepts top: 1", () => {

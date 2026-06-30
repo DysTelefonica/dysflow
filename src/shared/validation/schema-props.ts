@@ -221,8 +221,27 @@ export const SCHEMA_PROPS = {
   controlName: { type: "string", description: "Control name." } as JsonSchemaProperty,
   controlType: { type: "string", description: "Control type." } as JsonSchemaProperty,
   type: { type: "string", description: "Control type alias." } as JsonSchemaProperty,
+  newName: { type: "string", description: "New control name." } as JsonSchemaProperty,
+  targetSectionName: {
+    type: "string",
+    description: "Optional target section/container name for a new form control.",
+  } as JsonSchemaProperty,
+  properties: {
+    type: "object",
+    additionalProperties: true,
+    description: "Control properties to write to the form source.",
+  } as JsonSchemaProperty,
+  left: {
+    type: "number",
+    minimum: 0,
+    description: "Control Left coordinate in Access twips.",
+  } as JsonSchemaProperty,
   location: { type: "string", description: "Encoding fix location." } as JsonSchemaProperty,
-  top: { type: "number", minimum: 1, description: "Maximum returned rows." } as JsonSchemaProperty,
+  top: {
+    type: "number",
+    minimum: 0,
+    description: "Control Top coordinate in Access twips.",
+  } as JsonSchemaProperty,
   testsPath: { type: "string", description: "VBA test plan path." } as JsonSchemaProperty,
   exists_name: {
     type: "string",

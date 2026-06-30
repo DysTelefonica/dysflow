@@ -46,3 +46,4 @@ test-output-msg/
 /ARCHIVE_SUMMARY_*.md
 /AUDIT_*.md
 forms/
+bench-cache/
