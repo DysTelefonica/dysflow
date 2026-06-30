@@ -558,6 +558,91 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
         }
     }
 
+    Context "Normalize-AccessDocumentOrphanCodeBehindSection" {
+        It "inserts the marker after the root End, not after a nested control's End" {
+            # Flush-left nested layout: the inner control's `End` and the root
+            # `End` are both at column 0, so the marker MUST be placed by tracking
+            # Begin/End nesting, not by matching the first `End`.
+            $doc = @(
+                'Version =20'
+                'Begin Form'
+                'RecordSource = "qry"'
+                'Begin Label'
+                'Caption = "Hi"'
+                'End'
+                'End'
+                'Attribute VB_Name = "Form_Foo"'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $doc
+            $lines = $result -split "`r`n"
+            $markerIdx = [Array]::IndexOf($lines, 'CodeBehindForm')
+
+            $markerIdx | Should -BeGreaterThan -1 -Because "the marker must be inserted"
+            # Both layout `End` lines must precede the marker (the nested End and the root End).
+            (@($lines[0..($markerIdx - 1)] | Where-Object { $_ -eq 'End' }).Count) |
+                Should -Be 2 -Because "the marker belongs after the root End, past every nested End"
+            $lines[$markerIdx + 1] | Should -Be 'Attribute VB_Name = "Form_Foo"'
+        }
+
+        It "counts `Key = Begin` blob blocks when locating the root End" {
+            # A serialized blob (`PrtMip = Begin ... End`) opens a nesting level
+            # too; its `End` must not be mistaken for the document's root End.
+            $doc = @(
+                'Version =20'
+                'Begin Report'
+                'PrtMip = Begin'
+                '0x0100'
+                'End'
+                'End'
+                'Attribute VB_Name = "Report_Inv"'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $doc
+            $lines = $result -split "`r`n"
+            $markerIdx = [Array]::IndexOf($lines, 'CodeBehindReport')
+
+            $markerIdx | Should -BeGreaterThan -1
+            (@($lines[0..($markerIdx - 1)] | Where-Object { $_ -eq 'End' }).Count) | Should -Be 2
+            $lines[$markerIdx + 1] | Should -Be 'Attribute VB_Name = "Report_Inv"'
+        }
+
+        It "leaves a layout without code-behind unchanged" {
+            $doc = "Version =21`r`nBegin Form`r`nEnd`r`n"
+            Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $doc | Should -Be $doc
+        }
+
+        It "is a no-op when the CodeBehind marker is already present" {
+            $doc = @(
+                'Begin Form'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Foo"'
+                'Option Explicit'
+            ) -join "`r`n"
+            Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $doc | Should -Be $doc
+        }
+
+        It "falls back to the first End when Begin/End nesting is malformed" {
+            # Unbalanced: an extra `Begin` with no matching `End` means depth never
+            # returns to 0, so the function warns and falls back to the first End.
+            $doc = @(
+                'Begin Form'
+                'Begin Label'
+                'End'
+                'Attribute VB_Name = "Form_Bad"'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $doc -WarningAction SilentlyContinue
+            $result | Should -Match 'CodeBehindForm'
+        }
+    }
+
     Context "Resolve-FormCodeBehindFile" {
         It "returns the sibling .cls when a form has both .form.txt and .cls" {
             $root = Join-Path $TestDrive "src-both"

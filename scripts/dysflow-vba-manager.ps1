@@ -1060,24 +1060,58 @@ function Normalize-AccessDocumentOrphanCodeBehindSection {
     # limit parameter to keep the documented "no limit" behaviour across PS5.x/PS7.
     foreach ($line in ($normalized -split "`n")) { $lines.Add([string]$line) }
 
+    # Locate the document's ROOT End by tracking Begin/End nesting instead of
+    # matching the first `End`. Both a control block (`Begin <type>`) and a
+    # serialized blob (`<key> = Begin`) open a level; a bare `End` closes one.
+    # The marker belongs after the End that brings nesting back to 0 — relying on
+    # indentation breaks on flush-left exports, where a nested control's `End`
+    # would otherwise trigger the marker prematurely inside the layout block.
+    $depth = 0
+    $started = $false
+    $rootEndIndex = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        if (([string]$lines[$i]).Trim() -ne "End") { continue }
-        if ($lines[$i] -notmatch '^End\s*$') { continue }
-
-        $firstNonBlank = -1
-        $hasVba = $false
-        for ($j = $i + 1; $j -lt $lines.Count; $j++) {
-            if ($firstNonBlank -lt 0 -and -not [string]::IsNullOrWhiteSpace($lines[$j])) { $firstNonBlank = $j }
-            if (Test-LooksLikeVbaCodeLine -Line $lines[$j]) {
-                $hasVba = $true
+        $trimmed = ([string]$lines[$i]).Trim()
+        if ($trimmed -match '^Begin(?:\s+\w+)?$' -or $trimmed -match '^\w+\s*=\s*Begin$') {
+            $depth++
+            $started = $true
+            continue
+        }
+        if ($trimmed -eq "End") {
+            if ($depth -gt 0) { $depth-- }
+            if ($started -and $depth -eq 0) {
+                $rootEndIndex = $i
                 break
             }
         }
+    }
 
-        if ($firstNonBlank -ge 0 -and $hasVba) {
-            $lines.Insert($firstNonBlank, ("CodeBehind{0}" -f $suffix))
-            return (($lines -join "`n") -replace "`n", $newline)
+    if ($rootEndIndex -lt 0) {
+        # Malformed Begin/End nesting (it never balances back to 0). Warn and fall
+        # back to the original first-`End` heuristic so a best-effort marker is
+        # still inserted rather than silently dropping the code-behind.
+        Write-Warning "Normalize-AccessDocumentOrphanCodeBehindSection: unbalanced Begin/End nesting; falling back to first End."
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if (([string]$lines[$i]).Trim() -eq "End") { $rootEndIndex = $i; break }
         }
+        if ($rootEndIndex -lt 0) { return $DocumentText }
+    }
+
+    # Insert the marker before the first VBA-bearing line after the root End. If
+    # nothing after the root End looks like VBA, there is no orphan code-behind to
+    # mark and the document is returned untouched.
+    $firstNonBlank = -1
+    $hasVba = $false
+    for ($j = $rootEndIndex + 1; $j -lt $lines.Count; $j++) {
+        if ($firstNonBlank -lt 0 -and -not [string]::IsNullOrWhiteSpace($lines[$j])) { $firstNonBlank = $j }
+        if (Test-LooksLikeVbaCodeLine -Line $lines[$j]) {
+            $hasVba = $true
+            break
+        }
+    }
+
+    if ($firstNonBlank -ge 0 -and $hasVba) {
+        $lines.Insert($firstNonBlank, ("CodeBehind{0}" -f $suffix))
+        return (($lines -join "`n") -replace "`n", $newline)
     }
 
     return $DocumentText
@@ -1668,7 +1702,7 @@ function Resolve-FormCodeBehindFile {
 
     # A form/report is exported as TWO artifacts: the `.form.txt`/`.report.txt`
     # (layout + an embedded serialization of the code-behind) and a separate
-    # `.cls` that holds the canonical code (verify_binary compares the form's
+    # `.cls` that holds the canonical code (verify_code compares the form's
     # code through this `.cls`, not the embedded copy). When both exist, an Auto
     # import must sync the `.cls` after loading the document so the canonical code
     # wins over the possibly-stale embedded copy. Returns that `.cls` path, or
@@ -2482,7 +2516,7 @@ function Import-DocumentCodeBehind {
     # Overwrites the code module of an already-existing document (form/report)
     # component with the canonical code-behind from $SourcePath (a `.cls`). Called
     # after a form/report is loaded via LoadFromText so the `.cls` — the source of
-    # truth verify_binary compares against — wins over the `.form.txt`'s embedded
+    # truth verify_code compares against — wins over the `.form.txt`'s embedded
     # (and possibly stale) copy. Reuses the same DeleteLines + AddFromFile path
     # that importMode=Code uses for document code-behind.
     $componentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
@@ -2609,7 +2643,7 @@ function Import-VbaModule {
 
             # The document we just loaded carries an embedded copy of the
             # code-behind, but the canonical code lives in the sibling `.cls`
-            # (what verify_binary compares). Sync that `.cls` into the freshly
+            # (what verify_code compares). Sync that `.cls` into the freshly
             # loaded document module so the canonical code wins over a
             # possibly-stale embedded copy. Only Code mode skips this block (it
             # resolves the `.cls` directly and never reaches LoadFromText); the
