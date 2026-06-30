@@ -114,12 +114,14 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
+      ok: true,
     });
     await expect(
       tools[1]?.handler({ sql: "SELECT id, name FROM People", mode: "read" }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [{ id: 1, name: "Ada" }] }) }],
       isError: false,
+      ok: true,
     });
     await expect(tools[2]?.handler({ includeEnvironment: true })).resolves.toEqual({
       content: [
@@ -131,6 +133,7 @@ describe("MCP tool registration over core services", () => {
         },
       ],
       isError: false,
+      ok: true,
     });
 
     expect(vba.requests).toEqual([
@@ -421,12 +424,14 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
+      ok: false,
     });
     await expect(
       tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 }),
     ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: sql must be a string." }],
       isError: true,
+      ok: false,
     });
     await expect(
       tools
@@ -435,6 +440,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
+      ok: true,
     });
     expect(
       tools.find((tool) => tool.name === "catalog_add_control")?.inputSchema?.properties,
@@ -462,6 +468,7 @@ describe("MCP tool registration over core services", () => {
       tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "" }),
     ).resolves.toMatchObject({
       isError: true,
+      ok: false,
       content: [{ text: expect.stringContaining("procedureName") }],
     });
     await expect(
@@ -482,6 +489,7 @@ describe("MCP tool registration over core services", () => {
       tools.find((t) => t.name === "dysflow_query_execute")?.handler({ sql: "", mode: "read" }),
     ).resolves.toMatchObject({
       isError: true,
+      ok: false,
       content: [{ text: expect.stringContaining("sql") }],
     });
     await expect(
@@ -489,6 +497,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toMatchObject({ isError: true });
     await expect(tools.find((t) => t.name === "query_sql")?.handler({})).resolves.toMatchObject({
       isError: true,
+      ok: false,
       content: [{ text: expect.stringContaining("sql is required") }],
     });
     expect(query.requests).toHaveLength(0);
@@ -510,6 +519,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
       isError: true,
+      ok: false,
     });
     await expect(
       tools
@@ -523,6 +533,7 @@ describe("MCP tool registration over core services", () => {
         },
       ],
       isError: true,
+      ok: false,
     });
     await expect(
       tools
@@ -531,6 +542,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: allowTables[1] must be a string." }],
       isError: true,
+      ok: false,
     });
     await expect(
       tools
@@ -541,6 +553,7 @@ describe("MCP tool registration over core services", () => {
         { type: "text", text: "MCP_INPUT_INVALID: queryDefinitions[0].sql must be a string." },
       ],
       isError: true,
+      ok: false,
     });
 
     expect(vba.requests).toEqual([]);
@@ -565,6 +578,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
+      ok: true,
     });
 
     expect(query.requests).toEqual([
@@ -596,6 +610,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
+      ok: true,
     });
 
     expect(query.requests).toEqual([
@@ -641,20 +656,24 @@ describe("MCP tool registration over core services", () => {
     await expect(runVba?.handler({ procedureName: "Broken", argsJson: "[1," })).resolves.toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: argsJson must be valid JSON." }],
       isError: true,
+      ok: false,
     });
     await expect(runVba?.handler({ procedureName: "Blank", argsJson: "   " })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
+      ok: true,
     });
     await expect(
       runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]' }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
+      ok: true,
     });
     await expect(runVba?.handler({ procedureName: "Single", argsJson: "42" })).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
+      ok: true,
     });
 
     expect(vba.requests).toEqual([
@@ -730,6 +749,7 @@ describe("MCP tool registration over core services", () => {
             { type: "text", text: JSON.stringify({ toolName, input: { diff: true }, ok: true }) },
           ],
           isError: false,
+          ok: true,
         });
       }
     });
@@ -876,6 +896,7 @@ describe("MCP tool registration over core services", () => {
           },
         ],
         isError: false,
+        ok: true,
       });
     });
 
@@ -931,6 +952,7 @@ describe("MCP tool registration over core services", () => {
           },
         ],
         isError: false,
+        ok: true,
       });
     });
   });
@@ -959,6 +981,7 @@ describe("MCP tool registration over core services", () => {
         },
       ],
       isError: true,
+      ok: false,
     });
   });
 
@@ -981,6 +1004,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: "RUNNER_TIMEOUT: Timed out opening [PATH]" }],
       isError: true,
+      ok: false,
     });
     expect(diagnostics.requests).toEqual([{ projectId: "dysflow" }]);
   });
@@ -1004,6 +1028,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toEqual({
       content: [{ type: "text", text: "RUNNER_FAILED: PowerShell failed for [PATH]" }],
       isError: true,
+      ok: false,
     });
     expect(query.requests).toEqual([
       expect.objectContaining({ action: "list_tables", mode: "read" }),
@@ -1404,6 +1429,7 @@ describe("MCP tool registration over core services", () => {
         ?.handler({ sql: "DROP TABLE TbConfiguracion" });
       expect(result).toMatchObject({
         isError: true,
+        ok: false,
         content: [{ type: "text", text: expect.stringContaining("INVALID_READ_ONLY_QUERY") }],
       });
 
@@ -1430,6 +1456,7 @@ describe("MCP tool registration over core services", () => {
         ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "read" });
       expect(result).toMatchObject({
         isError: true,
+        ok: false,
         content: [{ type: "text", text: expect.stringContaining("INVALID_READ_ONLY_QUERY") }],
       });
 
@@ -1537,6 +1564,7 @@ describe("AccessOperationRegistry explicit injection", () => {
     expect(result).toEqual({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: accessPath is required." }],
       isError: true,
+      ok: false,
     });
     expect(cleanupRequests).toEqual([]);
   });
@@ -1696,6 +1724,7 @@ describe("AccessOperationRegistry explicit injection", () => {
         },
       ],
       isError: false,
+      ok: true,
     };
 
     expect(result).toMatchObject(expectedContent);

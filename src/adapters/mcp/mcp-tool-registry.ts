@@ -24,6 +24,8 @@ export const VBA_SYNC_TOOL_NAMES = [
   "dysflow_form_add_control",
   "dysflow_form_move_control",
   "dysflow_form_rename_control",
+  "dysflow_form_serialize",
+  "dysflow_form_deserialize",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

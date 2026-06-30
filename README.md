@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**57 visible MCP tools · Windows / Node 20+**
+**59 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 57 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 59 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -701,6 +701,10 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `sourcePath`, `controlName`, `left` (optional), `top` (optional), `dryRun`, `apply`
 * **`dysflow_form_rename_control`**: Rename one existing control while preserving its type, properties, and opaque metadata. Controls with `[Event Procedure]` bindings are rejected rather than silently breaking Access event procedure names. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
   - Parameters: `sourcePath`, `controlName`, `newName`, `dryRun`, `apply`
+* **`dysflow_form_serialize`** *(slice 3, #616)*: Read-only round-trip serializer. Parses a `.form.txt` at `sourcePath`, runs it through `parseFormTxt` → `serializeFormTxt`, and returns the serialized text with `byteEqual` + `metadataReport` (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Access is never opened. `apply` is ignored — this tool is intentionally read-only.
+  - Parameters: `sourcePath` (string, required), `formName` (string, optional; derived from filename when omitted), `dryRun`/`apply` (ignored)
+* **`dysflow_form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.
+  - Parameters: `sourcePath` (string, required), `ir` (object, required — the slice-1 FormIR), `formName` (string, optional), `dryRun`/`apply`
 
 ### MCP protocol and maintenance
 

@@ -96,6 +96,7 @@ describe("MCP/core architecture boundary", () => {
     await expect(tools.find((tool) => tool.name === "export_all")?.handler({})).resolves.toEqual({
       content: [{ type: "text", text: "TOOL_NOT_IMPLEMENTED: not implemented" }],
       isError: true,
+      ok: false,
     });
 
     expect(vbaSyncRequests).toEqual([{ toolName: "export_all", input: {} }]);

@@ -140,6 +140,36 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     }
     ```
 
+#### Round-trip Serialize a `.form.txt` (Read-only, slice 3)
+*   **Tool**: `dysflow_form_serialize`
+*   **Arguments**:
+    ```json
+    {
+      "sourcePath": "forms/Form_Customer.form.txt",
+      "formName": "Form_Customer"
+    }
+    ```
+*   **Notes**: Returns `{ serialized, byteEqual, byteDiff, metadataReport: { preservedKeys, byteDiff, opaqueCount } }`. Read-only — `apply` is ignored, the binary is never opened, and writes are off by default. Use this to verify that a form has round-trip-safe serialization before any mutation or clone attempt.
+
+#### Write a `FormIR` Back to `.form.txt` Through the LoadFromText Gate (Write-gated, slice 3)
+*   **Tool**: `dysflow_form_deserialize`
+*   **Arguments**:
+    ```json
+    {
+      "sourcePath": "forms/Form_Customer.form.txt",
+      "formName": "Form_Customer",
+      "ir": {
+        "name": "Form_Customer",
+        "kind": "Form",
+        "preamble": [],
+        "root": { "blockType": "Form", "entries": [], "children": [] },
+        "codeBehind": null
+      },
+      "dryRun": true
+    }
+    ```
+*   **Notes**: `dryRun:true` returns `{ mode: "dry-run", written: false, preview, ... }` and never writes. `apply:true` re-serializes the IR, writes the `.form.txt`, and invokes `import_modules` (the canonical `LoadFromText` gate). On gate failure the original source is restored best-effort, mirroring the slice-4 mutation pattern.
+
 ---
 
 ### 6. Cycle & Diagnostics

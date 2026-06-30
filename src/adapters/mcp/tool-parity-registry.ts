@@ -49,6 +49,8 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "dysflow_form_add_control",
   "dysflow_form_move_control",
   "dysflow_form_rename_control",
+  "dysflow_form_serialize",
+  "dysflow_form_deserialize",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -149,6 +151,10 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Move one existing .form.txt control by updating Left and/or Top only. Defaults to dry-run and preserves control identity, event bindings, and opaque metadata; apply:true writes the source and validates through import_modules/LoadFromText. Write-gated.",
   dysflow_form_rename_control:
     "Rename one existing .form.txt control while preserving its type, properties, event bindings, and opaque metadata. Defaults to dry-run; apply:true writes the source and validates through import_modules/LoadFromText before success. Write-gated.",
+  dysflow_form_serialize:
+    "Read-only round-trip serializer: parse the .form.txt at sourcePath, run it through parseFormTxt -> serializeFormTxt, and return the resulting text with byteEqual + metadataReport (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Default read-only (dry-run), no writes; apply:true is ignored on this tool.",
+  dysflow_form_deserialize:
+    "Write a FormIR to sourcePath after re-serializing it, then invoke the import_modules LoadFromText gate. Defaults to dry-run (no write, no import). apply:true writes the .form.txt and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

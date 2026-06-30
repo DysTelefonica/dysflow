@@ -29,6 +29,13 @@ export type McpTextContent = {
 export type McpToolResult = {
   content: readonly McpTextContent[];
   isError: boolean;
+  /**
+   * Mirror of `!isError` exposed for contract-style consumers (#616 slice 3).
+   * Optional for backward compatibility with literal `{ content, isError }`
+   * construction sites across the test suite; new dispatch surfaces populate it
+   * explicitly. When omitted, treat `ok = !isError`.
+   */
+  ok?: boolean;
 };
 
 export type DysflowMcpTool = {
@@ -109,12 +116,14 @@ export function translateCoreResultToMcpContent<TData>(
         },
       ],
       isError: true,
+      ok: false,
     };
   }
 
   return {
     content: [{ type: "text", text: JSON.stringify(result.data) }],
     isError: false,
+    ok: true,
   };
 }
 

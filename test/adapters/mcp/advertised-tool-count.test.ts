@@ -18,8 +18,9 @@ describe("advertised MCP tool surface", () => {
   const hidden = buildHiddenToolRegistry(tools);
   const advertised = tools.filter((tool) => !hidden.has(tool.name)).map((tool) => tool.name);
 
-  it("advertises exactly 57 non-hidden tools (matches the MCP server tools/list)", () => {
-    expect(advertised).toHaveLength(57);
+  it("advertises exactly 59 non-hidden tools (matches the MCP server tools/list)", () => {
+    // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
+    expect(advertised).toHaveLength(59);
   });
 
   it("advertises a duplicate-free set", () => {

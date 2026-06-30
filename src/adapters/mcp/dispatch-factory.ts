@@ -43,7 +43,8 @@ export function createDispatchTool(
   const isDryRunCapableBinaryWrite =
     name === "dysflow_form_add_control" ||
     name === "dysflow_form_move_control" ||
-    name === "dysflow_form_rename_control";
+    name === "dysflow_form_rename_control" ||
+    name === "dysflow_form_deserialize";
 
   const isWriteGated =
     route.kind === "query-write-fixture" ||
@@ -85,10 +86,13 @@ export function createDispatchTool(
               // — service defaults dryRun to true when both flags are absent).
               // generate_form preserves the legacy `hasOwn` gate because the
               // service-level default there is different.
+              // dysflow_form_deserialize joins the slice-4 mutation family with
+              // the same apply/dryRun semantics (#616 slice 3).
               name === "catalog_add_control" ||
               name === "dysflow_form_add_control" ||
               name === "dysflow_form_move_control" ||
-              name === "dysflow_form_rename_control"
+              name === "dysflow_form_rename_control" ||
+              name === "dysflow_form_deserialize"
               ? resolveIsDryRun(input)
               : name === "generate_form" && hasOwn(input, "dryRun")
                 ? resolveIsDryRun(input)
@@ -110,6 +114,7 @@ export function createDispatchTool(
           }
           return {
             isError: true,
+            ok: false,
             content: [
               {
                 type: "text",

@@ -19,6 +19,7 @@ export function wrapWithErrorAbsorber(
       return {
         content: [{ type: "text", text: `MCP_TOOL_ERROR: ${message}` }],
         isError: true,
+        ok: false,
       };
     }
   };

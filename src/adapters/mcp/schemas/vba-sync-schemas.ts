@@ -355,6 +355,50 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
+  dysflow_form_serialize: {
+    type: "object",
+    required: ["sourcePath"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      formName: {
+        type: "string",
+        description:
+          "Optional form name (e.g. 'Form_Customer'). Derived from the sourcePath filename when omitted; reported back in the response.",
+      },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  dysflow_form_deserialize: {
+    type: "object",
+    required: ["sourcePath", "ir"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      formName: {
+        type: "string",
+        description: "Optional form name; derived from the sourcePath filename when omitted.",
+      },
+      ir: {
+        type: "object",
+        description:
+          "FormIR (parsed by parseFormTxt). Pass an existing FormIR; the tool re-serializes it with serializeFormTxt and writes the result. The IR contract is the slice-1 FormIR model (name/kind/preamble/root/codeBehind).",
+      },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,

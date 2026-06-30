@@ -126,6 +126,7 @@ export async function handleMcpAccessCleanup(
         },
       ],
       isError: true,
+      ok: false,
     };
   }
   const request = buildRequest(input);
@@ -183,6 +184,7 @@ export async function handleMcpAccessOrphanCleanup(
         },
       ],
       isError: true,
+      ok: false,
     };
   }
 

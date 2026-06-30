@@ -58,6 +58,7 @@ describe("wrapWithErrorAbsorber", () => {
     const successResult = {
       content: [{ type: "text" as const, text: "all good" }],
       isError: false,
+      ok: true,
     };
     const handler = wrapWithErrorAbsorber(async () => successResult);
 
@@ -70,6 +71,7 @@ describe("wrapWithErrorAbsorber", () => {
     const errorResult = {
       content: [{ type: "text" as const, text: "MCP_TOOL_ERROR: already an error" }],
       isError: true,
+      ok: false,
     };
     const handler = wrapWithErrorAbsorber(async () => errorResult);
 
@@ -89,6 +91,7 @@ describe("wrapWithSanitizer", () => {
     const handler = wrapWithSanitizer(async () => ({
       content: [{ type: "text" as const, text: `failed at ${windowsPath}` }],
       isError: true,
+      ok: false,
     }));
 
     const result = await handler(undefined, undefined);
@@ -103,6 +106,7 @@ describe("wrapWithSanitizer", () => {
     const handler = wrapWithSanitizer(async () => ({
       content: [{ type: "text" as const, text: `open failed: ${uncPath}` }],
       isError: true,
+      ok: false,
     }));
 
     const result = await handler(undefined, undefined);
@@ -116,6 +120,7 @@ describe("wrapWithSanitizer", () => {
     const successResult = {
       content: [{ type: "text" as const, text: "C:\\some\\path.accdb all good" }],
       isError: false,
+      ok: true,
     };
     const handler = wrapWithSanitizer(async () => successResult);
 
@@ -129,6 +134,7 @@ describe("wrapWithSanitizer", () => {
     const noPathResult = {
       content: [{ type: "text" as const, text: "generic failure message" }],
       isError: true,
+      ok: false,
     };
     const handler = wrapWithSanitizer(async () => noPathResult);
 

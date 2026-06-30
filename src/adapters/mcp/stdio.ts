@@ -199,6 +199,7 @@ export async function startWithSdkServer(
       return {
         content: [{ type: "text" as const, text: `MCP_TOOL_ERROR: Tool not found: ${name}` }],
         isError: true,
+        ok: false,
       };
     }
 

@@ -42,11 +42,12 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 51-tool inventory", () => {
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(27);
+  it("declares the complete 53-tool inventory", () => {
+    // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(29);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(51);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(51);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(53);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(53);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -56,11 +57,13 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_add_control");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_move_control");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_rename_control");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_serialize");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_deserialize");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(51);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(51);
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(53);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(53);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
@@ -128,6 +131,7 @@ describe("Dysflow MCP tool parity inventory", () => {
 
     await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({
       isError: true,
+      ok: false,
       content: [
         {
           type: "text",
@@ -166,12 +170,14 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "export_modules" }) }],
     });
     await expect(
       tools.find((tool) => tool.name === "list_tables")?.handler({ backendPath: "C:/db.accdb" }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -180,6 +186,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ sql: "UPDATE People SET Name='Ada'", apply: false }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -188,6 +195,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ path: "fixtures.sql", apply: true }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -196,6 +204,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ tableName: "People", dryRun: false }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -204,6 +213,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ moduleNames: ["Form_Main"], diff: true }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_code" }) }],
     });
 
@@ -395,6 +405,7 @@ describe("Dysflow MCP tool parity inventory", () => {
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -403,6 +414,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ backendPath: "C:/backend.accdb" }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
     await expect(
@@ -411,6 +423,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         ?.handler({ databasePath: "C:/db.accdb", dryRun: true }),
     ).resolves.toEqual({
       isError: false,
+      ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
     });
 

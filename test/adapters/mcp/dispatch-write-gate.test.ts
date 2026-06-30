@@ -58,6 +58,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
         "dysflow_form_add_control",
         "dysflow_form_move_control",
         "dysflow_form_rename_control",
+        "dysflow_form_deserialize",
         "generate_form",
       ].sort(),
     );
@@ -199,6 +200,17 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       newName: "cmdSave",
       apply: true,
     },
+    dysflow_form_deserialize: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      ir: {
+        name: "Form_Customer",
+        kind: "Form",
+        preamble: [],
+        root: { blockType: "Form", entries: [], children: [] },
+        codeBehind: null,
+      },
+      apply: true,
+    },
     vba_inline_execution: { code: "Sub T()\r\nEnd Sub" },
   };
 
@@ -212,6 +224,7 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "dysflow_form_add_control",
         "dysflow_form_move_control",
         "dysflow_form_rename_control",
+        "dysflow_form_deserialize",
         "vba_inline_execution",
       ].sort(),
     );

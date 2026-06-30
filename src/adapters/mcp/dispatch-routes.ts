@@ -52,6 +52,11 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   dysflow_form_add_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   dysflow_form_move_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   dysflow_form_rename_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  // slice 3 — serialize (read-only) + deserialize (write-gated with LoadFromText gate).
+  // Deserialize reuses the slice-4 import_modules gate via vbaSyncToolService so the
+  // binary is the single source of truth for the apply check (#616).
+  dysflow_form_serialize: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  dysflow_form_deserialize: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // query maintenance (9)

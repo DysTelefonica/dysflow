@@ -20,11 +20,16 @@ export function writesDisabled(toolName?: string): McpToolResult {
       },
     ],
     isError: true,
+    ok: false,
   };
 }
 
 export function invalidInput(message: string): McpToolResult {
-  return { content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }], isError: true };
+  return {
+    content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
+    isError: true,
+    ok: false,
+  };
 }
 
 export async function isWriteAllowed(

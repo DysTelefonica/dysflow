@@ -14,8 +14,10 @@ import {
   collectFormEvents,
   FormMutationError,
   moveControl,
+  normalizeLineEndings,
   parseFormTxt,
   renameControl,
+  serializeFormTxt,
 } from "../../core/services/form-ir-service.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
@@ -164,7 +166,9 @@ export class VbaFormsAdapter {
       toolName === "lint_form_code" ||
       toolName === "dysflow_form_add_control" ||
       toolName === "dysflow_form_move_control" ||
-      toolName === "dysflow_form_rename_control"
+      toolName === "dysflow_form_rename_control" ||
+      toolName === "dysflow_form_serialize" ||
+      toolName === "dysflow_form_deserialize"
     );
   }
 
@@ -186,6 +190,8 @@ export class VbaFormsAdapter {
     ) {
       return this.mutateForm(toolName, params);
     }
+    if (toolName === "dysflow_form_serialize") return this.serializeForm(params);
+    if (toolName === "dysflow_form_deserialize") return this.deserializeForm(params);
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
     }
@@ -580,6 +586,195 @@ export class VbaFormsAdapter {
       );
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // dysflow_form_serialize — read-only round-trip: parse -> serialize -> report
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Read-only round-trip serializer (#616 slice 3). Parses the .form.txt at
+   * `sourcePath`, re-serializes the resulting FormIR, and reports whether the
+   * serialized output is byte-equal to the normalized original (LF endings).
+   * No Access is opened, no binary is touched, no file is written. Apply is
+   * ignored — this tool is intentionally read-only.
+   */
+  private async serializeForm(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+    const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+    if (!sourcePath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "dysflow_form_serialize requires sourcePath (path to the .form.txt file).",
+        ),
+      );
+    }
+
+    let originalText: string;
+    try {
+      originalText = await this.fileSystem.readFile(sourcePath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read form file at "${sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    const name =
+      stringValue(params.formName) ??
+      deriveFormName(sourcePath) ??
+      stringValue(params.name) ??
+      "Form";
+
+    let ir: FormIR;
+    try {
+      ir = parseFormTxt(originalText, { name });
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_PARSE_ERROR",
+          `Failed to parse "${sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    const serialized = serializeFormTxt(ir);
+    const normalizedOriginal = normalizeLineEndings(originalText);
+    const byteEqual = serialized === normalizedOriginal;
+    const byteDiff = Math.abs(serialized.length - normalizedOriginal.length);
+    const opaqueCount = countOpaqueEntries(ir);
+
+    return successResult({
+      name: ir.name,
+      kind: ir.kind,
+      serialized,
+      byteEqual,
+      byteDiff,
+      metadataReport: {
+        preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
+        byteDiff,
+        opaqueCount,
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // dysflow_form_deserialize — write-gated: serialize IR -> write -> import gate
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Write-gated FormIR -> .form.txt deserializer (#616 slice 3). Re-serializes
+   * the supplied `ir` to text, writes it to `sourcePath` on apply, and invokes
+   * the existing `import_modules` LoadFromText gate. On gate failure the
+   * original source is restored best-effort (same pattern as slice 4 mutation
+   * tools). Defaults to dry-run (no write, no import).
+   */
+  private async deserializeForm(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+    if (!sourcePath) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "dysflow_form_deserialize requires sourcePath (path to the .form.txt file).",
+        ),
+      );
+    }
+
+    const ir = readFormIR(params.ir);
+    if (ir === undefined) {
+      return failureResult(
+        createDysflowError(
+          "FORM_SPEC_MISSING",
+          "dysflow_form_deserialize requires an `ir` parameter (FormIR object).",
+        ),
+      );
+    }
+
+    const source = await this.resolveManagedMutationSource(
+      "dysflow_form_deserialize",
+      params,
+      sourcePath,
+    );
+    if (!source.ok) return source;
+
+    let originalSource: string;
+    try {
+      originalSource = await this.fileSystem.readFile(source.data.sourcePath);
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    const serializedText = serializeFormTxt(ir);
+    const apply = params.apply === true || params.dryRun === false;
+
+    if (!apply) {
+      return successResult({
+        mode: "dry-run",
+        sourcePath: source.data.sourcePath,
+        written: false,
+        appliedChecksumBefore: undefined,
+        appliedChecksumAfter: undefined,
+        loadFromTextGate: "skipped",
+        preview: serializedText,
+      });
+    }
+
+    try {
+      await this.fileSystem.writeFile(source.data.sourcePath, serializedText, "utf8");
+    } catch (err) {
+      return failureResult(
+        createDysflowError(
+          "FORM_WRITE_FAILED",
+          `Cannot write form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+
+    const importParams = {
+      ...params,
+      sourcePath: source.data.sourcePath,
+      destinationRoot: source.data.destinationRoot,
+      moduleNames: [source.data.moduleName],
+      importMode: "Auto",
+      apply: true,
+      dryRun: false,
+    };
+    const importResult = await this.orchestrator.executeMappedTool(
+      "import_modules",
+      importParams,
+      FORMS_MAPPINGS.import_modules_gate,
+    );
+    if (!importResult.ok) {
+      await Promise.resolve(
+        this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
+      ).catch(() => undefined);
+      return failureResult(
+        createDysflowError(
+          "FORM_IMPORT_GATE_FAILED",
+          `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
+          { details: { cause: importResult.error } },
+        ),
+      );
+    }
+
+    return successResult({
+      mode: "apply",
+      sourcePath: source.data.sourcePath,
+      written: true,
+      appliedChecksumBefore: undefined,
+      appliedChecksumAfter: undefined,
+      loadFromTextGate: "passed",
+      importResult: importResult.data,
+    });
+  }
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -599,4 +794,51 @@ function readProperties(value: unknown): Record<string, string | number | boolea
     }
   }
   return out;
+}
+
+// Slice 3 (#616) — opaque metadata keys reported by dysflow_form_serialize
+// as the "preserved" set the round-trip is contracted to keep byte-equal.
+const PRESERVED_METADATA_KEYS_FOR_SERIALIZE = ["Checksum", "Format", "PrtDevMode"] as const;
+
+/** Count opaque (blob) entries in a FormIR — used for the metadata report. */
+function countOpaqueEntries(ir: FormIR): number {
+  let count = 0;
+  const walk = (node: FormIR["root"]): void => {
+    for (const entry of node.entries) {
+      if (entry.kind === "blob") count++;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(ir.root);
+  return count;
+}
+
+/**
+ * Read a FormIR-shaped object from the deserializer input. Permissive: any
+ * object with a `root` property of the right shape is accepted (the round-trip
+ * tool contract is structural, not nominal). Returns undefined for anything
+ * that cannot be coerced to a FormIR.
+ */
+function readFormIR(value: unknown): FormIR | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const candidate = value as { name?: unknown; kind?: unknown; root?: unknown };
+  if (typeof candidate.root !== "object" || candidate.root === null) return undefined;
+  const kind = candidate.kind === "Report" ? "Report" : "Form";
+  const name = typeof candidate.name === "string" ? candidate.name : "Form";
+  // The slice-1 FormIR contract carries preamble/root/codeBehind; we keep the
+  // caller's `preamble` and `codeBehind` if provided, otherwise default to
+  // empty/null so the re-serialized output stays minimal and deterministic.
+  const ir: FormIR = {
+    name,
+    kind,
+    preamble: Array.isArray((candidate as { preamble?: unknown }).preamble)
+      ? ((candidate as { preamble: unknown[] }).preamble as FormIR["preamble"])
+      : [],
+    root: candidate.root as FormIR["root"],
+    codeBehind:
+      typeof (candidate as { codeBehind?: unknown }).codeBehind === "string"
+        ? (candidate as { codeBehind: string }).codeBehind
+        : null,
+  };
+  return ir;
 }
