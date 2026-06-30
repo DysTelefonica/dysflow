@@ -489,12 +489,31 @@ function hasEventProcedureBinding(node: FormNode): boolean {
   );
 }
 
+function childControlContainer(node: FormNode): FormNode {
+  return node.children.find((child) => child.blockType === "") ?? node;
+}
+
+function findDefaultControlContainer(node: FormNode): FormNode {
+  const section = node.children
+    .flatMap((child) => [child, ...child.children])
+    .find((child) => {
+      if (child.blockType !== "Section") return false;
+      const nameEntry = findNameEntry(child);
+      const name = nameEntry === undefined ? "" : unquoteScalar(nameEntry.value).toLowerCase();
+      return name === "detalle" || name === "detail";
+    });
+  if (section !== undefined) return childControlContainer(section);
+  const firstSection = node.children.find((child) => child.blockType === "Section");
+  if (firstSection !== undefined) return childControlContainer(firstSection);
+  return childControlContainer(node);
+}
+
 function findTargetContainer(node: FormNode, targetSectionName?: string): FormNode | undefined {
-  if (targetSectionName === undefined) {
-    return node.children.find((child) => child.blockType === "") ?? node;
-  }
+  if (targetSectionName === undefined) return findDefaultControlContainer(node);
   const nameEntry = findNameEntry(node);
-  if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === targetSectionName) return node;
+  if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === targetSectionName) {
+    return childControlContainer(node);
+  }
   for (const child of node.children) {
     const found = findTargetContainer(child, targetSectionName);
     if (found !== undefined) return found;

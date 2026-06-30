@@ -102,6 +102,40 @@ describe("FormIR mutation primitives", () => {
     );
   });
 
+  it("adds controls inside the target section child container", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin Section
+        Name ="Detalle"
+        Begin
+        End
+    End
+End
+`,
+      { name: "CustomerForm" },
+    );
+
+    const result = addControl(ir, {
+      targetSectionName: "Detalle",
+      control: {
+        name: "cmdInsideDetail",
+        type: "CommandButton",
+        properties: { Left: "1", Top: "2", Width: "3", Height: "4" },
+      },
+    });
+
+    const serialized = serializeFormTxt(result.ir);
+    expect(serialized).toContain(
+      `Begin Section
+        Name ="Detalle"
+        Begin
+            Begin CommandButton
+                Name ="cmdInsideDetail"
+                Left =1`,
+    );
+  });
+
   it("rejects mutation when preserved metadata changes during the operation", () => {
     const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
 

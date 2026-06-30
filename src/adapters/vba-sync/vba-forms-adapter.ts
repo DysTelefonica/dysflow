@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, win32 } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -92,13 +92,28 @@ function hasManagedFormExtension(sourcePath: string): boolean {
   return /\.form\.txt$/i.test(sourcePath) || /\.report\.txt$/i.test(sourcePath);
 }
 
+function isWindowsPath(path: string): boolean {
+  return win32.isAbsolute(path) || /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function resolveMutationPath(basePath: string, childPath: string): string {
+  if (win32.isAbsolute(childPath)) return win32.normalize(childPath);
+  if (isAbsolute(childPath)) return resolve(childPath);
+  if (isWindowsPath(basePath)) return win32.normalize(win32.resolve(basePath, childPath));
+  return resolve(basePath, childPath);
+}
+
 function isPathInside(childPath: string, parentPath: string): boolean {
+  if (isWindowsPath(childPath) || isWindowsPath(parentPath)) {
+    const rel = win32.relative(win32.resolve(parentPath), win32.resolve(childPath));
+    return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !win32.isAbsolute(rel));
+  }
   const rel = relative(resolve(parentPath), resolve(childPath));
   return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel));
 }
 
 function normalizePathForDetails(path: string): string {
-  return resolve(path);
+  return isWindowsPath(path) ? win32.normalize(path) : resolve(path);
 }
 
 export interface VbaFormsOrchestrator {
@@ -386,9 +401,7 @@ export class VbaFormsAdapter {
       targetData.projectRoot !== undefined
         ? normalizePathForDetails(targetData.projectRoot)
         : undefined;
-    const sourcePath = normalizePathForDetails(
-      isAbsolute(rawSourcePath) ? rawSourcePath : resolve(destinationRoot, rawSourcePath),
-    );
+    const sourcePath = normalizePathForDetails(resolveMutationPath(destinationRoot, rawSourcePath));
 
     if (isWithinRuntime(sourcePath, this.orchestrator.env ?? process.env)) {
       return failureResult(
