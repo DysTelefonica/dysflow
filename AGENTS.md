@@ -208,3 +208,8 @@ code-behind through the `.form.txt` (it is serialization noise; see VBA semantic
 Entries use **ordered arrays** (not maps) so duplicate keys (e.g. `NoSaveCTIWhenDisabled` appearing
 twice in frmBusy) are preserved verbatim. Blob entries (`Key = Begin…End`) are kept opaque.
 `codeBehind` is the raw VBA text after the `CodeBehindForm` marker, or `null` when absent.
+
+### MCP real-world examples reference
+
+For copy-pasteable, concrete JSON input payloads for everyday MCP tasks, see
+[`docs/mcp-examples.md`](./docs/mcp-examples.md).
