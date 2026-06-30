@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.12.0] - 2026-06-30
+
+- chore: ignore generated form mutation artifact - feat(forms): add MCP form mutation primitives - docs: add MCP real-world examples reference
+
+
 ## [v1.11.3] - 2026-06-30
 
 - fix(vba-sync): place orphan CodeBehind marker after root End via Begin/End nesting
