@@ -2,7 +2,10 @@
 
 ## [v1.12.0] - 2026-06-30
 
-- chore: ignore generated form mutation artifact - feat(forms): add MCP form mutation primitives - docs: add MCP real-world examples reference
+- feat(forms): add MCP form mutation primitives (`dysflow_form_add_control`, `dysflow_form_move_control`, `dysflow_form_rename_control`) with strict write gates and canonical LoadFromText verification on `Gestion_Riesgos.accdb`.
+- fix(forms): insert new controls into the section control container so Access `LoadFromText` accepts the mutated form source.
+- chore: ignore generated form mutation artifact.
+- docs: add MCP real-world examples reference.
 
 
 ## [v1.11.3] - 2026-06-30
