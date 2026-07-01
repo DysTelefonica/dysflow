@@ -254,7 +254,26 @@ Prepend a new `[Unreleased]` section at the top:
 - `pnpm test -- --run` (full unit suite) — all existing tests remain green.
 - The F3 `empty-string accessDbPath override does not trigger CONFIG_MISSING_ACCESS_PATH` test confirms the regression is fixed.
 
-### Rollback
+### Status: ✅ PR 2 COMPLETE (2026-07-01)
+
+All 9 new tests pass; 276 insertions / 5 deletions across 5 files; under the 400-line review budget.
+
+#### Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+| --- | --- | --- | --- | --- |
+| `a5d357b` | F2 fix + tests + biome format | F2 (branch 2 backendPath propagation) | `pnpm vitest run test/core/config/execution-target.test.ts` → 9/9 PASS | no `.accdb` change; code-only |
+| `2dbc563` | F3 fix + tests + CHANGELOG `[Unreleased]` | F3 (empty-string normalization across 4 path fields) | `pnpm vitest run test/core/config/dysflow-config.test.ts` → 37/37 PASS | no `.accdb` change; code-only |
+
+**Full suite**: `pnpm test` → 1895/1896 PASS. The single failure is `test/core/runner/access-runner.test.ts > Cross-process lock for .accdb > runs a real diagnostics check and verifies no lingering MSACCESS.EXE process` (pre-existing real-Access flake requiring `C:\Proyectos\dysflow\E2E_testing\NoConformidades.accdb`, which only exists in the parent repo path, not the worktree). NOT a regression; same flake documented in PR 1.
+
+**Build**: `pnpm build` → clean (`tsc -p tsconfig.json` → 0). **Lint**: `pnpm lint` → 0 errors, 3 pre-existing warnings in `test/integration/form-template-clone-bench.test.ts`.
+
+#### Deviations from design
+
+- **Parity test wording relaxation** (`test/core/config/execution-target.test.ts`): The design asserts a single `it("branches 0/1/2 backendPath parity — caller override wins in every branch (#619)")` test. Tracing the source of branch 1 (`src/core/config/execution-target.ts:70-91`) shows branch 1 calls `loadDysflowConfigAsyncWith` WITHOUT threading `params.backendPath`, so the caller's value is dropped (only the repo-config's `backendPath` reaches the result). The design's diff only adds the field to branch 2 — branches 0 and 1 are described as "already working" in the design's backwards-compat note, but that's imprecise for branch 1. To stay within the orchestrator's narrow scope ("branch 2 only"), the test asserts the per-branch actual behavior: branch 0 propagates caller's value (existing, via `buildExplicitConfig`), branch 1 honors the repo-config's `backendPath` (existing, NOT fixed), branch 2 propagates caller's value (the new fix). The test's docstring flags this as a contract freeze so any future branch-1 fix is an intentional decision. Branch 1's caller's-backendPath propagation is deferred to a future change; the design's spec scenario "Branches 0/1 backendPath parity — caller's path still wins" is partially met (branch 0 only).
+
+#### Rollback
 
 **Commit 1 (F2)**:
 ```bash

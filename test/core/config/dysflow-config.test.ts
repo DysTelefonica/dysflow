@@ -776,4 +776,122 @@ describe("dysflow configuration", () => {
       }
     });
   });
+
+  describe("Empty-String Override Normalization (#619)", () => {
+    it("empty-string destinationRoot override is treated as no override (#619)", async () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "front.accdb",
+          destinationRoot: "src",
+        });
+        writeFileSync(join(root, "front.accdb"), "", "utf8");
+
+        const result = await loadDysflowConfigAsync({
+          cwd: root,
+          env: {},
+          destinationRoot: "",
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success");
+        expect(result.data.destinationRoot).toBe(resolve(root, "src"));
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("empty-string backendPath override is treated as no override (#619)", async () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "front.accdb",
+          backendPath: "backend.accdb",
+        });
+        writeFileSync(join(root, "front.accdb"), "", "utf8");
+        writeFileSync(join(root, "backend.accdb"), "", "utf8");
+
+        const result = await loadDysflowConfigAsync({
+          cwd: root,
+          env: {},
+          backendPath: "",
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success");
+        expect(result.data.backendPath).toBe(resolve(root, "backend.accdb"));
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("whitespace-only destinationRoot override is treated as no override (#619)", async () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "front.accdb",
+          destinationRoot: "src",
+        });
+        writeFileSync(join(root, "front.accdb"), "", "utf8");
+
+        const result = await loadDysflowConfigAsync({
+          cwd: root,
+          env: {},
+          destinationRoot: "   ",
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success");
+        expect(result.data.destinationRoot).toBe(resolve(root, "src"));
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("empty-string accessDbPath override does not trigger CONFIG_MISSING_ACCESS_PATH (#619)", async () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "front.accdb",
+        });
+        writeFileSync(join(root, "front.accdb"), "", "utf8");
+
+        const result = await loadDysflowConfigAsync({
+          cwd: root,
+          env: {},
+          accessDbPath: "",
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success (repo accessPath wins)");
+        expect(result.data.accessDbPath).toBe(resolve(root, "front.accdb"));
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("non-empty caller override still wins after normalization (#619)", async () => {
+      const { root, cleanup } = createTempWorkspace();
+      try {
+        writeRepoProjectConfig(root, {
+          accessPath: "front.accdb",
+          destinationRoot: "src",
+        });
+        writeFileSync(join(root, "front.accdb"), "", "utf8");
+
+        const override = "C:/worktrees/feature/src";
+        const result = await loadDysflowConfigAsync({
+          cwd: root,
+          env: {},
+          destinationRoot: override,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("expected success");
+        expect(result.data.destinationRoot).toBe(override);
+      } finally {
+        cleanup();
+      }
+    });
+  });
 });

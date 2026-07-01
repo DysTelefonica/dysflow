@@ -99,6 +99,7 @@ export async function resolveExecutionTarget(
     configSource: "runtime-default" as const,
     accessDbPath: context.accessPath ?? "",
     accessPath: context.accessPath,
+    backendPath: stringValue(params.backendPath),
     destinationRoot,
     projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
     projectId: undefined,
