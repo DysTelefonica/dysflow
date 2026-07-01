@@ -85,3 +85,67 @@ export type FormMutationResult = {
   changedControlName: string;
   preservedKeys: string[];
 };
+
+// ---------------------------------------------------------------------------
+// Form Template Cloning (slice 5, issue #618)
+// ---------------------------------------------------------------------------
+
+/**
+ * Caller-supplied replacement map: `{{Token}}` placeholder → string value.
+ * Keys MUST be non-empty strings; values MUST be strings; the engine replaces
+ * every occurrence of `{{Key}}` in scalar values and non-preserved blob body
+ * lines. Reserved metadata (`Checksum`, `Format`, `PrtDevMode`) is never walked.
+ */
+export type TokenMap = Readonly<Record<string, string>>;
+
+/**
+ * How the engine handles a token that appears in the source but is missing
+ * from the token map.
+ *
+ * - `warn-pass-through` (default): leave the token verbatim in the result,
+ *   record it in `missingTokens`, emit a structured warning, return success.
+ * - `strict`: throw `FORM_MUTATION_INVALID` and produce no cloned IR.
+ */
+export type MissingTokenPolicy = "warn-pass-through" | "strict";
+
+/**
+ * Options for `applyTokenMap` (pure IR transformation).
+ */
+export type ApplyTokenMapOptions = {
+  missingTokenPolicy?: MissingTokenPolicy;
+};
+
+/**
+ * Result of `applyTokenMap`: the transformed IR plus a structured accounting
+ * of which tokens were applied and which were left verbatim.
+ */
+export type ApplyTokenMapResult = {
+  ir: FormIR;
+  appliedTokens: string[];
+  missingTokens: string[];
+  warnings: string[];
+};
+
+/**
+ * Options for `cloneFormFromTemplate`. Pure: the engine does not read or
+ * write files. Path-level concerns (source resolution, target overwrite,
+ * LoadFromText gate) are the adapter's responsibility.
+ */
+export type CloneFromTemplateOptions = {
+  tokenMap: TokenMap;
+  targetFormName: string;
+  missingTokenPolicy?: MissingTokenPolicy;
+};
+
+/**
+ * Result of `cloneFormFromTemplate`. `source` is the byte-equivalent
+ * serialized form of the cloned IR; `preservedKeys` mirrors `FormMutationResult`.
+ */
+export type CloneFromTemplateResult = {
+  ir: FormIR;
+  source: string;
+  appliedTokens: string[];
+  missingTokens: string[];
+  warnings: string[];
+  preservedKeys: string[];
+};

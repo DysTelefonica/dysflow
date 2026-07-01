@@ -3,15 +3,21 @@
 
 import type {
   AddControlInput,
+  ApplyTokenMapOptions,
+  ApplyTokenMapResult,
   BlobEntry,
+  CloneFromTemplateOptions,
+  CloneFromTemplateResult,
   EmptyLineEntry,
   FormIR,
   FormMutationResult,
   FormNode,
+  MissingTokenPolicy,
   MoveControlInput,
   PropertyEntry,
   RenameControlInput,
   ScalarEntry,
+  TokenMap,
 } from "../models/form-ir.js";
 
 // ---------------------------------------------------------------------------
@@ -37,7 +43,9 @@ export class FormMutationError extends Error {
       | "FORM_SECTION_NOT_FOUND"
       | "FORM_MUTATION_INVALID"
       | "FORM_METADATA_LOSS"
-      | "FORM_CONTROL_HAS_EVENT_BINDING",
+      | "FORM_CONTROL_HAS_EVENT_BINDING"
+      | "FORM_TOKEN_MAP_INVALID"
+      | "FORM_TARGET_EXISTS",
     message: string,
   ) {
     super(message);
@@ -671,4 +679,229 @@ export function renameControl(ir: FormIR, input: RenameControlInput): FormMutati
   }
   upsertScalar(control, "Name", quoteName(newName));
   return mutationResult(ir, next, newName);
+}
+
+// ---------------------------------------------------------------------------
+// Form Template Cloning (slice 5, issue #618)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate a token map. Every key MUST be a non-empty string; every value
+ * MUST be a string. Otherwise throws FORM_TOKEN_MAP_INVALID with an
+ * actionable message — no source IR mutation occurs.
+ */
+function validateTokenMap(tokenMap: TokenMap): void {
+  for (const [key, value] of Object.entries(tokenMap)) {
+    if (typeof key !== "string" || key.length === 0) {
+      throw new FormMutationError(
+        "FORM_TOKEN_MAP_INVALID",
+        `Token map keys must be non-empty strings; received ${JSON.stringify(key)}.`,
+      );
+    }
+    if (typeof value !== "string") {
+      throw new FormMutationError(
+        "FORM_TOKEN_MAP_INVALID",
+        `Token "${key}" maps to a non-string value (${typeof value}). Token values must be strings.`,
+      );
+    }
+  }
+}
+
+const TOKEN_PATTERN = /\{\{([^}]+)\}\}/g;
+
+/**
+ * Collect every unique `{{Token}}` placeholder that appears in the source text.
+ * Used by applyTokenMap to partition tokens into `applied` vs `missing`.
+ */
+function collectSourceTokens(sourceText: string): string[] {
+  const seen = new Set<string>();
+  for (const match of sourceText.matchAll(TOKEN_PATTERN)) {
+    const token = match[1];
+    if (token !== undefined) seen.add(token);
+  }
+  return [...seen].sort();
+}
+
+/**
+ * Replace every `{{Key}}` occurrence in `value` using `tokenMap`. Order
+ * matches `Object.entries(tokenMap)`; collisions are not a concern at the
+ * orchestrator's shape (token names are stable identifiers).
+ */
+function replaceTokensInString(value: string, tokenMap: TokenMap): string {
+  let out = value;
+  for (const [token, replacement] of Object.entries(tokenMap)) {
+    const pattern = `{{${token}}}`;
+    if (out.includes(pattern)) {
+      out = out.split(pattern).join(replacement);
+    }
+  }
+  return out;
+}
+
+/**
+ * Returns true when a property key belongs to the Access opaque metadata
+ * reserved set: any key equal to or starting with `Checksum`, `Format`,
+ * or `PrtDevMode`. Matches the slice 4 invariant — the metadata guard
+ * (`metadataSnapshot`) uses the same prefix rules.
+ *
+ * Single source of truth for the "is this a reserved Access metadata key"
+ * predicate: both `metadataSnapshot` and `applyTokenMap` walk it.
+ */
+function isPreservedMetadataKey(key: string): boolean {
+  return PRESERVED_METADATA_KEYS.some((prefix) => key === prefix || key.startsWith(prefix));
+}
+
+/**
+ * Apply the token map to a single PropertyEntry. Returns a NEW entry when
+ * the key is NOT a preserved-metadata key; returns the entry unchanged
+ * (no object allocation needed for empty entries) when the key IS preserved.
+ * When the key is preserved, body lines and scalar values are NEVER touched.
+ */
+function applyTokensToEntry(entry: PropertyEntry, tokenMap: TokenMap): PropertyEntry {
+  if (entry.kind === "empty") return entry;
+  if (isPreservedMetadataKey(entry.key)) return entry;
+  if (entry.kind === "scalar") {
+    return {
+      kind: "scalar",
+      key: entry.key,
+      value: replaceTokensInString(entry.value, tokenMap),
+    };
+  }
+  // blob — apply tokens line by line; preserve verbatim whitespace.
+  return {
+    kind: "blob",
+    key: entry.key,
+    lines: entry.lines.map((line) => replaceTokensInString(line, tokenMap)),
+  };
+}
+
+/**
+ * Walk a FormNode tree and apply the token map to every non-preserved entry
+ * (recursive). Children are always processed. Returns a NEW node; the input
+ * is never mutated.
+ */
+function applyTokensToNode(node: FormNode, tokenMap: TokenMap): FormNode {
+  return {
+    blockType: node.blockType,
+    entries: node.entries.map((entry) => applyTokensToEntry(entry, tokenMap)),
+    children: node.children.map((child) => applyTokensToNode(child, tokenMap)),
+  };
+}
+
+/**
+ * Apply a token map to a parsed FormIR. Pure IR transformation.
+ *
+ * Scope rules (slice 5 design):
+ *   - Walks every scalar value and every blob body line whose key is NOT
+ *     `Checksum`, `Format`, or `PrtDevMode` (preserved metadata).
+ *   - Under `missingTokenPolicy: "warn-pass-through"` (default): tokens
+ *     present in the source but absent from the token map are left verbatim
+ *     and reported in `missingTokens`. The operation still succeeds.
+ *   - Under `missingTokenPolicy: "strict"`: any missing source token throws
+ *     `FORM_MUTATION_INVALID` with no IR mutation applied.
+ *   - `appliedTokens` lists every token from the map that was actually
+ *     replaced (i.e. its `{{Token}}` pattern was found in the source).
+ *   - `warnings` carries one human-readable string per missing token, in
+ *     the same order as `missingTokens`.
+ *
+ * The input IR is NEVER mutated; the returned IR is a fresh clone.
+ *
+ * @throws FormMutationError with code `FORM_TOKEN_MAP_INVALID` for bad input.
+ * @throws FormMutationError with code `FORM_MUTATION_INVALID` when strict
+ *         policy rejects an unmapped source token.
+ */
+export function applyTokenMap(
+  ir: FormIR,
+  tokenMap: TokenMap,
+  opts?: ApplyTokenMapOptions,
+): ApplyTokenMapResult {
+  validateTokenMap(tokenMap);
+
+  const missingTokenPolicy: MissingTokenPolicy = opts?.missingTokenPolicy ?? "warn-pass-through";
+
+  const next = cloneIr(ir);
+  next.preamble = next.preamble.map((entry) => applyTokensToEntry(entry, tokenMap));
+  next.root = applyTokensToNode(next.root, tokenMap);
+
+  const sourceText = serializeFormTxt(ir);
+  const sourceTokens = collectSourceTokens(sourceText);
+
+  const appliedTokens: string[] = [];
+  const missingTokens: string[] = [];
+  const warnings: string[] = [];
+  for (const token of sourceTokens) {
+    if (Object.hasOwn(tokenMap, token)) {
+      appliedTokens.push(token);
+    } else {
+      missingTokens.push(token);
+      warnings.push(
+        `Token "{{${token}}}" is present in the source but missing from the token map; leaving verbatim under warn-pass-through policy.`,
+      );
+    }
+  }
+
+  if (missingTokenPolicy === "strict" && missingTokens.length > 0) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      `Strict token enforcement rejected ${missingTokens.length} unmapped source token(s): ${missingTokens
+        .map((t) => `"{{${t}}}"`)
+        .join(", ")}.`,
+    );
+  }
+
+  return {
+    ir: next,
+    appliedTokens,
+    missingTokens,
+    warnings,
+  };
+}
+
+/**
+ * Clone a source FormIR into a target by applying a token map. Pure: the
+ * adapter wraps this with filesystem + LoadFromText gate + restore-on-failure.
+ *
+ * Pipeline (slice 5 design):
+ *   1. Validate the token map (FORM_TOKEN_MAP_INVALID on bad input).
+ *   2. Run `applyTokenMap` — populates the cloned IR's scalars and non-
+ *      preserved blob body lines with the mapped values.
+ *   3. Set the cloned IR's `name` to `targetFormName`.
+ *   4. Call `assertMetadataPreserved(sourceIr, clonedIr)` — rejects with
+ *      FORM_METADATA_LOSS if a reserved metadata key was rewritten.
+ *
+ * Round-trip property (spec scenario 1): a manual clone-and-replace on
+ * the source text using the same token map is byte-equivalent to
+ * `result.source`. This is the spec's "byte-equivalence" guarantee.
+ *
+ * @throws FormMutationError with code `FORM_TOKEN_MAP_INVALID`,
+ *         `FORM_MUTATION_INVALID` (strict), or `FORM_METADATA_LOSS`.
+ */
+export function cloneFormFromTemplate(
+  sourceIr: FormIR,
+  opts: CloneFromTemplateOptions,
+): CloneFromTemplateResult {
+  const tokenMap = opts.tokenMap;
+  const targetFormName = opts.targetFormName;
+  const missingTokenPolicy: MissingTokenPolicy = opts.missingTokenPolicy ?? "warn-pass-through";
+
+  if (typeof targetFormName !== "string" || targetFormName.length === 0) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "cloneFormFromTemplate requires a non-empty targetFormName.",
+    );
+  }
+
+  const applied = applyTokenMap(sourceIr, tokenMap, { missingTokenPolicy });
+
+  applied.ir.name = targetFormName;
+  assertMetadataPreserved(sourceIr, applied.ir);
+
+  return {
+    ir: applied.ir,
+    source: serializeFormTxt(applied.ir),
+    appliedTokens: applied.appliedTokens,
+    missingTokens: applied.missingTokens,
+    warnings: applied.warnings,
+    preservedKeys: preservedKeys(applied.ir),
+  };
 }
