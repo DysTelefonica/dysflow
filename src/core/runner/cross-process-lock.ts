@@ -135,8 +135,15 @@ export function startLockHeartbeat(
   lockPath: string,
   fileSystem: LockFileSystemPort,
   stopSignal?: AbortSignal,
-  onHeartbeatError: (error: unknown) => void = (error) =>
-    logSwallowedIoError("cross-process-lock:heartbeat", error),
+  // F3b (#620): the default is a silent no-op so callers that do not care about
+  // heartbeat failures (e.g. tests, ad-hoc scripts) do not get noisy debug logs.
+  // Production wiring (`AccessPowerShellRunner.run`) supplies an explicit sink
+  // that collects errors and surfaces them as warning diagnostics on the
+  // returned `OperationResult`. The default change does not affect callers who
+  // already pass `onHeartbeatError` explicitly.
+  onHeartbeatError: (error: unknown) => void = () => {
+    /* F3b: silent no-op when no caller-supplied sink */
+  },
 ): NodeJS.Timeout {
   const intervalMs = CROSS_PROCESS_LOCK_STALE_MS / 2;
   const handle = setInterval(() => {
@@ -189,6 +196,11 @@ export const defaultAccessExecutionLocks = new Map<string, Promise<void>>();
  * @param lockState     - Optional in-process lock map. Defaults to the module-level
  *                        `defaultAccessExecutionLocks` singleton so production code
  *                        gets the original serialized behaviour without passing anything.
+ * @param onHeartbeatError - Optional callback for non-ENOENT heartbeat failures
+ *                           (F3b, #620). When omitted, the heartbeat fails silently
+ *                           per the new default in `startLockHeartbeat`. Production
+ *                           wiring in `AccessPowerShellRunner.run` supplies an explicit
+ *                           sink that drains into the returned `OperationResult.diagnostics`.
  */
 export async function runWithAccessExecutionLock<T>(
   key: string,
@@ -196,6 +208,9 @@ export async function runWithAccessExecutionLock<T>(
   timeoutMs: number,
   fileSystem: LockFileSystemPort,
   lockState: Map<string, Promise<void>> = defaultAccessExecutionLocks,
+  onHeartbeatError: (error: unknown) => void = () => {
+    /* F3b: silent no-op — see startLockHeartbeat default */
+  },
 ): Promise<T> {
   const normalizedKey = key.toLowerCase();
   const previous = lockState.get(normalizedKey) ?? Promise.resolve();
@@ -223,7 +238,8 @@ export async function runWithAccessExecutionLock<T>(
       50,
       fileSystem,
     );
-    const stopHeartbeat = startLockHeartbeat(lockPath, fileSystem);
+    // F3b (#620): thread the optional heartbeat error sink through to the heartbeat.
+    const stopHeartbeat = startLockHeartbeat(lockPath, fileSystem, undefined, onHeartbeatError);
     try {
       return await work();
     } finally {

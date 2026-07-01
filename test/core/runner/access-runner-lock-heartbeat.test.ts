@@ -25,6 +25,7 @@ import {
   getCrossProcessLockPath,
   type PowerShellExecutor,
 } from "../../../src/core/runner/access-runner.js";
+import type { LockFileSystemPort } from "../../../src/core/runner/cross-process-lock.js";
 
 const noOpPreflight: AccessOperationPreflightCleanup = {
   cleanup: async () => ({ cleaned: [], killed: [], orphanedKilled: [], errors: [] }),
@@ -211,5 +212,72 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     );
     expect(secondResult.ok).toBe(true);
     expect(executorCallCount).toBe(2);
+  });
+
+  // F3b (#620): heartbeat errors surface as `access.heartbeat` diagnostics.
+  // Production wires an explicit `onHeartbeatError` callback to the lock that
+  // collects errors. The runner drains the closure at the end of
+  // `runLockedOperation` and attaches each error as a warning diagnostic on
+  // the returned `OperationResult`. ENOENT (lock already released) stays silent.
+  it("surfaces non-ENOENT heartbeat errors as warning Diagnostics on OperationResult (#620)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+
+    // Stub filesystem that lets mkdir succeed (so we acquire the lock) but
+    // throws EPERM on every utimes call (so the heartbeat fails every tick).
+    const stubFs: LockFileSystemPort = {
+      mkdir: async (path) => path,
+      rm: async () => {},
+      stat: async () => null,
+      utimes: async () => {
+        const err: NodeJS.ErrnoException = new Error("operation not permitted");
+        err.code = "EPERM";
+        throw err;
+      },
+      writeFile: async () => {},
+      tmpdir: () => tmpdir(),
+    };
+
+    // The executor must hold the lock long enough for at least one heartbeat
+    // tick to fire. With fake timers + an advance inside the executor, we
+    // are deterministic: one tick fires while the work is in progress.
+    const executor: PowerShellExecutor = async () => {
+      await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2 + 50);
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+
+    const dbPath = uniqueDbPath("f3b-heartbeat-diagnostic");
+    const runner = new AccessPowerShellRunner({
+      lockFileSystem: stubFs,
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run.ps1",
+      lockAcquireTimeoutMs: 5_000,
+    });
+
+    const result = await runner.run(
+      { kind: "diagnostics", request: {} },
+      {
+        configSource: "explicit-request",
+        allowWrites: false,
+        accessDbPath: dbPath,
+        timeoutMs: 10_000,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    // The heartbeat failure must surface as a warning diagnostic with the
+    // documented source. ENOENT would be silent; EPERM is the failure we test.
+    const heartbeatDiagnostics = result.diagnostics.filter(
+      (d) => d.source === "access.heartbeat",
+    );
+    expect(heartbeatDiagnostics.length).toBeGreaterThan(0);
+    expect(heartbeatDiagnostics[0]?.level).toBe("warning");
+    expect(heartbeatDiagnostics[0]?.message.toLowerCase()).toContain("heartbeat");
   });
 });

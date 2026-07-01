@@ -39,6 +39,7 @@ export { sanitizeSecrets as sanitizePowerShellOutput } from "../utils/index.js";
 
 import {
   CROSS_PROCESS_LOCK_STALE_MS,
+  defaultAccessExecutionLocks,
   getCrossProcessLockPath,
   type LockFileSystemPort,
   RunnerLockTimeoutError,
@@ -177,13 +178,28 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
 
     try {
+      // F3b (#620): collect non-ENOENT heartbeat errors in a closure so they can
+      // be drained as warning diagnostics on the returned `OperationResult`.
+      // ENOENT (lock already released) is still suppressed inside
+      // `startLockHeartbeat` and never reaches this sink.
+      const heartbeatErrors: unknown[] = [];
+      const heartbeatSink = (error: unknown) => {
+        heartbeatErrors.push(error);
+      };
       return await runWithAccessExecutionLock(
         config.accessDbPath,
         async () => {
-          return await this.runLockedOperation<TData>(operation, config, options);
+          return await this.runLockedOperation<TData>(
+            operation,
+            config,
+            options,
+            heartbeatErrors,
+          );
         },
         this.lockAcquireTimeoutMs,
         this.lockFileSystem,
+        defaultAccessExecutionLocks,
+        heartbeatSink,
       );
     } catch (error) {
       if (error instanceof RunnerLockTimeoutError) {
@@ -197,6 +213,10 @@ export class AccessPowerShellRunner implements AccessRunner {
     operation: AccessRunnerOperation,
     config: DysflowConfig,
     options: AccessRunnerRunOptions,
+    // F3b (#620): closure-pushed array of heartbeat errors, drained below into
+    // the result's diagnostics. Optional so existing test fixtures that call
+    // `runLockedOperation` directly (without going through `run`) still compile.
+    heartbeatErrors?: unknown[],
   ): Promise<OperationResult<TData>> {
     let finalOperation = operation;
     if (operation.kind === "query") {
@@ -345,6 +365,21 @@ export class AccessPowerShellRunner implements AccessRunner {
       },
     );
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
+    // F3b (#620): drain heartbeat errors collected during the lock into warning
+    // diagnostics on the returned `OperationResult`. ENOENT (lock already
+    // released) is suppressed by `startLockHeartbeat` and never reaches this
+    // sink; only real failures (EPERM, EIO, etc.) are surfaced here.
+    if (heartbeatErrors !== undefined && heartbeatErrors.length > 0) {
+      for (const err of heartbeatErrors) {
+        diagnostics.push(
+          createDiagnostic(
+            "warning",
+            "access.heartbeat",
+            `Heartbeat refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
+      }
+    }
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
 
