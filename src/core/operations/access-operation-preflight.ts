@@ -269,25 +269,35 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       if (process.commandLine === undefined) continue;
       if (!pathMatchesAccessPath(process.commandLine, request.accessPath)) continue;
 
-      const isHeadless = process.commandLine.toLowerCase().includes("-embedding");
-      if (isHeadless) {
-        try {
-          await withTimeout(
-            this.options.processKiller.kill(process.pid),
-            this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-          );
-          result.orphanedKilled.push(process.pid);
-          handledPids.add(process.pid);
-        } catch (error) {
-          result.errors.push({
-            operationId: "orphan",
-            message: `Failed to kill unattributed headless process ${process.pid}: ${formatError(error)}`,
-          });
-        }
-      } else {
+      // F1 (#620): gate headless detection on mainWindowHandle, not the `-embedding`
+      // substring (which could match a project path). Mirrors access-orphan-cleanup.
+      if (process.mainWindowHandle === undefined) {
         result.errors.push({
           operationId: "orphan",
-          message: `Blocked cleanup because PID ${process.pid} is an unattributed MSACCESS process for the requested accessPath.`,
+          message: `Refused to kill PID ${process.pid}: mainWindowHandle is undefined (Get-Process fallback — cannot prove headless).`,
+        });
+        continue;
+      }
+      if (process.mainWindowHandle !== 0) {
+        const handleHex = `0x${process.mainWindowHandle.toString(16).toUpperCase()}`;
+        result.errors.push({
+          operationId: "orphan",
+          message: `Refused to kill PID ${process.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
+        });
+        continue;
+      }
+
+      try {
+        await withTimeout(
+          this.options.processKiller.kill(process.pid),
+          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+        );
+        result.orphanedKilled.push(process.pid);
+        handledPids.add(process.pid);
+      } catch (error) {
+        result.errors.push({
+          operationId: "orphan",
+          message: `Failed to kill unattributed headless process ${process.pid}: ${formatError(error)}`,
         });
       }
     }
@@ -369,25 +379,32 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
     );
     if (matchingProcess !== undefined) {
       handledPids.add(matchingProcess.pid);
-      const isHeadless = matchingProcess.commandLine?.toLowerCase().includes("-embedding") ?? false;
-      if (isHeadless) {
-        try {
-          await withTimeout(
-            this.options.processKiller.kill(matchingProcess.pid),
-            this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-          );
-          result.killed.push(matchingProcess.pid);
-        } catch (error) {
-          result.errors.push({
-            operationId: record.operationId,
-            message: `Failed to kill unowned headless process ${matchingProcess.pid}: ${formatError(error)}`,
-          });
-          return;
-        }
-      } else {
+      // F1 (#620): see mirror in scanAndCleanOrphans above.
+      if (matchingProcess.mainWindowHandle === undefined) {
         result.errors.push({
           operationId: record.operationId,
-          message: `Refused to mark operation cleaned because PID ${matchingProcess.pid} is an unowned Access process for the registered accessPath.`,
+          message: `Refused to kill PID ${matchingProcess.pid}: mainWindowHandle is undefined (Get-Process fallback — cannot prove headless).`,
+        });
+        return;
+      }
+      if (matchingProcess.mainWindowHandle !== 0) {
+        const handleHex = `0x${matchingProcess.mainWindowHandle.toString(16).toUpperCase()}`;
+        result.errors.push({
+          operationId: record.operationId,
+          message: `Refused to kill PID ${matchingProcess.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
+        });
+        return;
+      }
+      try {
+        await withTimeout(
+          this.options.processKiller.kill(matchingProcess.pid),
+          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+        );
+        result.killed.push(matchingProcess.pid);
+      } catch (error) {
+        result.errors.push({
+          operationId: record.operationId,
+          message: `Failed to kill unowned headless process ${matchingProcess.pid}: ${formatError(error)}`,
         });
         return;
       }

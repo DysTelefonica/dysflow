@@ -854,7 +854,10 @@ describe("Access operation preflight cleanup safety", () => {
     expect(result.killed).toEqual([]);
     expect(result.orphanedKilled).toEqual([]);
     expect(result.errors).toMatchObject([{ operationId: "op-1" }]);
-    expect(result.errors[0]?.message).toContain("unowned Access process");
+    // Contract: pid_unknown stays unchanged, and an error is recorded naming
+    // the offending PID. The exact refusal wording depends on which gate trips
+    // first (mainWindowHandle state in F1).
+    expect(result.errors[0]?.message).toContain("PID 9876");
     expect(killed).toEqual([]);
     await expect(registry.get("op-1")).resolves.toMatchObject({ status: "pid_unknown" });
   });
