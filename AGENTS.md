@@ -92,7 +92,9 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
   saved-queries folder is never scanned. `prune` + `filter` is rejected (`INVALID_INPUT`) because a
   filtered export would make every non-matching file look orphaned. Never weaken these when editing
-  `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`.
+  `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`. The legacy `.frm` binary
+  form format is **not** in the managed allow-list — prune must leave `.frm` files alone, even when
+  no matching VBE module exists. See issue #619.
 
 ## MCP workflow recipes
 

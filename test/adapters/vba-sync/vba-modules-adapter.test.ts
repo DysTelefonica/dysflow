@@ -1730,4 +1730,154 @@ describe("VbaModulesAdapter", () => {
     // Must fail BEFORE running any export — a filtered prune is never partially applied.
     expect(executorCalled).toBe(false);
   });
+
+  describe("export_all prune allow-list parity (#619)", () => {
+    it("export_all prune never deletes .frm orphan files (#619)", async () => {
+      const root = await mkdtemp(join(tmpdir(), "dysflow-prune-frm-orphan-"));
+      const sourceRoot = join(root, "src");
+      await mkdir(join(sourceRoot, "modules"), { recursive: true });
+      await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+      // Legacy .frm binary form format — NOT in the AGENTS.md documented allow-list
+      // (`.bas`/`.cls`/`.form.txt`/`.report.txt`). Prune must leave it alone.
+      await writeFile(join(sourceRoot, "modules", "LegacyForm.frm"), "binary", "utf8");
+
+      const service = new VbaSyncAdapter({
+        executor: async () => ({
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+          stderr: "",
+          durationMs: 5,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: sourceRoot,
+        env: {},
+      });
+
+      const result = await service.execute("export_all", { prune: true });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      const prune = (result.data as { prune: { applied: boolean; deleted: string[] } }).prune;
+      expect(prune.applied).toBe(true);
+      expect(prune.deleted).not.toContain(join(sourceRoot, "modules", "LegacyForm.frm"));
+      // The .frm file must still exist on disk — prune never touched it.
+      expect(await readFile(join(sourceRoot, "modules", "LegacyForm.frm"), "utf8")).toBe("binary");
+    });
+
+    it("export_all prune keeps .bas and .cls orphans deletable (#619)", async () => {
+      const root = await mkdtemp(join(tmpdir(), "dysflow-prune-bas-cls-allow-list-"));
+      const sourceRoot = join(root, "src");
+      await mkdir(join(sourceRoot, "modules"), { recursive: true });
+      await mkdir(join(sourceRoot, "classes"), { recursive: true });
+      await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+      // Positive control: .bas and .cls ARE in the AGENTS.md documented allow-list,
+      // so orphans with these extensions MUST still be pruned normally.
+      await writeFile(join(sourceRoot, "modules", "OrphanMod.bas"), "old", "utf8");
+      await writeFile(join(sourceRoot, "classes", "OrphanClass.cls"), "old", "utf8");
+
+      const service = new VbaSyncAdapter({
+        executor: async () => ({
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+          stderr: "",
+          durationMs: 5,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: sourceRoot,
+        env: {},
+      });
+
+      const result = await service.execute("export_all", { prune: true });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      const prune = (result.data as { prune: { applied: boolean; deleted: string[] } }).prune;
+      expect(prune.applied).toBe(true);
+      expect(prune.deleted).toContain(join(sourceRoot, "modules", "OrphanMod.bas"));
+      expect(prune.deleted).toContain(join(sourceRoot, "classes", "OrphanClass.cls"));
+      // Both orphan files are gone from disk.
+      await expect(
+        readFile(join(sourceRoot, "modules", "OrphanMod.bas"), "utf8"),
+      ).rejects.toThrow();
+      await expect(
+        readFile(join(sourceRoot, "classes", "OrphanClass.cls"), "utf8"),
+      ).rejects.toThrow();
+    });
+
+    it("export_all prune ignores .txt and other non-allow-listed extensions (#619)", async () => {
+      const root = await mkdtemp(join(tmpdir(), "dysflow-prune-txt-allow-list-"));
+      const sourceRoot = join(root, "src");
+      await mkdir(join(sourceRoot, "modules"), { recursive: true });
+      await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+      // Arbitrary non-allow-listed extension: prune must not delete it even when
+      // the basename has no matching VBE module.
+      await writeFile(join(sourceRoot, "modules", "notes.txt"), "scratch", "utf8");
+
+      const service = new VbaSyncAdapter({
+        executor: async () => ({
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+          stderr: "",
+          durationMs: 5,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: sourceRoot,
+        env: {},
+      });
+
+      const result = await service.execute("export_all", { prune: true });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      const prune = (result.data as { prune: { applied: boolean; deleted: string[] } }).prune;
+      expect(prune.applied).toBe(true);
+      expect(prune.deleted).not.toContain(join(sourceRoot, "modules", "notes.txt"));
+      // .txt file remains untouched.
+      expect(await readFile(join(sourceRoot, "modules", "notes.txt"), "utf8")).toBe("scratch");
+    });
+
+    it("export_all prune adversarial .frm masquerade attempt — not deleted even when no VBE match (#619)", async () => {
+      const root = await mkdtemp(join(tmpdir(), "dysflow-prune-frm-masquerade-"));
+      const sourceRoot = join(root, "src");
+      await mkdir(join(sourceRoot, "modules"), { recursive: true });
+      await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+      // Adversarial case: a .frm named after a module name that does NOT exist in the
+      // live VBE inventory. The name matches the basename pattern that *would* be
+      // considered an orphan for a .bas/.cls file, but the .frm extension must keep
+      // prune from touching it.
+      await writeFile(join(sourceRoot, "modules", "ImportantModule.frm"), "binary", "utf8");
+
+      const service = new VbaSyncAdapter({
+        executor: async () => ({
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
+          stderr: "",
+          durationMs: 5,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: sourceRoot,
+        env: {},
+      });
+
+      const result = await service.execute("export_all", { prune: true });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      const prune = (result.data as { prune: { applied: boolean; deleted: string[] } }).prune;
+      expect(prune.applied).toBe(true);
+      expect(prune.deleted).not.toContain(join(sourceRoot, "modules", "ImportantModule.frm"));
+      // Masquerading .frm survives prune.
+      expect(await readFile(join(sourceRoot, "modules", "ImportantModule.frm"), "utf8")).toBe(
+        "binary",
+      );
+    });
+  });
 });
