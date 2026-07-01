@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### form-ir-bugs (#622)
+
+#### F2 (PR 2 of 3 — this PR)
+- **Preserved-metadata key predicate is now exact-match** in `applyTokenMap` (`src/core/services/form-ir-service.ts`). Keys that share a prefix with a preserved key (e.g. `FormatConditions`, `FormatHeader`) are no longer mis-classified as preserved; they flow through token replacement like ordinary layout keys. **Behavior change** for any template whose `{{Token}}` lives inside a `Format*` (or `PrtDevMode*` / `Checksum`) key — that token now gets replaced.
+- **`appliedTokens` now reflects actual replacement**, derived from a post-IR serialization diff (`serializeFormTxt(next)` vs source tokens). Previously `appliedTokens` was `Object.hasOwn(tokenMap, sourceToken)`, which lied when a token's only occurrence lived inside a preserved metadata key — the result reported `applied` while the serialized IR still contained `{{Token}}`. **Behavior change — strict policy**: a source token whose only `{{...}}` occurrence lives inside a preserved metadata key now triggers `FORM_MUTATION_INVALID` under `missingTokenPolicy: "strict"`. Previously the operation reported success. `warn-pass-through` (default) is unchanged for the IR text — preserved keys still keep their tokens verbatim — only the truth of `appliedTokens`/`missingTokens` changes.
+- **Action required for strict-policy users**: if your source forms contain tokens inside `Checksum`, `Format`, or `PrtDevMode` scalars, either widen the token map to cover them or remove the tokens from the preserved-key scalars before re-running under strict policy.
+
 ### mcp-contract-safety (#621)
 
 #### F1 (PR 1a of 4 — this PR)

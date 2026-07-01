@@ -142,6 +142,68 @@ End
     expect(serialized).not.toContain("FormNuevaAuditoria_blob_line_one");
   });
 
+  it("replaces a {{Token}} occurrence in a FormatConditions scalar when mapped (issue #622 #B)", () => {
+    // FormatConditions starts with `Format` but is NOT a preserved key.
+    // The exact-match predicate MUST treat it as an ordinary layout key.
+    const ir = loadIr(
+      `Version =21
+Begin Form
+    FormatConditions ="{{X}}_foo"
+End
+`,
+      "SourceForm",
+    );
+
+    const result = applyTokenMap(ir, { X: "BAR" });
+
+    expect(serializeFormTxt(result.ir)).toContain('FormatConditions ="BAR_foo"');
+    expect(serializeFormTxt(result.ir)).not.toContain("{{X}}");
+    expect(result.appliedTokens).toContain("X");
+    expect(result.missingTokens).not.toContain("X");
+  });
+
+  it("appliedTokens excludes a token whose only occurrence was inside a preserved-metadata key (issue #622 #B)", () => {
+    // The token only appears inside Checksum (preserved). The post-IR
+    // serialized text still contains `{{X}}`. The token MUST go into
+    // missingTokens, NOT appliedTokens.
+    const ir = loadIr(
+      `Version =21
+Checksum ="{{X}}_checksum_value"
+Begin Form
+    Caption ="hello"
+End
+`,
+      "SourceForm",
+    );
+
+    const result = applyTokenMap(ir, { X: "BAR" });
+
+    // Token survives in the serialized output (Checksum is preserved).
+    expect(serializeFormTxt(result.ir)).toContain("{{X}}");
+    // Truthfulness contract: it is NOT applied.
+    expect(result.appliedTokens).not.toContain("X");
+    // It IS reported as missing.
+    expect(result.missingTokens).toContain("X");
+  });
+
+  it("appliedTokens includes only tokens whose {{...}} pattern was actually replaced in the serialized IR (issue #622 #B)", () => {
+    // Source: token appears once in a layout Caption. Map has the token.
+    const ir = loadIr(
+      `Version =21
+Begin Form
+    Caption ="Hello {{X}}"
+End
+`,
+      "SourceForm",
+    );
+
+    const result = applyTokenMap(ir, { X: "World" });
+
+    expect(result.appliedTokens).toContain("X");
+    expect(serializeFormTxt(result.ir)).toContain('Caption ="Hello World"');
+    expect(serializeFormTxt(result.ir)).not.toContain("{{X}}");
+  });
+
   it("leaves unmapped tokens verbatim under warn-pass-through and records them as missing", () => {
     const ir = loadIr(SOURCE_TOKEN_IN_QUOTED_SCALAR, "SourceForm");
 
