@@ -69,6 +69,58 @@ describe("Component Resolver", () => {
       });
     });
 
+    it("should resolve type 100 with rpt prefix as reports — prefix wins over fallback (issue #622 #A)", () => {
+      // REGRESSION GUARD: the prefix check MUST run BEFORE the
+      // `vbaType === 100` form-default fallback. If someone reorders the
+      // function or moves the prefix block after the fallback, this test
+      // goes red — `rptDaily, 100` would fall through to the form-default.
+      const result = resolveComponent("rptDaily", 100);
+      expect(result).toEqual({
+        folder: "reports",
+        extension: ".report.txt",
+        type: "report",
+      });
+    });
+
+    it("should resolve type 100 with rpt_ prefix as reports (issue #622 #A)", () => {
+      const result = resolveComponent("rpt_Foo", 100);
+      expect(result).toEqual({
+        folder: "reports",
+        extension: ".report.txt",
+        type: "report",
+      });
+    });
+
+    it("should resolve type 100 with report_ prefix as reports — existing behavior preserved (issue #622 #A)", () => {
+      // Regression guard for the legacy `report_` prefix. The widened
+      // prefix set MUST keep the existing `report_` contract intact.
+      const result = resolveComponent("report_X", 100);
+      expect(result).toEqual({
+        folder: "reports",
+        extension: ".report.txt",
+        type: "report",
+      });
+    });
+
+    it("should resolve lowercase rpt prefix as reports (case-insensitive) (issue #622 #A)", () => {
+      // DESIGN DECISION (issue #622 #A edge case): the prefix check uses
+      // `nameLower.startsWith(prefix)` with lowercase prefixes, so
+      // `rptlowercase` matches the `rpt` prefix and resolves to reports.
+      //
+      // We DELIBERATELY do NOT narrow to `rpt[A-Z]` (uppercase-required).
+      // In legacy Access naming, `rpt` is conventionally lowercase (same
+      // as `frm`, `mod`, `cls`); requiring uppercase would reject the
+      // natural form. If false-positives bite on real `rpt*` modules in
+      // a future project, the design reserves narrowing as a future
+      // mitigation — the current behavior is case-insensitive match.
+      const result = resolveComponent("rptlowercase", 100);
+      expect(result).toEqual({
+        folder: "reports",
+        extension: ".report.txt",
+        type: "report",
+      });
+    });
+
     it("should resolve type 100 with Form_ prefix as forms", () => {
       const result = resolveComponent("Form_Options", 100);
       expect(result).toEqual({
