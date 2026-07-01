@@ -222,3 +222,280 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// slice 5 (issue #618) — `dysflow_create_form_from_template`
+// ---------------------------------------------------------------------------
+//
+// Fixture used for the clone engine: contains `{{FormName}}` and
+// `{{TitleCaption}}` placeholders in layout scalars and a PreservedKey
+// (`PrtDevMode`) that does NOT carry tokens.
+const CLONE_SOURCE_FORM = `Version =21
+Checksum =-1482272507
+Begin Form
+    Caption ="{{TitleCaption}}"
+    DefaultValue ="hello {{FormName}}"
+    PrtDevMode = Begin
+        0xDEADBEEF
+    End
+    Begin TextBox
+        Name ="txt{{FormName}}"
+    End
+End`;
+
+const CLONE_BENCH_SOURCE_PATH = "C:\\bench\\forms\\Form_CloneSource.form.txt";
+const CLONE_BENCH_TARGET_PATH = "C:\\bench\\forms\\Form_CloneTarget.form.txt";
+const CLONE_PROJECT_SOURCE_PATH = "C:\\repo\\forms\\Form_CloneSource.form.txt";
+const CLONE_BENCH_ROOT = "C:\\bench\\forms";
+
+describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () => {
+  it("handles dysflow_create_form_from_template", () => {
+    expect(VbaFormsAdapter.handles("dysflow_create_form_from_template")).toBe(true);
+  });
+
+  it("dry-runs with bench-first resolution: reads bench source, never writes or imports", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_PROJECT_SOURCE_PATH) {
+        throw new Error("FileSystemPort: bench-first should not have read projectRoot");
+      }
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Slice 5 envelope: sourcePath, targetPath, mode, importGate, appliedTokens, missingTokens, warnings
+      expect(result.data).toMatchObject({ mode: "dry-run", importGate: "not-run" });
+      expect(result.data).toMatchObject({
+        sourcePath: CLONE_BENCH_SOURCE_PATH,
+      });
+      const data = result.data as { appliedTokens: string[]; targetSource: string };
+      expect(data.appliedTokens).toEqual(expect.arrayContaining(["FormName", "TitleCaption"]));
+      // Post-replacement text replaces tokens inside layout scalars.
+      expect(data.targetSource).toContain('Caption ="Cloned Caption"');
+      expect(data.targetSource).toContain("txtCloneTarget");
+      // PrtDevMode bytes remain unchanged.
+      expect(data.targetSource).toContain("0xDEADBEEF");
+    }
+    expect(readFile).toHaveBeenCalledWith(CLONE_BENCH_SOURCE_PATH);
+    expect(readFile).not.toHaveBeenCalledWith(CLONE_PROJECT_SOURCE_PATH);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("falls back to projectRoot when bench cache does not have the source form", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) {
+        throw new Error("ENOENT");
+      }
+      if (path === CLONE_PROJECT_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(readFile).toHaveBeenCalledWith(CLONE_BENCH_SOURCE_PATH);
+    expect(readFile).toHaveBeenCalledWith(CLONE_PROJECT_SOURCE_PATH);
+    // Projectroot fallback was used. Result echoes the resolved source.
+    if (result.ok) {
+      expect(result.data).toMatchObject({ sourcePath: CLONE_PROJECT_SOURCE_PATH });
+    }
+  });
+
+  it("apply: writes the token-replaced target and invokes import_modules as the LoadFromText gate", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      // Target does not yet exist — readFile throws ENOENT.
+      if (path === CLONE_BENCH_TARGET_PATH) throw new Error("ENOENT");
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({ mode: "apply", importGate: "passed" });
+      expect(result.data).toMatchObject({
+        sourcePath: CLONE_BENCH_SOURCE_PATH,
+        targetPath: CLONE_BENCH_TARGET_PATH,
+      });
+    }
+    // Target was written with the token-replaced content.
+    expect(writeFile).toHaveBeenCalledWith(
+      CLONE_BENCH_TARGET_PATH,
+      expect.stringContaining('Caption ="Cloned Caption"'),
+      "utf8",
+    );
+    // import_modules apply gate was invoked with the resolved target as the module.
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+      "import_modules",
+      expect.objectContaining({
+        moduleNames: ["CloneTarget"],
+        apply: true,
+        importMode: "Auto",
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("rejects when target exists and overwrite is false (FORM_TARGET_EXISTS), no write, no import", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const EXISTING_TARGET_CONTENT = "PRESERVE ME";
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) return Promise.resolve(EXISTING_TARGET_CONTENT);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      // overwrite omitted — defaults to false
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_TARGET_EXISTS" } });
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("overwrites an existing target when overwrite=true and writes the token-replaced content", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) return Promise.resolve("PRESERVE ME");
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
+      overwrite: true,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith(
+      CLONE_BENCH_TARGET_PATH,
+      expect.stringContaining("Cloned Caption"),
+      "utf8",
+    );
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the original target contents when the import gate fails", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "GATE_FAILED",
+        message: "import_modules rejected",
+        retryable: false,
+      }),
+    );
+    const writeFile = vi.fn();
+    const ORIGINAL_TARGET = "ORIGINAL TARGET CONTENT — RESTORE ME";
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) return Promise.resolve(ORIGINAL_TARGET);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      overwrite: true,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    // The restore was the LAST write — writeFile received ORIGINAL_TARGET on the target path.
+    expect(writeFile).toHaveBeenLastCalledWith(CLONE_BENCH_TARGET_PATH, ORIGINAL_TARGET, "utf8");
+  });
+
+  it("rejects strict missing tokens via FORM_MUTATION_INVALID", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) throw new Error("ENOENT");
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    // TitleCaption is unmapped — strict policy must reject before any write.
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      missingTokenPolicy: "strict",
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_MUTATION_INVALID" } });
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid token map with FORM_TOKEN_MAP_INVALID", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    // Empty token key — engine rejects at validation.
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { "": "X" },
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_TOKEN_MAP_INVALID" } });
+    expect(fs.readFile).not.toHaveBeenCalled();
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+});
