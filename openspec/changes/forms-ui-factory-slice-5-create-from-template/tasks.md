@@ -53,6 +53,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Docs + parity contract (PR 3 complete)
 
-- [ ] 5.1 Update `README.md` MCP tools table: add `dysflow_create_form_from_template` entry with signature, `dry-run` default, and token-map description
-- [ ] 5.2 Update `src/adapters/mcp/tool-parity-registry.ts` `implementedToolNames` and description to reflect the new tool
-- [ ] 5.3 Confirm `pnpm test` safety net is green
+- [x] 5.1 Update `README.md` MCP tools table: add `dysflow_create_form_from_template` entry with signature, `dry-run` default, and token-map description
+- [x] 5.2 Update `src/adapters/mcp/tool-parity-registry.ts` `implementedToolNames` and description to reflect the new tool
+- [x] 5.3 Confirm `pnpm test` safety net is green
