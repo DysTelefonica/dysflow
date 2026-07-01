@@ -9,6 +9,9 @@
 #### F3
 - **Empty-string caller overrides for `accessDbPath`/`backendPath`/`destinationRoot`/`projectRoot` are now treated as no override.** Previously `""` silently won the `??` precedence test, overwriting repo-config defaults. Callers relying on `""` as a fallback marker must now omit the field instead (#619).
 
+#### F4
+- **`export_all prune` no longer deletes legacy `.frm` orphan files.** The allow-list now exactly matches AGENTS.md: `.bas`/`.cls`/`.form.txt`/`.report.txt`. `.frm` (the legacy binary form format) is not in the managed allow-list and survives prune even when no matching VBE module exists (#619).
+
 ## [v1.13.0] - 2026-07-01
 
 - chore(openspec): archive forms-ui-factory-slice-5-create-from-template - chore(sdd): apply-progress + tasks.md for slice 5 PR 3 ÔÇö 18/18 complete - feat(mcp): align parity registry + contract tests with new tool - docs(mcp): document dysflow_create_form_from_template in README - chore(sdd): apply-progress + tasks.md for slice 5 PR 2 - test(integration): bench round-trip with injected {{FormName}} and {{TitleCaption}} tokens - feat(adapter): bench-cache-first path resolution and restore-on-failure for create-from-template - feat(mcp): register dysflow_create_form_from_template with write gate - chore(sdd): apply-progress + tasks.md for slice 5 PR 1 - refactor(core): share preserved-metadata-key predicate with applyTokenMap - feat(core): add cloneFormFromTemplate + applyTokenMap (issue #618, slice 5 PR 1) - chore(openspec): scaffold slice 5 create-from-template change - feat(mcp-tools): expose serialize/deserialize for Forms IR (slice 3) - chore(openspec): archive forms-ui-factory-slice-4-mutation-primitives

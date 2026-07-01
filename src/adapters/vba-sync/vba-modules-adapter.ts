@@ -114,12 +114,12 @@ export interface VbaModulesOrchestrator {
   ): Promise<OperationResult<unknown>>;
 }
 
-const MANAGED_CODE_EXTENSIONS = [".bas", ".cls", ".frm"];
+const MANAGED_CODE_EXTENSIONS = [".bas", ".cls"];
 
 /**
  * Maps a disk file name to the VBA module name it represents, or null when the
  * file is not a managed source artifact. Forms/reports serialize as
- * `<name>.form.txt` / `<name>.report.txt`; code lives in `.bas` / `.cls` / `.frm`.
+ * `<name>.form.txt` / `<name>.report.txt`; code lives in `.bas` / `.cls`.
  * Keep this aligned with the export layout so orphan detection and pruning
  * agree on what counts as a managed file.
  */
@@ -585,7 +585,7 @@ export class VbaModulesAdapter {
             modName = entryName.slice(0, -".report.txt".length);
           } else {
             const ext = extname(entryName).toLowerCase();
-            if ([".bas", ".cls", ".frm"].includes(ext)) {
+            if ([".bas", ".cls"].includes(ext)) {
               modName = parse(entryName).name;
             }
           }
