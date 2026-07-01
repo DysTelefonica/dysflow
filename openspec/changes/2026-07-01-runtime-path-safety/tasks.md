@@ -366,6 +366,52 @@ git revert <sha>
 ```
 Re-adds `.frm` to both lists and restores the docstring. No effect on PRs 1/2.
 
+### Status: ✅ PR 3 COMPLETE (2026-07-01)
+
+All 4 new tests pass; under the 400-line review budget.
+
+#### Implementation commits
+
+| Commit | Work unit | SDD tasks | Verification | Access sync |
+| --- | --- | --- | --- | --- |
+| `972968a` | F4 fix + 4 tests + `AGENTS.md` docstring + `CHANGELOG.md` F4 bullet | F4 (drop `.frm` from prune allow-list, AGENTS.md alignment) | `pnpm vitest run test/adapters/vba-sync/vba-modules-adapter.test.ts` → 55/55 PASS (51 baseline + 4 new) | no `.accdb` change; code-only |
+
+**Full suite**: `pnpm test` → 1899/1900 PASS (1 pre-existing real-Access flake at `test/core/runner/access-runner.test.ts:1358`, same flake documented in PR 1 and PR 2). NOT a regression; the flake requires the real Access fixture at `C:\Proyectos\dysflow\E2E_testing\NoConformidades.accdb` which only exists in the parent repo path, not the worktree.
+
+**Build**: `pnpm build` → clean (`tsc -p tsconfig.json` → 0). **Lint**: `pnpm lint` → 0 errors (3 pre-existing warnings in `test/integration/form-template-clone-bench.test.ts`, unchanged).
+
+#### TDD cycle evidence (F4 — `test/adapters/vba-sync/vba-modules-adapter.test.ts`)
+
+| Test | RED | GREEN | REFACTOR |
+| --- | --- | --- | --- |
+| `export_all prune never deletes .frm orphan files (#619)` | FAIL: `prune.deleted` contained the `.frm` path | PASS after F4 fix | — |
+| `export_all prune keeps .bas and .cls orphans deletable (#619)` | PASS by baseline (positive control) — locked the allow-list contract | PASS | — |
+| `export_all prune ignores .txt and other non-allow-listed extensions (#619)` | PASS by baseline (existing non-allow-list behavior) — locked the contract | PASS | — |
+| `export_all prune adversarial .frm masquerade attempt — not deleted even when no VBE match (#619)` | FAIL: `prune.deleted` contained the masquerading `.frm` path | PASS after F4 fix | — |
+
+#### Files Changed (vs `main` post-PR2 merge `dfa5f24`)
+
+| File | Action | What |
+|------|--------|------|
+| `src/adapters/vba-sync/vba-modules-adapter.ts` | Modify | F4: drop `.frm` from `MANAGED_CODE_EXTENSIONS` constant (line 117), drop `.frm` from the `auditOrphans` inline list (line 588), fix module-name docstring (line 122) |
+| `test/adapters/vba-sync/vba-modules-adapter.test.ts` | Modify | +4 new F4 tests under new `describe("export_all prune allow-list parity (#619)")` |
+| `AGENTS.md` | Modify | Add explicit `.frm` exclusion note to the prune-guardrail bullet (line 90-95) |
+| `CHANGELOG.md` | Modify | Append F4 bullet to the existing `[Unreleased]` section |
+| `openspec/changes/2026-07-01-runtime-path-safety/tasks.md` | Modify | PR 3 status, commits table, TDD evidence, file-changes table |
+
+**Total diff**: ~85–105 lines (insertion/deletion counts finalized at commit time). Within the 400-line review budget.
+
+#### Deviations from design
+
+- **AGENTS.md update included** (per orchestrator task brief): the design said "no change" because AGENTS.md already documented the correct allow-list; the orchestrator asked for an explicit `.frm` exclusion sentence to make the contract unambiguous. Added a single sentence to the prune-guardrail bullet.
+
+#### Rollback
+
+```bash
+git revert 972968a
+```
+Re-adds `.frm` to both lists, restores the docstring, removes the AGENTS.md sentence, and removes the CHANGELOG F4 bullet. No effect on PRs 1/2.
+
 ---
 
 ## Cross-PR Verification Contract
