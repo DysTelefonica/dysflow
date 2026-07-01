@@ -544,7 +544,7 @@ function metadataSnapshot(ir: FormIR): string[] {
   const out: string[] = [];
   const visitEntry = (entry: PropertyEntry): void => {
     if (entry.kind === "empty") return;
-    if (!PRESERVED_METADATA_KEYS.some((key) => entry.key === key || entry.key.startsWith(key))) {
+    if (!isPreservedMetadataKey(entry.key)) {
       return;
     }
     if (entry.kind === "blob") out.push(`${entry.key}=Begin\n${entry.lines.join("\n")}\nEnd`);
