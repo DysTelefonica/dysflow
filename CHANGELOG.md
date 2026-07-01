@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+### mcp-contract-safety (#621)
+
+#### F1 (PR 1a of 4 — this PR)
+- **`run_vba` / `dysflow_vba_execute` now default-deny** when no `allowedProcedures` is configured and `dryRun: true` is not passed. The MCP contract (`MCP_TOOL_CONTRACTS`) reclassifies both as `conditional-write` / `writeGate: "conditional"` with summaries that mention the allowlist and `dryRun`. The handler at `canonical-handlers.ts:ensureProcedureAllowed` refuses with `MCP_INPUT_INVALID` (text matching `/allowedProcedures|dryRun/`) when the call would otherwise run arbitrary compiled VBA. `dryRun: true` is the explicit escape hatch for unconfigured projects. `test_vba` contract metadata is also reclassified; runtime gate for `test_vba` lands in PR 1b.
+- **`AccessVbaRequest` gains `dryRun?: boolean`** (`src/core/contracts/index.ts`) — projects through `buildRunVbaRequest` (`alias-tools.ts`) and the modern handler. Schema exposes `dryRun: boolean` on both `VBA_EXECUTE_SCHEMA` (`dysflow-schemas.ts`) and the legacy `run_vba` schema (`vba-sync-schemas.ts`). Migration: agents that relied on implicit ad-hoc `run_vba` with no allowlist must either set `allowedProcedures` in `.dysflow/project.json` or pass `dryRun: true`. See `docs/mcp-examples.md` (updated separately) for the new pattern.
+
 ### process-lifecycle-safety (#620)
 
 #### F2

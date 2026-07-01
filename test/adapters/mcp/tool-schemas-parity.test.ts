@@ -5,6 +5,7 @@ import {
   HTTP_QUERY_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
   HTTP_WRITE_QUERY_SCHEMA,
+  VBA_EXECUTE_SCHEMA,
 } from "../../../src/adapters/mcp/schemas";
 import { MCP_TOOL_SCHEMAS } from "../../../src/adapters/mcp/tools";
 
@@ -90,5 +91,19 @@ describe("HTTP validation schemas", () => {
       type: "array",
       items: {},
     });
+  });
+
+  it("MCP VBA_EXECUTE_SCHEMA declares dryRun as an optional boolean (PR1a #621 escape hatch)", () => {
+    const dryRun = VBA_EXECUTE_SCHEMA.properties?.dryRun as { type: string };
+    expect(dryRun).toBeDefined();
+    expect(dryRun.type).toBe("boolean");
+    expect(VBA_EXECUTE_SCHEMA.required).not.toContain("dryRun");
+  });
+
+  it("MCP run_vba schema declares dryRun as an optional boolean (PR1a #621 escape hatch)", () => {
+    const dryRun = MCP_TOOL_SCHEMAS.run_vba?.properties?.dryRun as { type: string };
+    expect(dryRun).toBeDefined();
+    expect(dryRun.type).toBe("boolean");
+    expect(MCP_TOOL_SCHEMAS.run_vba?.required).not.toContain("dryRun");
   });
 });

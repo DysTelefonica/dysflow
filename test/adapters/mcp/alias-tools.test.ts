@@ -51,6 +51,33 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     }
   });
 
+  it("buildRunVbaRequest projects dryRun:true through to the typed request (PR1a #621 escape hatch)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({
+      procedureName: "Test",
+      dryRun: true,
+    });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.dryRun).toBe(true);
+    }
+  });
+
+  it("buildRunVbaRequest leaves dryRun undefined when not provided (PR1a #621)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({
+      procedureName: "Test",
+    });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.dryRun).toBeUndefined();
+    }
+  });
+
   it("buildRunVbaRequest returns McpToolResult for invalid argsJson (not throws)", async () => {
     const { buildRunVbaRequest, isMcpToolResult } = await import(
       "../../../src/adapters/mcp/alias-tools.js"

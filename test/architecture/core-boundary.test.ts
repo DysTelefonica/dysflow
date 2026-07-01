@@ -57,7 +57,7 @@ describe("MCP/core architecture boundary", () => {
     await expect(
       tools
         .find((tool) => tool.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "Smoke" }),
+        ?.handler({ procedureName: "Smoke", dryRun: true }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
@@ -69,7 +69,7 @@ describe("MCP/core architecture boundary", () => {
     ).resolves.toMatchObject({ isError: false });
 
     expect(requests).toEqual([
-      { service: "vba", request: { procedureName: "Smoke" } },
+      { service: "vba", request: { procedureName: "Smoke", dryRun: true } },
       { service: "query", request: { sql: "SELECT 1", mode: "read" } },
       { service: "diagnostics", request: { includeEnvironment: true } },
     ]);
