@@ -57,6 +57,14 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   // binary is the single source of truth for the apply check (#616).
   dysflow_form_serialize: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   dysflow_form_deserialize: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  // slice 5 (#618) — clone a form from a template, apply `{{Token}}` placeholders, write
+  // the cloned form to a target path, route through the import_modules LoadFromText gate.
+  // Default dry-run is the safe semantic; a real binary mutation requires apply:true.
+  dysflow_create_form_from_template: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+  },
   vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // query maintenance (9)

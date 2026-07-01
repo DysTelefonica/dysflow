@@ -44,7 +44,8 @@ export function createDispatchTool(
     name === "dysflow_form_add_control" ||
     name === "dysflow_form_move_control" ||
     name === "dysflow_form_rename_control" ||
-    name === "dysflow_form_deserialize";
+    name === "dysflow_form_deserialize" ||
+    name === "dysflow_create_form_from_template";
 
   const isWriteGated =
     route.kind === "query-write-fixture" ||
@@ -88,11 +89,15 @@ export function createDispatchTool(
               // service-level default there is different.
               // dysflow_form_deserialize joins the slice-4 mutation family with
               // the same apply/dryRun semantics (#616 slice 3).
+              // dysflow_create_form_from_template (slice 5, #618) extends that
+              // family: default dry-run at the service level; apply:true is a
+              // binary mutation gated by MCP_WRITES_DISABLED.
               name === "catalog_add_control" ||
               name === "dysflow_form_add_control" ||
               name === "dysflow_form_move_control" ||
               name === "dysflow_form_rename_control" ||
-              name === "dysflow_form_deserialize"
+              name === "dysflow_form_deserialize" ||
+              name === "dysflow_create_form_from_template"
               ? resolveIsDryRun(input)
               : name === "generate_form" && hasOwn(input, "dryRun")
                 ? resolveIsDryRun(input)

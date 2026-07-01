@@ -399,6 +399,29 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
+  // slice 5 (issue #618) — `dysflow_create_form_from_template`
+  dysflow_create_form_from_template: {
+    type: "object",
+    required: ["sourceForm", "targetForm", "tokenMap"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      // Form name only (e.g. 'Form_FormRiesgosGestionRiesgo'). The adapter
+      // resolves it to a path via bench-cache first, then projectRoot; the
+      // `.form.txt` extension is appended automatically.
+      sourceForm: SCHEMA_PROPS.sourceForm,
+      targetForm: SCHEMA_PROPS.targetForm,
+      tokenMap: SCHEMA_PROPS.tokenMap,
+      missingTokenPolicy: SCHEMA_PROPS.missingTokenPolicy,
+      strictMissingTokens: SCHEMA_PROPS.strictMissingTokens,
+      overwrite: SCHEMA_PROPS.overwrite,
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,

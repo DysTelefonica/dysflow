@@ -251,6 +251,39 @@ export const SCHEMA_PROPS = {
     type: "string",
     description: "VBA code snippet to execute inline.",
   } as JsonSchemaProperty,
+  // form-template cloning (slice 5, issue #618)
+  sourceForm: {
+    type: "string",
+    description:
+      "Source form name (e.g. 'Form_FormRiesgosGestionRiesgo'). Resolved bench-cache first then projectRoot.",
+  } as JsonSchemaProperty,
+  targetForm: {
+    type: "string",
+    description:
+      "Target form name (e.g. 'Form_FormNuevaAuditoria'). The new form being created. Rejected if the file already exists and overwrite is false.",
+  } as JsonSchemaProperty,
+  tokenMap: {
+    type: "object",
+    additionalProperties: { type: "string" },
+    description:
+      "Token replacement map: '{{Token}}' placeholder -> replacement string. Keys must be non-empty strings; values must be strings.",
+  } as JsonSchemaProperty,
+  missingTokenPolicy: {
+    type: "string",
+    enum: ["warn-pass-through", "strict"],
+    description:
+      "How to handle a token present in the source but absent from tokenMap. 'warn-pass-through' (default) leaves the token verbatim and emits a warning; 'strict' throws FORM_MUTATION_INVALID.",
+  } as JsonSchemaProperty,
+  strictMissingTokens: {
+    type: "boolean",
+    description:
+      "Convenience flag equivalent to missingTokenPolicy:'strict'. When true, any unmapped source token is a typed error and no target is written.",
+  } as JsonSchemaProperty,
+  overwrite: {
+    type: "boolean",
+    description:
+      "When true, an existing target .form.txt is replaced via the gated restore path so a failed load restores prior state. Default false.",
+  } as JsonSchemaProperty,
 };
 
 /** Shared context props used by most tools (single source of truth). */

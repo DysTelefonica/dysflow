@@ -181,6 +181,15 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "testsPath",
       "exists_name",
       "code",
+      // slice 5 (issue #618) — `dysflow_create_form_from_template` atoms.
+      // Documented here as mechanical contract maintenance; the full tool-count
+      // parity contract update is PR 3 (README + tool-parity-registry edits).
+      "sourceForm",
+      "targetForm",
+      "tokenMap",
+      "missingTokenPolicy",
+      "strictMissingTokens",
+      "overwrite",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

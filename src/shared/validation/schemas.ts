@@ -13,7 +13,14 @@ export type JsonSchemaProperty = {
   pattern?: string;
   items?: JsonSchemaProperty;
   maxItems?: number;
-  additionalProperties?: boolean;
+  // Boolean form (true/false) is what the dysflow validator currently
+  // understands. Schema form (a nested JsonSchemaProperty) is the
+  // canonical JSON-Schema way to constrain values of arbitrary keys
+  // (e.g. `additionalProperties: { type: "string" }` for a string map).
+  // The validator passes the schema form through without enforcing it
+  // (effectively `additionalProperties: true`); documented for future
+  // tightening.
+  additionalProperties?: boolean | JsonSchemaProperty;
   required?: readonly string[];
   properties?: Record<string, JsonSchemaProperty>;
 };

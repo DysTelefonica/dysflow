@@ -49,6 +49,7 @@ describe("public form mutation MCP tools", () => {
     "dysflow_form_add_control",
     "dysflow_form_move_control",
     "dysflow_form_rename_control",
+    "dysflow_create_form_from_template",
   ] as const;
 
   it("registers all mutation tool names as public MCP tools", () => {
@@ -91,6 +92,22 @@ describe("public form mutation MCP tools", () => {
         apply: expect.any(Object),
       }),
     );
+    // slice 5 (issue #618) — `dysflow_create_form_from_template` requires
+    // sourceForm + targetForm + tokenMap and supports dryRun/apply,
+    // missingTokenPolicy, overwrite. Source target must NOT carry a `.form.txt`
+    // extension because the adapter derives it from the name (mirroring slice-1
+    // FormIR naming).
+    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_create_form_from_template.properties).toEqual(
+      expect.objectContaining({
+        sourceForm: expect.any(Object),
+        targetForm: expect.any(Object),
+        tokenMap: expect.any(Object),
+        missingTokenPolicy: expect.any(Object),
+        overwrite: expect.any(Object),
+        dryRun: expect.any(Object),
+        apply: expect.any(Object),
+      }),
+    );
   });
 
   it("allows dry-run mutation calls when writes are disabled and routes to the VBA sync service", async () => {
@@ -126,5 +143,36 @@ describe("public form mutation MCP tools", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("dysflow_create_form_from_template — dry-run is allowed when writes are disabled; apply is write-gated", async () => {
+    const { tool, vbaSyncToolService } = toolByName("dysflow_create_form_from_template", false);
+
+    // Dry-run should pass through to the VBA sync service (default dry-run is
+    // the safe semantic; we never accept a binary-mutating call with writes
+    // disabled, but a dry-run is a no-op for the binary).
+    const dryRunResult = await tool.handler({
+      sourceForm: "Form_FormRiesgosGestionRiesgo",
+      targetForm: "Form_FormNuevaAuditoria",
+      tokenMap: { FormName: "FormNuevaAuditoria" },
+      dryRun: true,
+    });
+
+    expect(dryRunResult.isError).toBe(false);
+    expect(vbaSyncToolService.requests.slice(-1)[0]).toMatchObject({
+      toolName: "dysflow_create_form_from_template",
+      input: expect.objectContaining({ dryRun: true }),
+    });
+
+    // Apply must be write-gated when writes are disabled.
+    const applyResult = await tool.handler({
+      sourceForm: "Form_FormRiesgosGestionRiesgo",
+      targetForm: "Form_FormNuevaAuditoria",
+      tokenMap: { FormName: "FormNuevaAuditoria" },
+      apply: true,
+    });
+
+    expect(applyResult.isError).toBe(true);
+    expect(applyResult.content[0]?.text).toContain("MCP_WRITES_DISABLED");
   });
 });

@@ -51,6 +51,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "dysflow_form_rename_control",
   "dysflow_form_serialize",
   "dysflow_form_deserialize",
+  "dysflow_create_form_from_template",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -155,6 +156,12 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Read-only round-trip serializer: parse the .form.txt at sourcePath, run it through parseFormTxt -> serializeFormTxt, and return the resulting text with byteEqual + metadataReport (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Default read-only (dry-run), no writes; apply:true is ignored on this tool.",
   dysflow_form_deserialize:
     "Write a FormIR to sourcePath after re-serializing it, then invoke the import_modules LoadFromText gate. Defaults to dry-run (no write, no import). apply:true writes the .form.txt and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.",
+  // slice 5 (issue #618) — clone a form from a template by applying a caller-supplied
+  // `{{Token}}` token map; resolve source/target via bench-cache first then projectRoot;
+  // default dry-run, apply:true routes through the LoadFromText gate and restores the
+  // original target on gate failure. Write-gated.
+  dysflow_create_form_from_template:
+    "Clone a source .form.txt into a new target form by applying a token map (e.g. {{FormName}} -> Form_FormNuevaAuditoria). Resolves sourceForm/targetForm bench-cache first, projectRoot second. Default dry-run returns the post-replacement preview + applied/missing token summary; apply:true writes the target and routes through the import_modules LoadFromText gate, restoring the original target on gate failure. Use overwrite:true to replace an existing target. Defaults: missingTokenPolicy:'warn-pass-through'. Write-gated.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:
