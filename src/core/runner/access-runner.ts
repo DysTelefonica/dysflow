@@ -189,12 +189,7 @@ export class AccessPowerShellRunner implements AccessRunner {
       return await runWithAccessExecutionLock(
         config.accessDbPath,
         async () => {
-          return await this.runLockedOperation<TData>(
-            operation,
-            config,
-            options,
-            heartbeatErrors,
-          );
+          return await this.runLockedOperation<TData>(operation, config, options, heartbeatErrors);
         },
         this.lockAcquireTimeoutMs,
         this.lockFileSystem,

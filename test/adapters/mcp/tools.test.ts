@@ -1335,7 +1335,9 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "dysflow_vba_execute")
         ?.handler({ procedureName: "DeleteAll", dryRun: true });
       expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([expect.objectContaining({ procedureName: "DeleteAll", dryRun: true })]);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
+      ]);
     });
 
     it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
@@ -1349,7 +1351,9 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "dysflow_vba_execute")
         ?.handler({ procedureName: "AnyProcedure", dryRun: true });
       expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true })]);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
+      ]);
     });
 
     it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
@@ -1434,7 +1438,9 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "run_vba")
         ?.handler({ procedureName: "DeleteAll", dryRun: true });
       expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([expect.objectContaining({ procedureName: "DeleteAll", dryRun: true })]);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
+      ]);
     });
 
     it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
@@ -1448,7 +1454,9 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "run_vba")
         ?.handler({ procedureName: "AnyProcedure", dryRun: true });
       expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true })]);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
+      ]);
     });
 
     it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
