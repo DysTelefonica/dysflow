@@ -38,18 +38,18 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: RED + GREEN — Adapter and MCP (PR 2)
 
-- [ ] 3.1 Add `sourceForm`, `targetForm`, `tokenMap`, `strictMissingTokens`, `overwrite`, `missingTokenPolicy` schema atoms to `src/shared/validation/schema-props.ts`
-- [ ] 3.2 RED: add failing tests to `src/adapters/vba-sync/vba-forms-adapter-mutation.test.ts` — bench-first resolve, dry-run no writes, apply calls `import_modules`, gate-failure restore, overwrite path, strict-missing, missing-token warning
-- [ ] 3.3 GREEN: implement `cloneFormFromTemplate` handler in `src/adapters/vba-sync/vba-forms-adapter.ts` — bench-cache-first resolveSource, dryRun vs apply branch, capture originalSource, best-effort restore on gate failure
-- [ ] 3.4 RED: add failing tests to `test/adapters/mcp/form-mutation-tools.test.ts` — tool registered in list, schema parity, dispatch routes with `mutatesBinary:true, mutatesFilesystem:true`
-- [ ] 3.5 GREEN: wire `dysflow_create_form_from_template` in `src/adapters/mcp/mcp-tool-registry.ts`; add route in `src/adapters/mcp/dispatch-routes.ts`; add JSON schema in `src/adapters/mcp/schemas/vba-sync-schemas.ts`; add to `src/adapters/mcp/tool-parity-registry.ts` `implementedToolNames`
-- [ ] 3.6 GREEN: confirm `pnpm vitest run src/adapters/vba-sync/vba-forms-adapter-mutation.test.ts test/adapters/mcp/form-mutation-tools.test.ts` passes
+- [x] 3.1 Add `sourceForm`, `targetForm`, `tokenMap`, `strictMissingTokens`, `overwrite`, `missingTokenPolicy` schema atoms to `src/shared/validation/schema-props.ts`
+- [x] 3.2 RED: add failing tests to `src/adapters/vba-sync/vba-forms-adapter-mutation.test.ts` — bench-first resolve, dry-run no writes, apply calls `import_modules`, gate-failure restore, overwrite path, strict-missing, missing-token warning
+- [x] 3.3 GREEN: implement `cloneFormFromTemplate` handler in `src/adapters/vba-sync/vba-forms-adapter.ts` — bench-cache-first resolveSource, dryRun vs apply branch, capture originalSource, best-effort restore on gate failure
+- [x] 3.4 RED: add failing tests to `test/adapters/mcp/form-mutation-tools.test.ts` — tool registered in list, schema parity, dispatch routes with `mutatesBinary:true, mutatesFilesystem:true`
+- [x] 3.5 GREEN: wire `dysflow_create_form_from_template` in `src/adapters/mcp/mcp-tool-registry.ts`; add route in `src/adapters/mcp/dispatch-routes.ts`; add JSON schema in `src/adapters/mcp/schemas/vba-sync-schemas.ts`; add to `src/adapters/mcp/tool-parity-registry.ts` `implementedToolNames`
+- [x] 3.6 GREEN: confirm `pnpm vitest run src/adapters/vba-sync/vba-forms-adapter-mutation.test.ts test/adapters/mcp/form-mutation-tools.test.ts` passes
 
 ## Phase 4: Integration + restore tests (PR 3 foundation)
 
-- [ ] 4.1 RED: add failing integration test to `test/integration/form-ir-mutation-preservation.test.ts` — inject `{{FormName}}` into bench cache source at test time, clone to `Form_FormNuevaAuditoria`, byte-compare result against manual string-replace of same tokens; assert `PRESERVED_METADATA_KEYS` untouched; skip when bench cache absent
-- [ ] 4.2 GREEN: run integration test; confirm bench round-trip is byte-equivalent
-- [ ] 4.3 Verify restore-on-failure path: mock a gate failure and assert source is restored and typed error returned
+- [x] 4.1 RED: add failing integration test to `test/integration/form-ir-mutation-preservation.test.ts` — inject `{{FormName}}` into bench cache source at test time, clone to `Form_FormNuevaAuditoria`, byte-compare result against manual string-replace of same tokens; assert `PRESERVED_METADATA_KEYS` untouched; skip when bench cache absent
+- [x] 4.2 GREEN: run integration test; confirm bench round-trip is byte-equivalent
+- [x] 4.3 Verify restore-on-failure path: mock a gate failure and assert source is restored and typed error returned
 
 ## Phase 5: Docs + parity contract (PR 3 complete)
 
