@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**59 visible MCP tools · Windows / Node 20+**
+**60 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 59 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 60 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -705,6 +705,8 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `sourcePath` (string, required), `formName` (string, optional; derived from filename when omitted), `dryRun`/`apply` (ignored)
 * **`dysflow_form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.
   - Parameters: `sourcePath` (string, required), `ir` (object, required — the slice-1 FormIR), `formName` (string, optional), `dryRun`/`apply`
+* **`dysflow_create_form_from_template`** *(slice 5, #618)*: Clone a source `.form.txt` into a new target form by applying a `{{Token}}` token map (e.g. `{{FormName}}` → `Form_FormNuevaAuditoria`). Resolves `sourceForm`/`targetForm` via bench-cache first, then `projectRoot`. Defaults to dry-run — returns the post-replacement preview plus the applied/missing token summary; `apply:true` writes the target and routes through the `import_modules` LoadFromText gate, restoring the original target on gate failure. Use `overwrite:true` to replace an existing target. `missingTokenPolicy` accepts `warn-pass-through` (default) or `strict`. Write-gated.
+  - Parameters: `sourceForm` (string, required — form name without `.form.txt`), `targetForm` (string, required — target form name), `tokenMap` (object, required — `{ Token: replacement }`), `missingTokenPolicy` (string, optional — `warn-pass-through` | `strict`), `strictMissingTokens` (boolean, optional), `overwrite` (boolean, optional — default `false`), `dryRun`/`apply`
 
 ### MCP protocol and maintenance
 
