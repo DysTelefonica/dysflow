@@ -1621,6 +1621,252 @@ describe("MCP tool registration over core services", () => {
   });
 });
 
+// PR2 (#621 F1 / #6a) — dysflow_query_execute write mode must pass allowTables/
+// denyTables through to queryService. The modern handler spreads the validated
+// input into AccessQueryRequest; the schema change in dysflow-schemas.ts is
+// what makes the fields surface here.
+describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #6a)", () => {
+  it("write mode projects allowTables and denyTables from input into the core query request", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({
+        sql: "UPDATE People SET name='Ada'",
+        mode: "write",
+        apply: true,
+        allowTables: ["People"],
+        denyTables: ["Secrets"],
+      });
+
+    expect(result?.isError).toBe(false);
+    expect(query.requests).toHaveLength(1);
+    expect(query.requests[0]).toMatchObject({
+      sql: "UPDATE People SET name='Ada'",
+      mode: "write",
+      dryRun: false,
+      allowTables: ["People"],
+      denyTables: ["Secrets"],
+    });
+  });
+
+  it("write mode surfaces TABLE_DENIED from the core service as an MCP error", async () => {
+    const query = new FakeQueryService(
+      failureResult(
+        createDysflowError("TABLE_DENIED", "Operation denied on table 'Secrets' by denyTables."),
+      ),
+    );
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({
+        sql: "UPDATE Secrets SET x=1",
+        mode: "write",
+        apply: true,
+        denyTables: ["Secrets"],
+      });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toMatch(/TABLE_DENIED/);
+  });
+
+  it("read mode accepts allowTables/denyTables without failing (they are inert in read mode)", async () => {
+    const query = new FakeQueryService(successResult({ rows: [{ id: 1, name: "Ada" }] }));
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: query,
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({
+        sql: "SELECT * FROM People",
+        mode: "read",
+        allowTables: ["People"],
+        denyTables: ["Secrets"],
+      });
+
+    // Behavioral contract: read mode must not trip the write gate and must
+    // reach the query service. The legacy `query_sql` accepts these fields
+    // harmlessly too — read mode ignores them at the PowerShell layer. The
+    // exact shape of the request (whether allowTables is present) is an
+    // implementation detail; what matters is that the call succeeds.
+    expect(result?.isError).toBe(false);
+    expect(query.requests).toHaveLength(1);
+    expect(query.requests[0]).toMatchObject({
+      sql: "SELECT * FROM People",
+      mode: "read",
+    });
+  });
+
+  it("rejects a non-string element in allowTables before reaching the runner", async () => {
+    const query = new FakeQueryService(successResult({ rows: [] }));
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      true,
+    );
+
+    const result = await tools
+      .find((tool) => tool.name === "dysflow_query_execute")
+      ?.handler({
+        sql: "UPDATE People SET x=1",
+        mode: "write",
+        apply: true,
+        allowTables: ["People", 7],
+      });
+
+    expect(result?.isError).toBe(true);
+    expect(result?.content[0]?.text).toMatch(/allowTables\[1\] must be a string/);
+    expect(query.requests).toEqual([]);
+  });
+});
+
+// PR2 (#621 F2 / #6b) — modern dysflow_access_cleanup must preserve the full
+// surface (projectId, contextId, backendPath, destinationRoot, projectRoot,
+// timeoutMs, strictContext, expectedAccessPath, expectedProjectRoot,
+// expectedDestinationRoot) that the legacy cleanup_access_operation schema
+// declares, instead of silently dropping every field except operationId /
+// accessPath / force via the previous bare cast. The core service does not
+// enforce strictContext today (deferred to a follow-up), but the modern
+// surface must at least carry the param forward to the request.
+describe("dysflow_access_cleanup — full-field pass-through (PR2 #621 F2 / #6b)", () => {
+  function makeCleanupServices(cleanupRequests: unknown[]): DysflowMcpServices {
+    return {
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      cleanupService: {
+        cleanup: async (request) => {
+          cleanupRequests.push(request);
+          return successResult({
+            operationId: "op-pr2-cleanup",
+            accessPid: null,
+            status: "cleaned" as const,
+          });
+        },
+      },
+    };
+  }
+
+  for (const toolName of ["dysflow_access_cleanup", "cleanup_access_operation"] as const) {
+    it(`${toolName} preserves strictContext through to the cleanup service request`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      expect(cleanupTool).toBeDefined();
+
+      const result = await cleanupTool?.handler({
+        operationId: "op-pr2-cleanup",
+        accessPath: "C:/data/app.accdb",
+        strictContext: true,
+      });
+
+      // Non-force path: does NOT trip the write gate, must reach the cleanup service.
+      expect(result?.isError).toBe(false);
+      expect(cleanupRequests).toHaveLength(1);
+      expect(cleanupRequests[0]).toMatchObject({
+        operationId: "op-pr2-cleanup",
+        accessPath: "C:/data/app.accdb",
+        strictContext: true,
+      });
+    });
+
+    it(`${toolName} preserves the full optional surface (projectId, backendPath, timeoutMs, expectedAccessPath) in the request`, async () => {
+      const cleanupRequests: unknown[] = [];
+      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+
+      const cleanupTool = tools.find((t) => t.name === toolName);
+      expect(cleanupTool).toBeDefined();
+
+      const result = await cleanupTool?.handler({
+        operationId: "op-pr2-cleanup",
+        accessPath: "C:/data/app.accdb",
+        projectId: "demo",
+        contextId: "run-42",
+        backendPath: "C:/data/backend.accdb",
+        destinationRoot: "C:/data/dest",
+        projectRoot: "C:/data/proj",
+        timeoutMs: 5000,
+        expectedAccessPath: "C:/data/app.accdb",
+        expectedProjectRoot: "C:/data/proj",
+        expectedDestinationRoot: "C:/data/dest",
+      });
+
+      expect(result?.isError).toBe(false);
+      expect(cleanupRequests).toHaveLength(1);
+      expect(cleanupRequests[0]).toMatchObject({
+        operationId: "op-pr2-cleanup",
+        accessPath: "C:/data/app.accdb",
+        projectId: "demo",
+        contextId: "run-42",
+        backendPath: "C:/data/backend.accdb",
+        destinationRoot: "C:/data/dest",
+        projectRoot: "C:/data/proj",
+        timeoutMs: 5000,
+        expectedAccessPath: "C:/data/app.accdb",
+        expectedProjectRoot: "C:/data/proj",
+        expectedDestinationRoot: "C:/data/dest",
+      });
+    });
+  }
+
+  it("legacy and modern cleanup builders produce the SAME field set for the same input (parity)", async () => {
+    const { buildCleanupRequest } = await import("../../../src/adapters/mcp/alias-tools.js");
+    const input = {
+      operationId: "op-pr2-cleanup",
+      accessPath: "C:/data/app.accdb",
+      projectId: "demo",
+      backendPath: "C:/data/backend.accdb",
+      strictContext: true,
+      expectedAccessPath: "C:/data/app.accdb",
+      timeoutMs: 5000,
+    };
+
+    const request = buildCleanupRequest(input);
+    const definedKeys = Object.entries(request)
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key)
+      .sort();
+
+    // The legacy alias handler spreads buildCleanupRequest into the request
+    // it forwards to the cleanup service; the modern handler does the same
+    // after PR2 (replacing the bare cast). Parity check: same field set.
+    expect(definedKeys).toEqual(
+      [
+        "accessPath",
+        "backendPath",
+        "expectedAccessPath",
+        "operationId",
+        "projectId",
+        "strictContext",
+        "timeoutMs",
+      ].sort(),
+    );
+  });
+});
+
 // #405: registration invariants — duplicate names throw
 describe("registration invariants — duplicate names throw (#405)", () => {
   function makeTool(name: string) {

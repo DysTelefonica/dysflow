@@ -34,6 +34,73 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     }
   });
 
+  // PR2 (#621 F2 / #6b) — buildCleanupRequest is the parity anchor for the
+  // modern dysflow_access_cleanup handler (replacing the previous bare cast).
+  // Every optional field that the legacy cleanup_access_operation schema
+  // declares MUST project through so both the legacy and modern handlers
+  // forward the same field set to the cleanup service.
+  it("buildCleanupRequest projects the full optional surface (PR2 #621 F2 / #6b)", async () => {
+    const { buildCleanupRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildCleanupRequest({
+      operationId: "op-pr2",
+      accessPath: "C:/data/app.accdb",
+      projectId: "demo",
+      contextId: "run-42",
+      backendPath: "C:/data/backend.accdb",
+      destinationRoot: "C:/data/dest",
+      projectRoot: "C:/data/proj",
+      timeoutMs: 5000,
+      strictContext: true,
+      expectedAccessPath: "C:/data/app.accdb",
+      expectedProjectRoot: "C:/data/proj",
+      expectedDestinationRoot: "C:/data/dest",
+    });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request).toEqual({
+        operationId: "op-pr2",
+        accessPath: "C:/data/app.accdb",
+        force: undefined,
+        projectId: "demo",
+        contextId: "run-42",
+        backendPath: "C:/data/backend.accdb",
+        destinationRoot: "C:/data/dest",
+        projectRoot: "C:/data/proj",
+        timeoutMs: 5000,
+        strictContext: true,
+        expectedAccessPath: "C:/data/app.accdb",
+        expectedProjectRoot: "C:/data/proj",
+        expectedDestinationRoot: "C:/data/dest",
+      });
+    }
+  });
+
+  it("buildCleanupRequest leaves optional fields undefined when not provided (PR2 #621 F2 / #6b)", async () => {
+    const { buildCleanupRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildCleanupRequest({
+      operationId: "op-min",
+      accessPath: "C:/data/app.accdb",
+    });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      // Defined field set is exactly the two required ones; force and the rest
+      // are explicitly undefined so the modern handler does not forward stale
+      // keys to the cleanup service.
+      expect(request.operationId).toBe("op-min");
+      expect(request.accessPath).toBe("C:/data/app.accdb");
+      expect(request.force).toBeUndefined();
+      expect(request.strictContext).toBeUndefined();
+      expect(request.backendPath).toBeUndefined();
+      expect(request.projectRoot).toBeUndefined();
+      expect(request.timeoutMs).toBeUndefined();
+      expect(request.expectedAccessPath).toBeUndefined();
+    }
+  });
+
   it("buildRunVbaRequest ignores extra fields and parses argsJson", async () => {
     const { buildRunVbaRequest, isMcpToolResult } = await import(
       "../../../src/adapters/mcp/alias-tools.js"

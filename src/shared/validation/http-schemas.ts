@@ -5,7 +5,7 @@
 // adapter can import them through the shared validation kernel without
 // crossing the adapter-to-adapter boundary.
 
-import { SCHEMA_PROPS } from "./schema-props.js";
+import { ACCESS_OVERRIDE, CTX_PROPS, SCHEMA_PROPS, STRICT_CTX } from "./schema-props.js";
 import type { JsonObjectSchema } from "./schemas.js";
 
 export const CLEANUP_SCHEMA: JsonObjectSchema = {
@@ -18,11 +18,21 @@ export const CLEANUP_SCHEMA: JsonObjectSchema = {
       minLength: 1,
       description: "Dysflow-owned Access operation id.",
     },
-    accessPath: {
-      type: "string",
-      description: "Access database path associated with the operation.",
-    },
+    // PR2 (#621 F2 / #6b) — modern/legacy alias parity for
+    // cleanup_access_operation. The legacy `cleanup_access_operation` schema
+    // declares the full optional surface via CTX_PROPS / ACCESS_OVERRIDE /
+    // STRICT_CTX / timeoutMs so `buildCleanupRequest` can project every field.
+    // Mirror that surface on the modern `CLEANUP_SCHEMA` (accessPath comes via
+    // ACCESS_OVERRIDE; force stays explicit) so the modern handler (which now
+    // uses `buildCleanupRequest` after PR2) can carry every field through
+    // without the validator silently dropping them via `additionalProperties:
+    // false`. Forward-compat only — core enforcement of `strictContext` lands
+    // in a follow-up.
     force: { type: "boolean", description: "Force cleanup when supported." },
+    ...CTX_PROPS,
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+    timeoutMs: SCHEMA_PROPS.timeoutMs,
   },
 };
 

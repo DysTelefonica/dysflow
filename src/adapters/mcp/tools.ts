@@ -6,6 +6,7 @@ import {
 } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
+import { buildCleanupRequest } from "./alias-tools.js";
 import {
   handleMcpAccessCleanup,
   handleMcpAccessOperationsList,
@@ -148,8 +149,20 @@ export function createDysflowMcpTools(
           services,
           writesEnabled,
           writeAccessResolver,
-          (validatedInput) =>
-            validatedInput as { operationId: string; accessPath: string; force?: boolean },
+          // PR2 (#621 F2 / #6b) — modern/legacy alias parity. The previous
+          // bare cast dropped every field except operationId/accessPath/force.
+          // The legacy `cleanup_access_operation` already uses
+          // `buildCleanupRequest`, which projects the full optional surface
+          // (projectId, contextId, backendPath, destinationRoot, projectRoot,
+          // timeoutMs, strictContext, expectedAccessPath, expectedProjectRoot,
+          // expectedDestinationRoot). Use the same builder here so both
+          // surfaces carry the same field set forward to the cleanup service.
+          // The core service does not yet enforce strictContext
+          // (`AccessOperationCleanupService.cleanup` signature accepts only
+          // `{operationId, accessPath, force?}`); that ripples through to a
+          // follow-up PR. For now the modern surface at least preserves the
+          // param instead of silently dropping it.
+          (validatedInput) => buildCleanupRequest(validatedInput),
         ),
     },
     {
