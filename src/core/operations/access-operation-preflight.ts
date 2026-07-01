@@ -287,6 +287,44 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         continue;
       }
 
+      // F3a (#620): revalidate PID immediately before kill to close the TOCTOU race.
+      // The PID may have been recycled between scan and kill (killing an unrelated
+      // process) or the original process may have exited. Mirrors the
+      // `access-orphan-cleanup.ts:124-141` pattern. Suppress kill on gone; refuse
+      // with the `CLEANUP_RACE_PID_REUSED` diagnostic on mismatch.
+      let revalidated: OsProcessInfo | undefined;
+      try {
+        revalidated = await withTimeout(
+          this.options.processInspector.getProcess(process.pid),
+          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+        );
+      } catch {
+        // Timeout on revalidation: cannot prove the process is still the scanned
+        // MSACCESS.EXE — suppress kill rather than risk killing a recycled PID.
+        result.errors.push({
+          operationId: "orphan",
+          message: `Preflight kill suppressed for PID ${process.pid}: revalidation timed out.`,
+        });
+        continue;
+      }
+      if (revalidated === undefined) {
+        result.errors.push({
+          operationId: "orphan",
+          message: `Preflight kill suppressed for PID ${process.pid}: process no longer exists.`,
+        });
+        continue;
+      }
+      if (
+        revalidated.name.toUpperCase() !== "MSACCESS.EXE" ||
+        !sameProcessStartTime(revalidated.startTime, process.startTime)
+      ) {
+        result.errors.push({
+          operationId: "orphan",
+          message: `CLEANUP_RACE_PID_REUSED: PID ${process.pid} is no longer the scanned MSACCESS.EXE (revalidation mismatch).`,
+        });
+        continue;
+      }
+
       try {
         await withTimeout(
           this.options.processKiller.kill(process.pid),
@@ -392,6 +430,38 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         result.errors.push({
           operationId: record.operationId,
           message: `Refused to kill PID ${matchingProcess.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
+        });
+        return;
+      }
+      // F3a (#620): see mirror in scanAndCleanOrphans above — revalidate PID
+      // immediately before kill to close the TOCTOU race.
+      let revalidated: OsProcessInfo | undefined;
+      try {
+        revalidated = await withTimeout(
+          this.options.processInspector.getProcess(matchingProcess.pid),
+          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+        );
+      } catch {
+        result.errors.push({
+          operationId: record.operationId,
+          message: `Preflight kill suppressed for PID ${matchingProcess.pid}: revalidation timed out.`,
+        });
+        return;
+      }
+      if (revalidated === undefined) {
+        result.errors.push({
+          operationId: record.operationId,
+          message: `Preflight kill suppressed for PID ${matchingProcess.pid}: process no longer exists.`,
+        });
+        return;
+      }
+      if (
+        revalidated.name.toUpperCase() !== "MSACCESS.EXE" ||
+        !sameProcessStartTime(revalidated.startTime, matchingProcess.startTime)
+      ) {
+        result.errors.push({
+          operationId: record.operationId,
+          message: `CLEANUP_RACE_PID_REUSED: PID ${matchingProcess.pid} is no longer the scanned MSACCESS.EXE (revalidation mismatch).`,
         });
         return;
       }
