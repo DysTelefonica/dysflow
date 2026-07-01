@@ -6,6 +6,12 @@
 #### F2
 - **`dysflow_access_cleanup(force: true)` now refuses to kill a `running` operation whose owned PID is still alive (`CLEANUP_RUNNING_FORCE_REFUSED`).** Previously, `force: true` bypassed the running gate entirely, which violated the "this tier must not kill anything" rule for an operation that is still legitimately in flight (and can take minutes). Callers that relied on the old bypass must wait for natural completion or update the registry record to a terminal status first. Dead-PID running records (process already gone) remain cleanable.
 
+#### F3a
+- **Orphan kill at preflight sites (`scanAndCleanOrphans`, `retireUnownedRecord`) now revalidates the PID immediately before calling `processKiller.kill`.** Closes the TOCTOU race where a PID is recycled (killing an unrelated process) or the original process exits between scan and kill. If `processInspector.getProcess(pid)` returns `undefined`, the kill is suppressed and a warning diagnostic is recorded naming the PID. If the revalidation shows a different process (`name` mismatch or `startTime` mismatch), the kill is refused with a `CLEANUP_RACE_PID_REUSED` diagnostic embedded in `result.errors[].message`. Mirrors the pattern already used by `AccessOrphanCleanupService.cleanupOrphan` (`src/core/operations/access-orphan-cleanup.ts:124-141`).
+
+#### F3b
+- **`runWithAccessExecutionLock` now accepts an optional 6th parameter `onHeartbeatError`.** Production wiring (`AccessPowerShellRunner.run`) supplies an explicit sink that collects non-ENOENT heartbeat failures (e.g. `EPERM`, `EIO`) and surfaces them as warning `access.heartbeat` diagnostics on the returned `OperationResult`. ENOENT (lock already released) remains suppressed — that is the normal teardown race, not a failure. The default `onHeartbeatError` callback when the caller omits it is now a silent no-op; previously the default was a `console.debug` sink via `logSwallowedIoError` that nobody read. Callers that already pass an explicit callback are unaffected.
+
 ### runtime-path-safety (#619)
 
 #### F2

@@ -866,20 +866,22 @@ describe("AccessOperationPreflightCleanupService", () => {
     it("scanAndCleanOrphans kills when mainWindowHandle === 0 and accessPath contains -embedding (#620)", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       const killed: number[] = [];
-      const scanner = {
-        listProcesses: async (): Promise<OsProcessInfo[]> => [
-          {
-            pid: 5555,
-            name: "MSACCESS.EXE",
-            startTime: "2026-05-15T12:00:00.000Z",
-            commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
-            mainWindowHandle: 0,
-          },
-        ],
+      const liveProcess: OsProcessInfo = {
+        pid: 5555,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T12:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
+        mainWindowHandle: 0,
       };
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [liveProcess],
+      };
+      // F3a (#620): revalidation must see the same process the scanner listed —
+      // otherwise F3a's gone/mismatch gates would (correctly) suppress the kill.
+      // This regression guard pins "real headless + still alive" → kill proceeds.
       const service = new AccessOperationPreflightCleanupService({
         registry,
-        processInspector: { getProcess: async () => undefined },
+        processInspector: { getProcess: async () => liveProcess },
         processKiller: {
           kill: async (pid) => {
             killed.push(pid);
@@ -1002,20 +1004,21 @@ describe("AccessOperationPreflightCleanupService", () => {
         processStartTime: null,
       });
       const killed: number[] = [];
-      const scanner = {
-        listProcesses: async (): Promise<OsProcessInfo[]> => [
-          {
-            pid: 6666,
-            name: "MSACCESS.EXE",
-            startTime: "2026-05-15T12:00:00.000Z",
-            commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
-            mainWindowHandle: 0,
-          },
-        ],
+      const liveProcess: OsProcessInfo = {
+        pid: 6666,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-15T12:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
+        mainWindowHandle: 0,
       };
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [liveProcess],
+      };
+      // F3a (#620): mirror of the scanAndCleanOrphans regression guard —
+      // revalidation must see the same process the scanner listed.
       const service = new AccessOperationPreflightCleanupService({
         registry,
-        processInspector: { getProcess: async () => undefined },
+        processInspector: { getProcess: async () => liveProcess },
         processKiller: {
           kill: async (pid) => {
             killed.push(pid);
@@ -1034,6 +1037,137 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(killed).toEqual([6666]);
       expect(result.cleaned).toContain("op-unowned-path-emb");
       expect(result.errors).toEqual([]);
+    });
+  });
+
+  // F3a (#620): TOCTOU revalidation gate immediately before kill.
+  // Closes the race where a PID is recycled or the process exits between
+  // scan and kill. Mirrors the `access-orphan-cleanup.ts:124-141` pattern
+  // (revalidate via `processInspector.getProcess(pid)`; refuse on
+  // mismatch; suppress on gone).
+  describe("orphan-kill TOCTOU revalidation (F3a, #620)", () => {
+    const HEADLESS_PROCESS: OsProcessInfo = {
+      pid: 5555,
+      name: "MSACCESS.EXE",
+      startTime: "2026-05-15T12:00:00.000Z",
+      commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+      mainWindowHandle: 0,
+    };
+
+    it("scanAndCleanOrphans suppresses kill when revalidation returns undefined (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [HEADLESS_PROCESS],
+      };
+      // F3a: process was headless at scan time, but is GONE by the time we
+      // revalidate (process exited between scan and kill). Kill must be
+      // suppressed, NOT invoked on a recycled PID.
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([]);
+      expect(killed).toEqual([]);
+      // The diagnostic names the PID so operators can audit which kill was suppressed.
+      expect(
+        result.errors.some((e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message)),
+      ).toBe(true);
+    });
+
+    it("scanAndCleanOrphans refuses kill with CLEANUP_RACE_PID_REUSED when revalidation shows a different process name (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [HEADLESS_PROCESS],
+      };
+      // F3a: PID was recycled — the scan listed MSACCESS.EXE, but by the
+      // time we revalidate, the same PID is owned by notepad.exe. Killing
+      // it would kill an unrelated process. Must refuse with the typed
+      // CLEANUP_RACE_PID_REUSED code embedded in the diagnostic message.
+      const recycledProcess: OsProcessInfo = {
+        pid: 5555,
+        name: "notepad.exe",
+        startTime: "2026-05-15T12:30:00.000Z",
+        commandLine: "notepad.exe",
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => recycledProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([]);
+      expect(killed).toEqual([]);
+      expect(
+        result.errors.some((e) => /CLEANUP_RACE_PID_REUSED/.test(e.message) && /PID 5555/.test(e.message)),
+      ).toBe(true);
+    });
+
+    it("retireUnownedRecord suppresses kill when revalidation returns undefined (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [HEADLESS_PROCESS],
+      };
+      // F3a: mirror of the scanAndCleanOrphans suppression in the
+      // retireUnownedRecord path. Process is headless at scan time but
+      // gone by the time we revalidate.
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toEqual([]);
+      expect(killed).toEqual([]);
+      expect(
+        result.errors.some((e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message)),
+      ).toBe(true);
+      // The record was NOT marked cleaned because the kill was suppressed;
+      // retireUnownedRecord only marks cleaned after a successful kill.
+      await expect(registry.get("op-unowned")).resolves.toMatchObject({ status: "timed_out" });
     });
   });
 

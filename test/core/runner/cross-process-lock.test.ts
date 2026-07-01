@@ -298,6 +298,103 @@ describe("cross-process-lock module API", () => {
     });
   });
 
+  // F3b (#620): heartbeat error propagation.
+  // The lock API must accept an `onHeartbeatError` callback that the runner
+  // supplies to surface non-ENOENT failures. The default (when the caller
+  // omits the callback) MUST be a silent no-op — not the previous
+  // `console.debug` sink that nobody reads.
+  describe("heartbeat error propagation (F3b, #620)", () => {
+    const stubPort = (overrides: Partial<LockFileSystemPort>): LockFileSystemPort => ({
+      mkdir: async () => undefined,
+      rm: async () => {},
+      stat: async () => null,
+      utimes: async () => {},
+      writeFile: async () => {},
+      tmpdir: () => tmpdir(),
+      ...overrides,
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("runWithAccessExecutionLock passes onHeartbeatError through to startLockHeartbeat (#620)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const errors: unknown[] = [];
+      const fileSystem = stubPort({
+        utimes: async () => {
+          const err: NodeJS.ErrnoException = new Error("operation not permitted");
+          err.code = "EPERM";
+          throw err;
+        },
+      });
+      const dbPath = join(tmpdir(), "f3b-callback-forward.accdb");
+      const handle = await runWithAccessExecutionLock(
+        dbPath,
+        async () => {
+          // Hold the lock long enough for the heartbeat to fire once while
+          // the cross-process lock is held. Advance fake time past one
+          // heartbeat interval (CROSS_PROCESS_LOCK_STALE_MS / 2).
+          await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2 + 50);
+          return "ok";
+        },
+        5_000,
+        fileSystem,
+        new Map(),
+        (error) => errors.push(error),
+      );
+      try {
+        expect(handle).toBe("ok");
+        await vi.waitFor(() => expect(errors.length).toBeGreaterThan(0));
+        expect((errors[0] as NodeJS.ErrnoException).code).toBe("EPERM");
+      } finally {
+        // Clean up any lock dirs created during the test.
+        const lockPath = getCrossProcessLockPath(dbPath);
+        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    it("startLockHeartbeat default callback is a no-op (#620)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      // Spy on every console channel the previous default could have written
+      // through (`logSwallowedIoError` → `console.debug`). The new default
+      // must not touch any of them.
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const fileSystem = stubPort({
+          utimes: async () => {
+            const err: NodeJS.ErrnoException = new Error("operation not permitted");
+            err.code = "EPERM";
+            throw err;
+          },
+        });
+        // F3b: call startLockHeartbeat WITHOUT supplying onHeartbeatError.
+        // The default must be a silent no-op.
+        const handle = startLockHeartbeat("/locks/x.lock", fileSystem);
+        try {
+          await vi.advanceTimersByTimeAsync(CROSS_PROCESS_LOCK_STALE_MS / 2);
+          // Flush any pending microtasks from the fire-and-forget catch handler.
+          await Promise.resolve();
+          await Promise.resolve();
+        } finally {
+          clearInterval(handle);
+        }
+        expect(debugSpy).not.toHaveBeenCalled();
+        expect(logSpy).not.toHaveBeenCalled();
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalled();
+      } finally {
+        debugSpy.mockRestore();
+        logSpy.mockRestore();
+        errorSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+  });
+
   describe("evictStaleLock — atomic claim (race-free stale eviction)", () => {
     const created: string[] = [];
 
