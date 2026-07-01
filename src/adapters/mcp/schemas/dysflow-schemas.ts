@@ -64,6 +64,10 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
       description: "Public VBA procedure to execute.",
     },
     arguments: { type: "array", items: {}, description: "Procedure arguments." },
+    // PR1a (#621 F1) — explicit escape hatch for default-deny gate at the MCP
+    // adapter. When the project config does not declare `allowedProcedures`,
+    // the adapter refuses execution unless the caller passes `dryRun: true`.
+    dryRun: SCHEMA_PROPS.dryRun,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
     timeoutMs: SCHEMA_PROPS.timeoutMs,

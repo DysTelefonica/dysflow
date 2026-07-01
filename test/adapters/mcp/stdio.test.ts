@@ -925,6 +925,7 @@ describe("E2E mock transport — multiple database targeting with overrides", ()
         arguments: {
           procedureName: "SomeProc",
           accessPath: dbPath1,
+          dryRun: true,
         },
       });
       expect(res1.isError).toBeFalsy();
@@ -935,6 +936,7 @@ describe("E2E mock transport — multiple database targeting with overrides", ()
         arguments: {
           procedureName: "SomeProc",
           accessPath: dbPath2,
+          dryRun: true,
         },
       });
       expect(res2.isError).toBeFalsy();

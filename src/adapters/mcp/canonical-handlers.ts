@@ -23,15 +23,40 @@ function isMcpToolResult(value: unknown): value is McpToolResult {
   return typeof value === "object" && value !== null && "content" in value && "isError" in value;
 }
 
-function ensureProcedureAllowed(
+/**
+ * PR1a (#621 F1) — default-deny gate for compiled VBA execution at the MCP
+ * adapter boundary. Refuses to call `services.vbaService.execute(...)` unless
+ * EITHER (a) the project config declares a non-empty `allowedProcedures` AND
+ * `procedureName` is in that list, OR (b) the caller explicitly passes
+ * `dryRun: true`. The dry-run escape hatch is the consumer's explicit "plan
+ * only" affirmation; without an allowlist it is the only path that survives.
+ *
+ * Exported so it can be unit-tested directly via
+ * `test/adapters/mcp/canonical-handlers.test.ts` without a full MCP server
+ * fixture.
+ */
+export function ensureProcedureAllowed(
   procedureName: string,
   allowedProcedures: readonly string[] | undefined,
+  dryRun: boolean | undefined,
 ): McpToolResult | undefined {
-  if (
-    allowedProcedures !== undefined &&
-    allowedProcedures.length > 0 &&
-    !allowedProcedures.includes(procedureName)
-  ) {
+  // PR1a #621: default-deny gate. When the project config has no allowlist
+  // configured (undefined OR empty), execution MUST be rejected unless the
+  // caller explicitly passes `dryRun: true`. This closes the contract-truth
+  // gap where "read-only" tools could in fact run arbitrary compiled VBA.
+  if (allowedProcedures === undefined || allowedProcedures.length === 0) {
+    if (dryRun !== true) {
+      return invalidInput(
+        `Refusing to execute VBA procedure '${procedureName}': ` +
+          `project config must declare allowedProcedures (with procedure in the list) ` +
+          `OR caller must pass dryRun:true. ` +
+          `Set allowedProcedures in .dysflow/project.json to allow this procedure.`,
+      );
+    }
+    return undefined;
+  }
+
+  if (!allowedProcedures.includes(procedureName)) {
     return invalidInput(
       `Procedure '${procedureName}' is not in the configured allowedProcedures list.`,
     );
@@ -53,7 +78,11 @@ export async function handleMcpVbaExecute(
   const request = buildRequest(input);
   if (isMcpToolResult(request)) return request;
 
-  const allowlistError = ensureProcedureAllowed(request.procedureName, allowedProcedures);
+  const allowlistError = ensureProcedureAllowed(
+    request.procedureName,
+    allowedProcedures,
+    request.dryRun,
+  );
   if (allowlistError !== undefined) return allowlistError;
 
   return translateCoreResultToMcpContent(

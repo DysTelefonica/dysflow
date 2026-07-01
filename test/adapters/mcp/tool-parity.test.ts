@@ -116,10 +116,14 @@ describe("Dysflow MCP tool parity inventory", () => {
       expect(byName.has(name), `${name} should be registered`).toBe(true);
     }
 
-    await byName.get("run_vba")?.handler({ procedureName: "Smoke", argsJson: "[1,2]" });
+    await byName
+      .get("run_vba")
+      ?.handler({ procedureName: "Smoke", argsJson: "[1,2]", dryRun: true });
     await byName.get("query_sql")?.handler({ sql: "SELECT 1" });
 
-    expect(vba.requests).toEqual([{ moduleName: "", procedureName: "Smoke", arguments: [1, 2] }]);
+    expect(vba.requests).toEqual([
+      { moduleName: "", procedureName: "Smoke", arguments: [1, 2], dryRun: true },
+    ]);
     expect(query.requests).toEqual([{ sql: "SELECT 1", mode: "read" }]);
   });
 

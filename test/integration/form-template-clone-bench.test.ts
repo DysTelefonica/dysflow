@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   cloneFormFromTemplate,
-  FormMutationError,
+  type FormMutationError,
   parseFormTxt,
   serializeFormTxt,
 } from "../../src/core/services/form-ir-service";
@@ -70,9 +70,9 @@ function manualReplace(text: string, tokenMap: Record<string, string>): string {
  * convention or they cannot be byte-equal).
  */
 function injectTokens(text: string): string {
-  let normalized = text.replace(/\r\n/g, "\n");
+  const normalized = text.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
-  const captionIdx = lines.findIndex((l) => /^    Caption ="/.test(l));
+  const captionIdx = lines.findIndex((l) => /^ {4}Caption ="/.test(l));
   if (captionIdx === -1) {
     throw new Error("Could not find form-level Caption line in bench fixture");
   }

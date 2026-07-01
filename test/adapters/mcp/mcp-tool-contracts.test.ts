@@ -41,6 +41,35 @@ describe("MCP tool contract metadata", () => {
     });
   });
 
+  it("reclassifies dysflow_vba_execute as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+    expect(getMcpToolContract("dysflow_vba_execute")).toMatchObject({
+      access: "conditional-write",
+      writeGate: "conditional",
+    });
+    const summary = getMcpToolContract("dysflow_vba_execute").summary;
+    expect(summary.toLowerCase()).toContain("allowlist");
+    expect(summary.toLowerCase()).toContain("dryrun");
+  });
+
+  it("reclassifies run_vba (alias) as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+    expect(getMcpToolContract("run_vba")).toMatchObject({
+      access: "conditional-write",
+      writeGate: "conditional",
+    });
+    const summary = getMcpToolContract("run_vba").summary;
+    expect(summary.toLowerCase()).toContain("allowlist");
+    expect(summary.toLowerCase()).toContain("dryrun");
+  });
+
+  it("reclassifies test_vba contract metadata to conditional-write (PR1a #621, runtime gate deferred to PR1b)", () => {
+    expect(getMcpToolContract("test_vba")).toMatchObject({
+      access: "conditional-write",
+      writeGate: "conditional",
+    });
+    const summary = getMcpToolContract("test_vba").summary;
+    expect(summary.toLowerCase()).toContain("allowlist");
+  });
+
   it("defines contract metadata for every modern tool", () => {
     for (const toolName of MODERN_TOOL_NAMES) {
       expect(getMcpToolContract(toolName), `${toolName} contract`).toMatchObject({
@@ -66,11 +95,12 @@ describe("MCP tool contract metadata", () => {
     }
   });
 
-  it("advertises modern tool safety footguns and key arguments (#593)", () => {
+  it("advertises modern tool safety footguns and key arguments (#593 + PR1a #621)", () => {
     const descriptions = modernToolDescriptions();
 
     expect(descriptions.dysflow_vba_execute).toContain("procedureName");
-    expect(descriptions.dysflow_vba_execute).toContain("allowedProcedures");
+    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("allowlist");
+    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("dryrun");
     expect(descriptions.dysflow_vba_execute).toContain("compiled project");
 
     expect(descriptions.dysflow_query_execute).toContain('mode: "read"');

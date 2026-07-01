@@ -273,9 +273,7 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     expect(result.ok).toBe(true);
     // The heartbeat failure must surface as a warning diagnostic with the
     // documented source. ENOENT would be silent; EPERM is the failure we test.
-    const heartbeatDiagnostics = result.diagnostics.filter(
-      (d) => d.source === "access.heartbeat",
-    );
+    const heartbeatDiagnostics = result.diagnostics.filter((d) => d.source === "access.heartbeat");
     expect(heartbeatDiagnostics.length).toBeGreaterThan(0);
     expect(heartbeatDiagnostics[0]?.level).toBe("warning");
     expect(heartbeatDiagnostics[0]?.message.toLowerCase()).toContain("heartbeat");

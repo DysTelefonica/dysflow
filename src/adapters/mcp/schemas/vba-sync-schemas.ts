@@ -31,6 +31,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       procedureName: SCHEMA_PROPS.procedureName,
       argsJson: SCHEMA_PROPS.argsJson,
+      // PR1a (#621 F1) — explicit escape hatch for default-deny gate at the
+      // MCP adapter (legacy alias of `dysflow_vba_execute`). When the project
+      // config does not declare `allowedProcedures`, the adapter refuses
+      // execution unless the caller passes `dryRun: true`.
+      dryRun: SCHEMA_PROPS.dryRun,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,

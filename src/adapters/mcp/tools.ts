@@ -89,7 +89,7 @@ export function createDysflowMcpTools(
   const currentTools: DysflowMcpTool[] = [
     {
       name: "dysflow_vba_execute",
-      description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Enforces allowedProcedures when configured and requires an already compiled project before test/run calls. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
+      description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Requires an already compiled project. PR1a (#621 F1): the adapter now defaults to deny — a call without an 'allowedProcedures' allowlist (project config) AND without dryRun:true is refused with MCP_INPUT_INVALID. Pass dryRun:true in the request body to use the explicit escape hatch. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
       inputSchema: VBA_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpVbaExecute(

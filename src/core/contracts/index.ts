@@ -89,6 +89,16 @@ export type AccessVbaRequest = {
   moduleName: string;
   procedureName: string;
   arguments?: readonly unknown[];
+  /**
+   * PR1a (#621 F1) — explicit "plan only" escape hatch for VBA execution at
+   * the MCP adapter boundary. When the project config does not declare
+   * `allowedProcedures`, the adapter refuses execution unless the caller
+   * sets `dryRun: true`. The core service honors this flag by skipping the
+   * real Access side-effect and returning a plan-shaped result.
+   *
+   * Optional; default `undefined` is treated as "not a dry-run".
+   */
+  dryRun?: boolean;
   // Overrides
   projectId?: string;
   contextId?: string;

@@ -34,12 +34,28 @@ function contractFromGeneratedRoute(name: GeneratedDispatchToolName): McpToolCon
   };
 }
 
-const generatedContracts = Object.fromEntries(
-  (Object.keys(MCP_TOOL_ROUTES) as GeneratedDispatchToolName[]).map((name) => [
-    name,
-    contractFromGeneratedRoute(name),
-  ]),
-) as Record<GeneratedDispatchToolName, McpToolContract>;
+const generatedContracts = {
+  ...Object.fromEntries(
+    (Object.keys(MCP_TOOL_ROUTES) as GeneratedDispatchToolName[]).map((name) => [
+      name,
+      contractFromGeneratedRoute(name),
+    ]),
+  ),
+  // PR1a (#621 F1) — `test_vba` reclassified for honest contract metadata.
+  // The runtime gate lives in `VbaExecutionAdapter.executeTestVba` and is
+  // deferred to PR1b (per design.md open question #1). Until PR1b lands,
+  // the tool IS gated by the dispatcher route `mutatesBinary: false`
+  // classification, so consumers see this as conditional-write with the
+  // allowlist language — but the in-adapter allowlist check is still
+  // missing. The summary spells out the allowlist expectation so a stale
+  // consumer can detect the gap.
+  test_vba: {
+    access: "conditional-write",
+    writeGate: "conditional",
+    summary:
+      "Conditional-write MCP contract; test execution honors allowedProcedures allowlist when configured, with dryRun:true as an explicit escape hatch when no allowlist is configured. (Allowlist gate in adapter is pending — see PR1b.)",
+  },
+} as Record<GeneratedDispatchToolName, McpToolContract>;
 
 const aliasContracts: Record<AliasToolName, McpToolContract> = {
   list_access_operations: {
@@ -54,10 +70,10 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
       "Conditional-write MCP contract; cleanup is read-only without force and write-gated when force can kill a process.",
   },
   run_vba: {
-    access: "read-only",
-    writeGate: "none",
+    access: "conditional-write",
+    writeGate: "conditional",
     summary:
-      "Read-only MCP contract; executing a public VBA procedure requires an already compiled project.",
+      "Conditional-write MCP contract; VBA execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
   },
   query_sql: {
     access: "read-only",
@@ -104,10 +120,10 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
 
 const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
   dysflow_vba_execute: {
-    access: "read-only",
-    writeGate: "none",
+    access: "conditional-write",
+    writeGate: "conditional",
     summary:
-      "Read-only MCP contract; executing a VBA procedure requires an already compiled project.",
+      "Conditional-write MCP contract; VBA execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
   },
   dysflow_query_execute: {
     access: "read-write",

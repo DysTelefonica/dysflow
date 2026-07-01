@@ -349,9 +349,9 @@ describe("AccessOperationPreflightCleanupService", () => {
 
       expect(result.orphanedKilled).toEqual([]);
       // F1 (#620): contract — unattributed orphan is refused, refusal names the PID.
-      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
-        true,
-      );
+      expect(
+        result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message)),
+      ).toBe(true);
       expect(killed).toEqual([]);
     });
 
@@ -578,9 +578,9 @@ describe("AccessOperationPreflightCleanupService", () => {
 
       expect(result.orphanedKilled).toEqual([]);
       // F1 (#620): contract — case-insensitive match also refuses, names PID.
-      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
-        true,
-      );
+      expect(
+        result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message)),
+      ).toBe(true);
       expect(killed).toEqual([]);
     });
 
@@ -648,9 +648,9 @@ describe("AccessOperationPreflightCleanupService", () => {
 
       expect(result.orphanedKilled).toEqual([]);
       // F1 (#620): contract — unquoted-token path also refuses, names PID.
-      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
-        true,
-      );
+      expect(
+        result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message)),
+      ).toBe(true);
       expect(killed).toEqual([]);
     });
   });
@@ -694,9 +694,9 @@ describe("AccessOperationPreflightCleanupService", () => {
 
       expect(result.orphanedKilled).toEqual([]);
       // F1 (#620): contract — explicit scanner path also refuses, names PID.
-      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 5555/.test(e.message))).toBe(
-        true,
-      );
+      expect(
+        result.errors.some((e) => e.operationId === "orphan" && /PID 5555/.test(e.message)),
+      ).toBe(true);
       expect(killed).toEqual([]);
     });
 
@@ -1084,7 +1084,9 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(killed).toEqual([]);
       // The diagnostic names the PID so operators can audit which kill was suppressed.
       expect(
-        result.errors.some((e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message)),
+        result.errors.some(
+          (e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message),
+        ),
       ).toBe(true);
     });
 
@@ -1124,7 +1126,9 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(result.orphanedKilled).toEqual([]);
       expect(killed).toEqual([]);
       expect(
-        result.errors.some((e) => /CLEANUP_RACE_PID_REUSED/.test(e.message) && /PID 5555/.test(e.message)),
+        result.errors.some(
+          (e) => /CLEANUP_RACE_PID_REUSED/.test(e.message) && /PID 5555/.test(e.message),
+        ),
       ).toBe(true);
     });
 
@@ -1163,7 +1167,9 @@ describe("AccessOperationPreflightCleanupService", () => {
       expect(result.killed).toEqual([]);
       expect(killed).toEqual([]);
       expect(
-        result.errors.some((e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message)),
+        result.errors.some(
+          (e) => /PID 5555/.test(e.message) && /no longer exists|gone/i.test(e.message),
+        ),
       ).toBe(true);
       // The record was NOT marked cleaned because the kill was suppressed;
       // retireUnownedRecord only marks cleaned after a successful kill.

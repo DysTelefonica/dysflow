@@ -107,10 +107,16 @@ describe("MCP tool registration over core services", () => {
         moduleName: { type: "string" },
         procedureName: { type: "string" },
         arguments: { type: "array" },
+        dryRun: { type: "boolean" },
       },
     });
     await expect(
-      tools[0]?.handler({ moduleName: "Automation", procedureName: "Refresh", arguments: [2026] }),
+      tools[0]?.handler({
+        moduleName: "Automation",
+        procedureName: "Refresh",
+        arguments: [2026],
+        dryRun: true,
+      }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
@@ -137,7 +143,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     expect(vba.requests).toEqual([
-      { moduleName: "Automation", procedureName: "Refresh", arguments: [2026] },
+      { moduleName: "Automation", procedureName: "Refresh", arguments: [2026], dryRun: true },
     ]);
     expect(query.requests).toEqual([{ sql: "SELECT id, name FROM People", mode: "read" }]);
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
@@ -217,7 +223,11 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "dysflow_vba_execute")
-        ?.handler({ contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" }),
+        ?.handler({
+          contextId: "00-no-conformidades-staging-clean",
+          procedureName: "Smoke",
+          dryRun: true,
+        }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
@@ -231,7 +241,11 @@ describe("MCP tool registration over core services", () => {
 
     expect(diagnostics.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean" }]);
     expect(vba.requests).toEqual([
-      { contextId: "00-no-conformidades-staging-clean", procedureName: "Smoke" },
+      {
+        contextId: "00-no-conformidades-staging-clean",
+        procedureName: "Smoke",
+        dryRun: true,
+      },
     ]);
     expect(query.requests).toEqual([
       { contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" },
@@ -658,28 +672,32 @@ describe("MCP tool registration over core services", () => {
       isError: true,
       ok: false,
     });
-    await expect(runVba?.handler({ procedureName: "Blank", argsJson: "   " })).resolves.toEqual({
-      content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
-      isError: false,
-      ok: true,
-    });
     await expect(
-      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]' }),
+      runVba?.handler({ procedureName: "Blank", argsJson: "   ", dryRun: true }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
       ok: true,
     });
-    await expect(runVba?.handler({ procedureName: "Single", argsJson: "42" })).resolves.toEqual({
+    await expect(
+      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]', dryRun: true }),
+    ).resolves.toEqual({
+      content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
+      isError: false,
+      ok: true,
+    });
+    await expect(
+      runVba?.handler({ procedureName: "Single", argsJson: "42", dryRun: true }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
       ok: true,
     });
 
     expect(vba.requests).toEqual([
-      { moduleName: "", procedureName: "Blank", arguments: [] },
-      { moduleName: "", procedureName: "Array", arguments: [1, "two"] },
-      { moduleName: "", procedureName: "Single", arguments: [42] },
+      { moduleName: "", procedureName: "Blank", arguments: [], dryRun: true },
+      { moduleName: "", procedureName: "Array", arguments: [1, "two"], dryRun: true },
+      { moduleName: "", procedureName: "Single", arguments: [42], dryRun: true },
     ]);
   });
 
@@ -1199,7 +1217,7 @@ describe("MCP tool registration over core services", () => {
       const context = { progressToken: "tok-1", sendProgress };
 
       const tool = tools.find((t) => t.name === "dysflow_vba_execute");
-      await tool?.handler({ procedureName: "DoWork" }, context);
+      await tool?.handler({ procedureName: "DoWork", dryRun: true }, context);
 
       expect(vba.capturedOnProgress).toHaveLength(1);
       expect(vba.capturedOnProgress[0]).toBe(sendProgress);
@@ -1237,18 +1255,23 @@ describe("MCP tool registration over core services", () => {
       const context = { progressToken: "tok-mcp", sendProgress: () => {} };
       const mcpTool = tools.find((t) => t.name === "run_vba");
 
-      // MCP tool handlers don't use context — calling with it must not throw
-      await expect(mcpTool?.handler({ procedureName: "TestProc" }, context)).resolves.toMatchObject(
-        { isError: false },
-      );
+      // MCP tool handlers don't use context — calling with it must not throw.
+      // Pass dryRun:true so the default-deny gate passes; this test is about
+      // context-passing, not gate behavior (see canonical-handlers.test.ts).
+      await expect(
+        mcpTool?.handler({ procedureName: "TestProc", dryRun: true }, context),
+      ).resolves.toMatchObject({ isError: false });
     });
   });
 
   describe("allowedProcedures — procedureName allowlist for dysflow_vba_execute", () => {
-    function makeTools(allowedProcedures: readonly string[]) {
+    function makeTools(
+      allowedProcedures: readonly string[],
+      vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
+    ) {
       return createDysflowMcpTools(
         {
-          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          vbaService: vba,
           queryService: new FakeQueryService(successResult({ rows: [] })),
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
@@ -1281,15 +1304,18 @@ describe("MCP tool registration over core services", () => {
       expect(result?.isError).toBe(false);
     });
 
-    it("allows any procedure when allowlist is empty (unconfigured)", async () => {
+    it("refuses by default when allowlist is empty and no dryRun (default-deny, PR1a #621)", async () => {
       const tools = makeTools([]);
       const result = await tools
         .find((t) => t.name === "dysflow_vba_execute")
         ?.handler({ procedureName: "DeleteAll" });
-      expect(result?.isError).toBe(false);
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(result?.content[0]?.text).toContain("DeleteAll");
+      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
     });
 
-    it("allows any procedure when allowedProcedures is not passed", async () => {
+    it("refuses by default when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: new FakeQueryService(successResult({ rows: [] })),
@@ -1298,15 +1324,57 @@ describe("MCP tool registration over core services", () => {
       const result = await tools
         .find((t) => t.name === "dysflow_vba_execute")
         ?.handler({ procedureName: "AnyProcedure" });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
+    });
+
+    it("accepts dryRun:true as escape hatch when allowlist is empty (PR1a #621)", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = makeTools([], vba);
+      const result = await tools
+        .find((t) => t.name === "dysflow_vba_execute")
+        ?.handler({ procedureName: "DeleteAll", dryRun: true });
       expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
+      ]);
+    });
+
+    it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = createDysflowMcpTools({
+        vbaService: vba,
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+      const result = await tools
+        .find((t) => t.name === "dysflow_vba_execute")
+        ?.handler({ procedureName: "AnyProcedure", dryRun: true });
+      expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
+      ]);
+    });
+
+    it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
+      const tools = makeTools(["Refresh", "Sync"]);
+      const result = await tools
+        .find((t) => t.name === "dysflow_vba_execute")
+        ?.handler({ procedureName: "DeleteAll", dryRun: true });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain("DeleteAll");
+      expect(result?.content[0]?.text).toContain("allowedProcedures");
     });
   });
 
   describe("allowedProcedures — procedureName allowlist for run_vba alias", () => {
-    function makeTools(allowedProcedures: readonly string[]) {
+    function makeTools(
+      allowedProcedures: readonly string[],
+      vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
+    ) {
       return createDysflowMcpTools(
         {
-          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          vbaService: vba,
           queryService: new FakeQueryService(successResult({ rows: [] })),
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
@@ -1339,15 +1407,18 @@ describe("MCP tool registration over core services", () => {
       expect(result?.isError).toBe(false);
     });
 
-    it("allows any procedure when allowlist is empty (unconfigured)", async () => {
+    it("refuses by default when allowlist is empty and no dryRun (default-deny, PR1a #621)", async () => {
       const tools = makeTools([]);
       const result = await tools
         .find((t) => t.name === "run_vba")
         ?.handler({ procedureName: "DeleteAll" });
-      expect(result?.isError).toBe(false);
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(result?.content[0]?.text).toContain("DeleteAll");
+      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
     });
 
-    it("allows any procedure when allowedProcedures is not passed", async () => {
+    it("refuses by default when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: new FakeQueryService(successResult({ rows: [] })),
@@ -1356,7 +1427,46 @@ describe("MCP tool registration over core services", () => {
       const result = await tools
         .find((t) => t.name === "run_vba")
         ?.handler({ procedureName: "AnyProcedure" });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
+    });
+
+    it("accepts dryRun:true as escape hatch when allowlist is empty (PR1a #621)", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = makeTools([], vba);
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "DeleteAll", dryRun: true });
       expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
+      ]);
+    });
+
+    it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = createDysflowMcpTools({
+        vbaService: vba,
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      });
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "AnyProcedure", dryRun: true });
+      expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
+      ]);
+    });
+
+    it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
+      const tools = makeTools(["Refresh", "Sync"]);
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "DeleteAll", dryRun: true });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain("DeleteAll");
+      expect(result?.content[0]?.text).toContain("allowedProcedures");
     });
   });
 
