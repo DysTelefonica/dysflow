@@ -295,6 +295,13 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,
       accessPassword: config.accessPassword,
+      // PR1b (#621 F1) — forward the project's allowedProcedures allowlist so
+      // `VbaExecutionAdapter.executeTestVba` can enforce the same default-deny
+      // gate as the MCP-handler `handleMcpVbaExecute`. The MCP-handler gate
+      // already covers `run_vba` / `dysflow_vba_execute` (PR1a); this closes
+      // the parallel gap for `test_vba`, which routes through the adapter
+      // rather than the MCP handler.
+      allowedProcedures: config.allowedProcedures,
     }),
   };
 }

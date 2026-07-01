@@ -102,6 +102,15 @@ export type VbaSyncAdapterOptions = {
   destinationRoot?: string;
   accessPassword?: string;
   timeoutMs?: number;
+  /**
+   * PR1b (#621 F1) — `allowedProcedures` allowlist forwarded to
+   * `VbaExecutionAdapter` so the `test_vba` default-deny gate can enforce it
+   * at the adapter boundary. When undefined or empty, `test_vba` refuses
+   * execution unless the caller passes `dryRun: true` (the same semantics
+   * as the MCP-handler gate in `canonical-handlers.ts:ensureProcedureAllowed`,
+   * which already covers `run_vba` / `dysflow_vba_execute`).
+   */
+  allowedProcedures?: readonly string[];
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
@@ -147,6 +156,13 @@ export class VbaSyncAdapter implements VbaSyncPort {
   public readonly destinationRoot?: string;
   public readonly accessPassword?: string;
   public readonly timeoutMs: number;
+  /**
+   * PR1b (#621 F1) — allowlist forwarded to `VbaExecutionAdapter` so the
+   * `test_vba` default-deny gate can enforce it. Kept on the adapter for
+   * inspection / debugging; the gate logic lives in
+   * `VbaExecutionAdapter.ensureTestProceduresAllowed`.
+   */
+  public readonly allowedProcedures?: readonly string[];
 
   private readonly operationsAdapter: VbaOperationsAdapter;
   private readonly operationRegistry?: AccessOperationRegistry;
@@ -165,6 +181,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.operationRegistry = options.operationRegistry;
+    this.allowedProcedures = options.allowedProcedures;
 
     // Sub-adapters instantiation delegating orchestrator context
     this.operationsAdapter = new VbaOperationsAdapter({
@@ -173,13 +190,17 @@ export class VbaSyncAdapter implements VbaSyncPort {
       preflightCleanup: options.preflightCleanup,
       cwd: this.cwd,
     });
-    this.executionAdapter = new VbaExecutionAdapter({
-      cwd: this.cwd,
-      env: this.env,
-      executeMappedTool: (toolName, params, mapping) =>
-        this.executeMappedTool(toolName, params, mapping),
-      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
-    });
+    this.executionAdapter = new VbaExecutionAdapter(
+      {
+        cwd: this.cwd,
+        env: this.env,
+        executeMappedTool: (toolName, params, mapping) =>
+          this.executeMappedTool(toolName, params, mapping),
+        resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
+      },
+      undefined, // fileSystem: use the adapter's default (Node fs/promises)
+      options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
+    );
     this.formsAdapter = new VbaFormsAdapter({
       executor: this.executor,
       env: this.env,

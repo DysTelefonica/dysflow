@@ -8,6 +8,48 @@ import {
 } from "../../../src/adapters/vba-sync/vba-execution-adapter";
 import { successResult } from "../../../src/core/contracts/index";
 
+/**
+ * PR1b (#621 F1) — allowlist forwarded to `new VbaExecutionAdapter(...)` so
+ * the default-deny gate does NOT fire on the existing test fixtures (which
+ * were written before the gate existed and use these synthetic procedure
+ * names). The new gate-specific tests deliberately pass their own allowlists
+ * (or `undefined` to exercise the refusal branches) instead of this constant.
+ *
+ * Keep this list in sync with every `procedureName`, `"procedure": "..."`,
+ * and `procedure: "..."` literal used in `adapter.execute("test_vba", ...)`
+ * calls below. The gate's per-test-plan atomicity check compares every
+ * extracted procedure name against this set; a missing entry turns a
+ * previously-green test red with `MCP_INPUT_INVALID`.
+ */
+const TEST_ALLOWED_PROCEDURES: readonly string[] = [
+  "Test_A",
+  "Test_Allowed",
+  "Test_AlsoAllowed",
+  "Test_B",
+  "Test_C",
+  "Test_Compile",
+  "Test_D",
+  "Test_DefaultDiscovery",
+  "Test_DefaultDiscovery_NotUsed",
+  "Test_DeleteAll",
+  "Test_Export",
+  "Test_FromAbsolutePath",
+  "Test_FromCwd",
+  "Test_FromDestinationRoot",
+  "Test_FromManifest",
+  "Test_FromRootManifest",
+  "Test_FromTestsSubdir",
+  "Test_Import",
+  "Test_NoMessage",
+  "Test_ProjectRoot",
+  "Test_Run",
+  "Test_RunAll",
+  "Test_Sanitized",
+  "Test_Shorthand",
+  "Test_Throws",
+  "Test_X",
+];
+
 describe("VbaExecutionAdapter", () => {
   it("handles execution tools", () => {
     expect(VbaExecutionAdapter.handles("run_vba")).toBe(true);
@@ -22,7 +64,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("compile_vba", {
       accessPath: "C:/custom/front.accdb",
@@ -56,7 +98,7 @@ describe("VbaExecutionAdapter", () => {
       writeFile: vi.fn().mockResolvedValue(undefined),
       rm: vi.fn().mockResolvedValue(undefined),
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem);
+    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem, TEST_ALLOWED_PROCEDURES);
     return { adapter, executeMappedTool, fileSystem };
   }
 
@@ -134,7 +176,7 @@ describe("VbaExecutionAdapter", () => {
       writeFile: vi.fn().mockResolvedValue(undefined),
       rm: vi.fn().mockResolvedValue(undefined),
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem);
+    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("vba_inline_execution", { code: 'Debug.Print "x"' });
 
@@ -205,7 +247,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_RunAll",
@@ -234,7 +276,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_X", args: [] }]),
@@ -284,7 +326,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -320,7 +362,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests/tests.vba.json",
@@ -350,7 +392,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -383,7 +425,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -403,7 +445,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { proceduresJson: "[]" });
 
@@ -430,7 +472,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { compile: true });
 
@@ -455,7 +497,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/nonexistent-dir",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "nonexistent.json",
@@ -472,7 +514,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Run",
@@ -490,7 +532,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
     const result = await adapter.execute("unsupported_tool", {});
     expect(result).toMatchObject({
       ok: false,
@@ -518,7 +560,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       compile: true,
@@ -538,7 +580,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_Run" });
     expect(result.ok).toBe(true);
@@ -552,7 +594,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: "{ not valid json }",
@@ -567,7 +609,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Sanitized" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const payloads = [
       '\uFEFF[\n  "Test_Sanitized"\n]',
@@ -599,7 +641,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([123]),
@@ -618,7 +660,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Shorthand" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["Test_Shorthand"]),
@@ -638,7 +680,7 @@ describe("VbaExecutionAdapter", () => {
   it("accepts proceduresJson mixing shorthand strings and full objects", async () => {
     const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["Test_A", { procedure: "Test_B", args: ["x"] }]),
@@ -662,7 +704,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["   "]),
@@ -677,7 +719,7 @@ describe("VbaExecutionAdapter", () => {
     await writeFile(join(root, "tests.vba.json"), JSON.stringify(["Test_FromManifest"]), "utf8");
     const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
 
@@ -702,7 +744,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
 
@@ -726,7 +768,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
 
@@ -760,7 +802,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -794,7 +836,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_Throws" });
 
@@ -816,7 +858,7 @@ describe("VbaExecutionAdapter", () => {
     const results = [{ ok: false, procedure: "Test_NoMessage", payload: "<<not-json>>" }];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_NoMessage" });
 
@@ -852,7 +894,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromTestsSubdir" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -874,7 +916,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromRootManifest" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -890,7 +932,7 @@ describe("VbaExecutionAdapter", () => {
 
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -918,7 +960,7 @@ describe("VbaExecutionAdapter", () => {
     const absolutePath = join(root, "elsewhere", "my-tests.json");
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: absolutePath });
 
@@ -940,7 +982,7 @@ describe("VbaExecutionAdapter", () => {
 
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: "missing.json" });
 
@@ -970,7 +1012,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromCwd" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { projectRoot: "" });
 
@@ -987,7 +1029,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "",
     } as unknown as VbaSyncOrchestrator;
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { projectRoot: "" });
 
@@ -1027,7 +1069,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromAbsolutePath" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: absolutePath });
 
@@ -1072,7 +1114,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromDestinationRoot" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectRoot };
-    const adapter = new VbaExecutionAdapter(orchestrator);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
     // No testsPath: adapter must walk projectRoot first (no manifest there),
     // then fall back to destinationRoot and find the manifest there.
@@ -1090,6 +1132,254 @@ describe("VbaExecutionAdapter", () => {
       expect.objectContaining({
         proceduresJson: JSON.stringify([{ procedure: "Test_FromDestinationRoot", args: ["dest"] }]),
       }),
+      expect.any(Object),
+    );
+  });
+
+  // --- PR1b (#621 F1) — test_vba default-deny gate in VbaExecutionAdapter -------
+  //
+  // PR1a added the gate at the MCP adapter boundary (`handleMcpVbaExecute`),
+  // which covers `run_vba` and `dysflow_vba_execute`. `test_vba` does NOT
+  // route through that handler — it routes through `VbaSyncAdapter` →
+  // `VbaExecutionAdapter.executeTestVba`. This block exercises the parallel
+  // gate added in PR1b so the contract-truth gap ("read-only" tool that ran
+  // arbitrary compiled VBA via `proceduresJson: '[{"procedure":"DeleteAll",
+  // "args":[]}]'`) stays closed for `test_vba` too.
+  //
+  // Gate semantics mirror the MCP-handler gate in `canonical-handlers.ts`:
+  //   1. When `allowedProcedures` is undefined OR empty, refuse unless the
+  //      caller passes `dryRun: true` (default-deny).
+  //   2. When `allowedProcedures` is configured, ALL procedures in the plan
+  //      must be in the list — the plan is atomic.
+  //
+  // The tests construct an adapter with no allowlist (the default) and assert
+  // the observable gate behavior at the port: `result.ok` is false AND the
+  // runner (`executeMappedTool`) is NOT invoked. They do NOT assert on private
+  // call order or internal data shape.
+
+  function makeUnconfiguredAdapter(executeMappedTool = vi.fn()): {
+    adapter: VbaExecutionAdapter;
+    executeMappedTool: typeof executeMappedTool;
+  } {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool,
+      cwd: "C:/repo",
+    };
+    // No `allowedProcedures` passed — exercises the default-deny branch.
+    return { adapter: new VbaExecutionAdapter(orchestrator), executeMappedTool };
+  }
+
+  it("PR1b — refuses test_vba when allowedProcedures is unconfigured AND no dryRun (default-deny)", async () => {
+    const { adapter, executeMappedTool } = makeUnconfiguredAdapter();
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_RunAll",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected default-deny refusal");
+    // Same `MCP_INPUT_INVALID` code as PR1a's MCP-handler gate so consumers can
+    // grep for the same string regardless of which layer caught the call.
+    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    expect(result.error.message).toContain("allowedProcedures");
+    expect(result.error.message).toContain("dryRun");
+    expect(result.error.message).toContain("Test_RunAll");
+    // The runner MUST NOT be invoked — the gate short-circuits before any
+    // PowerShell spawn.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("PR1b — refuses test_vba when allowedProcedures is empty AND no dryRun (default-deny)", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, []);
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_DeleteAll", args: [] }]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected default-deny refusal for empty allowlist");
+    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    expect(result.error.message).toContain("allowedProcedures");
+    expect(result.error.message).toContain("Test_DeleteAll");
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("PR1b — accepts test_vba when allowedProcedures is unconfigured AND dryRun:true (escape hatch)", async () => {
+    const { adapter, executeMappedTool } = makeUnconfiguredAdapter(
+      vi.fn().mockResolvedValue(successResult([{ ok: true, procedure: "Test_Anything" }])),
+    );
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_Anything", args: [] }]),
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toEqual([{ ok: true, procedure: "Test_Anything" }]);
+    }
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_Anything", args: [] }]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("PR1b — accepts test_vba when procedure is in the configured allowedProcedures list", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Allowed" }])),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, [
+      "Test_Allowed",
+      "Test_AlsoAllowed",
+    ]);
+
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_Allowed",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_Allowed", args: [] }]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("PR1b — refuses test_vba when procedure is NOT in the configured allowedProcedures list (even with dryRun:true)", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_NotInList", args: [] }]),
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected refusal for procedure outside allowlist");
+    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    expect(result.error.message).toContain("Test_NotInList");
+    expect(result.error.message).toContain("allowedProcedures");
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("PR1b — refuses a multi-procedure plan when ANY procedure is outside the allowlist", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([
+        { procedure: "Test_Allowed", args: [] },
+        { procedure: "Test_NotInList", args: [] },
+      ]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected refusal when plan mixes allowed + disallowed");
+    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    // The message MUST name the offending procedure(s) so the consumer can
+    // adjust the allowlist or the plan.
+    expect(result.error.message).toContain("Test_NotInList");
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("PR1b — accepts a multi-procedure plan when ALL procedures are in the allowlist", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn().mockResolvedValue(successResult([{ ok: true }])),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, [
+      "Test_Allowed",
+      "Test_AlsoAllowed",
+    ]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([
+        { procedure: "Test_Allowed", args: [] },
+        { procedure: "Test_AlsoAllowed", args: ["x"] },
+      ]),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([
+          { procedure: "Test_Allowed", args: [] },
+          { procedure: "Test_AlsoAllowed", args: ["x"] },
+        ]),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("PR1b — gate fires AFTER manifest resolution (procedures from testsPath still go through the gate)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-pr1b-manifest-gate-"));
+    await writeFile(
+      join(root, "tests.vba.json"),
+      JSON.stringify([{ procedure: "Test_FromManifest", args: [] }]),
+      "utf8",
+    );
+
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: root,
+    };
+    // Allowlist does NOT contain Test_FromManifest — gate must catch it after
+    // the adapter loads the manifest.
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Other"]);
+
+    const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected gate to fire after manifest resolution");
+    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    expect(result.error.message).toContain("Test_FromManifest");
+    expect(result.error.message).toContain("allowedProcedures");
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("PR1b — compile_vba is NOT subject to the test_vba gate (only execution is gated)", async () => {
+    // PR1b scope: the gate is on EXECUTING test plans. `compile_vba` only
+    // compiles the VBA project — it does not run any procedure — so the gate
+    // does not apply to it. This pins the boundary so a future refactor does
+    // not silently widen the gate to cover `compile_vba`.
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn().mockResolvedValue(successResult({ ok: true })),
+      cwd: "C:/repo",
+    };
+    // No allowlist, no dryRun — the gate would normally refuse test execution.
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+
+    // Compile-only path with no plan: compile_vba still runs; the result is
+    // VBA_INVALID_TEST_PLAN (existing behavior, NOT a gate error).
+    const result = await adapter.execute("test_vba", { compile: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected VBA_INVALID_TEST_PLAN, not success");
+    expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
+    expect(result.error.code).not.toBe("MCP_INPUT_INVALID");
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(1);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+      "compile_vba",
+      expect.objectContaining({ compile: true }),
       expect.any(Object),
     );
   });

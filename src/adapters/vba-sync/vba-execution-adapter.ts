@@ -78,9 +78,20 @@ const defaultExecutionFileSystem: ExecutionFileSystemPort = {
 };
 
 export class VbaExecutionAdapter {
+  /**
+   * PR1b (#621 F1) — `allowedProcedures` allowlist used by the test_vba gate.
+   * When undefined or empty, the gate refuses execution unless the caller
+   * passes `dryRun: true`. When non-empty, every procedure in the test plan
+   * must appear in the list — the plan is atomic. Mirrors the MCP-handler
+   * gate semantics from `canonical-handlers.ts:ensureProcedureAllowed`
+   * (PR1a), relocated to the adapter boundary because `test_vba` routes
+   * through `VbaExecutionAdapter.executeTestVba`, NOT through
+   * `handleMcpVbaExecute`.
+   */
   constructor(
     private readonly orchestrator: VbaSyncOrchestrator,
     private readonly fileSystem: ExecutionFileSystemPort = defaultExecutionFileSystem,
+    private readonly allowedProcedures?: readonly string[],
   ) {}
 
   static handles(toolName: string): boolean {
@@ -300,28 +311,91 @@ End Sub
       if (!compileResult.ok) return compileResult;
     }
 
+    // Resolve the plan (either direct `proceduresJson` or resolved from
+    // `procedureName+argsJson` / `testsPath`). Capture both the canonical
+    // JSON string (passed through to the runner) and the procedure names
+    // (consumed by the gate below).
     const directProceduresJson = stringValue(params.proceduresJson);
+    let resolvedProceduresJson: string;
+    let resolvedProcedureNames: readonly string[];
     if (directProceduresJson !== undefined) {
       const directPlan = validateTestProceduresJson(directProceduresJson);
       if (!directPlan.ok) return directPlan;
-      return inspectTestResult(
-        await this.orchestrator.executeMappedTool(
-          "test_vba",
-          { ...params, proceduresJson: directPlan.data },
-          EXECUTION_MAPPINGS.test_vba,
-        ),
-      );
+      resolvedProceduresJson = directPlan.data;
+      resolvedProcedureNames = extractProcedureNames(directPlan.data);
+    } else {
+      const planResult = await this.resolveTestProceduresJson(params);
+      if (!planResult.ok) return planResult;
+      resolvedProceduresJson = planResult.data;
+      resolvedProcedureNames = extractProcedureNames(planResult.data);
     }
 
-    const planResult = await this.resolveTestProceduresJson(params);
-    if (!planResult.ok) return planResult;
+    // PR1b (#621 F1) — default-deny gate. Fires AFTER plan resolution (so we
+    // know which procedures will execute) and BEFORE `executeMappedTool` so
+    // the runner never sees an unauthorized plan. `compile_vba` ran in the
+    // pre-resolution branch above and is intentionally NOT gated — compiling
+    // the project is not the same as executing arbitrary VBA procedures.
+    const gateError = this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
+    if (gateError !== undefined) return gateError;
+
     return inspectTestResult(
       await this.orchestrator.executeMappedTool(
         "test_vba",
-        { ...params, proceduresJson: planResult.data },
+        { ...params, proceduresJson: resolvedProceduresJson },
         EXECUTION_MAPPINGS.test_vba,
       ),
     );
+  }
+
+  /**
+   * PR1b (#621 F1) — default-deny gate for test_vba at the adapter
+   * boundary. Mirrors the MCP-handler gate semantics from
+   * `canonical-handlers.ts:ensureProcedureAllowed`:
+   *
+   *   1. When `allowedProcedures` is undefined OR empty, refuse unless the
+   *      caller passes `dryRun: true` (default-deny).
+   *   2. When `allowedProcedures` is configured, EVERY procedure in the
+   *      plan must appear in the list — the plan is atomic.
+   *
+   * Returns an `OperationResult<unknown>` failure when the gate refuses, or
+   * `undefined` when execution may proceed. The error code is `MCP_INPUT_INVALID`
+   * so consumers can grep for the same string regardless of which layer
+   * caught the call (MCP-handler vs adapter). This layer returns
+   * OperationResult, so the result translator wraps the code in the MCP text
+   * exactly as it does for PR1a's MCP-handler refusals.
+   */
+  private ensureTestProceduresAllowed(
+    params: Record<string, unknown>,
+    procedures: readonly string[],
+  ): OperationResult<unknown> | undefined {
+    if (this.allowedProcedures === undefined || this.allowedProcedures.length === 0) {
+      if (params.dryRun !== true) {
+        return failureResult(
+          createDysflowError(
+            "MCP_INPUT_INVALID",
+            `Refusing to execute test_vba plan [${procedures.join(", ")}]: ` +
+              `project config must declare allowedProcedures (with every procedure in the list) ` +
+              `OR caller must pass dryRun:true. ` +
+              `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+          ),
+        );
+      }
+      return undefined;
+    }
+
+    const allowSet = new Set(this.allowedProcedures);
+    const disallowed = procedures.filter((procedure) => !allowSet.has(procedure));
+    if (disallowed.length > 0) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          `Refusing to execute test_vba plan: procedure(s) [${disallowed.join(", ")}] ` +
+            `are not in the configured allowedProcedures list. ` +
+            `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+        ),
+      );
+    }
+    return undefined;
   }
 
   private async resolveTestProceduresJson(
@@ -517,6 +591,34 @@ function isFsMissingError(err: unknown): boolean {
 
 function directTestProceduresJson(input: Record<string, unknown>): string | undefined {
   return stringValue(input.proceduresJson);
+}
+
+/**
+ * Extract procedure names from a canonical test-plan JSON string
+ * (`[{procedure: "X", args: []}, ...]`). The shape is produced by
+ * {@link validateTestProceduresJson} and {@link resolveTestProceduresJson} —
+ * both strip `name`/`tags` and keep only `{procedure, args}` so the runner
+ * payload stays minimal. The gate consumes the names to check the
+ * `allowedProcedures` allowlist.
+ *
+ * Returns an empty array when the payload is malformed — the gate treats
+ * "no procedures" as "nothing to execute" and lets the runner proceed; the
+ * runner's own validation will surface a typed error if the plan is unusable.
+ */
+function extractProcedureNames(planJson: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(planJson);
+    if (!Array.isArray(parsed)) return [];
+    const names: string[] = [];
+    for (const entry of parsed) {
+      if (isRecord(entry) && typeof entry.procedure === "string" && entry.procedure.length > 0) {
+        names.push(entry.procedure);
+      }
+    }
+    return names;
+  } catch {
+    return [];
+  }
 }
 
 type VbaTestPlanEntry = {
