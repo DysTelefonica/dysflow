@@ -79,6 +79,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          # AGENTS.md hard rule: the release title MUST equal the tag name.
+          # Pass the ref (e.g. "v1.13.0") as the release name so the artifact
+          # is born matching the tag. The release-title-guard workflow re-
+          # asserts this on release: [created, edited] for defense-in-depth.
+          name: ${{ github.ref_name }}
           files: |
             dysflow-*.tar.gz
             SHA256SUMS
