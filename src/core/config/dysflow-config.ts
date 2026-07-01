@@ -256,12 +256,17 @@ function buildProjectConfig(
 ): OperationResult<DysflowConfig> {
   const { resolvedPath, configSource, projectIdOverride, input, env } = opts;
   const configDir = dirname(resolvedPath);
-  const projectRoot = resolveProjectRoot(raw, configDir, input.projectRoot);
+  const projectRoot = resolveProjectRoot(raw, configDir, stringValue(input.projectRoot));
   const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
   // Explicit request paths are caller intent and must win over repo config defaults.
   // This mirrors backendPath/destinationRoot and lets MCP callers override a stale
   // project config by passing an absolute accessPath together with projectId.
-  const accessDbPath = resolveProjectPath(input.accessDbPath ?? raw.accessPath, projectRoot);
+  // #619 — wrap empty/whitespace caller overrides in stringValue() so they normalize
+  // to undefined and fall through to the repo-config default, mirroring buildExplicitConfig.
+  const accessDbPath = resolveProjectPath(
+    stringValue(input.accessDbPath) ?? raw.accessPath,
+    projectRoot,
+  );
   if (accessDbPath === undefined) {
     return failureResult(
       createDysflowError(
@@ -271,15 +276,22 @@ function buildProjectConfig(
     );
   }
 
-  const backendPath = resolveProjectPath(input.backendPath ?? raw.backendPath, projectRoot);
+  const backendPath = resolveProjectPath(
+    stringValue(input.backendPath) ?? raw.backendPath,
+    projectRoot,
+  );
   // #13228 — an explicit caller override MUST win over the discovered repo config.
   // The discovered config is a DEFAULT, not an authority over what the caller asked
   // for. This matches buildExplicitConfig and resolveProjectRoot, which already let
   // the explicit value win; the old `raw.* ?? input.*` order let a startup project's
   // src/ overwrite a worktree export target (186-file incident).
+  // #619 — wrap empty/whitespace caller overrides in stringValue() before the ?? chain
+  // so a "" or "   " destinationRoot falls through to raw.destinationRoot ?? "src".
   const destinationRoot =
-    resolveProjectPath(input.destinationRoot ?? raw.destinationRoot ?? "src", projectRoot) ??
-    projectRoot;
+    resolveProjectPath(
+      stringValue(input.destinationRoot) ?? raw.destinationRoot ?? "src",
+      projectRoot,
+    ) ?? projectRoot;
   const accessPasswordEnv = resolvePasswordEnv(raw);
   const backendPasswordEnv = resolveBackendPasswordEnv(raw);
   const accessPassword = resolvePassword(
