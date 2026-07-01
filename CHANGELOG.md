@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### process-lifecycle-safety (#620)
+
+#### F2
+- **`dysflow_access_cleanup(force: true)` now refuses to kill a `running` operation whose owned PID is still alive (`CLEANUP_RUNNING_FORCE_REFUSED`).** Previously, `force: true` bypassed the running gate entirely, which violated the "this tier must not kill anything" rule for an operation that is still legitimately in flight (and can take minutes). Callers that relied on the old bypass must wait for natural completion or update the registry record to a terminal status first. Dead-PID running records (process already gone) remain cleanable.
+
 ### runtime-path-safety (#619)
 
 #### F2

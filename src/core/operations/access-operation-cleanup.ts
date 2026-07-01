@@ -135,6 +135,40 @@ export class AccessOperationCleanupService {
       return this.retireUnownedOperation(record.operationId, record.accessPath);
     }
 
+    // F2 (#620): Even with force:true, refuse to kill a running operation whose owned
+    // PID is still alive. A running record means an automation owns that PID; the
+    // operator must either wait for natural completion or update the record to a
+    // terminal status first. force:true cannot become a back-door kill switch.
+    //
+    // This gate fires ONLY when force:true is set. When force:false, the existing
+    // ELIGIBLE_STATUSES gate below already returns CLEANUP_STATUS_NOT_ELIGIBLE for
+    // status === "running" — F2's refusal is reserved for the force-bypass path.
+    //
+    // The dead-PID case (liveProcess === undefined) falls through naturally: the
+    // existing flow at the next block sees the PID is gone, transitions the registry
+    // record to "cleaned", and returns success — preserving the existing L137 test.
+    if (
+      request.force &&
+      record.status === "running" &&
+      record.accessPid !== null &&
+      record.processStartTime !== null
+    ) {
+      const liveProcess = await this.options.processInspector.getProcess(record.accessPid);
+      if (liveProcess !== undefined) {
+        const sameProcess =
+          liveProcess.name.toUpperCase() === "MSACCESS.EXE" &&
+          sameProcessStartTime(liveProcess.startTime, record.processStartTime);
+        if (sameProcess) {
+          return failureResult(
+            createDysflowError(
+              "CLEANUP_RUNNING_FORCE_REFUSED",
+              `Cleanup refused: operation ${record.operationId} is running and PID ${record.accessPid} is still alive.`,
+            ),
+          );
+        }
+      }
+    }
+
     if (!request.force && !ELIGIBLE_STATUSES.has(record.status)) {
       return failureResult(
         createDysflowError(

@@ -224,6 +224,135 @@ describe("AccessOperationCleanupService — dead-PID cleanup", () => {
   });
 });
 
+describe("AccessOperationCleanupService — F2: force:true refuses running records (#620)", () => {
+  // F2 contract: cleanup({force:true}) on a record whose status === "running" AND whose
+  // owned PID is still alive MUST return CLEANUP_RUNNING_FORCE_REFUSED without calling
+  // the killer. A running operation means an automation owns that PID; the operator
+  // must either wait or update the record to a terminal status first.
+  //
+  // The dead-PID case is already covered by the "dead-PID cleanup" describe above
+  // (existing L137 test): when status is "running" but the PID is gone, force:true
+  // is allowed to retire the registry record (no kill needed).
+
+  it("returns CLEANUP_RUNNING_FORCE_REFUSED without invoking the killer when status is running and owned PID is alive (#620)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        pid: 999,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:00.000Z",
+      }),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("CLEANUP_RUNNING_FORCE_REFUSED");
+      expect(result.error.message).toMatch(/operation op-1 is running/);
+      expect(result.error.message).toMatch(/PID 999 is still alive/);
+    }
+    // Hard guarantee: the killer was NOT called for a still-running operation.
+    expect(killed).toEqual([]);
+    // Registry record must NOT have been transitioned — the caller may retry once
+    // the operation finishes naturally.
+    const stored = await registry.get("op-1");
+    expect(stored?.status).toBe("running");
+  });
+
+  it("returns CLEANUP_STATUS_NOT_ELIGIBLE (not the F2 refusal) when force:false and status is running (#620)", async () => {
+    // Existing behavior: force:false on a non-eligible status returns CLEANUP_STATUS_NOT_ELIGIBLE.
+    // The new F2 gate fires ONLY when force:true — it must not change the force:false path.
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        pid: 999,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:00.000Z",
+      }),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanup({
+      operationId: "op-1",
+      accessPath: "C:\\data\\app.accdb",
+      force: false,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("CLEANUP_STATUS_NOT_ELIGIBLE");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  it("called 100 times on a running record with alive PID never invokes the killer (#620)", async () => {
+    // Adversarial: a retry loop hammering cleanup({force:true}) against a stuck
+    // operation must never silently transition running→terminal or call the killer.
+    // The whole point of F2 is that force:true cannot become a back-door kill switch.
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      status: "running",
+      accessPid: 999,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+    };
+    const { killer, killed } = fakeKiller();
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(record);
+    const svc = new AccessOperationCleanupService({
+      registry,
+      processInspector: fakeInspector({
+        pid: 999,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:00.000Z",
+      }),
+      processKiller: killer,
+    });
+
+    for (let i = 0; i < 100; i++) {
+      const result = await svc.cleanup({
+        operationId: "op-1",
+        accessPath: "C:\\data\\app.accdb",
+        force: true,
+      });
+      expect(result.ok, `iteration ${i} should refuse`).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code, `iteration ${i} wrong error code`).toBe(
+          "CLEANUP_RUNNING_FORCE_REFUSED",
+        );
+      }
+    }
+    expect(killed, "killer must never be called for a running+alive operation").toEqual([]);
+    const stored = await registry.get("op-1");
+    expect(stored?.status, "registry record must remain running across all 100 attempts").toBe(
+      "running",
+    );
+  });
+});
+
 describe("sameProcessStartTime — whole-second tolerance", () => {
   it("returns true when times are identical strings", () => {
     expect(sameProcessStartTime("2026-05-18T12:34:56.000Z", "2026-05-18T12:34:56.000Z")).toBe(true);
