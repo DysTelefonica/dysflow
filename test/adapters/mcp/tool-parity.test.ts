@@ -42,12 +42,13 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 53-tool inventory", () => {
+  it("declares the complete 54-tool inventory", () => {
     // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(29);
+    // Slice 5 (#618) added dysflow_create_form_from_template.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(30);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(53);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(53);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(54);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(54);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -59,11 +60,12 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_rename_control");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_serialize");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_deserialize");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_create_form_from_template");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(53);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(53);
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(54);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(54);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

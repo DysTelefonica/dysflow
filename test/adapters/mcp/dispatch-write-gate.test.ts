@@ -55,6 +55,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect([...filesystemWriters].sort()).toEqual(
       [
         "catalog_add_control",
+        "dysflow_create_form_from_template",
         "dysflow_form_add_control",
         "dysflow_form_move_control",
         "dysflow_form_rename_control",
@@ -211,6 +212,15 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       },
       apply: true,
     },
+    // slice 5 (issue #618) — minimal apply input for dysflow_create_form_from_template.
+    // The tool requires sourceForm/targetForm/tokenMap; apply:true forces isDryRun=false
+    // so the write-gate must fire even when writes are disabled.
+    dysflow_create_form_from_template: {
+      sourceForm: "Form_Customer",
+      targetForm: "Form_CustomerClone",
+      tokenMap: { FormName: "FormCustomerClone" },
+      apply: true,
+    },
     vba_inline_execution: { code: "Sub T()\r\nEnd Sub" },
   };
 
@@ -221,6 +231,7 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "delete_module",
         "import_all",
         "import_modules",
+        "dysflow_create_form_from_template",
         "dysflow_form_add_control",
         "dysflow_form_move_control",
         "dysflow_form_rename_control",

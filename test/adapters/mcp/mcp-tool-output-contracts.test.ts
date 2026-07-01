@@ -44,6 +44,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "dysflow_form_rename_control",
     "dysflow_form_serialize",
     "dysflow_form_deserialize",
+    "dysflow_create_form_from_template",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],
