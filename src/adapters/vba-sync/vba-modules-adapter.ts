@@ -216,6 +216,30 @@ export class VbaModulesAdapter {
         ? { ...params, destinationRoot: exportPath }
         : params;
 
+    // F1 (#619): after the explicit-exportPath guard, resolve the target and refuse
+    // if destinationRoot (from project config, context defaults, or a caller override)
+    // falls inside the dysflow production runtime. The runner MUST NOT be invoked
+    // when the resolved target is unsafe; mirror vba-execution-adapter.ts:160-175.
+    let resolvedExportTarget: OperationResult<VbaModulesExecutionTarget> | undefined;
+    if (toolName === "export_modules" || toolName === "export_all") {
+      const target = await this.orchestrator.resolveExecutionTarget(effectiveParams);
+      if (!target.ok) return target;
+      resolvedExportTarget = target;
+      if (
+        isWithinRuntime(
+          target.data.destinationRoot,
+          this.orchestrator.env ?? (process.env as Record<string, string | undefined>),
+        )
+      ) {
+        return failureResult(
+          createDysflowError(
+            "INVALID_INPUT",
+            `Refusing to export to destinationRoot '${target.data.destinationRoot}' inside the dysflow production runtime. Point destinationRoot at your project, not the installed runtime.`,
+          ),
+        );
+      }
+    }
+
     if (toolName === "export_all" && truthy(params.prune)) {
       if (stringValue(params.filter) !== undefined) {
         return failureResult(
@@ -225,7 +249,7 @@ export class VbaModulesAdapter {
           ),
         );
       }
-      return this.exportAllWithPrune(effectiveParams);
+      return this.exportAllWithPrune(effectiveParams, resolvedExportTarget);
     }
 
     const importPruneResult =
@@ -437,6 +461,7 @@ export class VbaModulesAdapter {
    */
   private async exportAllWithPrune(
     params: Record<string, unknown>,
+    preResolvedTarget?: OperationResult<VbaModulesExecutionTarget>,
   ): Promise<OperationResult<unknown>> {
     const mapping = MODULE_MAPPINGS.export_all;
     if (!mapping) {
@@ -456,7 +481,11 @@ export class VbaModulesAdapter {
       );
     }
 
-    const target = await this.orchestrator.resolveExecutionTarget(params);
+    // When the caller has already resolved and pre-validated the target (the F1 top-level
+    // guard at the execute() entry), reuse it. Otherwise fall back to resolving here so
+    // existing internal callers still work. The post-resolution guard below remains as
+    // defense-in-depth in case a future refactor bypasses the top-level guard.
+    const target = preResolvedTarget ?? (await this.orchestrator.resolveExecutionTarget(params));
     if (!target.ok) return target;
     const destinationRoot = target.data.destinationRoot;
 

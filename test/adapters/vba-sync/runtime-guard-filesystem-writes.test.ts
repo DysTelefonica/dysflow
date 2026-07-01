@@ -31,7 +31,11 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
 
   function makeAdapter(env: Record<string, string | undefined>) {
     const executeMappedTool = vi.fn();
-    const resolveExecutionTarget = vi.fn();
+    // Default to a safe destinationRoot. Individual tests that need to exercise
+    // a runtime-resolving target override this mock (see #619 tests below).
+    const resolveExecutionTarget = vi
+      .fn()
+      .mockResolvedValue(successResult({ destinationRoot: "C:/projects/anywhere" }));
     const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
     const runPreflightCleanup = vi.fn();
     const adapter = new VbaModulesAdapter({
@@ -44,7 +48,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
       runPreflightCleanup,
       executor: vi.fn(),
     });
-    return { adapter, executeMappedTool };
+    return { adapter, executeMappedTool, resolveExecutionTarget };
   }
 
   it("refuses export_modules when exportPath points inside the production runtime", async () => {
@@ -90,6 +94,90 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
     // we only assert the guard did NOT block this call.
     expect(executeMappedTool).toHaveBeenCalled();
     // And the rejected guard wasn't triggered.
+    if (!result.ok) {
+      expect(result.error.code).not.toBe("INVALID_INPUT");
+    }
+  });
+
+  // --- Issue #619 — F1: pre-write guard on resolved destinationRoot ---
+  // The exportPath-only guard above protects the explicit-override case. When no
+  // exportPath is supplied (or it falls outside the runtime), the resolved
+  // destinationRoot from project config / context defaults still flows into the
+  // runner. A plain export_modules / export_all with a runtime-resolving
+  // destinationRoot MUST be refused pre-write, mirroring
+  // vba-execution-adapter.ts:160-175 and vba-forms-adapter.ts:427-442.
+
+  function makeAdapterWithResolvedTarget(
+    env: Record<string, string | undefined>,
+    destinationRoot: string,
+  ) {
+    const executeMappedTool = vi.fn();
+    const resolveExecutionTarget = vi
+      .fn()
+      .mockResolvedValue(successResult({ destinationRoot, projectRoot: "C:/projects/anywhere" }));
+    const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
+    const runPreflightCleanup = vi.fn();
+    const adapter = new VbaModulesAdapter({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      cwd: "C:/projects/anywhere",
+      env,
+      executeMappedTool,
+      resolveExecutionTarget,
+      validateStrictContext,
+      runPreflightCleanup,
+      executor: vi.fn(),
+    });
+    return { adapter, executeMappedTool, resolveExecutionTarget };
+  }
+
+  it("refuses export_modules when resolved destinationRoot points inside the production runtime (#619)", async () => {
+    const { adapter, executeMappedTool } = makeAdapterWithResolvedTarget(
+      runtimeEnv,
+      "C:/runtime/dysflow/app/scripts",
+    );
+
+    const result = await adapter.execute("export_modules", {
+      moduleNames: ["Module1"],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(result.error.message).toMatch(/production runtime|inside the runtime/i);
+    // Critical: pre-write guard. Runner MUST NOT be invoked.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("refuses export_all when resolved destinationRoot points inside the production runtime (#619)", async () => {
+    const { adapter, executeMappedTool } = makeAdapterWithResolvedTarget(
+      runtimeEnv,
+      "C:/runtime/dysflow",
+    );
+
+    const result = await adapter.execute("export_all", {});
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(result.error.message).toMatch(/production runtime|inside the runtime/i);
+    // Critical: pre-write guard. Runner MUST NOT be invoked.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("allows export_modules when resolved destinationRoot is outside the production runtime (#619)", async () => {
+    const { adapter, executeMappedTool } = makeAdapterWithResolvedTarget(
+      runtimeEnv,
+      "C:/projects/myapp/src",
+    );
+    executeMappedTool.mockResolvedValue({ ok: true, data: { ok: true } });
+
+    const result = await adapter.execute("export_modules", {
+      moduleNames: ["Module1"],
+    });
+
+    // Guard passed; execution reached the runner. The runner may return anything;
+    // we only assert the guard did NOT block this call.
+    expect(executeMappedTool).toHaveBeenCalled();
     if (!result.ok) {
       expect(result.error.code).not.toBe("INVALID_INPUT");
     }
@@ -148,6 +236,42 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.exportAllWithPrune"
     // The guard did NOT block; the runner returned a normal prune result.
     // (We mocked the runner's executeMappedTool to return success with empty exported list.)
     expect(result.ok).toBe(true);
+  });
+
+  // --- Issue #619 — F1: pre-write guard on resolved destinationRoot for export_all prune ---
+  // The pre-write guard MUST fire BEFORE the runner's export_all is invoked, so the
+  // destructive phase is never reached. Pin that executeMappedTool is NOT called.
+
+  it("export_all prune refuses runtime destinationRoot pre-write — runner never invoked (#619)", async () => {
+    const executeMappedTool = vi.fn();
+    const resolveExecutionTarget = vi.fn().mockResolvedValue(
+      successResult({
+        destinationRoot: "C:/runtime/dysflow/app/scripts",
+        projectRoot: "C:/projects/anywhere",
+      }),
+    );
+    const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
+    const runPreflightCleanup = vi.fn().mockResolvedValue({ performed: false });
+    const adapter = new VbaModulesAdapter({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      cwd: "C:/projects/anywhere",
+      env: runtimeEnv,
+      executeMappedTool,
+      resolveExecutionTarget,
+      validateStrictContext,
+      runPreflightCleanup,
+      executor: vi.fn(),
+    });
+
+    const result = await adapter.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.code).toBe("INVALID_INPUT");
+    expect(result.error.message).toMatch(/production runtime|inside the runtime/i);
+    // Critical: pre-write guard. The runner's executeMappedTool MUST NOT be invoked
+    // for the export step (nor for any destructive phase).
+    expect(executeMappedTool).not.toHaveBeenCalled();
   });
 });
 
