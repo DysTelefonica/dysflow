@@ -740,15 +740,13 @@ function replaceTokensInString(value: string, tokenMap: TokenMap): string {
 
 /**
  * Returns true when a property key belongs to the Access opaque metadata
- * reserved set: any key equal to or starting with `Checksum`, `Format`,
- * or `PrtDevMode`. Matches the slice 4 invariant — the metadata guard
- * (`metadataSnapshot`) uses the same prefix rules.
- *
- * Single source of truth for the "is this a reserved Access metadata key"
- * predicate: both `metadataSnapshot` and `applyTokenMap` walk it.
+ * reserved set. MUST be byte-equal (exact-match) to one of `Checksum`,
+ * `Format`, or `PrtDevMode` — keys that share a prefix with a preserved
+ * key (e.g. `FormatConditions`, `FormatHeader`) are NOT preserved and
+ * flow through token replacement. Issue #622 (#B).
  */
 function isPreservedMetadataKey(key: string): boolean {
-  return PRESERVED_METADATA_KEYS.some((prefix) => key === prefix || key.startsWith(prefix));
+  return (PRESERVED_METADATA_KEYS as readonly string[]).includes(key);
 }
 
 /**
@@ -824,19 +822,27 @@ export function applyTokenMap(
   next.root = applyTokensToNode(next.root, tokenMap);
 
   const sourceText = serializeFormTxt(ir);
+  const nextText = serializeFormTxt(next);
   const sourceTokens = collectSourceTokens(sourceText);
+  const survivingTokens = new Set(collectSourceTokens(nextText));
 
+  // `appliedTokens` MUST reflect ACTUAL replacement, not source-AND-map
+  // membership. A token whose `{{...}}` pattern still appears in the
+  // post-IR serialized text (e.g. its only occurrence lives inside a
+  // preserved metadata key) was NOT replaced; it is `missing`. Issue #622
+  // (#B). Under `strict` policy, surviving source tokens now trigger
+  // `FORM_MUTATION_INVALID` (CHANGELOG: behavior change).
   const appliedTokens: string[] = [];
   const missingTokens: string[] = [];
   const warnings: string[] = [];
   for (const token of sourceTokens) {
-    if (Object.hasOwn(tokenMap, token)) {
-      appliedTokens.push(token);
-    } else {
+    if (survivingTokens.has(token)) {
       missingTokens.push(token);
       warnings.push(
-        `Token "{{${token}}}" is present in the source but missing from the token map; leaving verbatim under warn-pass-through policy.`,
+        `Token "{{${token}}}" is present in the source but not replaced in the serialized IR (likely lives inside a preserved metadata key); leaving verbatim under warn-pass-through policy.`,
       );
+    } else {
+      appliedTokens.push(token);
     }
   }
 
