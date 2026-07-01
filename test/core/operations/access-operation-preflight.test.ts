@@ -348,11 +348,10 @@ describe("AccessOperationPreflightCleanupService", () => {
       });
 
       expect(result.orphanedKilled).toEqual([]);
-      expect(result.errors).toContainEqual({
-        operationId: "orphan",
-        message:
-          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
-      });
+      // F1 (#620): contract — unattributed orphan is refused, refusal names the PID.
+      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
+        true,
+      );
       expect(killed).toEqual([]);
     });
 
@@ -578,11 +577,10 @@ describe("AccessOperationPreflightCleanupService", () => {
       });
 
       expect(result.orphanedKilled).toEqual([]);
-      expect(result.errors).toContainEqual({
-        operationId: "orphan",
-        message:
-          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
-      });
+      // F1 (#620): contract — case-insensitive match also refuses, names PID.
+      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
+        true,
+      );
       expect(killed).toEqual([]);
     });
 
@@ -649,11 +647,10 @@ describe("AccessOperationPreflightCleanupService", () => {
       });
 
       expect(result.orphanedKilled).toEqual([]);
-      expect(result.errors).toContainEqual({
-        operationId: "orphan",
-        message:
-          "Blocked cleanup because PID 9999 is an unattributed MSACCESS process for the requested accessPath.",
-      });
+      // F1 (#620): contract — unquoted-token path also refuses, names PID.
+      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 9999/.test(e.message))).toBe(
+        true,
+      );
       expect(killed).toEqual([]);
     });
   });
@@ -696,15 +693,15 @@ describe("AccessOperationPreflightCleanupService", () => {
       });
 
       expect(result.orphanedKilled).toEqual([]);
-      expect(result.errors).toContainEqual({
-        operationId: "orphan",
-        message:
-          "Blocked cleanup because PID 5555 is an unattributed MSACCESS process for the requested accessPath.",
-      });
+      // F1 (#620): contract — explicit scanner path also refuses, names PID.
+      expect(result.errors.some((e) => e.operationId === "orphan" && /PID 5555/.test(e.message))).toBe(
+        true,
+      );
       expect(killed).toEqual([]);
     });
 
-    it("scanAndCleanOrphans terminates a headless process with -Embedding and adds to orphanedKilled", async () => {
+    // F1 (#620): FLIP — substring + undefined window handle must refuse, not kill.
+    it("scanAndCleanOrphans: with -Embedding but mainWindowHandle undefined → refuses", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       const killed: number[] = [];
       const scanner = {
@@ -714,6 +711,7 @@ describe("AccessOperationPreflightCleanupService", () => {
             name: "MSACCESS.EXE",
             startTime: "2026-05-15T12:00:00.000Z",
             commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+            // mainWindowHandle is intentionally omitted → undefined (Get-Process fallback).
           },
         ],
       };
@@ -734,12 +732,15 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.orphanedKilled).toEqual([5555]);
-      expect(result.errors).toEqual([]);
-      expect(killed).toEqual([5555]);
+      expect(result.orphanedKilled).toEqual([]);
+      // Refusal diagnostic carries mainWindowHandle-related language so operators can audit.
+      expect(result.errors).not.toEqual([]);
+      expect(result.errors.some((e) => /mainWindowHandle/i.test(e.message))).toBe(true);
+      expect(killed).toEqual([]);
     });
 
-    it("retireUnownedRecord terminates a headless process with -Embedding, kills it and marks record cleaned", async () => {
+    // F1 (#620): FLIP — mirror in retireUnownedRecord.
+    it("retireUnownedRecord: with -Embedding but mainWindowHandle undefined → refuses", async () => {
       const registry = new InMemoryAccessOperationRegistry();
       await registry.create({
         ...baseRecord,
@@ -755,6 +756,7 @@ describe("AccessOperationPreflightCleanupService", () => {
             name: "MSACCESS.EXE",
             startTime: "2026-05-15T12:00:00.000Z",
             commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+            // mainWindowHandle is intentionally omitted → undefined (Get-Process fallback).
           },
         ],
       };
@@ -775,10 +777,263 @@ describe("AccessOperationPreflightCleanupService", () => {
         projectRoot: "C:/repo/app",
       });
 
-      expect(result.cleaned).toContain("op-unowned");
-      expect(result.killed).toEqual([6666]);
+      expect(result.cleaned).not.toContain("op-unowned");
+      expect(result.killed).toEqual([]);
+      expect(result.errors.some((e) => /mainWindowHandle/i.test(e.message))).toBe(true);
+      expect(killed).toEqual([]);
+    });
+
+    // F1 (#620): undefined mainWindowHandle = refusal (treat as "unknown").
+    it("scanAndCleanOrphans refuses when mainWindowHandle is undefined even if commandLine matches (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 5555,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+            mainWindowHandle: undefined,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([]);
+      expect(killed).toEqual([]);
+      expect(result.errors).not.toEqual([]);
+      expect(result.errors[0]?.message).toMatch(/mainWindowHandle/i);
+    });
+
+    // F1 (#620): visible window = refusal. Substring is not a kill signal.
+    it("scanAndCleanOrphans refuses when mainWindowHandle is non-zero even if commandLine contains -embedding (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 5555,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+            mainWindowHandle: 0xbeef,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([]);
+      expect(killed).toEqual([]);
+      expect(result.errors).not.toEqual([]);
+      // Refusal message must surface the window-handle reason so an operator can audit.
+      expect(result.errors[0]?.message).toMatch(/mainWindowHandle/i);
+      // Substring is explicitly NOT the signal — message must mention the visible window.
+      expect(result.errors[0]?.message).toMatch(/0xBEEF|visible|not headless/i);
+    });
+
+    // F1 (#620): regression guard — real headless is still killed when path has -embedding.
+    it("scanAndCleanOrphans kills when mainWindowHandle === 0 and accessPath contains -embedding (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 5555,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
+            mainWindowHandle: 0,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/my-embedding-app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.orphanedKilled).toEqual([5555]);
+      expect(killed).toEqual([5555]);
       expect(result.errors).toEqual([]);
+    });
+
+    // F1 (#620): undefined mainWindowHandle mirror in retireUnownedRecord.
+    it("retireUnownedRecord refuses when mainWindowHandle is undefined even if commandLine matches (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned-undef",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 6666,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+            mainWindowHandle: undefined,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toEqual([]);
+      expect(killed).toEqual([]);
+      // Without a matching live PID, retireUnownedRecord would normally call markCleaned.
+      // Refusal here must therefore block the "cleaned" transition as well.
+      expect(result.cleaned).not.toContain("op-unowned-undef");
+      expect(result.errors).not.toEqual([]);
+      expect(result.errors[0]?.message).toMatch(/mainWindowHandle/i);
+    });
+
+    // F1 (#620): visible window mirror in retireUnownedRecord.
+    it("retireUnownedRecord refuses when mainWindowHandle is non-zero even if commandLine contains -embedding (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned-visible",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 6666,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/app.accdb" -Embedding',
+            mainWindowHandle: 0x1234,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toEqual([]);
+      expect(killed).toEqual([]);
+      expect(result.cleaned).not.toContain("op-unowned-visible");
+      expect(result.errors[0]?.message).toMatch(/mainWindowHandle/i);
+      expect(result.errors[0]?.message).toMatch(/0x1234|visible|not headless/i);
+    });
+
+    // F1 (#620): regression guard — headless killed even when path has -embedding.
+    it("retireUnownedRecord kills when mainWindowHandle === 0 and accessPath contains -embedding (#620)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned-path-emb",
+        accessPath: "C:/data/my-embedding-app.accdb",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [
+          {
+            pid: 6666,
+            name: "MSACCESS.EXE",
+            startTime: "2026-05-15T12:00:00.000Z",
+            commandLine: 'MSACCESS.EXE "C:/data/my-embedding-app.accdb"',
+            mainWindowHandle: 0,
+          },
+        ],
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => undefined },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/my-embedding-app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toEqual([6666]);
       expect(killed).toEqual([6666]);
+      expect(result.cleaned).toContain("op-unowned-path-emb");
+      expect(result.errors).toEqual([]);
     });
   });
 
