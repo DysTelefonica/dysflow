@@ -14,6 +14,28 @@ VBA execution, on purpose, because they sit behind **different threat models**.
 HTTP is more exposed, so it is more restrictive. That difference is the whole reason
 the gates differ.
 
+## Process-wide write default
+
+The two adapters also start with **different process-wide write defaults**, for the
+same trust-model reason above:
+
+| Adapter | Command | Default | Opt-out / opt-in |
+|---------|---------|---------|-------------------|
+| MCP (stdio) | `dysflow mcp` | **Writes enabled** | `--disable-writes` runs read-only. `--enable-writes` is an accepted no-op. |
+| HTTP | `dysflow serve` | **Writes disabled** | `--enable-writes` opts in for a trusted local session. |
+
+Rationale: the stdio caller is the process owner (the parent that spawned `dysflow
+mcp`), so it is safe to default that surface **on**. The HTTP adapter is a network
+surface — any caller that can reach the port is untrusted by default — so it stays
+**off** until an operator explicitly enables it.
+
+This only changes the default *input* to the write gate. Per-repo `allowWrites`,
+`allowedProcedures`, and the ad hoc `buildExplicitConfig` floor in
+`src/core/config/dysflow-config.ts` are unchanged and still apply on top of this
+default — a repo can still be scoped to read-only with `"allowWrites": false` even
+while the MCP process default is enabled. See `resolveMcpWriteAccessForInput` in
+`dispatch-common.ts` for the unchanged precedence order.
+
 ## What each adapter gates
 
 | Operation | HTTP | MCP | Why |

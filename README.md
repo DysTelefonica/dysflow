@@ -473,22 +473,24 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
-**Write tools are disabled by default on MCP**, matching the HTTP safety model. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to enable writes:
+**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
 
-**Option 1 — per-repo (recommended).** Set `"allowWrites": true` in the repo's `.dysflow/project.json`. Writes are then enabled for that project even if MCP was started without `--enable-writes`, and the setting travels with the repo:
+**Option 1 — per-repo.** Set `"allowWrites": false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
 
 ```json
 {
   "accessDbPath": "path/to/database.accdb",
-  "allowWrites": true
+  "allowWrites": false
 }
 ```
 
-**Option 2 — process-wide.** Start MCP with `--enable-writes`. This enables writes for every project that server instance touches, so use it only for trusted local maintenance sessions:
+**Option 2 — process-wide.** Start MCP with `--disable-writes` to run the whole session read-only, regardless of per-repo settings:
 
 ```powershell
-dysflow mcp --enable-writes
+dysflow mcp --disable-writes
 ```
+
+`--enable-writes` is still accepted as a no-op (writes are already enabled by default); passing both `--enable-writes` and `--disable-writes` together is rejected with a usage error.
 
 `dryRun` operations remain allowed in all modes regardless of either setting.
 
@@ -757,7 +759,7 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | Command           | Description                                   |
 | ----------------- | --------------------------------------------- |
 | `dysflow`         | Open the Dysflow TUI dashboard                |
-| `dysflow mcp`     | Start MCP stdio adapter (`--enable-writes` enables guarded MCP writes) |
+| `dysflow mcp`     | Start MCP stdio adapter (writes enabled by default; `--disable-writes` opts out) |
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |

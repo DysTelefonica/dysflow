@@ -52,11 +52,12 @@ describe("README MCP tool surface", () => {
     expect(inventoryToolNames).toEqual(expected);
   });
 
-  it("describes --enable-writes as enabling guarded MCP writes, not only SQL writes", async () => {
+  it("describes MCP writes as enabled by default with a --disable-writes opt-out, not only SQL writes", async () => {
     const readme = await readFile("README.md", "utf8");
     const cliSection = sectionBetween(readme, "## CLI", "### Common flow");
 
-    expect(cliSection).toContain("enables guarded MCP writes");
+    expect(cliSection).toContain("writes enabled by default");
+    expect(cliSection).toContain("--disable-writes");
     expect(cliSection).not.toContain("enables guarded SQL writes");
   });
 });
