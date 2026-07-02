@@ -1,10 +1,37 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildMaintenanceRequest,
   buildQueryReadRequest,
   buildWriteFixtureRequest,
+  coerceTimeoutMs,
   getStr,
+  pickOverrides,
 } from "../../../src/core/mapping/access-query-request-mapper.js";
+
+/**
+ * Project-relative override fields. Every `build*` builder MUST populate
+ * these from the same `pickOverrides(params)` helper, so the builder
+ * outputs are deep-equal across each other for the override slice.
+ */
+const OVERRIDE_KEYS = [
+  "projectId",
+  "contextId",
+  "accessPath",
+  "destinationRoot",
+  "projectRoot",
+  "strictContext",
+  "expectedAccessPath",
+  "expectedProjectRoot",
+  "expectedDestinationRoot",
+  "timeoutMs",
+] as const;
+
+function pickOverrideSlice(request: Record<string, unknown>): Record<string, unknown> {
+  const slice: Record<string, unknown> = {};
+  for (const key of OVERRIDE_KEYS) slice[key] = request[key];
+  return slice;
+}
 
 describe("access-query-request-mapper", () => {
   describe("getStr", () => {
@@ -305,6 +332,112 @@ describe("access-query-request-mapper", () => {
       expect(request.expectedAccessPath).toBe("C:/expected-access.accdb");
       expect(request.expectedProjectRoot).toBe("C:/expected-proj");
       expect(request.expectedDestinationRoot).toBe("C:/expected-dest");
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // PR 3 (#F override dedup + #E coerceTimeoutMs helper) — structural,
+  // happy, edge, and regression coverage. Strict TDD: RED before GREEN.
+  // ---------------------------------------------------------------
+
+  describe("pickOverrides", () => {
+    it("is the single source of override fields (structural)", () => {
+      const source = readFileSync("src/core/mapping/access-query-request-mapper.ts", "utf8");
+      // The 9 override-only string keys each map to `getStr(params, "X")`.
+      // `expectedAccessPath` is unique to the override set (no builder
+      // uses it for any other field), so its `getStr` call site count is
+      // the cleanest canary for "single source of truth".
+      const overrideOnlyCalls =
+        source.match(/getStr\(params,\s*["']expectedAccessPath["']\)/g) ?? [];
+      expect(overrideOnlyCalls.length).toBe(1);
+      // The same invariant for `expectedProjectRoot` (another override-only key).
+      const expectedProjectRootCalls =
+        source.match(/getStr\(params,\s*["']expectedProjectRoot["']\)/g) ?? [];
+      expect(expectedProjectRootCalls.length).toBe(1);
+    });
+
+    it("all 3 builders produce identical override shapes for the same input (happy)", () => {
+      const params = {
+        projectId: "proj-123",
+        contextId: "ctx-456",
+        accessPath: "C:/access.accdb",
+        destinationRoot: "C:/dest",
+        projectRoot: "C:/proj",
+        timeoutMs: 5000,
+        strictContext: true,
+        expectedAccessPath: "C:/expected-access.accdb",
+        expectedProjectRoot: "C:/expected-proj",
+        expectedDestinationRoot: "C:/expected-dest",
+      };
+      const readRequest = buildQueryReadRequest("query_sql", params);
+      const writeRequest = buildWriteFixtureRequest("seed_fixture", params);
+      const maintRequest = buildMaintenanceRequest("link_tables", "write", params, () => undefined);
+
+      const readSlice = pickOverrideSlice(readRequest as unknown as Record<string, unknown>);
+      const writeSlice = pickOverrideSlice(writeRequest as unknown as Record<string, unknown>);
+      const maintSlice = pickOverrideSlice(maintRequest as unknown as Record<string, unknown>);
+
+      expect(readSlice).toEqual(writeSlice);
+      expect(writeSlice).toEqual(maintSlice);
+    });
+
+    it("preserves missing-field defaults as undefined (edge)", () => {
+      const result = pickOverrides({ projectId: "only-this" });
+      // Provided field passes through.
+      expect(result.projectId).toBe("only-this");
+      // Every other override field is undefined — not null, not absent, not defaulted.
+      for (const key of OVERRIDE_KEYS) {
+        if (key === "projectId") continue;
+        expect(result[key]).toBeUndefined();
+      }
+    });
+
+    it("delegates timeoutMs to coerceTimeoutMs (identity)", () => {
+      // Behavioral check: passing a number returns the number.
+      const result = pickOverrides({ timeoutMs: 12345 });
+      expect(result.timeoutMs).toBe(12345);
+      // Structural check: pickOverrides MUST call coerceTimeoutMs on params.timeoutMs.
+      // The TypeScript-narrowing cast (`as number | string | undefined`) is
+      // allowed by the regex because the cast is the same call site, not a
+      // different one.
+      const source = readFileSync("src/core/mapping/access-query-request-mapper.ts", "utf8");
+      expect(source).toMatch(/timeoutMs:\s*coerceTimeoutMs\(params\.timeoutMs(?:\s+as\s+[^)]+)?\)/);
+    });
+  });
+
+  describe("coerceTimeoutMs", () => {
+    it("is the only timeoutMs coercion site in the mapper (structural)", () => {
+      const source = readFileSync("src/core/mapping/access-query-request-mapper.ts", "utf8");
+      // Exactly one definition (export or local).
+      const definitions = source.match(/(?:export\s+)?function\s+coerceTimeoutMs\b/g) ?? [];
+      expect(definitions.length).toBe(1);
+      // Exactly one call site.
+      const callSites = source.match(/\bcoerceTimeoutMs\(/g) ?? [];
+      // 1 definition + 1 call site in pickOverrides = 2 matches.
+      expect(callSites.length).toBe(2);
+      // The 3 inline `typeof === "string"` blocks MUST be gone.
+      const inlineBlocks = source.match(/typeof\s+params\.timeoutMs\s*===\s*["']string["']/g) ?? [];
+      expect(inlineBlocks.length).toBe(0);
+    });
+
+    it("number pass-through returns the number (regression)", () => {
+      expect(coerceTimeoutMs(12345)).toBe(12345);
+    });
+
+    it("undefined pass-through returns undefined (regression)", () => {
+      expect(coerceTimeoutMs(undefined)).toBeUndefined();
+    });
+
+    it("throws TypeError on a string input — design decision 5 pins throw, not silent coerce", () => {
+      // The Zod schema declares `timeoutMs: z.number().optional()`, so a
+      // string reaching coerceTimeoutMs is a programming error. The
+      // helper MUST fail loud instead of silently accepting the dead
+      // branch the refactor was meant to delete. We pin the message so
+      // this test stays RED before the helper exists (the "is not a
+      // function" TypeError has a different message).
+      expect(() => coerceTimeoutMs("15000" as unknown as number)).toThrow(
+        /timeoutMs must be a number/,
+      );
     });
   });
 });
