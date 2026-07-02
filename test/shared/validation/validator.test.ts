@@ -228,3 +228,86 @@ describe("Validate tool schemas with overrides and context parameters", () => {
     expect(validateInput(input, DOCTOR_SCHEMA)).toBeUndefined();
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// validateInput — schema-form additionalProperties (PR 5 of #624)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("validateInput — additionalProperties schema form", () => {
+  it('additionalProperties: { type: "string" } accepts valid extra keys', () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: { type: "string" },
+      properties: {
+        a: { type: "string" },
+      },
+    };
+    const result = validateInput({ a: "hello", b: "world" }, schema);
+    expect(result).toBeUndefined();
+  });
+
+  it('additionalProperties: { type: "string" } rejects extra key with wrong primitive type', () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: { type: "string" },
+      properties: {
+        a: { type: "string" },
+      },
+    };
+    const result = validateInput({ a: "hello", b: 42 }, schema);
+    expect(result).toBe("b must be a string.");
+  });
+
+  it("additionalProperties: { enum: [...] } rejects disallowed value", () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: { enum: ["a", "b", "c"] },
+      properties: {},
+    };
+    const result = validateInput({ x: "d" }, schema);
+    expect(result).toBe("x must be one of: a, b, c.");
+  });
+
+  it("additionalProperties schema form is enforced recursively in nested objects", () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        nested: {
+          type: "object",
+          // Nested object property allows arbitrary number-valued additional keys.
+          additionalProperties: { type: "number" },
+          properties: {
+            z: { type: "number" },
+          },
+        },
+      },
+    };
+    const result = validateInput({ nested: { y: "not a number", z: 99 } }, schema);
+    expect(result).toBe("nested.y must be a number.");
+  });
+
+  it("additionalProperties: false still rejects extra keys (regression)", () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        a: { type: "string" },
+      },
+    };
+    const result = validateInput({ a: "hello", extra: "not allowed" }, schema);
+    expect(result).toBe("extra is not allowed.");
+  });
+
+  it("additionalProperties: true still allows extra keys (regression)", () => {
+    const schema: JsonObjectSchema = {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        a: { type: "string" },
+      },
+    };
+    const result = validateInput({ a: "hello", any: "value", count: 42 }, schema);
+    expect(result).toBeUndefined();
+  });
+});
