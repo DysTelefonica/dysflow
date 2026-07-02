@@ -1,6 +1,25 @@
 # Changelog
 
 ## [Unreleased]
+### vba-import-vbname-preserve (#646)
+
+#### Bugfix — `Attribute VB_Name` was dropped on every VBA import, silently corrupting module identity
+- **`Normalize-VbaImportText` no longer strips `Attribute VB_Name`.** `Test-IsVbaImportMetadataLine`'s
+  broad `^Attribute\s+VB_` match caused the import-normalization path to strip `Attribute VB_Name`
+  along with every other `Attribute VB_*` line before every `AddFromFile` write, so `VB_Name` never
+  reached the compiled binary. Reimporting affected forms dropped their identity line and could cause
+  Access to spawn a broken placeholder component. A new predicate,
+  `Test-IsVbaImportDroppableMetadataLine` (identical to the old one except it excludes
+  `Attribute VB_Name`), is now used at both `Normalize-VbaImportText` call sites. The original
+  `Test-IsVbaImportMetadataLine` is unchanged and still used by `Split-VbaHeaderAndBody` /
+  `Merge-AccessDocumentWithCanonicalHeader`, which correctly need the broad match to avoid emitting a
+  duplicate `Attribute VB_Name` line.
+- **`verify_code` no longer masks a one-side-missing `Attribute VB_Name` as `attributeOnly`.** The
+  semantic classifier's `keepVbName` flag previously stripped `VB_Name` from both sides whenever
+  *either* side omitted it, hiding this exact import defect from drift audits. `keepVbName` now
+  triggers whenever the two sides disagree (a real rename, or one side omitting it entirely), so the
+  dropped-identity defect surfaces as an actionable difference instead of a non-functional one.
+
 ### mcp-writes-enabled-default (#645)
 
 #### Trust-posture change — `dysflow mcp` now starts with writes enabled by default

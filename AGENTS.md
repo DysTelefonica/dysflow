@@ -55,10 +55,11 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   name itself.
 - **Module/class header boilerplate is non-functional**: `Attribute VB_*` lines (in code modules
   AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block
-  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: kept
-  functional ONLY when both sides name the module and the names differ (a real rename). A `.frm`
-  starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be
-  stripped; only `VERSION <num> CLASS` headers are.
+  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: it is
+  functional whenever the two sides disagree — a real rename (both name it, values differ) OR one
+  side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both
+  carry the same name or both omit it. A `.frm` starts with `VERSION 5.00` and a control `Begin…End`
+  tree — that is functional and must NOT be stripped; only `VERSION <num> CLASS` headers are.
 - **A form's code-behind is verified through its `forms/*.cls`, NOT its `.form.txt`.** The code lives
   canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the
   document module). The `.form.txt` `CodeBehindForm` section is the same code serialized a second way

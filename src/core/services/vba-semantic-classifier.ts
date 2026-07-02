@@ -151,9 +151,10 @@ export function stripAttributeLines(text: string, fileType: string, keepVbName =
     .filter((line) => {
       const trimmed = line.trim();
       if (!trimmed.startsWith(VB_ATTR_PREFIX)) return true;
-      // VB_Name is kept only when both sides agree on it (a real rename stays
-      // functional); the caller passes keepVbName=false when it is non-functional
-      // header presence (one side simply omits the header).
+      // VB_Name is kept whenever the two sides' names differ, including when
+      // one side omits it entirely (issue #646) — a real rename or a dropped
+      // identity line are both functional. The caller passes keepVbName=false
+      // only when both sides agree (same value, or both absent).
       if (trimmed.startsWith(VB_NAME_ATTR_PREFIX)) return keepVbName;
       return false;
     })
@@ -867,12 +868,13 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     );
   }
 
-  // A VB_Name is functional only when both sides name the module and the names
-  // differ (a real rename). When one side simply omits the header, VB_Name
-  // presence is non-functional and is stripped along with the rest of the header.
+  // VB_Name is functional whenever the two sides disagree — a real rename (both
+  // name it, values differ) OR one side omitting it entirely (a dropped-identity
+  // import defect, #646). Non-functional only when both carry the same name or
+  // both omit it.
   const srcVbName = extractVbName(srcText);
   const binVbName = extractVbName(binText);
-  const keepVbName = srcVbName !== null && binVbName !== null && srcVbName !== binVbName;
+  const keepVbName = srcVbName !== binVbName;
 
   // -------------------------------------------------------------------------
   // Step 3: attributeOnly — strip module/class header + Attribute VB_* lines
