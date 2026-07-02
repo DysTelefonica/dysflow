@@ -60,7 +60,7 @@ No stale-checkbox reconciliation was performed.
 
 | Commit | Work unit | SDD tasks | Verification | Access sync |
 |---|---|---|---|---|
-| Pending | Implementation exists in the working tree but has not been committed yet. Fill this section with the resolving commit SHA(s) before final closeout or issue closure. | Phases 1-9 in `tasks.md` | `pnpm run build`, `pnpm run lint`, `pnpm test`, `pnpm run test:ps1` passed in verify report | Not an Access binary sync change; no Access import/compile required for this TypeScript/PowerShell runtime change. |
+| `bdca488` | `fix(vba-manager): preserve VB_Name on import` | Phases 1-9 in `tasks.md` | `pnpm run build`, `pnpm run lint`, `pnpm test`, `pnpm run test:ps1` passed in verify report | Not an Access binary sync change; no Access import/compile required for this TypeScript/PowerShell runtime change. |
 
 ## Verification Evidence
 
@@ -73,6 +73,6 @@ No stale-checkbox reconciliation was performed.
 
 ## Notes and Risks
 
-- No implementation commit exists yet; commit traceability must be filled before final closeout or GitHub issue closure.
+- Implementation commit traceability is recorded above and must be cited in the GitHub issue closure comment.
 - The pre-existing unrelated E2E failure for #543 remains out of scope and is documented in `apply-progress.md` / `verify-report.md`.
 - `.atl/skill-registry.md` remains a separate modified working-tree file outside this archived change's verification scope.

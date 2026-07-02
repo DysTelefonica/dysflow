@@ -10,7 +10,7 @@
 | Implementation tasks | PASS | 29/29 tasks complete across all 9 phases. |
 | Verification | PASS | `verify-report.md` verdict is PASS; build, lint, Vitest, and Pester passed. |
 | Archive | PASS | Change archived to `openspec/changes/archive/2026-07-02-vba-import-vbname-preserve/`; main OpenSpec specs synced. |
-| Commit traceability | PENDING | Fill the final commit SHA in `archive-report.md` after committing this work unit. |
+| Commit traceability | PASS | Implementation commit `bdca488` recorded in `archive-report.md`; cite it in the GitHub issue closure comment. |
 
 ## Files Changed
 
@@ -81,4 +81,4 @@
 
 ## Status
 
-29/29 tasks complete. Verification and archive are complete. Final closeout requires the resolving commit SHA to be recorded in `archive-report.md` and in the GitHub issue closure comment.
+29/29 tasks complete. Verification and archive are complete. Final closeout requires citing resolving commit `bdca488` in the GitHub issue closure comment.
