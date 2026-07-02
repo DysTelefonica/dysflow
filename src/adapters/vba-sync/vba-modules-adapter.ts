@@ -220,12 +220,23 @@ export class VbaModulesAdapter {
     // if destinationRoot (from project config, context defaults, or a caller override)
     // falls inside the dysflow production runtime. The runner MUST NOT be invoked
     // when the resolved target is unsafe; mirror vba-execution-adapter.ts:160-175.
+    //
+    // #644 — runtime-guard regression fix: when the user has supplied an explicit
+    // exportPath, the exportPath guard above has ALREADY validated the user's intent.
+    // The orchestrator's resolved destinationRoot is then irrelevant for the
+    // destinationRoot guard, because the runner receives `effectiveParams` with
+    // `destinationRoot: exportPath` (see lines above). Trusting the user's explicit
+    // override is the correct contract; without this guard, the user's safe export
+    // path would be silently shadowed by whatever the orchestrator resolves
+    // (misconfigured project config, MCP context defaults, etc.), breaking the
+    // `exportPath` override path documented in #185.
     let resolvedExportTarget: OperationResult<VbaModulesExecutionTarget> | undefined;
     if (toolName === "export_modules" || toolName === "export_all") {
       const target = await this.orchestrator.resolveExecutionTarget(effectiveParams);
       if (!target.ok) return target;
       resolvedExportTarget = target;
       if (
+        exportPath === undefined &&
         isWithinRuntime(
           target.data.destinationRoot,
           this.orchestrator.env ?? (process.env as Record<string, string | undefined>),

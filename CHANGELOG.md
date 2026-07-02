@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### runtime-guard-exportpath (#644)
+- **Fix runtime-guard regression on `export_modules` / `export_all` (#644).** The F1 destinationRoot guard (#619, `src/adapters/vba-sync/vba-modules-adapter.ts:223-241`) fired against the orchestrator's resolved `destinationRoot` even when the user had explicitly supplied a safe `exportPath`. When the user passes `exportPath`, the runner writes to that path (the guard above already validated the user's intent) — the orchestrator's resolution is irrelevant for the safety check. The fix narrows the F1 guard to fire ONLY when the user did NOT provide an `exportPath` (`exportPath === undefined && isWithinRuntime(target.data.destinationRoot, env)`). The no-exportPath safety net (#619 F1) is preserved for callers who rely on the orchestrator's project-config resolution. Two new unit tests in `test/adapters/vba-sync/runtime-guard-filesystem-writes.test.ts` pin the contract at the unit layer (mirror the E2E test at `test/e2e/runtime-guard-mcp-integration.e2e.test.ts:309-331`, which now passes); both fail RED against the pre-fix code and pass GREEN after the conditional.
+
 ### hexagonal-tech-debt (#624)
 
 #### #B.2 ELIGIBLE_STATUSES unification (PR 1 of 5)
