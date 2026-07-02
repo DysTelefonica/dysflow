@@ -12,6 +12,12 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
     for (const key of Object.keys(params)) {
       if (schema.properties[key] === undefined) return `${key} is not allowed.`;
     }
+  } else if (isSchemaFormAdditionalProperties(schema.additionalProperties)) {
+    for (const key of Object.keys(params)) {
+      if (schema.properties[key] !== undefined) continue;
+      const validation = validateJsonSchemaProperty(params[key], schema.additionalProperties, key);
+      if (validation !== undefined) return validation;
+    }
   }
 
   for (const [key, property] of Object.entries(schema.properties)) {
@@ -29,8 +35,11 @@ function validateJsonSchemaProperty(
   property: JsonSchemaProperty,
   path: string,
 ): string | undefined {
-  if (property.type === undefined) return undefined;
-  if (!matchesJsonSchemaType(value, property.type))
+  // `enum` without `type` is still enforceable (string-by-default per
+  // the existing enum branch below). Skip the early-return only when
+  // neither guard is set.
+  if (property.type === undefined && property.enum === undefined) return undefined;
+  if (property.type !== undefined && !matchesJsonSchemaType(value, property.type))
     return `${path} must be ${articleFor(property.type)} ${property.type}.`;
 
   if (property.enum !== undefined) {
@@ -81,6 +90,16 @@ function validateJsonSchemaProperty(
       for (const key of Object.keys(value)) {
         if (property.properties?.[key] === undefined) return `${path}.${key} is not allowed.`;
       }
+    } else if (isSchemaFormAdditionalProperties(property.additionalProperties)) {
+      for (const key of Object.keys(value)) {
+        if (property.properties?.[key] !== undefined) continue;
+        const validation = validateJsonSchemaProperty(
+          value[key],
+          property.additionalProperties,
+          `${path}.${key}`,
+        );
+        if (validation !== undefined) return validation;
+      }
     }
     for (const [key, childProperty] of Object.entries(property.properties ?? {})) {
       const childValue = value[key];
@@ -125,4 +144,14 @@ function matchesJsonSchemaType(value: unknown, type: JsonSchemaPrimitiveType): b
 
 function articleFor(type: JsonSchemaPrimitiveType): "a" | "an" {
   return type === "object" || type === "array" ? "an" : "a";
+}
+
+// Distinguishes the schema form of `additionalProperties`
+// (`{ type: "string" }`, `{ enum: [...] }`) from the boolean form
+// (`true` / `false`) and the absent form. Used by `validateInput` and
+// `validateJsonSchemaProperty` to enforce per-key schemas. Closes #624.
+function isSchemaFormAdditionalProperties(
+  value: JsonSchemaProperty["additionalProperties"],
+): value is JsonSchemaProperty {
+  return typeof value === "object" && value !== null;
 }
