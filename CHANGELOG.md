@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### hexagonal-tech-debt (#624)
+
+#### #B.2 ELIGIBLE_STATUSES unification (PR 1 of 5)
+- **Fix latent cleanup-eligibility divergence for `pid_unknown` records.** `ELIGIBLE_STATUSES` was historically declared in two places with different membership: `src/core/operations/access-operation-preflight.ts` (4 statuses, includes `pid_unknown`) and `src/core/operations/access-operation-cleanup.ts` (3 statuses, missing `pid_unknown`). The new canonical module `src/core/operations/access-operation-status.ts` exports the single source of truth (`ReadonlySet<AccessOperationStatus>` with `{timed_out, failed, cleanup_pending, pid_unknown}`); both preflight and cleanup now import (and re-export) the same `Set` reference. Net runtime behavior change: **none** — preflight already treated `pid_unknown` as eligible, and cleanup's `pid_unknown` refusal is governed by an independent `CLEANUP_PID_UNKNOWN` guard at `access-operation-cleanup.ts:124` that runs BEFORE the `ELIGIBLE_STATUSES.has(...)` check. The fix closes the latent divergence that would have surfaced as a 4-vs-3 mismatch on any future membership edit.
+
 ### form-ir-bugs (#622)
 
 #### F2 (PR 2 of 3 — this PR)

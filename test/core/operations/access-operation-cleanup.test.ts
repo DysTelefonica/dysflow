@@ -6,12 +6,14 @@ import type {
 } from "../../../src/core/operations/access-operation-cleanup.js";
 import {
   AccessOperationCleanupService,
+  ELIGIBLE_STATUSES,
   sameProcessStartTime,
 } from "../../../src/core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
   InMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
+import { ELIGIBLE_STATUSES as SHARED_ELIGIBLE_STATUSES } from "../../../src/core/operations/access-operation-status.js";
 
 const BASE_RECORD: AccessOperationRecord = {
   operationId: "op-1",
@@ -624,6 +626,50 @@ describe("AccessOperationCleanupService — force-retire null-PID records (Goal 
     });
 
     expect(result.ok).toBe(true);
+    expect(killed).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #B.2 ELIGIBLE_STATUSES unification (hexagonal-tech-debt, #624, PR 1)
+//
+// `ELIGIBLE_STATUSES` was historically duplicated across preflight and cleanup
+// with DIVERGENT membership (preflight had 4 statuses; cleanup had 3). These
+// tests pin the consolidated single-source invariant: the consumer resolves
+// the SAME `Set` reference as the shared module (Object.is strict identity),
+// the membership is the canonical union, and cleanup still refuses
+// `pid_unknown` with the typed CLEANUP_PID_UNKNOWN error envelope.
+// ---------------------------------------------------------------------------
+describe("ELIGIBLE_STATUSES — single source of truth (#624 #B.2)", () => {
+  it("imports ELIGIBLE_STATUSES from access-operation-status (identity)", () => {
+    expect(Object.is(ELIGIBLE_STATUSES, SHARED_ELIGIBLE_STATUSES)).toBe(true);
+  });
+
+  it("membership is the canonical union {timed_out, failed, cleanup_pending, pid_unknown}", () => {
+    expect([...ELIGIBLE_STATUSES].sort()).toEqual(
+      ["cleanup_pending", "failed", "pid_unknown", "timed_out"].sort(),
+    );
+    expect(ELIGIBLE_STATUSES.size).toBe(4);
+  });
+
+  it("pid_unknown returns CLEANUP_PID_UNKNOWN error envelope (no kill)", async () => {
+    const record: AccessOperationRecord = {
+      ...BASE_RECORD,
+      operationId: "op-pid-unknown",
+      status: "pid_unknown",
+      accessPid: null,
+      processStartTime: null,
+    };
+    const { killer, killed } = fakeKiller();
+    const svc = await makeService(record, fakeInspector(), killer);
+
+    const result = await svc.cleanup({
+      operationId: "op-pid-unknown",
+      accessPath: "C:\\data\\app.accdb",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error.code).toBe("CLEANUP_PID_UNKNOWN");
     expect(killed).toEqual([]);
   });
 });
