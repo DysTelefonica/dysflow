@@ -761,6 +761,24 @@ function Test-IsVbaImportMetadataLine {
     )
 }
 
+function Test-IsVbaImportDroppableMetadataLine {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Line
+    )
+
+    $trim = $Line.Trim()
+    if ([string]::IsNullOrWhiteSpace($trim)) { return $false }
+
+    return (
+        $trim -match '^VERSION\s+\d+(\.\d+)?\s+CLASS$' -or
+        $trim -match '^BEGIN\b' -or
+        $trim -match '^END$' -or
+        $trim -match '^(MultiUse|Persistable|DataBindingBehavior|DataSourceBehavior|MTSTransactionMode)\s*=' -or
+        $trim -match '^Attribute\s+VB_(?!Name\b)'
+    )
+}
+
 function Test-IsVbaOptionDirectiveLine {
     [CmdletBinding()]
     Param(
@@ -796,7 +814,7 @@ function Normalize-VbaImportText {
             $start++
             continue
         }
-        if (Test-IsVbaImportMetadataLine -Line $lines[$start]) {
+        if (Test-IsVbaImportDroppableMetadataLine -Line $lines[$start]) {
             $start++
             continue
         }
@@ -817,7 +835,15 @@ function Normalize-VbaImportText {
                 continue
             }
 
-            if (Test-IsVbaImportMetadataLine -Line $line) {
+            # issue #646: VB_Name carries module/form identity and MUST reach the
+            # binary via AddFromFile. Keep it, but STAY in directive-block mode so
+            # the droppable metadata after it is still stripped.
+            if ($trim -match '^Attribute\s+VB_Name\b') {
+                $result.Add($line)
+                continue
+            }
+
+            if (Test-IsVbaImportDroppableMetadataLine -Line $line) {
                 continue
             }
 

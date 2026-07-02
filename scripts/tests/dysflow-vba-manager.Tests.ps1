@@ -332,6 +332,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
         # only the pure string/text functions. This avoids COM activation.
         $pureFunctions = @(
             'function Test-IsVbaImportMetadataLine',
+            'function Test-IsVbaImportDroppableMetadataLine',
             'function Test-IsVbaOptionDirectiveLine',
             'function Normalize-VbaImportText',
             'function Get-PreferredNewline',
@@ -369,6 +370,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
         $pureNames = @(
             'Test-IsVbaImportMetadataLine',
+            'Test-IsVbaImportDroppableMetadataLine',
             'Test-IsVbaOptionDirectiveLine',
             'Normalize-VbaImportText',
             'Get-PreferredNewline',
@@ -376,6 +378,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Split-CodeBehindSection',
             'Split-VbaHeaderAndBody',
             'Join-VbaHeaderAndBody',
+            'Merge-AccessDocumentWithCanonicalHeader',
             'Remove-AccessDocumentRootNameProperty',
             'Normalize-AccessDocumentRootEndMarker',
             'Normalize-AccessDocumentCodeBehindMarker',
@@ -445,6 +448,58 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
         }
     }
 
+    Context "Test-IsVbaImportDroppableMetadataLine (issue #646)" {
+        # This predicate is the import-normalization-only counterpart of
+        # Test-IsVbaImportMetadataLine: identical clauses except it EXCLUDES
+        # Attribute VB_Name (negative lookahead), so Normalize-VbaImportText can
+        # preserve module identity while still dropping every other droppable
+        # metadata line. Test-IsVbaImportMetadataLine itself stays broad and
+        # unchanged (Split-VbaHeaderAndBody/919 still needs it broad).
+        It "returns false for Attribute VB_Name (the whole point of this predicate)" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Attribute VB_Name = `"MyModule`"" | Should -Be $false
+        }
+
+        It "returns true for Attribute VB_GlobalNameSpace" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Attribute VB_GlobalNameSpace = False" | Should -Be $true
+        }
+
+        It "returns true for Attribute VB_Creatable" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Attribute VB_Creatable = True" | Should -Be $true
+        }
+
+        It "returns true for Attribute VB_PredeclaredId" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Attribute VB_PredeclaredId = True" | Should -Be $true
+        }
+
+        It "returns true for Attribute VB_Exposed" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Attribute VB_Exposed = False" | Should -Be $true
+        }
+
+        It "returns true for VERSION line" {
+            Test-IsVbaImportDroppableMetadataLine -Line "VERSION 1.0 CLASS" | Should -Be $true
+        }
+
+        It "returns true for BEGIN line" {
+            Test-IsVbaImportDroppableMetadataLine -Line "BEGIN" | Should -Be $true
+        }
+
+        It "returns true for END line" {
+            Test-IsVbaImportDroppableMetadataLine -Line "END" | Should -Be $true
+        }
+
+        It "returns true for MultiUse property" {
+            Test-IsVbaImportDroppableMetadataLine -Line "MultiUse = -1" | Should -Be $true
+        }
+
+        It "returns false for regular VBA code" {
+            Test-IsVbaImportDroppableMetadataLine -Line "Public Sub MyProcedure()" | Should -Be $false
+        }
+
+        It "throws for empty string due to mandatory validation" {
+            { Test-IsVbaImportDroppableMetadataLine -Line "" } | Should -Throw
+        }
+    }
+
     Context "Test-IsVbaOptionDirectiveLine" {
         It "returns true for Option Explicit" {
             Test-IsVbaOptionDirectiveLine -Line "Option Explicit" | Should -Be $true
@@ -456,6 +511,75 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
         It "returns false for regular code" {
             Test-IsVbaOptionDirectiveLine -Line "Dim x As Integer" | Should -Be $false
+        }
+    }
+
+    Context "Normalize-VbaImportText — Attribute VB_Name preservation (issue #646)" {
+        It "keeps VB_Name as the first non-blank output line while stripping sibling VB_* attrs and de-duplicating Option lines" {
+            $input = @(
+                'Attribute VB_Name = "Form_X"'
+                'Attribute VB_GlobalNameSpace = False'
+                'Attribute VB_Creatable = False'
+                'Attribute VB_PredeclaredId = True'
+                'Attribute VB_Exposed = False'
+                'Option Compare Database'
+                'Option Explicit'
+                'Option Explicit'
+                'Public Sub Foo()'
+                '    MsgBox "hi"'
+                'End Sub'
+            ) -join "`r`n"
+
+            $result = Normalize-VbaImportText -Text $input
+            $lines = $result -split "`r`n"
+
+            $lines[0] | Should -Be 'Attribute VB_Name = "Form_X"' -Because "VB_Name must reach the compiled binary via AddFromFile (issue #646)"
+            $result | Should -Not -Match 'VB_GlobalNameSpace'
+            $result | Should -Not -Match 'VB_Creatable'
+            $result | Should -Not -Match 'VB_PredeclaredId'
+            $result | Should -Not -Match 'VB_Exposed'
+
+            $optionExplicitCount = (@($lines | Where-Object { $_.Trim() -eq 'Option Explicit' })).Count
+            $optionExplicitCount | Should -Be 1 -Because "duplicated Option lines must be de-duplicated"
+
+            $result | Should -Match 'Public Sub Foo\(\)'
+            $result | Should -Match '    MsgBox "hi"'
+            $result | Should -Match 'End Sub'
+        }
+    }
+
+    Context "Merge-AccessDocumentWithCanonicalHeader — no duplicate Attribute VB_Name (issue #646 regression guard)" {
+        It "emits exactly one Attribute VB_Name line, holding the canonical value" {
+            $localDoc = @(
+                'Version =21'
+                'Begin Form'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Local"'
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+
+            $canonicalDoc = @(
+                'Version =21'
+                'Begin Form'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Canonical"'
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+
+            $merged = Merge-AccessDocumentWithCanonicalHeader -LocalDocumentText $localDoc -CanonicalDocumentText $canonicalDoc
+            $lines = $merged -split "`r`n"
+
+            $vbNameLines = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
+            $vbNameLines.Count | Should -Be 1 -Because "issue #646: VB_Name must be preserved via the header bucket but never duplicated"
+            $vbNameLines[0] | Should -Be 'Attribute VB_Name = "Form_Canonical"' -Because "the header-wins rule sources VB_Name from the live canonical export"
         }
     }
 

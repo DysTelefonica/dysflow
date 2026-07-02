@@ -1291,11 +1291,12 @@ describe("module header boilerplate normalization", () => {
     expect(result.actionable).toBe(false);
   });
 
-  it("resolves to caseOnly when only a header and identifier casing differ", () => {
-    // Form code-behind: binary export has no header/attributes, source has the full
-    // header, and the only real difference is property casing (.Caption vs .caption).
+  it("resolves to caseOnly when only a header and identifier casing differ (VB_Name present and equal on both sides)", () => {
+    // Form code-behind: binary export has no VERSION/BEGIN/END boilerplate but DOES
+    // carry the same VB_Name as source, and the only real difference is property
+    // casing (.Caption vs .caption).
     const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\nAttribute VB_Name = "Form_FormX"\nOption Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.Caption = "Seguimiento #/#"\nEnd Sub`;
-    const bin = `Option Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.caption = "Seguimiento #/#"\nEnd Sub`;
+    const bin = `Attribute VB_Name = "Form_FormX"\nOption Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.caption = "Seguimiento #/#"\nEnd Sub`;
 
     const result = classifyVbaPair({
       sourceText: src,
@@ -1306,6 +1307,25 @@ describe("module header boilerplate normalization", () => {
 
     expect(result.classification).toBe("caseOnly");
     expect(result.actionable).toBe(false);
+  });
+
+  it("flags a one-side-missing VB_Name alongside casing noise as actionable, not caseOnly (issue #646 — this fixture used to mask the bug)", () => {
+    // Same shape as the previous test, but the binary export omits VB_Name
+    // entirely (the #646 import defect). Previously this collapsed to caseOnly
+    // because keepVbName stripped VB_Name whenever either side lacked it —
+    // hiding the dropped-identity defect behind an unrelated casing diff.
+    const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\nAttribute VB_Name = "Form_FormX"\nOption Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.Caption = "Seguimiento #/#"\nEnd Sub`;
+    const bin = `Option Compare Database\nPrivate Sub Run()\n    Me.lblSeguimientos.caption = "Seguimiento #/#"\nEnd Sub`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("caseOnly");
+    expect(result.actionable).toBe(true);
   });
 
   it("keeps a real VB_Name VALUE change actionable despite header normalization", () => {
@@ -1335,6 +1355,51 @@ describe("module header boilerplate normalization", () => {
     });
 
     expect(result.actionable).toBe(true);
+  });
+
+  it("classifies a one-side-missing VB_Name (source has it, binary omits it entirely) as actionable, not attributeOnly (issue #646)", () => {
+    const src = `Attribute VB_Name = "Form_X"\n${codeBody}`;
+    const bin = codeBody;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("attributeOnly");
+    expect(result.actionable).toBe(true);
+  });
+
+  it("classifies a one-side-missing VB_Name (binary has it, source omits it entirely) as actionable, not attributeOnly (issue #646)", () => {
+    const src = codeBody;
+    const bin = `Attribute VB_Name = "Form_X"\n${codeBody}`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "cls",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("attributeOnly");
+    expect(result.actionable).toBe(true);
+  });
+
+  it("keeps both-sides-absent VB_Name non-actionable (attributeOnly) — unaffected by the #646 fix", () => {
+    const src = `VERSION 1.0 CLASS\nBEGIN\n  MultiUse = -1  'True\nEND\n${codeBody}`;
+    const bin = codeBody;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("attributeOnly");
+    expect(result.actionable).toBe(false);
   });
 });
 
