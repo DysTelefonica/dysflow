@@ -246,3 +246,4 @@ twice in frmBusy) are preserved verbatim. Blob entries (`Key = Begin…End`) are
 
 For copy-pasteable, concrete JSON input payloads for everyday MCP tasks, see
 [`docs/mcp-examples.md`](./docs/mcp-examples.md).
+# trigger CI
