@@ -30,7 +30,7 @@ Read it. The essence:
 
 Commands:
 - Unit/spec: `pnpm test` (`vitest.config.ts`).
-- Integration/E2E: `vitest.integration.config.ts` (`test/e2e/**`, `test/scripts-access-runner.test.ts`) — requires Windows + Access COM.
+- Integration/E2E: `vitest.integration.config.ts` (`test/e2e/**`, `test/integration/**`) — requires Windows + Access COM.
 - Real MCP E2E: `node E2E_testing/mcp-e2e.mjs` (requires `ACCESS_VBA_PASSWORD`).
 
 ## VBA semantic diff — behavioral contract
