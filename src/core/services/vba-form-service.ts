@@ -179,6 +179,40 @@ export class VbaFormService {
     // dry-run unless apply:true is explicit; dryRun:false also disables.
     // apply:true takes precedence over dryRun:true.
     const dryRun = params.apply === true ? false : params.dryRun !== false;
+
+    // Read the catalog BEFORE the dryRun short-circuit so corruption is
+    // visible in dryRun (matches the spec's "corruption check precedes the
+    // dry-run branch" contract). Issue #622 (#C).
+    let catalog: Record<string, unknown> = {};
+    try {
+      catalog = (await this.fileSystem.readJson<Record<string, unknown>>(catalogPath)) as Record<
+        string,
+        unknown
+      >;
+    } catch (err) {
+      if (isMissingPathError(err)) {
+        // ENOENT — proceed with an empty catalog. Existing behavior.
+        logSwallowedIoError("vba-form-service:catalog-read", err);
+      } else {
+        // JSON parse error or any other read failure — refuse. The catalog
+        // on disk is NOT modified. Caller must restore or rebuild.
+        return failureResult(
+          createDysflowError(
+            "VBA_CATALOG_CORRUPT",
+            `Catalog at ${catalogPath} is corrupt and cannot be parsed: ${err instanceof Error ? err.message : String(err)}. Refusing to overwrite; inspect and restore the catalog manually.`,
+          ),
+        );
+      }
+    }
+
+    const forms = isRecord(catalog.forms) ? (catalog.forms as Record<string, unknown>) : {};
+    const controls = Array.isArray(forms[spec.data.name])
+      ? (forms[spec.data.name] as unknown[])
+      : [];
+    controls.push({ name: controlName, type: controlType });
+    forms[spec.data.name] = controls;
+    const updated = { ...catalog, forms };
+
     if (dryRun) {
       return successResult({
         dryRun: true,
@@ -190,22 +224,6 @@ export class VbaFormService {
       });
     }
 
-    let catalog: Record<string, unknown> = {};
-    try {
-      catalog = (await this.fileSystem.readJson<Record<string, unknown>>(catalogPath)) as Record<
-        string,
-        unknown
-      >;
-    } catch (err) {
-      logSwallowedIoError("vba-form-service:catalog-read", err);
-    }
-    const forms = isRecord(catalog.forms) ? (catalog.forms as Record<string, unknown>) : {};
-    const controls = Array.isArray(forms[spec.data.name])
-      ? (forms[spec.data.name] as unknown[])
-      : [];
-    controls.push({ name: controlName, type: controlType });
-    forms[spec.data.name] = controls;
-    const updated = { ...catalog, forms };
     try {
       await this.fileSystem.mkdir(resolve(catalogPath, ".."), { recursive: true });
       await this.fileSystem.writeFile(catalogPath, JSON.stringify(updated, null, 2), "utf8");

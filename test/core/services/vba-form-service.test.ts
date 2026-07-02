@@ -676,7 +676,10 @@ describe("VbaFormService", () => {
 
     it("catalogAddControl defaults to dry-run when both flags absent (does NOT write)", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
+      // Simulates an existing valid catalog so the read does not error.
+      const existingCatalog = { forms: {} };
       const fs = makeFs({
+        readJson: vi.fn().mockResolvedValue(existingCatalog),
         writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
           writtenFiles.push({ path: p, data: d });
         }),
@@ -702,7 +705,9 @@ describe("VbaFormService", () => {
 
     it("catalogAddControl apply:true disables dry-run and writes the catalog", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
+      const existingCatalog = { forms: {} };
       const fs = makeFs({
+        readJson: vi.fn().mockResolvedValue(existingCatalog),
         writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
           writtenFiles.push({ path: p, data: d });
         }),
@@ -727,7 +732,9 @@ describe("VbaFormService", () => {
 
     it("catalogAddControl dryRun:true explicit does NOT write", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
+      const existingCatalog = { forms: {} };
       const fs = makeFs({
+        readJson: vi.fn().mockResolvedValue(existingCatalog),
         writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
           writtenFiles.push({ path: p, data: d });
         }),
@@ -752,7 +759,9 @@ describe("VbaFormService", () => {
 
     it("catalogAddControl apply:true takes precedence over dryRun:true", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
+      const existingCatalog = { forms: {} };
       const fs = makeFs({
+        readJson: vi.fn().mockResolvedValue(existingCatalog),
         writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
           writtenFiles.push({ path: p, data: d });
         }),
@@ -811,10 +820,10 @@ describe("VbaFormService", () => {
       expect(written.forms.Form_Cat[1]).toEqual({ name: "newCtrl", type: "TextBox" });
     });
 
-    it("catalogAddControl uses empty catalog when readJson rejects (missing catalog)", async () => {
+    it("catalogAddControl uses empty catalog when readJson rejects with ENOENT (issue #622 #C)", async () => {
       const writtenFiles: Array<{ path: string; data: string }> = [];
       const fs = makeFs({
-        readJson: vi.fn().mockRejectedValue(new Error("ENOENT")),
+        readJson: vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" })),
         writeFile: vi.fn().mockImplementation(async (p: string, d: string) => {
           writtenFiles.push({ path: p, data: d });
         }),
@@ -831,6 +840,8 @@ describe("VbaFormService", () => {
       });
 
       expect(result.ok).toBe(true);
+      // writeFile MUST be called exactly once with the new JSON.
+      expect(writtenFiles).toHaveLength(1);
       const firstWritten = writtenFiles[0];
       expect(firstWritten).toBeDefined();
       if (!firstWritten) throw new Error("Expected written file");
@@ -838,9 +849,91 @@ describe("VbaFormService", () => {
       expect(written.forms.Form_New).toEqual([{ name: "btn", type: "Button" }]);
     });
 
+    it("catalogAddControl returns VBA_CATALOG_CORRUPT when readJson rejects with a non-ENOENT error and does not write (issue #622 #C)", async () => {
+      const writeFileSpy = vi.fn().mockResolvedValue(undefined);
+      const fs = makeFs({
+        // Simulates the JSON parse-error message that nodeFileSystem.readJson
+        // produces when the catalog file is present but unparseable.
+        readJson: vi
+          .fn()
+          .mockRejectedValue(new Error("Invalid JSON file: /fake/forms/catalog.json")),
+        writeFile: writeFileSpy,
+      });
+
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_Corrupt", kind: "Form", controls: [] },
+        controlName: "ctrl",
+        controlType: "Label",
+        catalogPath: "/fake/forms/catalog.json",
+        apply: true,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("VBA_CATALOG_CORRUPT");
+      }
+      // The on-disk catalog is NOT modified.
+      expect(writeFileSpy).not.toHaveBeenCalled();
+    });
+
+    it("catalogAddControl returns success in dryRun with ENOENT and does not write (issue #622 #C)", async () => {
+      const writeFileSpy = vi.fn().mockResolvedValue(undefined);
+      const fs = makeFs({
+        readJson: vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" })),
+        writeFile: writeFileSpy,
+      });
+
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_DryRunMissing", kind: "Form", controls: [] },
+        controlName: "btn",
+        controlType: "Button",
+        catalogPath: "/fake/forms/catalog.json",
+        // dryRun defaults to true; explicit for clarity.
+        dryRun: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const data = result.data as { dryRun: boolean; written: boolean };
+        expect(data.dryRun).toBe(true);
+        expect(data.written).toBe(false);
+      }
+      expect(writeFileSpy).not.toHaveBeenCalled();
+    });
+
+    it("catalogAddControl returns VBA_CATALOG_CORRUPT in dryRun with parse error and does not write (issue #622 #C)", async () => {
+      const writeFileSpy = vi.fn().mockResolvedValue(undefined);
+      const fs = makeFs({
+        readJson: vi
+          .fn()
+          .mockRejectedValue(new Error("Invalid JSON file: /fake/forms/catalog.json")),
+        writeFile: writeFileSpy,
+      });
+
+      const service = new VbaFormService({ fileSystem: fs });
+
+      const result = await service.catalogAddControl({
+        spec: { name: "Form_DryRunCorrupt", kind: "Form", controls: [] },
+        controlName: "btn",
+        controlType: "Button",
+        catalogPath: "/fake/forms/catalog.json",
+        dryRun: true,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("VBA_CATALOG_CORRUPT");
+      }
+      expect(writeFileSpy).not.toHaveBeenCalled();
+    });
+
     it("catalogAddControl returns VBA_CATALOG_WRITE_FAILED when fileSystem.writeFile rejects", async () => {
       const fs = makeFs({
-        readJson: vi.fn().mockRejectedValue(new Error("ENOENT")),
+        readJson: vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" })),
         writeFile: vi.fn().mockRejectedValue(new Error("permission denied")),
       });
 
