@@ -846,6 +846,36 @@ opencode mcp list
 
 ---
 
+## Companion Tool: CodeGraph VBA
+
+To run static analysis, call graph explorations, and database/SQL impact tracing on your VBA codebase, configure the **`codegraph-vba`** MCP companion server.
+
+Add the following to your OpenCode MCP config:
+
+```json
+{
+  "mcp": {
+    "codegraph-vba": {
+      "enabled": true,
+      "type": "local",
+      "command": [
+        "codegraph-vba",
+        "serve",
+        "--mcp"
+      ]
+    }
+  }
+}
+```
+
+### Available Custom Agent Skills
+`codegraph-vba` comes with custom agent skills designed to support agents working in this repository:
+- **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
+- **`vba-handler-backtrace`**: Traces control click/change event handlers back to the control, parses custom UDT parameter types, and reconstructs multiline SQL queries.
+- **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.
+
+---
+
 ## Error handling and diagnostics
 
 All command/tool responses expose structured error codes and diagnostics. In CLI mode, `dysflow doctor` prints check-by-check status (`✓`/`✗`).
