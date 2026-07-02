@@ -412,3 +412,38 @@ describe("engine options", () => {
     expect(ruleIds.has("bare-function-call-with-parens")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #E — redundant ListBox.ColumnWidths guard removal (hexagonal-tech-debt PR 2)
+//
+// Pre-refactor: `checkControlProperty` had an explicit `if (type === "ListBox"
+// && prop === "ColumnWidths") { return null; }` block that returned the same
+// null as the implicit default — a redundant guard. Post-refactor: that
+// guard is gone and the default `return null` at the bottom handles the
+// case. The observable contract is unchanged: ListBox.ColumnWidths MUST
+// continue to emit zero diagnostics.
+// ---------------------------------------------------------------------------
+
+describe("Rule F: ListBox.ColumnWidths post-refactor contract (#E)", () => {
+  it("does NOT emit any control-property-support diagnostic for ListBox.ColumnWidths", () => {
+    const ir = parseWith(formTxtWithControls([{ name: "lstResultados", type: "ListBox" }]));
+    const cls = [
+      "Public Sub Demo()",
+      '    Me.lstResultados.ColumnWidths = "0;1;2"',
+      "End Sub",
+    ].join("\n");
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const diag = result.diagnostics.find(
+      (d) => d.rule === "control-property-support" && d.file === "forms/Form_Test.cls",
+    );
+    expect(diag).toBeUndefined();
+  });
+});

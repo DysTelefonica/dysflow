@@ -9,6 +9,8 @@
  *   encodingOnly | sourceNewer | binaryNewer | bothChanged
  */
 
+import { FORM_NOISE_KEYS } from "./form-noise-keys.js";
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -79,31 +81,13 @@ const CODE_FILE_TYPES = new Set(["bas", "cls", "frm"]);
 /** File types that are form/report serialization documents. */
 const FORM_FILE_TYPES = new Set(["form.txt", "report.txt"]);
 
-/**
- * Known serialization-noise keys for form/report files.
- * These keys (scalar or Begin..End block) are stripped before comparison.
- * LOCKED list — unknown keys are retained (bias-to-functional).
- * GUID is NOT in this list (it is functional). NameMap is stripped because
- * repeated Access exports can omit/recreate it without changing behavior; real
- * control/name changes still survive through the actual property/control lines.
- */
-const FORM_NOISE_KEYS = new Set([
-  "Checksum",
-  "PrtDevMode",
-  "PrtDevModeW",
-  "PrtDevNames",
-  "PrtDevNamesW",
-  "PrtMip",
-  "RecSrcDt",
-  // Layout cache and publish/CTI flags — IDE/runtime bookkeeping, never functional.
-  "LayoutCachedLeft",
-  "LayoutCachedTop",
-  "LayoutCachedWidth",
-  "LayoutCachedHeight",
-  "PublishOption",
-  "NoSaveCTIWhenDisabled",
-  "NameMap",
-]);
+// FORM_NOISE_KEYS — re-exported from `src/core/services/form-noise-keys.ts`,
+// the SINGLE source of truth for the Access form/report serialization-noise
+// membership (#hexagonal-tech-debt PR 2, #B.1). Re-exporting keeps
+// `Object.is(sharedClassifier, classifier)` strict-identity true; the local
+// `findNoiseKey` helper and `stripFormSerializationNoise` use the imported
+// reference.
+export { FORM_NOISE_KEYS };
 
 /**
  * VB_ attribute prefix. Lines starting with this are candidate for stripping.

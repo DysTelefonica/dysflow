@@ -8,9 +8,11 @@
  * and inlined as constants so these tests have zero I/O dependencies.
  */
 import { describe, expect, it } from "vitest";
+import { FORM_NOISE_KEYS as SHARED_FORM_NOISE_KEYS } from "../../../src/core/services/form-noise-keys";
 import {
   type ClassifyVbaPairInput,
   classifyVbaPair,
+  FORM_NOISE_KEYS,
   type SemanticClassification,
   type VbaSemanticCategory,
 } from "../../../src/core/services/vba-semantic-classifier";
@@ -1580,5 +1582,17 @@ describe("report.txt — serialization noise and toggle equivalence", () => {
     });
 
     expect(result.actionable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #B.1 — FORM_NOISE_KEYS shared module identity (hexagonal-tech-debt PR 2)
+// ---------------------------------------------------------------------------
+
+describe("FORM_NOISE_KEYS shared module (#B.1, #624, PR 2)", () => {
+  // Same identity contract as the form-ir-compare test. Both consumers must
+  // reach the shared module's Set reference — never two divergent copies.
+  it("vba-semantic-classifier re-export points to the same Set reference as the shared module", () => {
+    expect(Object.is(FORM_NOISE_KEYS, SHARED_FORM_NOISE_KEYS)).toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import {
   type FormDriftKind,
 } from "../../../src/core/services/form-ir-compare-service";
 import { parseFormTxt } from "../../../src/core/services/form-ir-service";
+import { FORM_NOISE_KEYS as SHARED_FORM_NOISE_KEYS } from "../../../src/core/services/form-noise-keys";
 
 // ---------------------------------------------------------------------------
 // Test fixture builders — minimal SaveAsText fragments
@@ -282,5 +283,47 @@ describe("compareForms (form-IR-domain drift classifier)", () => {
       key: "NoSaveCTIWhenDisabled",
       actionable: false, // NoSaveCTIWhenDisabled is in FORM_NOISE_KEYS
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #B.1 — FORM_NOISE_KEYS shared module identity (hexagonal-tech-debt PR 2)
+// ---------------------------------------------------------------------------
+
+describe("FORM_NOISE_KEYS shared module (#B.1, #624, #PR 2)", () => {
+  // Identity test — must survive any internal refactor that preserves the
+  // shared-module pattern. If either side changes the reference, the strict
+  // identity pins the contract that both consumers see the same `Set`.
+  it("form-ir-compare re-export points to the same Set reference as the shared module", () => {
+    expect(Object.is(FORM_NOISE_KEYS, SHARED_FORM_NOISE_KEYS)).toBe(true);
+  });
+
+  // Membership snapshot — same 14 keys the form-noise-keys module declares.
+  // The previous dual-list "LOCKED" invariant from this file's own list is now
+  // enforced by the SINGLE source of truth; this test pins the post-refactor
+  // membership so a future addition to the shared module surfaces here.
+  it("shared module's FORM_NOISE_KEYS still contains the 14 canonical keys", () => {
+    const expected = [
+      "Checksum",
+      "PrtDevMode",
+      "PrtDevModeW",
+      "PrtDevNames",
+      "PrtDevNamesW",
+      "PrtMip",
+      "RecSrcDt",
+      "LayoutCachedLeft",
+      "LayoutCachedTop",
+      "LayoutCachedWidth",
+      "LayoutCachedHeight",
+      "PublishOption",
+      "NoSaveCTIWhenDisabled",
+      "NameMap",
+    ];
+    expect(SHARED_FORM_NOISE_KEYS).toBeInstanceOf(Set);
+    for (const key of expected) {
+      expect(SHARED_FORM_NOISE_KEYS.has(key), `shared FORM_NOISE_KEYS must contain "${key}"`).toBe(
+        true,
+      );
+    }
   });
 });

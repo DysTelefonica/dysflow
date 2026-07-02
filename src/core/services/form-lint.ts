@@ -504,7 +504,12 @@ function checkControlProperty(
   column: number,
   line: number,
 ): Omit<LintDiagnostic, "file"> | null {
-  // Property matrix (minimal).
+  // Property matrix (minimal). ListBox.ColumnWidths is intentionally NOT
+  // warned here — Access supports `Me.<ListBox>.ColumnWidths = "<widths>"`
+  // verbatim, so the default return-null below covers it without needing a
+  // redundant early-return (the explicit guard was removed in
+  // #hexagonal-tech-debt PR 2 — the prior guard returned the same null the
+  // default would).
   if (type === "ComboBox" && prop === "List") {
     return {
       severity: "warning",
@@ -514,11 +519,6 @@ function checkControlProperty(
       message: `ComboBox '${controlName}' does not support .List for large lists; assign a RowSource string instead.`,
       suggestedFix: `${controlName}.RowSource = "a;b;c"`,
     };
-  }
-  // Rule not yet implemented for this combination — surface an info so consumers
-  // see the rule fires but don't get a false positive.
-  if (type === "ListBox" && prop === "ColumnWidths") {
-    return null; // ListBox.ColumnWidths IS supported; do not warn.
   }
   return null;
 }
