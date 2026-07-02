@@ -4,6 +4,48 @@
 ### runtime-guard-exportpath (#644)
 - **Fix runtime-guard regression on `export_modules` / `export_all` (#644).** The F1 destinationRoot guard (#619, `src/adapters/vba-sync/vba-modules-adapter.ts:223-241`) fired against the orchestrator's resolved `destinationRoot` even when the user had explicitly supplied a safe `exportPath`. When the user passes `exportPath`, the runner writes to that path (the guard above already validated the user's intent) — the orchestrator's resolution is irrelevant for the safety check. The fix narrows the F1 guard to fire ONLY when the user did NOT provide an `exportPath` (`exportPath === undefined && isWithinRuntime(target.data.destinationRoot, env)`). The no-exportPath safety net (#619 F1) is preserved for callers who rely on the orchestrator's project-config resolution. Three new unit tests in `test/adapters/vba-sync/runtime-guard-filesystem-writes.test.ts` and `test/adapters/mcp/runtime-guard-dispatch-exportpath.test.ts` pin the contract at the unit layer (mirror the E2E test at `test/e2e/runtime-guard-mcp-integration.e2e.test.ts:309-331`, which now passes); both fail RED against the pre-fix code and pass GREEN after the conditional. The MCP-dispatch-path test goes through `createDispatchTool` → `validateInput` → `services.vbaSyncToolService.execute` → `VbaModulesAdapter.execute`, so future regressions in the schema validator, the dispatch handler, or the orchestrator wiring surface at the cheap unit layer instead of waiting for the expensive E2E.
 
+### vba-import-vbname-preserve (#646)
+
+#### Bugfix — `Attribute VB_Name` was dropped on every VBA import, silently corrupting module identity
+- **`Normalize-VbaImportText` no longer strips `Attribute VB_Name`.** `Test-IsVbaImportMetadataLine`'s
+  broad `^Attribute\s+VB_` match caused the import-normalization path to strip `Attribute VB_Name`
+  along with every other `Attribute VB_*` line before every `AddFromFile` write, so `VB_Name` never
+  reached the compiled binary. Reimporting affected forms dropped their identity line and could cause
+  Access to spawn a broken placeholder component. A new predicate,
+  `Test-IsVbaImportDroppableMetadataLine` (identical to the old one except it excludes
+  `Attribute VB_Name`), is now used at both `Normalize-VbaImportText` call sites. The original
+  `Test-IsVbaImportMetadataLine` is unchanged and still used by `Split-VbaHeaderAndBody` /
+  `Merge-AccessDocumentWithCanonicalHeader`, which correctly need the broad match to avoid emitting a
+  duplicate `Attribute VB_Name` line.
+- **`verify_code` no longer masks a one-side-missing `Attribute VB_Name` as `attributeOnly`.** The
+  semantic classifier's `keepVbName` flag previously stripped `VB_Name` from both sides whenever
+  *either* side omitted it, hiding this exact import defect from drift audits. `keepVbName` now
+  triggers whenever the two sides disagree (a real rename, or one side omitting it entirely), so the
+  dropped-identity defect surfaces as an actionable difference instead of a non-functional one.
+
+### mcp-writes-enabled-default (#645)
+
+#### Trust-posture change — `dysflow mcp` now starts with writes enabled by default
+- **`dysflow mcp` (stdio) enables write-capable tools by default.** Previously, bare
+  `dysflow mcp` started read-only and required `--enable-writes` to unlock
+  `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with
+  `force: true`, `vba_inline_execution`, and other write-gated tools. The stdio
+  surface is process-ownership-trusted (the parent process that spawns `dysflow mcp`
+  is the operator), so the friction of a manual opt-in every session was not
+  justified — see `docs/security/adapter-write-gates.md#process-wide-write-default`.
+- **New `--disable-writes` flag opts out** to the previous read-only behavior:
+  `dysflow mcp --disable-writes`. `--enable-writes` is still accepted as a
+  backward-compatible no-op. Passing both `--enable-writes` and `--disable-writes`
+  together is rejected (`exitCode 1`) with a mutual-exclusion error and usage.
+- **`dysflow serve` (HTTP) is unaffected** — the network surface keeps its
+  writes-disabled-by-default posture; this change is stdio-only.
+- **Per-repo `allowWrites` is unaffected** — set `"allowWrites": false` in a repo's
+  `.dysflow/project.json` to keep that project read-only even while the process-wide
+  MCP default is enabled.
+- **Action required**: agents/scripts relying on the old read-only-by-default stdio
+  behavior must add `--disable-writes` (or set `"allowWrites": false` per repo) to
+  preserve the previous posture after upgrading.
+
 ### hexagonal-tech-debt (#624)
 
 #### #B.2 ELIGIBLE_STATUSES unification (PR 1 of 5)

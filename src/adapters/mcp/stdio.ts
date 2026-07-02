@@ -93,7 +93,7 @@ export async function startMcpStdioAdapter(
     configResult.ok ? configResult.data : undefined,
     configResult.ok ? undefined : configResult.error,
   );
-  const writesEnabled = options?.writesEnabled ?? false;
+  const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
 
   const tools = createDysflowMcpTools(

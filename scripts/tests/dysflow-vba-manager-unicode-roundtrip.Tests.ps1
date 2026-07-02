@@ -45,6 +45,7 @@ BeforeAll {
         "Normalize-Newlines"
         "Split-CodeBehindSection"
         "Test-IsVbaImportMetadataLine"
+        "Test-IsVbaImportDroppableMetadataLine"
         "Test-IsVbaOptionDirectiveLine"
         "Write-Utf8NoBom"
         "Convert-AnsiToUtf8NoBom"
@@ -70,8 +71,9 @@ Describe "Convert-Utf8CodeImportToAnsiTempFile — Unicode round-trip (EXPEDIENT
         # Regression guard for the root-cause bug: `-split "`n", -1` used to
         # collapse the whole module into one line on PS7, leaving the temp
         # file empty. The sanitized output must be at least as large as the
-        # body (Attribute VB_Name + Option Explicit are stripped, but the
-        # executable body is preserved verbatim).
+        # body — Attribute VB_Name is PRESERVED (issue #646); duplicate Option
+        # lines are de-duplicated and the executable body is preserved
+        # verbatim.
         $sandbox = Join-Path (Join-Path $PSScriptRoot "..\..\test-runtime") (
             "unicode-roundtrip-" + [guid]::NewGuid().ToString("N")
         )
@@ -105,6 +107,7 @@ Describe "Convert-Utf8CodeImportToAnsiTempFile — Unicode round-trip (EXPEDIENT
 
             $outText = [System.IO.File]::ReadAllText($tgt, $script:Ansi1252)
             $outText.Length | Should -BeGreaterThan 0
+            $outText.Contains('Attribute VB_Name = "Demo"') | Should -BeTrue -Because "Attribute VB_Name must survive import normalization (issue #646)"
         }
         finally {
             if (Test-Path -LiteralPath $sandbox) {

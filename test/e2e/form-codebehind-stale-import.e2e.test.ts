@@ -338,6 +338,16 @@ describe.skipIf(!canRunE2e)(
         exportedCls,
         `Expected STALE_CODEBEHIND_MARKER to be absent from exported .cls — Phase 2 must have won`,
       ).not.toContain(STALE_CODEBEHIND_MARKER);
+
+      // NOTE (issue #646): a VB_Name-survives-import assertion was evaluated here but
+      // dropped — export_modules writes a form/report .cls from
+      // `CodeModule.Lines(1, CodeModule.CountOfLines)` (dysflow-vba-manager.ps1), and the
+      // VBE `CodeModule.Lines` API never returns `Attribute` statements (they are
+      // metadata, not code lines). So the exported .cls can NEVER contain
+      // `Attribute VB_Name`, regardless of whether import normalization preserves it —
+      // this artifact cannot verify the fix. The Pester suite
+      // (scripts/tests/dysflow-vba-manager.Tests.ps1, `Normalize-VbaImportText`
+      // context) is the primary pinning seam for VB_Name reaching `AddFromFile`.
     }, 180_000);
 
     it('importMode "Auto" + compile:true: form import does NOT hard-fail; compile is reported unverified (#543)', async () => {

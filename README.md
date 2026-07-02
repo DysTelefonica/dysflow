@@ -473,22 +473,24 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
-**Write tools are disabled by default on MCP**, matching the HTTP safety model. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to enable writes:
+**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
 
-**Option 1 — per-repo (recommended).** Set `"allowWrites": true` in the repo's `.dysflow/project.json`. Writes are then enabled for that project even if MCP was started without `--enable-writes`, and the setting travels with the repo:
+**Option 1 — per-repo.** Set `"allowWrites": false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
 
 ```json
 {
   "accessDbPath": "path/to/database.accdb",
-  "allowWrites": true
+  "allowWrites": false
 }
 ```
 
-**Option 2 — process-wide.** Start MCP with `--enable-writes`. This enables writes for every project that server instance touches, so use it only for trusted local maintenance sessions:
+**Option 2 — process-wide.** Start MCP with `--disable-writes` to run the whole session read-only, regardless of per-repo settings:
 
 ```powershell
-dysflow mcp --enable-writes
+dysflow mcp --disable-writes
 ```
+
+`--enable-writes` is still accepted as a no-op (writes are already enabled by default); passing both `--enable-writes` and `--disable-writes` together is rejected with a usage error.
 
 `dryRun` operations remain allowed in all modes regardless of either setting.
 
@@ -614,7 +616,7 @@ Each differing module is assigned one `classification`:
 | --- | --- | --- |
 | `matched` | No functional difference | No |
 | `whitespaceOnly` | Only line endings (CRLF/LF), trailing whitespace, trailing blank lines, or trivial indentation | No |
-| `attributeOnly` | Only module/class header boilerplate differs — `Attribute VB_*` lines (in code modules and a form's embedded `CodeBehindForm`) or the `VERSION x.x CLASS` + `BEGIN…END` instancing block that an Access export may emit on one side only. `VB_Name` is kept functional only when **both** sides name the module and the names differ (a real rename); a one-sided header is non-functional | No |
+| `attributeOnly` | Only module/class header boilerplate differs — `Attribute VB_*` lines (in code modules and a form's embedded `CodeBehindForm`) or the `VERSION x.x CLASS` + `BEGIN…END` instancing block that an Access export may emit on one side only. `VB_Name` is functional whenever the two sides disagree — a real rename (both name it, values differ) OR one side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both sides carry the same name or both omit it | No |
 | `caseOnly` | Only identifier/keyword casing differs (`Me.Name` vs `Me.name`). VBA is case-insensitive and the VBE re-cases identifiers project-wide on import. String-literal and comment bodies are compared **case-sensitively**, so a runtime-visible text change is NOT absorbed here | No |
 | `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`), **or** a toggle property uses an equivalent serialization (`Visible =0` ≡ `Visible = NotDefault`). Access only writes a property when it differs from its default, so a written toggle value is always the same non-default — only the `NotDefault`/`0`/`-1` representation varies. A real change shows up as a line being present vs absent, which stays functional | No |
 | `encodingOnly` | Difference disappears after normalizing encoding/mojibake artifacts — a leading BOM or its mojibake remnant (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side only, or lossy out-of-codepage glyphs that Access export replaced with `?` (e.g. `►` → `?`). Lossy/case normalization is applied **outside string literals only**, so a glyph or casing change inside a quoted string stays functional | No |
@@ -757,7 +759,7 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 | Command           | Description                                   |
 | ----------------- | --------------------------------------------- |
 | `dysflow`         | Open the Dysflow TUI dashboard                |
-| `dysflow mcp`     | Start MCP stdio adapter (`--enable-writes` enables guarded MCP writes) |
+| `dysflow mcp`     | Start MCP stdio adapter (writes enabled by default; `--disable-writes` opts out) |
 | `dysflow setup`   | Print resolved config (with redacted secrets) |
 | `dysflow doctor`  | Run config + environment diagnostics          |
 | `dysflow install` | Install runtime + auto-wire MCP integrations  |

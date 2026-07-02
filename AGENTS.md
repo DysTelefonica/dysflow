@@ -62,10 +62,11 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   name itself.
 - **Module/class header boilerplate is non-functional**: `Attribute VB_*` lines (in code modules
   AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block
-  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: kept
-  functional ONLY when both sides name the module and the names differ (a real rename). A `.frm`
-  starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be
-  stripped; only `VERSION <num> CLASS` headers are.
+  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: it is
+  functional whenever the two sides disagree — a real rename (both name it, values differ) OR one
+  side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both
+  carry the same name or both omit it. A `.frm` starts with `VERSION 5.00` and a control `Begin…End`
+  tree — that is functional and must NOT be stripped; only `VERSION <num> CLASS` headers are.
 - **A form's code-behind is verified through its `forms/*.cls`, NOT its `.form.txt`.** The code lives
   canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the
   document module). The `.form.txt` `CodeBehindForm` section is the same code serialized a second way
@@ -165,8 +166,11 @@ recoverable, and aligned with the write-gate contract.
 ### Safe write enablement
 
 1. Run write-capable tools with `dryRun` first whenever the tool supports it.
-2. Enable writes per repo with `allowWrites` only after explicit human authorization, or start MCP
-   process-wide with `--enable-writes` for trusted local maintenance sessions.
+2. `dysflow mcp` (stdio) enables writes by default — the stdio surface is process-ownership-trusted.
+   Scope a repo to read-only with `"allowWrites": false` in `.dysflow/project.json`, or start the
+   whole session read-only with `dysflow mcp --disable-writes`. `dysflow serve` (HTTP) still starts
+   writes-disabled by default; enable it explicitly per session with `--enable-writes` only for
+   trusted local maintenance.
 3. Use `apply: true` only for intentional writes after reviewing the dry-run plan.
 4. Treat `MCP_WRITES_DISABLED` as a safety stop, not as a reason to bypass the adapter.
 
