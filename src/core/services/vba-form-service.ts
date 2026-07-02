@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { nodeFormFileSystem } from "../../adapters/services/node-form-file-system.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import {
   createDysflowError,
@@ -41,22 +41,13 @@ export type VbaFormServiceOptions = {
 
 // ---------------------------------------------------------------------------
 // Default Node.js port implementations (used when no explicit port is injected)
+//
+// The FS default lives in `src/adapters/services/node-form-file-system.ts` —
+// the production adapter that wraps `node:fs/promises`. `core` does NOT
+// import `node:fs/promises` itself; it depends only on the port surface
+// above. Mirrors the `cross-process-lock.ts` + `node-lock-file-system.ts`
+// precedent (commit `6ac0af1`). Hexagonal split (#A, #624).
 // ---------------------------------------------------------------------------
-
-const nodeFileSystem: FormFileSystemPort = {
-  mkdir: (path, options) => mkdir(path, options),
-  readdir: (path) => readdir(path),
-  readFile: (path) => readFile(path, "utf8"),
-  readJson: async <T>(path: string): Promise<T> => {
-    const raw = await readFile(path, "utf8");
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      throw new Error(`Invalid JSON file: ${path}`);
-    }
-  },
-  writeFile: (path, data, encoding) => writeFile(path, data, encoding),
-};
 
 const nodeClock: FormClockPort = {
   nowIso: () => new Date().toISOString(),
@@ -74,7 +65,7 @@ export class VbaFormService {
 
   constructor(options: VbaFormServiceOptions = {}) {
     this.cwd = options.cwd ?? process.cwd();
-    this.fileSystem = options.fileSystem ?? nodeFileSystem;
+    this.fileSystem = options.fileSystem ?? nodeFormFileSystem;
     this.clock = options.clock ?? nodeClock;
     this.env = options.env ?? (process.env as Record<string, string | undefined>);
   }

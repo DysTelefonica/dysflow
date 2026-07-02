@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";
 import { isLockAlreadyExistsError, isTransientLockContentionError } from "../utils/lock-errors.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
+import type { RegistryFileSystemPort } from "./registry-file-system-port.js";
 
 export type AccessOperationStatus =
   | "starting"
@@ -92,6 +93,14 @@ export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistry
   filePath: string;
   lockTimeoutMs?: number;
   staleLockMs?: number;
+  /**
+   * Filesystem port. Production wires `nodeRegistryFileSystem`
+   * (`src/adapters/operations/node-registry-file-system.ts`); tests inject a
+   * fake to drive happy / sad / adversarial branches without touching host
+   * FS. Hexagonal split (#A, #624): the registry no longer imports
+   * `node:fs/promises` directly.
+   */
+  fileSystem?: RegistryFileSystemPort;
 };
 
 const DEFAULT_MAX_RECORDS = 1000;
@@ -152,6 +161,13 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private readonly maxRecords: number;
   private readonly lockTimeoutMs: number;
   private readonly staleLockMs: number;
+  /**
+   * Hexagonal split (#A, #624): every filesystem call the registry makes
+   * routes through this port. The default wires `nodeRegistryFileSystem`
+   * (see constructor); tests inject a fake to drive happy / sad / adversarial
+   * branches without touching the host filesystem.
+   */
+  private readonly fileSystem: RegistryFileSystemPort;
   private lastHealth: AccessOperationRegistryHealth = { status: "ok" };
 
   constructor(options: FileAccessOperationRegistryOptions) {
@@ -161,6 +177,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
     this.lockTimeoutMs = Math.max(1, Math.floor(options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS));
     this.staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
+    this.fileSystem = options.fileSystem ?? nodeRegistryFileSystem;
   }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
@@ -240,11 +257,11 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
 
   private async acquireRegistryMutationLock(): Promise<RegistryMutationLock> {
     const deadline = Date.now() + this.lockTimeoutMs;
-    await mkdir(dirname(this.lockPath), { recursive: true });
+    await this.fileSystem.mkdir(dirname(this.lockPath), { recursive: true });
     while (true) {
       const ownerToken = this.createLockOwnerToken();
       try {
-        await mkdir(this.lockPath);
+        await this.fileSystem.mkdir(this.lockPath);
       } catch (error) {
         if (!isTransientLockContentionError(error)) throw error;
         // EEXIST: the lock dir exists and may be stale. EACCES/EPERM: a concurrent release left
@@ -262,7 +279,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
       }
 
       try {
-        await writeFile(this.lockOwnerPath, ownerToken, { flag: "wx" });
+        await this.fileSystem.writeFile(this.lockOwnerPath, ownerToken, "utf8", { flag: "wx" });
         return { ownerToken };
       } catch (error) {
         await this.removeOwnerlessLockDirectory().catch(() => undefined);
@@ -287,7 +304,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private async removeOwnerlessLockDirectory(): Promise<void> {
     if ((await this.readLockOwnerToken()) !== undefined) return;
     try {
-      await rmdir(this.lockPath);
+      await this.fileSystem.rmdir(this.lockPath);
     } catch (error) {
       if (isPathMissingError(error) || isDirectoryNotEmptyError(error)) return;
       throw error;
@@ -297,9 +314,9 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private async releaseRegistryMutationLock(lock: RegistryMutationLock): Promise<void> {
     if ((await this.readLockOwnerToken()) !== lock.ownerToken) return;
     if ((await this.readLockOwnerToken()) !== lock.ownerToken) return;
-    await rm(this.lockOwnerPath, { force: true });
+    await this.fileSystem.rm(this.lockOwnerPath, { force: true });
     try {
-      await rmdir(this.lockPath);
+      await this.fileSystem.rmdir(this.lockPath);
     } catch (error) {
       if (isPathMissingError(error)) return;
       throw error;
@@ -308,7 +325,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
 
   private async readLockOwnerToken(): Promise<string | undefined> {
     try {
-      return await readFile(this.lockOwnerPath, "utf8");
+      return await this.fileSystem.readFile(this.lockOwnerPath, "utf8");
     } catch (error) {
       if (isPathMissingError(error)) return undefined;
       throw error;
@@ -316,10 +333,9 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private async isLockStale(): Promise<boolean> {
-    const lockStat = await stat(this.lockPath).catch((error: unknown) => {
-      if (isPathMissingError(error)) return undefined;
-      throw error;
-    });
+    // RegistryFileSystemPort.stat returns undefined for ENOENT and rethrows every
+    // other error unchanged, so no extra .catch wrapper is needed here.
+    const lockStat = await this.fileSystem.stat(this.lockPath);
     return lockStat !== undefined && Date.now() - lockStat.mtimeMs >= this.staleLockMs;
   }
 
@@ -328,7 +344,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private async readRecords(): Promise<Map<string, AccessOperationRecord>> {
-    const raw = await readFile(this.filePath, "utf8").catch((err: unknown) => {
+    const raw = await this.fileSystem.readFile(this.filePath, "utf8").catch((err: unknown) => {
       if (isPathMissingError(err)) return undefined;
       logSwallowedIoError("access-operation-registry:read", err);
       return undefined;
@@ -373,8 +389,8 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     const isoStamp = new Date().toISOString().replace(/[:.]/g, "-");
     const quarantinePath = `${this.filePath}.quarantine-${isoStamp}.json`;
     try {
-      await mkdir(dirname(this.filePath), { recursive: true });
-      await rename(this.filePath, quarantinePath);
+      await this.fileSystem.mkdir(dirname(this.filePath), { recursive: true });
+      await this.fileSystem.rename(this.filePath, quarantinePath);
       return {
         status: "degraded",
         reason: "corrupt-json",
@@ -388,8 +404,8 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
       // original could not be moved.
       try {
         const tempPath = `${this.filePath}.quarantine-${isoStamp}.json.partial`;
-        await writeFile(tempPath, raw, "utf8");
-        await rename(tempPath, quarantinePath);
+        await this.fileSystem.writeFile(tempPath, raw, "utf8");
+        await this.fileSystem.rename(tempPath, quarantinePath);
         return {
           status: "degraded",
           reason: "corrupt-json",
@@ -403,7 +419,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   }
 
   private async writeRecords(records: Map<string, AccessOperationRecord>): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
+    await this.fileSystem.mkdir(dirname(this.filePath), { recursive: true });
     const payload = {
       records: [...records.values()].sort((a, b) =>
         b.updatedAt < a.updatedAt ? -1 : b.updatedAt > a.updatedAt ? 1 : 0,
@@ -411,10 +427,10 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     };
     const tempPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-      await rename(tempPath, this.filePath);
+      await this.fileSystem.writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      await this.fileSystem.rename(tempPath, this.filePath);
     } catch (error) {
-      await rm(tempPath, { force: true });
+      await this.fileSystem.rm(tempPath, { force: true });
       throw error;
     }
   }
