@@ -348,5 +348,11 @@ export class VbaFormService {
 }
 
 function isMissingPathError(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
+  if (typeof err !== "object" || err === null || !("code" in err)) return false;
+  // Treat any path/traversal-level filesystem error as "missing" so the caller
+  // can fall through to its own recovery (empty catalog for ENOENT; mkdir +
+  // writeFile retry for ENOTDIR/EACCES/etc.). Only JSON parse errors and other
+  // non-FS errors should surface as VBA_CATALOG_CORRUPT.
+  const code = (err as { code: unknown }).code;
+  return code === "ENOENT" || code === "ENOTDIR" || code === "EACCES" || code === "EPERM";
 }
