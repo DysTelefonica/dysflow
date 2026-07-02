@@ -13,6 +13,13 @@ the Access runner) through PowerShell scripts. Architecture is **hexagonal / cle
 - `src/adapters` — MCP, HTTP, vba-sync, and the I/O boundaries.
 - `src/cli` — command surface.
 
+A `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph for the
+whole tree. When exploring or before editing, prefer the `codegraph-vba` MCP tool's
+`codegraph_explore` (pass `projectPath: "C:\Proyectos\dysflow"`) over `Read`/`Grep`/`Glob` —
+it returns the relevant symbols' line-numbered source + the call paths between them in one call,
+and includes dynamic-dispatch hops that grep cannot follow. See the "Hard rules" section for
+maintenance triggers and re-index command.
+
 ## Testing — READ THIS BEFORE WRITING ANY TEST
 
 The authoritative testing criterion lives in **[`docs/testing/testing-philosophy.md`](./docs/testing/testing-philosophy.md)**.
@@ -96,10 +103,30 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   gated on a fully clean export (skip on ANY warning), scoped to managed source extensions
   (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
   saved-queries folder is never scanned. `prune` + `filter` is rejected (`INVALID_INPUT`) because a
-  filtered export would make every non-matching file look orphaned. Never weaken these when editing
+  filtered export would make every other on-disk file look orphaned. Never weaken these when editing
   `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`. The legacy `.frm` binary
   form format is **not** in the managed allow-list — prune must leave `.frm` files alone, even when
   no matching VBE module exists. See issue #619.
+- **CodeGraph is the canonical code-exploration tool. Use it instead of `Read`/`Grep`/`Glob` when
+  you can.** The `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph
+  for the whole tree. The `codegraph-vba` MCP server's `codegraph_explore` returns the relevant
+  symbols' verbatim line-numbered source PLUS the call paths between them in one call — including
+  dynamic-dispatch hops that `grep` cannot follow. Reach for it BEFORE `Read`/`Grep` when you
+  need to understand or locate code, and reach for it BEFORE edits to verify a call path before
+  changing it. The MCP tool has no default project — pass `projectPath: "C:\Proyectos\dysflow"`
+  (or the equivalent absolute path) explicitly. Example query: `codegraph_explore({ query:
+  "modulesAdapter.execute exportPath dispatch chain", maxFiles: 8, projectPath: "C:\\Proyectos\\dysflow" })`.
+- **Keep the `.codegraph/` index fresh — re-run after every code change.** A stale index is a silent
+  token sink: `codegraph_explore` answers return the OLD source, the agent reads the file again to
+  "verify", and 3–5× the tokens are spent for no benefit. Re-index whenever you:
+  - add, rename, or delete files
+  - change exported function signatures, type definitions, or dispatch routes
+  - touch the MCP layer (`src/adapters/mcp/**`)
+  - merge a PR that lands in `main`
+  The standard tool is the `codegraph` CLI bundled with the MCP server — run
+  `codegraph index C:\Proyectos\dysflow` (or `codegraph init` for a fresh index). Index drift is a
+  P2 process defect; if you notice `codegraph_explore` returning answers that don't match the
+  current source, re-index immediately.
 
 ## MCP workflow recipes
 
@@ -386,3 +413,4 @@ Available custom agent skills in `codegraph-vba`:
 - **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
 - **`vba-handler-backtrace`**: Traces form control event handlers, dynamic calls, circular references, UDT parameters, and reconstructs multiline SQL statements.
 - **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.
+

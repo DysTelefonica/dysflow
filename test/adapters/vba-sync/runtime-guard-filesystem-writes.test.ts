@@ -182,6 +182,60 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
       expect(result.error.code).not.toBe("INVALID_INPUT");
     }
   });
+
+  // --- Issue #644 — runtime-guard regression ---
+  // The F1 destinationRoot guard (#619) must NOT fire when the user has supplied an
+  // explicit, safe `exportPath`. The exportPath guard (#574) already validated the
+  // user's intent; the orchestrator's resolved destinationRoot is then irrelevant
+  // because the runner receives `effectiveParams` with `destinationRoot: exportPath`.
+  // Pin the E2E contract from test/e2e/runtime-guard-mcp-integration.e2e.test.ts:309-331
+  // at the unit layer so a refactor that re-fires the destinationRoot guard against
+  // a safe exportPath turns red here before it ever reaches the integration layer.
+
+  it("export_modules: guard does NOT fire when user passes non-runtime exportPath even if orchestrator returns runtime destinationRoot (#644)", async () => {
+    // Orchestrator MISCONFIGURED — returns a runtime destinationRoot. Real users
+    // hit this when project config is wrong, MCP context defaults to the
+    // installed runtime, or a caller overrides destinationRoot via SDK context.
+    // The contract is: as long as the USER's exportPath is safe, the guard
+    // MUST trust it and not double-check the orchestrator's resolved value.
+    const { adapter, executeMappedTool } = makeAdapterWithResolvedTarget(
+      runtimeEnv,
+      "C:/runtime/dysflow/app/scripts",
+    );
+    executeMappedTool.mockResolvedValue({ ok: true, data: { ok: true } });
+
+    const result = await adapter.execute("export_modules", {
+      exportPath: "C:/projects/myapp/src",
+      moduleNames: ["Module1"],
+    });
+
+    // Contract: guard did NOT block — execution reached the runner.
+    expect(executeMappedTool).toHaveBeenCalled();
+    if (!result.ok) {
+      // The guard's specific rejection must NOT fire.
+      expect(result.error.code).not.toBe("INVALID_INPUT");
+      expect(result.error.message).not.toMatch(/production runtime|inside the runtime/i);
+    }
+  });
+
+  it("export_all: guard does NOT fire when user passes non-runtime exportPath even if orchestrator returns runtime destinationRoot (#644)", async () => {
+    const { adapter, executeMappedTool } = makeAdapterWithResolvedTarget(
+      runtimeEnv,
+      "C:/runtime/dysflow",
+    );
+    executeMappedTool.mockResolvedValue({ ok: true, data: { ok: true } });
+
+    const result = await adapter.execute("export_all", {
+      exportPath: "C:/projects/myapp/src",
+    });
+
+    // Contract: guard did NOT block — execution reached the runner.
+    expect(executeMappedTool).toHaveBeenCalled();
+    if (!result.ok) {
+      expect(result.error.code).not.toBe("INVALID_INPUT");
+      expect(result.error.message).not.toMatch(/production runtime|inside the runtime/i);
+    }
+  });
 });
 
 describe("Issue #574 — runtime guard for VbaModulesAdapter.exportAllWithPrune", () => {
