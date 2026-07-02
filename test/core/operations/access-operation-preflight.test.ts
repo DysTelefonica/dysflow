@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { OsProcessInfo } from "../../../src/core/operations/access-operation-cleanup.js";
 import {
   AccessOperationPreflightCleanupService,
+  ELIGIBLE_STATUSES,
   reapOrphanedAccessOnTimeout,
 } from "../../../src/core/operations/access-operation-preflight.js";
 import {
   type AccessOperationRecord,
   InMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
+import { ELIGIBLE_STATUSES as SHARED_ELIGIBLE_STATUSES } from "../../../src/core/operations/access-operation-status.js";
 
 const baseRecord: AccessOperationRecord = {
   operationId: "op-stale",
@@ -1395,5 +1397,67 @@ describe("reapOrphanedAccessOnTimeout", () => {
     expect(diagnostics[0]?.level).toBe("warning");
     expect(diagnostics[0]?.message).toContain("orphan cleanup after timeout failed");
     expect(diagnostics[0]?.message).toContain("registry unavailable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #B.2 ELIGIBLE_STATUSES unification (hexagonal-tech-debt, #624, PR 1)
+//
+// The `ELIGIBLE_STATUSES` membership that gates preflight cleanup eligibility
+// was historically duplicated in two files with DIVERGENT membership:
+//   - access-operation-preflight.ts (4 statuses, includes pid_unknown)
+//   - access-operation-cleanup.ts   (3 statuses, missing pid_unknown)
+// These tests pin the consolidated single-source invariant: both modules
+// resolve the SAME `Set` reference (Object.is strict identity), the
+// membership is the canonical union, and preflight accepts pid_unknown.
+// ---------------------------------------------------------------------------
+describe("ELIGIBLE_STATUSES — single source of truth (#624 #B.2)", () => {
+  it("imports ELIGIBLE_STATUSES from access-operation-status (identity)", () => {
+    expect(Object.is(ELIGIBLE_STATUSES, SHARED_ELIGIBLE_STATUSES)).toBe(true);
+  });
+
+  it("membership is the canonical union {timed_out, failed, cleanup_pending, pid_unknown}", () => {
+    expect([...ELIGIBLE_STATUSES].sort()).toEqual(
+      ["cleanup_pending", "failed", "pid_unknown", "timed_out"].sort(),
+    );
+    expect(ELIGIBLE_STATUSES.size).toBe(4);
+  });
+
+  it("preflight accepts a pid_unknown record (was previously eligible only in preflight)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const pidUnknownRecord: AccessOperationRecord = {
+      ...baseRecord,
+      operationId: "op-pid-unknown",
+      status: "pid_unknown",
+      // pid_unknown semantically means no owned PID — registry already has null.
+      accessPid: null,
+      processStartTime: null,
+    };
+    await registry.create(pidUnknownRecord);
+    const killed: number[] = [];
+    const service = new AccessOperationPreflightCleanupService({
+      registry,
+      processInspector: { getProcess: async () => undefined },
+      processKiller: {
+        kill: async (pid) => {
+          killed.push(pid);
+        },
+      },
+      // Scanner is required so retireUnownedRecord can mark the record cleaned
+      // when no live MSACCESS matches. Empty list → no match → markCleaned.
+      processScanner: {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [],
+      },
+      clock: () => "2026-05-15T10:02:00.000Z",
+    });
+
+    const result = await service.cleanup({
+      accessPath: "C:/DATA/app.accdb",
+      projectRoot: "C:/repo/app",
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.cleaned).toContain("op-pid-unknown");
+    expect(killed).toEqual([]);
   });
 });

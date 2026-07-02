@@ -11,11 +11,17 @@ import { sameProcessStartTime } from "./access-operation-cleanup.js";
 import {
   type AccessOperationRecord,
   type AccessOperationRegistry,
-  type AccessOperationStatus,
   DEFAULT_STARTING_STALE_MS,
   INTERRUPTED_BEFORE_PID_REASON,
   isInterruptedStartingRecord,
 } from "./access-operation-registry.js";
+// #B.2 (hexagonal-tech-debt, #624): single-source ELIGIBLE_STATUSES.
+// Imported locally for runtime use and re-exported so callers can
+// `import { ELIGIBLE_STATUSES } from "..."` from either this module or the
+// canonical `access-operation-status` and observe Object.is(...) strict identity.
+import { ELIGIBLE_STATUSES } from "./access-operation-status.js";
+
+export { ELIGIBLE_STATUSES };
 
 export type AccessOperationPreflightCleanupRequest = {
   accessPath: string;
@@ -47,12 +53,6 @@ export type AccessOperationPreflightCleanup = {
   ): Promise<AccessOperationPreflightCleanupResult>;
 };
 
-const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>([
-  "timed_out",
-  "failed",
-  "cleanup_pending",
-  "pid_unknown",
-]);
 const DEFAULT_OPERATION_TIMEOUT_MS = 3_000;
 
 export class AccessOperationPreflightCleanupService implements AccessOperationPreflightCleanup {
