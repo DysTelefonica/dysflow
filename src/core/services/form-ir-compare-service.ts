@@ -5,44 +5,22 @@
 // Zero adapter dependencies. No I/O. No Access, no PowerShell, no COM.
 
 import type { FormIR, FormNode, PropertyEntry, ScalarEntry } from "../models/form-ir.js";
+import { FORM_NOISE_KEYS } from "./form-noise-keys.js";
 
 // ---------------------------------------------------------------------------
 // Constants — the noise floor
 // ---------------------------------------------------------------------------
 
-/**
- * Canonical set of Access form/report serialization-noise keys. A scalar
- * property change whose key is in this set is non-actionable (Access will
- * regenerate / adjust these on a round-trip through `LoadFromText` /
- * `SaveAsText` — they never represent user-visible intent).
- *
- * The list mirrors `src/core/services/vba-semantic-classifier.ts`
- * `FORM_NOISE_KEYS` by design (both layers classify the same Access
- * serialization noise). Coupling them into a single shared module is a
- * refactor opportunity for a future slice — this slice keeps the list
- * co-located with the new IR-domain diff to avoid pulling the heavy
- * text/LCS machinery of `classifyVbaPair` into a typed-IR diff.
- *
- * The list is LOCKED. Any addition / removal must update both this set
- * and the corresponding list in the semantic classifier, and bump the
- * coverage test in `test/core/services/form-ir-compare.test.ts`.
- */
-export const FORM_NOISE_KEYS: ReadonlySet<string> = new Set([
-  "Checksum",
-  "PrtDevMode",
-  "PrtDevModeW",
-  "PrtDevNames",
-  "PrtDevNamesW",
-  "PrtMip",
-  "RecSrcDt",
-  "LayoutCachedLeft",
-  "LayoutCachedTop",
-  "LayoutCachedWidth",
-  "LayoutCachedHeight",
-  "PublishOption",
-  "NoSaveCTIWhenDisabled",
-  "NameMap",
-]);
+// FORM_NOISE_KEYS is the canonical set of Access form/report serialization-noise
+// keys (scalar properties that are non-actionable drift — Access regenerates
+// them on LoadFromText/SaveAsText round-trips and they never represent
+// user-visible intent).
+//
+// Single source of truth lives at `src/core/services/form-noise-keys.ts` —
+// both this service and `vba-semantic-classifier.ts` re-export from there so
+// `Object.is(consumer.FORM_NOISE_KEYS, shared.FORM_NOISE_KEYS)` holds.
+// External callers keep importing from this module unchanged.
+export { FORM_NOISE_KEYS };
 
 /** Properties whose change is reported as a single `layoutBoundsChanged` drift
  * (instead of a per-key `propertyChanged`). Order is deterministic:

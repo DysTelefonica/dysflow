@@ -4,17 +4,32 @@ import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
 
 // ─── Route table ──────────────────────────────────────────────────────────────
 
+/**
+ * Closed union of dispatch route kinds.
+ *
+ * - `vba-sync` — VBA module sync tools (`mutatesBinary` / `mutatesFilesystem`
+ *   are the single source of truth for whether the write-gate fires; both
+ *   flags are REQUIRED so omitting either is a compile error, never a
+ *   silently un-gated write).
+ * - `query-read` — read-only query tools; never write-gated.
+ * - `query-maintenance` — table/query maintenance tools; `queryMode` decides
+ *   the write-gate.
+ *
+ * ## Re-introduction note (#E — `query-write-fixture` removal)
+ *
+ * The prior `query-write-fixture` member was removed in #hexagonal-tech-debt
+ * PR 2 (2026-07-01). No `MCP_TOOL_ROUTES` entry ever routed to it (verified by
+ * grep), so removal is a no-op at runtime but tightens the type so the
+ * dispatcher `switch` is exhaustively typed.
+ *
+ * Re-introduction requires a deliberate type-widening PR (add the union
+ * member, add a `case` to the dispatcher `switch`, and add an `MCP_TOOL_ROUTES`
+ * entry). No consumer should smuggle it back via an `as McpToolRoute` cast.
+ */
 export type McpToolRoute =
-  // `mutatesBinary` and `mutatesFilesystem` are the single source of truth for
-  // whether a VBA-sync tool must pass the write-gate. `mutatesFilesystem` tracks
-  // non-export filesystem writes that are user-facing mutations; source export
-  // tools remain false by design. Both flags are REQUIRED so a new VBA tool
-  // cannot be registered without deciding — omitting either is a compile error,
-  // never a silently un-gated write.
   | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean }
   | { kind: "query-read" }
-  | { kind: "query-maintenance"; queryMode: "read" | "write" }
-  | { kind: "query-write-fixture" };
+  | { kind: "query-maintenance"; queryMode: "read" | "write" };
 
 export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolName>;
 

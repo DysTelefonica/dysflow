@@ -1,7 +1,6 @@
 import {
   buildMaintenanceRequest,
   buildQueryReadRequest,
-  buildWriteFixtureRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
 import { isRecord } from "../../core/utils/index.js";
@@ -48,7 +47,6 @@ export function createDispatchTool(
     name === "dysflow_create_form_from_template";
 
   const isWriteGated =
-    route.kind === "query-write-fixture" ||
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
     isBinaryWrite ||
     isFilesystemWrite;
@@ -152,12 +150,6 @@ export function createDispatchTool(
         case "query-read":
           return translateCoreResultToMcpContent(
             await services.queryService.execute(buildQueryReadRequest(queryActionFor(name), input)),
-          );
-        case "query-write-fixture":
-          return translateCoreResultToMcpContent(
-            await services.queryService.execute(
-              buildWriteFixtureRequest(queryActionFor(name), input),
-            ),
           );
       }
     },
