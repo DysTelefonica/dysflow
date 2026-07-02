@@ -138,8 +138,11 @@ recoverable, and aligned with the write-gate contract.
 ### Safe write enablement
 
 1. Run write-capable tools with `dryRun` first whenever the tool supports it.
-2. Enable writes per repo with `allowWrites` only after explicit human authorization, or start MCP
-   process-wide with `--enable-writes` for trusted local maintenance sessions.
+2. `dysflow mcp` (stdio) enables writes by default — the stdio surface is process-ownership-trusted.
+   Scope a repo to read-only with `"allowWrites": false` in `.dysflow/project.json`, or start the
+   whole session read-only with `dysflow mcp --disable-writes`. `dysflow serve` (HTTP) still starts
+   writes-disabled by default; enable it explicitly per session with `--enable-writes` only for
+   trusted local maintenance.
 3. Use `apply: true` only for intentional writes after reviewing the dry-run plan.
 4. Treat `MCP_WRITES_DISABLED` as a safety stop, not as a reason to bypass the adapter.
 

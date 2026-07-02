@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { handleDoctorCommand } from "../../src/cli/commands/doctor";
+import { MCP_USAGE } from "../../src/cli/commands/mcp";
 import { handleServeCommand } from "../../src/cli/commands/serve";
 import { handleSetupCommand } from "../../src/cli/commands/setup";
 import { runCli } from "../../src/cli/index";
@@ -193,12 +194,14 @@ describe("dysflow command modules", () => {
 
   it("starts MCP stdio through an injected core adapter without writing stdout", async () => {
     const calls: unknown[] = [];
+    const optionCalls: unknown[] = [];
 
     const workspace = createRepoConfigWorkspace();
     try {
       const result = await runCli(["mcp"], {
         startMcpAdapter: async (...args: unknown[]) => {
           calls.push(args[0]);
+          optionCalls.push(args[1]);
         },
         cwd: workspace.root,
         env: { DYSFLOW_ACCESS_PASSWORD: "secret" },
@@ -210,6 +213,7 @@ describe("dysflow command modules", () => {
           accessDbPath: join(workspace.root, "front.accdb"),
         }),
       ]);
+      expect(optionCalls).toEqual([{ writesEnabled: true }]);
     } finally {
       workspace.cleanup();
     }
@@ -229,6 +233,67 @@ describe("dysflow command modules", () => {
 
       expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
       expect(calls).toEqual([undefined]);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("starts MCP with writes disabled when --disable-writes is passed", async () => {
+    const optionCalls: unknown[] = [];
+    const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
+    try {
+      const result = await runCli(["mcp", "--disable-writes"], {
+        env: {},
+        cwd: workspace,
+        startMcpAdapter: async (...args: unknown[]) => {
+          optionCalls.push(args[1]);
+        },
+      });
+
+      expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+      expect(optionCalls).toEqual([{ writesEnabled: false }]);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts --enable-writes alone as a no-op that keeps writes enabled", async () => {
+    const optionCalls: unknown[] = [];
+    const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
+    try {
+      const result = await runCli(["mcp", "--enable-writes"], {
+        env: {},
+        cwd: workspace,
+        startMcpAdapter: async (...args: unknown[]) => {
+          optionCalls.push(args[1]);
+        },
+      });
+
+      expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+      expect(optionCalls).toEqual([{ writesEnabled: true }]);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects --enable-writes and --disable-writes passed together", async () => {
+    const calls: unknown[] = [];
+    const workspace = mkdtempSync(join(tmpdir(), "dysflow-missing-"));
+    try {
+      const result = await runCli(["mcp", "--enable-writes", "--disable-writes"], {
+        env: {},
+        cwd: workspace,
+        startMcpAdapter: async (...args: unknown[]) => {
+          calls.push(args);
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe(
+        `--enable-writes and --disable-writes are mutually exclusive. Cannot use both at the same time.\n${MCP_USAGE}`,
+      );
+      expect(calls).toEqual([]);
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

@@ -1,6 +1,29 @@
 # Changelog
 
 ## [Unreleased]
+### mcp-writes-enabled-default (#645)
+
+#### Trust-posture change — `dysflow mcp` now starts with writes enabled by default
+- **`dysflow mcp` (stdio) enables write-capable tools by default.** Previously, bare
+  `dysflow mcp` started read-only and required `--enable-writes` to unlock
+  `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with
+  `force: true`, `vba_inline_execution`, and other write-gated tools. The stdio
+  surface is process-ownership-trusted (the parent process that spawns `dysflow mcp`
+  is the operator), so the friction of a manual opt-in every session was not
+  justified — see `docs/security/adapter-write-gates.md#process-wide-write-default`.
+- **New `--disable-writes` flag opts out** to the previous read-only behavior:
+  `dysflow mcp --disable-writes`. `--enable-writes` is still accepted as a
+  backward-compatible no-op. Passing both `--enable-writes` and `--disable-writes`
+  together is rejected (`exitCode 1`) with a mutual-exclusion error and usage.
+- **`dysflow serve` (HTTP) is unaffected** — the network surface keeps its
+  writes-disabled-by-default posture; this change is stdio-only.
+- **Per-repo `allowWrites` is unaffected** — set `"allowWrites": false` in a repo's
+  `.dysflow/project.json` to keep that project read-only even while the process-wide
+  MCP default is enabled.
+- **Action required**: agents/scripts relying on the old read-only-by-default stdio
+  behavior must add `--disable-writes` (or set `"allowWrites": false` per repo) to
+  preserve the previous posture after upgrading.
+
 ### hexagonal-tech-debt (#624)
 
 #### #B.2 ELIGIBLE_STATUSES unification (PR 1 of 5)
