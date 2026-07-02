@@ -80,8 +80,7 @@ assertions proves nothing.
 
 ## In this repo, concretely
 
-- Integration/E2E config: `vitest.integration.config.ts` → `test/e2e/**` and
-  `test/scripts-access-runner.test.ts`.
+- Integration/E2E config: `vitest.integration.config.ts` → `test/e2e/**` and `test/integration/**`.
 - Unit/spec config: `vitest.config.ts`.
 - The I/O adapters that are legitimate mock seams: Access COM runner
   (`scripts/dysflow-access-runner.ps1` / `dysflow-vba-manager.ps1` via the runner port), filesystem,
