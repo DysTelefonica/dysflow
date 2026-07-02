@@ -8,6 +8,9 @@
 - **`appliedTokens` now reflects actual replacement**, derived from a post-IR serialization diff (`serializeFormTxt(next)` vs source tokens). Previously `appliedTokens` was `Object.hasOwn(tokenMap, sourceToken)`, which lied when a token's only occurrence lived inside a preserved metadata key — the result reported `applied` while the serialized IR still contained `{{Token}}`. **Behavior change — strict policy**: a source token whose only `{{...}}` occurrence lives inside a preserved metadata key now triggers `FORM_MUTATION_INVALID` under `missingTokenPolicy: "strict"`. Previously the operation reported success. `warn-pass-through` (default) is unchanged for the IR text — preserved keys still keep their tokens verbatim — only the truth of `appliedTokens`/`missingTokens` changes.
 - **Action required for strict-policy users**: if your source forms contain tokens inside `Checksum`, `Format`, or `PrtDevMode` scalars, either widen the token map to cover them or remove the tokens from the preserved-key scalars before re-running under strict policy.
 
+#### F3 (PR 3 of 3 — this PR)
+- **`catalogAddControl` now refuses a corrupt catalog with `VBA_CATALOG_CORRUPT`** instead of silently overwriting it with a one-control stub. The catalog read happens BEFORE the `dryRun` short-circuit, so corruption is visible in both `apply` and `dryRun`. **Behavior change**: any caller that previously got silent overwrites on a corrupt catalog now receives `{ ok: false, error: { code: "VBA_CATALOG_CORRUPT" } }` and the on-disk catalog is NOT modified. **Recovery**: inspect the catalog file at the path in the error message, restore from backup, or delete it to let the tool rebuild it on the next run. ENOENT (genuinely missing catalog) keeps existing behavior — the operation proceeds with an empty catalog.
+
 ### mcp-contract-safety (#621)
 
 #### F1 (PR 1a of 4 — this PR)
