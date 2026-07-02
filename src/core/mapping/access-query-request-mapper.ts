@@ -59,6 +59,24 @@ function paramsOf(input: unknown): Record<string, unknown> {
 }
 
 /**
+ * The override slice fields produced by {@link pickOverrides}. Centralized
+ * so the 3 builder functions (`buildQueryReadRequest`,
+ * `buildWriteFixtureRequest`, `buildMaintenanceRequest`) cannot drift.
+ */
+export type OverrideShape = {
+  projectId: string | undefined;
+  contextId: string | undefined;
+  accessPath: string | undefined;
+  destinationRoot: string | undefined;
+  projectRoot: string | undefined;
+  strictContext: boolean | undefined;
+  expectedAccessPath: string | undefined;
+  expectedProjectRoot: string | undefined;
+  expectedDestinationRoot: string | undefined;
+  timeoutMs: number | undefined;
+};
+
+/**
  * Reads a trimmed non-empty string from `params[key]`, falling back to the
  * provided alias keys in order. Returns undefined when no key yields a value.
  */
@@ -92,6 +110,44 @@ function rowsValue(value: unknown): readonly Record<string, unknown>[] | undefin
   if (!Array.isArray(value)) return undefined;
   const rows = value.filter(isRecord);
   return rows.length > 0 ? rows : undefined;
+}
+
+/**
+ * Centralized override-slice picker for all 3 builder functions.
+ * Pure of I/O; identical shape across every builder ensures no behavioral
+ * drift between read / write-fixture / maintenance call sites.
+ */
+export function pickOverrides(params: Record<string, unknown>): OverrideShape {
+  return {
+    projectId: getStr(params, "projectId"),
+    contextId: getStr(params, "contextId"),
+    accessPath: getStr(params, "accessPath"),
+    destinationRoot: getStr(params, "destinationRoot"),
+    projectRoot: getStr(params, "projectRoot"),
+    strictContext:
+      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
+    expectedAccessPath: getStr(params, "expectedAccessPath"),
+    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
+    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
+    timeoutMs: coerceTimeoutMs(params.timeoutMs as number | string | undefined),
+  };
+}
+
+/**
+ * Coerces a `timeoutMs` value to `number | undefined`. The Zod schemas at
+ * the MCP boundary already declare `timeoutMs: z.number().optional()`,
+ * so the string branch is unreachable in practice — but the type
+ * signature `number | string | undefined` forces us to handle it, and
+ * we MUST NOT silently re-introduce the dead `parseFloat` branch the
+ * refactor was meant to delete. Throwing turns a future regression into
+ * a loud failure rather than a silent runtime mis-coercion.
+ */
+export function coerceTimeoutMs(value: number | string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number") return value;
+  throw new TypeError(
+    `timeoutMs must be a number; received ${typeof value}. Zod schemas reject strings at parse time.`,
+  );
 }
 
 function queryDefinitionsValue(
@@ -139,22 +195,7 @@ export function buildQueryReadRequest(
     importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-    projectId: getStr(params, "projectId"),
-    contextId: getStr(params, "contextId"),
-    accessPath: getStr(params, "accessPath"),
-    destinationRoot: getStr(params, "destinationRoot"),
-    projectRoot: getStr(params, "projectRoot"),
-    timeoutMs:
-      typeof params.timeoutMs === "number"
-        ? params.timeoutMs
-        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
-          ? Number(params.timeoutMs)
-          : undefined,
-    strictContext:
-      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
-    expectedAccessPath: getStr(params, "expectedAccessPath"),
-    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
-    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
+    ...pickOverrides(params),
   };
 }
 
@@ -182,22 +223,7 @@ export function buildWriteFixtureRequest(
     dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
-    projectId: getStr(params, "projectId"),
-    contextId: getStr(params, "contextId"),
-    accessPath: getStr(params, "accessPath"),
-    destinationRoot: getStr(params, "destinationRoot"),
-    projectRoot: getStr(params, "projectRoot"),
-    timeoutMs:
-      typeof params.timeoutMs === "number"
-        ? params.timeoutMs
-        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
-          ? Number(params.timeoutMs)
-          : undefined,
-    strictContext:
-      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
-    expectedAccessPath: getStr(params, "expectedAccessPath"),
-    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
-    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
+    ...pickOverrides(params),
   };
 }
 
@@ -243,24 +269,9 @@ export function buildMaintenanceRequest(
     removeUnresolved: params.removeUnresolved === true ? true : undefined,
     noBackup: params.backup === false ? true : undefined,
     recursive: typeof params.recursive === "boolean" ? params.recursive : undefined,
-    timeoutMs:
-      typeof params.timeoutMs === "number"
-        ? params.timeoutMs
-        : typeof params.timeoutMs === "string" && !Number.isNaN(Number(params.timeoutMs))
-          ? Number(params.timeoutMs)
-          : undefined,
     backendPassword:
       getStr(params, "backendPassword", ["password"]) ??
       (params.passwordEnv ? env(getStr(params, "passwordEnv") ?? "") : undefined),
-    projectId: getStr(params, "projectId"),
-    contextId: getStr(params, "contextId"),
-    accessPath: getStr(params, "accessPath"),
-    destinationRoot: getStr(params, "destinationRoot"),
-    projectRoot: getStr(params, "projectRoot"),
-    strictContext:
-      params.strictContext === true ? true : params.strictContext === false ? false : undefined,
-    expectedAccessPath: getStr(params, "expectedAccessPath"),
-    expectedProjectRoot: getStr(params, "expectedProjectRoot"),
-    expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
+    ...pickOverrides(params),
   };
 }
