@@ -101,13 +101,13 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     ).toBeLessThan(advertisedIdx);
   });
 
-  it("expected count matches the shared advertised-tool-count helper (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
+  it("expected count is sourced from the shared advertised-tool-count helper (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
     // The unit test (test/adapters/mcp/advertised-tool-count.test.ts) and this
     // e2e both derive their expected count from E2E_testing/_helpers/advertised-tool-count.mjs.
     // We pin three structural contracts so drift cannot recur silently:
     //   1. mcp-e2e.mjs imports the helper module (it must use the same source of truth).
     //   2. mcp-e2e.mjs compares advertised.length against the helper constant.
-    //   3. The helper's numeric value matches the unit-test pin (no runtime divergence).
+    //   3. The unit pin also imports the helper instead of carrying a second numeric literal.
     //
     // If someone adds a new tool but forgets to bump the helper constant, the
     // unit test catches it at vitest speed and the e2e live gate catches it at
@@ -118,8 +118,14 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     expect(readSource(MCP_E2E_PATH)).toMatch(
       /pass:\s*advertised\.length\s*===\s*EXPECTED_ADVERTISED_TOOL_COUNT/,
     );
-    // The helper is the single source of truth — its value must match the unit-test pin.
-    expect(EXPECTED_ADVERTISED_TOOL_COUNT).toBe(61);
+    expect(Number.isSafeInteger(EXPECTED_ADVERTISED_TOOL_COUNT)).toBe(true);
+    const unitPinSource = readSource(
+      resolve(process.cwd(), "test/adapters/mcp/advertised-tool-count.test.ts"),
+    );
+    expect(unitPinSource).toMatch(
+      /import\s+\{[^}]*EXPECTED_ADVERTISED_TOOL_COUNT[^}]*\}\s+from\s+["']\.\.\/\.\.\/\.\.\/E2E_testing\/_helpers\/advertised-tool-count\.mjs["']/,
+    );
+    expect(unitPinSource).not.toMatch(/\.toBe\(\s*\d+\s*\)/);
   });
 });
 

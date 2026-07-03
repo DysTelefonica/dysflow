@@ -5,6 +5,7 @@ test-runtime/
 coverage/
 temp-runtime/
 .codegraph/
+.codegraph-vba/
 .env
 .env.*
 .secrets.json
