@@ -691,6 +691,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl1",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
       });
 
       expect(result.ok).toBe(true);
@@ -719,6 +720,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl1",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
       });
 
@@ -746,6 +748,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl1",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         dryRun: true,
       });
 
@@ -773,6 +776,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl1",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
         dryRun: true,
       });
@@ -804,6 +808,7 @@ describe("VbaFormService", () => {
         controlName: "newCtrl",
         controlType: "TextBox",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
       });
 
@@ -836,6 +841,7 @@ describe("VbaFormService", () => {
         controlName: "btn",
         controlType: "Button",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
       });
 
@@ -867,6 +873,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl",
         controlType: "Label",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
       });
 
@@ -892,6 +899,7 @@ describe("VbaFormService", () => {
         controlName: "btn",
         controlType: "Button",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         // dryRun defaults to true; explicit for clarity.
         dryRun: true,
       });
@@ -921,6 +929,7 @@ describe("VbaFormService", () => {
         controlName: "btn",
         controlType: "Button",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         dryRun: true,
       });
 
@@ -944,6 +953,7 @@ describe("VbaFormService", () => {
         controlName: "ctrl",
         controlType: "Label",
         catalogPath: "/fake/forms/catalog.json",
+        destinationRoot: "/fake",
         apply: true,
       });
 
