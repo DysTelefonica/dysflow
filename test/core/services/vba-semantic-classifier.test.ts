@@ -159,7 +159,13 @@ End Sub`;
     expect(result.classification).toBe("caseOnly");
   });
 
-  it("treats omitted form toggle lines as serialization noise", () => {
+  it("#671 — classifies omitted form toggle lines as ACTIONABLE (presence vs absence)", () => {
+    // #671 reverses the previous behaviour: source has explicit toggle lines
+    // (`Visible = NotDefault`, `AllowEdits =0`) but the binary omits them
+    // (Access default-true). That is a real UI-state change and MUST be
+    // flagged actionable, not absorbed as serialization noise. The previous
+    // filter collapsed this into `formSerializationOnly`, which made consumers
+    // skip the sync and ship a form whose `Visible` differs from source.
     const sourceText = `Begin Form
     Caption ="Demo"
     Visible = NotDefault
@@ -176,8 +182,55 @@ End`;
       mode: "semantic",
     });
 
+    expect(result.actionable).toBe(true);
+  });
+
+  it("#671 — same toggle value, different renderings (NotDefault vs 0) stays non-actionable", () => {
+    // The new normalize (rewrite value to canonical `TOGGLE`) preserves the
+    // equivalence on the two renderings of the same boolean. Only the
+    // presence-vs-absence case flips to actionable.
+    const sourceText = `Begin Form
+    Caption ="Demo"
+    Visible = NotDefault
+End`;
+    const binaryText = `Begin Form
+    Caption ="Demo"
+    Visible =0
+End`;
+
+    const result = classifyVbaPair({
+      sourceText,
+      binaryText,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
     expect(result.actionable).toBe(false);
     expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("#671 — same toggle value, same rendering is matched (raw equal)", () => {
+    // Identical toggle lines collapse to raw `matched` even before any
+    // normalization runs (step 1). The formSerializationOnly bucket only
+    // fires when the texts differ but normalize equal.
+    const sourceText = `Begin Form
+    Caption ="Demo"
+    Visible =0
+End`;
+    const binaryText = `Begin Form
+    Caption ="Demo"
+    Visible =0
+End`;
+
+    const result = classifyVbaPair({
+      sourceText,
+      binaryText,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("matched");
   });
 
   it("treats reordered form event procedure properties as serialization noise", () => {
@@ -1197,7 +1250,9 @@ describe("encodingOnly — leading BOM / mojibake-BOM artifact", () => {
 // T14 — form serialization NotDefault / toggle value equivalence
 // ---------------------------------------------------------------------------
 
-describe("formSerializationOnly — NotDefault toggle equivalence", () => {
+describe("formSerializationOnly — NotDefault toggle equivalence (#671)", () => {
+  // #671 — both renderings of the SAME boolean value (`NotDefault` / `0`) on
+  // BOTH sides still compare equal under the canonical `TOGGLE` normalization.
   it("treats `Visible = NotDefault` vs `Visible =0` as formSerializationOnly", () => {
     const src = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Visible =0\n    End\nEnd`;
     const bin = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Visible = NotDefault\n    End\nEnd`;
@@ -1245,16 +1300,14 @@ describe("formSerializationOnly — NotDefault toggle equivalence", () => {
     expect(result.actionable).toBe(true);
   });
 
-  // Characterization test (issue #552, closed by-design): the toggle collapse is
-  // value-token scoped, NOT property-name scoped. Any property whose value is
-  // `0`/`-1`/`NotDefault` present on one side and absent on the other collapses to
-  // non-actionable. This is intentional: Access serializes a toggle only when it
-  // is non-default and does so non-deterministically across repeated exports, so
-  // present-vs-absent of such a line is churn, not a functional change. Narrowing
-  // this to an allowlist of boolean property names was rejected: a missed name
-  // would re-introduce exactly that churn as a false positive. This test pins the
-  // documented behavior so it is not "fixed" by accident.
-  it("collapses a `=0` line present on one side regardless of property name (by design, #552)", () => {
+  // #671 REVERSAL — the previous #552 characterization test pinned the
+  // value-token collapse regardless of property name. The #671 analysis
+  // found that this hid real UI-state changes: source has `DecimalPlaces =0`
+  // (explicit zero) but binary omits the line (default-true) → real change,
+  // not serialization churn. The new behavior keeps the line and only
+  // normalizes the value to `TOGGLE`, so presence vs absence now classifies
+  // as actionable. This test pins the new contract.
+  it("#671 — a `=0` line present on one side is actionable (presence vs absence is a UI change)", () => {
     const src = `Version =21\nBegin Form\n    Width =9070\n    DecimalPlaces =0\nEnd`;
     const bin = `Version =21\nBegin Form\n    Width =9070\nEnd`;
 
@@ -1265,7 +1318,7 @@ describe("formSerializationOnly — NotDefault toggle equivalence", () => {
       mode: "semantic",
     });
 
-    expect(result.actionable).toBe(false);
+    expect(result.actionable).toBe(true);
   });
 });
 

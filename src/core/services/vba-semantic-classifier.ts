@@ -609,10 +609,20 @@ export function normalizeFormPropertyValues(text: string, fileType: string): str
   if (!FORM_FILE_TYPES.has(fileType)) {
     return text; // no-op for non-form file types
   }
+  // #671 — fix: the previous behaviour FILTERED toggle lines out entirely,
+  // which collapsed "source has Enabled = 0" (explicit false) into equal
+  // to "binary has no Enabled line at all" (Access default-true). That hid
+  // a real UI-state change from the actionable diff. Now we NORMALIZE the
+  // value to a canonical `TOGGLE` token (line preserved, canonical
+  // "<prop> = TOGGLE") so presence vs absence stays visible AND the two
+  // renderings of the same value compare equal. The capture stops before
+  // the trailing whitespace so the canonical form has exactly one space
+  // between `=` and `TOGGLE` regardless of the input.
+  const TOGGLE_VALUE_RE = /^(\s*[A-Za-z_]\w*\s*=)\s*(?:NotDefault|0|-1)\s*$/;
   return normalizeEventProcedureOrderWithinPropertyRuns(
     text
       .split("\n")
-      .filter((line) => !/^\s*[A-Za-z_]\w*\s*=\s*(?:NotDefault|0|-1)\s*$/.test(line))
+      .map((line) => line.replace(TOGGLE_VALUE_RE, "$1 TOGGLE"))
       .join("\n"),
   );
 }
