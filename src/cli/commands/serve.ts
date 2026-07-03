@@ -17,6 +17,25 @@ type ServeOptions = {
 };
 
 /**
+ * #669 — fail-closed guard for non-loopback hosts without a token.
+ * Listening on a non-loopback interface (e.g. 0.0.0.0) without a token
+ * exposes the API (and `--enable-writes`) to the LAN. We refuse to start
+ * in that combination and tell the operator what to do.
+ */
+function isNonLoopbackHost(host: string): boolean {
+  // Accept the literal "0.0.0.0", "::", IPv4 broadcast, and IPv6 wildcard.
+  // Anything that's NOT 127.0.0.1/::1/localhost is treated as non-loopback
+  // for fail-closed purposes.
+  if (host === "localhost") return false;
+  if (host === "127.0.0.1" || host === "::1") return false;
+  if (host === "0.0.0.0" || host === "::") return true;
+  // Conservative default: anything that isn't an obvious loopback address
+  // is treated as non-loopback. Operators who want to listen on a private
+  // IP MUST provide a token.
+  return true;
+}
+
+/**
  * Composition root for the HTTP adapter.
  * Concrete service construction is delegated to createHttpServices() via startDysflowHttpServer.
  */
@@ -31,6 +50,20 @@ export async function handleServeCommand(
   const parsed = parseServeOptions(args);
   if (!parsed.ok) {
     return { exitCode: 1, stdout: "", stderr: `${parsed.message}\n${SERVE_USAGE}` };
+  }
+
+  // #669 — fail-closed: refuse to bind a non-loopback host without a token.
+  // The token is required so that LAN-reachable instances cannot be
+  // exercised without authentication, even with `--enable-writes`.
+  if (isNonLoopbackHost(parsed.options.host) && !parsed.options.httpToken) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr:
+        `Refusing to start: host ${parsed.options.host} is non-loopback and no --token was provided.\n` +
+        `Pass --token <token> (or set DYSFLOW_SERVE_TOKEN) to authenticate callers, or bind to 127.0.0.1.\n` +
+        SERVE_USAGE,
+    };
   }
 
   try {
