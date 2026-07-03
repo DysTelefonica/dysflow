@@ -9,6 +9,7 @@ import {
 } from "../contracts/index.js";
 import { isRecord, stringValue } from "../utils/index.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
+import { isPathInside } from "../utils/path-containment.js";
 
 // ---------------------------------------------------------------------------
 // I/O Port interfaces — owned by core, implemented by adapters
@@ -106,6 +107,20 @@ export class VbaFormService {
     const fileName = `${spec.data.name}.${spec.data.kind === "Report" ? "report" : "form"}.json`;
     const outputPath = resolve(formsDir, fileName);
 
+    // #675 — refuse to write a generated form outside the resolved
+    // destinationRoot. Without this, a caller could pass
+    // spec.name="..\\..\\evil" and the resolved outputPath would escape
+    // the project. The `hasManagedFormExtension` check on the import side
+    // does NOT apply here (it only validates the suffix, not traversal).
+    if (!isPathInside(outputPath, destinationRoot)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `generateForm outputPath must be inside the resolved destinationRoot. outputPath=${outputPath}; destinationRoot=${destinationRoot}.`,
+        ),
+      );
+    }
+
     const dryRun = params.apply === true ? false : params.dryRun !== false;
     if (dryRun) {
       return successResult({
@@ -165,6 +180,21 @@ export class VbaFormService {
       stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
     const catalogPath =
       stringValue(params.catalogPath) ?? resolve(destinationRoot, "forms", "catalog.json");
+
+    // #675 — refuse to write the catalog outside the resolved
+    // destinationRoot. Without this, a caller could pass
+    // catalogPath="C:\\Windows\\System32\\evil.json" and the file write
+    // would succeed. The default destination (destinationRoot/forms/
+    // catalog.json) is always inside, so this rejects only an explicit
+    // escape attempt.
+    if (!isPathInside(catalogPath, destinationRoot)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `catalogAddControl catalogPath must be inside the resolved destinationRoot. catalogPath=${catalogPath}; destinationRoot=${destinationRoot}.`,
+        ),
+      );
+    }
 
     // DELTA-007 — dryRun/apply parity with generateForm (line 99). Default to
     // dry-run unless apply:true is explicit; dryRun:false also disables.

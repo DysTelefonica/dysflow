@@ -19,6 +19,7 @@
  * CLOSED (refuse) for any caller that points these paths at production.
  */
 
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { successResult } from "../../../src/core/contracts/index.js";
@@ -383,9 +384,20 @@ describe("Issue #574 — runtime guard for VbaFormService.generateForm", () => {
 
   it("allows generateForm when destinationRoot is outside the production runtime", async () => {
     const service = makeService(runtimeEnv);
+    // Issue #685 — destinationRoot must be platform-native so it stays
+    // consistent with generateForm's `path.resolve(destinationRoot, "forms", ...)`
+    // outputPath. A Windows-style string like "C:/projects/myapp" was passing
+    // on Windows (because the runtime and outputPath share the win32
+    // resolver) but failing on Linux CI (because the runtime resolves the
+    // segments as a POSIX-relative path, leaving the win32 branch in
+    // isPathInside to compare across mismatched separators). Using
+    // `path.resolve` makes the destinationRoot match the platform-native
+    // resolver the service uses, so the runtime-guard contract is verified
+    // independently of any incidental cross-platform path behavior.
+    const outsideRuntimeRoot = path.resolve("dysflow-rg-test", "projects", "myapp");
     const result = await service.generateForm({
       spec: { name: "Form_Normal", kind: "Form", controls: [] },
-      destinationRoot: "C:/projects/myapp",
+      destinationRoot: outsideRuntimeRoot,
       apply: true,
     });
     // The guard did NOT block. Whether the spec validation/writing succeeds is
