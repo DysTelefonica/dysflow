@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [v1.14.0] - 2026-07-03
+### get-capabilities-mcp (#656)
+- **New `dysflow_get_capabilities` MCP tool exposes a single introspectable source-of-truth
+  for the MCP write gate, per-project `allowWrites` resolution, the `allowedProcedures`
+  allowlist gate, and the implicit `dryRun:true` default.** A new IA consumer calls this
+  tool once per session and decides every subsequent call without consulting docs. The
+  adapter (`src/adapters/mcp/get-capabilities-tool.ts:195`) emits a structured JSON
+  payload keyed by gate, listing the resolved write posture, the matched
+  `allowWrites` project, the currently-allowed procedure prefixes, and the runtime's
+  default `dryRun` policy. Wired into the tool registry at
+  `src/adapters/mcp/tools.ts:21` and the dispatch contracts at
+  `src/adapters/mcp/mcp-tool-contracts.ts:9`. Three unit tests pin the contract at
+  `test/adapters/mcp/dysflow-get-capabilities-tool.test.ts:207`,
+  `test/adapters/mcp/capabilities-via-dispatch.test.ts:61`, and
+  `test/adapters/mcp/release-matrix-gate.test.ts:7`.
+
+### project-capabilities-config (#657)
+- **New `.dysflow/project.json` `capabilities` consolidated block** lets operators
+  declare per-project capability hints in a single, version-controlled location
+  (`src/core/config/dysflow-config.ts:197` — `capabilities.*` with `tools`,
+  `procedures`, `writes`, and `dryRun` sub-keys). The block is consumed by
+  `dysflow_get_capabilities` (#656) and by the MCP tool-contracts layer so a future
+  consumer never needs to re-derive project intent from docs. The node loader
+  (`src/adapters/config/dysflow-config-node.ts:27`) merges the block with sensible
+  defaults. Two unit tests pin the contract:
+  `test/adapters/config/dysflow-config-capabilities-block.test.ts:237` and
+  `test/adapters/config/dysflow-config-discovery-fallback.test.ts:267`.
+
+### allowed-procedures-discovery (#658)
+- **`allowedProcedures` discovery scans `src/` by default and emits the union of
+  declared procedure prefixes.** The discovery service
+  (`src/core/services/allowed-procedures-discovery.ts:341`) walks the project source
+  tree, harvests VBA procedure declarations, and produces a `prefix:` allowlist
+  ready to paste into `project.json`. A single-line `@dysflow: dangerous` comment
+  on any `Sub`/`Function` declaration opts that procedure OUT of the prefix list
+  (mirroring the existing `@dysflow:` annotation convention) — dangerous entry
+  points must be opted in explicitly. The MCP adapter
+  (`src/adapters/discovery/allowed-procedures-adapter.ts:88`) renders the discovery
+  result for `dysflow_get_capabilities`. Five unit tests at
+  `test/core/services/allowed-procedures-discovery.test.ts:565` pin the contract:
+  default scan, dangerous opt-out, empty project, nested modules, and
+  prefix-collision rules.
+
 ## [v1.13.1] - 2026-07-02
 ### compile-vba-exit-code (#543)
 - **`compile_vba` now exits non-zero when VBA compilation fails.** The top-level PowerShell `Compile`

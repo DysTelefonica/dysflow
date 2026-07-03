@@ -1,10 +1,12 @@
 import { basename, dirname, resolve } from "node:path";
 import {
+  createDiagnostic,
   createDysflowError,
   failureResult,
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
+import { NO_DISCOVERY } from "../services/allowed-procedures-discovery.js";
 import { isAbsolutePath, REDACTED_SECRET, stringValue } from "../utils/index.js";
 
 // ---------------------------------------------------------------------------
@@ -30,11 +32,38 @@ const ALT_ACCESS_PASSWORD_ENV = "ACCESS_VBA_PASSWORD";
 
 export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-default";
 
+/**
+ * Consolidated capabilities block for `.dysflow/project.json`.
+ *
+ * This is the new home for the write gate (`allowWrites`) and the procedure
+ * allowlist / denylist (`procedures.allow` / `procedures.deny`). The top-level
+ * `allowWrites` and `allowedProcedures` fields on `DysflowProjectConfig` are
+ * kept as DEPRECATED read-through aliases and emit a single warning when both
+ * the top-level and `capabilities` forms are present in the same file.
+ *
+ * Removal of the top-level aliases is reserved for v1.15.0
+ * (proposal §"Backward Compatibility").
+ *
+ * `procedures.deny` is exposed as a project-level advisory signal only — the
+ * runtime gate stays `procedures.allow`. The shape is preserved so a future
+ * PR can wire the denylist without breaking `.dysflow/project.json` consumers.
+ */
+export type DysflowProjectCapabilities = {
+  allowWrites?: boolean;
+  procedures?: {
+    allow?: readonly string[];
+    deny?: readonly string[];
+  };
+};
+
 export type DysflowProjectConfig = {
   id?: string;
   name?: string;
+  /** @deprecated Use `capabilities.allowWrites`. Kept as a read-through alias until v1.15.0. */
   allowWrites?: boolean;
+  /** @deprecated Use `capabilities.procedures.allow`. Kept as a read-through alias until v1.15.0. */
   allowedProcedures?: string[];
+  capabilities?: DysflowProjectCapabilities;
   accessPath?: string;
   backendPath?: string;
   destinationRoot?: string;
@@ -93,6 +122,14 @@ export type DysflowConfigInput = {
   env?: Record<string, string | undefined>;
   httpToken?: string;
   httpTokenEnv?: string;
+  /**
+   * PR-3 (#658): caller-supplied procedure discovery function. The composition
+   * root injects `nodeDiscoverFromSrcRoot` here so `src/core/` stays
+   * adapter-free (no `node:fs`). The default `NO_DISCOVERY` returns `[]`
+   * and the field stays `undefined` — explicit values in the `capabilities`
+   * block always win over discovery.
+   */
+  discoverFromSrcRoot?: (srcRoot: string) => readonly string[];
 };
 
 export function loadDysflowConfigShared<
@@ -321,24 +358,52 @@ function buildProjectConfig(
     ),
   );
 
-  return successResult({
-    configSource,
-    allowWrites: raw.allowWrites === true,
-    allowedProcedures: Array.isArray(raw.allowedProcedures) ? raw.allowedProcedures : undefined,
-    accessDbPath,
-    backendPath,
-    destinationRoot,
-    projectRoot,
-    projectId: projectIdOverride ?? stringValue(raw.id),
-    timeoutMs,
-    accessPassword,
-    backendPassword,
-    accessPasswordEnv,
-    backendPasswordEnv,
-    configPath: resolvedPath,
-    httpToken,
-    httpTokenEnv,
-  });
+  // Resolve the consolidated `capabilities` block (#657, #655). The top-level
+  // `allowWrites` and `allowedProcedures` fields are kept as DEPRECATED
+  // read-through aliases until v1.15.0. When BOTH the top-level fields and
+  // the `capabilities` block are present, `capabilities` wins and a single
+  // warning is surfaced so the user is not pummeled.
+  //
+  // The result is composed with `resolveAllowedProceduresFallback` (PR-3 / #658)
+  // (defined next to this function): when both `allowedProcedures` and the
+  // `capabilities.procedures.allow` block are absent, dysflow offers a
+  // discovered prefix list unless the caller passed `discoverFromSrcRoot: false`.
+  // Explicit values always win over discovery.
+  //-------------------------------------------------------------------
+  const {
+    allowWrites,
+    allowedProcedures: capabilitiesAllowedProcedures,
+    deprecationWarning,
+  } = resolveCapabilities(raw);
+  const discoveryResult =
+    capabilitiesAllowedProcedures === undefined
+      ? (input.discoverFromSrcRoot ?? NO_DISCOVERY)(destinationRoot)
+      : [];
+
+  return successResult(
+    {
+      configSource,
+      allowWrites,
+      allowedProcedures: resolveAllowedProceduresFallback(
+        capabilitiesAllowedProcedures,
+        discoveryResult,
+      ),
+      accessDbPath,
+      backendPath,
+      destinationRoot,
+      projectRoot,
+      projectId: projectIdOverride ?? stringValue(raw.id),
+      timeoutMs,
+      accessPassword,
+      backendPassword,
+      accessPasswordEnv,
+      backendPasswordEnv,
+      configPath: resolvedPath,
+      httpToken,
+      httpTokenEnv,
+    },
+    deprecationWarning === undefined ? {} : { diagnostics: [deprecationWarning] },
+  );
 }
 
 function loadProjectConfigFromPath(
@@ -559,6 +624,27 @@ function resolveTimeout(explicitTimeoutMs: number | undefined): number {
   return DEFAULT_TIMEOUT_MS;
 }
 
+/**
+ * Resolve the final `allowedProcedures` allowlist for the project (#658).
+ *
+ * Precedence (PR-3 / #658):
+ *   - Explicit (`capabilities.procedures.allow` first, then top-level
+ *     `allowedProcedures`) always beats discovery.
+ *   - When the explicit slot is `undefined` AND discovery returned a
+ *     non-empty prefix list, the discovered list is offered (sorted
+ *     alphabetically to match the discovery contract).
+ *   - When both are empty/missing, the result stays `undefined` (mirrors
+ *     the pre-discovery contract for "nothing to seed").
+ */
+function resolveAllowedProceduresFallback(
+  explicit: readonly string[] | undefined,
+  discovered: readonly string[],
+): readonly string[] | undefined {
+  if (explicit !== undefined) return explicit;
+  if (discovered.length > 0) return [...discovered].sort((a, b) => a.localeCompare(b));
+  return undefined;
+}
+
 function resolvePassword(
   explicitPassword: string | undefined,
   envPassword: string | undefined,
@@ -584,6 +670,81 @@ function resolveHttpTokenEnv(config: DysflowProjectConfig): string | undefined {
 
 function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
   return values.find((value) => value !== undefined);
+}
+
+/**
+ * Resolve the consolidated `capabilities` block (#657) with read-through
+ * fallback to the deprecated top-level `allowWrites` / `allowedProcedures`
+ * fields.
+ *
+ * Precedence (#657):
+ *
+ *   1. If `capabilities` carries any setting (allowWrites OR procedures), it
+ *      is the source of truth. `capabilities.allowWrites` resolves
+ *      `allowWrites`. The procedure allowlist is `capabilities.procedures.allow`
+ *      when defined (including the empty-array default-deny signal); when
+ *      absent, it falls through to the deprecated `allowedProcedures` slot.
+ *   2. If `capabilities` is absent, the deprecated top-level fields are used
+ *      verbatim (no warning — they are the only thing the user has set).
+ *   3. If BOTH `capabilities` AND at least one deprecated top-level field are
+ *      present, `capabilities` wins and a SINGLE deprecation warning is
+ *      surfaced so the consumer can find the duplicate. The user is not
+ *      pummeled with one warning per field.
+ *
+ * `procedures.deny` is advisory only and is NOT projected into
+ * `DysflowConfig.allowedProcedures` — the runtime gate stays `allow`. The
+ * shape is preserved so a future PR can wire the denylist without breaking
+ * `.dysflow/project.json` consumers.
+ */
+function resolveCapabilities(raw: DysflowProjectConfig): {
+  allowWrites: boolean;
+  allowedProcedures: readonly string[] | undefined;
+  deprecationWarning?: ReturnType<typeof createDiagnostic>;
+} {
+  const capabilities = raw.capabilities;
+  const hasCapabilitiesBlock = capabilities !== undefined && typeof capabilities === "object";
+  const hasTopLevelAllowWrites = typeof raw.allowWrites === "boolean";
+  const hasTopLevelAllowedProcedures = Array.isArray(raw.allowedProcedures);
+
+  const capabilitiesHasAny =
+    hasCapabilitiesBlock &&
+    (capabilities?.allowWrites !== undefined || capabilities?.procedures !== undefined);
+
+  if (capabilitiesHasAny) {
+    const capabilitiesAllowWrites = capabilities.allowWrites;
+    const capabilitiesAllow =
+      capabilities.procedures?.allow !== undefined
+        ? capabilities.procedures.allow
+        : hasTopLevelAllowedProcedures
+          ? raw.allowedProcedures
+          : undefined;
+
+    // A conflict requires BOTH the capabilities block AND at least one of the
+    // deprecated top-level fields. If `capabilities.procedures.allow` was
+    // unset and we fell through to `allowedProcedures`, that is NOT a
+    // conflict — it is a partial migration path.
+    const topLevelConflict =
+      hasTopLevelAllowWrites ||
+      (hasTopLevelAllowedProcedures && capabilities.procedures?.allow !== undefined);
+
+    return {
+      allowWrites: capabilitiesAllowWrites === true,
+      allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
+      deprecationWarning: topLevelConflict
+        ? createDiagnostic(
+            "warning",
+            "project-config",
+            ".dysflow/project.json sets both the `capabilities` block and the deprecated top-level `allowWrites` / `allowedProcedures` fields. The `capabilities` block wins; the top-level aliases will be removed in v1.15.0.",
+          )
+        : undefined,
+    };
+  }
+
+  // No capabilities block — pure backward compatibility path.
+  return {
+    allowWrites: hasTopLevelAllowWrites && raw.allowWrites === true,
+    allowedProcedures: hasTopLevelAllowedProcedures ? raw.allowedProcedures : undefined,
+  };
 }
 
 /**

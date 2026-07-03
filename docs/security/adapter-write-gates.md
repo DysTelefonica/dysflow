@@ -36,6 +36,60 @@ default — a repo can still be scoped to read-only with `"allowWrites": false` 
 while the MCP process default is enabled. See `resolveMcpWriteAccessForInput` in
 `dispatch-common.ts` for the unchanged precedence order.
 
+## Per-repo write-gate config — `capabilities` block (v1.14.0+)
+
+The `capabilities` block in `.dysflow/project.json` is the **canonical home** for
+the per-repo write gate (`allowWrites`) and the procedure allowlist/denylist
+(`procedures.allow` / `procedures.deny`). It supersedes the top-level
+`allowWrites` and `allowedProcedures` fields, which are kept as **deprecated
+read-through aliases** until v1.15.0. Reference implementation: the
+`DysflowProjectCapabilities` type and the `resolveCapabilities` helper,
+both in the dysflow-config module.
+
+### Canonical form
+
+```json
+{
+  "id": "project-abc",
+  "accessPath": "src/ProjectABC.accdb",
+  "capabilities": {
+    "allowWrites": false,
+    "procedures": {
+      "allow": ["Refresh", "ExportReport", "RunMigration"]
+    }
+  }
+}
+```
+
+### Precedence table
+
+When BOTH the top-level aliases and the `capabilities` block are present in the
+same `.dysflow/project.json`, the `capabilities` block wins and a **single**
+deprecation warning is surfaced on `successResult.diagnostics` (source =
+`project-config`, level = `warning`). The user is not pummeled with one warning
+per field.
+
+| Top-level fields present? | `capabilities` block present? | Effective `allowWrites` | Effective `allowedProcedures` | Warnings |
+|---------------------------|-------------------------------|-------------------------|------------------------------|----------|
+| no                        | no                            | `false` (default)       | `undefined`                  | none     |
+| yes                       | no                            | top-level               | top-level                    | none     |
+| no                        | yes                           | `capabilities.allowWrites` | `capabilities.procedures.allow` | none |
+| yes                       | yes                           | `capabilities.allowWrites` | `capabilities.procedures.allow` | 1      |
+
+`procedures.deny` is a **project-level advisory signal** reserved for a future
+wire. The runtime gate stays `procedures.allow` only — `deny` is preserved in
+the schema so a future PR can wire it without breaking `.dysflow/project.json`
+consumers. See the `dysflow-config-capabilities-block.test.ts` suite for
+the locked precedence contract.
+
+### Migration plan
+
+- **v1.14.0** (this PR, #657): add `capabilities` block; top-level aliases stay
+  as deprecated read-through; single warning on conflict.
+- **v1.15.0**: remove the top-level `allowWrites` / `allowedProcedures` fields
+  from `DysflowProjectConfig`. `resolveCapabilities` and the deprecation
+  warning go with them.
+
 ## What each adapter gates
 
 | Operation | HTTP | MCP | Why |

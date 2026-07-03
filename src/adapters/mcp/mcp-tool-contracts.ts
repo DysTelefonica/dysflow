@@ -148,6 +148,15 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     summary:
       "Conditional-write MCP contract; orphan cleanup is read-only when listing and write-gated when confirmPid can kill a process.",
   },
+  // PR-1 (issue #656) — `dysflow_get_capabilities` is the read-only gate
+  // introspection surface (#655 umbrella). It aggregates the static contract
+  // metadata with the live process- and project-level state. It never opens
+  // Access, never spawns PowerShell, and is never write-gated.
+  dysflow_get_capabilities: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {

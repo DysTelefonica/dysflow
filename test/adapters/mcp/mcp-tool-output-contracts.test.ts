@@ -17,6 +17,9 @@ const OUTPUT_CONTRACT_GROUPS = {
     "dysflow_access_operations_list",
     "dysflow_access_cleanup",
     "dysflow_access_force_cleanup_orphaned",
+    // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
+    // tool. It aggregates capability metadata; it never touches Access.
+    "dysflow_get_capabilities",
   ],
   modernServiceAliases: ["run_vba"],
   vbaManagerDysflowResult: [

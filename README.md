@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**60 visible MCP tools · Windows / Node 20+**
+**61 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 60 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 61 visible MCP tools covering VBA, SQL, schema, and form operations.
 
 ### It is not
 
@@ -444,6 +444,34 @@ Runtime directory resolution order:
 
 HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
+#### `capabilities` consolidated block (preferred — v1.14.0+)
+
+The `capabilities` block is the **canonical home** for the write gate and the procedure allowlist/denylist. The top-level `allowWrites` and `allowedProcedures` fields above are kept as **deprecated read-through aliases** and emit a single warning when both forms are present in the same file. Removal of the aliases is scheduled for **v1.15.0**.
+
+```json
+{
+  "id": "project-abc",
+  "accessPath": "src/ProjectABC.accdb",
+  "capabilities": {
+    "allowWrites": false,
+    "procedures": {
+      "allow": ["Refresh", "ExportReport", "RunMigration"]
+    }
+  }
+}
+```
+
+The four-case precedence (`top-level × capabilities`):
+
+| Top-level fields | `capabilities` block | Effective `allowWrites` | Effective `allowedProcedures` | Warning |
+|------------------|-----------------------|-------------------------|------------------------------|---------|
+| none             | none                  | `false` (default)       | `undefined`                  | none    |
+| present          | absent                | top-level               | top-level                    | none    |
+| absent           | present               | `capabilities`          | `capabilities.procedures.allow` | none |
+| present          | present               | `capabilities`          | `capabilities.procedures.allow` | 1     |
+
+`procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only. See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
+
 Bootstrap a repo-local config explicitly:
 
 ```powershell
@@ -554,6 +582,10 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
+
+#### `dysflow_get_capabilities`
+Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. The snapshot surfaces the running adapter version, MCP surface, process- and project-level write flags, projectId resolution outcome, the `allowedProcedures` allowlist, the global `dryRun` default, the count of tools visible in `tools/list`, and the list of write-class tools currently permitted.
+* **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
 
 ---
 
