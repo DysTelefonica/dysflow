@@ -73,7 +73,11 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   const processObj = ctx.processObj ?? process;
   const DateNow = ctx.DateNow ?? Date.now;
   const normalize =
-    ctx.normalize ?? ((text) => String(text ?? "").replace(/\s+/g, " ").slice(0, 260));
+    ctx.normalize ??
+    ((text) =>
+      String(text ?? "")
+        .replace(/\s+/g, " ")
+        .slice(0, 260));
 
   // Stop-on-fail gate: refuse to start a new tool if a suite-owned
   // MSACCESS.EXE child survived the previous step. A leftover zombie
@@ -234,10 +238,7 @@ export function walkDescendantsPids(rootPid) {
  *   point so tests can replace the wmic-backed walk with a fake.
  * @returns {boolean}
  */
-export function isPidOrDescendantAlive(
-  pid,
-  walkDescendantsFn = walkDescendantsPids,
-) {
+export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsPids) {
   if (!pid || pid <= 0) return false;
   try {
     process.kill(pid, 0);

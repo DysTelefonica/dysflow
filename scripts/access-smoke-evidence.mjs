@@ -54,7 +54,11 @@ function summarizeAccessDependentTests(report) {
     if (!isAccessDependentSuite(result?.name)) continue;
     hasAccessSuites = true;
     for (const assertion of result?.assertionResults ?? []) {
-      if (assertion?.status === "pending" || assertion?.status === "skipped" || assertion?.status === "todo") {
+      if (
+        assertion?.status === "pending" ||
+        assertion?.status === "skipped" ||
+        assertion?.status === "todo"
+      ) {
         skipped += 1;
       } else {
         executed += 1;
@@ -81,7 +85,8 @@ async function main(argv) {
   const summary = summarizeAccessSmokeEvidence(JSON.parse(raw), {
     releaseMode: process.env.DYSFLOW_ACCESS_SMOKE_RELEASE === "1",
   });
-  const annotation = summary.exitCode !== 0 ? "error" : summary.status.includes("skipped") ? "warning" : "notice";
+  const annotation =
+    summary.exitCode !== 0 ? "error" : summary.status.includes("skipped") ? "warning" : "notice";
   console.log(`::${annotation} title=Windows Access smoke evidence::${summary.message}`);
   console.log(summary.message);
   return summary.exitCode;

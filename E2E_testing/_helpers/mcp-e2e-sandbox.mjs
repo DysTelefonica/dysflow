@@ -9,9 +9,9 @@ function isSameOrInside(candidate, parent) {
 }
 
 function productionRuntimeRoots() {
-  return [
-    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "dysflow") : undefined,
-  ].filter(Boolean).map((path) => resolve(path));
+  return [process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "dysflow") : undefined]
+    .filter(Boolean)
+    .map((path) => resolve(path));
 }
 
 function looksLikeProductionRuntime(candidate) {

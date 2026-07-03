@@ -9,11 +9,15 @@
     "includes": [
       "src/**",
       "test/**",
+      "scripts/**/*.mjs",
+      "E2E_testing/_helpers/**/*.mjs",
       "!!**/dist",
       "!!**/coverage",
       "!!**/node_modules",
       "!!**/scratch",
-      "!!**/E2E_testing"
+      "!!E2E_testing/.dysflow/**",
+      "!!E2E_testing/.mcp.json",
+      "!!E2E_testing/forms/*.form.json"
     ]
   },
   "formatter": {
@@ -51,5 +55,27 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["E2E_testing/_helpers/mcp-harness.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useTemplate": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["scripts/access-smoke-evidence.mjs"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
 }

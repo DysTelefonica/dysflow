@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readdir, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const DEFAULT_TARGETS = ["src"];
@@ -38,10 +38,7 @@ function isObjectPrototypeHasOwnPropertyCall(callExpression, sourceFile) {
 
 function hasOwnPropertyReceiver(callExpression) {
   const expression = callExpression.expression;
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === "hasOwnProperty"
-  ) {
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === "hasOwnProperty") {
     return expression.expression;
   }
   return undefined;
@@ -100,10 +97,7 @@ export function findOptionalPresenceGuardViolations(filePath, sourceText) {
       }
 
       const hasOwnPropertySubject = hasOwnPropertyReceiver(node);
-      if (
-        hasOwnPropertySubject !== undefined &&
-        isRelevantPresenceSubject(hasOwnPropertySubject)
-      ) {
+      if (hasOwnPropertySubject !== undefined && isRelevantPresenceSubject(hasOwnPropertySubject)) {
         report(node, hasOwnPropertySubject, "hasOwnProperty");
       }
     }
@@ -167,6 +161,9 @@ async function main() {
   process.exitCode = 1;
 }
 
-if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+) {
   await main();
 }

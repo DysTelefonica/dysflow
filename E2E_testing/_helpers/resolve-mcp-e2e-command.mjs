@@ -29,8 +29,7 @@ export function isProductionRuntimePath(candidatePath) {
   // %LOCALAPPDATA% resolves to <USERPROFILE>/AppData/Local on Windows, and
   // the production install places its bin under that AppData/Local/dysflow.
   return (
-    normalized.includes("/appdata/local/dysflow/") ||
-    normalized.includes("/localappdata/dysflow/")
+    normalized.includes("/appdata/local/dysflow/") || normalized.includes("/localappdata/dysflow/")
   );
 }
 
