@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -11,12 +10,6 @@ const GUARD_YML = ".github/workflows/release-title-guard.yml";
 
 function readText(path: string): string {
   return readFileSync(path, "utf8");
-}
-
-/** Detect whether the `bash` binary is reachable on the current PATH. */
-function bashAvailable(): boolean {
-  const probe = spawnSync("bash", ["-c", "echo ok"], { stdio: "ignore" });
-  return probe.status === 0;
 }
 
 /**
