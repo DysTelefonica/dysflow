@@ -9,6 +9,10 @@ import {
   isPidOrDescendantAlive,
   record as recordImpl,
 } from "./_helpers/mcp-e2e-record.mjs";
+import {
+  EXPECTED_ADVERTISED_TOOL_COUNT,
+  EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
+} from "./_helpers/advertised-tool-count.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -154,8 +158,9 @@ async function runBattery() {
 const list = await record("protocol", "tools/list");
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
-// test/adapters/mcp/advertised-tool-count.test.ts — update both together.
-rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 61, expected: "61 tools", ms: 0, summary: `advertised=${advertised.length}` });
+// test/adapters/mcp/advertised-tool-count.test.ts — both import the same constant
+// from _helpers/advertised-tool-count.mjs, so a future add/remove flips one place.
+rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
 
 await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
 await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
