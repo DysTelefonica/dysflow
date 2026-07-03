@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [v1.14.1] - 2026-07-03
+### e2e-harness-sync (#665)
+- **Release-gate fix — `E2E_testing/mcp-e2e.mjs` advertised count bumped `54 → 61`.**
+  The harness hardcoded `advertised.length === 54` while
+  `test/adapters/mcp/advertised-tool-count.test.ts:25` already pinned **61** (the count
+  after the gate-introspection epic added `dysflow_get_capabilities` in PR #661). Every
+  pre-release E2E run flipped the protocol preflight red and aborted the battery on
+  STOP-ON-FAIL — the release gate was broken since v1.14.0. The two are pinned together
+  by an explicit comment in the harness (`update both together`); this commit realigns
+  them so the gate runs green.
+- **`dysflow_get_capabilities` E2E coverage added** (epic #655, PR #661). New
+  `capabilities` area row exercises the tool through the suite-owned PID wrapper
+  (`record()`, with preflight + post-tool `:zombie-check`). A second row,
+  `dysflow_get_capabilities:toolsVisible-matches-advertised`, cross-checks the
+  snapshot's `toolsVisible` against the live registry — drift between the unit pin
+  and the live MCP server now surfaces immediately in the report instead of failing
+  silently.
+- **`E2E_testing/README.md` rewritten** with the testing strategy (`pnpm test` →
+  `pnpm test:integration -t <pattern>` → targeted JSON-RPC smoke → full battery only
+  at release), the `record()` invariant, the launcher sync path (`bin/dist/`, NOT
+  `app/dist/`), and the maintenance rule that keeps the harness in sync with new
+  feature/bug work in the same PR.
+
 ## [v1.14.0] - 2026-07-03
 ### get-capabilities-mcp (#656)
 - **New `dysflow_get_capabilities` MCP tool exposes a single introspectable source-of-truth
