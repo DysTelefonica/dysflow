@@ -4221,13 +4221,24 @@ try {
 
     } elseif ($Action -eq "Compile") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        # Capture (do NOT let the returned object leak onto stdout and pollute the
-        # DYSFLOW_RESULT channel). The structured result is already emitted by
-        # Invoke-CompileAction; a compile failure must surface as a non-zero exit
-        # so the TS adapter takes its structured-failure path (issue #543). exit
-        # runs the finally block below, which closes the Access session.
-        $compileActionResult = Invoke-CompileAction -Session $session -Json:$Json
-        if ($compileActionResult -and -not $compileActionResult.ok) { exit 1 }
+        # Invoke CompileVbaProject directly so we get the result object (Invoke-CompileAction
+        # returns nothing when -Json, so the old $compileActionResult check was always false).
+        # A compile failure must exit non-zero so the TS adapter takes the structured-failure
+        # path (issue #543); exit runs the finally block below, which closes the session.
+        $compileResult = Invoke-CompileVbaProject -AccessApplication $session.AccessApplication
+        if ($Json) {
+            Write-DysflowResult -Result $compileResult -Depth 6
+        } else {
+            if ($compileResult.ok) {
+                Write-Status -Message "OK compilación VBA completada" -Color Green
+            } else {
+                Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error.message) -Color Red
+                if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
+                if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
+                if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
+            }
+        }
+        if (-not $compileResult.ok) { exit 1 }
 
     } elseif ($Action -eq "Generate-ERD") {
         Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json

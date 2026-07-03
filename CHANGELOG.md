@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ## [v1.13.1] - 2026-07-02
+### compile-vba-exit-code (#543)
+- **`compile_vba` now exits non-zero when VBA compilation fails.** The top-level PowerShell `Compile`
+  action previously called `Invoke-CompileAction -Json`, which emits the structured `DYSFLOW_RESULT`
+  sentinel but returns `$null`; the subsequent `$compileActionResult` check therefore never detected a
+  failed compile and the process exited `0`. The TypeScript adapter could then receive a structured
+  `VBA_COMPILE_ERROR` payload as a non-error MCP result. The handler now calls
+  `Invoke-CompileVbaProject` directly, writes the same structured payload, and exits `1` when
+  `ok = false`, so failed compilations travel through the adapter's structured-error path.
+
 ### runtime-guard-exportpath (#644)
 - **Fix runtime-guard regression on `export_modules` / `export_all` (#644).** The F1 destinationRoot guard (#619, `src/adapters/vba-sync/vba-modules-adapter.ts:223-241`) fired against the orchestrator's resolved `destinationRoot` even when the user had explicitly supplied a safe `exportPath`. When the user passes `exportPath`, the runner writes to that path (the guard above already validated the user's intent) — the orchestrator's resolution is irrelevant for the safety check. The fix narrows the F1 guard to fire ONLY when the user did NOT provide an `exportPath` (`exportPath === undefined && isWithinRuntime(target.data.destinationRoot, env)`). The no-exportPath safety net (#619 F1) is preserved for callers who rely on the orchestrator's project-config resolution. Three new unit tests in `test/adapters/vba-sync/runtime-guard-filesystem-writes.test.ts` and `test/adapters/mcp/runtime-guard-dispatch-exportpath.test.ts` pin the contract at the unit layer (mirror the E2E test at `test/e2e/runtime-guard-mcp-integration.e2e.test.ts:309-331`, which now passes); both fail RED against the pre-fix code and pass GREEN after the conditional. The MCP-dispatch-path test goes through `createDispatchTool` → `validateInput` → `services.vbaSyncToolService.execute` → `VbaModulesAdapter.execute`, so future regressions in the schema validator, the dispatch handler, or the orchestrator wiring surface at the cheap unit layer instead of waiting for the expensive E2E.
 
