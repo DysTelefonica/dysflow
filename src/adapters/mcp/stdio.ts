@@ -101,7 +101,16 @@ export async function startMcpStdioAdapter(
     writesEnabled,
     async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
     process.env,
-    startupConfig?.allowedProcedures,
+    // #674 — per-input allowedProcedures resolution. The MCP gate (see
+    // canonical-handlers.ts:ensureProcedureAllowed) now sees the allowlist
+    // of the project the input targets, not the startup one. Without this,
+    // a caller could pass the gate with project A's allowlist and execute
+    // against project B's binary.
+    async (input) => {
+      const configResult = await resolveConfigForInput(input);
+      if (!configResult.ok) return undefined;
+      return configResult.data.allowedProcedures;
+    },
     async (input) => resolveMcpAccessContextForInput(input, startupConfig),
   );
 

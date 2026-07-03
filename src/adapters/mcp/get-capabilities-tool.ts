@@ -171,14 +171,20 @@ function readAdapterVersion(): string {
 export function createGetCapabilitiesTool(opts: {
   writesEnabled: boolean;
   writeAccessResolver: McpWriteAccessResolver | undefined;
-  allowedProcedures: readonly string[] | undefined;
+  // #674 — accept the resolver form too so the per-input snapshot is
+  // honest. The snapshot tool reads allowedProcedures for the introspection
+  // surface, so a frozen start-up array would mis-report cross-project.
+  allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined;
   projectId: string | undefined;
   allowWrites: boolean;
 }): DysflowMcpTool {
   const snapshot = getCapabilitiesAll({
     writesEnabled: opts.writesEnabled,
     writeAccessResolver: opts.writeAccessResolver,
-    allowedProcedures: opts.allowedProcedures,
+    // Pass through the resolver/array as-is. The snapshot tool does not
+    // take an input, so it surfaces the STARTUP value of the gate; per-input
+    // semantics apply only on the call path (dysflow_vba_execute / test_vba).
+    allowedProcedures: Array.isArray(opts.allowedProcedures) ? opts.allowedProcedures : undefined,
     projectId: opts.projectId,
     allowWrites: opts.allowWrites,
   });
