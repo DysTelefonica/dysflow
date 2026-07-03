@@ -155,7 +155,7 @@ const list = await record("protocol", "tools/list");
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
 // test/adapters/mcp/advertised-tool-count.test.ts — update both together.
-rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 54, expected: "54 tools", ms: 0, summary: `advertised=${advertised.length}` });
+rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === 61, expected: "61 tools", ms: 0, summary: `advertised=${advertised.length}` });
 
 await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
 await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
@@ -163,6 +163,35 @@ await record("vba", "dysflow_vba_execute", { projectId, procedureName: "DysflowM
 await record("operations", "dysflow_access_operations_list", {});
 await record("operations", "dysflow_access_cleanup", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "dysflow_access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
+// dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
+// Same harness shape as every other tool — record() runs the call through the suite-owned
+// child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
+// is a separate row below (so each assertion stands on its own and the report stays scannable).
+await record("capabilities", "dysflow_get_capabilities", { projectId });
+{
+  // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
+  // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
+  const crossStart = Date.now();
+  const cross = await callMcp("tools/call", { name: "dysflow_get_capabilities", arguments: { projectId } });
+  const crossMs = Date.now() - crossStart;
+  const crossRow = (() => {
+    if (cross.timedOut) return { pass: false, summary: "timeout" };
+    if (cross.isError) return { pass: false, summary: normalize(cross.text || cross.stderr || "") };
+    let parsed;
+    try { parsed = JSON.parse(cross.text); } catch { return { pass: false, summary: "non-JSON response" }; }
+    const snapshot = parsed?.snapshot ?? parsed;
+    if (!snapshot || typeof snapshot.toolsVisible !== "number") return { pass: false, summary: "missing snapshot.toolsVisible" };
+    const matches = snapshot.toolsVisible === advertised.length;
+    return {
+      pass: matches,
+      summary: matches
+        ? `toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length} writesProject.allowWrites=${snapshot.writesProject?.allowWrites}`
+        : `drift: snapshot.toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length}`,
+    };
+  })();
+  rows.push({ area: "capabilities", tool: "dysflow_get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
+  console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tdysflow_get_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
+}
 
 await record("query", "query_sql", { projectId, ...backendTarget, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades" });
 await record("security", "query_sql", { projectId, sql: "DROP TABLE TbConfiguracion" }, { expected: "error" });
