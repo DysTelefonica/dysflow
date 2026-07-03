@@ -1369,31 +1369,79 @@ describe("VbaExecutionAdapter", () => {
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("PR1b — compile_vba is NOT subject to the test_vba gate (only execution is gated)", async () => {
-    // PR1b scope: the gate is on EXECUTING test plans. `compile_vba` only
-    // compiles the VBA project — it does not run any procedure — so the gate
-    // does not apply to it. This pins the boundary so a future refactor does
-    // not silently widen the gate to cover `compile_vba`.
+  it("#667 — compile_vba does NOT run when plan resolution fails (no manifest)", async () => {
+    // #667 reversed the ordering: plan resolution runs first, then the gate,
+    // then compile_vba. With no manifest, plan resolution fails with
+    // VBA_INVALID_TEST_PLAN and compile_vba is NEVER invoked — the binary
+    // write is correctly gated by the existence of a valid plan.
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool: vi.fn().mockResolvedValue(successResult({ ok: true })),
       cwd: "C:/repo",
     };
-    // No allowlist, no dryRun — the gate would normally refuse test execution.
     const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
 
-    // Compile-only path with no plan: compile_vba still runs; the result is
-    // VBA_INVALID_TEST_PLAN (existing behavior, NOT a gate error).
     const result = await adapter.execute("test_vba", { compile: true });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected VBA_INVALID_TEST_PLAN, not success");
     expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
-    expect(result.error.code).not.toBe("MCP_INPUT_INVALID");
-    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(1);
-    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("#667 — compile_vba runs AFTER the gate when a valid plan + non-empty allowlist is provided", async () => {
+    // The new ordering: resolve plan → gate → compile → run. When the plan
+    // resolves cleanly AND the gate passes, compile_vba IS invoked.
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValueOnce(successResult({ ok: true })) // compile_vba
+        .mockResolvedValueOnce(successResult([{ ok: true, procedure: "Test_Allowed" }])), // test_vba
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+
+    const result = await adapter.execute("test_vba", {
+      compile: true,
+      procedureName: "Test_Allowed",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(2);
+    expect(orchestrator.executeMappedTool).toHaveBeenNthCalledWith(
+      1,
       "compile_vba",
       expect.objectContaining({ compile: true }),
       expect.any(Object),
     );
+    expect(orchestrator.executeMappedTool).toHaveBeenNthCalledWith(
+      2,
+      "test_vba",
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it("#667 — compile_vba does NOT run when the gate refuses (plan has procedure not in allowlist)", async () => {
+    // The new ordering means: if the gate refuses (PROCEDURE_NOT_ALLOWED),
+    // compile_vba is never invoked even though the caller asked for it. This
+    // is the security fix — the prior ordering wrote the binary first.
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn().mockResolvedValue(successResult({ ok: true })),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+
+    const result = await adapter.execute("test_vba", {
+      compile: true,
+      procedureName: "Test_NotInList",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected refusal, not success");
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
+    // compile_vba was NEVER invoked — the binary write is correctly skipped.
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 });
