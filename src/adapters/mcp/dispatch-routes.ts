@@ -35,8 +35,8 @@ export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolNam
 
 export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = {
   // VBA sync — mutatesBinary:true tools always pass the write-gate (they mutate the .accdb).
-  export_modules: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  export_all: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  export_modules: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
+  export_all: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
   import_modules: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   import_all: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   list_objects: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
@@ -49,8 +49,8 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   // See src/core/services/vba-source-comparison.ts (compareSourceAgainstBinary).
   verify_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   delete_module: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
-  generate_erd: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  fix_encoding: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  generate_erd: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
+  fix_encoding: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   validate_form_spec: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   generate_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
   catalog_add_control: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },

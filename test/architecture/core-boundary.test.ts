@@ -93,29 +93,40 @@ describe("MCP/core architecture boundary", () => {
 
   it("keeps VBA sync dispatch behind the injected VBA sync service", async () => {
     const vbaSyncRequests: unknown[] = [];
-    const tools = createDysflowMcpTools({
-      vbaService: { execute: async () => successResult({ returnValue: "unused" }) },
-      queryService: { execute: async () => successResult({ rows: [] }) },
-      diagnosticsService: { run: async () => successResult({ checks: [] }) },
-      vbaSyncToolService: {
-        execute: async (toolName, input) => {
-          vbaSyncRequests.push({ toolName, input });
-          return failureResult({
-            code: "TOOL_NOT_IMPLEMENTED",
-            message: "not implemented",
-            retryable: false,
-          });
+    // writesEnabled=true so the filesystem-write gate does not intercept
+    // before the call reaches the vbaSyncToolService stub. The mutates* audit
+    // (#665) flipped export_all from mutatesFilesystem:false to
+    // mutatesFilesystem:true, so the gate now fires by default.
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: { execute: async () => successResult({ returnValue: "unused" }) },
+        queryService: { execute: async () => successResult({ rows: [] }) },
+        diagnosticsService: { run: async () => successResult({ checks: [] }) },
+        vbaSyncToolService: {
+          execute: async (toolName, input) => {
+            vbaSyncRequests.push({ toolName, input });
+            return failureResult({
+              code: "TOOL_NOT_IMPLEMENTED",
+              message: "not implemented",
+              retryable: false,
+            });
+          },
         },
       },
-    });
+      true,
+    );
 
-    await expect(tools.find((tool) => tool.name === "export_all")?.handler({})).resolves.toEqual({
+    await expect(
+      tools.find((tool) => tool.name === "export_all")?.handler({ projectRoot: "C:/project" }),
+    ).resolves.toEqual({
       content: [{ type: "text", text: "TOOL_NOT_IMPLEMENTED: not implemented" }],
       isError: true,
       ok: false,
     });
 
-    expect(vbaSyncRequests).toEqual([{ toolName: "export_all", input: {} }]);
+    expect(vbaSyncRequests).toEqual([
+      { toolName: "export_all", input: { projectRoot: "C:/project" } },
+    ]);
   });
 });
 
