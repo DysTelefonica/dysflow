@@ -128,11 +128,17 @@ describe("Dysflow MCP tool parity inventory", () => {
   });
 
   it("returns explicit service-unavailable errors for VBA sync tools when the product service is not configured", async () => {
-    const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(),
-      queryService: new FakeQueryService(),
-      diagnosticsService: new FakeDiagnosticsService(),
-    });
+    // #665 — export_modules is now correctly declared as a filesystem-write
+    // tool. To test the SERVICE_UNAVAILABLE path (downstream of the gate),
+    // enable writes so the gate does not intercept.
+    const tools = createDysflowMcpTools(
+      {
+        vbaService: new FakeVbaService(),
+        queryService: new FakeQueryService(),
+        diagnosticsService: new FakeDiagnosticsService(),
+      },
+      true, // writesEnabled — bypass the write-gate to reach the service check
+    );
     const exportModules = tools.find((tool) => tool.name === "export_modules");
 
     await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({

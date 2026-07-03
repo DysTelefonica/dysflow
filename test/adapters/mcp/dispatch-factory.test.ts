@@ -122,10 +122,13 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
       .sort();
     // Mirrors dispatch-write-gate.test.ts so a future route-table drift
     // surfaces both here and in the live integration test.
+    // #665 — fix_encoding was previously misdeclared mutatesBinary:false but
+    // the PowerShell Fix-Encoding action rewrites modules inside the .accdb.
     expect(binaryWriters).toEqual(
       [
         "compile_vba",
         "delete_module",
+        "fix_encoding",
         "import_all",
         "import_modules",
         "dysflow_create_form_from_template",

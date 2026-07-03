@@ -52,6 +52,11 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
       .filter(([, route]) => route.kind === "vba-sync" && route.mutatesFilesystem)
       .map(([name]) => name);
 
+    // #665 — export_modules, export_all, generate_erd, and fix_encoding were
+    // declared mutatesFilesystem:false but actually mutate the filesystem
+    // (write .bas files / write ERD HTML / rewrite module encoding). The
+    // declarations are now corrected so read-only MCP sessions cannot run
+    // them under the write-gate.
     expect([...filesystemWriters].sort()).toEqual(
       [
         "catalog_add_control",
@@ -60,9 +65,62 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
         "dysflow_form_move_control",
         "dysflow_form_rename_control",
         "dysflow_form_deserialize",
+        "export_all",
+        "export_modules",
+        "fix_encoding",
         "generate_form",
+        "generate_erd",
       ].sort(),
     );
+  });
+
+  // #665 — the newly-flagged filesystem writers must actually be blocked
+  // when writes are disabled (regression net for the corrected declarations).
+  it("blocks export_modules when writes are disabled (regression #665)", async () => {
+    const { tool, vbaSyncToolService } = toolByName("export_modules", false);
+    const result = await tool.handler({
+      moduleNames: ["ModuleA"],
+      destinationRoot: "C:/project",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("blocks export_all (incl. prune:true) when writes are disabled (regression #665)", async () => {
+    const { tool, vbaSyncToolService } = toolByName("export_all", false);
+    const result = await tool.handler({
+      destinationRoot: "C:/project",
+      prune: true,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("blocks generate_erd when writes are disabled (regression #665)", async () => {
+    const { tool, vbaSyncToolService } = toolByName("generate_erd", false);
+    const result = await tool.handler({
+      erdPath: "C:/project/docs/schema.html",
+      projectRoot: "C:/project",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("blocks fix_encoding when writes are disabled (regression #665)", async () => {
+    const { tool, vbaSyncToolService } = toolByName("fix_encoding", false);
+    // fix_encoding schema accepts location + accessPath + projectRoot but not
+    // moduleNames (modules are derived from the project). Provide enough to
+    // bypass the empty-input guard and reach the write-gate.
+    const result = await tool.handler({
+      location: "module",
+      projectRoot: "C:/project",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([]);
   });
 
   it("blocks generate_form when writes are disabled", async () => {
@@ -225,10 +283,14 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
   };
 
   it("flags exactly the binary-mutating VBA tools", () => {
+    // #665 — fix_encoding was declared mutatesBinary:false but the
+    // PowerShell Fix-Encoding action rewrites modules inside the .accdb.
+    // Now correctly declared so the binary write-gate fires.
     expect([...binaryWriters].sort()).toEqual(
       [
         "compile_vba",
         "delete_module",
+        "fix_encoding",
         "import_all",
         "import_modules",
         "dysflow_create_form_from_template",
@@ -247,7 +309,11 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       const tool = tools.find((t) => t.name === name);
       if (!tool) throw new Error(`Tool not registered: ${name}`);
       // These tools force isDryRun=false, so they must gate even without apply/dryRun.
-      const result = await tool.handler(minimalInput[name] ?? {});
+      // fix_encoding is ALSO a filesystem write, so it requires non-empty input
+      // (the dispatch-factory rejects empty input with MCP_INPUT_INVALID before
+      // the gate would fire). Provide a minimal location to pass that check.
+      const input = name === "fix_encoding" ? { location: "module" } : (minimalInput[name] ?? {});
+      const result = await tool.handler(input);
       expect(result.content[0]?.text, name).toContain("MCP_WRITES_DISABLED");
     }
   });
