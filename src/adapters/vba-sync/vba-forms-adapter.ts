@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, win32 } from "node:path";
+import { isAbsolute, resolve, win32 } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -22,6 +22,7 @@ import {
 } from "../../core/services/form-ir-service.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { isPathInside } from "../../core/utils/path-containment.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
@@ -104,15 +105,6 @@ function resolveMutationPath(basePath: string, childPath: string): string {
   if (isAbsolute(childPath)) return resolve(childPath);
   if (isWindowsPath(basePath)) return win32.normalize(win32.resolve(basePath, childPath));
   return resolve(basePath, childPath);
-}
-
-function isPathInside(childPath: string, parentPath: string): boolean {
-  if (isWindowsPath(childPath) || isWindowsPath(parentPath)) {
-    const rel = win32.relative(win32.resolve(parentPath), win32.resolve(childPath));
-    return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !win32.isAbsolute(rel));
-  }
-  const rel = relative(resolve(parentPath), resolve(childPath));
-  return rel === "" || (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel));
 }
 
 function normalizePathForDetails(path: string): string {
@@ -905,6 +897,18 @@ export class VbaFormsAdapter {
         ),
       );
     }
+    // #675 — also reject source paths that escape the resolved root.
+    // The runtime check above is not enough: a path outside the runtime
+    // could still traverse out of the bench-cache / projectRoot.
+    const sourceRootForContainment = sourceRoot === "bench" ? this.benchCacheRoot : projectRoot;
+    if (!isPathInside(sourcePath, sourceRootForContainment)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `dysflow_create_form_from_template sourcePath must be inside the resolved source root. sourcePath=${sourcePath}; root=${sourceRootForContainment}.`,
+        ),
+      );
+    }
 
     // Parse the source IR — pure.
     let sourceIr: FormIR;
@@ -926,6 +930,21 @@ export class VbaFormsAdapter {
             resolveMutationPath(this.benchCacheRoot, `${targetForm}.form.txt`),
           )
         : normalizePathForDetails(resolveMutationPath(projectRoot, `forms/${targetForm}.form.txt`));
+
+    // #675 — replace the dead `hasManagedFormExtension` suffix-only
+    // validation with a real path-containment check on the target.
+    // The previous check only verified the `.form.txt` / `.report.txt`
+    // suffix, which let a caller pass `targetForm = "../etc/passwd"`
+    // and escape the bench-cache / projectRoot.
+    const targetRoot = sourceRoot === "bench" ? this.benchCacheRoot : projectRoot;
+    if (!isPathInside(targetPath, targetRoot)) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `dysflow_create_form_from_template targetPath must be inside the resolved source root. targetPath=${targetPath}; root=${targetRoot}.`,
+        ),
+      );
+    }
 
     if (isWithinRuntime(targetPath, this.orchestrator.env ?? process.env)) {
       return failureResult(
