@@ -13,6 +13,20 @@ export type DysflowError = {
   message: string;
   retryable: boolean;
   details?: Record<string, unknown>;
+  /**
+   * Currently-allowed procedure allowlist, populated only on refusals
+   * that hit the gate (e.g. `PROCEDURE_NOT_ALLOWED`). Lets a consuming
+   * agent read the live allowlist directly off the error envelope instead
+   * of re-asking the user. Mirrors the field exposed by
+   * `dysflow_get_capabilities.allowedProcedures` (#656 / PR #661).
+   */
+  allowedProcedures?: readonly string[];
+  /**
+   * One-line fix instruction, populated only on refusals that hit the
+   * gate (e.g. `PROCEDURE_NOT_ALLOWED`). The MCP text content mirrors
+   * the same line for log-grep convenience.
+   */
+  remediation?: string;
 };
 
 /**
@@ -257,13 +271,20 @@ export {
 export function createDysflowError(
   code: string,
   message: string,
-  options: { retryable?: boolean; details?: Record<string, unknown> } = {},
+  options: {
+    retryable?: boolean;
+    details?: Record<string, unknown>;
+    allowedProcedures?: readonly string[];
+    remediation?: string;
+  } = {},
 ): DysflowError {
   return {
     code,
     message,
     retryable: options.retryable ?? false,
     ...(options.details ? { details: options.details } : {}),
+    ...(options.allowedProcedures ? { allowedProcedures: options.allowedProcedures } : {}),
+    ...(options.remediation ? { remediation: options.remediation } : {}),
   };
 }
 

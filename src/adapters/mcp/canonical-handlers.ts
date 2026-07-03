@@ -6,7 +6,12 @@ import {
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
-import { invalidInput, isWriteAllowed, writesDisabled } from "./dispatch-common.js";
+import {
+  invalidInput,
+  isWriteAllowed,
+  procedureNotAllowed,
+  writesDisabled,
+} from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   McpToolResult,
@@ -57,9 +62,11 @@ export function ensureProcedureAllowed(
   }
 
   if (!allowedProcedures.includes(procedureName)) {
-    return invalidInput(
-      `Procedure '${procedureName}' is not in the configured allowedProcedures list.`,
-    );
+    // #659 — emit the new MCP_PROCEDURE_NOT_ALLOWED envelope so consumers can
+    // distinguish "procedure is not in the allowlist" from generic
+    // MCP_INPUT_INVALID. The structured error block carries the active
+    // allowlist and a remediation hint pointing to dysflow_get_capabilities.
+    return procedureNotAllowed(procedureName, allowedProcedures);
   }
   return undefined;
 }

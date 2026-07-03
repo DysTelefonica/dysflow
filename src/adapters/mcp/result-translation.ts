@@ -26,6 +26,24 @@ export type McpTextContent = {
   text: string;
 };
 
+export type McpToolError = {
+  code: string;
+  message: string;
+  /**
+   * Optional remediation hint surfaced on gate-rejection envelopes (#659).
+   * When present, the hint names the next action a consumer should take
+   * (e.g. "call dysflow_get_capabilities to introspect the allowlist").
+   */
+  remediation?: string;
+  /**
+   * Optional allowlist surfaced when the rejection is an allowlist
+   * membership check (#659). Equals the array that was active at the time
+   * of the call — verbatim, NOT a snapshot — so a consumer can branch on
+   * its contents without a second round-trip to `dysflow_get_capabilities`.
+   */
+  allowedProcedures?: readonly string[];
+};
+
 export type McpToolResult = {
   content: readonly McpTextContent[];
   isError: boolean;
@@ -36,6 +54,14 @@ export type McpToolResult = {
    * explicitly. When omitted, treat `ok = !isError`.
    */
   ok?: boolean;
+  /**
+   * Structured error envelope (#659). Populated by gate-rejection helpers
+   * (e.g. `procedureNotAllowed`) so consumers can branch on `error.code`
+   * instead of regex-matching the legacy `content[0].text` body. The
+   * `content[0].text` body still carries the same `<CODE>: <message>`
+   * prefix for backward compatibility with regex consumers.
+   */
+  error?: McpToolError;
 };
 
 export type DysflowMcpTool = {

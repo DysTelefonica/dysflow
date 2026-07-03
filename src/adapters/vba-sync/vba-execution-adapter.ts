@@ -386,12 +386,27 @@ End Sub
     const allowSet = new Set(this.allowedProcedures);
     const disallowed = procedures.filter((procedure) => !allowSet.has(procedure));
     if (disallowed.length > 0) {
+      // Issue #659 — split: this is case (b) (gate IS configured AND the
+      // plan contains a procedure not in the allowlist). Emits
+      // `PROCEDURE_NOT_ALLOWED` with the current allowlist and a
+      // remediation line, mirroring the MCP-handler split in
+      // `canonical-handlers.ts:ensureProcedureAllowed`. The structured
+      // `error.allowedProcedures` and `error.remediation` fields are
+      // carried by the `DysflowError` shape and propagated to the
+      // `McpToolResult.error` envelope by `translateCoreResultToMcpContent`.
       return failureResult(
         createDysflowError(
-          "MCP_INPUT_INVALID",
+          "PROCEDURE_NOT_ALLOWED",
           `Refusing to execute test_vba plan: procedure(s) [${disallowed.join(", ")}] ` +
             `are not in the configured allowedProcedures list. ` +
             `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+          {
+            allowedProcedures: this.allowedProcedures,
+            remediation:
+              disallowed.length === 1
+                ? `Add '${disallowed[0]}' to allowedProcedures in .dysflow/project.json or test a procedure that is in the list.`
+                : `Add procedures [${disallowed.join(", ")}] to allowedProcedures in .dysflow/project.json or test a procedure that is in the list.`,
+          },
         ),
       );
     }
