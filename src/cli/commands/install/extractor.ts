@@ -44,7 +44,7 @@ async function copyIfDifferent(
   await cp(source, destination, options);
 }
 
-async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
+async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Promise<void> {
   await mkdir(runtimePaths.appDir, { recursive: true });
   await mkdir(runtimePaths.binDir, { recursive: true });
 
@@ -68,13 +68,30 @@ async function copyRuntime(runtimePaths: RuntimePaths): Promise<void> {
     });
   }
 
+  // Copy pnpm-lock.yaml so the install is reproducible (#666). Without it,
+  // `pnpm install --prod` re-resolves the transitive graph from the public
+  // registry on every install, which defeats the trust model that says we
+  // ship exactly the graph we built and signed.
+  const lockfileSource = path.join(packageRoot, "pnpm-lock.yaml");
+  const lockfileDest = path.join(runtimePaths.appDir, "pnpm-lock.yaml");
+  const lockfileAvailable = await fileExists(lockfileSource);
+  if (lockfileAvailable) {
+    await copyIfDifferent(lockfileSource, lockfileDest, { force: true });
+  }
+
   if (await fileExists(runtimePaths.packageJsonSource)) {
     await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
       force: true,
     });
     // Install production dependencies so runtime deps (e.g. @modelcontextprotocol/sdk)
     // are available without requiring the full source node_modules to be copied.
-    await runCommand("pnpm", ["install", "--ignore-scripts", "--prod"], runtimePaths.appDir, {
+    // When the lockfile is present we pass --frozen-lockfile to fail closed if
+    // the registry returns a different graph than what we signed.
+    const installArgs = ["install", "--ignore-scripts", "--prod"];
+    if (lockfileAvailable) {
+      installArgs.push("--frozen-lockfile");
+    }
+    await runCommand("pnpm", installArgs, runtimePaths.appDir, {
       timeoutMs: 120_000,
     });
   }
@@ -121,7 +138,7 @@ export async function installRuntime(
   packageRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  await copyRuntime(runtimePaths);
+  await copyRuntime(runtimePaths, packageRoot);
   await copyDocs(runtimePaths, packageRoot);
   await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
   await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);

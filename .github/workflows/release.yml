@@ -41,8 +41,13 @@ jobs:
         run: pnpm build
 
       - name: Create release tarball
+        # pnpm-lock.yaml is required so the self-updater can verify the
+        # transitive dep graph with --frozen-lockfile (#666). Without it,
+        # `pnpm install --prod` re-resolves from the public registry on every
+        # `dysflow update`, defeating the trust model that says we ship
+        # exactly the graph we built and signed.
         run: |
-          tar -czf dysflow-${{ github.ref_name }}.tar.gz dist scripts package.json README.md CHANGELOG.md
+          tar -czf dysflow-${{ github.ref_name }}.tar.gz dist scripts package.json pnpm-lock.yaml README.md CHANGELOG.md
 
       - name: Generate checksums
         run: sha256sum dysflow-*.tar.gz > SHA256SUMS
