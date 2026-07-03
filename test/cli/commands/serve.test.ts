@@ -127,15 +127,16 @@ describe("handleServeCommand — successful option handling", () => {
   });
 
   it("uses custom --host in adapter options", async () => {
+    // #669 — must also pass --token for non-loopback hosts (fail-closed).
     const calls: unknown[] = [];
-    await handleServeCommand(["--host", "0.0.0.0", "--port", "0"], {
+    await handleServeCommand(["--host", "0.0.0.0", "--port", "0", "--token", "secret"], {
       startHttpAdapter: async (options) => {
         calls.push(options);
         return { url: "http://0.0.0.0:0", host: "0.0.0.0", port: 0, writesEnabled: false };
       },
     });
 
-    expect(calls).toEqual([expect.objectContaining({ host: "0.0.0.0" })]);
+    expect(calls).toEqual([expect.objectContaining({ host: "0.0.0.0", httpToken: "secret" })]);
   });
 
   it("reports writes disabled in output when --enable-writes is absent", async () => {
@@ -179,6 +180,87 @@ describe("handleServeCommand — successful option handling", () => {
     });
 
     expect(calls).toEqual([expect.objectContaining({ httpToken: "my-secret-token" })]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #669 — fail-closed: refuse non-loopback host without --token
+// ---------------------------------------------------------------------------
+describe("handleServeCommand — #669 fail-closed on non-loopback without token", () => {
+  it("rejects --host 0.0.0.0 without --token (fail-closed)", async () => {
+    const result = await handleServeCommand(["--host", "0.0.0.0"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("non-loopback");
+    expect(result.stderr).toContain("--token");
+    expect(result.stderr).toContain(SERVE_USAGE);
+  });
+
+  it("rejects --host 0.0.0.0 --enable-writes without --token", async () => {
+    const result = await handleServeCommand(["--host", "0.0.0.0", "--enable-writes"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("non-loopback");
+    expect(result.stderr).toContain("--token");
+  });
+
+  it("rejects --host :: (IPv6 wildcard) without --token", async () => {
+    const result = await handleServeCommand(["--host", "::"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("non-loopback");
+  });
+
+  it("allows --host 0.0.0.0 when --token is provided", async () => {
+    const calls: unknown[] = [];
+    const result = await handleServeCommand(["--host", "0.0.0.0", "--token", "my-token"], {
+      startHttpAdapter: async (options) => {
+        calls.push(options);
+        return { url: "http://0.0.0.0:0", host: "0.0.0.0", port: 0, writesEnabled: false };
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(calls).toEqual([expect.objectContaining({ host: "0.0.0.0", httpToken: "my-token" })]);
+  });
+
+  it("allows --host 127.0.0.1 without --token (loopback)", async () => {
+    const result = await handleServeCommand(["--host", "127.0.0.1"], {
+      startHttpAdapter: fakeAdapter(),
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("allows --host ::1 without --token (IPv6 loopback)", async () => {
+    const result = await handleServeCommand(["--host", "::1"], {
+      startHttpAdapter: fakeAdapter(),
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("allows --host localhost without --token", async () => {
+    const result = await handleServeCommand(["--host", "localhost"], {
+      startHttpAdapter: fakeAdapter(),
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("default host (127.0.0.1) does not require a token", async () => {
+    const result = await handleServeCommand([], {
+      startHttpAdapter: fakeAdapter(),
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("rejects --host with a private LAN IP (e.g. 192.168.x.y) without --token", async () => {
+    const result = await handleServeCommand(["--host", "192.168.1.42"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("non-loopback");
   });
 });
 
