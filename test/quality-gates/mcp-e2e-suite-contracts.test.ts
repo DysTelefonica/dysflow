@@ -100,10 +100,10 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     ).toBeLessThan(advertisedIdx);
   });
 
-  it("expected count is 54 (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
-    // The unit test pins 54 non-hidden tools. If the e2e diverges (e.g. someone
+  it("expected count is 61 (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
+    // The unit test pins 61 non-hidden tools. If the e2e diverges (e.g. someone
     // adds a new tool and forgets to bump both pins), this catches it.
-    expect(readSource(MCP_E2E_PATH)).toContain('"54 tools"');
+    expect(readSource(MCP_E2E_PATH)).toContain('"61 tools"');
   });
 });
 
