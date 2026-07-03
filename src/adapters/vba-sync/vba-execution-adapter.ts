@@ -302,15 +302,6 @@ End Sub
   }
 
   private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    if (truthy(params.compile)) {
-      const compileResult = await this.orchestrator.executeMappedTool(
-        "compile_vba",
-        params,
-        EXECUTION_MAPPINGS.compile_vba,
-      );
-      if (!compileResult.ok) return compileResult;
-    }
-
     // Resolve the plan (either direct `proceduresJson` or resolved from
     // `procedureName+argsJson` / `testsPath`). Capture both the canonical
     // JSON string (passed through to the runner) and the procedure names
@@ -330,13 +321,23 @@ End Sub
       resolvedProcedureNames = extractProcedureNames(planResult.data);
     }
 
-    // PR1b (#621 F1) — default-deny gate. Fires AFTER plan resolution (so we
-    // know which procedures will execute) and BEFORE `executeMappedTool` so
-    // the runner never sees an unauthorized plan. `compile_vba` ran in the
-    // pre-resolution branch above and is intentionally NOT gated — compiling
-    // the project is not the same as executing arbitrary VBA procedures.
+    // PR1b (#621 F1) + #667 — default-deny gate. Fires AFTER plan resolution
+    // (so we know which procedures will execute) and BEFORE both compile_vba
+    // and the runner, so neither the binary write nor the test execution
+    // happen when the plan is rejected. The previous order ran compile_vba
+    // first, which wrote the .accdb even when the gate would later refuse —
+    // an unwanted side effect on the live binary.
     const gateError = this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
     if (gateError !== undefined) return gateError;
+
+    if (truthy(params.compile)) {
+      const compileResult = await this.orchestrator.executeMappedTool(
+        "compile_vba",
+        params,
+        EXECUTION_MAPPINGS.compile_vba,
+      );
+      if (!compileResult.ok) return compileResult;
+    }
 
     return inspectTestResult(
       await this.orchestrator.executeMappedTool(
