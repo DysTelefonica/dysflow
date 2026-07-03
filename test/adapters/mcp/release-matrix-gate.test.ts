@@ -47,15 +47,16 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // Any edit that moves one of these numbers MUST justify the change in that PR.
     // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
     // Slice 5 (#618) added dysflow_create_form_from_template.
+    // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
     // Expected breakdown: 54 dispatch names (DYSFLOW_MCP_TOOL_NAMES, including
     //   inspect_form/compare_form/lint_form_code, the three form mutation tools, the
     //   new serialize/deserialize pair, and dysflow_create_form_from_template)
     //   - 0 hidden stubs (zero-hidden-tools policy)
-    //   + 6 modern core tools = 60 visible.
+    //   + 7 modern core tools = 61 visible.
     expect(toolCount).toBe(54);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(6);
-    expect(visibleCount).toBe(60);
+    expect(modernCount).toBe(7);
+    expect(visibleCount).toBe(61);
   });
 
   it("verifies split-mode coverage explicitly", () => {
