@@ -76,13 +76,17 @@ jobs:
           rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
           echo "Signed SHA256SUMS -> SHA256SUMS.sig"
 
-      - name: Create GitHub Release
+- name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           # AGENTS.md hard rule: the release title MUST equal the tag name.
           # Pass the ref (e.g. "v1.13.0") as the release name so the artifact
-          # is born matching the tag. The release-title-guard workflow re-
-          # asserts this on release: [created, edited] for defense-in-depth.
+          # is born matching the tag. The assert-release-name step below
+          # verifies the invariant immediately after creation — replaces the
+          # previous release-title-guard.yml workflow, which was doubly dead:
+          # it used the wrong field (`.title` instead of `.name`) AND its
+          # `release: [created, edited]` trigger never fired for releases
+          # created with GITHUB_TOKEN.
           name: ${{ github.ref_name }}
           files: |
             dysflow-*.tar.gz
@@ -93,3 +97,24 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # #668 — replaces the dead release-title-guard.yml. Verifies the
+      # published release's `name` matches the tag immediately after
+      # creation so a maintainer edit or a future softprops action change
+      # cannot break the AGENTS.md hard rule "release title must equal tag".
+      - name: Assert release name == tag (#668)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Resolve the tag name from the ref (refs/tags/vX.Y.Z → vX.Y.Z).
+          TAG="${GITHUB_REF_NAME}"
+          # Fetch the release that softprops just created.
+          RELEASE_NAME="$(gh release view "${TAG}" --json name --jq .name)"
+          if [ "${RELEASE_NAME}" != "${TAG}" ]; then
+            echo "Release name must equal tag_name." >&2
+            echo "  name    = ${RELEASE_NAME}" >&2
+            echo "  tag     = ${TAG}" >&2
+            exit 1
+          fi
+          echo "Release name matches tag: ${TAG}"
