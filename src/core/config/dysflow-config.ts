@@ -6,6 +6,7 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
+import { NO_DISCOVERY } from "../services/allowed-procedures-discovery.js";
 import { isAbsolutePath, REDACTED_SECRET, stringValue } from "../utils/index.js";
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,14 @@ export type DysflowConfigInput = {
   env?: Record<string, string | undefined>;
   httpToken?: string;
   httpTokenEnv?: string;
+  /**
+   * PR-3 (#658): caller-supplied procedure discovery function. The composition
+   * root injects `nodeDiscoverFromSrcRoot` here so `src/core/` stays
+   * adapter-free (no `node:fs`). The default `NO_DISCOVERY` returns `[]`
+   * and the field stays `undefined` — explicit values in the `capabilities`
+   * block always win over discovery.
+   */
+  discoverFromSrcRoot?: (srcRoot: string) => readonly string[];
 };
 
 export function loadDysflowConfigShared<
@@ -354,17 +363,31 @@ function buildProjectConfig(
   // read-through aliases until v1.15.0. When BOTH the top-level fields and
   // the `capabilities` block are present, `capabilities` wins and a single
   // warning is surfaced so the user is not pummeled.
+  //
+  // The result is composed with `resolveAllowedProceduresFallback` (PR-3 / #658)
+  // (defined next to this function): when both `allowedProcedures` and the
+  // `capabilities.procedures.allow` block are absent, dysflow offers a
+  // discovered prefix list unless the caller passed `discoverFromSrcRoot: false`.
+  // Explicit values always win over discovery.
+  //-------------------------------------------------------------------
   const {
     allowWrites,
     allowedProcedures: capabilitiesAllowedProcedures,
     deprecationWarning,
   } = resolveCapabilities(raw);
+  const discoveryResult =
+    capabilitiesAllowedProcedures === undefined
+      ? (input.discoverFromSrcRoot ?? NO_DISCOVERY)(destinationRoot)
+      : [];
 
   return successResult(
     {
       configSource,
       allowWrites,
-      allowedProcedures: capabilitiesAllowedProcedures,
+      allowedProcedures: resolveAllowedProceduresFallback(
+        capabilitiesAllowedProcedures,
+        discoveryResult,
+      ),
       accessDbPath,
       backendPath,
       destinationRoot,
@@ -599,6 +622,27 @@ function resolveTimeout(explicitTimeoutMs: number | undefined): number {
       : DEFAULT_TIMEOUT_MS;
   }
   return DEFAULT_TIMEOUT_MS;
+}
+
+/**
+ * Resolve the final `allowedProcedures` allowlist for the project (#658).
+ *
+ * Precedence (PR-3 / #658):
+ *   - Explicit (`capabilities.procedures.allow` first, then top-level
+ *     `allowedProcedures`) always beats discovery.
+ *   - When the explicit slot is `undefined` AND discovery returned a
+ *     non-empty prefix list, the discovered list is offered (sorted
+ *     alphabetically to match the discovery contract).
+ *   - When both are empty/missing, the result stays `undefined` (mirrors
+ *     the pre-discovery contract for "nothing to seed").
+ */
+function resolveAllowedProceduresFallback(
+  explicit: readonly string[] | undefined,
+  discovered: readonly string[],
+): readonly string[] | undefined {
+  if (explicit !== undefined) return explicit;
+  if (discovered.length > 0) return [...discovered].sort((a, b) => a.localeCompare(b));
+  return undefined;
 }
 
 function resolvePassword(
