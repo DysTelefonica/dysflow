@@ -1,0 +1,207 @@
+import { describe, expect, it } from "vitest";
+import { getCapabilitiesAll } from "../../../src/adapters/mcp/get-capabilities-tool";
+import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { successResult } from "../../../src/core/contracts/index";
+
+/**
+ * PR-1 (issue #656) — `dysflow_get_capabilities` is a read-only MCP tool that
+ * returns an aggregated capabilities snapshot for the live MCP adapter. The
+ * shape is the consumer surface for #655 (gate-introspection-v1).
+ *
+ * Cheap unit tests — pure module-import + function-call. No MSACCESS, no
+ * PowerShell. The full integration test for the dispatch path lives in
+ * `test/adapters/mcp/capabilities-via-dispatch.test.ts`.
+ */
+
+class FakeVbaService {
+  async execute() {
+    return successResult({ returnValue: "ok" });
+  }
+}
+class FakeQueryService {
+  async execute() {
+    return successResult({ rows: [] });
+  }
+}
+class FakeDiagnosticsService {
+  async run() {
+    return successResult({ checks: [] });
+  }
+}
+
+function makeServices() {
+  return {
+    vbaService: new FakeVbaService(),
+    queryService: new FakeQueryService(),
+    diagnosticsService: new FakeDiagnosticsService(),
+  };
+}
+
+describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
+  it("returns the documented snapshot shape with every required field", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "my-project",
+      allowWrites: false,
+    });
+
+    expect(snapshot).toMatchObject({
+      adapterVersion: expect.any(String),
+      surface: "stdio",
+      writesProcess: {
+        enabled: false,
+        resolverConfigured: false,
+      },
+      writesProject: {
+        allowWrites: false,
+      },
+      projectIdResolution: {
+        projectId: "my-project",
+        outcome: "resolved",
+      },
+      toolsVisible: expect.any(Number),
+      writeClassToolsPermitted: expect.any(Array),
+    });
+    expect(snapshot.adapterVersion.length).toBeGreaterThan(0);
+  });
+
+  it("reports writesProcess.enabled = true when writesEnabled is true", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: true,
+    });
+    expect(snapshot.writesProcess.enabled).toBe(true);
+    expect(snapshot.writesProject.allowWrites).toBe(true);
+  });
+
+  it("reports writesProcess.resolverConfigured = true when a resolver is provided", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: async () => true,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+    });
+    expect(snapshot.writesProcess.resolverConfigured).toBe(true);
+  });
+
+  it("propagates allowedProcedures verbatim into the snapshot", () => {
+    const allowed = ["Test_A", "Test_B"] as const;
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: allowed,
+      projectId: "p",
+      allowWrites: true,
+    });
+    expect(snapshot.allowedProcedures).toEqual(["Test_A", "Test_B"]);
+  });
+
+  it("marks projectIdResolution.outcome = 'unresolved' when no projectId is given", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+    });
+    expect(snapshot.projectIdResolution).toEqual({
+      projectId: null,
+      outcome: "unresolved",
+    });
+  });
+
+  it("counts every tool registered in MCP_TOOL_CONTRACTS as toolsVisible", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+    });
+    expect(snapshot.toolsVisible).toBe(Object.keys(MCP_TOOL_CONTRACTS).length);
+  });
+
+  it("lists every write-class tool name when writes are fully open", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+    });
+
+    const expectedWriteClass = Object.entries(MCP_TOOL_CONTRACTS)
+      .filter(([, contract]) => contract.access !== "read-only")
+      .map(([name]) => name)
+      .sort();
+
+    expect([...snapshot.writeClassToolsPermitted].sort()).toEqual(expectedWriteClass);
+  });
+
+  it("lists NO write-class tools when writes are fully blocked and no resolver/allowlist applies", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+    });
+    expect(snapshot.writeClassToolsPermitted).toEqual([]);
+  });
+});
+
+describe("dysflow_get_capabilities tool — registration and read-only contract (#656)", () => {
+  it("is registered as a modern tool by createDysflowMcpTools", () => {
+    const tools = createDysflowMcpTools(makeServices(), false);
+    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    expect(tool, "tool must be registered").toBeDefined();
+  });
+
+  it("uses NO_INPUT_SCHEMA (read-only, no required input)", () => {
+    const tools = createDysflowMcpTools(makeServices(), false);
+    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    expect(tool?.inputSchema).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    });
+  });
+
+  it("is NOT write-gated: handler returns ok when writes are disabled", async () => {
+    const tools = createDysflowMcpTools(makeServices(), false);
+    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    if (!tool) throw new Error("tool not registered");
+
+    const result = await tool.handler({});
+    expect(result.isError).toBe(false);
+    expect(result.ok).toBe(true);
+    // No MCP_WRITES_DISABLED envelope — confirms the read-only gate contract.
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+  });
+
+  it("handler returns a parseable JSON payload with the documented snapshot", async () => {
+    const tools = createDysflowMcpTools(makeServices(), true);
+    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    if (!tool) throw new Error("tool not registered");
+
+    const result = await tool.handler({});
+    expect(result.isError).toBe(false);
+
+    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    expect(parsed).toMatchObject({
+      surface: "stdio",
+      writesProcess: expect.any(Object),
+      writesProject: expect.any(Object),
+      projectIdResolution: expect.any(Object),
+      toolsVisible: expect.any(Number),
+      writeClassToolsPermitted: expect.any(Array),
+    });
+  });
+});

@@ -1,0 +1,195 @@
+// `package.json` is the source of truth for the adapter version. The
+// import is intentional — it is resolved at build/test time and bundled
+// for production, so the runtime cost is zero. The cast keeps the
+// `noUncheckedIndexedAccess` strict mode happy.
+import packageJson from "../../../package.json" with { type: "json" };
+import type { OperationResult } from "../../core/contracts/index.js";
+import { successResult } from "../../core/contracts/index.js";
+import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
+import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
+import { translateCoreResultToMcpContent } from "./result-translation.js";
+import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
+
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+/**
+ * PR-1 (issue #656) — aggregated capabilities snapshot for the live MCP
+ * adapter. The consumer surface for the gate-introspection-v1 umbrella (#655).
+ *
+ * Field semantics:
+ * - `adapterVersion`: the running `dysflow` package version (from package.json).
+ * - `surface`: the MCP transport this snapshot is served from. The stdio
+ *   adapter is the only surface that registers this tool today; HTTP callers
+ *   never reach this code path.
+ * - `writesProcess.enabled`: process-level write flag (`writesEnabled`).
+ * - `writesProcess.resolverConfigured`: whether a per-input write-access
+ *   resolver is wired in (`writeAccessResolver !== undefined`).
+ * - `writesProject.allowWrites`: project-level flag (`.dysflow/project.json`
+ *   `allowWrites`). Consumers use this to know whether the project is open
+ *   to writes regardless of the process flag.
+ * - `projectIdResolution.projectId`: the projectId resolved at startup.
+ *   `null` when the startup config carried no projectId.
+ * - `projectIdResolution.outcome`: how the projectId was resolved.
+ *   `resolved` — a projectId is in scope; `unresolved` — no projectId.
+ * - `allowedProcedures`: the project's `allowedProcedures` allowlist, copied
+ *   verbatim from the resolved `DysflowConfig`. `undefined` when no allowlist
+ *   is configured.
+ * - `dryRunDefault`: the global default for `dryRun`. Today every write-class
+ *   tool in `MCP_TOOL_CONTRACTS` either declares `dryRunDefault: true` or
+ *   defaults to true via the `contractFromGeneratedRoute` derivation
+ *   (`src/adapters/mcp/mcp-tool-contracts.ts:32`), so the global default is
+ *   `true`. Surfaced as a snapshot field so a consumer can detect drift.
+ * - `toolsVisible`: count of tools in `MCP_TOOL_CONTRACTS`. Equal to the
+ *   number of tools advertised in `tools/list` after the hidden-stub filter.
+ * - `writeClassToolsPermitted`: names of write-class tools (i.e. `access`
+ *   is `read-write` or `conditional-write`) that the process-level gate
+ *   currently permits. When `writesProcess.enabled` is `false` and no
+ *   resolver is configured, the resolver outcome is unknown to the snapshot
+ *   and the list is empty — the consumer must call `dysflow_get_capabilities`
+ *   with the per-input tool name to resolve the per-tool gate.
+ */
+export type McpCapabilitySnapshot = {
+  adapterVersion: string;
+  surface: "stdio" | "http";
+  writesProcess: {
+    enabled: boolean;
+    resolverConfigured: boolean;
+  };
+  writesProject: {
+    allowWrites: boolean;
+  };
+  projectIdResolution: {
+    projectId: string | null;
+    outcome: "resolved" | "unresolved" | "ambiguous";
+  };
+  allowedProcedures: readonly string[] | undefined;
+  dryRunDefault: boolean;
+  toolsVisible: number;
+  writeClassToolsPermitted: readonly string[];
+};
+
+export type GetCapabilitiesAllInput = {
+  writesEnabled: boolean;
+  writeAccessResolver: McpWriteAccessResolver | undefined;
+  allowedProcedures: readonly string[] | undefined;
+  projectId: string | undefined;
+  allowWrites: boolean;
+  surface?: "stdio" | "http";
+  adapterVersion?: string;
+};
+
+// ─── Pure aggregate function ──────────────────────────────────────────────────
+
+/**
+ * Pure aggregator: no I/O, no Access, no PowerShell. The result is a
+ * snapshot of the static + process-level state of the MCP adapter.
+ */
+export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilitySnapshot {
+  const surface: "stdio" | "http" = input.surface ?? "stdio";
+  const adapterVersion = input.adapterVersion ?? readAdapterVersion();
+  const toolNames = Object.keys(MCP_TOOL_CONTRACTS);
+
+  const writeClassToolsPermitted = computeWriteClassToolsPermitted(input.writesEnabled, toolNames);
+
+  return {
+    adapterVersion,
+    surface,
+    writesProcess: {
+      enabled: input.writesEnabled,
+      resolverConfigured: input.writeAccessResolver !== undefined,
+    },
+    writesProject: {
+      allowWrites: input.allowWrites,
+    },
+    projectIdResolution: {
+      projectId: input.projectId ?? null,
+      outcome: input.projectId === undefined ? "unresolved" : "resolved",
+    },
+    allowedProcedures: input.allowedProcedures,
+    dryRunDefault: deriveGlobalDryRunDefault(),
+    toolsVisible: toolNames.length,
+    writeClassToolsPermitted,
+  };
+}
+
+function computeWriteClassToolsPermitted(
+  writesEnabled: boolean,
+  toolNames: readonly string[],
+): readonly string[] {
+  // When writes are fully open at the process level, every write-class tool
+  // is permitted. Otherwise the resolver-evaluated outcome is unknown to the
+  // aggregate (the resolver takes a per-input argument), so the snapshot
+  // reports an empty list. Consumers who need the per-input verdict call
+  // `resolveEffectiveGate` (a follow-up layer of #655) or re-invoke
+  // `dysflow_get_capabilities` with the specific tool input.
+  if (!writesEnabled) return [];
+  return toolNames.filter((name) => {
+    const contract = MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS];
+    return contract !== undefined && contract.access !== ("read-only" satisfies McpToolAccess);
+  });
+}
+
+function deriveGlobalDryRunDefault(): boolean {
+  // Every write-class tool in MCP_TOOL_CONTRACTS either declares
+  // `dryRunDefault: true` explicitly or is a non-vba-sync dispatch route
+  // (where the generated contract defaults to true). vba-sync routes default
+  // to false, but those are filesystem-mutating tools where the dispatcher
+  // path still honors dryRun via `resolveIsDryRun`. The global default is the
+  // safer "plan first" stance.
+  for (const contract of Object.values(MCP_TOOL_CONTRACTS)) {
+    if (contract.dryRunDefault === false) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function readAdapterVersion(): string {
+  // The `package.json` import is a build-time resolved module — the JSON
+  // value is bundled at compile time, so the runtime cost is zero. Wrapped
+  // in a try/catch so the tool never throws on a misconfigured install.
+  try {
+    const pkg = packageJson as { version?: string };
+    return typeof pkg.version === "string" ? pkg.version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+// ─── Tool factory ─────────────────────────────────────────────────────────────
+
+/**
+ * Factory for the `dysflow_get_capabilities` tool. Wires the aggregate
+ * function with the captured adapter context (writesEnabled, resolver,
+ * allowlist, projectId). Returns a `DysflowMcpTool` ready to register via
+ * the `createDysflowMcpTools` factory.
+ *
+ * The tool is read-only: it never touches Access, never spawns PowerShell,
+ * and never mutates the binary. The `NO_INPUT_SCHEMA` enforces "no input"
+ * at the JSON-schema layer; the handler ignores its `input` argument.
+ */
+export function createGetCapabilitiesTool(opts: {
+  writesEnabled: boolean;
+  writeAccessResolver: McpWriteAccessResolver | undefined;
+  allowedProcedures: readonly string[] | undefined;
+  projectId: string | undefined;
+  allowWrites: boolean;
+}): DysflowMcpTool {
+  const snapshot = getCapabilitiesAll({
+    writesEnabled: opts.writesEnabled,
+    writeAccessResolver: opts.writeAccessResolver,
+    allowedProcedures: opts.allowedProcedures,
+    projectId: opts.projectId,
+    allowWrites: opts.allowWrites,
+  });
+
+  return {
+    name: "dysflow_get_capabilities",
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. ${MCP_TOOL_CONTRACTS.dysflow_get_capabilities.summary}`,
+    inputSchema: NO_INPUT_SCHEMA,
+    handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
+      const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);
+      return translateCoreResultToMcpContent(result);
+    },
+  };
+}

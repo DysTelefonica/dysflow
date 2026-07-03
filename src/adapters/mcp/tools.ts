@@ -15,6 +15,7 @@ import {
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
+import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
 export {
@@ -67,6 +68,7 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_access_operations_list",
   "dysflow_access_cleanup",
   "dysflow_access_force_cleanup_orphaned",
+  "dysflow_get_capabilities",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -86,6 +88,12 @@ export function createDysflowMcpTools(
         "accessPath must be provided or .dysflow/project.json must declare one.",
       ),
     ),
+  // PR-1 (issue #656) — capabilities snapshot needs the project-level
+  // allowWrites flag and the resolved projectId. Both default to
+  // `writesEnabled` / `undefined` so existing callers (no .dysflow/project.json
+  // resolved at this layer) keep working unchanged.
+  allowWrites: boolean = writesEnabled,
+  projectId: string | undefined = undefined,
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -188,6 +196,19 @@ export function createDysflowMcpTools(
           },
         ),
     },
+    // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
+    // aggregated `McpCapabilitySnapshot` for the live MCP adapter. The tool
+    // is registered in `MODERN_TOOL_NAMES` above and surfaces its contract
+    // summary through `MCP_TOOL_CONTRACTS.dysflow_get_capabilities` (added in
+    // `mcp-tool-contracts.ts`). It is intentionally read-only — it never
+    // touches Access, never spawns PowerShell, and is never write-gated.
+    createGetCapabilitiesTool({
+      writesEnabled,
+      writeAccessResolver,
+      allowedProcedures,
+      projectId,
+      allowWrites,
+    }),
   ];
 
   return registerMcpTools(
