@@ -444,6 +444,34 @@ Runtime directory resolution order:
 
 HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
+#### `capabilities` consolidated block (preferred — v1.14.0+)
+
+The `capabilities` block is the **canonical home** for the write gate and the procedure allowlist/denylist. The top-level `allowWrites` and `allowedProcedures` fields above are kept as **deprecated read-through aliases** and emit a single warning when both forms are present in the same file. Removal of the aliases is scheduled for **v1.15.0**.
+
+```json
+{
+  "id": "project-abc",
+  "accessPath": "src/ProjectABC.accdb",
+  "capabilities": {
+    "allowWrites": false,
+    "procedures": {
+      "allow": ["Refresh", "ExportReport", "RunMigration"]
+    }
+  }
+}
+```
+
+The four-case precedence (`top-level × capabilities`):
+
+| Top-level fields | `capabilities` block | Effective `allowWrites` | Effective `allowedProcedures` | Warning |
+|------------------|-----------------------|-------------------------|------------------------------|---------|
+| none             | none                  | `false` (default)       | `undefined`                  | none    |
+| present          | absent                | top-level               | top-level                    | none    |
+| absent           | present               | `capabilities`          | `capabilities.procedures.allow` | none |
+| present          | present               | `capabilities`          | `capabilities.procedures.allow` | 1     |
+
+`procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only. See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
+
 Bootstrap a repo-local config explicitly:
 
 ```powershell
