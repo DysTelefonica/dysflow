@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [v1.14.2] - 2026-07-03
+### e2e-suite-contracts-pin-sync (#666)
+- **Repo-side CI fix — `test/quality-gates/mcp-e2e-suite-contracts.test.ts`
+  advertised-tool-count string pin bumped `"54 tools" → "61 tools"`.** The
+  meta-test reads the harness source and asserts a literal substring; it was
+  pinned to the pre-#655 count and started failing once the harness moved to
+  61. The runtime of v1.14.1 was unaffected (the harness itself was correct),
+  but every CI run on the release-prep commit (`a23f502`) flipped red. With
+  this commit, all three advertised-count pins are back in sync:
+  - `E2E_testing/mcp-e2e.mjs` (runtime gate) — 61
+  - `test/adapters/mcp/advertised-tool-count.test.ts` (unit pin) — 61
+  - `test/quality-gates/mcp-e2e-suite-contracts.test.ts` (meta guard) — 61
+- **No user-facing product changes.** Pure test-infrastructure patch.
+
 ## [v1.14.1] - 2026-07-03
 ### e2e-harness-sync (#665)
 - **Release-gate fix — `E2E_testing/mcp-e2e.mjs` advertised count bumped `54 → 61`.**
