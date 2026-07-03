@@ -1,5 +1,6 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { buildWriteFixtureRequest } from "../../core/mapping/access-query-request-mapper.js";
+import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
   handleMcpAccessCleanup,
   handleMcpAccessOperationsList,
@@ -198,7 +199,7 @@ export function buildAliasTools(
   services: DysflowMcpServices,
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
-  allowedProcedures: readonly string[] | undefined,
+  allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined,
 ): DysflowMcpTool[] {
   const cleanupSchema = mcpSchemaFor("cleanup_access_operation");
   const runVbaSchema = mcpSchemaFor("run_vba");
@@ -252,10 +253,15 @@ export function buildAliasTools(
       name: "run_vba",
       description: TOOL_DESCRIPTIONS.run_vba,
       inputSchema: runVbaSchema,
-      handler: async (input) =>
-        handleMcpVbaExecute(input, runVbaSchema, services, allowedProcedures, (validatedInput) =>
+      handler: async (input) => {
+        // #674 — per-input allowlist resolution. The legacy array form is
+        // treated as frozen; the resolver form is called per input so the
+        // gate sees the allowlist of the project the input targets.
+        const resolved = await resolveAllowedProceduresFor(allowedProcedures, input);
+        return handleMcpVbaExecute(input, runVbaSchema, services, resolved, (validatedInput) =>
           buildRunVbaRequest(validatedInput),
-        ),
+        );
+      },
     },
     {
       name: "query_sql",

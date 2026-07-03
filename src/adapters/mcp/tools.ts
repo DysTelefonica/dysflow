@@ -7,6 +7,7 @@ import {
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import { buildCleanupRequest } from "./alias-tools.js";
+import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
   handleMcpAccessCleanup,
   handleMcpAccessOperationsList,
@@ -80,7 +81,9 @@ export function createDysflowMcpTools(
   writesEnabled = false,
   writeAccessResolver?: McpWriteAccessResolver,
   env: Record<string, string | undefined> = process.env,
-  allowedProcedures?: readonly string[],
+  allowedProcedures?:
+    | readonly string[]
+    | import("./allowed-procedures-resolver.js").AllowedProcedures,
   accessContextResolver: McpAccessContextResolver = async () =>
     failureResult(
       createDysflowError(
@@ -100,15 +103,19 @@ export function createDysflowMcpTools(
       name: "dysflow_vba_execute",
       description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Requires an already compiled project. PR1a (#621 F1): the adapter now defaults to deny — a call without an 'allowedProcedures' allowlist (project config) AND without dryRun:true is refused with MCP_INPUT_INVALID. PR-4 (#659): when the allowlist IS configured but the procedure is not in it, the refusal emits MCP_PROCEDURE_NOT_ALLOWED (distinct structured code) with error.allowedProcedures and error.remediation; the legacy MCP_INPUT_INVALID body prefix is preserved for backward compat. Pass dryRun:true in the request body to use the explicit escape hatch. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
       inputSchema: VBA_EXECUTE_SCHEMA,
-      handler: async (input, context) =>
-        handleMcpVbaExecute(
+      handler: async (input, context) => {
+        // #674 — resolve the allowlist per input so the gate sees the
+        // allowlist of the project the input targets, not the startup one.
+        const resolvedAllowed = await resolveAllowedProceduresFor(allowedProcedures, input);
+        return handleMcpVbaExecute(
           input,
           VBA_EXECUTE_SCHEMA,
           services,
-          allowedProcedures,
+          resolvedAllowed,
           (validatedInput) => validatedInput as AccessVbaRequest,
           context,
-        ),
+        );
+      },
     },
     {
       name: "dysflow_query_execute",

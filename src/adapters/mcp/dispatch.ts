@@ -1,4 +1,5 @@
 import { ALIAS_TOOL_NAMES, buildAliasTools } from "./alias-tools.js";
+import type { AllowedProcedures } from "./allowed-procedures-resolver.js";
 import { createDispatchTool } from "./dispatch-factory.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
@@ -54,7 +55,7 @@ export function registerMcpTools(
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
   env: Record<string, string | undefined>,
-  allowedProcedures?: readonly string[],
+  allowedProcedures?: AllowedProcedures,
 ): DysflowMcpTool[] {
   const aliasTools = buildAliasTools(
     services,
