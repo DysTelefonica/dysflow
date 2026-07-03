@@ -1271,9 +1271,15 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected refusal for procedure outside allowlist");
-    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    // Issue #659 — split: case (b) (allowlist IS configured AND the
+    // procedure is not in it) now emits `PROCEDURE_NOT_ALLOWED` with the
+    // current allowlist + a remediation line. Case (a) (no allowlist AND
+    // no `dryRun:true`) keeps the legacy `MCP_INPUT_INVALID` code.
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
     expect(result.error.message).toContain("Test_NotInList");
     expect(result.error.message).toContain("allowedProcedures");
+    expect(result.error.allowedProcedures).toEqual(["Test_Allowed"]);
+    expect(result.error.remediation).toMatch(/Test_NotInList/);
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
@@ -1293,10 +1299,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected refusal when plan mixes allowed + disallowed");
-    expect(result.error.code).toBe("MCP_INPUT_INVALID");
-    // The message MUST name the offending procedure(s) so the consumer can
-    // adjust the allowlist or the plan.
+    // Issue #659 — case (b): PROCEDURE_NOT_ALLOWED with the allowlist and
+    // a remediation line that names ALL the offending procedures.
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
     expect(result.error.message).toContain("Test_NotInList");
+    expect(result.error.allowedProcedures).toEqual(["Test_Allowed"]);
+    expect(result.error.remediation).toMatch(/Test_NotInList/);
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
@@ -1350,9 +1358,14 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected gate to fire after manifest resolution");
-    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    // Issue #659 — case (b) (manifest resolved a procedure not in the
+    // allowlist). Emits PROCEDURE_NOT_ALLOWED with the current allowlist
+    // and a remediation line that names the offending procedure.
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
     expect(result.error.message).toContain("Test_FromManifest");
     expect(result.error.message).toContain("allowedProcedures");
+    expect(result.error.allowedProcedures).toEqual(["Test_Other"]);
+    expect(result.error.remediation).toMatch(/Test_FromManifest/);
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 

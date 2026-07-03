@@ -437,17 +437,19 @@ describe("MCP tool registration over core services", () => {
       tools
         .find((tool) => tool.name === "dysflow_vba_execute")
         ?.handler({ moduleName: "Automation" }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "procedureName is required." },
     });
     await expect(
       tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: sql must be a string." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "sql must be a string." },
     });
     await expect(
       tools
@@ -532,16 +534,17 @@ describe("MCP tool registration over core services", () => {
       tools
         .find((tool) => tool.name === "dysflow_query_execute")
         ?.handler({ sql: "SELECT 1", mode: "delete" }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "mode must be one of: read, write." },
     });
     await expect(
       tools
         .find((tool) => tool.name === "dysflow_query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [
         {
           type: "text",
@@ -550,26 +553,35 @@ describe("MCP tool registration over core services", () => {
       ],
       isError: true,
       ok: false,
+      error: {
+        code: "MCP_WRITES_DISABLED",
+        remediation: expect.stringContaining("dysflow mcp --enable-writes"),
+      },
     });
     await expect(
       tools
         .find((tool) => tool.name === "seed_fixture")
         ?.handler({ tableName: "People", allowTables: ["People", 7], rows: [{ id: 1 }] }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: allowTables[1] must be a string." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "allowTables[1] must be a string." },
     });
     await expect(
       tools
         .find((tool) => tool.name === "import_queries")
         ?.handler({ queryDefinitions: [{ name: "q_people", sql: 42 }] }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [
         { type: "text", text: "MCP_INPUT_INVALID: queryDefinitions[0].sql must be a string." },
       ],
       isError: true,
       ok: false,
+      error: {
+        code: "MCP_INPUT_INVALID",
+        message: "queryDefinitions[0].sql must be a string.",
+      },
     });
 
     expect(vba.requests).toEqual([]);
@@ -669,10 +681,13 @@ describe("MCP tool registration over core services", () => {
     });
     const runVba = tools.find((tool) => tool.name === "run_vba");
 
-    await expect(runVba?.handler({ procedureName: "Broken", argsJson: "[1," })).resolves.toEqual({
+    await expect(
+      runVba?.handler({ procedureName: "Broken", argsJson: "[1," }),
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: argsJson must be valid JSON." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "argsJson must be valid JSON." },
     });
     await expect(
       runVba?.handler({ procedureName: "Blank", argsJson: "   ", dryRun: true }),
@@ -1919,10 +1934,11 @@ describe("AccessOperationRegistry explicit injection", () => {
     expect(aliasCleanupTool).toBeDefined();
     const result = await aliasCleanupTool?.handler({ operationId: "op-test-mcp" });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: accessPath is required." }],
       isError: true,
       ok: false,
+      error: { code: "MCP_INPUT_INVALID", message: "accessPath is required." },
     });
     expect(cleanupRequests).toEqual([]);
   });
