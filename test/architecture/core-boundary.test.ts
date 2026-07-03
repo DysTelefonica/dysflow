@@ -110,9 +110,7 @@ describe("MCP/core architecture boundary", () => {
     });
 
     await expect(
-      tools
-        .find((tool) => tool.name === "export_all")
-        ?.handler({ projectRoot: "C:/project" }),
+      tools.find((tool) => tool.name === "export_all")?.handler({ projectRoot: "C:/project" }),
     ).resolves.toEqual({
       content: [{ type: "text", text: "TOOL_NOT_IMPLEMENTED: not implemented" }],
       isError: true,
