@@ -12,6 +12,7 @@ describe("MCP schema — import_queries exposes importPath (#672)", () => {
   it("import_queries schema includes the importPath property", () => {
     const schema = MCP_TOOL_SCHEMAS.import_queries;
     expect(schema).toBeDefined();
+    if (!schema) return; // narrow for TS strict
     expect(schema.type).toBe("object");
     expect(schema.properties).toBeDefined();
     expect(schema.properties).toHaveProperty("importPath");
