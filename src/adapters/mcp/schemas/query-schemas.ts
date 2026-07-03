@@ -272,6 +272,10 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       accessPath: SCHEMA_PROPS.accessPath,
+      // #672 — schema now exposes importPath (already supported by the
+      // runner and the request mapper). Lets callers point at a file of
+      // query definitions without inlining the array.
+      importPath: SCHEMA_PROPS.importPath,
       queryDefinitions: SCHEMA_PROPS.queryDefinitions,
       queries: SCHEMA_PROPS.queries,
       dryRun: SCHEMA_PROPS.dryRun,
