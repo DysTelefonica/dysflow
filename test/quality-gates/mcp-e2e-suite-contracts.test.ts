@@ -33,6 +33,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { EXPECTED_ADVERTISED_TOOL_COUNT } from "../../E2E_testing/_helpers/advertised-tool-count.mjs";
 
 const MCP_E2E_PATH = resolve(process.cwd(), "E2E_testing/mcp-e2e.mjs");
 const RECORD_PATH = resolve(process.cwd(), "E2E_testing/_helpers/mcp-e2e-record.mjs");
@@ -100,10 +101,31 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     ).toBeLessThan(advertisedIdx);
   });
 
-  it("expected count is 61 (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
-    // The unit test pins 61 non-hidden tools. If the e2e diverges (e.g. someone
-    // adds a new tool and forgets to bump both pins), this catches it.
-    expect(readSource(MCP_E2E_PATH)).toContain('"61 tools"');
+  it("expected count is sourced from the shared advertised-tool-count helper (matches the unit-test pin in advertised-tool-count.test.ts)", () => {
+    // The unit test (test/adapters/mcp/advertised-tool-count.test.ts) and this
+    // e2e both derive their expected count from E2E_testing/_helpers/advertised-tool-count.mjs.
+    // We pin three structural contracts so drift cannot recur silently:
+    //   1. mcp-e2e.mjs imports the helper module (it must use the same source of truth).
+    //   2. mcp-e2e.mjs compares advertised.length against the helper constant.
+    //   3. The unit pin also imports the helper instead of carrying a second numeric literal.
+    //
+    // If someone adds a new tool but forgets to bump the helper constant, the
+    // unit test catches it at vitest speed and the e2e live gate catches it at
+    // MCP server speed — both surfaces fail in the same commit.
+    expect(readSource(MCP_E2E_PATH)).toMatch(
+      /import\s+\{[^}]*EXPECTED_ADVERTISED_TOOL_COUNT[^}]*\}\s+from\s+["']\.\/_helpers\/advertised-tool-count\.mjs["']/,
+    );
+    expect(readSource(MCP_E2E_PATH)).toMatch(
+      /pass:\s*advertised\.length\s*===\s*EXPECTED_ADVERTISED_TOOL_COUNT/,
+    );
+    expect(Number.isSafeInteger(EXPECTED_ADVERTISED_TOOL_COUNT)).toBe(true);
+    const unitPinSource = readSource(
+      resolve(process.cwd(), "test/adapters/mcp/advertised-tool-count.test.ts"),
+    );
+    expect(unitPinSource).toMatch(
+      /import\s+\{[^}]*EXPECTED_ADVERTISED_TOOL_COUNT[^}]*\}\s+from\s+["']\.\.\/\.\.\/\.\.\/E2E_testing\/_helpers\/advertised-tool-count\.mjs["']/,
+    );
+    expect(unitPinSource).not.toMatch(/\.toBe\(\s*\d+\s*\)/);
   });
 });
 
