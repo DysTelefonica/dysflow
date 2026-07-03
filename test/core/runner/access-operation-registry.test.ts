@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system.js";
 import { AccessOperationCleanupService } from "../../../src/core/operations/access-operation-cleanup.js";
 import { AccessOperationPreflightCleanupService } from "../../../src/core/operations/access-operation-preflight.js";
 import {
@@ -128,6 +129,7 @@ describe("Access operation registry and cleanup safety", () => {
     try {
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
       });
       await Promise.all(
         Array.from({ length: 20 }, (_, index) =>
@@ -155,6 +157,7 @@ describe("Access operation registry and cleanup safety", () => {
     try {
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 100,
       });
       await registry.create({
@@ -181,6 +184,7 @@ describe("Access operation registry and cleanup safety", () => {
       await mkdir(lockPath, { recursive: true });
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 25,
         staleLockMs: 60_000,
       });
@@ -214,6 +218,7 @@ describe("Access operation registry and cleanup safety", () => {
       await utimes(lockPath, staleTime, staleTime);
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 25,
         staleLockMs: 1,
       });
@@ -245,6 +250,7 @@ describe("Access operation registry and cleanup safety", () => {
       await utimes(lockPath, staleTime, staleTime);
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 5_000,
         staleLockMs: 1,
       });
@@ -280,6 +286,7 @@ describe("Access operation registry and cleanup safety", () => {
       await utimes(lockPath, staleTime, staleTime);
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 25,
         staleLockMs: 1,
       });
@@ -315,6 +322,7 @@ describe("Access operation registry and cleanup safety", () => {
     try {
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 100,
       });
       const internals = registry as unknown as RegistryInternals;
@@ -361,8 +369,12 @@ describe("Access operation registry and cleanup safety", () => {
       const { FileAccessOperationRegistry: ReleaseFailureRegistry } = await import(
         "../../../src/core/operations/access-operation-registry.js"
       );
+      const { nodeRegistryFileSystem: mockedNodeRegistryFileSystem } = await import(
+        "../../../src/adapters/operations/node-registry-file-system.js"
+      );
       const registry = new ReleaseFailureRegistry({
         filePath: registryPath,
+        fileSystem: mockedNodeRegistryFileSystem,
         lockTimeoutMs: 100,
       });
 
@@ -391,6 +403,7 @@ describe("Access operation registry and cleanup safety", () => {
     try {
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
       });
       await registry.create({
         ...base,
@@ -408,7 +421,10 @@ describe("Access operation registry and cleanup safety", () => {
       });
 
       await expect(
-        new FileAccessOperationRegistry({ filePath: registryPath }).get("op-timeout"),
+        new FileAccessOperationRegistry({
+          filePath: registryPath,
+          fileSystem: nodeRegistryFileSystem,
+        }).get("op-timeout"),
       ).resolves.toMatchObject({
         operationId: "op-timeout",
         status: "timed_out",
@@ -427,6 +443,7 @@ describe("Access operation registry and cleanup safety", () => {
     try {
       const registry = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
       });
       await registry.create({
         ...base,
@@ -499,7 +516,10 @@ describe("FileAccessOperationRegistry — swallowed-I/O diagnostics (#478)", () 
       await writeFile(registryPath, garbage, "utf8");
 
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const result = await registry.listRecent();
       expect(result).toEqual([]);
       expect(spy).toHaveBeenCalled();
@@ -530,7 +550,10 @@ describe("FileAccessOperationRegistry — swallowed-I/O diagnostics (#478)", () 
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
       const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const result = await registry.listRecent();
       expect(result).toEqual([]);
       // ENOENT must not trigger a debug log
@@ -872,6 +895,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
       // Seed the registry with one record
       const writer = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 100,
       });
       await writer.create({
@@ -890,6 +914,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
       // With a very short lockTimeoutMs, a lock-acquiring get() would time out; lock-free should not
       const reader = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 50,
         staleLockMs: 120_000,
       });
@@ -909,6 +934,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
     try {
       const writer = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 100,
       });
       await writer.create({
@@ -925,6 +951,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
 
       const reader = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 50,
         staleLockMs: 120_000,
       });
@@ -943,6 +970,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
     try {
       const writer = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 200,
       });
       await writer.create({
@@ -956,6 +984,7 @@ describe("FileAccessOperationRegistry — lock-free reads (#179)", () => {
 
       const reader = new FileAccessOperationRegistry({
         filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
         lockTimeoutMs: 200,
       });
       // Fire N concurrent reads while a write is happening
@@ -1085,7 +1114,10 @@ describe("Access operation registry additional branches", () => {
       processStartTime: null,
     };
     try {
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       await registry.create({
         ...base,
         operationId: "op-file-complete",
@@ -1103,7 +1135,10 @@ describe("Access operation registry additional branches", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-file-update-notfound-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const result = await registry.update("does-not-exist", { status: "completed" });
       expect(result).toBeUndefined();
     } finally {
@@ -1136,7 +1171,10 @@ describe("Access operation registry additional branches", () => {
         ]),
         "utf8",
       );
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const record = await registry.get("op-legacy");
       expect(record?.operationId).toBe("op-legacy");
     } finally {
@@ -1151,7 +1189,10 @@ describe("Access operation registry additional branches", () => {
       await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
       await writeFile(registryPath, "{ not valid json }", "utf8");
       vi.spyOn(console, "debug").mockImplementation(() => {});
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const records = await registry.listRecent();
       expect(records).toEqual([]);
       // DELTA-001 (#575): corrupt registry is quarantined and health is degraded
@@ -1168,7 +1209,10 @@ describe("Access operation registry additional branches", () => {
     try {
       await mkdir(join(root, ".dysflow", "runtime"), { recursive: true });
       await writeFile(registryPath, JSON.stringify({ version: 1 }), "utf8");
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const records = await registry.listRecent();
       expect(records).toEqual([]);
       // Valid JSON without the `records` key is a structural mismatch, NOT a
@@ -1278,7 +1322,11 @@ describe("PR4 — registry mechanical fixes (#198 #202 #204)", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-evict-file-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath, maxRecords: 3 });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+        maxRecords: 3,
+      });
       const entries = [
         { operationId: "f-oldest-1", updatedAt: "2024-01-01T00:00:00.000Z" },
         { operationId: "f-oldest-2", updatedAt: "2024-01-02T00:00:00.000Z" },

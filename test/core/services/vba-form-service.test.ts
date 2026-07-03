@@ -2,17 +2,26 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { nodeFormFileSystem } from "../../../src/adapters/services/node-form-file-system";
 import {
   type FormClockPort,
   type FormFileSystemPort,
   VbaFormService,
 } from "../../../src/core/services/vba-form-service";
 
+function createService(
+  options: Omit<ConstructorParameters<typeof VbaFormService>[0], "fileSystem"> & {
+    fileSystem?: FormFileSystemPort;
+  } = {},
+): VbaFormService {
+  return new VbaFormService({ fileSystem: nodeFormFileSystem, ...options });
+}
+
 describe("VbaFormService", () => {
   // --- resolveFormSpec branches ---
 
   it("returns FORM_SPEC_MISSING when neither spec nor specPath is provided", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({});
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_MISSING");
@@ -26,14 +35,14 @@ describe("VbaFormService", () => {
       JSON.stringify({ name: "Form_FromFile", kind: "Form", controls: [] }),
       "utf8",
     );
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.validateFormSpec({ specPath: specFile });
     expect(result.ok).toBe(true);
     if (result.ok) expect((result.data as { name: string }).name).toBe("Form_FromFile");
   });
 
   it("falls back to params.name when spec object has no name field", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: { kind: "Form", controls: [] },
       name: "Form_ParamName",
@@ -43,7 +52,7 @@ describe("VbaFormService", () => {
   });
 
   it("infers kind as Report when name starts with Report_", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: { name: "Report_Sales", controls: [] },
     });
@@ -52,7 +61,7 @@ describe("VbaFormService", () => {
   });
 
   it("falls back to params.kind when spec has no kind and name does not start with Report_", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: { name: "MyForm", controls: [] },
       kind: "Report",
@@ -62,7 +71,7 @@ describe("VbaFormService", () => {
   });
 
   it("returns FORM_SPEC_INVALID for unsupported form kind", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: { name: "BadForm", kind: "Subform", controls: [] },
     });
@@ -71,7 +80,7 @@ describe("VbaFormService", () => {
   });
 
   it("filters out controls without a name and maps controlType fallback", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: {
         name: "Form_Controls",
@@ -94,7 +103,7 @@ describe("VbaFormService", () => {
   });
 
   it("returns type Unknown when control has neither type nor controlType", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: {
         name: "Form_Unknown",
@@ -113,7 +122,7 @@ describe("VbaFormService", () => {
 
   it("generates a Report .json file when kind is Report", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-gen-report-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.generateForm({
       spec: { name: "Report_Sales", kind: "Report", controls: [] },
       destinationRoot: root,
@@ -127,7 +136,7 @@ describe("VbaFormService", () => {
 
   it("uses projectRoot as destinationRoot when destinationRoot is absent", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-gen-projectroot-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.generateForm({
       spec: { name: "Form_PR", kind: "Form", controls: [] },
       projectRoot: root,
@@ -141,7 +150,7 @@ describe("VbaFormService", () => {
 
   it("uses service cwd as destinationRoot when neither destinationRoot nor projectRoot given", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-gen-cwd-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.generateForm({
       spec: { name: "Form_CWD", kind: "Form", controls: [] },
     });
@@ -154,7 +163,7 @@ describe("VbaFormService", () => {
 
   it("defaults to dry-run for generateForm when dryRun/apply parameters are omitted", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-gen-default-dryrun-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.generateForm({
       spec: { name: "Form_Default", kind: "Form", controls: [] },
       destinationRoot: root,
@@ -169,7 +178,7 @@ describe("VbaFormService", () => {
 
   it("generateForm executes and generates file when apply: true is passed", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-gen-apply-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.generateForm({
       spec: { name: "Form_Apply", kind: "Form", controls: [] },
       destinationRoot: root,
@@ -183,7 +192,7 @@ describe("VbaFormService", () => {
   });
 
   it("generateForm returns failure when spec is invalid", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.generateForm({});
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_MISSING");
@@ -192,7 +201,7 @@ describe("VbaFormService", () => {
   // --- catalogAddControl branches ---
 
   it("returns FORM_SPEC_INVALID when catalogAddControl spec is missing", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.catalogAddControl({
       controlName: "btn",
       controlType: "Button",
@@ -202,7 +211,7 @@ describe("VbaFormService", () => {
   });
 
   it("returns FORM_SPEC_INVALID when controlName is missing", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.catalogAddControl({
       spec: { name: "Form_X", kind: "Form", controls: [] },
       controlType: "TextBox",
@@ -212,7 +221,7 @@ describe("VbaFormService", () => {
   });
 
   it("returns FORM_SPEC_INVALID when controlType is missing", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
     const result = await service.catalogAddControl({
       spec: { name: "Form_X", kind: "Form", controls: [] },
       controlName: "ctrl1",
@@ -223,7 +232,7 @@ describe("VbaFormService", () => {
 
   it("uses params.name as controlName fallback and params.type as controlType fallback", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-fallback-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.catalogAddControl({
       spec: { name: "Form_Fallback", kind: "Form", controls: [] },
       name: "fallbackCtrl",
@@ -241,7 +250,7 @@ describe("VbaFormService", () => {
   it("appends to existing catalog entries for the same form", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-append-"));
     const catalogPath = join(root, "forms", "catalog.json");
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
 
     // Add first control
     await service.catalogAddControl({
@@ -282,7 +291,7 @@ describe("VbaFormService", () => {
       JSON.stringify({ name: "Real", kind: "Form", controls: [] }),
       "utf8",
     );
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.harvestFormCatalog({ destinationRoot: root });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -300,7 +309,7 @@ describe("VbaFormService", () => {
       JSON.stringify({ kind: "Form", controls: [] }),
       "utf8",
     );
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.harvestFormCatalog({ destinationRoot: root });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -318,7 +327,7 @@ describe("VbaFormService", () => {
       JSON.stringify({ name: "KindFallback", controls: [] }),
       "utf8",
     );
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.harvestFormCatalog({ destinationRoot: root });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -336,7 +345,7 @@ describe("VbaFormService", () => {
       JSON.stringify({ name: "NoControls", kind: "Form" }),
       "utf8",
     );
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.harvestFormCatalog({ destinationRoot: root });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -349,7 +358,7 @@ describe("VbaFormService", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-harvest-projroot-"));
     const formsDir = join(root, "forms");
     await mkdir(formsDir, { recursive: true });
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
     const result = await service.harvestFormCatalog({ projectRoot: root });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -359,7 +368,7 @@ describe("VbaFormService", () => {
   });
 
   it("can validate a correct form spec", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
 
     const result = await service.validateFormSpec({
       spec: {
@@ -382,7 +391,7 @@ describe("VbaFormService", () => {
   });
 
   it("returns FORM_SPEC_INVALID when validateFormSpec spec has no name", async () => {
-    const service = new VbaFormService({ cwd: process.cwd() });
+    const service = createService({ cwd: process.cwd() });
 
     const result = await service.validateFormSpec({
       spec: {
@@ -399,7 +408,7 @@ describe("VbaFormService", () => {
 
   it("can generate form JSON file in forms directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-form-gen-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
 
     const result = await service.generateForm({
       spec: {
@@ -433,7 +442,7 @@ describe("VbaFormService", () => {
 
   it("can catalog control and update forms/catalog.json", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-catalog-test-"));
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
 
     const catalogPath = join(root, "forms", "catalog.json");
     const result = await service.catalogAddControl({
@@ -463,7 +472,7 @@ describe("VbaFormService", () => {
     await writeFile(formsFile, "I am a file not a dir", "utf8");
     const catalogPath = join(root, "forms", "catalog.json");
 
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
 
     const result = await service.catalogAddControl({
       spec: { name: "TestForm", kind: "Form", controls: [] },
@@ -497,7 +506,7 @@ describe("VbaFormService", () => {
       "utf8",
     );
 
-    const service = new VbaFormService({ cwd: root });
+    const service = createService({ cwd: root });
 
     const result = await service.harvestFormCatalog({
       destinationRoot: root,
@@ -543,7 +552,7 @@ describe("VbaFormService", () => {
       });
       const clock = makeClock("2025-06-01T12:00:00.000Z");
 
-      const service = new VbaFormService({ fileSystem: fs, clock });
+      const service = createService({ fileSystem: fs, clock });
 
       const result = await service.generateForm({
         spec: { name: "Form_FakePort", kind: "Form", controls: [{ name: "btn", type: "Button" }] },
@@ -579,7 +588,7 @@ describe("VbaFormService", () => {
 
     it("generateForm with dryRun:true returns a plan without writing through the fileSystem port", async () => {
       const fs = makeFs();
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.generateForm({
         spec: { name: "Form_DryRun", kind: "Form", controls: [{ name: "txt", type: "TextBox" }] },
@@ -610,7 +619,7 @@ describe("VbaFormService", () => {
           writtenFiles.push({ path, data });
         },
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.generateForm({
         spec: { name: "Form_ApplyDryRun", kind: "Form", controls: [] },
@@ -642,7 +651,7 @@ describe("VbaFormService", () => {
       });
       const clock = makeClock("2099-12-31T23:59:59.999Z");
 
-      const service = new VbaFormService({ fileSystem: fs, clock });
+      const service = createService({ fileSystem: fs, clock });
 
       await service.generateForm({
         spec: { name: "Form_TS", kind: "Form", controls: [] },
@@ -661,7 +670,7 @@ describe("VbaFormService", () => {
       const fs = makeFs({
         writeFile: vi.fn().mockRejectedValue(new Error("disk full")),
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       await expect(
         service.generateForm({
@@ -684,7 +693,7 @@ describe("VbaFormService", () => {
           writtenFiles.push({ path: p, data: d });
         }),
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_DefaultDry", kind: "Form", controls: [] },
@@ -713,7 +722,7 @@ describe("VbaFormService", () => {
           writtenFiles.push({ path: p, data: d });
         }),
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_Apply", kind: "Form", controls: [] },
@@ -741,7 +750,7 @@ describe("VbaFormService", () => {
           writtenFiles.push({ path: p, data: d });
         }),
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_ExplicitDry", kind: "Form", controls: [] },
@@ -769,7 +778,7 @@ describe("VbaFormService", () => {
           writtenFiles.push({ path: p, data: d });
         }),
       });
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_ApplyPrevails", kind: "Form", controls: [] },
@@ -801,7 +810,7 @@ describe("VbaFormService", () => {
         }),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_Cat", kind: "Form", controls: [] },
@@ -834,7 +843,7 @@ describe("VbaFormService", () => {
         }),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_New", kind: "Form", controls: [] },
@@ -866,7 +875,7 @@ describe("VbaFormService", () => {
         writeFile: writeFileSpy,
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_Corrupt", kind: "Form", controls: [] },
@@ -892,7 +901,7 @@ describe("VbaFormService", () => {
         writeFile: writeFileSpy,
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_DryRunMissing", kind: "Form", controls: [] },
@@ -922,7 +931,7 @@ describe("VbaFormService", () => {
         writeFile: writeFileSpy,
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_DryRunCorrupt", kind: "Form", controls: [] },
@@ -946,7 +955,7 @@ describe("VbaFormService", () => {
         writeFile: vi.fn().mockRejectedValue(new Error("permission denied")),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.catalogAddControl({
         spec: { name: "Form_WriteErr", kind: "Form", controls: [] },
@@ -980,7 +989,7 @@ describe("VbaFormService", () => {
         }),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.harvestFormCatalog({ destinationRoot: "/fake/root" });
 
@@ -1009,7 +1018,7 @@ describe("VbaFormService", () => {
         readJson: vi.fn().mockResolvedValue({ name: "Good", kind: "Form", controls: [] }),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.harvestFormCatalog({ destinationRoot: "/fake" });
 
@@ -1032,7 +1041,7 @@ describe("VbaFormService", () => {
         }),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.harvestFormCatalog({ destinationRoot: "/fake" });
 
@@ -1048,7 +1057,7 @@ describe("VbaFormService", () => {
         readdir: vi.fn().mockRejectedValue(new Error("ENOENT")),
       });
 
-      const service = new VbaFormService({ fileSystem: fs });
+      const service = createService({ fileSystem: fs });
 
       const result = await service.harvestFormCatalog({ destinationRoot: "/nonexistent" });
 

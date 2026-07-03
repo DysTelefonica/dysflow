@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import { nodeFormFileSystem } from "../../adapters/services/node-form-file-system.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import {
   createDysflowError,
@@ -33,7 +32,7 @@ export interface FormClockPort {
 
 export type VbaFormServiceOptions = {
   cwd?: string;
-  fileSystem?: FormFileSystemPort;
+  fileSystem: FormFileSystemPort;
   clock?: FormClockPort;
   // Override `process.env` for runtime-dir resolution (#574). Tests use this to point
   // isWithinRuntime at a synthetic runtime directory without polluting the host env.
@@ -41,13 +40,9 @@ export type VbaFormServiceOptions = {
 };
 
 // ---------------------------------------------------------------------------
-// Default Node.js port implementations (used when no explicit port is injected)
-//
-// The FS default lives in `src/adapters/services/node-form-file-system.ts` —
-// the production adapter that wraps `node:fs/promises`. `core` does NOT
-// import `node:fs/promises` itself; it depends only on the port surface
-// above. Mirrors the `cross-process-lock.ts` + `node-lock-file-system.ts`
-// precedent (commit `6ac0af1`). Hexagonal split (#A, #624).
+// Default non-I/O port implementations.
+// Concrete filesystem ports are owned by adapters and must be injected by
+// callers; core owns only the port surface above.
 // ---------------------------------------------------------------------------
 
 const nodeClock: FormClockPort = {
@@ -64,9 +59,9 @@ export class VbaFormService {
   private readonly clock: FormClockPort;
   private readonly env: Record<string, string | undefined>;
 
-  constructor(options: VbaFormServiceOptions = {}) {
+  constructor(options: VbaFormServiceOptions) {
     this.cwd = options.cwd ?? process.cwd();
-    this.fileSystem = options.fileSystem ?? nodeFormFileSystem;
+    this.fileSystem = options.fileSystem;
     this.clock = options.clock ?? nodeClock;
     this.env = options.env ?? (process.env as Record<string, string | undefined>);
   }

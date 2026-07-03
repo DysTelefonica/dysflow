@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system.js";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 
 const base = {
@@ -18,8 +19,14 @@ describe("FileAccessOperationRegistry sharing", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-ops-sharing-"));
     const registryPath = join(root, ".dysflow", "runtime", "operations.json");
     try {
-      const registryA = new FileAccessOperationRegistry({ filePath: registryPath });
-      const registryB = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registryA = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
+      const registryB = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
 
       // Create operation via registryA
       await registryA.create({

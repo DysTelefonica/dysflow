@@ -25,6 +25,7 @@ import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
+import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
   createWindowsAccessOperationPreflightCleanup,
@@ -271,7 +272,10 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
 }
 
 function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
-  const operationRegistry = createProjectAccessOperationRegistry(config);
+  const operationRegistry = createProjectAccessOperationRegistry({
+    ...config,
+    fileSystem: nodeRegistryFileSystem,
+  });
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
     lockFileSystem: nodeLockFileSystem,
@@ -327,7 +331,10 @@ export function createDynamicServices(
   const serviceCache = new Map<string, DysflowMcpServices>();
 
   const defaultRegistry = startupConfig
-    ? createProjectAccessOperationRegistry(startupConfig)
+    ? createProjectAccessOperationRegistry({
+        ...startupConfig,
+        fileSystem: nodeRegistryFileSystem,
+      })
     : createInMemoryAccessOperationRegistry();
 
   const resolveService = async (

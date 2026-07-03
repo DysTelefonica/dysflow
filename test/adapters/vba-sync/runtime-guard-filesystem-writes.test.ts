@@ -21,6 +21,7 @@
 
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { nodeFormFileSystem } from "../../../src/adapters/services/node-form-file-system";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { successResult } from "../../../src/core/contracts/index.js";
 import { VbaFormService } from "../../../src/core/services/vba-form-service";
@@ -338,6 +339,7 @@ describe("Issue #574 — runtime guard for VbaFormService.generateForm", () => {
   function makeService(env?: Record<string, string | undefined>) {
     return new VbaFormService({
       cwd: "C:/runtime/dysflow",
+      fileSystem: nodeFormFileSystem,
       env,
     });
   }
@@ -371,6 +373,7 @@ describe("Issue #574 — runtime guard for VbaFormService.generateForm", () => {
     // Service cwd lives inside the runtime, no destinationRoot/projectRoot in params.
     const service = new VbaFormService({
       cwd: "C:/runtime/dysflow",
+      fileSystem: nodeFormFileSystem,
       env: runtimeEnv,
     });
     const result = await service.generateForm({

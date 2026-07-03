@@ -1,4 +1,3 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve, win32 } from "node:path";
 import {
   createDysflowError,
@@ -24,6 +23,7 @@ import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba
 import { stringValue } from "../../core/utils/index.js";
 import { isPathInside } from "../../core/utils/path-containment.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { nodeFormFileSystem } from "../services/node-form-file-system.js";
 import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import { type DirectMapping, mapping } from "./vba-sync-types.js";
@@ -47,23 +47,6 @@ const FORMS_MAPPINGS = {
         : [],
     (input) => ({ importMode: stringValue(input.importMode) }),
   ),
-};
-
-// Node.js implementation of the form filesystem port.
-// Adapters own the concrete I/O; core owns only the interface.
-const nodeFormFileSystem: FormFileSystemPort = {
-  mkdir: (path, options) => mkdir(path, options),
-  readdir: (path) => readdir(path),
-  readFile: (path) => readFile(path, "utf8"),
-  readJson: async <T>(path: string): Promise<T> => {
-    const raw = await readFile(path, "utf8");
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      throw new Error(`Invalid JSON file: ${path}`);
-    }
-  },
-  writeFile: (path, data, encoding) => writeFile(path, data, encoding),
 };
 
 /**

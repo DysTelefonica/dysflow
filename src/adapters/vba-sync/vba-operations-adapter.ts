@@ -17,6 +17,7 @@ import {
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
+import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
 
 export type VbaOperationsCleanupService = {
   cleanup(request: {
@@ -53,7 +54,10 @@ export class VbaOperationsAdapter {
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     if (toolName === "list_access_operations") {
       const registry = resolveAccessOperationRegistry(this.operationRegistry, () =>
-        createProjectAccessOperationRegistry({ projectRoot: this.cwd }),
+        createProjectAccessOperationRegistry({
+          projectRoot: this.cwd,
+          fileSystem: nodeRegistryFileSystem,
+        }),
       );
       // DELTA-001 (#575): include `registryHealth` alongside the list so callers
       // can distinguish "no operations" from "registry was corrupt and is now empty by design".
@@ -88,7 +92,10 @@ export class VbaOperationsAdapter {
       // ran. Failure envelopes keep their existing shape.
       if (cleanupResult.ok) {
         const registry = resolveAccessOperationRegistry(this.operationRegistry, () =>
-          createProjectAccessOperationRegistry({ projectRoot: this.cwd }),
+          createProjectAccessOperationRegistry({
+            projectRoot: this.cwd,
+            fileSystem: nodeRegistryFileSystem,
+          }),
         );
         return successResult<{
           cleanup: AccessCleanupResult;
@@ -141,7 +148,10 @@ export class VbaOperationsAdapter {
     const { WindowsMsAccessProcessInspector, WindowsMsAccessProcessScanner, WindowsProcessKiller } =
       await import("../process/windows-processes.js");
     return new AccessOperationPreflightCleanupService({
-      registry: createProjectAccessOperationRegistry({ projectRoot }),
+      registry: createProjectAccessOperationRegistry({
+        projectRoot,
+        fileSystem: nodeRegistryFileSystem,
+      }),
       processInspector: new WindowsMsAccessProcessInspector(),
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),

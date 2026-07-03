@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
-import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";
 import { isLockAlreadyExistsError, isTransientLockContentionError } from "../utils/lock-errors.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import type { RegistryFileSystemPort } from "./registry-file-system-port.js";
@@ -100,7 +99,7 @@ export type FileAccessOperationRegistryOptions = InMemoryAccessOperationRegistry
    * FS. Hexagonal split (#A, #624): the registry no longer imports
    * `node:fs/promises` directly.
    */
-  fileSystem?: RegistryFileSystemPort;
+  fileSystem: RegistryFileSystemPort;
 };
 
 const DEFAULT_MAX_RECORDS = 1000;
@@ -116,8 +115,12 @@ export function createInMemoryAccessOperationRegistry(): AccessOperationRegistry
 
 export function createProjectAccessOperationRegistry(config: {
   projectRoot?: string;
+  fileSystem: RegistryFileSystemPort;
 }): AccessOperationRegistry {
-  return new FileAccessOperationRegistry({ filePath: resolveProjectOperationRegistryPath(config) });
+  return new FileAccessOperationRegistry({
+    filePath: resolveProjectOperationRegistryPath(config),
+    fileSystem: config.fileSystem,
+  });
 }
 
 export function resolveAccessOperationRegistry(
@@ -163,9 +166,9 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
   private readonly staleLockMs: number;
   /**
    * Hexagonal split (#A, #624): every filesystem call the registry makes
-   * routes through this port. The default wires `nodeRegistryFileSystem`
-   * (see constructor); tests inject a fake to drive happy / sad / adversarial
-   * branches without touching the host filesystem.
+   * routes through this port. Production composition roots inject
+   * `nodeRegistryFileSystem`; tests inject fakes to drive happy / sad /
+   * adversarial branches without touching the host filesystem.
    */
   private readonly fileSystem: RegistryFileSystemPort;
   private lastHealth: AccessOperationRegistryHealth = { status: "ok" };
@@ -177,7 +180,7 @@ export class FileAccessOperationRegistry implements AccessOperationRegistry {
     this.maxRecords = Math.max(1, Math.floor(options.maxRecords ?? DEFAULT_MAX_RECORDS));
     this.lockTimeoutMs = Math.max(1, Math.floor(options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS));
     this.staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
-    this.fileSystem = options.fileSystem ?? nodeRegistryFileSystem;
+    this.fileSystem = options.fileSystem;
   }
 
   async create(record: CreateAccessOperationRecord): Promise<AccessOperationRecord> {
