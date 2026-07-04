@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**64 visible MCP tools · Windows / Node 20+**
+**65 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 64 visible MCP tools covering VBA, SQL, schema, form operations, and source-level VBA procedure introspection.
+- A platform with 65 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, and dead-code detection.
 
 ### It is not
 
@@ -611,6 +611,14 @@ Find all references to a given symbol across a set of modules. The tool parses i
   - `scope` (string, optional): `module`, `binary`, `source`, or `all` (default).
   - `module` (string, optional): Search only in this specific module.
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
+
+#### `dysflow_detect_dead_code`
+Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem. Read-only.
+* **Parameters**:
+  - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
+  - `modules` (object, **required**): Key-value pair of module names to their inline VBA source code.
+  - `module` (string, optional): Module-name constraint; restricts the analysis to a single module and elevates risk for surviving private-procedure findings.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ---

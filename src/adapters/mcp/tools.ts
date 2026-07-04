@@ -9,6 +9,7 @@ import {
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
+  detectDeadCode,
   findVbaReferences,
   getVbaProcedure,
   listVbaProcedures,
@@ -53,6 +54,7 @@ import type {
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import {
   CLEANUP_SCHEMA,
+  DETECT_DEAD_CODE_SCHEMA,
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
@@ -258,6 +260,8 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_list_procedures",
   "dysflow_get_procedure",
   "dysflow_find_references",
+  // issue #705 — read-only dead-code detection
+  "dysflow_detect_dead_code",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -659,6 +663,86 @@ export function createDysflowMcpTools(
 
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
+          isError: false,
+          ok: true,
+        };
+      },
+    },
+    // issue #705 — read-only dead-code analysis. The handler runs the
+    // pure `detectDeadCode` core function over the caller-supplied
+    // `modules` map (or, when omitted, the project source tree resolved
+    // via the Access context). It never opens Access, never spawns
+    // PowerShell, and never consults the write gate.
+    {
+      name: "dysflow_detect_dead_code",
+      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`dysflow_find_references\` (#701). ${MCP_TOOL_CONTRACTS.dysflow_detect_dead_code.summary}`,
+      inputSchema: DETECT_DEAD_CODE_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, DETECT_DEAD_CODE_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+
+        const params = input as Record<string, unknown>;
+        const scope = (params.scope ?? "binary") as "binary" | "source" | "module";
+        const moduleConstraint = (params.module as string | undefined) ?? undefined;
+
+        // Inline `modules` short-circuits any disk read — the caller
+        // already provided every byte of source the analyser needs.
+        let modules: Record<string, string> | undefined;
+        if (
+          params.modules !== undefined &&
+          typeof params.modules === "object" &&
+          params.modules !== null
+        ) {
+          modules = params.modules as Record<string, string>;
+        }
+
+        if (modules === undefined) {
+          // Fall back to the project source tree via the Access context.
+          // When no `destinationRoot` is configured (or the caller's
+          // destinationRoot disagrees with the configured root), the
+          // resolver returns `undefined` — same security posture as the
+          // other read-only procedure tools (#701).
+          const resolved = await resolveAllProjectModules(
+            input,
+            params.destinationRoot as string | undefined,
+            accessContextResolver,
+          );
+          if (resolved === undefined) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `MODULE_NOT_FOUND: No modules could be resolved. Pass an inline \`modules\` map or ensure the project's source root is configured.`,
+                },
+              ],
+              isError: true,
+              ok: false,
+            };
+          }
+          modules = resolved;
+        }
+
+        const report = detectDeadCode(modules, { scope, module: moduleConstraint });
+
+        if (report === undefined) {
+          // The caller narrowed to a module that does not exist in the
+          // resolved modules map. Treat this as a typed MODULE_NOT_FOUND
+          // envelope so the consumer can distinguish "no dead code" from
+          // "module was not resolved" — see #705 review blocker #3.
+          return {
+            content: [
+              {
+                type: "text",
+                text: `MODULE_NOT_FOUND: Module '${moduleConstraint}' was not found in the supplied modules map.`,
+              },
+            ],
+            isError: true,
+            ok: false,
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(report) }],
           isError: false,
           ok: true,
         };

@@ -208,3 +208,59 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
       "confirmPid": 4321
     }
     ```
+
+---
+
+### 7. Dead-Code Analysis (Read-only, #705)
+
+#### Detect Dead Code Across Inline Modules
+*   **Tool**: `dysflow_detect_dead_code`
+*   **Arguments**:
+    ```json
+    {
+      "scope": "binary",
+      "modules": {
+        "ModA": "Option Explicit\r\nPublic Sub UnusedProc()\r\nEnd Sub\r\n",
+        "ModB": "Option Explicit\r\nPublic Sub Caller()\r\n    Application.Run \"UnusedProc\"\r\nEnd Sub\r\n"
+      }
+    }
+    ```
+*   **Notes**: The tool performs a pure string-in / string-out analysis over the supplied `modules` map. It never opens Access, never spawns PowerShell, and never mutates the filesystem. The handler runs in both write-enabled and write-disabled mode (the tool itself is `read-only / writeGate: none`). A successful response shape:
+
+    ```json
+    {
+      "scope": "binary",
+      "scannedModules": ["ModA", "ModB"],
+      "scannedAt": "2026-07-04T19:30:00.000Z",
+      "findings": [
+        {
+          "symbol": "UnusedProc",
+          "module": "ModA",
+          "kind": "sub",
+          "line": 2,
+          "evidence": {
+            "scannedModules": ["ModA", "ModB"],
+            "referenceCount": 0,
+            "definitionSnippet": "Public Sub UnusedProc()"
+          },
+          "risk": "Low"
+        }
+      ],
+      "summary": { "total": 1, "low": 1, "med": 0, "high": 0 }
+    }
+    ```
+
+#### Restrict Detection to a Single Module
+*   **Tool**: `dysflow_detect_dead_code`
+*   **Arguments**:
+    ```json
+    {
+      "scope": "module",
+      "module": "ModB",
+      "modules": {
+        "ModA": "Option Explicit\r\nPublic Sub UnusedA()\r\nEnd Sub\r\n",
+        "ModB": "Option Explicit\r\nPublic Sub UnusedB()\r\nEnd Sub\r\n"
+      }
+    }
+    ```
+*   **Notes**: `scope: "module"` echoes the narrowing back on the report and `module: "ModB"` restricts the analysis to that module only. The risk of every surviving finding is elevated to `Med` for private procedures (a narrowed scan can hide references that live outside the chosen module). Access lifecycle and control-event names (`AutoExec`, `Form_Load`, `cmdSave_Click`, …) are filtered out via `EXCLUDED_NAME_PATTERNS` and never appear as findings.

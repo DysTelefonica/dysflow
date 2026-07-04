@@ -280,3 +280,52 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
     },
   },
 };
+
+// issue #705 — `dysflow_detect_dead_code`. The schema mirrors the
+// `dysflow_find_references` shape: the caller either supplies an inline
+// `modules` map (so the handler never opens Access) or relies on the
+// project-source-tree fallback resolved via the Access context.
+//
+// `modules` is intentionally NOT in the `required` list: omitting it is
+// a valid request that triggers the `resolveAllProjectModules` fallback
+// inside the handler. When the fallback also fails to resolve anything,
+// the handler returns a typed `MODULE_NOT_FOUND` envelope (#705 review
+// blocker #2). The `additionalProperties: false` guard rejects typos at
+// the validator boundary so the handler never runs against ill-formed
+// input.
+export const DETECT_DEAD_CODE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["scope"],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    contextId: {
+      type: "string",
+      description:
+        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
+    },
+    scope: {
+      type: "string",
+      enum: ["binary", "source", "module"],
+      description:
+        "Search scope for the dead-code analysis. The handler treats the caller-supplied modules map as the source of truth regardless of scope; `scope` and `module` are echoed back on the report for caller introspection.",
+    },
+    module: {
+      type: "string",
+      description:
+        "Optional module-name constraint. When set, only procedures and declarations in that module are considered; risk is elevated to `Med` for surviving private-procedure findings because a narrowed scan may hide references that live outside the chosen module.",
+    },
+    modules: {
+      type: "object",
+      description:
+        "In-memory mapping of module name to VBA source code. The handler operates exclusively on this map and never opens Access or reads from disk. Omit to defer to the project-source-tree fallback resolved via the Access context.",
+      additionalProperties: { type: "string" },
+    },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+  },
+};
