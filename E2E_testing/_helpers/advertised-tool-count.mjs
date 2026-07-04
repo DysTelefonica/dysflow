@@ -5,7 +5,7 @@
 //   2. test/adapters/mcp/advertised-tool-count.test.ts — unit pin
 //   3. test/quality-gates/mcp-e2e-suite-contracts.test.ts — source-text pin
 //
-// Each site imported its own literal "61" / `61`. Extracting it here
+// Each site imported its own literal tool count. Extracting it here
 // means a future add/remove flips one number and the next test run
 // surfaces every dependent pin in one cycle. The label is derived from
 // the count so the e2e expected column and the literal-string source
@@ -15,7 +15,7 @@
 // corresponding `README.md` / `docs/` mentions.
 
 /** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 61;
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 64;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

@@ -112,7 +112,7 @@ describe("release name == tag_name CI guard (#668)", () => {
       expect(rendered).toContain('TAG="v9.9.9-rc1"');
       // Make sure no templated syntax leaked through into the rendered form.
       expect(rendered).not.toMatch(/\${{/);
-      expect(rendered).not.toContain("${GITHUB_REF_NAME}");
+      expect(rendered).not.toContain("$" + "{GITHUB_REF_NAME}");
     });
   });
 });

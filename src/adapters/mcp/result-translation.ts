@@ -123,6 +123,7 @@ export type McpWriteAccessResolver = (input: unknown) => Promise<boolean>;
 export type McpAccessContext = {
   accessPath: string;
   projectRoot: string;
+  destinationRoot?: string;
 };
 
 export type McpAccessContextResolver = (

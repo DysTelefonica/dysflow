@@ -30,6 +30,7 @@ describe("advertised MCP tool surface", () => {
     // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
     // Slice 5 (#618) added dysflow_create_form_from_template.
     // PR-1 (#656) added dysflow_get_capabilities.
+    // #701 added dysflow_list_procedures + dysflow_get_procedure.
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     // Guard the label format too — the e2e suite-contracts pin asserts on this string.
     expect(EXPECTED_ADVERTISED_TOOL_COUNT_LABEL).toBe(`${EXPECTED_ADVERTISED_TOOL_COUNT} tools`);

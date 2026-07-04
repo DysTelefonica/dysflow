@@ -20,6 +20,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
     // tool. It aggregates capability metadata; it never touches Access.
     "dysflow_get_capabilities",
+    // #701 — read-only modern service tools that parse VBA source text without
+    // PowerShell runner DYSFLOW_RESULT output.
+    "dysflow_list_procedures",
+    "dysflow_get_procedure",
+    "dysflow_find_references",
   ],
   modernServiceAliases: ["run_vba"],
   vbaManagerDysflowResult: [
