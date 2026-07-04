@@ -688,7 +688,11 @@ export function createDysflowMcpTools(
         // Inline `modules` short-circuits any disk read — the caller
         // already provided every byte of source the analyser needs.
         let modules: Record<string, string> | undefined;
-        if (params.modules !== undefined && typeof params.modules === "object" && params.modules !== null) {
+        if (
+          params.modules !== undefined &&
+          typeof params.modules === "object" &&
+          params.modules !== null
+        ) {
           modules = params.modules as Record<string, string>;
         }
 

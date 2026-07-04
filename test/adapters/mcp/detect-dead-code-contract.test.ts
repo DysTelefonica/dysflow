@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  getMcpToolContract,
-} from "../../../src/adapters/mcp/mcp-tool-contracts";
-import {
-  createDysflowMcpTools,
-} from "../../../src/adapters/mcp/tools";
+import { getMcpToolContract } from "../../../src/adapters/mcp/mcp-tool-contracts";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 /**

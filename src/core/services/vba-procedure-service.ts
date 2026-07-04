@@ -335,9 +335,7 @@ const MODULE_LEVEL_VAR_RE =
 const MODULE_LEVEL_BLOCK_RE =
   /^(?:\s+)?(?:(?:Public|Private)\s+)?(?:Type|Enum)\s+([A-Za-z_][A-Za-z0-9_]*)/i;
 
-function listVbaModuleLevelDeclarations(
-  source: string,
-): ModuleLevelDeclaration[] {
+function listVbaModuleLevelDeclarations(source: string): ModuleLevelDeclaration[] {
   const declarations: ModuleLevelDeclaration[] = [];
   const lines = source.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -352,9 +350,7 @@ function listVbaModuleLevelDeclarations(
     const constMatch = stripped.match(MODULE_LEVEL_CONST_RE);
     const varMatch = constMatch === null ? stripped.match(MODULE_LEVEL_VAR_RE) : null;
     const blockMatch =
-      constMatch === null && varMatch === null
-        ? stripped.match(MODULE_LEVEL_BLOCK_RE)
-        : null;
+      constMatch === null && varMatch === null ? stripped.match(MODULE_LEVEL_BLOCK_RE) : null;
 
     let capturedName: string | undefined;
     if (constMatch !== null && constMatch[1] !== undefined) {
@@ -499,9 +495,7 @@ export function detectDeadCode(
       });
     }
     for (const decl of declarations) {
-      const sameAs = procedures.some(
-        (p) => p.name.toLowerCase() === decl.name.toLowerCase(),
-      );
+      const sameAs = procedures.some((p) => p.name.toLowerCase() === decl.name.toLowerCase());
       if (sameAs) continue;
       candidates.push({
         name: decl.name,
@@ -515,12 +509,7 @@ export function detectDeadCode(
     for (const candidate of candidates) {
       if (isExcludedName(candidate.name)) continue;
 
-      const refs = findVbaReferences(
-        searchModules,
-        candidate.name,
-        "binary",
-        narrowModuleName,
-      );
+      const refs = findVbaReferences(searchModules, candidate.name, "binary", narrowModuleName);
       const referenceCount = refs?.totalCount ?? 0;
       if (referenceCount > 0) continue;
 
@@ -532,11 +521,7 @@ export function detectDeadCode(
         evidence: {
           scannedModules,
           referenceCount: 0,
-          definitionSnippet: readDefinitionSnippet(
-            modules,
-            candidate.module,
-            candidate.line,
-          ),
+          definitionSnippet: readDefinitionSnippet(modules, candidate.module, candidate.line),
         },
         risk: classifyRisk(candidate.kind, candidate.visibility, narrowed),
       });

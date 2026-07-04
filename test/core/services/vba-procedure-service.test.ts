@@ -268,19 +268,22 @@ describe("vba-procedure-service — findVbaReferences", () => {
  * All tests here are pure string-in / string-out — no filesystem, no
  * Access, no PowerShell. The same parser module is the unit-under-test.
  */
+function expectDeadCodeReport(report: ReturnType<typeof detectDeadCode>) {
+  expect(report).toBeDefined();
+  if (report === undefined) {
+    throw new Error("Expected detectDeadCode to return a report");
+  }
+  return report;
+}
+
 describe("vba-procedure-service — detectDeadCode", () => {
   // 1.1 — definition-only dead procedure is reported with Low risk / sub kind.
   it("detectDeadCode_unreferenced_procedure_returns_dead", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Sub UnusedProc()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Sub UnusedProc()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "UnusedProc");
     expect(finding, "UnusedProc must be reported as dead").toBeDefined();
@@ -296,20 +299,11 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // `stripStrings` patch in `findVbaReferences`.
   it("detectDeadCode_string_literal_does_not_count", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Sub UnusedProc()",
-        "End Sub",
-      ].join("\r\n"),
-      ModB: [
-        "Public Sub Caller()",
-        "    Application.Run \"UnusedProc\"",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Sub UnusedProc()", "End Sub"].join("\r\n"),
+      ModB: ["Public Sub Caller()", '    Application.Run "UnusedProc"', "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "UnusedProc")).toBeDefined();
   });
@@ -317,20 +311,11 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // 1.3 — comment-only mentions do not count as references.
   it("detectDeadCode_comment_does_not_count", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Sub UnusedProc()",
-        "End Sub",
-      ].join("\r\n"),
-      ModB: [
-        "Public Sub Caller()",
-        "    ' TODO refactor UnusedProc",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Sub UnusedProc()", "End Sub"].join("\r\n"),
+      ModB: ["Public Sub Caller()", "    ' TODO refactor UnusedProc", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "UnusedProc")).toBeDefined();
   });
@@ -341,19 +326,11 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // matching, not plain `indexOf`.
   it("detectDeadCode_substring_does_not_count", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Sub UnusedProc()",
-        "End Sub",
-      ].join("\r\n"),
-      ModB: [
-        "Public Sub MyUnusedProcCaller()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Sub UnusedProc()", "End Sub"].join("\r\n"),
+      ModB: ["Public Sub MyUnusedProcCaller()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "UnusedProc")).toBeDefined();
   });
@@ -362,22 +339,13 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // ModB.Consumer, `Consumer` is alive and must be omitted from findings.
   it("detectDeadCode_cross_module_reference_omits_live", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Public Sub Producer()",
-        "    Call Consumer",
-        "End Sub",
-      ].join("\r\n"),
-      ModB: [
-        "Option Explicit",
-        "",
-        "Public Sub Consumer()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Public Sub Producer()", "    Call Consumer", "End Sub"].join(
+        "\r\n",
+      ),
+      ModB: ["Option Explicit", "", "Public Sub Consumer()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "Consumer")).toBeUndefined();
   });
@@ -387,15 +355,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // in a module with zero references.
   it("detectDeadCode_autoexec_excluded", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Public Sub AutoExec()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Public Sub AutoExec()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "AutoExec")).toBeUndefined();
   });
@@ -404,15 +367,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // pattern and are excluded.
   it("detectDeadCode_form_load_excluded", () => {
     const modules = {
-      Form_Main: [
-        "Option Explicit",
-        "",
-        "Private Sub Form_Load()",
-        "End Sub",
-      ].join("\r\n"),
+      Form_Main: ["Option Explicit", "", "Private Sub Form_Load()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "Form_Load")).toBeUndefined();
   });
@@ -421,15 +379,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // are excluded even when defined standalone.
   it("detectDeadCode_control_event_handler_excluded", () => {
     const modules = {
-      Form_Main: [
-        "Option Explicit",
-        "",
-        "Private Sub cmdSave_Click()",
-        "End Sub",
-      ].join("\r\n"),
+      Form_Main: ["Option Explicit", "", "Private Sub cmdSave_Click()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     expect(report.findings.find((f) => f.symbol === "cmdSave_Click")).toBeUndefined();
   });
@@ -440,14 +393,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // expression service, external binding, etc.).
   it("detectDeadCode_public_const_high_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Public Const MY_CONST As Long = 42",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Public Const MY_CONST As Long = 42"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "MY_CONST");
     expect(finding, "MY_CONST must be reported as dead").toBeDefined();
@@ -464,12 +413,7 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // Med because the scope was narrowed (private procedure elevations).
   it("detectDeadCode_module_narrow_scope", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Sub UnusedA()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Sub UnusedA()", "End Sub"].join("\r\n"),
       ModB: [
         "Option Explicit",
         "",
@@ -482,7 +426,9 @@ describe("vba-procedure-service — detectDeadCode", () => {
       ].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary", module: "ModB" })!;
+    const report = expectDeadCodeReport(
+      detectDeadCode(modules, { scope: "binary", module: "ModB" }),
+    );
 
     expect(report.findings.map((f) => f.symbol)).toEqual(["UnusedB"]);
     expect(report.findings[0]?.risk).toBe("Med");
@@ -495,21 +441,11 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // taken verbatim from the source line where the symbol was defined.
   it("detectDeadCode_evidence_includes_scanned_modules_and_snippet", () => {
     const modules = {
-      Zebra: [
-        "Option Explicit",
-        "",
-        "Private Sub Z_Proc()",
-        "End Sub",
-      ].join("\r\n"),
-      Alpha: [
-        "Option Explicit",
-        "",
-        "Private Sub A_Proc()",
-        "End Sub",
-      ].join("\r\n"),
+      Zebra: ["Option Explicit", "", "Private Sub Z_Proc()", "End Sub"].join("\r\n"),
+      Alpha: ["Option Explicit", "", "Private Sub A_Proc()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const zFinding = report.findings.find((f) => f.symbol === "Z_Proc");
     expect(zFinding, "Z_Proc must be reported as dead").toBeDefined();
@@ -526,14 +462,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // declaration, leaving them invisible to the analyser.
   it("detectDeadCode_public_variable_declaration_is_reported_with_high_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Public Foo As Long",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Public Foo As Long"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "Foo");
     expect(finding, "Public Foo As Long must surface as a dead declaration").toBeDefined();
@@ -545,14 +477,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
 
   it("detectDeadCode_private_variable_declaration_is_reported_with_low_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Bar As String",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Bar As String"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "Bar");
     expect(finding, "Private Bar As String must surface as a dead declaration").toBeDefined();
@@ -563,14 +491,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
 
   it("detectDeadCode_global_variable_declaration_is_reported_with_high_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Global AppVersion As String",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Global AppVersion As String"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "AppVersion");
     expect(finding, "Global AppVersion must surface as a dead declaration").toBeDefined();
@@ -591,7 +515,7 @@ describe("vba-procedure-service — detectDeadCode", () => {
       ].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     // Only the Type name `Point` should be reported — the body members
     // (X, Y) live inside a Type block and must NOT be treated as
@@ -610,16 +534,12 @@ describe("vba-procedure-service — detectDeadCode", () => {
 
   it("detectDeadCode_private_type_block_reports_low_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Type InnerPoint",
-        "    A As Long",
-        "End Type",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Type InnerPoint", "    A As Long", "End Type"].join(
+        "\r\n",
+      ),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "InnerPoint");
     expect(finding, "Private Type InnerPoint must surface as a dead declaration").toBeDefined();
@@ -629,16 +549,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
 
   it("detectDeadCode_type_without_visibility_reports_med_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Type NoVisibility",
-        "    X As Long",
-        "End Type",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Type NoVisibility", "    X As Long", "End Type"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "NoVisibility");
     expect(finding, "Default-visibility Type must surface as a dead declaration").toBeDefined();
@@ -658,7 +572,7 @@ describe("vba-procedure-service — detectDeadCode", () => {
       ].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const symbols = report.findings.map((f) => f.symbol);
     expect(symbols).toContain("Color");
@@ -673,16 +587,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
 
   it("detectDeadCode_private_enum_block_reports_low_risk", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Private Enum Days",
-        "    Mon = 1",
-        "End Enum",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Private Enum Days", "    Mon = 1", "End Enum"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     const finding = report.findings.find((f) => f.symbol === "Days");
     expect(finding, "Private Enum Days must surface as a dead declaration").toBeDefined();
@@ -704,16 +612,10 @@ describe("vba-procedure-service — detectDeadCode", () => {
         "    IsPoint = TypeOf obj Is Point",
         "End Function",
       ].join("\r\n"),
-      ModB: [
-        "Option Explicit",
-        "",
-        "Public Type Point",
-        "    X As Long",
-        "End Type",
-      ].join("\r\n"),
+      ModB: ["Option Explicit", "", "Public Type Point", "    X As Long", "End Type"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary" })!;
+    const report = expectDeadCodeReport(detectDeadCode(modules, { scope: "binary" }));
 
     // The TypeOf body line must not produce phantom findings for `Is` /
     // `Class1` / `obj` — they live inside a runtime expression, not at
@@ -778,27 +680,14 @@ describe("vba-procedure-service — detectDeadCode", () => {
   // to tell them what was actually scanned.
   it("detectDeadCode_narrow_scanned_modules_reflects_searched_set", () => {
     const modules = {
-      ModA: [
-        "Option Explicit",
-        "",
-        "Public Sub LiveA()",
-        "End Sub",
-      ].join("\r\n"),
-      ModB: [
-        "Option Explicit",
-        "",
-        "Public Sub UnusedB()",
-        "End Sub",
-      ].join("\r\n"),
-      ModC: [
-        "Option Explicit",
-        "",
-        "Public Sub LiveC()",
-        "End Sub",
-      ].join("\r\n"),
+      ModA: ["Option Explicit", "", "Public Sub LiveA()", "End Sub"].join("\r\n"),
+      ModB: ["Option Explicit", "", "Public Sub UnusedB()", "End Sub"].join("\r\n"),
+      ModC: ["Option Explicit", "", "Public Sub LiveC()", "End Sub"].join("\r\n"),
     };
 
-    const report = detectDeadCode(modules, { scope: "binary", module: "ModB" })!;
+    const report = expectDeadCodeReport(
+      detectDeadCode(modules, { scope: "binary", module: "ModB" }),
+    );
 
     // Only ModB was searched — ModA and ModC must NOT appear.
     expect(report.scannedModules).toEqual(["ModB"]);
