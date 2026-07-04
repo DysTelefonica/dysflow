@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**63 visible MCP tools · Windows / Node 20+**
+**64 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 63 visible MCP tools covering VBA, SQL, schema, form operations, and source-level VBA procedure introspection.
+- A platform with 64 visible MCP tools covering VBA, SQL, schema, form operations, and source-level VBA procedure introspection.
 
 ### It is not
 
@@ -602,6 +602,15 @@ Retrieve one VBA procedure body from a source module without opening Access. The
   - `module` (string, **required**): VBA module name without extension.
   - `procedure` (string, **required**): Procedure name to retrieve.
   - `source` (string, optional): Inline VBA source text.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
+
+#### `dysflow_find_references`
+Find all references to a given symbol across a set of modules. The tool parses inline `modules` when supplied, otherwise it resolves modules from the configured source root and/or exports them from the binary. Read-only.
+* **Parameters**:
+  - `symbol` (string, **required**): Symbol name to find references for.
+  - `scope` (string, optional): `module`, `binary`, `source`, or `all` (default).
+  - `module` (string, optional): Search only in this specific module.
+  - `modules` (object, optional): Key-value pair of module names to their inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ---
