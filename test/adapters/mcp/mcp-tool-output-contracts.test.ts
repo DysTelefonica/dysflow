@@ -27,6 +27,8 @@ const OUTPUT_CONTRACT_GROUPS = {
     "dysflow_find_references",
     // #705 — read-only dead-code analysis over the supplied modules map.
     "dysflow_detect_dead_code",
+    // #703 — read-only VBA test manifest validation.
+    "dysflow_validate_manifest",
   ],
   modernServiceAliases: ["run_vba"],
   vbaManagerDysflowResult: [

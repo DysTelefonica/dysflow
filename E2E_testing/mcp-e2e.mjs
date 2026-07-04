@@ -370,6 +370,11 @@ await record("vba-introspection", "dysflow_list_procedures", {
   ...ctx,
   module: existingModuleName,
 });
+await record("vba-manifest", "dysflow_validate_manifest", {
+  projectId,
+  manifest: { tests: [{ procedure: "DysflowMcpE2E_DoWork", args: [] }] },
+  modules: { DysflowMcpE2EInline: inlineSourceFixture },
+});
 }
 
 // isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,
