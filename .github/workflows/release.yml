@@ -81,7 +81,7 @@ jobs:
           rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
           echo "Signed SHA256SUMS -> SHA256SUMS.sig"
 
-- name: Create GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           # AGENTS.md hard rule: the release title MUST equal the tag name.
