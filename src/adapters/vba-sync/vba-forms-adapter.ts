@@ -75,6 +75,38 @@ type ManagedFormSource = {
   moduleName: string;
 };
 
+/**
+ * Shape surfaced in error.details.rollback so consumers can tell what happened.
+ * #692 — extended to disambiguate new-target creation from genuine restore.
+ *
+ * Cases:
+ * - target existed, restore succeeded:    { attempted:true, applied:true, targetExisted:true }
+ * - target existed, restore failed:         { attempted:true, applied:false, targetExisted:true, error:{message} }
+ * - target did NOT exist, restore succeeded: { attempted:true, applied:true, targetExisted:false,
+ *                                              restoredState:"empty-placeholder", requiresManualCleanup:true }
+ * - target did NOT exist, restore failed:   { attempted:true, applied:false, targetExisted:false,
+ *                                            restoredState:"empty-placeholder", requiresManualCleanup:true,
+ *                                            error:{message} }
+ */
+type RollbackOutcome =
+  | { attempted: true; applied: true; targetExisted: true }
+  | { attempted: true; applied: false; targetExisted: true; error: { message: string } }
+  | {
+      attempted: true;
+      applied: true;
+      targetExisted: false;
+      restoredState: "empty-placeholder";
+      requiresManualCleanup: true;
+    }
+  | {
+      attempted: true;
+      applied: false;
+      targetExisted: false;
+      restoredState: "empty-placeholder";
+      requiresManualCleanup: true;
+      error: { message: string };
+    };
+
 function hasManagedFormExtension(sourcePath: string): boolean {
   return /\.form\.txt$/i.test(sourcePath) || /\.report\.txt$/i.test(sourcePath);
 }
@@ -544,14 +576,17 @@ export class VbaFormsAdapter {
         FORMS_MAPPINGS.import_modules_gate,
       );
       if (!importResult.ok) {
-        await Promise.resolve(
-          this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
-        ).catch(() => undefined);
+        // Capture rollback outcome for consumer visibility (#692).
+        // source always existed here (readFile succeeded above).
+        const rollbackOutcome = await this.captureRollbackOutcome(
+          () => this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
+          true, // targetExisted — source file always exists in mutateForm
+        );
         return failureResult(
           createDysflowError(
             "FORM_IMPORT_GATE_FAILED",
             `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
-            { details: { cause: importResult.error } },
+            { details: { cause: importResult.error, rollback: rollbackOutcome } },
           ),
         );
       }
@@ -743,14 +778,17 @@ export class VbaFormsAdapter {
       FORMS_MAPPINGS.import_modules_gate,
     );
     if (!importResult.ok) {
-      await Promise.resolve(
-        this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
-      ).catch(() => undefined);
+      // Capture rollback outcome for consumer visibility (#692).
+      // source always existed here (readFile succeeded above).
+      const rollbackOutcome = await this.captureRollbackOutcome(
+        () => this.fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
+        true, // targetExisted — source file always exists in deserializeForm
+      );
       return failureResult(
         createDysflowError(
           "FORM_IMPORT_GATE_FAILED",
           `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
-          { details: { cause: importResult.error } },
+          { details: { cause: importResult.error, rollback: rollbackOutcome } },
         ),
       );
     }
@@ -1021,18 +1059,19 @@ export class VbaFormsAdapter {
       FORMS_MAPPINGS.import_modules_gate,
     );
     if (!importResult.ok) {
-      // Best-effort restore: write the original target back (or empty string when target was new).
-      // We do NOT delete the freshly-written file when targetExisted was false — the gate failure
-      // is reported back and the operator can decide. The restore write itself is wrapped so a
-      // failed restore does not crash the path.
-      await Promise.resolve(
-        this.fileSystem.writeFile(targetPath, originalTargetText, "utf8"),
-      ).catch(() => undefined);
+      // Capture rollback outcome for consumer visibility (#692).
+      // When targetExisted was false the target was newly created — writing
+      // originalTargetText (empty string) back is the best-effort restore;
+      // the caller decides whether to delete or keep the failed artifact.
+      const rollbackOutcome = await this.captureRollbackOutcome(
+        () => this.fileSystem.writeFile(targetPath, originalTargetText, "utf8"),
+        targetExisted,
+      );
       return failureResult(
         createDysflowError(
           "FORM_IMPORT_GATE_FAILED",
           `import_modules apply gate failed for "${targetPath}": ${importResult.error.message}`,
-          { details: { cause: importResult.error } },
+          { details: { cause: importResult.error, rollback: rollbackOutcome } },
         ),
       );
     }
@@ -1050,6 +1089,55 @@ export class VbaFormsAdapter {
       targetSource: cloneResult.source,
       importResult: importResult.data,
     });
+  }
+
+  /**
+   * Attempt the supplied best-effort restore write and report the outcome so
+   * error.details.rollback carries a consumer-visible contract. Used by form
+   * mutation, deserializeForm, and cloneFormFromTemplate when the import gate
+   * fails and a restore is required.
+   *
+   * #692 — when `targetExisted` is false the original state was "no file".
+   * The caller's restore write may create a placeholder artifact instead of a
+   * true restore (for example, empty string for a new target). The returned
+   * `restoredState:"empty-placeholder"` and `requiresManualCleanup:true`
+   * signal this ambiguity to the consumer.
+   */
+  private async captureRollbackOutcome(
+    write: () => Promise<void>,
+    targetExisted: boolean,
+  ): Promise<RollbackOutcome> {
+    try {
+      await write();
+      if (targetExisted) {
+        return { attempted: true, applied: true, targetExisted: true };
+      }
+      // New target — original state was "no file"; rollback wrote empty string.
+      return {
+        attempted: true,
+        applied: true,
+        targetExisted: false,
+        restoredState: "empty-placeholder",
+        requiresManualCleanup: true,
+      };
+    } catch (err) {
+      if (targetExisted) {
+        return {
+          attempted: true,
+          applied: false,
+          targetExisted: true,
+          error: { message: err instanceof Error ? err.message : String(err) },
+        };
+      }
+      return {
+        attempted: true,
+        applied: false,
+        targetExisted: false,
+        restoredState: "empty-placeholder",
+        requiresManualCleanup: true,
+        error: { message: err instanceof Error ? err.message : String(err) },
+      };
+    }
   }
 }
 
