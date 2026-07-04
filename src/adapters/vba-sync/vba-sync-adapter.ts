@@ -328,6 +328,13 @@ export class VbaSyncAdapter implements VbaSyncPort {
           operationFile: trackedOperation.operationFile,
         }
       : timedRequest;
+    // Issue #673: try to advance the registry record from "starting" to
+    // "running" the moment we have a PID. The PowerShell marker file may
+    // not exist yet (process still spinning up) — `transitionToRunning`
+    // is a best-effort no-op in that case, and the final `finishTrackedOperation`
+    // call below will still stamp the terminal status with whatever PID is
+    // eventually recorded.
+    await this.transitionToRunning(trackedOperation);
     let result: VbaManagerExecutionResult;
     try {
       result = await this.executor(trackedRequest);
@@ -468,6 +475,38 @@ export class VbaSyncAdapter implements VbaSyncPort {
       updatedAt: new Date().toISOString(),
     });
     await rm(operation.operationFile, { force: true }).catch(() => undefined);
+  }
+
+  /**
+   * Issue #673: while a VBA manager execution is in flight, the registry
+   * record MUST reach `status: "running"` so the orphan-ownership guards
+   * (`ORPHAN_CLEANUP_REGISTRY_OWNED` and the preflight cleanup scan) can
+   * see the operation as live. Without this transition, the record stays
+   * at `status: "starting"` and `accessPid: null`, so a `confirmPid` kill
+   * from another session can wipe a real in-flight import.
+   *
+   * Best-effort: reads the PowerShell-written marker file. If the marker
+   * is not yet present (PowerShell hasn't started yet), this is a no-op —
+   * the followup `finishTrackedOperation` call will still produce the
+   * final status with whatever PID was discovered by then. Swallows
+   * errors so a failed transition never breaks the underlying executor.
+   */
+  private async transitionToRunning(
+    operation: TrackedVbaManagerOperation | undefined,
+  ): Promise<void> {
+    if (operation === undefined || this.operationRegistry === undefined) return;
+    try {
+      const marker = await readVbaManagerOperationMarker(operation.operationFile);
+      if (marker.accessPid === undefined) return;
+      await this.operationRegistry.update(operation.operationId, {
+        accessPid: marker.accessPid,
+        processStartTime: marker.processStartTime ?? null,
+        status: "running",
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logSwallowedIoError("vba-sync-adapter:transition-to-running", err);
+    }
   }
 
   private async resolveExecutionTarget(params: Record<string, unknown>) {
