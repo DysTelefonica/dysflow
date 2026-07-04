@@ -149,9 +149,10 @@ describe("repository quality gates", () => {
     const docs = await readText("docs/testing/repo-quality-gates.md");
 
     expect(docs).toContain("Owner: repo-engineering-hardening");
-    expect(docs).toContain(
-      "Lint uses TypeScript strict checking, Biome, and the optional config/params presence guard",
-    );
+    expect(docs).toContain("`pnpm lint` — three-stage check");
+    expect(docs).toContain("node scripts/check-core-adapter-boundary.mjs");
+    expect(docs).toContain("node scripts/check-optional-presence-guards.mjs");
+    expect(docs).toContain("biome check src/ test/ scripts/ E2E_testing/_helpers/");
     expect(docs).not.toContain("Coverage starts at a 0% floor");
   });
 

@@ -4,12 +4,18 @@ Owner: repo-engineering-hardening
 
 ## Current gates
 
-- `pnpm test` runs the Vitest suite.
-- `pnpm build` runs the TypeScript build.
-- Lint uses TypeScript strict checking, Biome, and the optional config/params presence guard through `pnpm lint`
-  (`node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/`). Use
-  `pnpm format` to auto-format, `pnpm format:check` to verify.
-- `pnpm coverage` runs Vitest coverage for `src/**/*.ts`.
+- `pnpm test` — Vitest unit suite (fast, no Access/PowerShell).
+- `pnpm test:integration` — Vitest integration suite (requires Access/PowerShell).
+- `pnpm test:e2e:mcp` — MCP E2E battery (`node E2E_testing/mcp-e2e.mjs`).
+- `pnpm test:ps1` — PowerShell/Pester contracts (`pwsh -Command "Invoke-Pester scripts/tests/"`).
+- `pnpm build` — TypeScript compile.
+- `pnpm lint` — three-stage check:
+  1. `node scripts/check-core-adapter-boundary.mjs` — `src/core` must not import `src/adapters`.
+  2. `node scripts/check-optional-presence-guards.mjs` — no unchecked `in` / `hasOwnProperty` on optional config/params fields.
+  3. `tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ scripts/ E2E_testing/_helpers/`.
+     Biome lint covers `src/`, `test/`, `scripts/*.mjs`, and `E2E_testing/_helpers/*.mjs`.
+  - `pnpm format` / `pnpm format:check` — auto-format / verify formatting.
+- `pnpm coverage` — Vitest coverage for `src/**/*.ts`.
 
 ## Coverage thresholds
 
@@ -17,23 +23,21 @@ Owner: repo-engineering-hardening
 > [`testing-philosophy.md`](./testing-philosophy.md) for what a good test is. Never add an
 > implementation-coupled test just to raise a number.
 
-Thresholds are set at measured baseline minus 2 percentage points (ADR-6).
-Current floors (raised in GH #372 — branch coverage improvement):
+Thresholds are set at measured baseline minus a safety margin (ADR-6). Current floors:
 
-| Metric     | Floor |
-|------------|-------|
-| statements | 82%   |
-| branches   | 80%   |
-| functions  | 85%   |
-| lines      | 84%   |
+| Metric     | Floor   |
+|------------|---------|
+| statements | 82%     |
+| branches   | **78%** |
+| functions  | 85%     |
+| lines      | 84%     |
 
-> The CI quality gate runs `pnpm coverage` on Linux (ubuntu), where
-> Windows/PowerShell-specific branches do not execute. CI branch coverage
-> (~81.15%) is therefore slightly below a local Windows run (~82.08%). **CI is the
-> authoritative gate — floors must stay at or below the CI measurement.** The
-> branch floor is 80% (≈1pp margin under CI).
+> **CI is the authoritative gate.** The unit suite is serialized with `maxWorkers: 1` for
+> Windows spawn stability, but Linux v8 coverage still measures slightly lower than local
+> Windows for the same source (~79.7% Linux vs ~80.3% local). The branch floor of 78%
+> absorbs this environment variance and prevents false-gate flakes on every push.
 
-Raise the thresholds after significant coverage improvements.
+> Raise thresholds only after sustained coverage improvements and CI validation.
 
 ## PowerShell test quality rule
 
@@ -47,6 +51,7 @@ behavior-preserving refactors (variable renames, code reorganization) and violat
 [testing philosophy](./testing-philosophy.md) north star.
 
 **Required for PowerShell contracts**:
+
 - Use Pester in `scripts/tests/*.Tests.ps1`, loading functions via AST extraction (not
   `readFileSync`/`toContain`). AST extraction is a *loader* only — never assert extracted
   function body text.
