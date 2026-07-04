@@ -292,7 +292,7 @@ el `record(...)` correspondiente.
 | Cambiar parser puro, helper de dominio | `pnpm test` | El unit ya cubre. |
 | Cambiar un adapter I/O (filesystem, COM) | `pnpm test` + `pnpm test:integration` | Cubre los seams. |
 | Cambiar lógica del runner PowerShell | `pnpm test` + `pnpm test:ps1` | Pester valida el contrato. |
-| Añadir una herramienta MCP visible | `pnpm test` + `pnpm test:e2e:mcp` (release) | Actualiza el pin de 61. |
+| Añadir una herramienta MCP visible | `pnpm test` + `pnpm test:e2e:mcp` (release) | Actualiza el pin de herramientas advertised. |
 | Cambiar un parámetro de `mcp-e2e.mjs` | `pnpm test -- test/quality-gates/mcp-e2e` + `pnpm test:e2e:mcp` | Cheap-gates primero. |
 | Cortar release | Todo lo anterior + `pnpm test:e2e:mcp` | El E2E es el gate final. |
 
@@ -328,27 +328,27 @@ Mantener el `reviewedAt` actualizado es la diferencia entre "el binario está si
 con la spec" y "el binario está congelado en una revisión vieja". Más detalles en
 [`mcp-protocol-maintenance.md`](./mcp-protocol-maintenance.md).
 
-### Pin de herramientas advertised (61)
+### Pin de herramientas advertised (63)
 
 El número de herramientas visibles (no ocultas) del MCP está pinado en **tres** sitios que
 deben moverse juntos:
 
 | Pin | Fichero | Función |
 |---|---|---|
-| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(61)` |
-| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 61` |
-| Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness contiene el literal `"61 tools"` |
+| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(63)` |
+| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 63` |
+| Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness contiene el literal `"63 tools"` |
 
 `dysflow_get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
 cruza con `advertised.length` para detectar drift entre el pin unit y el servidor en vivo
 (fila `dysflow_get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
-`toolsVisible=60` y el pin dice 61, el cross-check falla aunque las herramientas
+`toolsVisible=62` y el pin dice 63, el cross-check falla aunque las herramientas
 individuales pasen.
 
 **Qué hacer cuando añades una herramienta visible:**
 
 1. Añade el `record(...)` correspondiente en el área adecuada del harness.
-2. Sube `61` → `62` en los tres pins **en el mismo commit**.
+2. Sube el contador compartido de herramientas advertised en el mismo commit.
 3. Confirma con `pnpm test -- test/adapters/mcp/advertised-tool-count` y con el E2E
    antes del release.
 

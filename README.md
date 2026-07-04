@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**61 visible MCP tools · Windows / Node 20+**
+**63 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 61 visible MCP tools covering VBA, SQL, schema, and form operations.
+- A platform with 63 visible MCP tools covering VBA, SQL, schema, form operations, and source-level VBA procedure introspection.
 
 ### It is not
 
@@ -586,6 +586,23 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 #### `dysflow_get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. The snapshot surfaces the running adapter version, MCP surface, process- and project-level write flags, projectId resolution outcome, the `allowedProcedures` allowlist, the global `dryRun` default, the count of tools visible in `tools/list`, and the list of write-class tools currently permitted.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
+
+#### `dysflow_list_procedures`
+List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
+* **Parameters**:
+  - `module` (string, **required**): VBA module name without extension.
+  - `filter` (string, optional): Substring filter for procedure names.
+  - `kind` (string, optional): `Sub`, `Function`, `Property`, or `both`.
+  - `source` (string, optional): Inline VBA source text.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
+
+#### `dysflow_get_procedure`
+Retrieve one VBA procedure body from a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root. Read-only.
+* **Parameters**:
+  - `module` (string, **required**): VBA module name without extension.
+  - `procedure` (string, **required**): Procedure name to retrieve.
+  - `source` (string, optional): Inline VBA source text.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ---
 

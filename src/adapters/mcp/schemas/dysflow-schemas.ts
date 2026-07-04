@@ -144,6 +144,80 @@ export const DOCTOR_SCHEMA: JsonObjectSchema = {
   },
 };
 
+export const LIST_PROCEDURES_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["module"],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    contextId: {
+      type: "string",
+      description:
+        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
+    },
+    module: {
+      type: "string",
+      description: "VBA module name (without extension).",
+    },
+    filter: {
+      type: "string",
+      description:
+        "Optional substring filter; only procedures whose name contains this value are returned.",
+    },
+    kind: {
+      type: "string",
+      enum: ["Sub", "Function", "Property", "both"],
+      description:
+        "Optional procedure kind filter. Use 'both' or omit to include every procedure kind.",
+    },
+    source: {
+      type: "string",
+      description:
+        "VBA module source code. When provided, the procedure catalog is built by parsing this text. When omitted, the module is resolved via the project's source root.",
+    },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+  },
+};
+
+export const GET_PROCEDURE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["module", "procedure"],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    contextId: {
+      type: "string",
+      description:
+        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
+    },
+    module: {
+      type: "string",
+      description: "VBA module name (without extension).",
+    },
+    procedure: {
+      type: "string",
+      minLength: 1,
+      description: "Name of the procedure to retrieve.",
+    },
+    source: {
+      type: "string",
+      description:
+        "VBA module source code. When provided, the procedure is located by parsing this text. When omitted, the module is resolved via the project's source root.",
+    },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+  },
+};
+
 export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: [],
