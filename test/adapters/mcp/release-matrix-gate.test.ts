@@ -56,8 +56,8 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   + 9 modern core tools = 63 visible.
     expect(toolCount).toBe(54);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(9);
-    expect(visibleCount).toBe(63);
+    expect(modernCount).toBe(10);
+    expect(visibleCount).toBe(64);
   });
 
   it("verifies split-mode coverage explicitly", () => {

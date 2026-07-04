@@ -8,7 +8,11 @@ import {
 } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
-import { getVbaProcedure, listVbaProcedures } from "../../core/services/vba-procedure-service.js";
+import {
+  findVbaReferences,
+  getVbaProcedure,
+  listVbaProcedures,
+} from "../../core/services/vba-procedure-service.js";
 import { buildCleanupRequest } from "./alias-tools.js";
 import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
@@ -50,6 +54,7 @@ import { translateCoreResultToMcpContent } from "./result-translation.js";
 import {
   CLEANUP_SCHEMA,
   DOCTOR_SCHEMA,
+  FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
   NO_INPUT_SCHEMA,
@@ -187,6 +192,52 @@ async function resolveProcedureSource(
   return await resolveModuleSource(configuredRoot, moduleName);
 }
 
+async function resolveAllProjectModules(
+  input: unknown,
+  destinationRoot: string | undefined,
+  accessContextResolver: McpAccessContextResolver,
+): Promise<Record<string, string> | undefined> {
+  const context = await accessContextResolver(input);
+  if (!context.ok) return undefined;
+  const configuredRoot = context.data.destinationRoot;
+  if (configuredRoot === undefined || configuredRoot.length === 0) {
+    return undefined;
+  }
+
+  if (destinationRoot !== undefined) {
+    if (!pathsAreEquivalent(destinationRoot, configuredRoot)) {
+      return undefined;
+    }
+  }
+
+  const { readdir, readFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+
+  const modules: Record<string, string> = {};
+  const subfolders = ["modules", "classes", "forms", "reports"];
+  let folderReadCount = 0;
+
+  for (const folder of subfolders) {
+    const folderPath = resolve(configuredRoot, folder);
+    try {
+      const files = await readdir(folderPath);
+      for (const file of files) {
+        if (file.endsWith(".bas") || file.endsWith(".cls")) {
+          const name = file.slice(0, -4);
+          const content = await readFile(resolve(folderPath, file), "utf-8");
+          modules[name] = content;
+          folderReadCount++;
+        }
+      }
+    } catch {
+      // Ignore missing or unreadable folders
+    }
+  }
+
+  if (folderReadCount === 0) return undefined;
+  return modules;
+}
+
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 
 /**
@@ -206,6 +257,7 @@ export const MODERN_TOOL_NAMES = [
   // issue #701 — read-only VBA procedure introspection
   "dysflow_list_procedures",
   "dysflow_get_procedure",
+  "dysflow_find_references",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -453,6 +505,160 @@ export function createDysflowMcpTools(
               }),
             },
           ],
+          isError: false,
+          ok: true,
+        };
+      },
+    },
+    {
+      name: "dysflow_find_references",
+      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.dysflow_find_references.summary}`,
+      inputSchema: FIND_REFERENCES_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, FIND_REFERENCES_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+
+        const params = input as Record<string, unknown>;
+        const symbol = params.symbol as string;
+        const scope = (params.scope ?? "all") as "module" | "binary" | "source" | "all";
+        const moduleConstraint = params.module as string | undefined;
+
+        if (params.modules !== undefined) {
+          const result = findVbaReferences(
+            params.modules as Record<string, string>,
+            symbol,
+            scope,
+            moduleConstraint,
+          );
+          if (result === undefined) {
+            return {
+              content: [{ type: "text", text: `SYMBOL_NOT_FOUND: Symbol '${symbol}' not found.` }],
+              isError: true,
+              ok: false,
+            };
+          }
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            isError: false,
+            ok: true,
+          };
+        }
+
+        let sourceModules: Record<string, string> = {};
+        if (scope === "source" || scope === "all" || scope === "module") {
+          const resolved = await resolveAllProjectModules(
+            input,
+            params.destinationRoot as string | undefined,
+            accessContextResolver,
+          );
+          if (resolved !== undefined) {
+            sourceModules = resolved;
+          }
+        }
+
+        const binaryModules: Record<string, string> = {};
+        if (scope === "binary" || scope === "all") {
+          const context = await accessContextResolver(input);
+          if (context.ok) {
+            const configuredRoot = context.data.destinationRoot;
+            if (configuredRoot !== undefined && configuredRoot.length > 0) {
+              if (
+                params.destinationRoot === undefined ||
+                pathsAreEquivalent(params.destinationRoot as string, configuredRoot)
+              ) {
+                const { mkdtemp, readdir, readFile, rm } = await import("node:fs/promises");
+                const { tmpdir } = await import("node:os");
+                const { resolve } = await import("node:path");
+                const tempRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-findrefs-"));
+
+                try {
+                  if (services.vbaSyncToolService === undefined) {
+                    return {
+                      content: [
+                        {
+                          type: "text",
+                          text: `SERVICE_UNAVAILABLE: vbaSyncToolService is not configured.`,
+                        },
+                      ],
+                      isError: true,
+                      ok: false,
+                    };
+                  }
+                  const exportResult = await services.vbaSyncToolService.execute("export_all", {
+                    ...params,
+                    exportPath: tempRoot,
+                    prune: false,
+                  });
+
+                  if (exportResult.ok) {
+                    const subfolders = ["modules", "classes", "forms", "reports"];
+                    for (const folder of subfolders) {
+                      const folderPath = resolve(tempRoot, folder);
+                      try {
+                        const files = await readdir(folderPath);
+                        for (const file of files) {
+                          if (file.endsWith(".bas") || file.endsWith(".cls")) {
+                            const name = file.slice(0, -4);
+                            const content = await readFile(resolve(folderPath, file), "utf-8");
+                            binaryModules[name] = content;
+                          }
+                        }
+                      } catch {
+                        // Ignore missing subfolders
+                      }
+                    }
+                  }
+                } finally {
+                  await rm(tempRoot, { recursive: true, force: true });
+                }
+              }
+            }
+          }
+        }
+
+        // Search in the resolved modules
+        const searchModules = scope === "binary" ? binaryModules : sourceModules;
+        const result = findVbaReferences(searchModules, symbol, scope, moduleConstraint);
+        if (result === undefined) {
+          return {
+            content: [{ type: "text", text: `SYMBOL_NOT_FOUND: Symbol '${symbol}' not found.` }],
+            isError: true,
+            ok: false,
+          };
+        }
+
+        if (scope === "all") {
+          const binaryResult = findVbaReferences(binaryModules, symbol, "binary", moduleConstraint);
+          const binaryRefs = binaryResult ? binaryResult.references : [];
+          const onlyInSource = result.references.filter(
+            (sr) => !binaryRefs.some((br) => br.module === sr.module && br.context === sr.context),
+          );
+          const onlyInBinary = binaryRefs.filter(
+            (br) =>
+              !result.references.some((sr) => sr.module === br.module && sr.context === br.context),
+          );
+          const hasDifferences = onlyInSource.length > 0 || onlyInBinary.length > 0;
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ...result,
+                  sourceReferences: result.references,
+                  binaryReferences: binaryRefs,
+                  hasDifferences,
+                  differences: { onlyInSource, onlyInBinary },
+                }),
+              },
+            ],
+            isError: false,
+            ok: true,
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
           isError: false,
           ok: true,
         };

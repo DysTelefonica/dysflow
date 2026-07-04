@@ -167,3 +167,160 @@ export function getVbaProcedure(
     body: bodyLines.join("\r\n").trim(),
   };
 }
+
+export interface VbaReferenceEntry {
+  module: string;
+  kind: "Sub" | "Function" | "Property" | "module";
+  line: number;
+  context: string;
+}
+
+export interface FindReferencesResult {
+  symbol: string;
+  scope: string;
+  references: VbaReferenceEntry[];
+  totalCount: number;
+}
+
+export interface VbaProcedureRange {
+  name: string;
+  kind: "Sub" | "Function" | "Property";
+  startLine: number;
+  endLine: number;
+}
+
+/** @internal */
+function removeComment(line: string): string {
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inString = !inString;
+    } else if (char === "'" && !inString) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+/** @internal */
+function isDefinitionLine(cleanLine: string, symbol: string): boolean {
+  const trimmed = cleanLine.trim();
+
+  // 1. Check procedure declaration
+  const declMatch = trimmed.match(DECLARATION_RE);
+  if (declMatch?.[2] && declMatch[2].toLowerCase() === symbol.toLowerCase()) {
+    return true;
+  }
+
+  // 2. Check variable / constant / event / type declaration
+  const varDeclRe = new RegExp(
+    `^(?:(?:Public|Private|Dim|Global|Const|Friend|Event|Type)[ \\t]+)+${symbol}\\b`,
+    "i",
+  );
+  if (varDeclRe.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getModuleProcedureRanges(source: string): VbaProcedureRange[] {
+  const procedures = listVbaProcedures(source);
+  const lines = source.split(/\r?\n/);
+
+  return procedures.map((p) => {
+    let endLine = lines.length;
+    for (let i = p.line; i < lines.length; i++) {
+      const lineNum = i + 1;
+      const rawLine = lines[i] ?? "";
+      if (END_RE.test(stripStrings(rawLine).trim())) {
+        endLine = lineNum;
+        break;
+      }
+    }
+    return {
+      name: p.name,
+      kind: p.kind,
+      startLine: p.line,
+      endLine,
+    };
+  });
+}
+
+/**
+ * Find all references to a given symbol across a set of modules.
+ * Returns undefined if the symbol is not defined anywhere in the modules.
+ */
+export function findVbaReferences(
+  modules: Record<string, string>,
+  symbol: string,
+  scope = "all",
+  moduleConstraint?: string,
+): FindReferencesResult | undefined {
+  let isDefined = false;
+  const references: VbaReferenceEntry[] = [];
+
+  // Check if the symbol is defined in any of the modules
+  for (const source of Object.values(modules)) {
+    const lines = source.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i] ?? "";
+      const cleanLine = removeComment(rawLine);
+      if (isDefinitionLine(cleanLine, symbol)) {
+        isDefined = true;
+        break;
+      }
+    }
+    if (isDefined) break;
+  }
+
+  if (!isDefined) {
+    return undefined;
+  }
+
+  // Find all references
+  const searchRegex = new RegExp(`\\b${symbol}\\b`, "i");
+
+  for (const [modName, source] of Object.entries(modules)) {
+    if (
+      moduleConstraint !== undefined &&
+      modName.toLowerCase() !== moduleConstraint.toLowerCase()
+    ) {
+      continue;
+    }
+
+    const lines = source.split(/\r?\n/);
+    const ranges = getModuleProcedureRanges(source);
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineNum = i + 1;
+      const rawLine = lines[i] ?? "";
+      const cleanLine = removeComment(rawLine);
+
+      if (searchRegex.test(cleanLine)) {
+        // Skip definition lines
+        if (isDefinitionLine(cleanLine, symbol)) {
+          continue;
+        }
+
+        // Find containing procedure
+        const proc = ranges.find((r) => r.startLine <= lineNum && lineNum <= r.endLine);
+
+        references.push({
+          module: modName,
+          kind: proc ? proc.kind : "module",
+          line: lineNum,
+          context: rawLine.trim(),
+        });
+      }
+    }
+  }
+
+  return {
+    symbol,
+    scope,
+    references,
+    totalCount: references.length,
+  };
+}

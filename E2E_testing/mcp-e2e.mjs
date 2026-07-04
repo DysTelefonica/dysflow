@@ -311,6 +311,65 @@ await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
+
+// issue #701 — read-only VBA procedure introspection tools. These tests
+// exercise both new visible MCP tools (`dysflow_list_procedures` and
+// `dysflow_get_procedure`) through a live `tools/call` JSON-RPC round-trip.
+// Inline `source` is used to keep these rows hermetic — the inline path does
+// NOT touch Access or the project filesystem, so the success path does not
+// depend on the fixture's actual modules being present. A second pair of
+// rows covers the project's on-disk source tree (via `existingModuleName`)
+// so the disk-resolution path is also exercised end-to-end. The final row
+// proves the source-root containment (#701 review blocker): an explicit
+// `destinationRoot` that points outside the configured project is rejected
+// with MODULE_NOT_FOUND, never reads from disk, and never leaks the
+// external file's body into the response.
+const inlineSourceFixture = [
+  "Option Explicit",
+  "",
+  "Public Sub DysflowMcpE2E_DoWork()",
+  "    Dim x As Long",
+  "    x = 42",
+  "End Sub",
+  "",
+  "Private Function DysflowMcpE2E_GetValue() As Long",
+  "    DysflowMcpE2E_GetValue = 7",
+  "End Function",
+].join("\r\n");
+await record("vba-introspection", "dysflow_list_procedures", {
+  projectId,
+  module: "DysflowMcpE2EInline",
+  source: inlineSourceFixture,
+});
+await record("vba-introspection", "dysflow_get_procedure", {
+  projectId,
+  module: "DysflowMcpE2EInline",
+  procedure: "DysflowMcpE2E_DoWork",
+  source: inlineSourceFixture,
+});
+await record("vba-introspection", "dysflow_get_procedure", {
+  projectId,
+  module: "DysflowMcpE2EInline",
+  procedure: "NonExistentDysflowMcpE2EProc",
+  source: inlineSourceFixture,
+}, { expected: "error" });
+// Source-root containment: an explicit `destinationRoot` that does NOT
+// match the configured project root must be refused. Inline `source` is
+// omitted so the only way to find the module would be a disk read, which
+// the adapter must NOT perform for an out-of-project path.
+await record("vba-introspection", "dysflow_list_procedures", {
+  projectId,
+  module: "DysflowMcpE2EAny",
+  destinationRoot: "C:/dysflow-mcp-e2e-not-the-project",
+}, { expected: "error" });
+// On-disk resolution path: the configured project's source tree is the
+// sandbox's `destinationRoot`. Use the existing fixture module the suite
+// already exercises (`existingModuleName`) to prove the disk path is
+// wired correctly end-to-end.
+await record("vba-introspection", "dysflow_list_procedures", {
+  ...ctx,
+  module: existingModuleName,
+});
 }
 
 // isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findVbaReferences,
   getVbaProcedure,
   listVbaProcedures,
 } from "../../../src/core/services/vba-procedure-service";
@@ -190,5 +191,66 @@ describe("vba-procedure-service — getVbaProcedure", () => {
     expect(getter?.kind).toBe("Property");
     expect(getter?.startLine).toBe(1);
     expect(getter?.body).toContain("Name = m_Name");
+  });
+});
+
+describe("vba-procedure-service — findVbaReferences", () => {
+  it("finds references to a defined procedure while ignoring its definition", () => {
+    const modules = {
+      modHelper: [
+        "Public Sub TargetSub()",
+        "End Sub",
+        "",
+        "Public Sub Caller()",
+        "    Call TargetSub",
+        "    TargetSub",
+        "End Sub",
+      ].join("\r\n"),
+    };
+
+    const result = findVbaReferences(modules, "TargetSub");
+    expect(result).toBeDefined();
+    expect(result?.symbol).toBe("TargetSub");
+    expect(result?.references).toHaveLength(2);
+    expect(result?.references?.[0]).toMatchObject({
+      module: "modHelper",
+      kind: "Sub",
+      line: 5,
+      context: "Call TargetSub",
+    });
+    expect(result?.references?.[1]).toMatchObject({
+      module: "modHelper",
+      kind: "Sub",
+      line: 6,
+      context: "TargetSub",
+    });
+  });
+
+  it("returns undefined when the symbol is not defined in any module", () => {
+    const modules = {
+      modHelper: ["Public Sub Caller()", "    Call SomeSub", "End Sub"].join("\r\n"),
+    };
+
+    const result = findVbaReferences(modules, "SomeSub");
+    expect(result).toBeUndefined();
+  });
+
+  it("ignores references inside comments", () => {
+    const modules = {
+      modHelper: [
+        "Public Sub TargetSub()",
+        "End Sub",
+        "",
+        "Public Sub Caller()",
+        "    ' Call TargetSub",
+        "    TargetSub ' comment on line",
+        "End Sub",
+      ].join("\r\n"),
+    };
+
+    const result = findVbaReferences(modules, "TargetSub");
+    expect(result).toBeDefined();
+    expect(result?.references).toHaveLength(1);
+    expect(result?.references?.[0]?.line).toBe(6);
   });
 });

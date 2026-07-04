@@ -321,11 +321,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     await mkdir(join(externalRoot, "modules"), { recursive: true });
     await writeFile(
       join(externalRoot, "modules", "LeakedProc.bas"),
-      [
-        "Public Sub LeakedProc()",
-        "    MsgBox \"should never be read\"",
-        "End Sub",
-      ].join("\r\n"),
+      ["Public Sub LeakedProc()", '    MsgBox "should never be read"', "End Sub"].join("\r\n"),
       "utf-8",
     );
   });
@@ -376,10 +372,19 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MODULE_NOT_FOUND");
 
-    // Hard guarantee: the external file was not read. The body parsed
-    // from the caller's tree cannot have leaked into the response.
-    expect(result.content[0]?.text).not.toContain("LeakedProc");
+    // Hard guarantee: the external file was not read. The file's body
+    // (procedure declarations and source text from the caller's tree)
+    // must not appear anywhere in the response — even if the module name
+    // itself is echoed in the error message (it is the caller's own input,
+    // so echoing it is correct).
     expect(result.content[0]?.text).not.toContain("should never be read");
+    // The file contains a single procedure "LeakedProc" — if the file
+    // had been read, the response body would contain that procedure name
+    // AS A PROCEDURE DECLARATION (with line number etc.), not just as a
+    // quoted echo. A simple `not.toContain("LeakedProc")` would over-match
+    // the legitimate echo. Use a substring that only appears in a parsed
+    // response: `"name": "LeakedProc"` (JSON catalog entry).
+    expect(result.content[0]?.text).not.toContain('"name": "LeakedProc"');
   });
 
   it("rejects an explicit destinationRoot that is a sibling of the configured project", async () => {
@@ -392,11 +397,9 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     try {
       await writeFile(
         join(siblingRoot, "modules", "SiblingProc.bas"),
-        [
-          "Public Sub SiblingProc()",
-          "    MsgBox \"also should never be read\"",
-          "End Sub",
-        ].join("\r\n"),
+        ["Public Sub SiblingProc()", '    MsgBox "also should never be read"', "End Sub"].join(
+          "\r\n",
+        ),
         "utf-8",
       );
 
@@ -408,7 +411,10 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("MODULE_NOT_FOUND");
-      expect(result.content[0]?.text).not.toContain("SiblingProc");
+      // The sibling file's body must not have been parsed. The error
+      // message may echo the module/procedure name as the caller's own
+      // input; we instead assert the body substring is absent.
+      expect(result.content[0]?.text).not.toContain("also should never be read");
     } finally {
       await rm(siblingRoot, { recursive: true, force: true });
     }
@@ -478,7 +484,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MODULE_NOT_FOUND");
-    expect(result.content[0]?.text).not.toContain("LeakedProc");
+    // External file's body must not have been parsed.
+    expect(result.content[0]?.text).not.toContain("should never be read");
   });
 
   it("ignores explicit destinationRoot when the resolver returns an error envelope", async () => {
@@ -493,6 +500,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
         failureResult({
           code: "ORPHAN_CLEANUP_PATH_UNRESOLVED",
           message: "no .dysflow/project.json",
+          retryable: false,
         }),
     );
     const getTool = tools.find((t) => t.name === "dysflow_get_procedure");
@@ -506,7 +514,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MODULE_NOT_FOUND");
-    expect(result.content[0]?.text).not.toContain("LeakedProc");
+    expect(result.content[0]?.text).not.toContain("should never be read");
   });
 
   it("still honors inline `source` regardless of destinationRoot (no I/O containment needed)", async () => {
@@ -518,11 +526,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     const getTool = tools.find((t) => t.name === "dysflow_get_procedure");
     if (getTool === undefined) throw new Error("dysflow_get_procedure tool not found");
 
-    const inlineSource = [
-      "Public Sub InlineProc()",
-      "    Dim x As Long",
-      "End Sub",
-    ].join("\r\n");
+    const inlineSource = ["Public Sub InlineProc()", "    Dim x As Long", "End Sub"].join("\r\n");
 
     // destinationRoot explicitly points to the external tree — but inline
     // source bypasses disk I/O entirely, so this must succeed.

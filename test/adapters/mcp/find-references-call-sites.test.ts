@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createDysflowMcpTools,
-  type DysflowMcpServices,
-} from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 function makeBaseServices() {
@@ -35,22 +32,32 @@ describe("dysflow_find_references — returns call sites of a symbol", () => {
     const tool = tools.find((t) => t.name === "dysflow_find_references");
     expect(tool).toBeDefined();
 
-    const result = await tool!.handler({
+    const result = (await tool?.handler({
       symbol: "EstablecerDatos",
       scope: "binary",
       modules: { modRiesgoEstadoGateHelper: sourceFixture.join("\r\n") },
-    });
+    })) ?? { content: [], isError: true };
 
     expect(result.isError).toBe(false);
-    const text = result.content[0]!.text ?? "";
+    const text = result.content[0]?.text ?? "";
     const parsed = JSON.parse(text);
 
     expect(parsed).toEqual({
       symbol: "EstablecerDatos",
       scope: "binary",
       references: [
-        { module: "modRiesgoEstadoGateHelper", kind: "Sub", line: 8, context: "Call EstablecerDatos m_Error" },
-        { module: "modRiesgoEstadoGateHelper", kind: "Sub", line: 12, context: "Call EstablecerDatos(m_Error)" },
+        {
+          module: "modRiesgoEstadoGateHelper",
+          kind: "Sub",
+          line: 8,
+          context: "Call EstablecerDatos m_Error",
+        },
+        {
+          module: "modRiesgoEstadoGateHelper",
+          kind: "Sub",
+          line: 12,
+          context: "Call EstablecerDatos(m_Error)",
+        },
       ],
       totalCount: 2,
     });

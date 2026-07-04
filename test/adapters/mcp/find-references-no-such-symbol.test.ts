@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createDysflowMcpTools,
-  type DysflowMcpServices,
-} from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 function makeBaseServices() {
@@ -19,16 +16,16 @@ describe("dysflow_find_references — typed error when symbol does not exist (NO
     const tool = tools.find((t) => t.name === "dysflow_find_references");
     expect(tool).toBeDefined();
 
-    const result = await tool!.handler({
+    const result = (await tool?.handler({
       symbol: "SymbolThatDoesNotExist",
-    });
+    })) ?? { content: [], isError: false };
 
     expect(result).toMatchObject({
       isError: true,
       content: [{ type: "text", text: expect.stringContaining("SYMBOL_NOT_FOUND") }],
     });
 
-    const text = result.content[0]!.text ?? "";
+    const text = result.content[0]?.text ?? "";
     expect(text).not.toContain('"references":[]');
   });
 });

@@ -51,6 +51,11 @@ E2E_testing/
 - `query` — `query_sql`, `list_tables`, `get_schema`, `count_rows`, `get_relationships`, etc.
 - `security` — guardia de solo-lectura contra `DROP`/`DELETE`
 - `vba` — `dysflow_vba_execute` con allowlist
+- `vba-introspection` — `dysflow_list_procedures` + `dysflow_get_procedure` (#701):
+  - inline `source` happy path para los dos tools
+  - inline `source` con `procedure` inexistente (camino de error tipado)
+  - `destinationRoot` externo rechazado por source-root containment
+  - resolución desde disco contra el árbol fuente del sandbox (happy path)
 - `operations` — `dysflow_access_operations_list` / `cleanup` / `force_cleanup_orphaned`
 - `capabilities` — `dysflow_get_capabilities` snapshot + cross-check vs `advertised.length`
 - `maintenance` — `compact_repair` (dry-run + apply con password real)
@@ -64,6 +69,9 @@ E2E_testing/
 
 **Baseline actual (v1.14.0):** 91 passed / 0 failed. Cualquier valor por debajo es una
 regresión o un drift entre el harness y el contrato — investiga antes de fusionar.
+Con la batería de `vba-introspection` (issue #701), el baseline sube a **96 passed
+/ 0 failed** — los 5 rows nuevos cubren inline source (3), source-root containment
+(1) y resolución desde disco contra el módulo del fixture (1).
 
 ## Dependencias
 
