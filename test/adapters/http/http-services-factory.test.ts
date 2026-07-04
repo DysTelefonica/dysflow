@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -62,5 +62,33 @@ describe("createHttpServices", () => {
     const result = await services.diagnosticsService.run();
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error.code).toBe("SERVICE_UNAVAILABLE");
+  });
+
+  it("wires vbaSyncToolService with configured allowedProcedures for HTTP /vba/test", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dysflow-factory-allowlist-"));
+    await mkdir(join(tempDir, ".dysflow"), { recursive: true });
+    await mkdir(join(tempDir, "src"), { recursive: true });
+    await writeFile(join(tempDir, "app.accdb"), "", "utf8");
+    await writeFile(
+      join(tempDir, ".dysflow", "project.json"),
+      JSON.stringify({
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+        allowWrites: true,
+        allowedProcedures: ["Test_A"],
+      }),
+      "utf8",
+    );
+
+    const services = await createHttpServices({}, tempDir);
+
+    expect(services.vbaSyncToolService).toBeDefined();
+    const result = await services.vbaSyncToolService?.execute("test_vba", {
+      proceduresJson: '["Test_B"]',
+    });
+
+    expect(result?.ok).toBe(false);
+    if (result === undefined || result.ok) throw new Error("expected allowlist refusal");
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
   });
 });

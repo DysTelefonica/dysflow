@@ -18,6 +18,7 @@ import {
   WindowsProcessKiller,
 } from "../process/windows-processes.js";
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
+import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import type { DysflowHttpServices } from "./server.js";
 
 export async function createHttpServices(
@@ -44,6 +45,21 @@ export async function createHttpServices(
       registry: operationRegistry,
     }),
   });
+
+  // PR1b (#621 F1) — VbaSyncAdapter carries the test_vba default-deny gate
+  // (ensureTestProceduresAllowed). Creating it here so the /vba/test HTTP route
+  // can route through it and get the same allowlist enforcement as MCP.
+  const vbaSyncToolService = new VbaSyncAdapter({
+    operationRegistry,
+    cleanupService: undefined, // VBA sync operations don't need Access-level cleanup
+    timeoutMs: configResult.data.timeoutMs,
+    cwd: configResult.data.projectRoot ?? process.cwd(),
+    env: env ?? process.env,
+    accessPassword: configResult.data.accessPassword,
+    // PR1b: forward allowlist so VbaExecutionAdapter can enforce the gate
+    allowedProcedures: configResult.data.allowedProcedures,
+  });
+
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
     queryService: new AccessQueryService({ runner, config: configResult.data }),
@@ -55,6 +71,8 @@ export async function createHttpServices(
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),
     }),
+    // PR1b (#621 F1): VBA sync tool service for test_vba with default-deny gate
+    vbaSyncToolService,
   };
 }
 
@@ -71,5 +89,6 @@ export function createUnavailableHttpServices(): DysflowHttpServices {
     queryService: { execute: unavailable },
     vbaService: { execute: unavailable },
     operationRegistry: createInMemoryAccessOperationRegistry(),
+    // vbaSyncToolService is omitted when services are unavailable
   };
 }

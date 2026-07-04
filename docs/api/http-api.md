@@ -132,7 +132,35 @@ When `allowedProcedures` is configured in `.dysflow/project.json`, procedures no
 }
 ```
 
-`allowedProcedures` applies to all VBA execution entry points: MCP `dysflow_vba_execute`, MCP `run_vba`, and this HTTP route. An empty list (`[]`) or absent field means all procedures are allowed.
+For this `/vba/execute` route, an empty list (`[]`) or absent `allowedProcedures` field means all procedures are allowed. The `/vba/test` route below is stricter and defaults to deny unless the request uses `dryRun:true`.
+
+
+### POST /vba/test
+
+Runs a `test_vba` plan through the same adapter used by the MCP `test_vba` tool. This is a write route: start the HTTP server with `--enable-writes` before using it.
+
+The HTTP route is inline-plan only: send `proceduresJson`. It does not accept `testsPath` or project/Access target overrides.
+
+Request:
+
+```json
+{
+  "proceduresJson": "[\"Test_Smoke\"]",
+  "dryRun": true
+}
+```
+
+Security contract:
+
+| Rule | Result |
+|------|--------|
+| Writes disabled | `403 HTTP_WRITES_DISABLED` |
+| No `allowedProcedures` and no `dryRun:true` | `400 MCP_INPUT_INVALID` |
+| Procedure not in `allowedProcedures` | `403 PROCEDURE_NOT_ALLOWED` |
+| `dryRun:true` with no allowlist | Allowed as an explicit planning escape hatch |
+| Target overrides such as `accessPath`, `projectId`, or `testsPath` | `400 HTTP_INVALID_INPUT` |
+
+The endpoint is bound to the server startup project config. It intentionally rejects per-request target and manifest-path overrides so one project's allowlist cannot authorize test execution against another Access database or arbitrary local file path.
 
 
 ### GET /access/operations

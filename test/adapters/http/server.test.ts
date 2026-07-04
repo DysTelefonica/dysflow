@@ -2,9 +2,10 @@ import { mkdtemp } from "node:fs/promises";
 import { request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getStringParam, startDysflowHttpServer } from "../../../src/adapters/http/server";
 import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system";
+import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -824,6 +825,276 @@ describe("Dysflow HTTP adapter", () => {
 
       expect(response.status).toBe(200);
       expect(services.calls.vba).toHaveLength(1);
+    });
+  });
+
+  // PR1b (#621 F1) — tests for POST /vba/test default-deny allowlist gate
+  describe("allowedProcedures — test_vba default-deny gate for POST /vba/test (#691)", () => {
+    // Tracks calls to the mocked vbaSyncToolService
+    const testVbaCalls: Array<{ toolName: string; input: unknown }> = [];
+
+    /**
+     * Creates a fake vbaSyncToolService that:
+     * - Records all calls in testVbaCalls
+     * - Simulates the VbaExecutionAdapter.ensureTestProceduresAllowed gate:
+     *   - Rejects with MCP_INPUT_INVALID when allowedProcedures is undefined/empty AND dryRun !== true
+     *   - Allows through otherwise (returns successResult)
+     */
+    function createFakeVbaSyncToolService(allowedProcedures?: readonly string[]) {
+      return {
+        execute: async (toolName: string, input: unknown) => {
+          testVbaCalls.push({ toolName, input });
+          const params = input as Record<string, unknown>;
+          const dryRun = params.dryRun === true;
+
+          // Simulate ensureTestProceduresAllowed gate behavior:
+          // Gate rejects when no allowlist AND no dryRun escape hatch
+          if (allowedProcedures === undefined || allowedProcedures.length === 0) {
+            if (dryRun !== true) {
+              return failureResult(
+                createDysflowError(
+                  "MCP_INPUT_INVALID",
+                  `Refusing to execute test_vba plan [Test_A]: ` +
+                    `project config must declare allowedProcedures (with every procedure in the list) ` +
+                    `OR caller must pass dryRun:true. ` +
+                    `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+                ),
+              );
+            }
+            // dryRun === true: escape hatch, allow
+            return successResult({ passed: 0, failed: 0, errors: 0, tests: [] }, { durationMs: 1 });
+          }
+
+          // Allowlist is configured: check if all procedures are in the list
+          const proceduresJson = params.proceduresJson as string | undefined;
+          let procedures: string[] = [];
+          if (proceduresJson) {
+            try {
+              const parsed = JSON.parse(proceduresJson);
+              if (Array.isArray(parsed)) {
+                procedures = parsed.map((t) =>
+                  typeof t === "string" ? t : (t as { procedure: string }).procedure,
+                );
+              }
+            } catch {
+              // ignore parse errors for test
+            }
+          }
+
+          const allowSet = new Set(allowedProcedures);
+          const disallowed = procedures.filter((p) => !allowSet.has(p));
+          if (disallowed.length > 0) {
+            return failureResult(
+              createDysflowError(
+                "PROCEDURE_NOT_ALLOWED",
+                `Refusing to execute test_vba plan: procedure(s) [${disallowed.join(", ")}] ` +
+                  `are not in the configured allowedProcedures list.`,
+              ),
+            );
+          }
+
+          return successResult({ passed: 1, failed: 0, errors: 0, tests: [] }, { durationMs: 5 });
+        },
+      };
+    }
+
+    beforeEach(() => {
+      testVbaCalls.length = 0;
+    });
+
+    it("rejects test_vba before PowerShell side effects with the real VbaSyncAdapter default-deny gate", async () => {
+      let executorCalled = false;
+      const vbaSyncToolService = new VbaSyncAdapter({
+        executor: async () => {
+          executorCalled = true;
+          return {
+            exitCode: 0,
+            stdout: "DYSFLOW_RESULT {}",
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        },
+        env: {},
+        cwd: process.cwd(),
+        allowedProcedures: undefined,
+      });
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_A"]' }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("MCP_INPUT_INVALID");
+      expect(body.error.message).toContain("allowedProcedures");
+      expect(body.error.message).toContain("dryRun:true");
+      expect(executorCalled).toBe(false);
+    });
+
+    it("allows test_vba with dryRun:true as the explicit escape hatch", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(undefined);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<{ ok: true; data: unknown }>(
+        `${server.url}/vba/test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ proceduresJson: '["Test_A"]', dryRun: true }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+      // Assert side effect DID occur: vbaSyncToolService was called
+      expect(testVbaCalls).toHaveLength(1);
+      expect(testVbaCalls[0]?.toolName).toBe("test_vba");
+    });
+
+    it("allows test_vba when allowedProcedures is configured and procedure is in the list", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(["Test_A", "Test_B"]);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({
+        services,
+        writesEnabled: true,
+        allowedProcedures: ["Test_A", "Test_B"],
+      });
+
+      const { response, body } = await readJson<{ ok: true; data: unknown }>(
+        `${server.url}/vba/test`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ proceduresJson: '["Test_A"]' }),
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(true);
+      expect(testVbaCalls).toHaveLength(1);
+    });
+
+    it("rejects test_vba when allowedProcedures is configured but procedure is NOT in the list", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(["Test_A", "Test_B"]);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({
+        services,
+        writesEnabled: true,
+        allowedProcedures: ["Test_A", "Test_B"],
+      });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_C"]' }), // Test_C not in allowlist
+      });
+
+      expect(response.status).toBe(403);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("PROCEDURE_NOT_ALLOWED");
+      expect(testVbaCalls).toHaveLength(1); // Gate is inside adapter, so call happens
+    });
+
+    it.each([
+      ["accessPath", "C:/other/project.accdb"],
+      ["projectId", "other-project"],
+      ["testsPath", "C:/outside/tests.vba.json"],
+      ["testsPath", "../outside/tests.vba.json"],
+    ])("rejects target override %s so the startup allowlist cannot authorize another target", async (key, value) => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(["Test_A"]);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({
+        services,
+        writesEnabled: true,
+        allowedProcedures: ["Test_A"],
+      });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_A"]', [key]: value }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(testVbaCalls).toEqual([]);
+    });
+
+    it("rejects an empty body because HTTP /vba/test requires an inline proceduresJson plan", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(undefined);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe("HTTP_INVALID_INPUT");
+      expect(testVbaCalls).toEqual([]);
+    });
+
+    it.each([
+      ["not-json", "VBA_INVALID_TEST_PLAN"],
+      ["[]", "VBA_NO_TESTS_SELECTED"],
+    ])("maps invalid proceduresJson %s to HTTP 400", async (proceduresJson, expectedCode) => {
+      const vbaSyncToolService = new VbaSyncAdapter({
+        executor: async () => {
+          throw new Error("executor must not run for invalid test plans");
+        },
+        env: {},
+        cwd: process.cwd(),
+        allowedProcedures: ["Test_A"],
+      });
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe(expectedCode);
+    });
+
+    it("returns 403 when writesEnabled is false (same as /vba/execute gate)", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(undefined);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: false });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_A"]' }),
+      });
+
+      expect(response.status).toBe(403);
+      expect(body.error.code).toBe("HTTP_WRITES_DISABLED");
+      expect(testVbaCalls).toEqual([]); // No side effect: writes disabled check comes first
+    });
+
+    it("returns 500 when vbaSyncToolService is not configured", async () => {
+      const services = createFakeServices({ vbaSyncToolService: undefined });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_A"]' }),
+      });
+
+      expect(response.status).toBe(500);
+      expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
     });
   });
 
