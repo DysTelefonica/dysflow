@@ -221,6 +221,139 @@ describe("VbaFormsAdapter — form mutation tools", () => {
       "utf8",
     );
   });
+
+  // #692 — rollback success must be reported in error details
+  it("reports rollback success in error details when import gate fails (deserializeForm)", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({ code: "IMPORT_FAILED", message: "import_modules failed", retryable: false }),
+    );
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    // Valid IR that serializes to something different from SIMPLE_FORM.
+    const ir = {
+      name: "Form_Customer",
+      kind: "Form" as const,
+      preamble: [],
+      root: {
+        blockType: "Form",
+        entries: [],
+        children: [
+          {
+            blockType: "",
+            entries: [{ kind: "scalar" as const, key: "Name", value: '"txtName"' }],
+            children: [],
+          },
+        ],
+      },
+      codeBehind: null,
+    };
+
+    const result = await adapter.execute("dysflow_form_deserialize", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      ir,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    if (!result.ok) {
+      expect(result.error.details).toMatchObject({
+        cause: expect.objectContaining({ code: "IMPORT_FAILED" }),
+        rollback: { attempted: true, applied: true, targetExisted: true },
+      });
+    }
+  });
+
+  // #692 — rollback failure must be reported in error details with the error message
+  it("reports rollback failure in error details when restore write throws (deserializeForm)", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({ code: "IMPORT_FAILED", message: "import_modules failed", retryable: false }),
+    );
+    const writeFile = vi.fn().mockImplementation(async (_path: string) => {
+      // First call is the mutation write (succeeds), second is the rollback write (fails).
+      if (writeFile.mock.calls.length === 1) return; // mutation write succeeds
+      throw new Error("ENOSPC: no space left on device");
+    });
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const ir = {
+      name: "Form_Customer",
+      kind: "Form" as const,
+      preamble: [],
+      root: {
+        blockType: "Form",
+        entries: [],
+        children: [
+          {
+            blockType: "",
+            entries: [{ kind: "scalar" as const, key: "Name", value: '"txtName"' }],
+            children: [],
+          },
+        ],
+      },
+      codeBehind: null,
+    };
+
+    const result = await adapter.execute("dysflow_form_deserialize", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      ir,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    if (!result.ok) {
+      expect(result.error.details).toMatchObject({
+        cause: expect.objectContaining({ code: "IMPORT_FAILED" }),
+        rollback: {
+          attempted: true,
+          applied: false,
+          targetExisted: true,
+          error: { message: expect.stringContaining("ENOSPC") },
+        },
+      });
+    }
+  });
+
+  it("applies deserializeForm (ir -> text -> import gate) and returns success", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const ir = {
+      name: "Form_Customer",
+      kind: "Form" as const,
+      preamble: [],
+      root: {
+        blockType: "Form",
+        entries: [],
+        children: [
+          {
+            blockType: "",
+            entries: [{ kind: "scalar" as const, key: "Name", value: '"txtName"' }],
+            children: [],
+          },
+        ],
+      },
+      codeBehind: null,
+    };
+
+    const result = await adapter.execute("dysflow_form_deserialize", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      ir,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({ mode: "apply", loadFromTextGate: "passed" });
+    }
+    expect(writeFile).toHaveBeenCalledTimes(1); // only the mutation write, no rollback needed
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -451,6 +584,179 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
     // The restore was the LAST write — writeFile received ORIGINAL_TARGET on the target path.
     expect(writeFile).toHaveBeenLastCalledWith(CLONE_BENCH_TARGET_PATH, ORIGINAL_TARGET, "utf8");
+  });
+
+  // #692 — rollback success must be reported in error details
+  it("reports rollback success in error details when import gate fails (cloneFormFromTemplate)", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "GATE_FAILED",
+        message: "import_modules rejected",
+        retryable: false,
+      }),
+    );
+    const writeFile = vi.fn();
+    const ORIGINAL_TARGET = "ORIGINAL TARGET CONTENT";
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) return Promise.resolve(ORIGINAL_TARGET);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      overwrite: true,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.details).toMatchObject({
+        rollback: { attempted: true, applied: true, targetExisted: true },
+      });
+    }
+  });
+
+  // #692 — rollback failure must be reported in error details with the error message
+  it("reports rollback failure in error details when restore write throws (cloneFormFromTemplate)", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "GATE_FAILED",
+        message: "import_modules rejected",
+        retryable: false,
+      }),
+    );
+    const writeFile = vi.fn().mockImplementation(async (_path: string) => {
+      // First call is the mutation write (succeeds), second is the rollback write (fails).
+      if (writeFile.mock.calls.length === 1) return; // mutation write succeeds
+      throw new Error("EACCES: permission denied on restore volume");
+    });
+    const ORIGINAL_TARGET = "ORIGINAL TARGET CONTENT";
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) return Promise.resolve(ORIGINAL_TARGET);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      overwrite: true,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.details).toMatchObject({
+        rollback: {
+          attempted: true,
+          applied: false,
+          targetExisted: true,
+          error: { message: expect.stringContaining("EACCES") },
+        },
+      });
+    }
+  });
+
+  // #692 — new-target rollback: when target did not exist before (readFile throws ENOENT),
+  // the import gate failure writes originalTargetText (empty string) back — this leaves
+  // an empty placeholder artifact, NOT a true restore of "no file". The new metadata
+  // (targetExisted, restoredState, requiresManualCleanup) disambiguates this for consumers.
+  it("reports new-target rollback metadata when import gate fails for a newly-created target", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "GATE_FAILED",
+        message: "import_modules rejected",
+        retryable: false,
+      }),
+    );
+    const writeFile = vi.fn();
+    // Target does NOT exist (readFile throws ENOENT on first call, then source).
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) throw new Error("ENOENT"); // new target
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    // Rollback wrote empty string (originalTargetText for non-existent target).
+    expect(writeFile).toHaveBeenLastCalledWith(CLONE_BENCH_TARGET_PATH, "", "utf8");
+    if (!result.ok) {
+      // New-target metadata: original state was "no file", rollback wrote empty placeholder.
+      expect(result.error.details).toMatchObject({
+        rollback: {
+          attempted: true,
+          applied: true,
+          targetExisted: false,
+          restoredState: "empty-placeholder",
+          requiresManualCleanup: true,
+        },
+      });
+    }
+  });
+
+  // #692 — new-target rollback failure: when target did not exist AND the restore write fails.
+  it("reports new-target rollback failure metadata when restore write throws for a newly-created target", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "GATE_FAILED",
+        message: "import_modules rejected",
+        retryable: false,
+      }),
+    );
+    const writeFile = vi.fn().mockImplementation(async (_path: string) => {
+      // First call is the mutation write (succeeds), second is the rollback write (fails).
+      if (writeFile.mock.calls.length === 1) return; // mutation write succeeds
+      throw new Error("ENOSPC: no space left on device");
+    });
+    // Target does NOT exist (readFile throws ENOENT on first call, then source).
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return Promise.resolve(CLONE_SOURCE_FORM);
+      if (path === CLONE_BENCH_TARGET_PATH) throw new Error("ENOENT"); // new target
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("dysflow_create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    if (!result.ok) {
+      // New-target rollback failure still carries the metadata indicating manual cleanup is needed.
+      expect(result.error.details).toMatchObject({
+        rollback: {
+          attempted: true,
+          applied: false,
+          targetExisted: false,
+          restoredState: "empty-placeholder",
+          requiresManualCleanup: true,
+          error: { message: expect.stringContaining("ENOSPC") },
+        },
+      });
+    }
   });
 
   it("rejects strict missing tokens via FORM_MUTATION_INVALID", async () => {
