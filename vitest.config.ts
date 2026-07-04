@@ -25,6 +25,12 @@ export default defineConfig({
       "test/e2e/**",
     ],
     environment: "node",
+    // Bounded fork pool: Windows spawn stability requires capped parallelism.
+    // Vitest 4 removed poolOptions/maxForks; maxWorkers is the top-level cap.
+    // Keep the unit suite serialized in CI-like runs: the previous unbounded
+    // worker pool intermittently exhausted Windows process-spawn resources.
+    pool: "forks",
+    maxWorkers: 1,
     // Headroom for tests that coordinate real async barriers (lock serialization,
     // filesystem locks). The default 5s is too tight when the worker pool is
     // saturated under a full parallel run, causing load-induced timeout flakes (GH #375).
