@@ -64,3 +64,20 @@ export const HTTP_WRITE_QUERY_SCHEMA: JsonObjectSchema = {
     apply: SCHEMA_PROPS.apply,
   },
 };
+
+// HTTP schema for test_vba. The route intentionally does NOT accept target
+// overrides (`accessPath`, `projectId`, etc.): the HTTP server is bound to its
+// startup project config, including that project's allowedProcedures list.
+// Allowing per-request target overrides here would let one project's allowlist
+// authorize execution against another Access file.
+export const HTTP_TEST_VBA_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["proceduresJson"],
+  additionalProperties: false,
+  properties: {
+    proceduresJson: { type: "string", minLength: 1 },
+    compile: { type: "boolean" },
+    dryRun: SCHEMA_PROPS.dryRun,
+    timeoutMs: SCHEMA_PROPS.timeoutMs,
+  },
+};

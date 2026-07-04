@@ -7,6 +7,7 @@ import {
   failureResult,
   type OperationResult,
   successResult,
+  type VbaSyncPort,
 } from "../../core/contracts/index.js";
 import {
   buildQueryReadRequest,
@@ -27,6 +28,7 @@ import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
 import {
   CLEANUP_SCHEMA,
   HTTP_QUERY_SCHEMA,
+  HTTP_TEST_VBA_SCHEMA,
   HTTP_VBA_EXECUTE_SCHEMA,
   HTTP_WRITE_QUERY_SCHEMA,
   type JsonObjectSchema,
@@ -59,6 +61,8 @@ export type DysflowHttpServices = {
       force?: boolean;
     }): Promise<OperationResult<AccessCleanupResult>>;
   };
+  /** PR1b (#621 F1): VBA sync tools (test_vba) routed through VbaSyncAdapter with the default-deny gate. */
+  vbaSyncToolService?: VbaSyncPort;
 };
 
 export type StartDysflowHttpServerOptions = {
@@ -353,6 +357,51 @@ async function routeRequest(
       return;
     }
     send(await context.services.vbaService.execute(vbaRequest));
+    return;
+  }
+
+  // PR1b (#621 F1) — HTTP route for test_vba with the same default-deny
+  // allowlist gate as MCP. VbaSyncAdapter.execute("test_vba", ...) calls
+  // VbaExecutionAdapter.executeTestVba which runs ensureTestProceduresAllowed
+  // BEFORE compile_vba or the test runner, so neither side effect fires when
+  // the gate rejects.
+  if (method === "POST" && path === "/vba/test") {
+    if (!context.writesEnabled) {
+      sendWritesDisabled(response);
+      return;
+    }
+    const body = await readJsonBody(request, context.maxBodyBytes);
+    if (!body.ok) {
+      sendBodyReadFailure(body);
+      return;
+    }
+    if (!handleValidation(body.data, HTTP_TEST_VBA_SCHEMA, context, response)) {
+      return;
+    }
+    if (context.services.vbaSyncToolService === undefined) {
+      send(
+        failureResult(
+          createDysflowError("SERVICE_UNAVAILABLE", "VBA sync service is not configured."),
+        ),
+        500,
+      );
+      return;
+    }
+    // The gate (ensureTestProceduresAllowed) lives inside VbaSyncAdapter's
+    // execute("test_vba", ...) -> VbaExecutionAdapter.executeTestVba.
+    // It fires AFTER plan resolution and BEFORE compile/test, so no side effects
+    // occur on rejection. The explicit escape hatch is dryRun: true.
+    const result = await context.services.vbaSyncToolService.execute("test_vba", body.data);
+    const status =
+      !result.ok &&
+      ["MCP_INPUT_INVALID", "VBA_INVALID_TEST_PLAN", "VBA_NO_TESTS_SELECTED"].includes(
+        result.error.code,
+      )
+        ? 400
+        : !result.ok && result.error.code === "PROCEDURE_NOT_ALLOWED"
+          ? 403
+          : undefined;
+    send(result, status);
     return;
   }
 
