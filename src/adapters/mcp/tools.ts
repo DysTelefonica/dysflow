@@ -5,6 +5,8 @@ import {
   type AccessVbaRequest,
   createDysflowError,
   failureResult,
+  type OperationResult,
+  successResult,
 } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
@@ -14,6 +16,7 @@ import {
   getVbaProcedure,
   listVbaProcedures,
 } from "../../core/services/vba-procedure-service.js";
+import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import { buildCleanupRequest } from "./alias-tools.js";
 import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
@@ -62,6 +65,7 @@ import {
   NO_INPUT_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
+  VALIDATE_MANIFEST_SCHEMA,
   VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
 import { validateInput } from "./validator.js";
@@ -240,12 +244,67 @@ async function resolveAllProjectModules(
   return modules;
 }
 
+async function resolveManifest(
+  params: Record<string, unknown>,
+  accessContextResolver: McpAccessContextResolver,
+): Promise<OperationResult<unknown>> {
+  if (params.manifest !== undefined) return successResult(params.manifest);
+
+  const testsPath = stringParam(params.testsPath) ?? stringParam(params.path);
+  if (testsPath === undefined) {
+    return failureResult(
+      createDysflowError(
+        "VBA_INVALID_TEST_PLAN",
+        "Provide testsPath/path or an inline manifest to validate.",
+      ),
+    );
+  }
+
+  let manifestPath = testsPath;
+  if (!isAbsoluteInputPath(testsPath)) {
+    const context = await accessContextResolver(params);
+    if (!context.ok) return context;
+    const root = context.data.projectRoot;
+    if (root === undefined || root.length === 0) {
+      return failureResult(
+        createDysflowError(
+          "VBA_INVALID_TEST_PLAN",
+          "Relative testsPath requires a resolved project root.",
+        ),
+      );
+    }
+    manifestPath = resolve(root, testsPath);
+  }
+
+  try {
+    const raw = await readFile(manifestPath, "utf8");
+    return successResult(JSON.parse(raw));
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "VBA_INVALID_TEST_PLAN",
+        `${err instanceof Error ? err.message : String(err)} (at ${manifestPath})`,
+      ),
+    );
+  }
+}
+
+function stringParam(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isAbsoluteInputPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("/") || path.startsWith("\\\\");
+}
+
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 
 /**
  * Canonical modern Dysflow MCP tool names.
  * These names use underscore separators and are the authoritative source of truth
- * for the six modern tool identifiers advertised via tools/list.
+ * for the modern tool identifiers advertised via tools/list.
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
@@ -262,6 +321,8 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_find_references",
   // issue #705 — read-only dead-code detection
   "dysflow_detect_dead_code",
+  // issue #703 — read-only VBA test manifest validation
+  "dysflow_validate_manifest",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -745,6 +806,43 @@ export function createDysflowMcpTools(
           content: [{ type: "text", text: JSON.stringify(report) }],
           isError: false,
           ok: true,
+        };
+      },
+    },
+    {
+      name: "dysflow_validate_manifest",
+      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_validate_manifest.summary}`,
+      inputSchema: VALIDATE_MANIFEST_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+
+        const params = input as Record<string, unknown>;
+        const manifestResult = await resolveManifest(params, accessContextResolver);
+        if (!manifestResult.ok) return translateCoreResultToMcpContent(manifestResult);
+
+        const inlineModules = params.modules as Record<string, string> | undefined;
+        const modules =
+          inlineModules ??
+          (await resolveAllProjectModules(input, undefined, accessContextResolver));
+        if (modules === undefined) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "MODULES_NOT_FOUND: No VBA source modules could be resolved for manifest validation.",
+              },
+            ],
+            isError: true,
+            ok: false,
+          };
+        }
+
+        const report = validateVbaTestManifest(manifestResult.data, modules);
+        return {
+          content: [{ type: "text", text: JSON.stringify(report) }],
+          isError: !report.valid,
+          ok: report.valid,
         };
       },
     },

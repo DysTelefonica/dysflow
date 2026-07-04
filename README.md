@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**65 visible MCP tools · Windows / Node 20+**
+**66 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 65 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, and dead-code detection.
+- A platform with 66 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, and VBA test manifest validation.
 
 ### It is not
 
@@ -617,8 +617,16 @@ Find all references to a given symbol across a set of modules. The tool parses i
 Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem. Read-only.
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
-  - `modules` (object, **required**): Key-value pair of module names to their inline VBA source code.
+  - `modules` (object, optional): Key-value pair of module names to their inline VBA source code. When omitted, the tool resolves modules from the configured source root.
   - `module` (string, optional): Module-name constraint; restricts the analysis to a single module and elevates risk for surviving private-procedure findings.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
+
+#### `dysflow_validate_manifest`
+Validate a VBA test manifest before running `test_vba`. The tool parses an inline `manifest` or reads `testsPath`/`path`, resolves VBA source modules from the configured source root unless inline `modules` are supplied, and returns `valid`, separate `errors`/`warnings`, and a `summary`. Read-only.
+* **Parameters**:
+  - `testsPath` / `path` (string, optional): VBA test manifest path. Relative paths resolve against the project root.
+  - `manifest` (object or array, optional): Inline test manifest object with a `tests` array, or an array of test entries.
+  - `modules` (object, optional): Key-value pair of module names to inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ---
@@ -647,6 +655,10 @@ Find VBA procedures and module-level declarations defined but never referenced. 
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
   - On failure the result is `ok: false` with code `VBA_TESTS_FAILED`. The message names the failing procedures, and `error.details` carries the structured per-procedure report: `{ failedCount, failures[], results[] }`, where each failure keeps `procedure`, `error`, `logs`, `durationMs`, and `payload`.
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
+* **`dysflow_validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
+  - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
+  - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
+  - Returns a validation report with `valid`, separate `errors` and `warnings` arrays, and a `summary` containing test and diagnostic counts.
 * **`verify_code`**: The single dry-run tool that compares exported VBA/Form source against the disk tree. It NEVER mutates Access. One tool covers every comparison scope:
   - **Whole project** — omit `moduleNames`.
   - **A subset or a single module** — pass `moduleNames`. If a `moduleNames` filter matches nothing in either side, it returns `MODULE_NOT_FOUND`.

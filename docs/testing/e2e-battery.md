@@ -56,6 +56,7 @@ E2E_testing/
   - inline `source` con `procedure` inexistente (camino de error tipado)
   - `destinationRoot` externo rechazado por source-root containment
   - resolución desde disco contra el árbol fuente del sandbox (happy path)
+- `vba-manifest` — `dysflow_validate_manifest` (#703): validación previa del manifest de tests VBA sin ejecutar `test_vba`
 - `operations` — `dysflow_access_operations_list` / `cleanup` / `force_cleanup_orphaned`
 - `capabilities` — `dysflow_get_capabilities` snapshot + cross-check vs `advertised.length`
 - `maintenance` — `compact_repair` (dry-run + apply con password real)
@@ -336,21 +337,21 @@ Mantener el `reviewedAt` actualizado es la diferencia entre "el binario está si
 con la spec" y "el binario está congelado en una revisión vieja". Más detalles en
 [`mcp-protocol-maintenance.md`](./mcp-protocol-maintenance.md).
 
-### Pin de herramientas advertised (63)
+### Pin de herramientas advertised (66)
 
 El número de herramientas visibles (no ocultas) del MCP está pinado en **tres** sitios que
 deben moverse juntos:
 
 | Pin | Fichero | Función |
 |---|---|---|
-| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(63)` |
-| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 63` |
-| Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness contiene el literal `"63 tools"` |
+| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(66)` |
+| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 66` |
+| Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness importa el contador compartido `EXPECTED_ADVERTISED_TOOL_COUNT` |
 
 `dysflow_get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
 cruza con `advertised.length` para detectar drift entre el pin unit y el servidor en vivo
 (fila `dysflow_get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
-`toolsVisible=62` y el pin dice 63, el cross-check falla aunque las herramientas
+`toolsVisible=65` y el pin dice 66, el cross-check falla aunque las herramientas
 individuales pasen.
 
 **Qué hacer cuando añades una herramienta visible:**

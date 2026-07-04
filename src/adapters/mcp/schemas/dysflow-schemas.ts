@@ -257,6 +257,43 @@ export const FIND_REFERENCES_SCHEMA: JsonObjectSchema = {
   },
 };
 
+export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    contextId: {
+      type: "string",
+      description:
+        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
+    },
+    testsPath: {
+      type: "string",
+      description: "VBA test manifest path. Relative paths resolve against the project root.",
+    },
+    path: {
+      type: "string",
+      description: "Alias for testsPath.",
+    },
+    manifest: {
+      description:
+        "Inline test manifest object or array. Use testsPath/path for normal project validation.",
+      additionalProperties: true,
+    },
+    modules: {
+      type: "object",
+      description: "Optional in-memory mapping of module names to source code.",
+      additionalProperties: { type: "string" },
+    },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+  },
+};
+
 export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: [],
