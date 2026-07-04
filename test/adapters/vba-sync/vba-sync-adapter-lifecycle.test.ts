@@ -55,7 +55,9 @@ function createRecordingRegistry(
     get: (id) => inner.get(id),
     listRecent: (options) => inner.listRecent(options),
     update: async (id, patch) => {
-      updates.push({ status: patch.status, accessPid: patch.accessPid ?? null });
+      if (patch.status !== undefined) {
+        updates.push({ status: patch.status, accessPid: patch.accessPid ?? null });
+      }
       return inner.update(id, patch);
     },
     getHealth: () => inner.getHealth(),
@@ -196,7 +198,9 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
       get: (id) => inner.get(id),
       listRecent: (options) => inner.listRecent(options),
       update: async (id, patch) => {
-        updates.push({ status: patch.status, accessPid: patch.accessPid ?? null });
+        if (patch.status !== undefined) {
+          updates.push({ status: patch.status, accessPid: patch.accessPid ?? null });
+        }
         return inner.update(id, patch);
       },
       getHealth: () => inner.getHealth(),
