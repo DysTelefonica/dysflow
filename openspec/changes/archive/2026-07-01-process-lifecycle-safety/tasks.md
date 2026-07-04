@@ -1,4 +1,12 @@
 # Tasks: process-lifecycle-safety — Audit Issue #620
+## Archive Reconciliation
+
+- **Issue**: #620
+- **Merged PR evidence**: #628, #629, #630
+- **Status**: Archive reconciliation: all planned tasks are marked complete based on merged PRs #628, #629, and #630.
+
+---
+
 
 ## Review Workload Forecast
 

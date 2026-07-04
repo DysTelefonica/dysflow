@@ -102,7 +102,7 @@ flag rather than reusing `force`.
 - AND this MUST remain the happy path the prior test at
       `access-operation-cleanup.test.ts:137` pins
 
-#### Scenario: Running + force:force=false still uses `CLEANUP_STATUS_NOT_ELIGIBLE`
+#### Scenario: Running + force:false still uses `CLEANUP_STATUS_NOT_ELIGIBLE`
 
 - GIVEN a record with `status === "running"`
 - WHEN `cleanup({ force: false })` runs

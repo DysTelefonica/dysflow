@@ -1,4 +1,12 @@
 # Tasks: form-ir-bugs — 3-Fix Campaign
+## Archive Reconciliation
+
+- **Issue**: #622
+- **Merged PR evidence**: #635, #636, #637
+- **Status**: Archive reconciliation: all planned tasks are marked complete based on merged PRs #635, #636, and #637.
+
+---
+
 
 ## Review Workload Forecast
 
