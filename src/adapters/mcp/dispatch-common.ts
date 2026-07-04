@@ -58,15 +58,19 @@ export function writesDisabled(toolName?: string): McpToolResult {
   };
 }
 
-export function invalidInput(message: string): McpToolResult {
+export function invalidInput(message: string, remediation?: string): McpToolResult {
+  const error: McpToolResult["error"] = {
+    code: MCP_INPUT_INVALID_CODE,
+    message,
+  };
+  if (remediation !== undefined) {
+    error.remediation = remediation;
+  }
   return {
     content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
     isError: true,
     ok: false,
-    error: {
-      code: MCP_INPUT_INVALID_CODE,
-      message,
-    },
+    error,
   };
 }
 

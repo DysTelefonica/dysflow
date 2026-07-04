@@ -59,6 +59,24 @@ export function createDispatchTool(
     handler: async (input) => {
       const validation = validateInput(input, schema);
       if (validation !== undefined) return invalidInput(validation);
+      // #694 — relink_directory rejects inline raw passwords before any write-gate
+      // response, so callers always receive the security-specific remediation.
+      // passwordEnv is resolved via the env callback and never appears in transcripts.
+      if (name === "relink_directory") {
+        const inputRecord = isRecord(input) ? input : {};
+        const hasInlinePassword =
+          hasOwn(inputRecord, "backendPassword") || hasOwn(inputRecord, "password");
+        if (hasInlinePassword) {
+          return invalidInput(
+            "relink_directory does not accept raw inline 'backendPassword' or 'password'. " +
+              "Use 'passwordEnv' to name an environment variable containing the password " +
+              "instead. " +
+              'Example: { "passwordEnv": "DYSFLOW_BACKEND_PASSWORD" }',
+            "Use 'passwordEnv' instead of inline 'backendPassword' or 'password'. " +
+              'Example: { "passwordEnv": "DYSFLOW_BACKEND_PASSWORD" }',
+          );
+        }
+      }
       // DELTA-003 — filesystem-mutating dispatch tools reject arguments:{} with
       // MCP_INPUT_INVALID. Empty input does NOT silently target the startup
       // config (inputTargetsConfig returns false for {}), so a filesystem write
