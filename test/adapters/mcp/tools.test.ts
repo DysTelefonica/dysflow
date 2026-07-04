@@ -172,11 +172,12 @@ describe("MCP tool registration over core services", () => {
     );
   });
 
-  it("regression: MODERN_TOOL_NAMES are exactly the 10 underscore-only names and none contains a dot", () => {
+  it("regression: MODERN_TOOL_NAMES are exactly the 11 underscore-only names and none contains a dot", () => {
     // This test is the authoritative contract for modern tool names.
     // It guards against accidental regression to dotted names (e.g. dysflow.vba.execute).
     // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
     // #701 added read-only VBA procedure introspection tools.
+    // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
     const expectedNames = [
       "dysflow_vba_execute",
       "dysflow_query_execute",
@@ -188,6 +189,7 @@ describe("MCP tool registration over core services", () => {
       "dysflow_list_procedures",
       "dysflow_get_procedure",
       "dysflow_find_references",
+      "dysflow_detect_dead_code",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);
