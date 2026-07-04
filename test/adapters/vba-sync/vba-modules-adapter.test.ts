@@ -1731,6 +1731,143 @@ describe("VbaModulesAdapter", () => {
     expect(executorCalled).toBe(false);
   });
 
+  it("export_all --prune does NOT delete when exported is entirely absent from payload (#689)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-no-exported-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
+
+    // Malformed success payload: no `exported` field at all.
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+    });
+    // No orphan deletion must have occurred.
+    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+    expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
+  });
+
+  it("export_all --prune does NOT delete when exported is not an array (#689)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-exported-not-array-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
+
+    // Malformed success payload: `exported` is a string instead of an array.
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true,"exported":"Live"}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+    });
+    // No orphan deletion must have occurred.
+    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+    expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
+  });
+
+  it("export_all --prune does NOT delete when exported is null (#689)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-exported-null-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
+
+    // Null is not an array.
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true,"exported":null}',
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+    });
+    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+    expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
+  });
+
+  it.each([
+    ['[{"name":"Live"}]', "an object"],
+    ["[null]", "null"],
+    ["[123]", "a number"],
+  ])("export_all --prune does NOT delete when exported contains %s (#689)", async (exportedJson) => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-exported-bad-entry-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+    await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
+
+    const service = new VbaSyncAdapter({
+      executor: async () => ({
+        exitCode: 0,
+        stdout: `DYSFLOW_RESULT {"ok":true,"exported":${exportedJson}}`,
+        stderr: "",
+        durationMs: 5,
+        timedOut: false,
+      }),
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: sourceRoot,
+      env: {},
+    });
+
+    const result = await service.execute("export_all", { prune: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+    });
+    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+    expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
+  });
+
   describe("export_all prune allow-list parity (#619)", () => {
     it("export_all prune never deletes .frm orphan files (#619)", async () => {
       const root = await mkdtemp(join(tmpdir(), "dysflow-prune-frm-orphan-"));

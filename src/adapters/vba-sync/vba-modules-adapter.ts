@@ -517,7 +517,21 @@ export class VbaModulesAdapter {
       );
     }
 
-    const exported = Array.isArray(data.exported) ? data.exported.map(String) : [];
+    // Guardrail: `exported` must be a trustworthy, explicit array. A missing or non-array
+    // value can mean the export payload was malformed or truncated — treating it as `[]`
+    // would delete every managed source file, which is catastrophic and non-recoverable.
+    // Instead, skip the prune with a stable reason so the caller can investigate.
+    if (
+      !Array.isArray(data.exported) ||
+      data.exported.some((name) => typeof name !== "string" || name.trim().length === 0)
+    ) {
+      return successResult(
+        { ...data, prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] } },
+        meta,
+      );
+    }
+
+    const exported = data.exported;
     const keep = new Set(exported.map((name) => name.toLowerCase()));
 
     const deleted: string[] = [];
