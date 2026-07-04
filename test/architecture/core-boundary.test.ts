@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
@@ -45,6 +47,29 @@ describe("MCP/core architecture boundary", () => {
     });
     const stale = [...KNOWN_ADAPTER_IMPORT_DEBT].filter((file) => !actualImporters.includes(file));
     expect(stale).toEqual([]);
+  });
+
+  it("fails the script guard for dynamic imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "dynamic-import.ts"),
+      'export async function leak() { return import("../../adapters/foo.js"); }\n',
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(dynamic\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
   });
 
   it("drives core behavior through injected service interfaces", async () => {

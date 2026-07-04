@@ -6,7 +6,16 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_TARGET = "src/core";
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules", "scratch"]);
 
-const ADAPTER_IMPORT = /^\s*(?:import|export)\s+(?:type\s+)?[^;\n]*\s+from\s+["'][^"']*adapters\//m;
+// Detect same-line static import/export like: import { Foo } from "...adapters/..."
+const SAME_LINE_ADAPTER_IMPORT =
+  /^\s*(?:import|export)\s+(?:type\s+)?[^;"']*?\s+from\s+["'][^"']*adapters\//gm;
+
+// Detect multiline static import where { or ( and } are on different lines from 'from'
+const MULTILINE_STATIC_ADAPTER_IMPORT =
+  /(?:^|\n)import\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)export\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)import\s*\([\s\S]*?\)\s+from\s+["'][\s\S]*?adapters\/[\s\S]*?["']/g;
+
+// Detect dynamic import(...) to adapters/
+const DYNAMIC_ADAPTER_IMPORT = /import\s*\([\s\S]*?adapters\/[\s\S]*?\)/g;
 
 async function collectTypeScriptFiles(targetPath) {
   const absolutePath = path.resolve(targetPath);
@@ -45,10 +54,38 @@ export async function findCoreAdapterBoundaryViolations(targetPath = DEFAULT_TAR
 
   for (const filePath of files) {
     const sourceText = await readFile(filePath, "utf8");
-    const match = sourceText.match(ADAPTER_IMPORT);
-    if (match?.index !== undefined) {
+
+    // Same-line static import/export: use match index for precise location
+    for (const match of sourceText.matchAll(SAME_LINE_ADAPTER_IMPORT)) {
       const location = lineAndColumn(sourceText, match.index);
-      violations.push({ filePath, line: location.line, column: location.column });
+      violations.push({
+        filePath,
+        line: location.line,
+        column: location.column,
+        type: "static",
+      });
+    }
+
+    // Multiline static import/export: matchAll gives each occurrence's index
+    for (const match of sourceText.matchAll(MULTILINE_STATIC_ADAPTER_IMPORT)) {
+      const location = lineAndColumn(sourceText, match.index);
+      violations.push({
+        filePath,
+        line: location.line,
+        column: location.column,
+        type: "multiline-static",
+      });
+    }
+
+    // Dynamic import(...): matchAll gives each occurrence's index
+    for (const match of sourceText.matchAll(DYNAMIC_ADAPTER_IMPORT)) {
+      const location = lineAndColumn(sourceText, match.index);
+      violations.push({
+        filePath,
+        line: location.line,
+        column: location.column,
+        type: "dynamic",
+      });
     }
   }
 
@@ -72,7 +109,7 @@ async function main() {
   );
   for (const violation of violations) {
     console.error(
-      `${violation.filePath}:${violation.line}:${violation.column} imports from adapters`,
+      `${violation.filePath}:${violation.line}:${violation.column} imports from adapters (${violation.type})`,
     );
   }
   process.exitCode = 1;
