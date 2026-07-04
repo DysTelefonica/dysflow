@@ -10,7 +10,8 @@ import {
   diagnosticsFromPreflightCleanup,
   reapOrphanedAccessOnTimeout,
 } from "../operations/access-operation-preflight.js";
-import { sanitizeSecrets, truthy } from "../utils/index.js";
+import { extractResultPayload } from "../runner/ps-result-channel.js";
+import { isRecord, sanitizeSecrets, truthy } from "../utils/index.js";
 import { buildRuntimeDiagnostics, type RuntimeDiagnostics } from "../utils/runtime-info.js";
 import {
   classifyVbaPair,
@@ -56,6 +57,13 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
 /** Per-category count map present in semantic mode results. */
 export type VbaSemanticSummary = Partial<Record<VbaSemanticCategory, number>>;
 
+/** Warning produced when a module fails to export (e.g. form open in design view). */
+export type ExportWarning = {
+  module: string;
+  error: string;
+  message: string;
+};
+
 export type VbaVerifyResult = {
   operation: "verify_code";
   ok: boolean;
@@ -94,6 +102,14 @@ export type VbaVerifyResult = {
    * interface (CLI / MCP stdio / shared-core), and when it was built.
    */
   runtimeDiagnostics?: RuntimeDiagnostics;
+  /**
+   * Warnings from the export phase of verify_code. Present when one or more
+   * modules failed to export (e.g. a form open in design view). The comparison
+   * is still run on the modules that were successfully exported, but a consumer
+   * should treat a non-empty warnings array as evidence that the result may be
+   * incomplete and should not be assumed clean.
+   */
+  warnings?: readonly ExportWarning[];
 };
 
 export type VbaExecutionTarget = {
@@ -181,7 +197,7 @@ export async function compareSourceAgainstBinary(
       destinationRoot: tempExportRoot,
       moduleNames: stringArray(params.moduleNames),
       password,
-      json: false,
+      json: true,
       extra: {},
       timeoutMs: effectiveTimeoutMs,
       env:
@@ -225,6 +241,40 @@ export async function compareSourceAgainstBinary(
       );
     }
 
+    // Parse export stdout to extract warnings (issue #690). verify_code asks the
+    // export action for JSON so per-module export failures are returned as
+    // warnings instead of throwing away the rest of the comparison evidence.
+    let exportWarnings: readonly ExportWarning[] = [];
+    try {
+      const parsed = extractResultPayload(result.stdout, secrets);
+      if (isRecord(parsed) && parsed.ok === false) {
+        const error = isRecord(parsed.error) ? parsed.error : {};
+        const code = typeof error.code === "string" ? error.code : "EXPORT_RESULT_FAILED";
+        const message =
+          typeof error.message === "string"
+            ? sanitizeSecrets(error.message, secrets)
+            : "verify export returned a structured failure payload; export warning state is unknown.";
+        exportWarnings = [
+          {
+            module: "__export__",
+            error: code,
+            message,
+          },
+        ];
+      } else if (isRecord(parsed) && Array.isArray(parsed.warnings)) {
+        exportWarnings = parsed.warnings;
+      }
+    } catch {
+      exportWarnings = [
+        {
+          module: "__export__",
+          error: "EXPORT_WARNING_PARSE_FAILED",
+          message:
+            "verify export succeeded, but its structured result payload could not be parsed; export warning state is unknown.",
+        },
+      ];
+    }
+
     const comparisonMode: VbaComparisonMode = truthy(params.strict) ? "strict" : "semantic";
     const comparison = await compareVbaSourceTrees(
       sourceRoot,
@@ -252,7 +302,7 @@ export async function compareSourceAgainstBinary(
       }
     }
     return successResult(
-      { operation: "verify_code", ...comparison },
+      { operation: "verify_code", ...comparison, warnings: exportWarnings },
       { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
     );
   } finally {

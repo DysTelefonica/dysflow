@@ -262,6 +262,240 @@ describe("vba-source-comparison", () => {
     expect(preflightCalls).toBe(2);
   });
 
+  it("verify_code surfaces export warnings in the structured result (issue #690)", async () => {
+    // When the export phase produces warnings (e.g. a form open in design view),
+    // those warnings must be surfaced in VbaVerifyResult so callers do not
+    // incorrectly infer a clean comparison from incomplete export evidence.
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-warnings-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Mod.bas"), "source content", "utf8");
+
+    let capturedJsonFlag: boolean | undefined;
+    const ctx = {
+      scriptPath: "mock.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { destinationRoot: string; json: boolean }) => {
+        capturedJsonFlag = req.json;
+        const destMod = join(req.destinationRoot, "modules");
+        await mkdir(destMod, { recursive: true });
+        await writeFile(join(destMod, "Mod.bas"), "binary content", "utf8");
+        // Simulate a form that failed to export (e.g. open in design view)
+        const exportOutput = JSON.stringify({
+          ok: true,
+          exported: ["Mod"],
+          warnings: [
+            {
+              module: "Form_TestForm",
+              error: "Form is open in design view",
+              message: "Form is open in design view",
+            },
+          ],
+        });
+        return {
+          exitCode: 0,
+          stdout: `DYSFLOW_RESULT ${exportOutput}`,
+          stderr: "",
+          durationMs: 10,
+          timedOut: false,
+        };
+      },
+    };
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(capturedJsonFlag).toBe(true);
+      expect(result.data.warnings).toBeDefined();
+      expect(result.data.warnings).toHaveLength(1);
+      expect(result.data.warnings?.[0]).toEqual({
+        module: "Form_TestForm",
+        error: "Form is open in design view",
+        message: "Form is open in design view",
+      });
+    }
+  });
+
+  it("verify_code surfaces unknown warning state when export result parsing fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-warning-parse-failed-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Mod.bas"), "same content", "utf8");
+
+    const ctx = {
+      scriptPath: "mock.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { destinationRoot: string }) => {
+        const destMod = join(req.destinationRoot, "modules");
+        await mkdir(destMod, { recursive: true });
+        await writeFile(join(destMod, "Mod.bas"), "same content", "utf8");
+        return {
+          exitCode: 0,
+          stdout: "export completed without a DYSFLOW_RESULT payload",
+          stderr: "",
+          durationMs: 10,
+          timedOut: false,
+        };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.actionableOk).toBe(true);
+      expect(result.data.warnings).toEqual([
+        {
+          module: "__export__",
+          error: "EXPORT_WARNING_PARSE_FAILED",
+          message:
+            "verify export succeeded, but its structured result payload could not be parsed; export warning state is unknown.",
+        },
+      ]);
+    }
+  });
+
+  it("verify_code surfaces unknown warning state when export result JSON is malformed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-warning-json-malformed-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Mod.bas"), "same content", "utf8");
+
+    const ctx = {
+      scriptPath: "mock.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { destinationRoot: string }) => {
+        const destMod = join(req.destinationRoot, "modules");
+        await mkdir(destMod, { recursive: true });
+        await writeFile(join(destMod, "Mod.bas"), "same content", "utf8");
+        return {
+          exitCode: 0,
+          stdout: "DYSFLOW_RESULT {not-json",
+          stderr: "",
+          durationMs: 10,
+          timedOut: false,
+        };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.actionableOk).toBe(true);
+      expect(result.data.warnings?.[0]?.error).toBe("EXPORT_WARNING_PARSE_FAILED");
+    }
+  });
+
+  it("verify_code surfaces structured export failure payloads as degraded evidence", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-export-failure-payload-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules"), { recursive: true });
+    await writeFile(join(sourceRoot, "modules", "Mod.bas"), "same content", "utf8");
+
+    const ctx = {
+      scriptPath: "mock.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: { destinationRoot: string }) => {
+        const destMod = join(req.destinationRoot, "modules");
+        await mkdir(destMod, { recursive: true });
+        await writeFile(join(destMod, "Mod.bas"), "same content", "utf8");
+        const exportOutput = JSON.stringify({
+          ok: false,
+          error: {
+            code: "VBA_MANAGER_SERIALIZATION_FAILED",
+            message: "Write-DysflowResult could not serialize the result payload.",
+          },
+        });
+        return {
+          exitCode: 0,
+          stdout: `DYSFLOW_RESULT ${exportOutput}`,
+          stderr: "",
+          durationMs: 10,
+          timedOut: false,
+        };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.actionableOk).toBe(true);
+      expect(result.data.warnings).toEqual([
+        {
+          module: "__export__",
+          error: "VBA_MANAGER_SERIALIZATION_FAILED",
+          message: "Write-DysflowResult could not serialize the result payload.",
+        },
+      ]);
+    }
+  });
+
   it("verify_code surfaces a manual-merge recommendation when source and binary differ", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-recon-diff-"));
     const sourceRoot = join(root, "src");
