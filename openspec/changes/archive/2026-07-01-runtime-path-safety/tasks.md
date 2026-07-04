@@ -1,4 +1,12 @@
 # Tasks: Runtime Path Safety — Audit-Driven Hardening
+## Archive Reconciliation
+
+- **Issue**: #619
+- **Merged PR evidence**: #625, #626, #627; follow-up #647
+- **Status**: Archive reconciliation: tasks were already complete; archive evidence also cites follow-up PR #647 as post-merge runtime guard evidence.
+
+---
+
 
 ## Review Workload Forecast
 

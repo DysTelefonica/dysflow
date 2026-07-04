@@ -1,4 +1,12 @@
 # Tasks: hexagonal-tech-debt — Hex, dup, validator, dead-code, override dedup (#624)
+## Archive Reconciliation
+
+- **Issue**: #624
+- **Merged PR evidence**: #639, #640, #641, #642, #643
+- **Status**: Archive reconciliation: all planned tasks are marked complete based on merged PRs #639, #640, #641, #642, and #643.
+
+---
+
 
 ## Review Workload Forecast
 
@@ -55,20 +63,20 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 ### Implementation steps
 
-- [ ] 1.1 **Create** `src/core/operations/access-operation-status.ts`
+- [x] 1.1 **Create** `src/core/operations/access-operation-status.ts`
   - Exports `ELIGIBLE_STATUSES: ReadonlySet<AccessOperationStatus>` = `new Set(["timed_out", "failed", "cleanup_pending", "pid_unknown"])`
   - Imports `AccessOperationStatus` from `./access-operation-registry.js`
 
-- [ ] 1.2 **Modify** `src/core/operations/access-operation-preflight.ts:50-55`
+- [x] 1.2 **Modify** `src/core/operations/access-operation-preflight.ts:50-55`
   - Delete local `const ELIGIBLE_STATUSES = new Set<AccessOperationStatus>([...])`
   - Add: `import { ELIGIBLE_STATUSES } from "./access-operation-status.js";`
   - `AccessOperationStatus` import may stay if other usages exist in file
 
-- [ ] 1.3 **Modify** `src/core/operations/access-operation-cleanup.ts:50`
+- [x] 1.3 **Modify** `src/core/operations/access-operation-cleanup.ts:50`
   - Delete local `const ELIGIBLE_STATUSES = new Set(["timed_out", "failed", "cleanup_pending"])`
   - Add: `import { ELIGIBLE_STATUSES } from "./access-operation-status.js";`
 
-- [ ] 1.4 **GREEN**: Run tests — all 4 new tests pass; existing tests unchanged
+- [x] 1.4 **GREEN**: Run tests — all 4 new tests pass; existing tests unchanged
 
 ### Verification
 
@@ -82,7 +90,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 ### CHANGELOG task
 
-- [ ] Add entry: `Fix latent cleanup-eligibility divergence for pid_unknown records (#B.2, #624)`
+- [x] Add entry: `Fix latent cleanup-eligibility divergence for pid_unknown records (#B.2, #624)`
 
 ---
 
@@ -118,38 +126,38 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 **#B.1 — FORM_NOISE_KEYS consolidation**
 
-- [ ] 2.1 **Create** `src/core/services/form-noise-keys.ts`
+- [x] 2.1 **Create** `src/core/services/form-noise-keys.ts`
   - Exports `FORM_NOISE_KEYS: ReadonlySet<string>` with the 14 keys (same order as current `form-ir-compare-service.ts:30-45`)
   - Copy the exact 14-key set from `form-ir-compare-service.ts`
 
-- [ ] 2.2 **Modify** `src/core/services/form-ir-compare-service.ts`
+- [x] 2.2 **Modify** `src/core/services/form-ir-compare-service.ts`
   - Replace local `FORM_NOISE_KEYS` declaration with: `export { FORM_NOISE_KEYS } from "./form-noise-keys.js";`
   - Keep the `ReadonlySet<string>` type annotation (re-export satisfies it)
   - Delete the `* LOCKED` comment block (lines 26-28) — moved intent to the shared module's JSDoc
 
-- [ ] 2.3 **Modify** `src/core/services/vba-semantic-classifier.ts`
+- [x] 2.3 **Modify** `src/core/services/vba-semantic-classifier.ts`
   - Replace local `FORM_NOISE_KEYS` declaration with: `import { FORM_NOISE_KEYS } from "./form-noise-keys.js";`
   - Change `const FORM_NOISE_KEYS` → keep the same local alias for internal use (or have both re-export — design says "re-export for backward compat")
   - **Decision**: Both modules re-export from shared; tests assert `Object.is(consumer.FORM_NOISE_KEYS, shared.FORM_NOISE_KEYS)`
 
 **#E — query-write-fixture removal**
 
-- [ ] 2.4 **Modify** `src/adapters/mcp/dispatch-routes.ts`
+- [x] 2.4 **Modify** `src/adapters/mcp/dispatch-routes.ts`
   - Delete `| { kind: "query-write-fixture" };` from `McpToolRoute` union (line 17)
   - Add JSDoc above `McpToolRoute`: re-introduction note explaining removal reason and path
 
-- [ ] 2.5 **Modify** `src/adapters/mcp/dispatch-factory.ts:51`
+- [x] 2.5 **Modify** `src/adapters/mcp/dispatch-factory.ts:51`
   - Delete `route.kind === "query-write-fixture" ||` from `isWriteGated` expression
   - Delete `case "query-write-fixture":` block at lines 156-161
 
 **#E — form-lint redundant guard**
 
-- [ ] 2.6 **Modify** `src/core/services/form-lint.ts:520-522`
+- [x] 2.6 **Modify** `src/core/services/form-lint.ts:520-522`
   - Delete the `if (type === "ListBox" && prop === "ColumnWidths") { return null; }` block
   - Ensure JSDoc above the function documents that `ColumnWidths` is supported
   - Default `return null` at line 523 handles the case
 
-- [ ] 2.7 **GREEN**: Run tests — all new + existing tests pass
+- [x] 2.7 **GREEN**: Run tests — all new + existing tests pass
 
 ### Verification
 
@@ -189,7 +197,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 ### Implementation steps
 
-- [ ] 3.1 **Add** `OVERRIDE_KEYS` const array + `OverrideShape` type + `pickOverrides(params)` helper + `coerceTimeoutMs(value)` helper to `src/core/mapping/access-query-request-mapper.ts` (before `buildQueryReadRequest`)
+- [x] 3.1 **Add** `OVERRIDE_KEYS` const array + `OverrideShape` type + `pickOverrides(params)` helper + `coerceTimeoutMs(value)` helper to `src/core/mapping/access-query-request-mapper.ts` (before `buildQueryReadRequest`)
 
   ```ts
   const OVERRIDE_KEYS = [
@@ -236,17 +244,17 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
   }
   ```
 
-- [ ] 3.2 **Modify** `buildQueryReadRequest` (lines ~140-158)
+- [x] 3.2 **Modify** `buildQueryReadRequest` (lines ~140-158)
   - Replace inline override block with `{ ...pickOverrides(params) }`
   - Delete the inline `typeof === "string"` timeoutMs coercion block
 
-- [ ] 3.3 **Modify** `buildWriteFixtureRequest` (lines ~185-200)
+- [x] 3.3 **Modify** `buildWriteFixtureRequest` (lines ~185-200)
   - Same transformation: spread `pickOverrides(params)`; delete string coercion block
 
-- [ ] 3.4 **Modify** `buildMaintenanceRequest` (lines ~255-264)
+- [x] 3.4 **Modify** `buildMaintenanceRequest` (lines ~255-264)
   - Same transformation: spread `pickOverrides(params)`; delete string coercion block
 
-- [ ] 3.5 **GREEN**: Run tests — all new tests pass; existing mapper tests unchanged
+- [x] 3.5 **GREEN**: Run tests — all new tests pass; existing mapper tests unchanged
 
 ### Verification
 
@@ -287,16 +295,16 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 **#A — RegistryFileSystemPort extraction**
 
-- [ ] 4.1 **Create** `src/core/operations/registry-file-system-port.ts`
+- [x] 4.1 **Create** `src/core/operations/registry-file-system-port.ts`
   - Exports `RegistryFileSystemPort` interface with: `mkdir`, `readFile`, `writeFile(path, data, encoding, options?)`, `rename`, `rm`, `rmdir`, `stat`
   - `writeFile` options accepts `{ flag?: "wx" }` only; unsupported flags throw `TypeError`
 
-- [ ] 4.2 **Create** `src/adapters/operations/node-registry-file-system.ts`
+- [x] 4.2 **Create** `src/adapters/operations/node-registry-file-system.ts`
   - Exports `nodeRegistryFileSystem: RegistryFileSystemPort` wrapping `node:fs/promises` calls
   - `stat` catches `ENOENT` and returns `undefined` (matches current behavior)
   - `writeFile` throws `TypeError("Unsupported writeFile flag: <x>")` for non-`wx` flags
 
-- [ ] 4.3 **Modify** `src/core/operations/access-operation-registry.ts`
+- [x] 4.3 **Modify** `src/core/operations/access-operation-registry.ts`
   - Drop `node:fs/promises` import (line 2)
   - Add: `import type { RegistryFileSystemPort } from "./registry-file-system-port.js";`
   - Add: `import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";`
@@ -308,17 +316,17 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 **#A — VbaFormService default extraction**
 
-- [ ] 4.4 **Create** `src/adapters/services/node-form-file-system.ts`
+- [x] 4.4 **Create** `src/adapters/services/node-form-file-system.ts`
   - Exports `nodeFormFileSystem: FormFileSystemPort` — mirrors current `nodeFileSystem` impl (lines 46-59 of `vba-form-service.ts`)
   - `readJson` helper: reads file, JSON.parse, throws `Error("Invalid JSON file: <path>")` on parse failure
 
-- [ ] 4.5 **Modify** `src/core/services/vba-form-service.ts`
+- [x] 4.5 **Modify** `src/core/services/vba-form-service.ts`
   - Drop `node:fs/promises` import (line 1)
   - Drop local `nodeFileSystem` constant (lines 46-59)
   - Update JSDoc header: "Default Node.js port implementations" now points to `src/adapters/services/node-form-file-system.ts`
   - Constructor: `this.fileSystem = options.fileSystem ?? nodeFormFileSystem` (import added)
 
-- [ ] 4.6 **GREEN**: Run tests — all new + existing tests pass
+- [x] 4.6 **GREEN**: Run tests — all new + existing tests pass
 
 ### Verification
 
@@ -335,7 +343,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 ### CHANGELOG task
 
-- [ ] Add entry: `Extract Node FS port for FileAccessOperationRegistry and VbaFormService (hexagonal split, #A, #624)`
+- [x] Add entry: `Extract Node FS port for FileAccessOperationRegistry and VbaFormService (hexagonal split, #A, #624)`
 
 ---
 
@@ -359,7 +367,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
 
 ### Implementation steps
 
-- [ ] 5.1 **Modify** `src/shared/validation/validator.ts:11-15` (top-level loop in `validateInput`)
+- [x] 5.1 **Modify** `src/shared/validation/validator.ts:11-15` (top-level loop in `validateInput`)
   - After the `additionalProperties === false` boolean branch, add:
     ```ts
     if (typeof schema.additionalProperties === "object" && schema.additionalProperties !== null) {
@@ -371,7 +379,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
     }
     ```
 
-- [ ] 5.2 **Modify** `src/shared/validation/validator.ts:80-91` (nested-object loop in `validateJsonSchemaProperty`)
+- [x] 5.2 **Modify** `src/shared/validation/validator.ts:80-91` (nested-object loop in `validateJsonSchemaProperty`)
   - After the `property.additionalProperties === false` boolean branch, add:
     ```ts
     if (typeof property.additionalProperties === "object" && property.additionalProperties !== null) {
@@ -383,7 +391,7 @@ Body: `SDD: hexagonal-tech-debt`, `Issue: #624`
     }
     ```
 
-- [ ] 5.3 **GREEN**: Run tests — all new + existing validator tests pass
+- [x] 5.3 **GREEN**: Run tests — all new + existing validator tests pass
 
 ### Verification
 

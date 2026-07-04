@@ -1,4 +1,12 @@
 # Tasks: MCP Contract Safety — Honest Schema-vs-Runtime Parity
+## Archive Reconciliation
+
+- **Issue**: #621
+- **Merged PR evidence**: #631, #632, #633, #634
+- **Status**: Archive reconciliation: all planned tasks are marked complete based on merged PRs #631, #632, #633, and #634.
+
+---
+
 
 ## Review Workload Forecast
 
@@ -106,16 +114,16 @@ Access: source-only; manual compile not required
 
 ### Phase 1: Parallel Gate
 
-- [ ] 1.1 Add `allowedProcedures?: readonly string[]` parameter to `VbaExecutionAdapter.constructor` and store as `private readonly allowedProcedures`
-- [ ] 1.2 Add `ensureTestProcedureAllowed(params, allowedProcedures)` private method mirroring the `canonical-handlers.ts` gate logic — reject when `allowedProcedures` empty AND no `dryRun: true` in params
-- [ ] 1.3 Call `ensureTestProcedureAllowed` at the top of `executeTestVba` (`src/adapters/vba-sync/vba-execution-adapter.ts:293`) — before any other logic
-- [ ] 1.4 Thread `allowedProcedures` from `VbaSyncAdapter` → `VbaExecutionAdapter` constructor (find the instantiation site and pass the config value)
+- [x] 1.1 Add `allowedProcedures?: readonly string[]` parameter to `VbaExecutionAdapter.constructor` and store as `private readonly allowedProcedures`
+- [x] 1.2 Add `ensureTestProcedureAllowed(params, allowedProcedures)` private method mirroring the `canonical-handlers.ts` gate logic — reject when `allowedProcedures` empty AND no `dryRun: true` in params
+- [x] 1.3 Call `ensureTestProcedureAllowed` at the top of `executeTestVba` (`src/adapters/vba-sync/vba-execution-adapter.ts:293`) — before any other logic
+- [x] 1.4 Thread `allowedProcedures` from `VbaSyncAdapter` → `VbaExecutionAdapter` constructor (find the instantiation site and pass the config value)
 
 ### Phase 2: Tests
 
 **RED first**:
 
-- [ ] 2.1 NEW FILE `test/adapters/vba-sync/vba-execution-adapter.test.ts` — test `executeTestVba`: (a) refuses when `allowedProcedures` unconfigured and no `dryRun`, (b) accepts when `dryRun: true`, (c) accepts when procedure name in `allowedProcedures`
+- [x] 2.1 NEW FILE `test/adapters/vba-sync/vba-execution-adapter.test.ts` — test `executeTestVba`: (a) refuses when `allowedProcedures` unconfigured and no `dryRun`, (b) accepts when `dryRun: true`, (c) accepts when procedure name in `allowedProcedures`
 
 ### Verification
 
@@ -144,24 +152,24 @@ Access: source-only; manual compile not required
 
 ### Phase 1: Schema Changes
 
-- [ ] 1.1 Add `allowTables: SCHEMA_PROPS.allowTables` and `denyTables: SCHEMA_PROPS.denyTables` to `QUERY_EXECUTE_SCHEMA` (`src/adapters/mcp/schemas/dysflow-schemas.ts:73-106`) — after `apply: SCHEMA_PROPS.apply`
-- [ ] 1.2 Verify `tools.ts:115-119` spread already carries `allowTables`/`denyTables` through — no change needed, but add a comment noting parity
+- [x] 1.1 Add `allowTables: SCHEMA_PROPS.allowTables` and `denyTables: SCHEMA_PROPS.denyTables` to `QUERY_EXECUTE_SCHEMA` (`src/adapters/mcp/schemas/dysflow-schemas.ts:73-106`) — after `apply: SCHEMA_PROPS.apply`
+- [x] 1.2 Verify `tools.ts:115-119` spread already carries `allowTables`/`denyTables` through — no change needed, but add a comment noting parity
 
 ### Phase 2: Cleanup Cast Replacement
 
-- [ ] 2.1 Import `buildCleanupRequest` from `./alias-tools.js` in `tools.ts`
-- [ ] 2.2 Replace the bare cast `(validatedInput) => validatedInput as { operationId: string; accessPath: string; force?: boolean }` at `tools.ts:151-153` with `(validatedInput) => buildCleanupRequest(validatedInput)`
+- [x] 2.1 Import `buildCleanupRequest` from `./alias-tools.js` in `tools.ts`
+- [x] 2.2 Replace the bare cast `(validatedInput) => validatedInput as { operationId: string; accessPath: string; force?: boolean }` at `tools.ts:151-153` with `(validatedInput) => buildCleanupRequest(validatedInput)`
 
 ### Phase 3: Tests
 
 **RED first**:
 
-- [ ] 3.1 In `test/adapters/mcp/schemas.test.ts` (or extend existing schema tests) — assert `QUERY_EXECUTE_SCHEMA.properties.allowTables.type === "array"` and same for `denyTables`
-- [ ] 3.2 In `tools.test.ts` — add test: `dysflow_query_execute write mode passes allowTables/denyTables through to core service` (fake queryService captures request; assert `allowTables` and `denyTables` present)
-- [ ] 3.3 In `tools.test.ts` — add test: `dysflow_query_execute write mode respects denyTables via TABLE_DENIED` (fake queryService returns `failureResult({ code: "TABLE_DENIED" })`; assert `isError: true` with text matching `/TABLE_DENIED/`)
-- [ ] 3.4 In `tools.test.ts` — add test: `dysflow_query_execute read mode ignores allowTables/denyTables` (fake queryService not called with these fields in read mode)
-- [ ] 3.5 In `tools.test.ts` — add test: `dysflow_access_cleanup modern pass-through mirrors buildCleanupRequest` (invoke with full field set; assert all schema fields present in captured request)
-- [ ] 3.6 In `alias-tools.test.ts` — add test: `legacy and modern cleanup pass-through field sets are equal` (call both builders with same input; assert same field keys)
+- [x] 3.1 In `test/adapters/mcp/schemas.test.ts` (or extend existing schema tests) — assert `QUERY_EXECUTE_SCHEMA.properties.allowTables.type === "array"` and same for `denyTables`
+- [x] 3.2 In `tools.test.ts` — add test: `dysflow_query_execute write mode passes allowTables/denyTables through to core service` (fake queryService captures request; assert `allowTables` and `denyTables` present)
+- [x] 3.3 In `tools.test.ts` — add test: `dysflow_query_execute write mode respects denyTables via TABLE_DENIED` (fake queryService returns `failureResult({ code: "TABLE_DENIED" })`; assert `isError: true` with text matching `/TABLE_DENIED/`)
+- [x] 3.4 In `tools.test.ts` — add test: `dysflow_query_execute read mode ignores allowTables/denyTables` (fake queryService not called with these fields in read mode)
+- [x] 3.5 In `tools.test.ts` — add test: `dysflow_access_cleanup modern pass-through mirrors buildCleanupRequest` (invoke with full field set; assert all schema fields present in captured request)
+- [x] 3.6 In `alias-tools.test.ts` — add test: `legacy and modern cleanup pass-through field sets are equal` (call both builders with same input; assert same field keys)
 
 ### Verification
 
@@ -188,11 +196,11 @@ Access: not applicable (CI change)
 
 ### Phase 1: release.yml Update
 
-- [ ] 1.1 Add `name: ${{ github.ref_name }}` to the `softprops/action-gh-release@v3` step (`.github/workflows/release.yml:79-89`) — before `files:` key
+- [x] 1.1 Add `name: ${{ github.ref_name }}` to the `softprops/action-gh-release@v3` step (`.github/workflows/release.yml:79-89`) — before `files:` key
 
 ### Phase 2: New Guard Workflow
 
-- [ ] 2.1 NEW FILE `.github/workflows/release-title-guard.yml`:
+- [x] 2.1 NEW FILE `.github/workflows/release-title-guard.yml`:
   ```yaml
   name: Release Title Guard
   on:
@@ -219,7 +227,7 @@ Access: not applicable (CI change)
 
 **RED first**:
 
-- [ ] 3.1 NEW FILE `test/quality-gates/release-title-guard.test.ts` — read both workflow files; assert `release.yml` contains `name: ${{ github.ref_name }}`; assert `release-title-guard.yml` contains both `title` and `tag_name` references and `exit 1` on mismatch
+- [x] 3.1 NEW FILE `test/quality-gates/release-title-guard.test.ts` — read both workflow files; assert `release.yml` contains `name: ${{ github.ref_name }}`; assert `release-title-guard.yml` contains both `title` and `tag_name` references and `exit 1` on mismatch
 
 ### Verification
 

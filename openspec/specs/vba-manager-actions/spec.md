@@ -266,3 +266,130 @@ on internal call order.
 - WHEN the file is searched for `split("\n")` used to navigate function bodies
 - THEN no such pattern exists
 - AND function-existence wiring checks are present instead
+
+### Requirement: CLI Invoke-RunProcedureAction Honors the Same Allowlist as MCP `run_vba`
+
+`Invoke-RunProcedureAction` MUST refuse to call `Invoke-AccessProcedure`
+when the project config declares a non-empty `allowedProcedures` list AND
+the requested procedure is not in that list. This mirrors the MCP adapter's
+default-deny gate so consumers observe identical gate behavior across CLI
+and MCP. **This is a forward-looking requirement; no PowerShell code is
+changed in PR1.** A separate capability change is required to bring the
+PowerShell layer to parity; until then, the MCP adapter gate is the only
+enforcement point.
+
+#### Scenario: CLI with allowlist configured — procedure outside the list is refused
+
+- GIVEN `.dysflow/project.json` declares `allowedProcedures: ["Refresh"]`
+- WHEN `Invoke-RunProcedureAction` runs with `-ProcedureName "DeleteAll"`
+- THEN the action MUST return an error result whose message contains
+  the literal substring `allowedProcedures`
+- AND `Invoke-AccessProcedure` MUST NOT be invoked
+- (Pin: a future Pester test in `test/scripts-vba-manager.Tests.ps1` —
+  `Invoke-RunProcedureAction refuses procedure outside allowedProcedures`.
+  This test does NOT exist yet; PR1 does not write it. The scenario
+  documents the contract for the eventual follow-up PR.)
+
+#### Scenario: CLI with allowlist configured — procedure inside the list is honored
+
+- GIVEN the same `allowedProcedures: ["Refresh"]`
+- WHEN `Invoke-RunProcedureAction` runs with `-ProcedureName "Refresh"`
+- THEN `Invoke-AccessProcedure` MUST be called exactly once with the
+  same procedure name and converted args
+- AND the action MUST pass the return value through unchanged
+- (Pin: future test mirror; covered for the **MCP** path by
+  `test/adapters/mcp/tools.test.ts` `allowedProcedures — procedureName
+  allowlist for run_vba alias`.)
+
+#### Scenario: CLI with no allowlist — explicit dryRun is recognized (forward-looking)
+
+- GIVEN `.dysflow/project.json` does NOT declare `allowedProcedures`
+- WHEN `Invoke-RunProcedureAction` runs with `-ProcedureName "Anything"`
+- THEN the action MUST proceed (today: it always proceeds; the future
+  contract asserts that any default-deny introduced for parity offers a
+  dry-run-class escape hatch consistent with the MCP adapter)
+- (Pin: future test; PR1 does not write it.)
+
+### Requirement: Runtime-Safe Export Write
+
+`export_modules` and `export_all` MUST refuse any invocation whose **resolved** `destinationRoot` falls inside the dysflow production runtime directory, BEFORE the runner is invoked. The runner MUST NOT be invoked and the call MUST return `{ ok: false, error.code: "INVALID_INPUT" }`. The check MUST be applied uniformly whether `destinationRoot` is supplied explicitly as `exportPath`, as a parameter, or resolved from a project config or context. This MUST hold for both `export_modules` and `export_all`, including the `export_all prune:true` path.
+
+#### Scenario: Explicit exportPath inside the production runtime — refused before runner
+
+- GIVEN a caller passes `exportPath` whose absolute path falls inside the dysflow production runtime directory
+- WHEN `export_modules` (or `export_all`) is invoked
+- THEN the operation MUST return `{ ok: false, error.code: "INVALID_INPUT" }`
+- AND the error message MUST mention the production runtime
+- AND the runner MUST NOT be invoked
+
+#### Scenario: Resolved destinationRoot inside the production runtime (no exportPath) — refused before runner
+
+- GIVEN a caller does not pass `exportPath`
+- AND the resolved `target.data.destinationRoot` (from `resolveExecutionTarget`) falls inside the dysflow production runtime directory
+- WHEN `export_modules` (or `export_all`) is invoked
+- THEN the operation MUST return `{ ok: false, error.code: "INVALID_INPUT" }`
+- AND the runner MUST NOT be invoked
+- AND no file system write under the resolved `destinationRoot` MAY occur
+
+#### Scenario: destinationRoot outside the production runtime — runner invoked normally
+
+- GIVEN a caller passes `exportPath` (or `destinationRoot`) that resolves outside the dysflow production runtime directory
+- WHEN `export_modules` (or `export_all`) is invoked
+- THEN the guard MUST NOT block
+- AND the runner MUST be invoked
+
+#### Scenario: test-runtime workdir is allowed (boundary case)
+
+- GIVEN the resolved `destinationRoot` is inside a `test-runtime/` directory that itself lives OUTSIDE the resolved production runtime path
+- WHEN `export_modules` (or `export_all`) is invoked
+- THEN the guard MUST NOT block
+- AND the runner MUST be invoked
+
+#### Scenario: export_all prune refuses runtime destinationRoot pre-write
+
+- GIVEN `export_all` is invoked with `prune: true`
+- AND the resolved `destinationRoot` falls inside the dysflow production runtime directory
+- WHEN the call resolves
+- THEN the operation MUST return `{ ok: false, error.code: "INVALID_INPUT" }`
+- AND the destructive `rm` loop MUST NOT execute
+- AND the runner's `executeMappedTool` MUST NOT be invoked for the export step
+
+### Requirement: Prune Allow-List Parity
+
+The set of disk-file extensions that `export_all prune` and `import_all prune` are allowed to delete MUST equal the AGENTS.md documented allow-list (`.bas`, `.cls`, `.form.txt`, `.report.txt`). Files with any other extension — including the legacy `.frm` binary form format — MUST NOT be deleted by prune, regardless of whether they match a module name in the live VBE inventory.
+
+#### Scenario: Legacy .frm orphan file is preserved by prune
+
+- GIVEN an on-disk `LegacyForm.frm` orphan file exists under the resolved `destinationRoot`
+- WHEN `export_all prune:true` runs after a clean export
+- THEN the legacy `.frm` file MUST NOT be deleted
+- AND the prune report MUST NOT list it under `deleted`
+
+#### Scenario: .bas orphan file is pruned normally
+
+- GIVEN an on-disk `Ghost.bas` orphan file exists under the resolved `destinationRoot`
+- WHEN `export_all prune:true` runs after a clean export
+- THEN the `.bas` file MUST be deleted
+- AND the prune report MUST list it under `deleted`
+
+#### Scenario: .cls orphan file is pruned normally
+
+- GIVEN an on-disk `OrphanClass.cls` orphan file exists under the resolved `destinationRoot`
+- WHEN `export_all prune:true` runs after a clean export
+- THEN the `.cls` file MUST be deleted
+- AND the prune report MUST list it under `deleted`
+
+#### Scenario: Non-allow-listed file (e.g. .txt) is preserved
+
+- GIVEN an on-disk `notes.txt` file exists under the resolved `destinationRoot`
+- WHEN `export_all prune:true` runs after a clean export
+- THEN the `.txt` file MUST NOT be deleted
+- AND no file system write that removes it MAY occur
+
+#### Scenario: Adversarial .frm masquerade attempt
+
+- GIVEN an on-disk `ImportantModule.frm` orphan file exists under the resolved `destinationRoot`
+- AND no module named `ImportantModule` exists in the live VBE inventory
+- WHEN `export_all prune:true` runs after a clean export
+- THEN the `.frm` file MUST NOT be deleted
+- AND the prune report MUST NOT list it under `deleted`
