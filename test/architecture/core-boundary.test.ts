@@ -72,6 +72,52 @@ describe("MCP/core architecture boundary", () => {
     }
   });
 
+  it("fails the script guard for bare side-effect imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "sideeffect-import.ts"),
+      'import "../../adapters/foo.js";\n',
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(sideeffect\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the script guard for single-quoted side-effect imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "single-quoted-sideeffect-import.ts"),
+      "import '../../adapters/foo.js';\n",
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(sideeffect\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it("drives core behavior through injected service interfaces", async () => {
     const requests: unknown[] = [];
     const tools = createDysflowMcpTools({

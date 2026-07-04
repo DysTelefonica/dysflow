@@ -6,15 +6,23 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_TARGET = "src/core";
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules", "scratch"]);
 
-// Detect same-line static import/export like: import { Foo } from "...adapters/..."
+// Label documentation for violation types:
+//   "static"          — same-line named import  : import { Foo } from "...adapters/..."
+//   "multiline-static"— multi-line named import : import { ... } from "...adapters/..."
+//                                        OR multi-line dynamic : import(... ) from "...adapters/..."
+//   "sideeffect"      — bare side-effect import : import "...adapters/...";  (no { ... } or from)
+
 const SAME_LINE_ADAPTER_IMPORT =
   /^\s*(?:import|export)\s+(?:type\s+)?[^;"']*?\s+from\s+["'][^"']*adapters\//gm;
 
-// Detect multiline static import where { or ( and } are on different lines from 'from'
-const MULTILINE_STATIC_ADAPTER_IMPORT =
+const MULTILINE_ADAPTER_IMPORT =
   /(?:^|\n)import\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)export\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)import\s*\([\s\S]*?\)\s+from\s+["'][\s\S]*?adapters\/[\s\S]*?["']/g;
 
-// Detect dynamic import(...) to adapters/
+// Bare side-effect import — no { ... }, no from, just the path string
+const SIDEEFFECT_ADAPTER_IMPORT =
+  /import\s+["'][^"']*adapters\/[^"']*["']\s*(?![\s]*from\b)[^;]*;/g;
+
+// Dynamic import(...) to adapters/ (import(...) without a following 'from')
 const DYNAMIC_ADAPTER_IMPORT = /import\s*\([\s\S]*?adapters\/[\s\S]*?\)/g;
 
 async function collectTypeScriptFiles(targetPath) {
@@ -66,8 +74,8 @@ export async function findCoreAdapterBoundaryViolations(targetPath = DEFAULT_TAR
       });
     }
 
-    // Multiline static import/export: matchAll gives each occurrence's index
-    for (const match of sourceText.matchAll(MULTILINE_STATIC_ADAPTER_IMPORT)) {
+    // Multiline named import OR multi-line dynamic import: matchAll gives each occurrence's index
+    for (const match of sourceText.matchAll(MULTILINE_ADAPTER_IMPORT)) {
       const location = lineAndColumn(sourceText, match.index);
       violations.push({
         filePath,
@@ -85,6 +93,17 @@ export async function findCoreAdapterBoundaryViolations(targetPath = DEFAULT_TAR
         line: location.line,
         column: location.column,
         type: "dynamic",
+      });
+    }
+
+    // Bare side-effect import — no { ... }, no from, just the path string
+    for (const match of sourceText.matchAll(SIDEEFFECT_ADAPTER_IMPORT)) {
+      const location = lineAndColumn(sourceText, match.index);
+      violations.push({
+        filePath,
+        line: location.line,
+        column: location.column,
+        type: "sideeffect",
       });
     }
   }
