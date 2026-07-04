@@ -1,19 +1,24 @@
 # Coverage #372 Progress
 
+> **Archived.** The goals in this document were achieved, but the thresholds it describes are
+> stale. The canonical coverage floors are in [`repo-quality-gates.md`](./repo-quality-gates.md).
+> The branch floor was lowered from 82% → 78% to absorb CI flakiness under the v8 fork-pool
+> collector (see the CI note in `repo-quality-gates.md`).
+
 Goal: raise branch coverage from 78.28% (1774/2266) to ≥ 82% (~+84 branches).
 
-## Final Result
+## Historical final result
 
 **Branch coverage: 82.08% (1860/2266) — GOAL MET.**
 
-All thresholds pass:
+At the time this effort completed, all thresholds passed:
 - Statements: 88.62% ≥ 82%
 - Branches: 82.08% ≥ 82%
 - Functions: 88.38% ≥ 85%
 - Lines: 90.17% ≥ 84%
 
-`vitest.config.ts` threshold updated: `branches: 77` → `branches: 82`.
-`docs/testing/repo-quality-gates.md` updated to reflect new floors.
+At the time, `vitest.config.ts` threshold was updated from `branches: 77` to `branches: 82`,
+and `docs/testing/repo-quality-gates.md` was updated to reflect those then-current floors.
 
 ## Status Table
 
@@ -56,7 +61,10 @@ couple to the file-lock internals. Skipped per testing philosophy.
 - Baseline: 78.28% (1774/2266)
 - After all batches: 82.08% (1860/2266) → **+86 branches covered**
 
-## How to Continue (if more coverage is needed)
+## Historical continuation notes
+
+> These notes are preserved as project history. For current floors and gate behavior, use
+> [`repo-quality-gates.md`](./repo-quality-gates.md) and `vitest.config.ts`.
 
 1. Run `pnpm coverage` to get fresh baseline.
 2. Run the branch analysis script to find remaining uncovered branches:
@@ -68,4 +76,6 @@ couple to the file-lock internals. Skipped per testing philosophy.
    - `src/adapters/mcp/tools.ts` — 50 uncovered (drive via fake services)
    - `src/adapters/mcp/stdio.ts` — 41 uncovered (transport wiring, skip unless necessary)
    - `src/adapters/http/server.ts` — 20 uncovered
-4. When branches improve: update `vitest.config.ts` thresholds.branches and this doc.
+4. When branches improve, update `vitest.config.ts` and
+   [`repo-quality-gates.md`](./repo-quality-gates.md). Do not treat this archived progress note
+   as the live threshold source.
