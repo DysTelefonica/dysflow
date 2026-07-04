@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system.js";
 import {
   type AccessOperationRecord,
   FileAccessOperationRegistry,
@@ -52,13 +53,19 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
   describe("FileAccessOperationRegistry.getHealth — clean state", () => {
     it("returns ok when the registry file does not exist (first-run state)", async () => {
       const registryPath = join(tempRoot, ".dysflow", "runtime", "operations.json");
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       expect(registry.getHealth().status).toBe("ok");
     });
 
     it("returns ok after a successful write", async () => {
       const registryPath = join(tempRoot, ".dysflow", "runtime", "operations.json");
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       await registry.create(baseRecord);
       expect(registry.getHealth().status).toBe("ok");
     });
@@ -74,7 +81,10 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
       // Silence the swallowed-io log during this scenario.
       vi.spyOn(console, "debug").mockImplementation(() => {});
 
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const records = await registry.listRecent();
 
       expect(records).toEqual([]);
@@ -100,7 +110,10 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
 
       vi.spyOn(console, "debug").mockImplementation(() => {});
 
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       // Trigger the read
       await registry.listRecent();
 
@@ -124,7 +137,10 @@ describe("AccessOperationRegistry health + quarantine — DELTA-001 (#575)", () 
 
       vi.spyOn(console, "debug").mockImplementation(() => {});
 
-      const registry = new FileAccessOperationRegistry({ filePath: registryPath });
+      const registry = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const records = await registry.listRecent();
 
       expect(records).toEqual([]);

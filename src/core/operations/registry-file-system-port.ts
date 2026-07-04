@@ -4,9 +4,9 @@
  * Owns the surface of filesystem calls the registry is allowed to make.
  * Lives in `src/core` so the registry code does not need to import
  * `node:fs` directly. The production adapter is
- * `src/adapters/operations/node-registry-file-system.ts` and is wired by
- * default; tests inject a fake to drive the happy / sad / adversarial
- * branches without touching the host filesystem.
+ * `src/adapters/operations/node-registry-file-system.ts` and is injected by
+ * adapter-side composition roots; tests inject a fake to drive the happy / sad
+ * / adversarial branches without touching the host filesystem.
  *
  * # Why `writeFile` accepts `{ flag: "wx" }`
  *

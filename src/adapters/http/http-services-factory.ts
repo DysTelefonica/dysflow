@@ -9,6 +9,7 @@ import { AccessDiagnosticsService } from "../../core/services/diagnostics-servic
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
+import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
   createWindowsAccessOperationPreflightCleanup,
@@ -31,7 +32,10 @@ export async function createHttpServices(
     return createUnavailableHttpServices();
   }
 
-  const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
+  const operationRegistry = createProjectAccessOperationRegistry({
+    ...configResult.data,
+    fileSystem: nodeRegistryFileSystem,
+  });
   const runner = new AccessPowerShellRunner({
     executor: createDefaultPowerShellExecutor(),
     lockFileSystem: nodeLockFileSystem,

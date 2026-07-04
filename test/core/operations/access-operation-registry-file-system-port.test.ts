@@ -10,22 +10,21 @@
  *      a regression pin because that flag is what gives registry
  *      acquisition its mutual-exclusion guarantees on POSIX and Windows.
  *      Removing the flag would silently break the lock.
- *   3. Default construction (no `fileSystem` option) wires the Node
- *      adapter that lives at
- *      `src/adapters/operations/node-registry-file-system.ts` —
- *      byte-equivalent production behavior.
+ *   3. Explicit construction with the production Node adapter remains
+ *      byte-equivalent to the previous default behavior.
  *   4. A failing fake port surfaces its rejected `Error` unchanged so
  *      callers can detect IO failures without losing fidelity.
  *
  * Before #hexagonal-tech-debt PR 4 the `FileAccessOperationRegistry`
  * constructor only accepted `filePath`/`maxRecords`/`lockTimeoutMs`/
- * `staleLockMs`. PR 4 adds `fileSystem?` and routes every FS call through
+ * `staleLockMs`. PR 4 adds `fileSystem` and routes every FS call through
  * it via the `RegistryFileSystemPort`.
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system.js";
 import type { AccessOperationRecord } from "../../../src/core/operations/access-operation-registry.js";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry.js";
 
@@ -150,17 +149,23 @@ describe("FileAccessOperationRegistry fileSystem port injection (#A #624)", () =
   });
 
   // -------------------------------------------------------------------------
-  // 3. Default construction wires the Node adapter — production byte-equivalent
+  // 3. Explicit production adapter injection — production byte-equivalent
   // -------------------------------------------------------------------------
 
-  it("when no fileSystem is provided the registry still works against a real temp dir (default Node adapter wired)", async () => {
+  it("works against a real temp dir when the production Node adapter is injected", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-port-default-"));
     try {
       const registryPath = join(root, ".dysflow", "runtime", "operations.json");
-      const writer = new FileAccessOperationRegistry({ filePath: registryPath });
+      const writer = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       await writer.create({ ...baseRecord, operationId: "op-port-default-1" });
 
-      const reader = new FileAccessOperationRegistry({ filePath: registryPath });
+      const reader = new FileAccessOperationRegistry({
+        filePath: registryPath,
+        fileSystem: nodeRegistryFileSystem,
+      });
       const recent = await reader.listRecent({ limit: 5 });
       expect(recent).toHaveLength(1);
       expect(recent[0]?.operationId).toBe("op-port-default-1");

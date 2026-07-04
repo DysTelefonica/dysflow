@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
@@ -45,6 +47,75 @@ describe("MCP/core architecture boundary", () => {
     });
     const stale = [...KNOWN_ADAPTER_IMPORT_DEBT].filter((file) => !actualImporters.includes(file));
     expect(stale).toEqual([]);
+  });
+
+  it("fails the script guard for dynamic imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "dynamic-import.ts"),
+      'export async function leak() { return import("../../adapters/foo.js"); }\n',
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(dynamic\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the script guard for bare side-effect imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "sideeffect-import.ts"),
+      'import "../../adapters/foo.js";\n',
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(sideeffect\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the script guard for single-quoted side-effect imports from core to adapters", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
+    const coreFixture = join(fixtureRoot, "src", "core");
+    mkdirSync(coreFixture, { recursive: true });
+    writeFileSync(
+      join(coreFixture, "single-quoted-sideeffect-import.ts"),
+      "import '../../adapters/foo.js';\n",
+      "utf8",
+    );
+
+    try {
+      expect(() =>
+        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          stdio: "pipe",
+        }),
+      ).toThrow(/imports from adapters \(sideeffect\)/);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
   });
 
   it("drives core behavior through injected service interfaces", async () => {
@@ -157,34 +228,7 @@ const KNOWN_DIRECT_IO_DEBT: ReadonlySet<string> = new Set([
   "src/core/utils/package-info.ts",
 ]);
 
-/**
- * Files that import an adapter for **default port wiring** only. The
- * cleaner pattern (per the `cross-process-lock.ts` precedent, commit
- * `6ac0af1`) is to keep the port REQUIRED in core and inject the Node
- * adapter from the composition root. We deviate here for two reasons:
- *
- *   1. **Byte-equivalent production behavior** is a hard contract
- *      (#624 PR4). Existing tests construct
- *      `new FileAccessOperationRegistry({ filePath })` and
- *      `new VbaFormService({ cwd })` WITHOUT a port — the default
- *      Node wiring preserves their behavior unchanged.
- *   2. **37 test sites** would have to change if we made the port
- *      required. PR4's review budget is 400 lines (forecast 160-260L,
- *      tightest margin in the chain); rewriting every call site is
- *      out of scope.
- *
- * The right next step is to move the factory functions
- * (`createFileAccessOperationRegistry`, `createProjectAccessOperationRegistry`)
- * to `src/adapters/operations/` and require the port in core — same
- * pattern as `cross-process-lock.ts`. A future PR can do that
- * without behavior change. Until then, this debt list keeps the
- * ratchet honest: every entry MUST be removed when the file stops
- * importing the adapter.
- */
-const KNOWN_ADAPTER_IMPORT_DEBT: ReadonlySet<string> = new Set([
-  "src/core/operations/access-operation-registry.ts",
-  "src/core/services/vba-form-service.ts",
-]);
+const KNOWN_ADAPTER_IMPORT_DEBT: ReadonlySet<string> = new Set([]);
 
 function toPosixRelative(file: string): string {
   return relative(process.cwd(), file).split(sep).join("/");

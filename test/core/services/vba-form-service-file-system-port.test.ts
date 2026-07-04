@@ -5,17 +5,12 @@
  *   "VbaFormService.ts no longer imports `node:fs/promises`"
  *   (delta for `access-core-services`, #A, #624).
  *
- * The spec also requires
- *   "Default factory wires the Node adapter (happy)" and
- *   "Test injection path still works (regression)".
- * The first is exercised by every test in `test/core/services/vba-form-service.test.ts`
- * that constructs `new VbaFormService({ cwd })` without `fileSystem` and expects a
- * real-FS write to land on disk — those tests already pass and remain GREEN after
- * the refactor. The second is pinned by the same suite (49 existing tests inject
- * a fake `fileSystem`).
+ * The production Node adapter is injected by adapter-side composition roots.
+ * `test/core/services/vba-form-service.test.ts` covers both explicit production
+ * injection and fake-port injection paths.
  *
  * This file adds ONLY the structural pin: the service source MUST NOT import
- * `node:fs/promises` and MUST NOT declare a local `const nodeFileSystem` —
+ * `node:fs/promises` and MUST NOT declare a local Node filesystem constant —
  * the port adapter at `src/adapters/services/node-form-file-system.ts` is
  * the only owner of the Node implementation.
  */
@@ -25,7 +20,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("VbaFormService fileSystem port structural pin (#A #624)", () => {
-  it("vba-form-service.ts source does not import node:fs/promises and does not declare a local const nodeFileSystem", () => {
+  it("vba-form-service.ts source does not import node:fs/promises and does not declare a local Node filesystem constant", () => {
     const sourcePath = join(
       __dirname,
       "..",
@@ -45,9 +40,9 @@ describe("VbaFormService fileSystem port structural pin (#A #624)", () => {
     );
     expect(hasNodeFsPromisesImport).toBe(false);
 
-    // The service file MUST NOT declare a local `nodeFileSystem` constant —
-    // the default impl lives in the adapter module instead.
-    const hasLocalNodeFileSystemConst = /\bconst\s+nodeFileSystem\b\s*[:=]/.test(source);
+    // The service file MUST NOT declare a local Node filesystem constant —
+    // concrete implementations live in adapter modules instead.
+    const hasLocalNodeFileSystemConst = /\bconst\s+node(?:Form)?FileSystem\b\s*[:=]/.test(source);
     expect(hasLocalNodeFileSystemConst).toBe(false);
   });
 });

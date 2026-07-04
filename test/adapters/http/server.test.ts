@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getStringParam, startDysflowHttpServer } from "../../../src/adapters/http/server";
+import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -544,7 +545,10 @@ describe("Dysflow HTTP adapter", () => {
   it("exposes operations + registryHealth from an injected FileAccessOperationRegistry via GET /access/operations (#176, #575)", async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), "dysflow-http-registry-"));
     const registryPath = join(tmpDir, "operations.json");
-    const operationRegistry = new FileAccessOperationRegistry({ filePath: registryPath });
+    const operationRegistry = new FileAccessOperationRegistry({
+      filePath: registryPath,
+      fileSystem: nodeRegistryFileSystem,
+    });
 
     const operationRecord = {
       operationId: "op-test-http-shared-registry",

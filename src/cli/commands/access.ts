@@ -1,4 +1,5 @@
 import { loadDysflowConfig } from "../../adapters/config/dysflow-config-node.js";
+import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
 import { nodeLockFileSystem } from "../../adapters/runner/node-lock-file-system.js";
@@ -57,7 +58,10 @@ export const handleAccessCommand: CommandHandler = async (args, context) => {
       return handleRelinkDirectoryCommand(rest, context);
     }
 
-    const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
+    const operationRegistry = createProjectAccessOperationRegistry({
+      ...configResult.data,
+      fileSystem: nodeRegistryFileSystem,
+    });
     const runner = new AccessPowerShellRunner({
       executor: createDefaultPowerShellExecutor(),
       lockFileSystem: nodeLockFileSystem,

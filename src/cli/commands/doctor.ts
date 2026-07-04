@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
+import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
 import { nodeLockFileSystem } from "../../adapters/runner/node-lock-file-system.js";
@@ -54,7 +55,10 @@ async function createDiagnosticsService(
     throw new Error(`${configResult.error.code}: ${configResult.error.message}`);
   }
 
-  const operationRegistry = createProjectAccessOperationRegistry(configResult.data);
+  const operationRegistry = createProjectAccessOperationRegistry({
+    ...configResult.data,
+    fileSystem: nodeRegistryFileSystem,
+  });
   return new AccessDiagnosticsService({
     runner: new AccessPowerShellRunner({
       executor: createDefaultPowerShellExecutor(),
