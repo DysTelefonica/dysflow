@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   type AccessQueryRequest,
   type AccessVbaRequest,
@@ -343,6 +343,76 @@ function isAbsoluteInputPath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("/") || path.startsWith("\\\\");
 }
 
+/**
+ * #731 — synchronous one-shot detection: returns `true` when any
+ * `.bas` / `.cls` / `.form.txt` under `<projectRoot>/src/` contains at
+ * least one non-ASCII identifier in a `Sub/Function/Property`,
+ * `Dim/Const/Private Const`, or `Attribute VB_Name` position. Walks the
+ * tree at most once per lint report; failures are silently treated as
+ * "no legacy signal" so the rule stays opt-in.
+ */
+function projectHasNonAsciiIdentifier(projectRoot: string): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    const srcRoot = join(projectRoot, "src");
+    if (!fs.existsSync(srcRoot) || !fs.statSync(srcRoot).isDirectory()) return false;
+    return walkForNonAsciiIdentifier(fs, srcRoot);
+  } catch {
+    return false;
+  }
+}
+
+function walkForNonAsciiIdentifier(fs: typeof import("node:fs"), dir: string): boolean {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        if (walkForNonAsciiIdentifier(fs, full)) return true;
+      } else if (/\.(bas|cls|form\.txt)$/i.test(entry.name)) {
+        if (fileHasNonAsciiIdentifier(fs, full)) return true;
+      }
+    } catch {
+      // Skip unreadable entries — the legacy detector must never throw.
+    }
+  }
+  return false;
+}
+
+function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): boolean {
+  let content: string;
+  try {
+    content = fs.readFileSync(path, "utf8");
+  } catch {
+    return false;
+  }
+  // Restrict the regex to declaration lines so a Spanish-language string
+  // literal or a comment doesn't trigger a false positive. Mirrors the
+  // VBA_IDENTIFIER_RE used by the lint rule itself.
+  const declarationRe =
+    /^(?:Attribute\s+VB_Name\s*=\s*"(?<a>[^"]+)"|(?:Public|Private|Friend|Global|Static)\s+(?<b>[A-Za-z_\u00C0-\uFFFF][A-Za-z0-9_\u00C0-\uFFFF]*)|(?:Dim|Const|Private\s+Const)\s+(?<c>[A-Za-z_\u00C0-\uFFFF][A-Za-z0-9_\u00C0-\uFFFF]*)|Sub\s+(?<d>[A-Za-z_\u00C0-\uFFFF][A-Za-z0-9_\u00C0-\uFFFF]*)|Function\s+(?<e>[A-Za-z_\u00C0-\uFFFF][A-Za-z0-9_\u00C0-\uFFFF]*)|Property\s+(?:Get|Let|Set)\s+(?<f>[A-Za-z_\u00C0-\uFFFF][A-Za-z0-9_\u00C0-\uFFFF]*))/gmu;
+  const nonAsciiRe = /[\u0080-\uFFFF]/;
+  const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    declarationRe.lastIndex = 0;
+    let match: RegExpExecArray | null = declarationRe.exec(line);
+    while (match !== null) {
+      const groups = match.slice(1);
+      for (const group of groups) {
+        if (group !== undefined && nonAsciiRe.test(group)) return true;
+      }
+      match = declarationRe.exec(line);
+    }
+  }
+  return false;
+}
+
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 
 /**
@@ -396,6 +466,13 @@ export function createDysflowMcpTools(
   // resolved at this layer) keep working unchanged.
   allowWrites: boolean = writesEnabled,
   projectId: string | undefined = undefined,
+  // #731 — per-rule lint overrides from `.dysflow/project.json`
+  // `capabilities.lint.rules`. When omitted, the lint service keeps its
+  // strict greenfield behavior (no per-rule opt-outs, no legacy
+  // auto-detection).
+  lintRulesOverride: Readonly<
+    Partial<Record<VbaModuleLintRule, { enabled: boolean; reason?: string }>>
+  > = {},
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -925,7 +1002,24 @@ export function createDysflowMcpTools(
         const rules = Array.isArray(params.rules)
           ? (params.rules as VbaModuleLintRule[])
           : undefined;
-        const report = lintVbaModule({ module, source: resolvedSource, rules });
+        // #731 — wire projectRoot + lint override + legacy auto-detection.
+        // The detector walks the project's `src/` tree once per call and
+        // returns `true` when any non-ASCII identifier is present; that
+        // legacy signal downgrades `identifier-safety` to `warning`. The
+        // marker file `.dysflow-no-auto-allow` opts out of the downgrade.
+        const projectContext = await accessContextResolver(input);
+        const projectRoot = projectContext.ok ? projectContext.data.projectRoot : undefined;
+        const detection = projectRoot
+          ? (): boolean => projectHasNonAsciiIdentifier(projectRoot)
+          : undefined;
+        const report = await lintVbaModule({
+          module,
+          source: resolvedSource,
+          rules,
+          projectRoot,
+          lintRulesOverride,
+          hasNonAsciiIdentifierInProject: detection,
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(report) }],
           isError: false,

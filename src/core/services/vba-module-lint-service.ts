@@ -14,6 +14,8 @@ export interface VbaModuleLintDiagnostic {
   rule: VbaModuleLintRule;
   line: number;
   severity: VbaModuleLintSeverity;
+  /** #731 — optional structured code (e.g. `LINT_SUPPRESSED` for opt-outs). */
+  code?: string;
   message: string;
 }
 
@@ -43,7 +45,33 @@ export interface VbaModuleLintRequest {
   module: string;
   source: string;
   rules?: readonly VbaModuleLintRule[];
+  /**
+   * #731 — optional project context that drives per-rule overrides and
+   * legacy auto-detection for `identifier-safety`. When omitted, the rule
+   * defaults to its strict behavior (greenfield-safe).
+   */
+  projectRoot?: string;
+  /**
+   * #731 — operator's per-rule overrides from `.dysflow/project.json`
+   * `capabilities.lint.rules`. Keys are rule ids. `enabled: false`
+   * suppresses the rule entirely and emits a single `LINT_SUPPRESSED`
+   * info diagnostic in its place.
+   */
+  lintRulesOverride?: Readonly<
+    Partial<Record<VbaModuleLintRule, { enabled: boolean; reason?: string }>>
+  >;
+  /**
+   * #731 — callback that returns `true` when the project root's `src/`
+   * tree contains at least one non-ASCII identifier. The lint service
+   * caches the result per call so the filesystem walk happens at most
+   * once per lint report. When omitted, the legacy auto-detection is
+   * skipped and the rule behaves as today.
+   */
+  hasNonAsciiIdentifierInProject?: () => boolean | Promise<boolean>;
 }
+
+const LINT_SUPPRESSED_DIAGNOSTIC_CODE = "LINT_SUPPRESSED";
+const NO_AUTO_ALLOW_MARKER = ".dysflow-no-auto-allow";
 
 interface VbaParameter {
   name: string;
@@ -112,7 +140,9 @@ const NUMERIC_VBA_TYPES = new Set([
   "decimal",
 ]);
 
-export function lintVbaModule(request: VbaModuleLintRequest): VbaModuleLintReport {
+export function lintVbaModule(
+  request: VbaModuleLintRequest,
+): VbaModuleLintReport | Promise<VbaModuleLintReport> {
   const rules = normalizeRules(request.rules);
   const flatDiagnostics: VbaModuleLintDiagnostic[] = [];
   const byRule: Partial<Record<VbaModuleLintRule, VbaModuleLintDiagnostic[]>> = {};
@@ -122,15 +152,100 @@ export function lintVbaModule(request: VbaModuleLintRequest): VbaModuleLintRepor
     byRule[rule] = [];
   }
 
+  if (rules.includes("identifier-safety")) {
+    // #731 — three-way resolution for identifier-safety:
+    //   Path A: explicit operator opt-out  →  emit a single LINT_SUPPRESSED info.
+    //   Path B: project has ≥1 non-ASCII identifier AND no marker file AND no
+    //           override  →  downgrade severity from "error" to "warning".
+    //   Path C: greenfield (no override, no legacy signal, or marker present)  →  keep error severity.
+    return resolveIdentifierSafety(request, rules, lines, byRule, flatDiagnostics);
+  }
+
+  return finishLintReport(request, rules, byRule, flatDiagnostics);
+}
+
+function resolveIdentifierSafety(
+  request: VbaModuleLintRequest,
+  rules: VbaModuleLintRule[],
+  lines: readonly string[],
+  byRule: Partial<Record<VbaModuleLintRule, VbaModuleLintDiagnostic[]>>,
+  flatDiagnostics: VbaModuleLintDiagnostic[],
+): VbaModuleLintReport | Promise<VbaModuleLintReport> {
+  const override = request.lintRulesOverride?.["identifier-safety"];
+
+  // Path A — explicit operator opt-out wins everything.
+  if (override?.enabled === false) {
+    const suppressed: VbaModuleLintDiagnostic = {
+      rule: "identifier-safety",
+      line: 1,
+      severity: "warning",
+      code: LINT_SUPPRESSED_DIAGNOSTIC_CODE,
+      message: `identifier-safety rule suppressed via project config${
+        override.reason ? ` ("${override.reason}")` : ""
+      }`,
+    };
+    flatDiagnostics.push(suppressed);
+    byRule["identifier-safety"]?.push(suppressed);
+    return finishLintReport(request, rules, byRule, flatDiagnostics);
+  }
+
+  const proceed = (legacy: boolean): VbaModuleLintReport => {
+    const found = lintIdentifierSafety(lines, legacy);
+    flatDiagnostics.push(...found);
+    byRule["identifier-safety"]?.push(...found);
+    return finishLintReport(request, rules, byRule, flatDiagnostics);
+  };
+
+  // Path B — auto-detect when the operator did NOT set an override AND we
+  // were given a project root + detection callback.
+  if (override === undefined && request.hasNonAsciiIdentifierInProject !== undefined) {
+    return Promise.resolve(request.hasNonAsciiIdentifierInProject()).then((hasLegacy) => {
+      // Even with a legacy signal, a `.dysflow-no-auto-allow` marker in the
+      // project root forces the strict path (operator opted out of the
+      // auto-downgrade explicitly).
+      const markerPresent =
+        typeof request.projectRoot === "string" && noAutoAllowMarkerPresent(request.projectRoot);
+      return proceed(hasLegacy && !markerPresent);
+    });
+  }
+
+  // Path C — greenfield or no project context: strict error severity.
+  return proceed(false);
+}
+
+function noAutoAllowMarkerPresent(projectRoot: string): boolean {
+  // Lazy require to keep the core layer free of node:fs at the type level —
+  // the marker check is only invoked when the operator's project root is
+  // passed in, so adapters must inject the dependency themselves or via a
+  // future port seam. We fall back to "no marker" if the file system
+  // cannot be reached, so the legacy path stays opt-in.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    return fs.existsSync(joinPath(projectRoot, NO_AUTO_ALLOW_MARKER));
+  } catch {
+    return false;
+  }
+}
+
+function joinPath(root: string, file: string): string {
+  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  return root.endsWith(sep) ? `${root}${file}` : `${root}${sep}${file}`;
+}
+
+function finishLintReport(
+  request: VbaModuleLintRequest,
+  rules: VbaModuleLintRule[],
+  byRule: Partial<Record<VbaModuleLintRule, VbaModuleLintDiagnostic[]>>,
+  flatDiagnostics: VbaModuleLintDiagnostic[],
+): VbaModuleLintReport {
+  // Run the remaining non-identifier-safety rules. The identifier-safety
+  // branch above already populated its slice before delegating here.
+  const lines = request.source.split(/\r?\n/);
   if (rules.includes("option-declaration")) {
     const found = lintOptionDeclarations(lines);
     flatDiagnostics.push(...found);
     byRule["option-declaration"]?.push(...found);
-  }
-  if (rules.includes("identifier-safety")) {
-    const found = lintIdentifierSafety(lines);
-    flatDiagnostics.push(...found);
-    byRule["identifier-safety"]?.push(...found);
   }
   if (rules.includes("declaration-order")) {
     const found = lintDeclarationOrder(lines);
@@ -143,13 +258,20 @@ export function lintVbaModule(request: VbaModuleLintRequest): VbaModuleLintRepor
     byRule["arg-type-match"]?.push(...found);
   }
 
-  const errors = flatDiagnostics.filter((d) => d.severity === "error").length;
-  const warnings = flatDiagnostics.filter((d) => d.severity === "warning").length;
+  // #731 — `LINT_SUPPRESSED` is an audit marker, not a real finding; it
+  // surfaces in `diagnostics.<rule>` for traceability but does NOT make
+  // `isClean` false. Otherwise a deliberate opt-out would falsely fail the
+  // import-modules pre-import gate.
+  const realDiagnostics = flatDiagnostics.filter(
+    (d) => d.code !== LINT_SUPPRESSED_DIAGNOSTIC_CODE,
+  );
+  const errors = realDiagnostics.filter((d) => d.severity === "error").length;
+  const warnings = realDiagnostics.filter((d) => d.severity === "warning").length;
 
   return {
     module: request.module,
     rules,
-    isClean: flatDiagnostics.length === 0,
+    isClean: realDiagnostics.length === 0,
     diagnostics: byRule,
     flatDiagnostics,
     summary: { errors, warnings },
@@ -221,7 +343,16 @@ function lintOptionDeclarations(lines: readonly string[]): VbaModuleLintDiagnost
   return diagnostics;
 }
 
-function lintIdentifierSafety(lines: readonly string[]): VbaModuleLintDiagnostic[] {
+function lintIdentifierSafety(
+  lines: readonly string[],
+  legacy: boolean,
+): VbaModuleLintDiagnostic[] {
+  // #731 — `legacy === true` downgrades the non-ASCII severity from "error"
+  // to "warning" so pre-existing Spanish-language projects (which compile and
+  // ship in production with non-ASCII identifiers) do not block the import
+  // gate. The dot-underscore and reserved-word findings stay at "error" in
+  // both legacy and greenfield paths — those are real syntactic defects.
+  const nonAsciiSeverity: VbaModuleLintSeverity = legacy ? "warning" : "error";
   const diagnostics: VbaModuleLintDiagnostic[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const lineNumber = i + 1;
@@ -244,7 +375,7 @@ function lintIdentifierSafety(lines: readonly string[]): VbaModuleLintDiagnostic
         diagnostics.push({
           rule: "identifier-safety",
           line: lineNumber,
-          severity: "error",
+          severity: nonAsciiSeverity,
           message: `Identifier '${identifier}' contains non-ASCII characters; use ASCII-safe VBA identifiers for reliable import/compile round-trips.`,
         });
       }

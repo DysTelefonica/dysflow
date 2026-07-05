@@ -113,6 +113,13 @@ export async function startMcpStdioAdapter(
       return configResult.data.allowedProcedures;
     },
     async (input) => resolveMcpAccessContextForInput(input, startupConfig),
+    undefined, // allowWrites
+    undefined, // projectId
+    // #731 — startup project's lint rule overrides (e.g. enabled:false
+    // for identifier-safety on a legacy Spanish project). Surfaced into
+    // dysflow_lint_module so it honors opt-outs and triggers the legacy
+    // auto-detection downgrade.
+    startupConfig?.lintRulesOverride ?? {},
   );
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
