@@ -119,6 +119,34 @@ End
     // The suggestion should point to the closest named control.
     expect(binding?.suggestedFix).toContain("ListaHitos");
   });
+
+  it("ignores intrinsic Access form members while still reporting missing controls", () => {
+    const ir = parseWith(formTxtWithControls([{ name: "ListaHitos", type: "ListBox" }]));
+    const cls = [
+      "Public Sub Cargar()",
+      "    Debug.Print Me.Name",
+      '    Me.Caption = "Gestión de riesgos"',
+      "    Debug.Print Me.InsideHeight",
+      "    Debug.Print Me.InsideWidth",
+      '    Me.ListaHitoz.RowSource = "SELECT 1"',
+      "End Sub",
+    ].join("\n");
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const controlBindingErrors = result.diagnostics.filter(
+      (d) => d.rule === "form-control-binding",
+    );
+    expect(controlBindingErrors).toHaveLength(1);
+    expect(controlBindingErrors[0]?.message).toContain("Me.ListaHitoz");
+    expect(controlBindingErrors[0]?.suggestedFix).toBe("Me.ListaHitos");
+  });
 });
 
 // ---------------------------------------------------------------------------
