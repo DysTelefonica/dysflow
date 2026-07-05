@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [v1.15.1] - 2026-07-05
+
+- Fix `lint_form_code` nested-control resolution so form-code lint reuses the same recursive FormIR control collection as form inspection. This prevents false `controls: <none>` missing-control diagnostics for nested controls such as `FormDetalle` in real Access forms (#714, #723).
+
 ## [v1.14.2] - 2026-07-03
 ### e2e-suite-contracts-pin-sync (#666)
 - **Repo-side CI fix — `test/quality-gates/mcp-e2e-suite-contracts.test.ts`
