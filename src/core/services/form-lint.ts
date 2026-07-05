@@ -74,13 +74,60 @@ export function lintFormCode(input: LintFormInput, options: LintFormOptions = {}
 // Rule A — form-control-binding
 // ---------------------------------------------------------------------------
 
+const INTRINSIC_ACCESS_FORM_REPORT_MEMBERS = new Set(
+  [
+    "ActiveControl",
+    "AllowAdditions",
+    "AllowDeletions",
+    "AllowEdits",
+    "Caption",
+    "Controls",
+    "CurrentRecord",
+    "DataEntry",
+    "Dirty",
+    "Filter",
+    "FilterOn",
+    "HasData",
+    "Height",
+    "InsideHeight",
+    "InsideWidth",
+    "Modal",
+    "Name",
+    "NewRecord",
+    "OpenArgs",
+    "OrderBy",
+    "OrderByOn",
+    "Page",
+    "Pages",
+    "Painting",
+    "Parent",
+    "PopUp",
+    "Printer",
+    "Recordset",
+    "RecordsetClone",
+    "RecordSource",
+    "Repaint",
+    "Requery",
+    "Section",
+    "SetFocus",
+    "TimerInterval",
+    "Undo",
+    "Visible",
+    "Width",
+  ].map((member) => member.toLowerCase()),
+);
+
+function isIntrinsicAccessFormReportMember(name: string): boolean {
+  return INTRINSIC_ACCESS_FORM_REPORT_MEMBERS.has(name.toLowerCase());
+}
+
 /**
  * Detect `Me.<ControlName>` references in the .cls and verify each name exists
  * in the parsed .form.txt controls.
  *
- * Conservative: only fires when the reference looks like a property access
- * (followed by `.`, `(`, end of line, or whitespace). This avoids misfiring on
- * substrings inside other identifiers (e.g. `MeA.btnClick`).
+ * Conservative: only fires for `Me.<Name>` references. Known intrinsic members
+ * of the Access Form/Report object are ignored so normal `Me.Caption` / `Me.Name`
+ * usage is not treated as a missing control.
  */
 function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
@@ -93,6 +140,7 @@ function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
       const name = match[1];
       if (!name) continue;
       if (controlNames.has(name)) continue;
+      if (isIntrinsicAccessFormReportMember(name)) continue;
       const column = (match.index ?? 0) + 1;
       const suggestion = suggestClosestControlName(name, [...controlNames]);
       diagnostics.push({
