@@ -310,9 +310,14 @@ describe("vba-module-lint-service", () => {
     });
 
     it("Path C: project-root marker `.dysflow-no-auto-allow` keeps 'error' severity even when the legacy signal fires", async () => {
-      // Create a temporary project root with the marker file so the production
-      // fs.existsSync branch in the lint service sees it.
-      const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+      // Create a temporary project root with the marker file. The
+      // adapter combines the marker check with the legacy-signal walk
+      // and exposes the combined result through the
+      // `hasNonAsciiIdentifierInProject` callback. This test simulates
+      // the adapter contract: when the marker is present, the callback
+      // returns `false` even though the project tree contains non-ASCII
+      // identifiers — the operator opted out of auto-detection.
+      const { existsSync, mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
       const { tmpdir } = await import("node:os");
       const { join } = await import("node:path");
       const root = mkdtempSync(join(tmpdir(), "dysflow-lint-marker-"));
@@ -328,7 +333,7 @@ describe("vba-module-lint-service", () => {
         source,
         rules: ["identifier-safety"],
         projectRoot: root,
-        hasNonAsciiIdentifierInProject: () => true,
+        hasNonAsciiIdentifierInProject: () => !existsSync(join(root, ".dysflow-no-auto-allow")),
       });
 
       // Marker forces the strict path — non-ASCII identifiers stay at "error".

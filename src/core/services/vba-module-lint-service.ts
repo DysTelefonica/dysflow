@@ -62,16 +62,18 @@ export interface VbaModuleLintRequest {
   >;
   /**
    * #731 — callback that returns `true` when the project root's `src/`
-   * tree contains at least one non-ASCII identifier. The lint service
-   * caches the result per call so the filesystem walk happens at most
-   * once per lint report. When omitted, the legacy auto-detection is
-   * skipped and the rule behaves as today.
+   * tree contains at least one non-ASCII identifier AND no
+   * `.dysflow-no-auto-allow` marker is present. The marker check is
+   * owned by the adapter (filesystem concern) and combined with the
+   * legacy-signal walk into one result so this core service stays free
+   * of `node:fs`. The lint service calls it at most once per lint
+   * report. When omitted, the legacy auto-detection is skipped and the
+   * rule behaves as today (strict greenfield severity).
    */
   hasNonAsciiIdentifierInProject?: () => boolean | Promise<boolean>;
 }
 
 const LINT_SUPPRESSED_DIAGNOSTIC_CODE = "LINT_SUPPRESSED";
-const NO_AUTO_ALLOW_MARKER = ".dysflow-no-auto-allow";
 
 interface VbaParameter {
   name: string;
@@ -195,42 +197,18 @@ function resolveIdentifierSafety(
     byRule["identifier-safety"]?.push(...found);
     return finishLintReport(request, rules, byRule, flatDiagnostics);
   };
-
   // Path B — auto-detect when the operator did NOT set an override AND we
-  // were given a project root + detection callback.
+  // were given a detection callback. The callback already accounts for the
+  // `.dysflow-no-auto-allow` marker so this core layer stays free of
+  // `node:fs` (#731 + architectural core-I/O-port-boundary test).
   if (override === undefined && request.hasNonAsciiIdentifierInProject !== undefined) {
-    return Promise.resolve(request.hasNonAsciiIdentifierInProject()).then((hasLegacy) => {
-      // Even with a legacy signal, a `.dysflow-no-auto-allow` marker in the
-      // project root forces the strict path (operator opted out of the
-      // auto-downgrade explicitly).
-      const markerPresent =
-        typeof request.projectRoot === "string" && noAutoAllowMarkerPresent(request.projectRoot);
-      return proceed(hasLegacy && !markerPresent);
-    });
+    return Promise.resolve(request.hasNonAsciiIdentifierInProject()).then((legacy) =>
+      proceed(legacy),
+    );
   }
 
   // Path C — greenfield or no project context: strict error severity.
   return proceed(false);
-}
-
-function noAutoAllowMarkerPresent(projectRoot: string): boolean {
-  // Lazy require to keep the core layer free of node:fs at the type level —
-  // the marker check is only invoked when the operator's project root is
-  // passed in, so adapters must inject the dependency themselves or via a
-  // future port seam. We fall back to "no marker" if the file system
-  // cannot be reached, so the legacy path stays opt-in.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs") as typeof import("node:fs");
-    return fs.existsSync(joinPath(projectRoot, NO_AUTO_ALLOW_MARKER));
-  } catch {
-    return false;
-  }
-}
-
-function joinPath(root: string, file: string): string {
-  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
-  return root.endsWith(sep) ? `${root}${file}` : `${root}${sep}${file}`;
 }
 
 function finishLintReport(

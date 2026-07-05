@@ -343,18 +343,21 @@ function isAbsoluteInputPath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("/") || path.startsWith("\\\\");
 }
 
+const NO_AUTO_ALLOW_MARKER = ".dysflow-no-auto-allow";
+
 /**
- * #731 — synchronous one-shot detection: returns `true` when any
- * `.bas` / `.cls` / `.form.txt` under `<projectRoot>/src/` contains at
- * least one non-ASCII identifier in a `Sub/Function/Property`,
- * `Dim/Const/Private Const`, or `Attribute VB_Name` position. Walks the
- * tree at most once per lint report; failures are silently treated as
- * "no legacy signal" so the rule stays opt-in.
+ * #731 — synchronous one-shot detection: returns `true` when the project
+ * qualifies as a legacy Spanish-style codebase AND the operator has not
+ * explicitly opted out of the auto-detection via
+ * `<projectRoot>/.dysflow-no-auto-allow`. Combines the legacy-signal walk
+ * with the marker check so the core layer never touches `node:fs`.
  */
-function projectHasNonAsciiIdentifier(projectRoot: string): boolean {
+function projectHasLegacyNonAsciiIdentifier(projectRoot: string): boolean {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs") as typeof import("node:fs");
+    // Operator-level opt-out wins everything.
+    if (fs.existsSync(join(projectRoot, NO_AUTO_ALLOW_MARKER))) return false;
     const srcRoot = join(projectRoot, "src");
     if (!fs.existsSync(srcRoot) || !fs.statSync(srcRoot).isDirectory()) return false;
     return walkForNonAsciiIdentifier(fs, srcRoot);
@@ -1010,7 +1013,7 @@ export function createDysflowMcpTools(
         const projectContext = await accessContextResolver(input);
         const projectRoot = projectContext.ok ? projectContext.data.projectRoot : undefined;
         const detection = projectRoot
-          ? (): boolean => projectHasNonAsciiIdentifier(projectRoot)
+          ? (): boolean => projectHasLegacyNonAsciiIdentifier(projectRoot)
           : undefined;
         const report = await lintVbaModule({
           module,
