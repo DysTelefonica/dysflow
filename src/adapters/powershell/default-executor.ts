@@ -12,6 +12,7 @@ export type PowerShellProcessResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  powershellWorkerPid?: number;
 };
 
 export type PowerShellProcessOptions = {
@@ -101,7 +102,14 @@ export function spawnPowerShellProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ exitCode, stdout, stderr, durationMs: Date.now() - startedAt, timedOut });
+      resolve({
+        exitCode,
+        stdout,
+        stderr,
+        durationMs: Date.now() - startedAt,
+        timedOut,
+        powershellWorkerPid: child.pid,
+      });
     };
     const abortChild = () => {
       timedOut = true;

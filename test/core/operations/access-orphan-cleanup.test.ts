@@ -577,3 +577,305 @@ describe("AccessOrphanCleanupService — inspection failure", () => {
     expect(killed).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #735 — PowerShell worker PID tracking and orphan cleanup
+// ---------------------------------------------------------------------------
+
+function workerRecord(
+  pid: number,
+  projectRoot: string,
+  workerPid: number | null,
+): AccessOperationRecord {
+  return {
+    operationId: `op-worker-${pid}`,
+    action: "run",
+    accessPath: ACCESS_PATH,
+    projectRootAbs: projectRoot,
+    accessPid: pid,
+    powershellWorkerPid: workerPid,
+    processStartTime: "2026-05-28T10:00:00.000Z",
+    status: "running",
+    metadata: {},
+    updatedAt: "2026-05-28T10:00:00.000Z",
+  };
+}
+
+function headlessPwshWorker(overrides: Partial<OsProcessInfo> = {}): OsProcessInfo {
+  return {
+    pid: 8888,
+    name: "pwsh.exe",
+    startTime: "2026-05-28T10:00:00.000Z",
+    commandLine: `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File dysflow-access-runner.ps1`,
+    mainWindowHandle: 0,
+    ...overrides,
+  };
+}
+
+describe("AccessOrphanCleanupService — pwsh worker listOrphans", () => {
+  it("returns pwsh workers from registry records that are still alive", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // Register a running operation with a worker PID
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Should include the pwsh worker as an orphan candidate
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(workerCandidates).toHaveLength(1);
+      expect(workerCandidates[0]?.pid).toBe(8888);
+      expect(workerCandidates[0]?.accessPath).toBe(ACCESS_PATH);
+    }
+  });
+
+  it("excludes pwsh workers whose PID is owned by a running operation's accessPid", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // Worker PID 8888 is also the accessPid of a running record — should not be double-counted
+    await registry.create(runningRecord(8888, PROJECT_ROOT));
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // PID 8888 should NOT appear because it's owned by a running operation
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(workerCandidates).toHaveLength(0);
+    }
+  });
+
+  it("excludes pwsh workers that are no longer running", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+
+    // Worker PID not in the process list — it's gone
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([]),
+      processInspector: makeInspector(undefined),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(workerCandidates).toHaveLength(0);
+    }
+  });
+
+  it("excludes pwsh workers from a different project", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(workerRecord(100, "C:\\other\\project", 8888));
+
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(workerCandidates).toHaveLength(0);
+    }
+  });
+
+  it("excludes pwsh workers from non-running registry records", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // Create a record with status "cleaned" — should not produce orphan candidates
+    const rec = await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+    await registry.update(rec.operationId, {
+      status: "cleaned",
+      updatedAt: new Date().toISOString(),
+    });
+
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(workerCandidates).toHaveLength(0);
+    }
+  });
+
+  it("includes both MSACCESS orphans and pwsh worker orphans in one result", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // Running op with worker — worker should appear as orphan
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+
+    const accessProc = headlessMsAccess({ pid: 9999 });
+    const workerProc = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([accessProc, workerProc]),
+      processInspector: makeInspector(accessProc),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const accessCandidates = result.data.filter((c) => c.kind === "access");
+      const workerCandidates = result.data.filter((c) => c.kind === "powershell-worker");
+      expect(accessCandidates).toHaveLength(1);
+      expect(accessCandidates[0]?.pid).toBe(9999);
+      expect(workerCandidates).toHaveLength(1);
+      expect(workerCandidates[0]?.pid).toBe(8888);
+    }
+  });
+});
+
+describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
+  it("kills a confirmed pwsh worker PID and writes synthetic record", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 8888,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.killed).toContain(8888);
+      expect(result.data.refused).toEqual([]);
+      expect(result.data.errors).toEqual([]);
+    }
+    expect(killed).toContain(8888);
+  });
+
+  it("rejects a pwsh worker PID that is owned by a running operation", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // PID 8888 is the accessPid of a running record — should be refused
+    await registry.create(runningRecord(8888, PROJECT_ROOT));
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 8888,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  it("rejects a pwsh worker PID that is the powershellWorkerPid of a running operation", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 8888,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  it("accepts a pwsh worker PID whose process is gone", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([]),
+      processInspector: makeInspector(undefined),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 8888,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_PID_GONE");
+    }
+    expect(killed).toEqual([]);
+  });
+});
+
+// NOTE: spawnPowerShellProcess and createDefaultPowerShellExecutor tests for
+// powershellWorkerPid live in test/adapters/powershell/default-executor.test.ts
+// because they need the vi.mock("node:child_process") setup in that file.

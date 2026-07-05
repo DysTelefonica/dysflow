@@ -19,8 +19,9 @@ import type {
 export type AccessOrphanCandidate = {
   pid: number;
   accessPath: string;
+  kind: "access" | "powershell-worker";
   startTime?: string;
-  mainWindowHandle: number;
+  mainWindowHandle?: number;
 };
 
 export type AccessOrphanCleanupRequest = {
@@ -99,8 +100,44 @@ export class AccessOrphanCleanupService {
       candidates.push({
         pid: proc.pid,
         accessPath: request.accessPath,
+        kind: "access",
         startTime: proc.startTime,
         mainWindowHandle: proc.mainWindowHandle,
+      });
+    }
+
+    // #735: scan for orphaned PowerShell workers. A pwsh worker is a
+    // process spawned by the runner that holds the Access session alive. When
+    // the worker gets stuck it prevents cleanup because the existing orphan
+    // detection only covers MSACCESS.EXE. Workers are tracked in the registry
+    // via `powershellWorkerPid`; we surface any still-alive worker that is NOT
+    // owned by a running operation's accessPid or powershellWorkerPid.
+    const workerPids = new Set<number>();
+    for (const record of registryRecords) {
+      if (record.status !== "running") continue;
+      if (
+        normalizePathForMatching(record.projectRootAbs ?? "") !==
+        normalizePathForMatching(request.projectRoot)
+      )
+        continue;
+      if (record.powershellWorkerPid == null) continue;
+      // Skip if this worker PID is already the accessPid of a running record
+      if (ownedPids.has(record.powershellWorkerPid)) continue;
+      // Skip if another running record already owns this worker PID
+      if (workerPids.has(record.powershellWorkerPid)) continue;
+
+      const workerProc = processes.find(
+        (p) => p.pid === record.powershellWorkerPid && p.name.toUpperCase() === "PWSH.EXE",
+      );
+      if (workerProc === undefined) continue;
+
+      workerPids.add(record.powershellWorkerPid);
+      candidates.push({
+        pid: record.powershellWorkerPid,
+        accessPath: request.accessPath,
+        kind: "powershell-worker",
+        startTime: workerProc.startTime,
+        mainWindowHandle: workerProc.mainWindowHandle,
       });
     }
 
@@ -139,44 +176,53 @@ export class AccessOrphanCleanupService {
       );
     }
 
-    if (liveProcess.name.toUpperCase() !== "MSACCESS.EXE") {
+    const processName = liveProcess.name.toUpperCase();
+    const isMsAccess = processName === "MSACCESS.EXE";
+    const isPowerShellWorker = processName === "PWSH.EXE";
+
+    if (!isMsAccess && !isPowerShellWorker) {
       return failureResult(
         createDysflowError(
           "ORPHAN_CLEANUP_NOT_MSACCESS",
-          `PID ${confirmPid} is ${liveProcess.name}, not MSACCESS.EXE.`,
+          `PID ${confirmPid} is ${liveProcess.name}, not MSACCESS.EXE or pwsh.exe.`,
         ),
       );
     }
 
-    if (liveProcess.mainWindowHandle !== 0) {
-      const handle =
-        liveProcess.mainWindowHandle === undefined
-          ? "undefined (Get-Process fallback — cannot prove headless)"
-          : `0x${liveProcess.mainWindowHandle.toString(16).toUpperCase()}`;
-      return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_NOT_HEADLESS",
-          `Refused to kill PID ${confirmPid}: window handle is ${handle}, expected 0 (headless).`,
-        ),
-      );
-    }
+    // MSACCESS-specific safety checks: headless, command-line path match.
+    // pwsh workers are always headless background processes; the path match is
+    // verified through registry ownership below instead.
+    if (isMsAccess) {
+      if (liveProcess.mainWindowHandle !== 0) {
+        const handle =
+          liveProcess.mainWindowHandle === undefined
+            ? "undefined (Get-Process fallback — cannot prove headless)"
+            : `0x${liveProcess.mainWindowHandle.toString(16).toUpperCase()}`;
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_NOT_HEADLESS",
+            `Refused to kill PID ${confirmPid}: window handle is ${handle}, expected 0 (headless).`,
+          ),
+        );
+      }
 
-    if (liveProcess.commandLine === undefined) {
-      return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_PATH_UNVERIFIED",
-          `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
-        ),
-      );
-    }
+      if (liveProcess.commandLine === undefined) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PATH_UNVERIFIED",
+            `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
+          ),
+        );
+      }
 
-    if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
-      return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_PATH_MISMATCH",
-          `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-        ),
-      );
+      if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PATH_MISMATCH",
+            `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
+          ),
+        );
+      }
     }
 
     const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
@@ -265,7 +311,7 @@ export class AccessOrphanCleanupService {
     const owned = registryRecords.some(
       (record) =>
         record.status === "running" &&
-        record.accessPid === pid &&
+        (record.accessPid === pid || record.powershellWorkerPid === pid) &&
         normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
     );
     return { ok: true, owned };

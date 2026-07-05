@@ -185,6 +185,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
           accessPath: "C:/project/app.accdb",
           startTime: "2026-06-08T10:00:00.000Z",
           mainWindowHandle: 0,
+          kind: "access",
         },
       ]),
     );
@@ -219,6 +220,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
           accessPath: "C:/project/app.accdb",
           startTime: "2026-06-08T10:00:00.000Z",
           mainWindowHandle: 0,
+          kind: "access",
         },
       ]),
     );

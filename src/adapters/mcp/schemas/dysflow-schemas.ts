@@ -353,7 +353,7 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
       type: "number",
       minimum: 1,
       description:
-        "Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates. When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath.",
+        "Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates (MSACCESS.EXE or pwsh.exe worker). When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath (MSACCESS) or owned by a Dysflow operation (pwsh worker).",
     },
   },
 };

@@ -359,6 +359,26 @@ export class AccessPowerShellRunner implements AccessRunner {
         },
       },
     );
+
+    // #735: Capture the PowerShell worker PID from the spawn result so the
+    // orphan cleanup service can find and kill stuck workers.
+    if (execution.powershellWorkerPid != null) {
+      try {
+        record =
+          (await this.operationRegistry.update(operationId, {
+            powershellWorkerPid: execution.powershellWorkerPid,
+            updatedAt: this.clock(),
+          })) ?? record;
+      } catch (error) {
+        captureDiagnostics.push(
+          createDiagnostic(
+            "error",
+            "powershell.worker-pid",
+            `Failed to record PowerShell worker PID: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+      }
+    }
     const diagnostics = [...collectDiagnostics(execution, secrets), ...captureDiagnostics];
     // F3b (#620): drain heartbeat errors collected during the lock into warning
     // diagnostics on the returned `OperationResult`. ENOENT (lock already

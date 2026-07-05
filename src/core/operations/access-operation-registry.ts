@@ -24,6 +24,7 @@ export type AccessOperationRecord = {
   destinationRootAbs?: string;
   projectRootAbs?: string;
   accessPid: number | null;
+  powershellWorkerPid?: number | null;
   processStartTime: string | null;
   commandLine?: string;
   status: AccessOperationStatus;
