@@ -1825,10 +1825,10 @@ try {
   $script:accessPid = $script:canonicalSession.OwnedPid
 
   # Runner-owned responsibilities not delegated to the canonical:
-  # - Visible/UserControl must be false for headless operation.
+  # - Visible/UserControl are forced to $false inside Open-CanonicalAccess BEFORE
+  #   OpenCurrentDatabase (issue #730). The canonical open owns that headless
+  #   invariant; this layer does not re-apply it.
   # - DYSFLOW_ACCESS_PROCESS marker is runner-specific stderr protocol; canonical does not emit it.
-  try { $access.Visible = $false } catch { Write-Debug "Diagnostics: $_" }
-  try { $access.UserControl = $false } catch { Write-Debug "Diagnostics: $_" }
 
   # Emit DYSFLOW_ACCESS_PROCESS marker using the PID returned by the canonical open.
   if ($script:accessPid) {
