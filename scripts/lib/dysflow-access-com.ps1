@@ -492,6 +492,17 @@ function Open-CanonicalAccess {
         $access.AutomationSecurity = 1  # msoAutomationSecurityLow
     }
 
+    # #730 — force headless BEFORE any OpenCurrentDatabase call so the splash /
+    # window never paints. Surface a typed DYSFLOW_HEADLESS_LAUNCH_FAILED error
+    # when the COM assignment fails so a silent regression does not regress to
+    # "MSACCESS window appeared on the operator's desktop".
+    try {
+        $access.UserControl = $false
+        $access.Visible     = $false
+    } catch {
+        throw "DYSFLOW_HEADLESS_LAUNCH_FAILED: cannot force Access.Application to headless (Visible/UserControl assignment failed); original error: $_"
+    }
+
     # --- layer 1: hWnd before OpenCurrentDatabase -------------------------
     $ownedPid = $null
     $hwnd1 = [IntPtr]0

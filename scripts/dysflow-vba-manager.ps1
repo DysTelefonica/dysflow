@@ -1312,16 +1312,16 @@ function Open-AccessDatabase {
 
         # Delegate COM spawn + 3-layer PID capture to the canonical open.
         # Open-CanonicalAccess handles: New-Object Access.Application, AutomationSecurity=1,
+        # Visible/UserControl=$false (BEFORE OpenCurrentDatabase, see #730),
         # hWnd layer-1 (pre-open), OpenCurrentDatabase, hWnd layer-2 (post-open retry),
         # WMI diff layer-3 (fallback, bounded, never overwrites a stronger layer).
         $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password
         $access = $canonical.AccessApplication
 
-        # Set Visible/UserControl after spawn — canonical does not set these; we set them here
-        # for defensive headless operation (Access default is already headless when COM-created,
-        # but we keep these explicit assignments for clarity and backward compatibility).
-        try { $access.Visible = $false } catch { Write-Debug "Diagnostics: $_" }
-        try { $access.UserControl = $false } catch { Write-Debug "Diagnostics: $_" }
+        # Visible/UserControl are forced to $false inside Open-CanonicalAccess BEFORE
+        # OpenCurrentDatabase (#730). DoCmd.SetWarnings still belongs to the runner —
+        # it is not part of the headless invariant and Access.Application may legitimately
+        # emit a warning on a successful spawn, which we want suppressed for tidy logs.
         try { $access.DoCmd.SetWarnings($false) } catch { Write-Debug "Diagnostics: $_" }
 
         $accessPid = $canonical.OwnedPid
