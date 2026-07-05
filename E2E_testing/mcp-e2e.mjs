@@ -12,6 +12,7 @@ import {
 import {
   EXPECTED_ADVERTISED_TOOL_COUNT,
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
+  ISSUE_713_REQUIRED_TOOLS,
 } from "./_helpers/advertised-tool-count.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -161,6 +162,17 @@ try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); }
 // test/adapters/mcp/advertised-tool-count.test.ts — both import the same constant
 // from _helpers/advertised-tool-count.mjs, so a future add/remove flips one place.
 rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
+const missingIssue713Tools = ISSUE_713_REQUIRED_TOOLS.filter((name) => !advertised.includes(name));
+rows.push({
+  area: "protocol",
+  tool: "issue-713-required-tools-advertised",
+  pass: missingIssue713Tools.length === 0,
+  expected: ISSUE_713_REQUIRED_TOOLS.join(", "),
+  ms: 0,
+  summary: missingIssue713Tools.length === 0
+    ? "all #713 merged VBA tools advertised"
+    : `missing=${missingIssue713Tools.join(",")}`,
+});
 
 await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
 await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });

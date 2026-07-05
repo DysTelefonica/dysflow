@@ -17,6 +17,14 @@ import { successResult } from "../../../src/core/contracts/index.js";
  * so the live e2e gate (`E2E_testing/mcp-e2e.mjs`) and the suite-contracts pin
  * (`test/quality-gates/mcp-e2e-suite-contracts.test.ts`) cannot drift from this unit pin.
  */
+const ISSUE_713_REQUIRED_TOOLS = [
+  "dysflow_list_procedures",
+  "dysflow_get_procedure",
+  "dysflow_find_references",
+  "dysflow_detect_dead_code",
+  "dysflow_validate_manifest",
+] as const;
+
 describe("advertised MCP tool surface", () => {
   const tools = createDysflowMcpTools({
     vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
@@ -36,6 +44,10 @@ describe("advertised MCP tool surface", () => {
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     // Guard the label format too — the e2e suite-contracts pin asserts on this string.
     expect(EXPECTED_ADVERTISED_TOOL_COUNT_LABEL).toBe(`${EXPECTED_ADVERTISED_TOOL_COUNT} tools`);
+  });
+
+  it("advertises all #713 merged VBA tools by name", () => {
+    expect(advertised).toEqual(expect.arrayContaining([...ISSUE_713_REQUIRED_TOOLS]));
   });
 
   it("advertises a duplicate-free set", () => {

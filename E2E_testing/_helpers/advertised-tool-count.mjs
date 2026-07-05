@@ -19,3 +19,16 @@ export const EXPECTED_ADVERTISED_TOOL_COUNT = 66;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;
+
+/**
+ * #713: required merged VBA tools that must be present in every advertised
+ * MCP/runtime surface, not just implemented behind the factory.
+ * @type {readonly string[]}
+ */
+export const ISSUE_713_REQUIRED_TOOLS = Object.freeze([
+  "dysflow_list_procedures",
+  "dysflow_get_procedure",
+  "dysflow_find_references",
+  "dysflow_detect_dead_code",
+  "dysflow_validate_manifest",
+]);
