@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [v1.15.3] - 2026-07-05
+
+- Fix `verify_code` phase-aware timeout errors and `moduleNames` subset forwarding. Focused `verify_code` calls now report a typed Dysflow error (`VERIFY_CODE_PHASE_TIMEOUT` for preflight/compare stalls, refined `VBA_MANAGER_TIMEOUT` for export stalls with `details.durationMs` and post-timeout `details.cleanupTimedOut`) before the outer MCP request timeout, and `moduleNames` is confirmed to scope the live Access export (no `-ModuleNamesJson` is emitted for whole-project verifies). Empty `moduleNames: []` is rejected with `INVALID_INPUT` so a focused call cannot silently widen to the whole project (#715, #728).
+
 ## [v1.15.2] - 2026-07-05
 
 - Fix `lint_form_code` `form-control-binding` false positives for intrinsic Access Form/Report `Me.*` members such as `Name`, `Caption`, `InsideHeight`, and `InsideWidth` (#725, #726).
