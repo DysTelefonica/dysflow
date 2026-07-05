@@ -256,7 +256,7 @@ describe("vba-module-lint-service", () => {
   describe("identifier-safety overrides (#731)", () => {
     it("Path A: explicit operator opt-out emits a single LINT_SUPPRESSED info diagnostic and no per-identifier findings", async () => {
       const source = [
-        "Attribute VB_Name = \"LegacyForm\"",
+        'Attribute VB_Name = "LegacyForm"',
         "Public Sub AdaptarTamañoFormulario()",
         "End Sub",
       ].join("\r\n");
@@ -279,14 +279,16 @@ describe("vba-module-lint-service", () => {
         code: "LINT_SUPPRESSED",
         severity: "warning",
       });
-      expect(String(report.flatDiagnostics[0]?.message)).toContain("legacy Spanish-language identifiers");
+      expect(String(report.flatDiagnostics[0]?.message)).toContain(
+        "legacy Spanish-language identifiers",
+      );
       // No per-identifier findings leak through the opt-out.
       expect(report.isClean).toBe(true);
     });
 
     it("Path B: legacy auto-detection downgrades non-ASCII identifier findings to 'warning'", async () => {
       const source = [
-        "Attribute VB_Name = \"LegacyForm\"",
+        'Attribute VB_Name = "LegacyForm"',
         "Public Sub AdaptarTamañoFormulario()",
         "End Sub",
       ].join("\r\n");
@@ -317,7 +319,7 @@ describe("vba-module-lint-service", () => {
       writeFileSync(join(root, ".dysflow-no-auto-allow"), "");
 
       const source = [
-        "Attribute VB_Name = \"StrictForm\"",
+        'Attribute VB_Name = "StrictForm"',
         "Public Sub AdaptarTamañoFormulario()",
         "End Sub",
       ].join("\r\n");

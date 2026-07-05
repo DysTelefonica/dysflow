@@ -262,9 +262,7 @@ function finishLintReport(
   // surfaces in `diagnostics.<rule>` for traceability but does NOT make
   // `isClean` false. Otherwise a deliberate opt-out would falsely fail the
   // import-modules pre-import gate.
-  const realDiagnostics = flatDiagnostics.filter(
-    (d) => d.code !== LINT_SUPPRESSED_DIAGNOSTIC_CODE,
-  );
+  const realDiagnostics = flatDiagnostics.filter((d) => d.code !== LINT_SUPPRESSED_DIAGNOSTIC_CODE);
   const errors = realDiagnostics.filter((d) => d.severity === "error").length;
   const warnings = realDiagnostics.filter((d) => d.severity === "warning").length;
 
