@@ -28,6 +28,26 @@ function createToolsWithMockContext(tempDir: string) {
   );
 }
 
+function parseJsonContent<T>(text: string | undefined): T {
+  try {
+    return JSON.parse(text ?? "{}") as T;
+  } catch (error) {
+    throw new Error(`Expected MCP tool response to contain JSON: ${String(error)}`);
+  }
+}
+
+type ProcedureCatalogResponse = {
+  module: string;
+  procedures: Array<{ name: string; kind?: string }>;
+};
+
+type ProcedureDetailResponse = {
+  module: string;
+  procedure: string;
+  startLine: number;
+  body: string;
+};
+
 describe("dysflow_list_procedures — source resolution from disk", () => {
   const tempDir = join(process.env.TEMP ?? "/tmp", `procedure-test-${Date.now()}`);
 
@@ -71,7 +91,7 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
     expect(result.isError).toBe(false);
     const text = result.content[0]?.text ?? "";
-    const parsed = JSON.parse(text);
+    const parsed = parseJsonContent<ProcedureCatalogResponse>(text);
 
     expect(parsed.module).toBe("TestModule");
     expect(parsed.procedures).toHaveLength(2);
@@ -140,7 +160,7 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
     const result = await tool.handler({ module: "TestModule" });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    const parsed = parseJsonContent<ProcedureCatalogResponse>(result.content[0]?.text);
     expect(parsed.procedures.map((p: { name: string }) => p.name)).toEqual(["DoWork", "GetValue"]);
   });
 
@@ -157,7 +177,7 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
     });
 
     const subText = subResult.content[0]?.text ?? "";
-    const subParsed = JSON.parse(subText);
+    const subParsed = parseJsonContent<ProcedureCatalogResponse>(subText);
     expect(subParsed.procedures).toHaveLength(1);
     expect(subParsed.procedures[0]?.name).toBe("DoWork");
     expect(subParsed.procedures[0]?.kind).toBe("Sub");
@@ -170,7 +190,7 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
     });
 
     const funcText = funcResult.content[0]?.text ?? "";
-    const funcParsed = JSON.parse(funcText);
+    const funcParsed = parseJsonContent<ProcedureCatalogResponse>(funcText);
     expect(funcParsed.procedures).toHaveLength(1);
     expect(funcParsed.procedures[0]?.name).toBe("GetValue");
     expect(funcParsed.procedures[0]?.kind).toBe("Function");
@@ -215,7 +235,7 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
     expect(result.isError).toBe(false);
     const text = result.content[0]?.text ?? "";
-    const parsed = JSON.parse(text);
+    const parsed = parseJsonContent<ProcedureDetailResponse>(text);
 
     expect(parsed.module).toBe("Calculator");
     expect(parsed.procedure).toBe("Add");
@@ -272,7 +292,7 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
     const result = await tool.handler({ module: "Calculator", procedure: "Add" });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    const parsed = parseJsonContent<ProcedureDetailResponse>(result.content[0]?.text);
     expect(parsed.body).toContain("Add = a + b");
   });
 
@@ -289,6 +309,114 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("PROCEDURE_NOT_FOUND");
+  });
+});
+
+describe("issue #713 merged VBA tools — project context source resolution", () => {
+  const tempDir = join(process.env.TEMP ?? "/tmp", `procedure-context-tools-${Date.now()}`);
+
+  beforeAll(async () => {
+    await mkdir(join(tempDir, "modules"), { recursive: true });
+    await writeFile(
+      join(tempDir, "modules", "Workflow.bas"),
+      [
+        "Option Explicit",
+        "",
+        "Public Sub ReferencedProc()",
+        "End Sub",
+        "",
+        "Public Sub Caller()",
+        "    ReferencedProc",
+        "End Sub",
+        "",
+        "Public Sub UnusedProc()",
+        "End Sub",
+      ].join("\r\n"),
+      "utf-8",
+    );
+  });
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  function makeToolsWithProjectContext() {
+    return createDysflowMcpTools(
+      makeBaseServices() as DysflowMcpServices,
+      false,
+      undefined,
+      process.env,
+      undefined,
+      async () =>
+        successResult({
+          accessPath: join(tempDir, "dummy.accdb"),
+          projectRoot: tempDir,
+          destinationRoot: tempDir,
+        }),
+    );
+  }
+
+  it("dysflow_find_references resolves project source modules when explicit source paths are omitted", async () => {
+    const tools = makeToolsWithProjectContext();
+    const tool = tools.find((t) => t.name === "dysflow_find_references");
+    if (tool === undefined) throw new Error("dysflow_find_references tool not found");
+
+    const result = await tool.handler({
+      projectId: "configured-project",
+      symbol: "ReferencedProc",
+      scope: "source",
+    });
+
+    expect(result.isError).toBe(false);
+    const parsed = parseJsonContent<{
+      symbol: string;
+      totalCount: number;
+      references: Array<{ module: string; context: string }>;
+    }>(result.content[0]?.text);
+    expect(parsed.symbol).toBe("ReferencedProc");
+    expect(parsed.totalCount).toBe(1);
+    expect(parsed.references).toEqual([
+      expect.objectContaining({ module: "Workflow", context: "ReferencedProc" }),
+    ]);
+  });
+
+  it("dysflow_detect_dead_code resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
+    const tools = makeToolsWithProjectContext();
+    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    if (tool === undefined) throw new Error("dysflow_detect_dead_code tool not found");
+
+    const result = await tool.handler({ projectId: "configured-project", scope: "source" });
+
+    expect(result.isError).toBe(false);
+    const parsed = parseJsonContent<{
+      scannedModules: string[];
+      findings: Array<{ symbol: string; module: string }>;
+    }>(result.content[0]?.text);
+    expect(parsed.scannedModules).toEqual(["Workflow"]);
+    expect(parsed.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ symbol: "UnusedProc", module: "Workflow" }),
+      ]),
+    );
+  });
+
+  it("dysflow_validate_manifest resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
+    const tools = makeToolsWithProjectContext();
+    const tool = tools.find((t) => t.name === "dysflow_validate_manifest");
+    if (tool === undefined) throw new Error("dysflow_validate_manifest tool not found");
+
+    const result = await tool.handler({
+      projectId: "configured-project",
+      manifest: { tests: ["ReferencedProc"] },
+    });
+
+    expect(result.isError).toBe(false);
+    const parsed = parseJsonContent<{
+      valid: boolean;
+      summary: { totalTests: number; validTests: number };
+    }>(result.content[0]?.text);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.summary).toMatchObject({ totalTests: 1, validTests: 1 });
   });
 });
 
@@ -355,7 +483,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     const result = await listTool.handler({ module: "ConfiguredModule" });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    const parsed = parseJsonContent<ProcedureCatalogResponse>(result.content[0]?.text);
     expect(parsed.procedures.map((p: { name: string }) => p.name)).toContain("ConfiguredProc");
   });
 
@@ -434,7 +562,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    const parsed = parseJsonContent<ProcedureCatalogResponse>(result.content[0]?.text);
     expect(parsed.procedures.map((p: { name: string }) => p.name)).toContain("ConfiguredProc");
   });
 
@@ -538,7 +666,7 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     });
 
     expect(result.isError).toBe(false);
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    const parsed = parseJsonContent<ProcedureDetailResponse>(result.content[0]?.text);
     expect(parsed.procedure).toBe("InlineProc");
     expect(parsed.body).toContain("Dim x As Long");
   });

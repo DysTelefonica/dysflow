@@ -30,6 +30,14 @@ class FakeDiagnosticsService {
   }
 }
 
+const ISSUE_713_REQUIRED_TOOLS = [
+  "dysflow_list_procedures",
+  "dysflow_get_procedure",
+  "dysflow_find_references",
+  "dysflow_detect_dead_code",
+  "dysflow_validate_manifest",
+] as const satisfies readonly (keyof typeof MCP_TOOL_CONTRACTS)[];
+
 function makeServices() {
   return {
     vbaService: new FakeVbaService(),
@@ -128,6 +136,20 @@ describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
     expect(snapshot.toolsVisible).toBe(Object.keys(MCP_TOOL_CONTRACTS).length);
   });
 
+  it("includes every #713 merged VBA tool in the capabilities contract surface", () => {
+    const contractNames = Object.keys(MCP_TOOL_CONTRACTS);
+
+    expect(contractNames).toEqual(expect.arrayContaining([...ISSUE_713_REQUIRED_TOOLS]));
+    for (const toolName of ISSUE_713_REQUIRED_TOOLS) {
+      expect(MCP_TOOL_CONTRACTS[toolName]?.access, `${toolName} must be read-only`).toBe(
+        "read-only",
+      );
+      expect(MCP_TOOL_CONTRACTS[toolName]?.writeGate, `${toolName} must not be write-gated`).toBe(
+        "none",
+      );
+    }
+  });
+
   it("lists every write-class tool name when writes are fully open", () => {
     const snapshot = getCapabilitiesAll({
       writesEnabled: true,
@@ -194,7 +216,12 @@ describe("dysflow_get_capabilities tool — registration and read-only contract 
     const result = await tool.handler({});
     expect(result.isError).toBe(false);
 
-    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    } catch (error) {
+      throw new Error(`Expected dysflow_get_capabilities to return JSON: ${String(error)}`);
+    }
     expect(parsed).toMatchObject({
       surface: "stdio",
       writesProcess: expect.any(Object),
