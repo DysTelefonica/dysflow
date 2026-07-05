@@ -1,6 +1,8 @@
 import { extname, parse, relative, resolve } from "node:path";
 import {
   createDysflowError,
+  type Diagnostic,
+  type DysflowError,
   failureResult,
   type OperationResult,
   successResult,
@@ -125,6 +127,7 @@ export type VbaExecutionRequest = {
   accessPath?: string;
   destinationRoot: string;
   moduleNames: readonly string[];
+  moduleNamesProvided?: boolean;
   password?: string;
   json: boolean;
   extra: Record<string, string | boolean | number | undefined>;
@@ -180,64 +183,117 @@ export async function compareSourceAgainstBinary(
   const strict = ctx.validateStrictContext(params, target.data);
   if (!strict.ok) return strict;
 
-  const sourceRoot = target.data.destinationRoot;
-  const tempExportRoot = await fileSystem.mkdtemp(
-    resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"),
-  );
   const password = ctx.accessPassword;
   const effectiveTimeoutMs =
     typeof params.timeoutMs === "number" && params.timeoutMs > 0
       ? params.timeoutMs
       : (target.data.timeoutMs ?? 30000);
+  const requestedModules = stringArray(params.moduleNames);
+  if (Array.isArray(params.moduleNames) && requestedModules.length === 0) {
+    return failureResult(
+      createDysflowError(
+        "INVALID_INPUT",
+        "verify_code moduleNames was provided as an empty list. Omit moduleNames for a whole-project verify, or pass at least one module name for a focused verify.",
+      ),
+    );
+  }
+
+  const sourceRoot = target.data.destinationRoot;
+  const tempExportRoot = await fileSystem.mkdtemp(
+    resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"),
+  );
+  const deadlineMs = Date.now() + effectiveTimeoutMs;
+  let pendingResult: OperationResult<VbaVerifyResult> | undefined;
+  let cleanupTempExportRoot = true;
+  const finalize = (result: OperationResult<VbaVerifyResult>): OperationResult<VbaVerifyResult> => {
+    pendingResult = result;
+    return result;
+  };
   try {
+    const preflightTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
+    const preflightCleanup = await withPhaseTimeout(
+      ctx.runPreflightCleanup(target.data),
+      preflightTimeoutMs,
+      createVerifyCodePhaseTimeoutError({
+        phase: "preflight",
+        moduleNames: requestedModules,
+        operationTimeoutMs: effectiveTimeoutMs,
+        phaseTimeoutMs: preflightTimeoutMs,
+      }),
+    );
+    if (!preflightCleanup.ok) {
+      return finalize(failureResult(preflightCleanup.error, { durationMs: preflightTimeoutMs }));
+    }
+    const preflightDiagnostics = diagnosticsFromPreflightCleanup(preflightCleanup.data);
+    const exportTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const request = {
       scriptPath: ctx.scriptPath,
       action: "Export",
       accessPath: target.data.accessPath,
       destinationRoot: tempExportRoot,
-      moduleNames: stringArray(params.moduleNames),
+      moduleNames: requestedModules,
+      moduleNamesProvided: requestedModules.length > 0,
       password,
       json: true,
       extra: {},
-      timeoutMs: effectiveTimeoutMs,
+      timeoutMs: exportTimeoutMs,
       env:
         password === undefined
           ? undefined
           : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
     };
 
-    const preflightDiagnostics = diagnosticsFromPreflightCleanup(
-      await ctx.runPreflightCleanup(target.data),
-    );
     const result = await ctx.runVbaManager(request);
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     if (result.timedOut) {
+      const timeoutError = createDysflowError(
+        "VBA_MANAGER_TIMEOUT",
+        `verify_code export phase timed out after ${result.durationMs}ms for ${formatRequestedModules(requestedModules)}.`,
+        {
+          retryable: true,
+          details: phaseTimeoutDetails({
+            phase: "export",
+            moduleNames: requestedModules,
+            operationTimeoutMs: effectiveTimeoutMs,
+            phaseTimeoutMs: exportTimeoutMs,
+            durationMs: result.durationMs,
+          }),
+        },
+      );
+      const cleanupTimeoutMs = cleanupTimeoutBeforeDeadline(deadlineMs);
       // The export timed out: the PowerShell process is killed, but the Access COM
       // process it spawned is a separate process that survives as an orphan. Reap
       // it immediately by re-running the path/lock cleanup so a timeout never
       // leaks an Access process (orphans would otherwise linger until the next op).
-      const timeoutCleanupDiagnostics = await reapOrphanedAccessOnTimeout(() =>
-        ctx.runPreflightCleanup(target.data),
+      const timeoutCleanup = await withPhaseTimeout(
+        reapOrphanedAccessOnTimeout(() => ctx.runPreflightCleanup(target.data)),
+        cleanupTimeoutMs,
+        createVerifyCodePhaseTimeoutError({
+          phase: "cleanup",
+          moduleNames: requestedModules,
+          operationTimeoutMs: effectiveTimeoutMs,
+          phaseTimeoutMs: cleanupTimeoutMs,
+        }),
       );
-      return failureResult(
-        createDysflowError(
-          "VBA_MANAGER_TIMEOUT",
-          `verify export timed out after ${result.durationMs}ms`,
-          { retryable: true },
-        ),
-        {
+      const timeoutCleanupDiagnostics = timeoutCleanup.ok
+        ? timeoutCleanup.data
+        : markCleanupTimedOut(timeoutError, cleanupTimeoutMs);
+      return finalize(
+        failureResult(timeoutError, {
           diagnostics: [...preflightDiagnostics, ...timeoutCleanupDiagnostics],
           durationMs: result.durationMs,
-        },
+        }),
       );
     }
     if (result.exitCode !== 0) {
-      return failureResult(
-        createDysflowError(
-          "VBA_MANAGER_FAILED",
-          `verify export failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`,
+      return finalize(
+        failureResult(
+          createDysflowError(
+            "VBA_MANAGER_FAILED",
+            `verify export failed with exit code ${result.exitCode ?? "unknown"}: ${sanitizeSecrets(result.stderr || result.stdout || "No output.", secrets)}`,
+          ),
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
         ),
-        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }
 
@@ -276,37 +332,73 @@ export async function compareSourceAgainstBinary(
     }
 
     const comparisonMode: VbaComparisonMode = truthy(params.strict) ? "strict" : "semantic";
-    const comparison = await compareVbaSourceTrees(
-      sourceRoot,
-      tempExportRoot,
-      stringArray(params.moduleNames),
-      truthy(params.diff),
-      fileSystem,
-      comparisonMode,
+    const compareTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
+    const comparison = await withPhaseTimeout(
+      compareVbaSourceTrees(
+        sourceRoot,
+        tempExportRoot,
+        requestedModules,
+        truthy(params.diff),
+        fileSystem,
+        comparisonMode,
+      ),
+      compareTimeoutMs,
+      createVerifyCodePhaseTimeoutError({
+        phase: "compare",
+        moduleNames: requestedModules,
+        operationTimeoutMs: effectiveTimeoutMs,
+        phaseTimeoutMs: compareTimeoutMs,
+      }),
     );
-    const requestedModules = stringArray(params.moduleNames);
+    if (!comparison.ok) {
+      cleanupTempExportRoot = false;
+      return finalize(
+        failureResult(comparison.error, {
+          diagnostics: [
+            ...preflightDiagnostics,
+            {
+              level: "warning",
+              source: "verify_code:cleanup",
+              message:
+                "Skipped temporary export directory cleanup after compare timeout because the uncancelled comparison may still be reading from it.",
+            },
+          ],
+          durationMs: result.durationMs + compareTimeoutMs,
+        }),
+      );
+    }
     if (requestedModules.length > 0) {
       const found =
-        comparison.matched.length +
-        comparison.different.length +
-        comparison.missingInSource.length +
-        comparison.missingInBinary.length;
+        comparison.data.matched.length +
+        comparison.data.different.length +
+        comparison.data.missingInSource.length +
+        comparison.data.missingInBinary.length;
       if (found === 0) {
-        return failureResult(
-          createDysflowError(
-            "MODULE_NOT_FOUND",
-            `No requested module was found in source or binary export: ${requestedModules.join(", ")}.`,
+        return finalize(
+          failureResult(
+            createDysflowError(
+              "MODULE_NOT_FOUND",
+              `No requested module was found in source or binary export: ${requestedModules.join(", ")}.`,
+            ),
+            { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
           ),
-          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
         );
       }
     }
-    return successResult(
-      { operation: "verify_code", ...comparison, warnings: exportWarnings },
-      { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+    return finalize(
+      successResult(
+        { operation: "verify_code", ...comparison.data, warnings: exportWarnings },
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+      ),
     );
   } finally {
-    await fileSystem.rm(tempExportRoot, { recursive: true, force: true });
+    if (cleanupTempExportRoot) {
+      const cleanupDiagnostics = await cleanupTempExportRootBounded(
+        () => fileSystem.rm(tempExportRoot, { recursive: true, force: true }),
+        cleanupTimeoutBeforeDeadline(deadlineMs),
+      );
+      pendingResult?.diagnostics.push(...cleanupDiagnostics);
+    }
   }
 }
 
@@ -323,6 +415,138 @@ export const VBE_CACHE_NOTE =
   "see the user's live Access/VBE in-memory cache. If the user still hits " +
   "'method or member not found' errors after this check passes, advise File > Close " +
   "and reopen Access to clear the stale VBE cache.";
+
+const VERIFY_CODE_TIMEOUT_RESERVE_MIN_MS = 100;
+const VERIFY_CODE_TIMEOUT_RESERVE_MAX_MS = 1000;
+const VERIFY_CODE_TIMEOUT_RESERVE_RATIO = 0.1;
+const VERIFY_CODE_CLEANUP_TIMEOUT_MAX_MS = 100;
+
+type VerifyCodePhase = "preflight" | "export" | "compare" | "cleanup";
+
+function phaseTimeoutBeforeOperationDeadline(operationTimeoutMs: number): number {
+  const reserveMs = Math.min(
+    VERIFY_CODE_TIMEOUT_RESERVE_MAX_MS,
+    Math.max(
+      VERIFY_CODE_TIMEOUT_RESERVE_MIN_MS,
+      Math.floor(operationTimeoutMs * VERIFY_CODE_TIMEOUT_RESERVE_RATIO),
+    ),
+  );
+  return Math.max(1, operationTimeoutMs - reserveMs);
+}
+
+function phaseTimeoutBeforeDeadline(deadlineMs: number): number {
+  return phaseTimeoutBeforeOperationDeadline(Math.max(1, deadlineMs - Date.now()));
+}
+
+function cleanupTimeoutBeforeDeadline(deadlineMs: number): number {
+  return Math.min(VERIFY_CODE_CLEANUP_TIMEOUT_MAX_MS, Math.max(1, deadlineMs - Date.now()));
+}
+
+function createVerifyCodePhaseTimeoutError(input: {
+  phase: VerifyCodePhase;
+  moduleNames: readonly string[];
+  operationTimeoutMs: number;
+  phaseTimeoutMs: number;
+  durationMs?: number;
+}): DysflowError {
+  return createDysflowError(
+    "VERIFY_CODE_PHASE_TIMEOUT",
+    `verify_code ${input.phase} phase timed out after ${input.phaseTimeoutMs}ms for ${formatRequestedModules(input.moduleNames)}.`,
+    {
+      retryable: true,
+      details: phaseTimeoutDetails(input),
+    },
+  );
+}
+
+function phaseTimeoutDetails(input: {
+  phase: VerifyCodePhase;
+  moduleNames: readonly string[];
+  operationTimeoutMs: number;
+  phaseTimeoutMs: number;
+  durationMs?: number;
+}): Record<string, unknown> {
+  return {
+    tool: "verify_code",
+    phase: input.phase,
+    moduleName: input.moduleNames.length === 1 ? input.moduleNames[0] : null,
+    moduleNames: [...input.moduleNames],
+    operationTimeoutMs: input.operationTimeoutMs,
+    phaseTimeoutMs: input.phaseTimeoutMs,
+    ...(input.durationMs === undefined ? {} : { durationMs: input.durationMs }),
+  };
+}
+
+function formatRequestedModules(moduleNames: readonly string[]): string {
+  if (moduleNames.length === 0) return "the whole project";
+  if (moduleNames.length === 1) return `module '${moduleNames[0]}'`;
+  return `modules ${moduleNames.map((name) => `'${name}'`).join(", ")}`;
+}
+
+function markCleanupTimedOut(error: DysflowError, cleanupTimeoutMs: number): Diagnostic[] {
+  error.details = {
+    ...(error.details ?? {}),
+    cleanupTimedOut: true,
+    cleanupTimeoutMs,
+  };
+  return [
+    {
+      level: "warning",
+      source: "verify_code:cleanup",
+      message: `Post-timeout Access orphan cleanup did not finish within ${cleanupTimeoutMs}ms; returning the typed verify_code timeout without waiting for cleanup to complete.`,
+    },
+  ];
+}
+
+async function cleanupTempExportRootBounded(
+  cleanup: () => Promise<void>,
+  cleanupTimeoutMs: number,
+): Promise<Diagnostic[]> {
+  try {
+    const result = await withPhaseTimeout(
+      cleanup(),
+      cleanupTimeoutMs,
+      createDysflowError(
+        "VERIFY_CODE_CLEANUP_TIMEOUT",
+        `verify_code temporary export directory cleanup timed out after ${cleanupTimeoutMs}ms.`,
+        { retryable: true },
+      ),
+    );
+    if (result.ok) return [];
+    return [
+      {
+        level: "warning",
+        source: "verify_code:cleanup",
+        message:
+          "verify_code temporary export directory cleanup timed out; returning without waiting for filesystem cleanup to complete.",
+      },
+    ];
+  } catch (error) {
+    return [
+      {
+        level: "warning",
+        source: "verify_code:cleanup",
+        message: `verify_code temporary export directory cleanup failed: ${String(error)}`,
+      },
+    ];
+  }
+}
+
+async function withPhaseTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  error: DysflowError,
+): Promise<{ ok: true; data: T } | { ok: false; error: DysflowError }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ ok: false; error: DysflowError }>((resolveTimeout) => {
+    timer = setTimeout(() => resolveTimeout({ ok: false, error }), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise.then((data) => ({ ok: true as const, data })), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function compareVbaSourceTrees(
   sourceRoot: string,

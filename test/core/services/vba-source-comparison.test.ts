@@ -125,6 +125,342 @@ describe("vba-source-comparison", () => {
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
   });
 
+  it("returns a phase-aware export timeout before the operation timeout budget is exhausted", async () => {
+    let capturedTimeoutMs = 0;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 10_000, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (req: VbaExecutionRequest) => {
+        capturedTimeoutMs = req.timeoutMs;
+        return {
+          exitCode: null,
+          stdout: "",
+          stderr: "",
+          durationMs: req.timeoutMs,
+          timedOut: true,
+        };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary(
+      { moduleNames: ["Module1"], timeoutMs: 10_000 },
+      ctx,
+      testFileSystem,
+    );
+
+    expect(capturedTimeoutMs).toBeLessThan(10_000);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+      expect(result.error.details).toMatchObject({
+        tool: "verify_code",
+        phase: "export",
+        moduleName: "Module1",
+        moduleNames: ["Module1"],
+        operationTimeoutMs: 10_000,
+        phaseTimeoutMs: capturedTimeoutMs,
+      });
+      expect(result.error.message).toContain("export phase");
+      expect(result.error.message).toContain("Module1");
+    }
+  });
+
+  it("returns a phase-aware compare timeout when source-tree comparison stalls", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-verify-compare-timeout-"));
+    const sourceRoot = join(root, "src");
+    const hangingFileSystem: ComparisonFileSystemPort = {
+      ...testFileSystem,
+      readdir: () => new Promise(() => {}),
+    };
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: sourceRoot, timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async () => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    };
+
+    const result = await compareSourceAgainstBinary(
+      { moduleNames: ["Module1"], timeoutMs: 5 },
+      ctx,
+      hangingFileSystem,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VERIFY_CODE_PHASE_TIMEOUT");
+      expect(result.error.details).toMatchObject({
+        tool: "verify_code",
+        phase: "compare",
+        moduleName: "Module1",
+        moduleNames: ["Module1"],
+        operationTimeoutMs: 5,
+      });
+      expect(result.error.message).toContain("compare phase");
+      expect(result.error.message).toContain("Module1");
+    }
+  });
+
+  it("returns a typed preflight timeout instead of letting preflight consume the operation budget", async () => {
+    let exportCalled = false;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: () => new Promise<never>(() => {}),
+      runVbaManager: async () => {
+        exportCalled = true;
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 1, timedOut: false };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary(
+      { moduleNames: ["Module1"], timeoutMs: 5 },
+      ctx,
+      testFileSystem,
+    );
+
+    expect(exportCalled).toBe(false);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VERIFY_CODE_PHASE_TIMEOUT");
+      expect(result.error.details).toMatchObject({
+        tool: "verify_code",
+        phase: "preflight",
+        moduleName: "Module1",
+        moduleNames: ["Module1"],
+      });
+    }
+  });
+
+  it("does not wait indefinitely for orphan cleanup after an export timeout", async () => {
+    let preflightCalls = 0;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: () => {
+        preflightCalls += 1;
+        if (preflightCalls === 1) {
+          return Promise.resolve({ cleaned: [], killed: [], orphanedKilled: [], errors: [] });
+        }
+        return new Promise<never>(() => {});
+      },
+      runVbaManager: async () => ({
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        durationMs: 5,
+        timedOut: true,
+      }),
+    };
+
+    const result = await compareSourceAgainstBinary(
+      { moduleNames: ["Module1"], timeoutMs: 5 },
+      ctx,
+      testFileSystem,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+      expect(result.error.details).toMatchObject({ cleanupTimedOut: true });
+    }
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warning",
+          source: "verify_code:cleanup",
+        }),
+      ]),
+    );
+  });
+
+  it("does not let temp directory cleanup block a typed export timeout response", async () => {
+    const hangingRmFileSystem: ComparisonFileSystemPort = {
+      ...testFileSystem,
+      rm: () => new Promise(() => {}),
+    };
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async () => ({
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        durationMs: 5,
+        timedOut: true,
+      }),
+    };
+
+    const result = await compareSourceAgainstBinary(
+      { moduleNames: ["Module1"], timeoutMs: 5 },
+      ctx,
+      hangingRmFileSystem,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warning",
+          source: "verify_code:cleanup",
+          message: expect.stringContaining("temporary export directory cleanup timed out"),
+        }),
+      ]),
+    );
+  });
+
+  it("rejects an explicit empty moduleNames list instead of widening to a whole-project verify", async () => {
+    let exportCalled = false;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async () => {
+        exportCalled = true;
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 1, timedOut: false };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary({ moduleNames: [] }, ctx, testFileSystem);
+
+    expect(exportCalled).toBe(false);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("INVALID_INPUT");
+      expect(result.error.message).toContain("moduleNames");
+    }
+  });
+
+  it("treats omitted moduleNames as a whole-project verify and forwards moduleNamesProvided:false to the export", async () => {
+    let captured: { moduleNames: readonly string[]; moduleNamesProvided?: boolean } | undefined;
+    const ctx = {
+      scriptPath: "script.ps1",
+      resolveExecutionTarget: async () => ({
+        ok: true as const,
+        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      validateStrictContext: () => ({
+        ok: true as const,
+        data: undefined,
+        diagnostics: [],
+        durationMs: 0,
+      }),
+      runPreflightCleanup: async () => ({
+        cleaned: [],
+        killed: [],
+        orphanedKilled: [],
+        errors: [],
+      }),
+      runVbaManager: async (request: VbaExecutionRequest) => {
+        captured = {
+          moduleNames: request.moduleNames,
+          moduleNamesProvided: request.moduleNamesProvided,
+        };
+        return { exitCode: 0, stdout: "", stderr: "", durationMs: 1, timedOut: false };
+      },
+    };
+
+    const result = await compareSourceAgainstBinary({}, ctx, testFileSystem);
+
+    expect(captured).toEqual({ moduleNames: [], moduleNamesProvided: false });
+    expect(result.ok).toBe(true);
+  });
+
   it("returns VBA_MANAGER_FAILED when export exits with non-zero code", async () => {
     const ctx = {
       scriptPath: "script.ps1",
@@ -159,7 +495,7 @@ describe("vba-source-comparison", () => {
     if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_FAILED");
   });
 
-  it("uses params.timeoutMs when provided and positive", async () => {
+  it("uses params.timeoutMs as the operation budget and reserves time for typed timeout handling", async () => {
     let capturedTimeoutMs = 0;
     const ctx = {
       scriptPath: "script.ps1",
@@ -188,10 +524,11 @@ describe("vba-source-comparison", () => {
       },
     };
     await compareSourceAgainstBinary({ timeoutMs: 9999 }, ctx, testFileSystem);
-    expect(capturedTimeoutMs).toBe(9999);
+    expect(capturedTimeoutMs).toBeGreaterThan(0);
+    expect(capturedTimeoutMs).toBeLessThan(9999);
   });
 
-  it("honors the project config timeoutMs when no params.timeoutMs is given", async () => {
+  it("honors the project config timeoutMs as the operation budget when no params.timeoutMs is given", async () => {
     // Coverage for the contract: with no per-call timeout, the export must use
     // the project's configured timeoutMs (target.data.timeoutMs), NOT a generic
     // hardcoded fallback. A large database sets a high project timeout precisely
@@ -224,7 +561,8 @@ describe("vba-source-comparison", () => {
       },
     };
     await compareSourceAgainstBinary({}, ctx, testFileSystem);
-    expect(capturedTimeoutMs).toBe(90_000);
+    expect(capturedTimeoutMs).toBeGreaterThan(0);
+    expect(capturedTimeoutMs).toBeLessThan(90_000);
   });
 
   it("reaps the orphaned Access process when the export times out", async () => {

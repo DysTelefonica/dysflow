@@ -1388,6 +1388,11 @@ describe("VbaModulesAdapter", () => {
 
     const result = await service.execute("verify_code", { diff: true });
 
+    expect(calls[0]).toMatchObject({
+      action: "Export",
+      moduleNames: [],
+      moduleNamesProvided: false,
+    });
     expect(result).toMatchObject({
       ok: true,
       data: {
@@ -1438,6 +1443,11 @@ describe("VbaModulesAdapter", () => {
 
     const result = await service.execute("verify_code", { moduleNames: ["Module1"] });
 
+    expect(calls[0]).toMatchObject({
+      action: "Export",
+      moduleNames: ["Module1"],
+      moduleNamesProvided: true,
+    });
     expect(result).toMatchObject({
       ok: true,
       data: {
