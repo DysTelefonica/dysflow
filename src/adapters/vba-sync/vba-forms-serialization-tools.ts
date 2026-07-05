@@ -5,11 +5,7 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import type { FormIR } from "../../core/models/form-ir.js";
-import {
-  normalizeLineEndings,
-  parseFormTxt,
-  serializeFormTxt,
-} from "../../core/services/form-ir-service.js";
+import { parseFormTxt, serializeFormTxt } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
@@ -20,7 +16,18 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 // Slice 3 (#616) — opaque metadata keys reported by dysflow_form_serialize
 // as the "preserved" set the round-trip is contracted to keep byte-equal.
-const PRESERVED_METADATA_KEYS_FOR_SERIALIZE = ["Checksum", "Format", "PrtDevMode"] as const;
+// These are the keys whose values are opaque blobs (Begin…End blocks) that
+// the serializer must reproduce verbatim for byte-equal round-trips.
+const PRESERVED_METADATA_KEYS_FOR_SERIALIZE = [
+  "Checksum",
+  "Format",
+  "PrtDevMode",
+  "PrtDevModeW",
+  "PrtDevNames",
+  "PrtDevNamesW",
+  "PrtMip",
+  "RecSrcDt",
+] as const;
 
 /**
  * Read-only round-trip serializer (#616 slice 3). Parses the .form.txt at
@@ -74,22 +81,31 @@ export async function serializeForm(
   }
 
   const serialized = serializeFormTxt(ir);
-  const normalizedOriginal = normalizeLineEndings(originalText);
-  const byteEqual = serialized === normalizedOriginal;
-  const byteDiff = Math.abs(serialized.length - normalizedOriginal.length);
+  // byteEqual compares the serialized output against the RAW original text
+  // (not normalized). This means CRLF vs LF differences, BOM bytes, or any
+  // other byte-level change in the source will cause byteEqual to flip false.
+  const byteEqual = serialized === originalText;
+  const byteDiff = Math.abs(
+    Buffer.byteLength(serialized, "utf8") - Buffer.byteLength(originalText, "utf8"),
+  );
   const opaqueCount = countOpaqueEntries(ir);
+
+  const includeSerialized =
+    stringValue(params.includeSerialized) === "true" || params.includeSerialized === true;
+
+  const report: Record<string, unknown> = {
+    preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
+    byteDiff,
+    opaqueCount,
+  };
 
   return successResult({
     name: ir.name,
     kind: ir.kind,
-    serialized,
+    ...(includeSerialized ? { serialized } : {}),
     byteEqual,
     byteDiff,
-    metadataReport: {
-      preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
-      byteDiff,
-      opaqueCount,
-    },
+    metadataReport: report,
   });
 }
 
