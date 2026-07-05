@@ -171,7 +171,7 @@ function pathsAreEquivalent(a: string, b: string): boolean {
  *     influences both the project search path AND the configured root in
  *     `buildProjectConfig`). After resolution, any caller-supplied
  *     `destinationRoot` must still match the resolved configured root — if
- * *   it differs, the caller was trying to widen the read scope and the
+ *     it differs, the caller was trying to widen the read scope and the
  *     read is rejected.
  *
  * This keeps the core parser pure (it only sees text), and it keeps the
