@@ -81,6 +81,15 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       importMode: SCHEMA_PROPS.importMode,
       dryRun: SCHEMA_PROPS.dryRun,
       compile: SCHEMA_PROPS.compile,
+      // #732 — when true (default), a project-wide compile failure after a
+      // successful per-module import triggers a rollback of every imported
+      // module in this call. Set to false to preserve the legacy
+      // partial-write behavior (advanced use case).
+      rollbackOnCompileFail: {
+        type: "boolean",
+        description:
+          "When true (default), a project-wide compile failure after a successful per-module import triggers a rollback of every imported module in this call. Set to false to preserve the legacy partial-write behavior (advanced use case).",
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
