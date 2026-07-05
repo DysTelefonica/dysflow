@@ -82,6 +82,7 @@ export type PowerShellExecutionResult = {
   durationMs: number;
   timedOut: boolean;
   accessProcess?: AccessProcessOwnership;
+  powershellWorkerPid?: number;
 };
 
 export type PowerShellExecutorOptions = {

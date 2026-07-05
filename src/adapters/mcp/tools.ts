@@ -561,7 +561,7 @@ export function createDysflowMcpTools(
     },
     {
       name: "dysflow_access_force_cleanup_orphaned",
-      description: `List orphaned headless MSACCESS processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
+      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(

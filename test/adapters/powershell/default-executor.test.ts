@@ -641,3 +641,71 @@ describe("POWERSHELL_SYSTEM_ENV_KEYS", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// #735 — powershellWorkerPid exposure
+// ---------------------------------------------------------------------------
+
+describe("spawnPowerShellProcess — returns powershellWorkerPid", () => {
+  it("exposes child.pid as powershellWorkerPid in the result", async () => {
+    mockSpawn.mockImplementation(() => ({
+      pid: 42,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (event: string, cb: (code: number) => void) => {
+        if (event === "close") cb(0);
+      },
+      kill: vi.fn(),
+    }));
+
+    const result = await spawnPowerShellProcess({
+      args: ["-Command", "exit 0"],
+      timeoutMs: 5_000,
+    });
+
+    expect(result.powershellWorkerPid).toBe(42);
+  });
+
+  it("returns undefined powershellWorkerPid when child.pid is undefined", async () => {
+    mockSpawn.mockImplementation(() => ({
+      // pid is not set — simulates spawn() returning before pid is assigned
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (event: string, cb: (code: number) => void) => {
+        if (event === "close") cb(0);
+      },
+      kill: vi.fn(),
+    }));
+
+    const result = await spawnPowerShellProcess({
+      args: ["-Command", "exit 0"],
+      timeoutMs: 5_000,
+    });
+
+    expect(result.powershellWorkerPid).toBeUndefined();
+  });
+});
+
+describe("createDefaultPowerShellExecutor — includes powershellWorkerPid", () => {
+  it("returns powershellWorkerPid from the spawned child", async () => {
+    mockSpawn.mockImplementation(() => ({
+      pid: 42,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (event: string, cb: (code: number) => void) => {
+        if (event === "close") cb(0);
+      },
+      kill: vi.fn(),
+    }));
+
+    const executor = createDefaultPowerShellExecutor();
+    const result = await executor("powershell.exe", ["-Command", "exit 0"], {
+      timeoutMs: 5_000,
+      operationId: "test-op",
+      accessPath: "C:\\test.accdb",
+      onAccessProcessCaptured: async () => {},
+    });
+
+    expect(result.powershellWorkerPid).toBe(42);
+  });
+});
