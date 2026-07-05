@@ -572,7 +572,7 @@ describe("VbaModulesAdapter", () => {
   });
 
   it("import_modules with compile:true calls compile after successful import", async () => {
-    const root = await mkdtemp(join(tmpdir(), "dysflow-compile-success-adapter-"));
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-compile-adapter-"));
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
     await writeFile(
@@ -591,9 +591,25 @@ describe("VbaModulesAdapter", () => {
       executor: async (request) => {
         actions.push(request.action);
         if (request.action === "Import") {
+          // #732 — per-module payload is the live contract; the snapshot
+          // rollback iterates `data.result` to mark per-module rollback status.
           return {
             exitCode: 0,
-            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","rollbackApplied":false,"error":null}]',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        if (request.action === "Export") {
+          // #732 — snapshot path returns one entry per module in the
+          // rollback snapshot (fileType + relPath are what the adapter
+          // copies into the snapshot map).
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","fileType":"bas","relPath":"modules/Entorno.bas"}]',
             stderr: "",
             durationMs: 1,
             timedOut: false,
@@ -619,10 +635,12 @@ describe("VbaModulesAdapter", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected import+compile success");
-    expect(actions).toEqual(["Import", "Compile"]);
+    // #732 — Import is followed by an Export snapshot (so the call can be
+    // rolled back if the compile fails) and only then the Compile.
+    expect(actions).toEqual(["Import", "Export", "Compile"]);
     expect(result.data).toMatchObject({
       operation: "import_modules",
-      result: { ok: true },
+      result: [{ module: "Entorno", status: "ok", rollbackApplied: false }],
       compileResult: { ok: true, phase: "compile" },
     });
   });
@@ -647,9 +665,22 @@ describe("VbaModulesAdapter", () => {
       executor: async (request) => {
         actions.push(request.action);
         if (request.action === "Import") {
+          // #732 — per-module payload so the rollback path can mark the
+          // module as `rollbackApplied: true, rollbackReason: "compile_failure_post_import"`.
           return {
             exitCode: 0,
-            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","rollbackApplied":false,"error":null}]',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        if (request.action === "Export") {
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","fileType":"bas","relPath":"modules/Entorno.bas"}]',
             stderr: "",
             durationMs: 1,
             timedOut: false,
@@ -675,8 +706,93 @@ describe("VbaModulesAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected compile failure");
-    expect(actions).toEqual(["Import", "Compile"]);
+    // #732 — Import then Export (snapshot) then Compile (fails). After
+    // the compile failure the snapshot is re-imported as a rollback; that
+    // import is invisible in the action log because the rollback path
+    // shares the underlying import_modules dispatch.
+    expect(actions).toEqual(["Import", "Export", "Compile", "Import"]);
     expect(result.error.code).toBe("VBA_COMPILE_ERROR");
+    // #732 — the per-module rollback report is in error.details.modules so
+    // callers can render what was reverted (or what was flagged
+    // rollbackFailed: true with a no_baseline_snapshot reason).
+    expect(result.error.details?.rollbackApplied).toBe(true);
+    expect(result.error.details?.modules).toEqual([
+      expect.objectContaining({
+        module: "Entorno",
+        status: "ok",
+        rollbackApplied: true,
+        rollbackReason: "compile_failure_post_import",
+      }),
+    ]);
+  });
+
+  it("import_modules with compile:true and rollbackOnCompileFail:false preserves the legacy partial-write behavior (#732)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-rollback-off-adapter-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "rollback-off-project",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        if (request.action === "Import") {
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","rollbackApplied":false,"error":null}]',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        if (request.action === "Export") {
+          return {
+            exitCode: 0,
+            stdout:
+              'DYSFLOW_RESULT [{"module":"Entorno","status":"ok","fileType":"bas","relPath":"modules/Entorno.bas"}]',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        }
+        // Compile fails: PowerShell exits non-zero and returns a structured error
+        return {
+          exitCode: 1,
+          stdout:
+            'DYSFLOW_RESULT {"ok":false,"error":{"code":"VBA_COMPILE_ERROR","message":"type mismatch"},"phase":"compile","component":"Form_Foo","line":42}',
+          stderr: "",
+          durationMs: 3,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_modules", {
+      moduleNames: ["Entorno"],
+      compile: true,
+      apply: true,
+      rollbackOnCompileFail: false,
+    });
+
+    // rollbackOnCompileFail:false — the legacy behavior: NO snapshot,
+    // NO rollback import, just the raw compile failure.
+    expect(actions).toEqual(["Import", "Compile"]);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected compile failure");
+    expect(result.error.code).toBe("VBA_COMPILE_ERROR");
+    // No rollbackApplied flag — the issue's "no surface to the caller"
+    // branch is the legacy default.
+    expect(result.error.details?.rollbackApplied).toBeUndefined();
   });
 
   it("compile_vba failure forwards module and line context from the runner — #557", async () => {
