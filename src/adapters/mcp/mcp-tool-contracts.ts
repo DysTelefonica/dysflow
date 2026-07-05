@@ -41,19 +41,17 @@ const generatedContracts = {
       contractFromGeneratedRoute(name),
     ]),
   ),
-  // PR1a (#621 F1) — `test_vba` reclassified for honest contract metadata.
-  // The runtime gate lives in `VbaExecutionAdapter.executeTestVba` and is
-  // deferred to PR1b (per design.md open question #1). Until PR1b lands,
-  // the tool IS gated by the dispatcher route `mutatesBinary: false`
-  // classification, so consumers see this as conditional-write with the
-  // allowlist language — but the in-adapter allowlist check is still
-  // missing. The summary spells out the allowlist expectation so a stale
-  // consumer can detect the gap.
+  // PR1b (#621 F1) — `test_vba` runtime gate lives in
+  // `VbaExecutionAdapter.executeTestVba` (default-deny when
+  // `allowedProcedures` is undefined/empty with a `dryRun:true` escape
+  // hatch, per-procedure allowlist verification with `error.allowedProcedures`
+  // + `error.remediation` when configured). The dispatcher route stays
+  // `mutatesBinary: false` so the tool remains conditional-write.
   test_vba: {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
-      "Conditional-write MCP contract; test execution honors allowedProcedures allowlist when configured, with dryRun:true as an explicit escape hatch when no allowlist is configured. (Allowlist gate in adapter is pending — see PR1b.)",
+      "Conditional-write MCP contract; test execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
   },
 } as Record<GeneratedDispatchToolName, McpToolContract>;
 
