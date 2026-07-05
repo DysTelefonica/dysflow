@@ -120,7 +120,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   run_vba:
     "Execute one PUBLIC VBA procedure by name and return its result. Pass arguments via argsJson — a JSON array of scalars only (string/number/boolean/null). Requires a compiled project; subject to the allowedProcedures allowlist when configured. PR1a (#621 F1): the adapter defaults to deny when no allowlist is configured — pass dryRun:true in the request body to use the explicit escape hatch. Headless.",
   test_vba:
-    "Run VBA test procedures and report pass/fail per atom — the project's green gate. Select tests with proceduresJson (explicit list), filter (name substring) or testsPath. Requires a compiled project: import and compile before running. PR1a (#621 F1): contract metadata reclassified; the adapter-side allowlist gate is deferred to PR1b — see design.md open question #1.",
+    "Run VBA test procedures and report pass/fail per atom — the project's green gate. Select tests with proceduresJson (explicit list), filter (name substring) or testsPath. Requires a compiled project: import and compile before running. PR1b (#621 F1): the in-adapter allowlist gate is implemented in VbaExecutionAdapter.executeTestVba (default-deny when no allowlist is configured, with dryRun:true as the escape hatch).",
   compile_vba:
     "Compile and save all VBA modules headless. Reports a structured VBA_COMPILE_ERROR when standard/class modules fail to compile (via Application.IsCompiled); mutates only the binary's compiled state. Form/report document modules cannot be verified headless.",
   verify_code:
