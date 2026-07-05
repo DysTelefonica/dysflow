@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+## [v1.15.2] - 2026-07-05
+
+- Fix `lint_form_code` `form-control-binding` false positives for intrinsic Access Form/Report `Me.*` members such as `Name`, `Caption`, `InsideHeight`, and `InsideWidth` (#725, #726).
+
 ## [v1.15.1] - 2026-07-05
 
 - Fix `lint_form_code` nested-control resolution so form-code lint reuses the same recursive FormIR control collection as form inspection. This prevents false `controls: <none>` missing-control diagnostics for nested controls such as `FormDetalle` in real Access forms (#714, #723).
