@@ -11,6 +11,10 @@ import {
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
+  lintVbaModule,
+  type VbaModuleLintRule,
+} from "../../core/services/vba-module-lint-service.js";
+import {
   detectDeadCode,
   findVbaReferences,
   getVbaProcedure,
@@ -61,6 +65,7 @@ import {
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
+  LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
   NO_INPUT_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
@@ -145,10 +150,10 @@ function pathsAreEquivalent(a: string, b: string): boolean {
 }
 
 /**
- * Resolve the source text for a procedure lookup, with strict source-root
+ * Resolve the source text for a VBA module, with strict source-root
  * containment.
  *
- * Security posture (#701 review):
+ * Security posture (#701 review / #704 fix):
  *   - Inline `source` (caller-controlled text) is honored verbatim — the
  *     caller already provided the bytes, so there is nothing to contain.
  *   - When the source must come from disk, the resolved destination root is
@@ -159,12 +164,22 @@ function pathsAreEquivalent(a: string, b: string): boolean {
  *     arbitrary filesystem path — is rejected: the function returns
  *     `undefined`, which the handler translates to `MODULE_NOT_FOUND`.
  *
+ *   - When `projectId` is absent from the caller's input, the caller's
+ *     `destinationRoot` is stripped before context resolution. This prevents
+ *     a caller from using `destinationRoot` to redirect the project config
+ *     lookup to an attacker-controlled directory (the `destinationRoot` value
+ *     influences both the project search path AND the configured root in
+ *     `buildProjectConfig`). After resolution, any caller-supplied
+ *     `destinationRoot` must still match the resolved configured root — if
+ *     it differs, the caller was trying to widen the read scope and the
+ *     read is rejected.
+ *
  * This keeps the core parser pure (it only sees text), and it keeps the
  * filesystem read contained to the project the MCP adapter was launched
  * for. A consumer cannot trick the tool into reading a `.bas`/`.cls` from
  * a different worktree, another user's home, or a sensitive directory.
  */
-async function resolveProcedureSource(
+async function resolveVbaSourceFile(
   input: unknown,
   moduleName: string,
   source: string | undefined,
@@ -175,10 +190,27 @@ async function resolveProcedureSource(
   // is nothing on disk to validate.
   if (source !== undefined) return source;
 
+  // Pull projectId out of input if present — when absent, we must strip
+  // destinationRoot before context resolution to prevent a caller from
+  // using it to redirect the project config lookup (#704).
+  const params =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const callerProjectId = typeof params.projectId === "string" ? params.projectId : undefined;
+
+  // When projectId is absent, strip destinationRoot before context
+  // resolution so the resolver falls back to cwd and does NOT use the
+  // caller's destinationRoot to locate the project config. This prevents
+  // the attack where caller passes destinationRoot pointing to a
+  // directory with a malicious .dysflow/project.json.
+  const inputToResolve: unknown =
+    callerProjectId === undefined && destinationRoot !== undefined
+      ? { ...params, destinationRoot: undefined }
+      : params;
+
   // Always resolve the MCP access context to learn the configured source
   // root. This is the authoritative value; the caller's explicit
   // `destinationRoot` can only override it when it agrees with it.
-  const context = await accessContextResolver(input);
+  const context = await accessContextResolver(inputToResolve);
   if (!context.ok) return undefined;
   const configuredRoot = context.data.destinationRoot;
   if (configuredRoot === undefined || configuredRoot.length === 0) {
@@ -203,7 +235,19 @@ async function resolveAllProjectModules(
   destinationRoot: string | undefined,
   accessContextResolver: McpAccessContextResolver,
 ): Promise<Record<string, string> | undefined> {
-  const context = await accessContextResolver(input);
+  // Pull projectId out of input if present — when absent, we must strip
+  // destinationRoot before context resolution to prevent a caller from
+  // using it to redirect the project config lookup (#704).
+  const params =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const callerProjectId = typeof params.projectId === "string" ? params.projectId : undefined;
+
+  const inputToResolve: unknown =
+    callerProjectId === undefined && destinationRoot !== undefined
+      ? { ...params, destinationRoot: undefined }
+      : params;
+
+  const context = await accessContextResolver(inputToResolve);
   if (!context.ok) return undefined;
   const configuredRoot = context.data.destinationRoot;
   if (configuredRoot === undefined || configuredRoot.length === 0) {
@@ -323,6 +367,8 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_detect_dead_code",
   // issue #703 — read-only VBA test manifest validation
   "dysflow_validate_manifest",
+  // issue #704 — read-only VBA module pre-import linting
+  "dysflow_lint_module",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -484,7 +530,7 @@ export function createDysflowMcpTools(
           source?: string;
           destinationRoot?: string;
         };
-        const resolvedSource = await resolveProcedureSource(
+        const resolvedSource = await resolveVbaSourceFile(
           input,
           module,
           source,
@@ -525,7 +571,7 @@ export function createDysflowMcpTools(
           source?: string;
           destinationRoot?: string;
         };
-        const resolvedSource = await resolveProcedureSource(
+        const resolvedSource = await resolveVbaSourceFile(
           input,
           module,
           source,
@@ -843,6 +889,47 @@ export function createDysflowMcpTools(
           content: [{ type: "text", text: JSON.stringify(report) }],
           isError: !report.valid,
           ok: report.valid,
+        };
+      },
+    },
+    {
+      name: "dysflow_lint_module",
+      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, and conservative literal argument type checks. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_lint_module.summary}`,
+      inputSchema: LINT_MODULE_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, LINT_MODULE_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+
+        const params = input as Record<string, unknown>;
+        const module = params.module as string;
+        const resolvedSource = await resolveVbaSourceFile(
+          input,
+          module,
+          params.source as string | undefined,
+          params.destinationRoot as string | undefined,
+          accessContextResolver,
+        );
+        if (resolvedSource === undefined) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `MODULE_NOT_FOUND: Module '${module}' could not be resolved. Provide source directly or ensure the module file exists under the project's source root (modules/, classes/, forms/, or reports/).`,
+              },
+            ],
+            isError: true,
+            ok: false,
+          };
+        }
+
+        const rules = Array.isArray(params.rules)
+          ? (params.rules as VbaModuleLintRule[])
+          : undefined;
+        const report = lintVbaModule({ module, source: resolvedSource, rules });
+        return {
+          content: [{ type: "text", text: JSON.stringify(report) }],
+          isError: false,
+          ok: true,
         };
       },
     },

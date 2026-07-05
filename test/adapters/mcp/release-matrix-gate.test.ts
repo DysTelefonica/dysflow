@@ -51,15 +51,16 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // #701 added dysflow_list_procedures + dysflow_get_procedure.
     // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
     // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
+    // #704 added dysflow_lint_module (read-only VBA module pre-import linting).
     // Expected breakdown: 54 dispatch names (DYSFLOW_MCP_TOOL_NAMES, including
     //   inspect_form/compare_form/lint_form_code, the three form mutation tools, the
     //   new serialize/deserialize pair, and dysflow_create_form_from_template)
     //   - 0 hidden stubs (zero-hidden-tools policy)
-    //   + 12 modern core tools = 66 visible.
+    //   + 13 modern core tools = 67 visible.
     expect(toolCount).toBe(54);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(12);
-    expect(visibleCount).toBe(66);
+    expect(modernCount).toBe(13);
+    expect(visibleCount).toBe(67);
   });
 
   it("verifies split-mode coverage explicitly", () => {

@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**66 visible MCP tools · Windows / Node 20+**
+**67 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 66 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, and VBA test manifest validation.
+- A platform with 67 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, and pre-import module linting.
 
 ### It is not
 
@@ -629,6 +629,15 @@ Validate a VBA test manifest before running `test_vba`. The tool parses an inlin
   - `modules` (object, optional): Key-value pair of module names to inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
+#### `dysflow_lint_module`
+Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). It never opens Access, never spawns PowerShell, and never mutates files. Read-only.
+* **Parameters**:
+  - `module` (string, **required**): VBA module name without extension.
+  - `source` (string, optional): Inline VBA source text.
+  - `rules` (array, optional): Filter to any of `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match`.
+  - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
+* **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
+
 ---
 
 ### MCP Tools
@@ -659,6 +668,10 @@ Validate a VBA test manifest before running `test_vba`. The tool parses an inlin
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
   - Returns a validation report with `valid`, separate `errors` and `warnings` arrays, and a `summary` containing test and diagnostic counts.
+* **`dysflow_lint_module`**: Lint a `.bas`/`.cls` source module before import.
+  - Parameters: `module` (string, required), `source` (string, optional), `rules` (array, optional), `destinationRoot`/`projectRoot` (optional)
+  - Rules: `option-declaration`, `identifier-safety`, `declaration-order`, and `arg-type-match` (same-module signatures only; detects clear literal-argument / declared-type mismatches only; no cross-module type inference or variable-flow analysis).
+  - Returns `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }` — diagnostics grouped by rule name, flatDiagnostics for backward compatibility, `isClean` true when no findings, and `summary` with error/warning counts.
 * **`verify_code`**: The single dry-run tool that compares exported VBA/Form source against the disk tree. It NEVER mutates Access. One tool covers every comparison scope:
   - **Whole project** — omit `moduleNames`.
   - **A subset or a single module** — pass `moduleNames`. If a `moduleNames` filter matches nothing in either side, it returns `MODULE_NOT_FOUND`.

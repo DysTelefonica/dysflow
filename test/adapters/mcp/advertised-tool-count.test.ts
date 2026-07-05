@@ -41,6 +41,7 @@ describe("advertised MCP tool surface", () => {
     // #701 added dysflow_list_procedures + dysflow_get_procedure.
     // #705 added dysflow_detect_dead_code.
     // #703 added dysflow_validate_manifest.
+    // #704 added dysflow_lint_module.
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     // Guard the label format too — the e2e suite-contracts pin asserts on this string.
     expect(EXPECTED_ADVERTISED_TOOL_COUNT_LABEL).toBe(`${EXPECTED_ADVERTISED_TOOL_COUNT} tools`);

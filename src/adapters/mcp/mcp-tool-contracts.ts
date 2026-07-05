@@ -189,6 +189,12 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // issue #704 — read-only VBA module pre-import linting.
+  dysflow_lint_module: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {
