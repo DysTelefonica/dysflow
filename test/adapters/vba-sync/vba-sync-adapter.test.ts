@@ -467,6 +467,39 @@ describe("VbaSyncAdapter Orchestrator", () => {
     expect(capturedCwd).toBe("C:/repo");
   });
 
+  it("emits -ModuleNamesJson when the caller marks moduleNames as provided", async () => {
+    let capturedArgs: readonly string[] = [];
+    spawnMock.mockImplementationOnce((_command: string, args: readonly string[]) => {
+      capturedArgs = args;
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill: ReturnType<typeof vi.fn>;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    });
+
+    await spawnVbaManager({
+      scriptPath: "scripts/dysflow-vba-manager.ps1",
+      action: "Export",
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      moduleNames: ["Module1"],
+      moduleNamesProvided: true,
+      json: true,
+      extra: {},
+      timeoutMs: 1_000,
+      cwd: "C:/repo",
+    });
+
+    expect(capturedArgs).toContain("-ModuleNamesJson");
+    expect(capturedArgs[capturedArgs.indexOf("-ModuleNamesJson") + 1]).toBe('["Module1"]');
+  });
+
   it("serializes a boolean extra as a bare PowerShell switch (-Force), never -Force true", async () => {
     const capture = (): (() => readonly string[]) => {
       let captured: readonly string[] = [];

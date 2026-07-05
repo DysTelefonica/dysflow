@@ -26,6 +26,8 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
       "diff": true
     }
     ```
+*   **Notes**: `moduleNames` is a true focused export request: Dysflow asks Access to export only the requested modules, then compares only those modules against disk. It is not a whole-project export with a filtered compare. Omit `moduleNames` for a whole-project verify; an explicit empty `moduleNames: []` is rejected with `INVALID_INPUT` so a focused call cannot silently widen to the whole project. If preflight, export, or compare stalls, the failure is typed before the outer MCP timeout: export timeouts use `VBA_MANAGER_TIMEOUT`, preflight/compare timeouts use `VERIFY_CODE_PHASE_TIMEOUT`, and `error.details` identifies `phase`, `moduleName`/`moduleNames`, `operationTimeoutMs`, and `phaseTimeoutMs`. Export-phase errors additionally include `error.details.durationMs` (how long PowerShell ran before stalling). Cleanup after a timeout is bounded; if the post-timeout Access orphan cleanup itself exceeds its bound, the parent export error additionally sets `error.details.cleanupTimedOut: true` and `error.details.cleanupTimeoutMs`, and a warning diagnostic is returned instead of the request waiting indefinitely.
+*   **Verification note**: Unit coverage proves this at the PowerShell boundary by asserting that focused `verify_code` requests carry `moduleNamesProvided: true` and that `spawnVbaManager` emits `-ModuleNamesJson`. A real Access COM fixture such as `VBA_TOOLKIT_BENCH` is still the preferred final smoke when available, but it is not required for these fast unit examples.
 
 ---
 
