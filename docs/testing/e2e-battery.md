@@ -337,21 +337,21 @@ Mantener el `reviewedAt` actualizado es la diferencia entre "el binario está si
 con la spec" y "el binario está congelado en una revisión vieja". Más detalles en
 [`mcp-protocol-maintenance.md`](./mcp-protocol-maintenance.md).
 
-### Pin de herramientas advertised (66)
+### Pin de herramientas advertised (67)
 
 El número de herramientas visibles (no ocultas) del MCP está pinado en **tres** sitios que
 deben moverse juntos:
 
 | Pin | Fichero | Función |
 |---|---|---|
-| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(66)` |
-| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 66` |
+| Unit | `test/adapters/mcp/advertised-tool-count.test.ts:25` | `expect(advertised).toHaveLength(67)` |
+| E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 67` |
 | Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness importa el contador compartido `EXPECTED_ADVERTISED_TOOL_COUNT` |
 
 `dysflow_get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
 cruza con `advertised.length` para detectar drift entre el pin unit y el servidor en vivo
 (fila `dysflow_get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
-`toolsVisible=65` y el pin dice 66, el cross-check falla aunque las herramientas
+`toolsVisible=66` y el pin dice 67, el cross-check falla aunque las herramientas
 individuales pasen.
 
 **Qué hacer cuando añades una herramienta visible:**

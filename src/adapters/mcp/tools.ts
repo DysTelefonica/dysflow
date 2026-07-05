@@ -11,6 +11,10 @@ import {
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
+  lintVbaModule,
+  type VbaModuleLintRule,
+} from "../../core/services/vba-module-lint-service.js";
+import {
   detectDeadCode,
   findVbaReferences,
   getVbaProcedure,
@@ -61,6 +65,7 @@ import {
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
+  LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
   NO_INPUT_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
@@ -145,7 +150,7 @@ function pathsAreEquivalent(a: string, b: string): boolean {
 }
 
 /**
- * Resolve the source text for a procedure lookup, with strict source-root
+ * Resolve the source text for a VBA module, with strict source-root
  * containment.
  *
  * Security posture (#701 review):
@@ -164,7 +169,7 @@ function pathsAreEquivalent(a: string, b: string): boolean {
  * for. A consumer cannot trick the tool into reading a `.bas`/`.cls` from
  * a different worktree, another user's home, or a sensitive directory.
  */
-async function resolveProcedureSource(
+async function resolveVbaSourceFile(
   input: unknown,
   moduleName: string,
   source: string | undefined,
@@ -323,6 +328,8 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_detect_dead_code",
   // issue #703 — read-only VBA test manifest validation
   "dysflow_validate_manifest",
+  // issue #704 — read-only VBA module pre-import linting
+  "dysflow_lint_module",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -484,7 +491,7 @@ export function createDysflowMcpTools(
           source?: string;
           destinationRoot?: string;
         };
-        const resolvedSource = await resolveProcedureSource(
+        const resolvedSource = await resolveVbaSourceFile(
           input,
           module,
           source,
@@ -525,7 +532,7 @@ export function createDysflowMcpTools(
           source?: string;
           destinationRoot?: string;
         };
-        const resolvedSource = await resolveProcedureSource(
+        const resolvedSource = await resolveVbaSourceFile(
           input,
           module,
           source,
@@ -843,6 +850,47 @@ export function createDysflowMcpTools(
           content: [{ type: "text", text: JSON.stringify(report) }],
           isError: !report.valid,
           ok: report.valid,
+        };
+      },
+    },
+    {
+      name: "dysflow_lint_module",
+      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, and conservative literal argument type checks. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_lint_module.summary}`,
+      inputSchema: LINT_MODULE_SCHEMA,
+      handler: async (input) => {
+        const validation = validateInput(input, LINT_MODULE_SCHEMA);
+        if (validation !== undefined) return invalidInput(validation);
+
+        const params = input as Record<string, unknown>;
+        const module = params.module as string;
+        const resolvedSource = await resolveVbaSourceFile(
+          input,
+          module,
+          params.source as string | undefined,
+          params.destinationRoot as string | undefined,
+          accessContextResolver,
+        );
+        if (resolvedSource === undefined) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `MODULE_NOT_FOUND: Module '${module}' could not be resolved. Provide source directly or ensure the module file exists under the project's source root (modules/, classes/, forms/, or reports/).`,
+              },
+            ],
+            isError: true,
+            ok: false,
+          };
+        }
+
+        const rules = Array.isArray(params.rules)
+          ? (params.rules as VbaModuleLintRule[])
+          : undefined;
+        const report = lintVbaModule({ module, source: resolvedSource, rules });
+        return {
+          content: [{ type: "text", text: JSON.stringify(report) }],
+          isError: false,
+          ok: true,
         };
       },
     },

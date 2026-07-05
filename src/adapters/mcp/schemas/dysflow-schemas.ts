@@ -294,6 +294,46 @@ export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
   },
 };
 
+export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: ["module"],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    contextId: {
+      type: "string",
+      description:
+        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
+    },
+    module: {
+      type: "string",
+      minLength: 1,
+      description: "VBA module name (without extension) to lint.",
+    },
+    source: {
+      type: "string",
+      description:
+        "Inline VBA module source code. When omitted, the module is resolved via the project's source root.",
+    },
+    rules: {
+      type: "array",
+      description:
+        "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match. " +
+        "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches — it performs no cross-module type inference and no variable-flow analysis.",
+      items: {
+        type: "string",
+        enum: ["option-declaration", "identifier-safety", "declaration-order", "arg-type-match"],
+      },
+    },
+    ...ACCESS_OVERRIDE,
+    ...STRICT_CTX,
+  },
+};
+
 export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: [],

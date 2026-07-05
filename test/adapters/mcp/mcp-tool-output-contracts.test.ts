@@ -29,6 +29,8 @@ const OUTPUT_CONTRACT_GROUPS = {
     "dysflow_detect_dead_code",
     // #703 — read-only VBA test manifest validation.
     "dysflow_validate_manifest",
+    // #704 — read-only VBA module pre-import linting.
+    "dysflow_lint_module",
   ],
   modernServiceAliases: ["run_vba"],
   vbaManagerDysflowResult: [
