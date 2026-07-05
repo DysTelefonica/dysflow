@@ -54,6 +54,29 @@ export type DysflowProjectCapabilities = {
     allow?: readonly string[];
     deny?: readonly string[];
   };
+  /**
+   * Per-rule lint overrides (#731). Each entry maps a known rule id
+   * (`option-declaration`, `identifier-safety`, `declaration-order`,
+   * `arg-type-match`) to its override. `enabled: false` suppresses the rule
+   * entirely; `enabled: true` keeps the rule at its default severity.
+   * The `reason` field is free-form and surfaces in the
+   * `LINT_SUPPRESSED` info diagnostic so the suppression is auditable.
+   */
+  lint?: {
+    rules?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
+  };
+};
+
+/** #731 — one of the four known lint rule ids. */
+export type LintRuleId =
+  | "option-declaration"
+  | "identifier-safety"
+  | "declaration-order"
+  | "arg-type-match";
+
+export type LintRuleOverride = {
+  enabled: boolean;
+  reason?: string;
 };
 
 export type DysflowProjectConfig = {
@@ -95,6 +118,14 @@ export type DysflowConfig = {
   configPath?: string;
   httpToken?: string;
   httpTokenEnv?: string;
+  /**
+   * #731 — per-rule lint overrides from `.dysflow/project.json`
+   * `capabilities.lint.rules`. Surfaced into the runtime so the MCP
+   * `dysflow_lint_module` tool can honor operator opt-outs and trigger
+   * the legacy-project auto-detection. `undefined` when the project
+   * config has no `capabilities.lint` block.
+   */
+  lintRulesOverride?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
 };
 
 export type RedactedDysflowConfig = Omit<
@@ -373,6 +404,7 @@ function buildProjectConfig(
   const {
     allowWrites,
     allowedProcedures: capabilitiesAllowedProcedures,
+    lintRulesOverride,
     deprecationWarning,
   } = resolveCapabilities(raw);
   const discoveryResult =
@@ -401,6 +433,9 @@ function buildProjectConfig(
       configPath: resolvedPath,
       httpToken,
       httpTokenEnv,
+      // #731 — per-rule lint overrides from `capabilities.lint.rules`.
+      // Undefined when the project config has no lint block.
+      ...(lintRulesOverride !== undefined ? { lintRulesOverride } : {}),
     },
     deprecationWarning === undefined ? {} : { diagnostics: [deprecationWarning] },
   );
@@ -699,6 +734,8 @@ function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
 function resolveCapabilities(raw: DysflowProjectConfig): {
   allowWrites: boolean;
   allowedProcedures: readonly string[] | undefined;
+  /** #731 — per-rule lint overrides from `capabilities.lint.rules`. */
+  lintRulesOverride: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined;
   deprecationWarning?: ReturnType<typeof createDiagnostic>;
 } {
   const capabilities = raw.capabilities;
@@ -706,9 +743,13 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
   const hasTopLevelAllowWrites = typeof raw.allowWrites === "boolean";
   const hasTopLevelAllowedProcedures = Array.isArray(raw.allowedProcedures);
 
+  // #731 — a capabilities block with ONLY `lint.rules` is still recognized;
+  // the legacy `allowWrites`/`procedures` check stays as the dominant path.
   const capabilitiesHasAny =
     hasCapabilitiesBlock &&
-    (capabilities?.allowWrites !== undefined || capabilities?.procedures !== undefined);
+    (capabilities?.allowWrites !== undefined ||
+      capabilities?.procedures !== undefined ||
+      capabilities?.lint !== undefined);
 
   if (capabilitiesHasAny) {
     const capabilitiesAllowWrites = capabilities.allowWrites;
@@ -718,6 +759,11 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
         : hasTopLevelAllowedProcedures
           ? raw.allowedProcedures
           : undefined;
+
+    // #731 — sanitize the lint override block. Unknown rule ids are
+    // rejected at config-load time with a typed error so a typo in
+    // `.dysflow/project.json` does not silently disable a rule.
+    const lintRulesOverride = normalizeLintRulesOverride(capabilities?.lint?.rules);
 
     // A conflict requires BOTH the capabilities block AND at least one of the
     // deprecated top-level fields. If `capabilities.procedures.allow` was
@@ -730,6 +776,7 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
     return {
       allowWrites: capabilitiesAllowWrites === true,
       allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
+      lintRulesOverride,
       deprecationWarning: topLevelConflict
         ? createDiagnostic(
             "warning",
@@ -744,7 +791,46 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
   return {
     allowWrites: hasTopLevelAllowWrites && raw.allowWrites === true,
     allowedProcedures: hasTopLevelAllowedProcedures ? raw.allowedProcedures : undefined,
+    lintRulesOverride: undefined,
   };
+}
+
+const KNOWN_LINT_RULE_IDS: readonly LintRuleId[] = [
+  "option-declaration",
+  "identifier-safety",
+  "declaration-order",
+  "arg-type-match",
+];
+
+/**
+ * #731 — validates `capabilities.lint.rules`. Returns the sanitized
+ * `Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>` or, when an
+ * unknown rule id is present, throws `DYSFLOW_CONFIG_UNKNOWN_LINT_RULE`
+ * so a config typo surfaces at boot rather than as a silently-no-op
+ * lint rule.
+ */
+function normalizeLintRulesOverride(
+  raw: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined,
+): Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined {
+  if (raw === undefined) return undefined;
+  const known = new Set<string>(KNOWN_LINT_RULE_IDS);
+  const sanitized: Partial<Record<LintRuleId, LintRuleOverride>> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!known.has(key)) {
+      throw createDysflowError(
+        "DYSFLOW_CONFIG_UNKNOWN_LINT_RULE",
+        `capabilities.lint.rules.${key} is not a known lint rule id. Known ids: ${KNOWN_LINT_RULE_IDS.join(", ")}.`,
+      );
+    }
+    if (value === undefined || typeof value !== "object") continue;
+    const override = value as LintRuleOverride;
+    if (typeof override.enabled !== "boolean") continue;
+    sanitized[key as LintRuleId] = {
+      enabled: override.enabled,
+      ...(typeof override.reason === "string" ? { reason: override.reason } : {}),
+    };
+  }
+  return sanitized;
 }
 
 /**
