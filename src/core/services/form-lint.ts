@@ -13,6 +13,7 @@
  * from "info" to "warning" / "error" must do it on solid signal.
  */
 
+import { collectControls } from "./form-ir-service.js";
 import {
   ALL_LINT_RULE_IDS,
   type LintDiagnostic,
@@ -83,7 +84,7 @@ export function lintFormCode(input: LintFormInput, options: LintFormOptions = {}
  */
 function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
-  const controlNames = new Set(input.ir.root.children.flatMap((c) => controlNameSet(c)));
+  const controlNames = new Set(collectControls(input.ir.root).map((control) => control.name));
   const lines = input.clsSource.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i++) {
@@ -106,25 +107,6 @@ function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
     }
   }
   return diagnostics;
-}
-
-function controlNameSet(node: import("../models/form-ir.js").FormNode): string[] {
-  const name = scalarValue(node, "Name");
-  if (name) return [name];
-  return [];
-}
-
-function scalarValue(
-  node: import("../models/form-ir.js").FormNode,
-  key: string,
-): string | undefined {
-  for (const entry of node.entries) {
-    if (entry.kind === "scalar" && entry.key === key) {
-      const raw = entry.value.trim();
-      return raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -176,10 +158,9 @@ function levenshtein(a: string, b: string): number {
 function ruleAccessListboxNoListAssignment(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   const declaredListBoxes = new Set<string>();
-  for (const child of input.ir.root.children) {
-    if (child.blockType === "ListBox") {
-      const name = scalarValue(child, "Name");
-      if (name) declaredListBoxes.add(name);
+  for (const control of collectControls(input.ir.root)) {
+    if (control.type === "ListBox") {
+      declaredListBoxes.add(control.name);
     }
   }
 
@@ -474,9 +455,8 @@ function stripStringLiteralsAndComments(line: string): string {
 function ruleControlPropertySupport(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   const controlTypes = new Map<string, string>(); // name -> blockType
-  for (const child of input.ir.root.children) {
-    const name = scalarValue(child, "Name");
-    if (name) controlTypes.set(name, child.blockType);
+  for (const control of collectControls(input.ir.root)) {
+    controlTypes.set(control.name, control.type);
   }
 
   const lines = input.clsSource.split(/\r?\n/);

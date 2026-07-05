@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { FormIR } from "../../../src/core/models/form-ir.js";
-import { parseFormTxt } from "../../../src/core/services/form-ir-service.js";
+import { collectControls, parseFormTxt } from "../../../src/core/services/form-ir-service.js";
 import { lintFormCode } from "../../../src/core/services/form-lint.js";
 import type { LintDiagnostic } from "../../../src/core/services/form-lint-types.js";
 
@@ -46,6 +46,43 @@ describe("Rule A: form-control-binding", () => {
       '    Me.cmdAceptar.Caption = "OK"',
       "End Sub",
     ].join("\n");
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const controlBindingErrors = result.diagnostics.filter(
+      (d) => d.rule === "form-control-binding",
+    );
+    expect(controlBindingErrors).toEqual([]);
+  });
+
+  it("does NOT diagnose Me.<ControlName> when the control is nested in .form.txt", () => {
+    const ir = parseWith(`Version = 21.00
+Begin Form
+  Begin Section
+      Begin TextBox
+      Name = "FormDetalle"
+      End
+      Begin CommandButton
+      Name = "ComandoGrabar"
+      End
+  End
+End
+`);
+    const cls = [
+      "Public Sub Guardar()",
+      '    Me.FormDetalle.Value = "ok"',
+      "    Me.ComandoGrabar.Enabled = False",
+      "End Sub",
+    ].join("\n");
+
+    const parsedControlNames = collectControls(ir.root).map((control) => control.name);
+    expect(parsedControlNames).toEqual(["FormDetalle", "ComandoGrabar"]);
 
     const result = lintFormCode({
       formName: "Form_Test",
@@ -129,6 +166,43 @@ describe("Rule B: access-listbox-no-list-assignment", () => {
 
     const diag = result.diagnostics.find((d) => d.rule === "access-listbox-no-list-assignment");
     expect(diag).toBeUndefined();
+  });
+
+  it("errors when assigning .List to a nested ListBox control", () => {
+    const ir = parseWith(`Version = 21.00
+Begin Form
+  Begin Section
+      Begin ListBox
+      Name = "NestedRows"
+      End
+  End
+End
+`);
+    const cls = [
+      "Public Sub CargarFilas()",
+      "    Dim arr As Variant",
+      '    arr = Array("a", "b")',
+      "    NestedRows.List = arr",
+      "End Sub",
+    ].join("\n");
+
+    expect(collectControls(ir.root).map((control) => `${control.name}:${control.type}`)).toEqual([
+      "NestedRows:ListBox",
+    ]);
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const diag = result.diagnostics.find((d) => d.rule === "access-listbox-no-list-assignment");
+    expect(diag).toBeDefined();
+    expect(diag?.severity).toBe("error");
+    expect(diag?.line).toBe(4);
+    expect(diag?.message).toContain("NestedRows");
   });
 
   it("detects ListBox via name prefix lst/listBox when .form.txt has no type info", () => {
@@ -344,6 +418,36 @@ describe("Rule E: unicode-sensitive-executable-tokens", () => {
 // ---------------------------------------------------------------------------
 
 describe("Rule F: control-property-support", () => {
+  it("warns when a nested ComboBox uses unsupported .List", () => {
+    const ir = parseWith(`Version = 21.00
+Begin Form
+  Begin Section
+      Begin ComboBox
+      Name = "NestedCombo"
+      End
+  End
+End
+`);
+    const cls = ["Public Sub Demo()", "    Me.NestedCombo.List = values", "End Sub"].join("\n");
+
+    expect(collectControls(ir.root).map((control) => `${control.name}:${control.type}`)).toEqual([
+      "NestedCombo:ComboBox",
+    ]);
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const diag = result.diagnostics.find((d) => d.rule === "control-property-support");
+    expect(diag).toBeDefined();
+    expect(diag?.severity).toBe("warning");
+    expect(diag?.message).toContain("NestedCombo");
+  });
+
   it("informs when a ListBox receives .ColumnWidths (allowed but worth noting)", () => {
     const ir = parseWith(formTxtWithControls([{ name: "lstResultados", type: "ListBox" }]));
     const cls = [
