@@ -359,7 +359,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'function Get-ComponentExtension',
             'function Build-ExportResultSummary',
             'function Resolve-ImportFileForModule',
-            'function Get-AccessLockFilePath'
+            'function Get-AccessLockFilePath',
+            # issue #752 defensive-validations helpers (pure — no COM, no Access).
+            'function Get-VbNameFromSourceFile',
+            'function Test-SourceFileHasDuplicateOptions',
+            'function Get-SourceFileSizeSnapshot'
         )
 
         $ast = [System.Management.Automation.Language.Parser]::ParseInput(
@@ -398,7 +402,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Resolve-FormCodeBehindFile',
             'Get-FormCodeBehindCandidateNames',
             'Resolve-ImportModeValue',
-            'Build-ExportResultSummary'
+            'Build-ExportResultSummary',
+            # issue #752 defensive-validations helpers (pure — no COM, no Access).
+            'Get-VbNameFromSourceFile',
+            'Test-SourceFileHasDuplicateOptions',
+            'Get-SourceFileSizeSnapshot'
         )
 
         $extractedCode = ($functionDefs |
@@ -1019,6 +1027,222 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
         It "keeps Code (case-insensitive)" {
             Resolve-ImportModeValue -ImportMode "code" | Should -Be "Code"
             Resolve-ImportModeValue -ImportMode "Code" | Should -Be "Code"
+        }
+    }
+
+    # issue #752: defensive-validations helpers — nested as Contexts inside the
+    # parent Describe so the BeforeAll at line 318 (AST extraction of pure helpers)
+    # runs once and exposes Get-VbNameFromSourceFile, Test-SourceFileHasDuplicateOptions,
+    # and Get-SourceFileSizeSnapshot to every It block below.
+
+    Context "Get-VbNameFromSourceFile (issue #752) — defensive VB_Name extraction" {
+
+        BeforeAll {
+            $script:SandboxDir = Join-Path ([System.IO.Path]::GetTempPath()) ("vba-mgr-vbname-" + [guid]::NewGuid().ToString("N"))
+            [System.IO.Directory]::CreateDirectory($script:SandboxDir) | Out-Null
+        }
+
+        AfterAll {
+            if (Test-Path -LiteralPath $script:SandboxDir) {
+                [System.IO.Directory]::Delete($script:SandboxDir, $true)
+            }
+        }
+
+        It "returns the VB_Name for a normal .bas file" {
+            $path = Join-Path $script:SandboxDir "ModNormal.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "ModNormal"'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n")
+            Get-VbNameFromSourceFile -Path $path | Should -Be "ModNormal"
+        }
+
+        It "returns the VB_Name when followed by Attribute VB_GlobalNameSpace etc." {
+            $path = Join-Path $script:SandboxDir "ModWithAttrs.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "ModWithAttrs"'
+                'Attribute VB_GlobalNameSpace = False'
+                'Attribute VB_Creatable = False'
+                'Attribute VB_PredeclaredId = False'
+                'Attribute VB_Exposed = False'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n")
+            Get-VbNameFromSourceFile -Path $path | Should -Be "ModWithAttrs"
+        }
+
+        It "skips leading blank lines before finding VB_Name" {
+            $path = Join-Path $script:SandboxDir "ModLeadingBlanks.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                ''
+                ''
+                'Attribute VB_Name = "ModLeadingBlanks"'
+                'Option Explicit'
+            ) -join "`r`n")
+            Get-VbNameFromSourceFile -Path $path | Should -Be "ModLeadingBlanks"
+        }
+
+        It "returns $null when no Attribute VB_Name is present" {
+            $path = Join-Path $script:SandboxDir "ModNoVbName.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n")
+            Get-VbNameFromSourceFile -Path $path | Should -BeNullOrEmpty
+        }
+
+        It "strips a UTF-8 BOM before matching VB_Name" {
+            $path = Join-Path $script:SandboxDir "ModBom.bas"
+            $bom = [byte[]](0xEF, 0xBB, 0xBF)
+            $body = [System.Text.Encoding]::UTF8.GetBytes(@(
+                'Attribute VB_Name = "ModBom"'
+                'Option Explicit'
+            ) -join "`r`n")
+            $all = New-Object 'System.Collections.Generic.List[byte]'
+            $all.AddRange($bom)
+            $all.AddRange($body)
+            [System.IO.File]::WriteAllBytes($path, $all.ToArray())
+            Get-VbNameFromSourceFile -Path $path | Should -Be "ModBom"
+        }
+
+        It "returns $null for an empty file" {
+            $path = Join-Path $script:SandboxDir "Empty.bas"
+            [System.IO.File]::WriteAllText($path, "")
+            Get-VbNameFromSourceFile -Path $path | Should -BeNullOrEmpty
+        }
+    }
+
+    Context "Test-SourceFileHasDuplicateOptions (issue #752) — defensive Option duplication detection" {
+
+        BeforeAll {
+            $script:SandboxDir = Join-Path ([System.IO.Path]::GetTempPath()) ("vba-mgr-dupopt-" + [guid]::NewGuid().ToString("N"))
+            [System.IO.Directory]::CreateDirectory($script:SandboxDir) | Out-Null
+        }
+
+        AfterAll {
+            if (Test-Path -LiteralPath $script:SandboxDir) {
+                [System.IO.Directory]::Delete($script:SandboxDir, $true)
+            }
+        }
+
+        It "returns $false when each Option directive appears at most once" {
+            $path = Join-Path $script:SandboxDir "Single.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "Single"'
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $false
+        }
+
+        It "returns $true when Option Explicit appears twice" {
+            $path = Join-Path $script:SandboxDir "DupExplicit.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "DupExplicit"'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+                'Option Explicit'
+            ) -join "`r`n")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $true
+        }
+
+        It "returns $true when Option Compare Database appears twice" {
+            $path = Join-Path $script:SandboxDir "DupCompare.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "DupCompare"'
+                'Option Compare Database'
+                'Public Sub Foo()'
+                'End Sub'
+                'Option Compare Database'
+            ) -join "`r`n")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $true
+        }
+
+        It "returns $false when no Option directives are present" {
+            $path = Join-Path $script:SandboxDir "NoOption.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "NoOption"'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $false
+        }
+
+        It "treats Option Compare variants case-insensitively (Option compare text vs Option Compare Text)" {
+            $path = Join-Path $script:SandboxDir "CaseInsensitive.bas"
+            [System.IO.File]::WriteAllText($path, @(
+                'Attribute VB_Name = "CaseInsensitive"'
+                'Option Compare Text'
+                'Public Sub Foo()'
+                'End Sub'
+                'option compare text'
+            ) -join "`r`n")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $true
+        }
+
+        It "returns $false for an empty file" {
+            $path = Join-Path $script:SandboxDir "Empty.bas"
+            [System.IO.File]::WriteAllText($path, "")
+            Test-SourceFileHasDuplicateOptions -Path $path | Should -Be $false
+        }
+    }
+
+    Context "Get-SourceFileSizeSnapshot (issue #752) — verbose pre-import snapshot" {
+
+        BeforeAll {
+            $script:SandboxDir = Join-Path ([System.IO.Path]::GetTempPath()) ("vba-mgr-snap-" + [guid]::NewGuid().ToString("N"))
+            [System.IO.Directory]::CreateDirectory($script:SandboxDir) | Out-Null
+        }
+
+        AfterAll {
+            if (Test-Path -LiteralPath $script:SandboxDir) {
+                [System.IO.Directory]::Delete($script:SandboxDir, $true)
+            }
+        }
+
+        It "returns bytes, lines, and sha256 for a multi-line file" {
+            $path = Join-Path $script:SandboxDir "Multi.bas"
+            $content = @(
+                'Attribute VB_Name = "Multi"'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+                'Public Sub Bar()'
+                'End Sub'
+            ) -join "`r`n"
+            [System.IO.File]::WriteAllText($path, $content)
+            $snap = Get-SourceFileSizeSnapshot -Path $path
+            $snap.bytes | Should -Be ($content.Length)
+            $snap.lines | Should -Be 6
+            $snap.sha256 | Should -Match "^[A-F0-9]{64}$"
+        }
+
+        It "computes the sha256 of the raw file bytes (not of the .NET-decoded text)" {
+            $path = Join-Path $script:SandboxDir "Bytes.bas"
+            [System.IO.File]::WriteAllText($path, "abc")
+            $snap = Get-SourceFileSizeSnapshot -Path $path
+            # sha256 of the bytes "abc" (no newline) = ba7816bf...
+            $snap.sha256 | Should -Be "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        }
+
+        It "returns lines=1 and bytes=N for a single-line file" {
+            $path = Join-Path $script:SandboxDir "Single.bas"
+            [System.IO.File]::WriteAllText($path, "Attribute VB_Name = `"X`"")
+            $snap = Get-SourceFileSizeSnapshot -Path $path
+            $snap.lines | Should -Be 1
+            $snap.bytes | Should -Be ([System.IO.File]::ReadAllBytes($path).Length)
+        }
+
+        It "throws for a non-existent path so the caller can fail loudly (verbose:true is opt-in; never silently)" {
+            $missing = Join-Path $script:SandboxDir "DoesNotExist.bas"
+            { Get-SourceFileSizeSnapshot -Path $missing } | Should -Throw -ExpectedMessage "*DoesNotExist*"
         }
     }
 }
