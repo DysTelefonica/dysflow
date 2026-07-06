@@ -7,6 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DEFAULT_NEGOTIATED_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createConfiguredServices,
   createDynamicServices,
   createProgressNotifier,
   createUnavailableServices,
@@ -1286,5 +1287,61 @@ describe("DELTA-009 — serviceCache uses LRU eviction, not FIFO", () => {
       procedureName: "Proc",
     });
     expect(createdConfigs.length).toBe(factoryCallsAfterKeyA);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #757 (F7) — test_vba must honor mid-session .dysflow/project.json edits.
+// createConfiguredServices wires the VbaSyncAdapter's allowedProcedures as a
+// per-input RESOLVER (not the frozen config.allowedProcedures array), so a
+// procedure added to the allowlist takes effect on the next call WITHOUT a
+// server restart. Before this fix the array was captured at service-factory
+// time and reused via serviceCache, so edits were ignored until restart.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("#757 (F7) — createConfiguredServices wires a per-input allowedProcedures resolver", () => {
+  function writeProjectConfig(project: string, allow: readonly string[] | undefined): void {
+    const capabilities = allow === undefined ? {} : { capabilities: { procedures: { allow } } };
+    writeFileSync(
+      join(project, ".dysflow", "project.json"),
+      JSON.stringify({ id: "f7-project", accessPath: "front.accdb", ...capabilities }),
+      "utf8",
+    );
+  }
+
+  it("passes a resolver function (not a frozen array) and re-reads the allowlist per call", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-mcp-f7-"));
+    const project = join(root, "project");
+    mkdirSync(join(project, ".dysflow"), { recursive: true });
+    writeFileSync(join(project, "front.accdb"), "", "utf8");
+    // Start with NO allowlist configured.
+    writeProjectConfig(project, undefined);
+
+    const config: DysflowConfig = {
+      configSource: "repo-config",
+      allowWrites: false,
+      accessDbPath: resolve(project, "front.accdb"),
+      projectRoot: project,
+      timeoutMs: 30_000,
+    };
+    const services = createConfiguredServices(config, { cwd: project });
+
+    // The adapter's allowlist is a RESOLVER, not the frozen array — that is the
+    // whole point of F7. A plain array here would mean edits are ignored.
+    const adapter = services.vbaSyncToolService as unknown as { allowedProcedures?: unknown };
+    expect(typeof adapter.allowedProcedures).toBe("function");
+
+    const resolver = adapter.allowedProcedures as (
+      input: unknown,
+    ) => Promise<readonly string[] | undefined>;
+    const input = { projectRoot: project };
+
+    // No allowlist on disk yet → resolver returns undefined (default-deny).
+    expect(await resolver(input)).toBeUndefined();
+
+    // Operator edits .dysflow/project.json mid-session to add a test procedure.
+    writeProjectConfig(project, ["Test_X"]);
+
+    // The very next call reflects the edit — no restart, no cache bust needed.
+    expect(await resolver(input)).toEqual(["Test_X"]);
   });
 });

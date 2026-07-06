@@ -27,6 +27,7 @@ import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils
 import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
 import { findPackageRootNear } from "../../core/utils/package-info.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
+import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
@@ -109,8 +110,14 @@ export type VbaSyncAdapterOptions = {
    * execution unless the caller passes `dryRun: true` (the same semantics
    * as the MCP-handler gate in `canonical-handlers.ts:ensureProcedureAllowed`,
    * which already covers `run_vba` / `dysflow_vba_execute`).
+   *
+   * #757 (F7) — accepts a per-input RESOLVER (function) as well as a frozen
+   * array. The composition root passes a resolver so `test_vba` re-reads the
+   * project's allowlist from `.dysflow/project.json` on every call instead of
+   * freezing it at service-factory time (which the service cache then reused,
+   * ignoring mid-session config edits until a server restart).
    */
-  allowedProcedures?: readonly string[];
+  allowedProcedures?: AllowedProcedures;
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
@@ -153,6 +160,60 @@ export function derivePsTimeoutMs(effectiveTimeoutMs: number, preflightElapsedMs
   return Math.max(MIN_PS_TIMEOUT_MS, effectiveTimeoutMs - preflightElapsedMs);
 }
 
+// ─── #757 (F3): structured VBA_MANAGER_TIMEOUT envelope helpers ──────────────
+// The bare `{ code, message }` timeout envelope forced a consuming agent to
+// manually audit MSACCESS.EXE processes and .laccdb locks after every stall.
+// These helpers enrich it with the phase, whether a write was in flight, the
+// PIDs dysflow already reaped, and a remediation pointer — all derived from data
+// dysflow already has (no new OS scans).
+
+/** Maps a tool name to the coarse timeout phase a consumer can branch on. */
+const TIMEOUT_PHASE_BY_TOOL: Readonly<Record<string, string>> = {
+  export_all: "export",
+  export_modules: "export",
+  import_all: "import",
+  import_modules: "import",
+  compile_vba: "compile",
+  verify_code: "verify",
+  link_tables: "link",
+  relink_tables: "link",
+  relink_directory: "link",
+  unlink_table: "link",
+  localize_backend_links: "link",
+  run_vba: "execute",
+  test_vba: "execute",
+  vba_inline_execution: "execute",
+};
+
+export function deriveTimeoutPhase(toolName: string): string {
+  return TIMEOUT_PHASE_BY_TOOL[toolName] ?? "other";
+}
+
+/** Tools whose timeout may have left a partially-committed write behind. */
+const TIMEOUT_WRITE_TOOLS = new Set([
+  "import_modules",
+  "import_all",
+  "delete_module",
+  "compile_vba",
+  "export_all",
+  "export_modules",
+  "fix_encoding",
+  "generate_erd",
+]);
+
+/**
+ * Derives the lock file that MAY linger for an Access binary. This is a pure
+ * path derivation, NOT a filesystem scan — it tells the consumer which file to
+ * check, without asserting it exists.
+ */
+export function deriveExpectedLockFile(accessPath: string | undefined): string | undefined {
+  if (accessPath === undefined) return undefined;
+  const lower = accessPath.toLowerCase();
+  if (lower.endsWith(".accdb")) return `${accessPath.slice(0, -".accdb".length)}.laccdb`;
+  if (lower.endsWith(".mdb")) return `${accessPath.slice(0, -".mdb".length)}.ldb`;
+  return undefined;
+}
+
 export class VbaSyncAdapter implements VbaSyncPort {
   public readonly executor: VbaManagerExecutor;
   public readonly scriptPath: string;
@@ -166,9 +227,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
    * PR1b (#621 F1) — allowlist forwarded to `VbaExecutionAdapter` so the
    * `test_vba` default-deny gate can enforce it. Kept on the adapter for
    * inspection / debugging; the gate logic lives in
-   * `VbaExecutionAdapter.ensureTestProceduresAllowed`.
+   * `VbaExecutionAdapter.ensureTestProceduresAllowed`. #757 (F7) — may be a
+   * per-input resolver function, not just a frozen array.
    */
-  public readonly allowedProcedures?: readonly string[];
+  public readonly allowedProcedures?: AllowedProcedures;
 
   private readonly operationsAdapter: VbaOperationsAdapter;
   private readonly operationRegistry?: AccessOperationRegistry;
@@ -362,14 +424,58 @@ export class VbaSyncAdapter implements VbaSyncPort {
       // spawned survives as an orphan. Reap it immediately via the path/lock
       // cleanup so a timeout never leaks an Access process (otherwise it lingers
       // until the next operation's preflight).
-      const timeoutCleanupDiagnostics = await reapOrphanedAccessOnTimeout(() =>
-        this.runPreflightCleanup(target.data),
-      );
+      // #757 (F3) — capture the RAW cleanup result (not just its diagnostics)
+      // so the timeout envelope can report which orphaned Access PIDs dysflow
+      // reaped and which it could not, letting a consumer act without a manual
+      // OS audit. Defensive: a timeout is already a failure path, so a cleanup
+      // throw degrades to a warning rather than masking the timeout.
+      let cleanupResult: AccessOperationPreflightCleanupResult;
+      try {
+        cleanupResult = await this.runPreflightCleanup(target.data);
+      } catch (error) {
+        cleanupResult = {
+          cleaned: [],
+          killed: [],
+          orphanedKilled: [],
+          errors: [
+            {
+              operationId: "orphan_cleanup",
+              message: `orphan cleanup after timeout failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+      const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(cleanupResult);
+      const reapedProcessPids = [...cleanupResult.killed, ...cleanupResult.orphanedKilled];
+      const expectedLockFile = deriveExpectedLockFile(accessPath);
+      const remediation =
+        `dysflow already attempted to reap the orphaned Access process on this timeout. ` +
+        `If an MSACCESS.EXE still holds ${accessPath ?? "the target binary"}, list orphans with ` +
+        `dysflow_access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
+        `Consider raising timeoutMs for large projects.`;
       return failureResult(
         createDysflowError(
           "VBA_MANAGER_TIMEOUT",
           `${toolName} timed out after ${result.durationMs}ms`,
-          { retryable: true },
+          {
+            retryable: true,
+            remediation,
+            details: {
+              phase: deriveTimeoutPhase(toolName),
+              wasApply: TIMEOUT_WRITE_TOOLS.has(toolName) && params.dryRun !== true,
+              operationTimeoutMs: effectiveTimeoutMs,
+              durationMs: result.durationMs,
+              // Orphaned Access PIDs dysflow reaped on this timeout — the
+              // consumer does NOT need to clean these.
+              reapedProcessPids,
+              // Cleanup steps that could NOT complete (refused/suppressed kills,
+              // enumeration failures) — a process here may still be lingering.
+              cleanupWarnings: cleanupResult.errors.map(
+                (error) => `${error.operationId}: ${error.message}`,
+              ),
+              ...(expectedLockFile !== undefined ? { expectedLockFile } : {}),
+            },
+          },
         ),
         {
           diagnostics: [...preflightDiagnostics, ...timeoutCleanupDiagnostics],

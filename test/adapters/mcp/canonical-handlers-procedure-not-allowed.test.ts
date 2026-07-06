@@ -4,8 +4,8 @@
  *
  * Two branches in the gate must keep distinct error envelopes:
  *   1. Allowlist not configured (undefined / empty) AND no `dryRun:true`
- *      → still `MCP_INPUT_INVALID` (backward-compatible; other SDD work owns
- *      `MCP_ALLOWLIST_NOT_CONFIGURED`).
+ *      → `MCP_ALLOWLIST_NOT_CONFIGURED` (#757 F6 — split out of the generic
+ *      `MCP_INPUT_INVALID` so a missing allowlist reads as a config fix).
  *   2. Procedure not in the populated allowlist
  *      → `MCP_PROCEDURE_NOT_ALLOWED` with the active allowlist surfaced.
  *
@@ -60,27 +60,36 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
   });
 });
 
-describe("ensureProcedureAllowed — allowlist-not-configured branch keeps MCP_INPUT_INVALID (#659 backward compat)", () => {
-  it("undefined allowlist AND no dryRun → still MCP_INPUT_INVALID", () => {
+describe("ensureProcedureAllowed — allowlist-not-configured branch emits MCP_ALLOWLIST_NOT_CONFIGURED (#757 F6)", () => {
+  it("undefined allowlist AND no dryRun → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
     const error = ensureProcedureAllowed("Anything", undefined, undefined);
     expect(error).toBeDefined();
-    expect(error?.content[0]?.text).toContain("MCP_INPUT_INVALID");
-    // Crucially, the new code MUST NOT appear here — only the procedure-not-in-list
+    expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
+    expect(error?.error?.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
+    // Crucially, the procedure-not-in-list code MUST NOT appear here — that
     // branch owns `MCP_PROCEDURE_NOT_ALLOWED`.
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
+    // Nor the generic input-shape code — the split is the whole point of F6.
+    expect(error?.content[0]?.text).not.toContain("MCP_INPUT_INVALID");
   });
 
-  it("empty allowlist AND no dryRun → still MCP_INPUT_INVALID", () => {
+  it("empty allowlist AND no dryRun → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
     const error = ensureProcedureAllowed("Anything", [], undefined);
     expect(error).toBeDefined();
-    expect(error?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
   });
 
-  it("empty allowlist AND dryRun=false → still MCP_INPUT_INVALID", () => {
+  it("empty allowlist AND dryRun=false → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
     const error = ensureProcedureAllowed("Anything", [], false);
     expect(error).toBeDefined();
-    expect(error?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
+  });
+
+  it("carries a remediation hint mentioning dryRun and the config file", () => {
+    const error = ensureProcedureAllowed("Anything", undefined, undefined);
+    expect(error?.error?.remediation).toContain("dryRun");
+    expect(error?.error?.remediation).toContain(".dysflow/project.json");
   });
 });

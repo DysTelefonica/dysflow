@@ -837,7 +837,7 @@ describe("Dysflow HTTP adapter", () => {
      * Creates a fake vbaSyncToolService that:
      * - Records all calls in testVbaCalls
      * - Simulates the VbaExecutionAdapter.ensureTestProceduresAllowed gate:
-     *   - Rejects with MCP_INPUT_INVALID when allowedProcedures is undefined/empty AND dryRun !== true
+     *   - Rejects with MCP_ALLOWLIST_NOT_CONFIGURED when allowedProcedures is undefined/empty AND dryRun !== true (#757 F6)
      *   - Allows through otherwise (returns successResult)
      */
     function createFakeVbaSyncToolService(allowedProcedures?: readonly string[]) {
@@ -853,11 +853,11 @@ describe("Dysflow HTTP adapter", () => {
             if (dryRun !== true) {
               return failureResult(
                 createDysflowError(
-                  "MCP_INPUT_INVALID",
+                  "MCP_ALLOWLIST_NOT_CONFIGURED",
                   `Refusing to execute test_vba plan [Test_A]: ` +
-                    `project config must declare allowedProcedures (with every procedure in the list) ` +
-                    `OR caller must pass dryRun:true. ` +
-                    `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+                    `project config declares no allowedProcedures allowlist. ` +
+                    `Declare a non-empty allowedProcedures in .dysflow/project.json ` +
+                    `(re-read per call — no restart needed), or pass dryRun:true to plan without executing.`,
                 ),
               );
             }
@@ -930,7 +930,8 @@ describe("Dysflow HTTP adapter", () => {
 
       expect(response.status).toBe(400);
       expect(body.ok).toBe(false);
-      expect(body.error.code).toBe("MCP_INPUT_INVALID");
+      // #757 (F6) — the no-allowlist branch now carries its own distinct code.
+      expect(body.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
       expect(body.error.message).toContain("allowedProcedures");
       expect(body.error.message).toContain("dryRun:true");
       expect(executorCalled).toBe(false);

@@ -1,5 +1,41 @@
 # Changelog
 
+## [v1.18.0] - 2026-07-06
+
+MCP friction consolidation from consumer production work (#757). Four
+independent fixes that make the MCP surface honest and agent-friendly under
+real TDD workflows, each traceable to a reported friction ID:
+
+- **F7 — `test_vba` honors mid-session `.dysflow/project.json` edits without a
+  restart.** The `test_vba` allowlist gate ran through `VbaExecutionAdapter`
+  with the project's `allowedProcedures` **frozen** at service-factory time and
+  then reused via the service cache, so adding a procedure to the allowlist was
+  ignored until the MCP server restarted — hostile to TDD. The composition root
+  (`stdio.ts:createConfiguredServices`) now forwards a per-input **resolver**
+  instead of the frozen array, mirroring the MCP-handler gate that already gave
+  `run_vba` this behavior (#674/#748). `loadDysflowConfig` has no cache, so each
+  call re-reads the file and a newly-added test takes effect immediately. No new
+  tool was needed — the fix is the wiring, not a cache-invalidation primitive.
+- **F6 — distinct `MCP_ALLOWLIST_NOT_CONFIGURED` error code.** The
+  "project declares no `allowedProcedures`" refusal was reported as the generic
+  `MCP_INPUT_INVALID`, indistinguishable from a real input-shape error. It now
+  carries its own code (the name reserved earlier in the #659 test notes) in
+  BOTH gates — `ensureProcedureAllowed` (run_vba/`dysflow_vba_execute`) and
+  `VbaExecutionAdapter.ensureTestProceduresAllowed` (test_vba) — plus the HTTP
+  `/vba/test` path, so a consumer greps one string regardless of the layer that
+  refused. The HTTP status stays `400` (unchanged from the old code).
+- **F3 — structured `VBA_MANAGER_TIMEOUT` envelope.** The bare
+  `{ code, message }` timeout forced agents to hand-audit `MSACCESS.EXE` and
+  `.laccdb` locks. The error now carries `error.details` with `phase`,
+  `wasApply`, `operationTimeoutMs`, `reapedProcessPids` (orphans dysflow already
+  reaped), `cleanupWarnings` (kills it could NOT complete — may still linger),
+  and a derived `expectedLockFile`, plus a top-level `error.remediation`
+  pointing at `dysflow_access_force_cleanup_orphaned`. All fields come from data
+  dysflow already had — no new OS scans.
+- **F1 — `export_all` description leads with write-by-default semantics.** The
+  advertised description now opens with "By default this WRITES to disk … Pass
+  diff:true to NOT write" so a caller cannot mistake the default for a no-op.
+
 ## [v1.17.0] - 2026-07-06
 
 Read-tool project-aware target resolution (#716) plus a runner invariant

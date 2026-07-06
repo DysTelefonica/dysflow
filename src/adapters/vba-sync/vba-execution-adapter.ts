@@ -403,13 +403,23 @@ End Sub
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
       if (params.dryRun !== true) {
+        // #757 (F6) — distinct `MCP_ALLOWLIST_NOT_CONFIGURED` code (was the
+        // generic `MCP_INPUT_INVALID`) so consumers can tell "project declares
+        // no allowlist" apart from a schema error. Same string the MCP-handler
+        // gate (`ensureProcedureAllowed`, run_vba) emits, so the consumer greps
+        // one code regardless of which layer refused. The config is re-read per
+        // call (#757 F7), so adding the allowlist takes effect without restart.
         return failureResult(
           createDysflowError(
-            "MCP_INPUT_INVALID",
+            "MCP_ALLOWLIST_NOT_CONFIGURED",
             `Refusing to execute test_vba plan [${procedures.join(", ")}]: ` +
-              `project config must declare allowedProcedures (with every procedure in the list) ` +
-              `OR caller must pass dryRun:true. ` +
-              `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+              `project config declares no allowedProcedures allowlist. ` +
+              `Declare a non-empty allowedProcedures in .dysflow/project.json ` +
+              `(re-read per call — no restart needed), or pass dryRun:true to plan without executing.`,
+            {
+              remediation:
+                "Declare a non-empty allowedProcedures in .dysflow/project.json, or pass dryRun:true.",
+            },
           ),
         );
       }
