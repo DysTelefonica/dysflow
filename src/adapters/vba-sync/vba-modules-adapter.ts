@@ -9,7 +9,9 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import {
+  buildDeletePlanResult,
   buildImportPlanResult,
+  type DeletePlanResult,
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
 import {
@@ -215,6 +217,17 @@ export class VbaModulesAdapter {
     const dryRun = params.apply === true ? false : params.dryRun !== false;
     if (dryRun && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
+    }
+    // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits
+    // `delete_module` to a plan-shaped result via `planDelete`. Unlike
+    // `import_*`/`import_all` above, this branch is EXPLICIT-only:
+    // `delete_module` without `dryRun` keeps the legacy execute path so
+    // production delete workflows don't accidentally dry-run when the flag
+    // is omitted. The `dryRun` variable above is reused as a guard so a
+    // future change that wants default-dry-run for delete_module can flip
+    // the predicate in one place.
+    if (dryRun && toolName === "delete_module" && params.dryRun === true) {
+      return this.planDelete(params);
     }
 
     const mapping = MODULE_MAPPINGS[toolName];
@@ -788,6 +801,62 @@ export class VbaModulesAdapter {
       buildImportPlanResult({
         toolName,
         params: effectiveParams,
+        target: target.data,
+        modulesPlanned,
+        warnings,
+        errors,
+      }),
+    );
+  }
+
+  /**
+   * Round-3 Item 5 (P2) — dry-run plan helper for `delete_module`. Mirrors
+   * `planImport` in shape and contract: resolve the target + strict-context
+   * first, derive the module list from the request (singular `moduleName`
+   * OR plural `moduleNames`, matching the `delete_module` mapping at line
+   * 107), capture any pre-call path warnings/errors, then build the
+   * `DeletePlanResult` so consumers see exactly which modules would have
+   * been deleted without invoking the runner.
+   *
+   * IMPORTANT: `delete_module` is intentionally EXPLICIT-only for dryRun
+   * (see the branch at execute() line 215). This helper therefore assumes
+   * the caller already verified `params.dryRun === true`; it does not
+   * re-check the flag.
+   */
+  private async planDelete(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<DeletePlanResult>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.orchestrator.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    // Mirror the delete_module mapping (line 107): prefer `moduleNames`, fall
+    // back to the singular `moduleName` so the plan exactly matches what the
+    // runner would have received.
+    const moduleNamesFromArray = stringArray(params.moduleNames);
+    const moduleNameFromSingular = stringValue(params.moduleName);
+    const modulesPlanned =
+      moduleNamesFromArray.length > 0
+        ? moduleNamesFromArray
+        : moduleNameFromSingular !== undefined
+          ? [moduleNameFromSingular]
+          : [];
+
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    await stat(target.data.destinationRoot).catch(() =>
+      errors.push(`destinationRoot not found: ${target.data.destinationRoot}`),
+    );
+    if (target.data.accessPath !== undefined) {
+      await stat(target.data.accessPath).catch(() =>
+        errors.push(`accessPath not found: ${target.data.accessPath}`),
+      );
+    }
+
+    return successResult(
+      buildDeletePlanResult({
+        params,
         target: target.data,
         modulesPlanned,
         warnings,

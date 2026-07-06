@@ -194,6 +194,7 @@ describe("MCP tool registration over core services", () => {
       "dysflow_detect_dead_code",
       "dysflow_validate_manifest",
       "dysflow_lint_module",
+      "dysflow_resolve_project",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

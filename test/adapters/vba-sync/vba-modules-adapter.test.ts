@@ -104,6 +104,236 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
+  // --- Round-3 Item 5 (P2) — delete_module accepts dryRun:true ---------------
+  //
+  // Pre-Item-5: the vba-sync schema for `delete_module` had no `dryRun` property
+  // and `additionalProperties: false` rejected the flag silently with
+  // "dryRun is not allowed", forcing consumers to commit real deletions before
+  // they could review the plan.
+  //
+  // Post-Item-5: `delete_module` declares `dryRun` in its schema AND the handler
+  // short-circuits to a plan-shaped result when `dryRun: true` is set
+  // EXPLICITLY. The default for `delete_module` (no flag, no dryRun) stays the
+  // legacy "execute" path so existing call sites keep working — this differs
+  // from `import_*`/`import_all` which default to dry-run.
+  //
+  // Contraparte tests pin the existing behavior: no dryRun, or dryRun:false,
+  // MUST still call the runner (consumer relies on this for production deletes).
+
+  it("Round-3 Item 5 — delete_module with dryRun:true short-circuits to a plan shape (no runner call)", async () => {
+    const calls: Array<{ action: string; moduleNames: readonly string[] }> = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      calls.push({ action: request.action, moduleNames: [...(request.moduleNames ?? [])] });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const root = await mkdtemp(join(tmpdir(), "dysflow-delete-dryrun-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "delete-dryrun",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+
+    const result = await service.execute("delete_module", {
+      moduleNames: ["Module_Foo", "Module_Bar"],
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run plan success");
+    expect(result.data).toMatchObject({
+      operation: "delete_module",
+      dryRun: true,
+      willModifyAccess: false,
+      modulesPlanned: ["Module_Foo", "Module_Bar"],
+      modulesCount: 2,
+      force: false,
+    });
+    // The runner MUST NOT be invoked — no PowerShell spawn, no Access.
+    expect(calls).toHaveLength(0);
+  });
+
+  it("Round-3 Item 5 — delete_module with dryRun:true and singular moduleName plans one entry", async () => {
+    // Singular `moduleName` is the historical delete_module input shape; the
+    // short-circuit must plan exactly that one module.
+    const calls: unknown[] = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      calls.push({ action: request.action, moduleNames: [...(request.moduleNames ?? [])] });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const root = await mkdtemp(join(tmpdir(), "dysflow-delete-dryrun-singular-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "delete-dryrun-singular",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+
+    const result = await service.execute("delete_module", {
+      moduleName: "Module_Foo",
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run plan success");
+    expect(result.data).toMatchObject({
+      operation: "delete_module",
+      dryRun: true,
+      willModifyAccess: false,
+      modulesPlanned: ["Module_Foo"],
+      modulesCount: 1,
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("Round-3 Item 5 — delete_module with dryRun:true and force:true plans a forced delete (does not actually force)", async () => {
+    // force:true is a destructive option; the dry-run plan must reflect it
+    // for transparency but obviously never apply it.
+    const calls: unknown[] = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      calls.push({ action: request.action, moduleNames: [...(request.moduleNames ?? [])] });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const root = await mkdtemp(join(tmpdir(), "dysflow-delete-dryrun-force-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "delete-dryrun-force",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+
+    const result = await service.execute("delete_module", {
+      moduleNames: ["Module_Foo"],
+      force: true,
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected dry-run plan success");
+    expect(result.data).toMatchObject({
+      operation: "delete_module",
+      dryRun: true,
+      willModifyAccess: false,
+      modulesPlanned: ["Module_Foo"],
+      force: true,
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("Round-3 Item 5 — delete_module WITHOUT dryRun calls the runner (existing behavior preserved)", async () => {
+    // Contraparte: no dryRun → real delete. Pins the historical contract that
+    // consumer production workflows rely on.
+    const calls: Array<{ action: string; moduleNames: readonly string[]; force?: boolean }> = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      calls.push({
+        action: request.action,
+        moduleNames: [...(request.moduleNames ?? [])],
+        force: request.extra.force as boolean | undefined,
+      });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const root = await mkdtemp(join(tmpdir(), "dysflow-delete-no-dryrun-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "delete-no-dryrun",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+
+    await service.execute("delete_module", { moduleNames: ["Module_Foo"] });
+
+    expect(calls).toHaveLength(1);
+    const [firstCall] = calls;
+    expect(firstCall?.action).toBe("Delete");
+    expect(firstCall?.moduleNames).toEqual(["Module_Foo"]);
+  });
+
+  it("Round-3 Item 5 — delete_module with dryRun:false calls the runner (explicit opt-out)", async () => {
+    // Explicit dryRun:false is the documented "I really want to delete" escape
+    // — the runner MUST be called exactly once.
+    const calls: Array<{ action: string; moduleNames: readonly string[] }> = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      calls.push({ action: request.action, moduleNames: [...(request.moduleNames ?? [])] });
+      return {
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const root = await mkdtemp(join(tmpdir(), "dysflow-delete-dryrun-false-"));
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "delete-dryrun-false",
+        accessPath: "front.accdb",
+        destinationRoot: "src",
+      }),
+      "utf8",
+    );
+    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+
+    await service.execute("delete_module", {
+      moduleNames: ["Module_Foo"],
+      dryRun: false,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.action).toBe("Delete");
+    expect(calls[0]?.moduleNames).toEqual(["Module_Foo"]);
+  });
+
   it("maps export_modules to a product-owned PowerShell runner invocation", async () => {
     const calls: unknown[] = [];
     const executor: VbaManagerExecutor = async (request) => {

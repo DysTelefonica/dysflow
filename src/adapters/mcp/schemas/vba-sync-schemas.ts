@@ -136,6 +136,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       proceduresJson: SCHEMA_PROPS.proceduresJson,
       filter: SCHEMA_PROPS.filter,
       testsPath: SCHEMA_PROPS.testsPath,
+      // Round-3 Item 5 (P2) — `dryRun: true` short-circuits to a plan-shaped
+      // result in `VbaExecutionAdapter.executeTestVba` (no PowerShell spawn,
+      // no Access, no compile). Without this, `additionalProperties: false`
+      // rejected `dryRun:true` silently with "dryRun is not allowed" and
+      // consumers had to commit real test execution before they could review
+      // the plan. Same shape as the `run_vba` schema.
+      dryRun: SCHEMA_PROPS.dryRun,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -166,6 +173,16 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       moduleName: SCHEMA_PROPS.moduleName,
       moduleNames: SCHEMA_PROPS.moduleNames,
       force: SCHEMA_PROPS.force,
+      // Round-3 Item 5 (P2) — `dryRun: true` short-circuits to a plan-shaped
+      // result in `VbaModulesAdapter.execute` via `planDelete` (mirrors the
+      // `import_modules`/`import_all` dry-run intercept at
+      // `vba-modules-adapter.ts:215`). Without this, `additionalProperties:
+      // false` rejected `dryRun:true` silently with "dryRun is not allowed"
+      // and consumers had to commit real deletions before they could review
+      // the plan. Unlike `import_*`/`import_all` this is an EXPLICIT-only
+      // flag — `delete_module` without `dryRun` keeps the legacy execute
+      // path so production deletes don't accidentally dry-run.
+      dryRun: SCHEMA_PROPS.dryRun,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

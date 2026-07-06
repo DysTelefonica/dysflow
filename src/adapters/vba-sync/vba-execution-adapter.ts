@@ -330,6 +330,28 @@ End Sub
     const gateError = this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
     if (gateError !== undefined) return gateError;
 
+    // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits BEFORE
+    // both compile_vba and the test_vba runner call. The gate already ran
+    // (so an out-of-allowlist procedure still emits PROCEDURE_NOT_ALLOWED);
+    // dryRun:true only replaces the runner invocation with a plan-shaped
+    // result so consumers can review what would have run. The schema gates
+    // dryRun via `additionalProperties: false`, so the only way to reach
+    // this branch is with the flag explicitly set to `true`.
+    if (params.dryRun === true) {
+      return successResult({
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        plan: {
+          procedureName: resolvedProcedureNames,
+          proceduresCount: resolvedProcedureNames.length,
+          compile: truthy(params.compile),
+          warnings: [],
+          errors: [],
+        },
+      });
+    }
+
     if (truthy(params.compile)) {
       const compileResult = await this.orchestrator.executeMappedTool(
         "compile_vba",

@@ -56,11 +56,11 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   inspect_form/compare_form/lint_form_code, the three form mutation tools, the
     //   new serialize/deserialize pair, and dysflow_create_form_from_template)
     //   - 0 hidden stubs (zero-hidden-tools policy)
-    //   + 13 modern core tools = 67 visible.
+    //   + 14 modern core tools = 68 visible.
     expect(toolCount).toBe(54);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(13);
-    expect(visibleCount).toBe(67);
+    expect(modernCount).toBe(14);
+    expect(visibleCount).toBe(68);
   });
 
   it("verifies split-mode coverage explicitly", () => {

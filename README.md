@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**67 visible MCP tools · Windows / Node 20+**
+**68 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 67 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, and pre-import module linting.
+- A platform with 68 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
 
 ### It is not
 
@@ -637,6 +637,13 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
   - `rules` (array, optional): Filter to any of `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match`.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
+
+#### `dysflow_resolve_project`
+Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `dysflow_get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+* **Parameters**:
+  - `projectId` (string, optional): The projectId to test for an explicit match.
+  - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
+* **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`, where `outcome` is `resolved` or `unresolved`, and `reason` is one of: `explicit id match`, `single project config found`, `project.json not found`, `id mismatch`, `unknown`.
 
 ---
 
