@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+## [v1.16.0] - 2026-07-06
+
+Round-3 P0 fixes for the Dysflow MCP runtime. This release changes internal
+behavior of three MCP tool paths and tightens the read-only contract; no new
+tools were added (visible MCP tool count stays at 68) and no schema shape
+changed.
+
+- **`VbaExecutionAdapter` uses a per-input `allowedProcedures` resolver** (round-3 Item 1, #674 / #684 follow-up / #748). The adapter no longer relies on the resolution that was bound once at MCP stdio startup; every `dysflow_vba_execute` call now resolves its `allowedProcedures` against the request that just arrived, so a project that enables the gate AFTER the stdio server has started is correctly enforced on the next call (and a project that disables it is correctly released). Closes the long-standing contract divergence where the gate surface and the docs promised per-input resolution but the implementation cached it once. New RED tests pin the resolver behavior at `test/adapters/vba-sync/vba-execution-adapter.test.ts`.
+- **`AccessRunner` skips the cross-process file lock for read-only paths — `dysflow_doctor`, `export_modules`, `export_all`** (round-3 Items 1+5+export, #750). The cross-process file lock that was acquired unconditionally before any PowerShell dispatch is now skipped for read-only paths (`dysflow_doctor`, `export_modules`, `export_all`, and any future read-only path). The previous behavior acquired the lock even when no Access process was about to be spawned, leaving orphan `.laccdb` lock files in the Access profile directory after every `dysflow_doctor` call. Three new test files pin the contract: `test/core/runner/access-runner-readlock.test.ts` (175 lines), `test/e2e/access-runner-readlock.e2e.test.ts` (136 lines), and `test/core/scripts/dysflow-access-runner-static.test.ts` (217 lines).
+- **Diagnostics branch returns BEFORE the canonical Access-open path** (round-3, #750). Even when the cross-process file lock is acquired, the diagnostics branch (`dysflow_doctor` `includeEnvironment:false`) now returns its result BEFORE the canonical Access-open path runs. Previously the canonical path could execute (and modify `.accdb` file metadata such as the `LastModified` stamp) even when the diagnostics had already concluded. The Access file is now guaranteed to remain unmodified on the diagnostics path. Companion to the read-only lock skip above; together they fix the "doctor modified my `.accdb`" finding.
+- **Test suite repair for #750's read-only dispatch** (#751 follow-up, `1ac39d9`). Pre-existing tests in `access-runner.test.ts` and `access-runner-lock-heartbeat.test.ts` assumed the canonical Access-open side-effect was always reached. Updated to skip non-Windows / use `existsSync` to skip when Access COM is unavailable, so CI stays green without compromising the new read-only contract.
+- **CI lint repair (TypeScript + biome)** (#751 follow-up, `8286ae0`). Sorted imports per biome (alphabetical order) and added optional chaining (`?.`) for `tool.inputSchema` (TS18048) to keep `pnpm lint` green after the round-3 changes.
+- **Tool count unchanged**: 68 visible MCP tools. This release is a behavior/internal-contracts fix; no tool was added, removed, or renamed.
+
+Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8286ae0`. Merge commit: `e78449b`.
+
 ## [v1.15.7] - 2026-07-06
 
 - **Export trust contract** (#745): `export_modules` and `export_all` now set `ok: false` when any module produces warnings instead of silently returning success with zero files written. New `Build-ExportResultSummary` function (renamed from `Merge-ExportResultSummary` to avoid PowerShell 5.1 cmdlet collisions) is the single source of truth for the export result trust contract. 4 Pester test atoms verify the contract across clean/partial/total failure scenarios.
