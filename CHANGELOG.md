@@ -1,5 +1,52 @@
 # Changelog
 
+## [v1.17.0] - 2026-07-06
+
+Read-tool project-aware target resolution (#716) plus a runner invariant
+repair. The new `target: "frontend" | "backend"` semantic lets MCP callers
+pass `projectId` plus `target` without `databasePath` / `backendPath` /
+`accessPath` / `sourcePath` and have Dysflow resolve the role against
+`.dysflow/project.json` for read-only schema/query tools (`get_schema`,
+`count_rows`, `distinct_values`, `list_tables`, `list_linked_tables`,
+`get_relationships`, `compare_backends`, `list_links`). An unresolvable
+role returns a typed `CONFIG_MISSING_TARGET_PATH` error before the
+PowerShell executor runs. Closes #716 for the frontend-local + backend
+lookup + explicit precedence + typed-error acceptance subset; `auto` mode
++ cross-DB ambiguity detection remain acknowledged follow-ups (see
+`openspec/changes/feat-716-target-frontend-backend/verify-report.md`).
+
+- **Semantic `target` role on read-only MCP schema/query tools** (#716). All
+  read tools that share the `READ_TARGET_OVERRIDE` input block now accept
+  a new `target` parameter: `"frontend"` resolves to the configured
+  `accessPath` from `.dysflow/project.json`; `"backend"` resolves to the
+  configured `backendPath`. Explicit `accessPath` / `backendPath` /
+  `databasePath` / `sourcePath` continue to win, so no caller that
+  previously passed a concrete path regresses. The schema enum is closed
+  (`frontend` / `backend`) and `auto` mode is not implemented in this
+  slice — the issue hedges that AC with *"if implemented"* and the new
+  explicit role already gives callers the unambiguous choice. When the
+  role cannot be resolved against the project config (e.g.
+  `target="backend"` against a project without `backendPath`), the
+  runner returns the typed `CONFIG_MISSING_TARGET_PATH` error **before**
+  invoking the PowerShell executor, so no orphan PIDs /
+  operation-registry entries are created on the unresolvable path.
+- **Runner default-fallback block re-keyed off `finalOperation.request`**
+  (`src/core/runner/access-runner.ts:285-322`). Discovered while rebasing
+  the prior-session WIP onto current `main`: the existing fallback that
+  defaults a missing path to `config.backendPath` / `config.accessDbPath`
+  was reading the **original** `operation.request`, so any upstream
+  resolution that had already populated a path (or cleared a `target`)
+  was silently overwritten by the spread. New `if (finalOperation.kind
+  === "query")` guard re-narrows TypeScript's discriminated union across
+  the `let` reassignment. Refactor-safe tests now assert on the parsed
+  `-PayloadJson` JSON content (what the PowerShell script actually sees)
+  rather than on top-level argument flags, so any future change to the
+  args layout that preserves the data semantics keeps the suite green.
+
+Implementation commits (PR #755): `f97810d`, `64018ea`. Merge commit: `c3f4f7a`.
+
+## [Unreleased]
+
 ## [v1.15.0] - 2026-07-05
 
 - Merge pull request #722 from DysTelefonica/feat/704-lint-module - fix(mcp): guard merged vba runtime tools - docs(mcp): fix containment comment - fix(mcp): contain VBA source resolution - refactor(vba-sync): split forms adapter - feat(mcp): add VBA module lint tool - Merge pull request #712 from DysTelefonica/feat/703-validate-manifest - feat(mcp): add VBA test manifest validation - feat(mcp): add dead code detection tool - docs(openspec): archive 2026-07-01 audit records - fix(ci): repair release workflow indentation - Merge pull request #707 from DysTelefonica/feat/701-procedure-read-tools - docs: document dysflow_find_references tool in README - feat(mcp): implement dysflow_find_references tool (closes #702) - test(mcp): RED for find_references no-such-symbol typed error - test(mcp): RED for find_references call sites - feat(mcp): implement dysflow_get_procedure and dysflow_list_procedures (closes #701) - test(mcp): RED for list_procedures typing filter - test(mcp): RED for get_procedure non-existent module - test(mcp): RED for get_procedure default empty - docs(testing): refresh coverage gates (#706) - fix(forms): report rollback outcomes (#700) - fix(mcp): reject relink inline passwords (#699) - fix(http): gate test_vba route by allowlist (#698) - fix(vba-sync): guard prune export inventory (#697) - fix(verify-code): surface export warnings (#696) - fix(test): serialize unit vitest workers (#695) - refactor(core): inject filesystem ports from adapters - fix(vba-sync): transition registry record to running - chore(lint): wire script helper coverage into CI gate (#687) - fix(forms): add path-containment guard to generate_form / catalog_add_control / create_form_from_template (#675) (#685) - fix(mcp): resolve allowedProcedures per-input, not per-startup (#674) (#684) - feat(mcp): expose import_queries.importPath in the MCP schema (#672) (#681) - ci(release): inline the release-name == tag assert, drop dead guard workflow (#668) (#680) - fix(dispatch-routes): correct mutates* declarations for export_* / generate_erd / fix_encoding (#665) (#678) - fix(vba-execution-adapter): gate allowlist BEFORE compile when compile:true (#667) (#679) - fix(classifier): normalize toggle values to TOGGLE token, surface presence-vs-absence (#671) (#683) - fix(serve): fail-closed on non-loopback host without --token (#669) (#682) - fix(update): include pnpm-lock.yaml in tarball + --frozen-lockfile in extractor (#666) (#677) - feat(errors): split MCP_INPUT_INVALID into MCP_PROCEDURE_NOT_ALLOWED (#659) (#676)
