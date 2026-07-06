@@ -7,6 +7,38 @@
 
 ## [Unreleased]
 
+## [v1.16.1] - 2026-07-06
+
+Truncation-safe `import_modules` + opt-in verbose observability (issue #752). The
+v1.15.7 hotfix path silently truncated source files at the pre-existing module's
+`CountOfLines` when the source's `Attribute VB_Name` resolved to an existing
+component (2035 → 630 in repro). v1.16.1 makes that mode fail loud and adds a
+per-module source/destination observability surface.
+
+- **Defensive validations in `Import-VbaModule`** (typed `error.code` per-module):
+  `VB_NAME_MISMATCH` (refuses when source's `Attribute VB_Name` ≠ resolved
+  component name), `DUPLICATE_OPTION_DIRECTIVE` (refuses when source has
+  duplicate `Option Explicit` / `Option Compare` / `Option Base` /
+  `Option Private Module`), `IMPORT_TRUNCATED` (refuses when post-`AddFromFile`
+  `CountOfLines` is strictly smaller than the source's line count).
+- **Opt-in `verbose: bool` flag** on `dysflow_import_modules` /
+  `dysflow_export_modules` / `import_all` / `export_all`. PowerShell switch
+  is `-VerboseContract` (the JSON `verbose` key is rewritten to
+  `-VerboseContract` at dispatch to avoid collision with
+  `[CmdletBinding()]$Verbose`). When set, every per-module result gains
+  `{source:{bytes,lines,sha256}, destination:{bytes,lines,sha256}, truncated,
+  mismatchReason}` so an AI caller can detect silent truncation instead of
+  trusting `status:ok`. Backward-compatible: omitted flag → field absent.
+- **Tests** — 16 new RED Pester atoms (`Get-VbNameFromSourceFile` x6,
+  `Test-SourceFileHasDuplicateOptions` x6, `Get-SourceFileSizeSnapshot` x4)
+  nested inside the parent pure-helper `Describe` so the existing AST
+  extraction at line 318 covers them. New E2E
+  `test/integration/vba-modules-import-verbose-truncation.e2e.test.ts`
+  covers the verbose envelope, the verbose:false backward-compat path, and
+  the `VB_NAME_MISMATCH` typed-error path.
+
+Implementation commits (PR #753): `60f5428`. Merge commit: `89d2b44`.
+
 ## [v1.16.0] - 2026-07-06
 
 Round-3 P0 fixes for the Dysflow MCP runtime. This release changes internal
