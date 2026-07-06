@@ -31,6 +31,7 @@ import {
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
+import { createResolveProjectTool } from "./dysflow-resolve-project-tool.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
@@ -442,6 +443,8 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_validate_manifest",
   // issue #704 — read-only VBA module pre-import linting
   "dysflow_lint_module",
+  // Round-3 Item 1 — project config re-resolution
+  "dysflow_resolve_project",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -1030,6 +1033,8 @@ export function createDysflowMcpTools(
         };
       },
     },
+    // Round-3 Item 1 — project config re-resolution companion tool
+    createResolveProjectTool({ cwd: process.cwd() }),
   ];
 
   return registerMcpTools(

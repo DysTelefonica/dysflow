@@ -1207,7 +1207,15 @@ describe("VbaExecutionAdapter", () => {
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("PR1b — accepts test_vba when allowedProcedures is unconfigured AND dryRun:true (escape hatch)", async () => {
+  it("PR1b + Round-3 Item 5 — test_vba with dryRun:true is plan-only (no runner call, no Access spawn)", async () => {
+    // Round-3 Item 5: when dryRun:true is set, test_vba short-circuits to a
+    // plan-shaped result WITHOUT invoking the orchestrator's executeMappedTool.
+    // Previously dryRun:true was an "escape hatch" that let the runner fire;
+    // the unified contract is now "dryRun=true → plan, dryRun absent → execute"
+    // so consumers can review the plan before committing real test execution.
+    // The gate's default-deny bypass for unconfigured allowlists still fires
+    // (dryRun:true satisfies the gate so execution would otherwise be allowed);
+    // the short-circuit just replaces the runner call with the plan shape.
     const { adapter, executeMappedTool } = makeUnconfiguredAdapter(
       vi.fn().mockResolvedValue(successResult([{ ok: true, procedure: "Test_Anything" }])),
     );
@@ -1218,16 +1226,117 @@ describe("VbaExecutionAdapter", () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toEqual([{ ok: true, procedure: "Test_Anything" }]);
-    }
+    if (!result.ok) throw new Error("expected dry-run plan success");
+    expect(result.data).toMatchObject({
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      plan: {
+        procedureName: ["Test_Anything"],
+        proceduresCount: 1,
+        compile: false,
+        warnings: [],
+        errors: [],
+      },
+    });
+    // No PowerShell / no Access — the short-circuit fires before the runner.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("Round-3 Item 5 — test_vba with dryRun:true and configured allowlist returns a plan WITHOUT calling the runner", async () => {
+    // Round-3 Item 5 RED test: the consumer-facing contract that must hold.
+    // When allowedProcedures is configured and contains the procedure, dryRun:true
+    // must return a plan-shaped result (no runner call) — matching the spec.
+    const executeMappedTool = vi.fn();
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected plan-only success");
+    expect(result.data).toMatchObject({
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      plan: {
+        procedureName: ["Test_A"],
+        proceduresCount: 1,
+      },
+    });
+    // The orchestrator must NOT receive a test_vba call — no runner spawn.
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("Round-3 Item 5 — test_vba with dryRun:true and compile:true plans the compile but does NOT invoke compile_vba either", async () => {
+    // The short-circuit must also skip the pre-run compile_vba call so the
+    // .accdb is never touched in dry-run mode.
+    const executeMappedTool = vi.fn();
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
+      dryRun: true,
+      compile: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected plan-only success with compile");
+    expect(result.data).toMatchObject({
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      plan: {
+        procedureName: ["Test_A"],
+        compile: true,
+      },
+    });
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("Round-3 Item 5 — test_vba WITHOUT dryRun executes the runner (existing behavior preserved)", async () => {
+    // Contraparte: when dryRun is absent, the original execute path runs —
+    // plan resolution → gate → compile_vba (if requested) → executeMappedTool.
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_A" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalledTimes(1);
     expect(executeMappedTool).toHaveBeenCalledWith(
       "test_vba",
       expect.objectContaining({
-        proceduresJson: JSON.stringify([{ procedure: "Test_Anything", args: [] }]),
+        proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
       }),
       expect.any(Object),
     );
+  });
+
+  it("Round-3 Item 5 — test_vba with dryRun:false executes the runner (explicit opt-out)", async () => {
+    // Explicit dryRun:false must preserve the legacy "execute" path.
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult([{ ok: true, procedure: "Test_A" }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
+      dryRun: false,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalledTimes(1);
   });
 
   it("PR1b — accepts test_vba when procedure is in the configured allowedProcedures list", async () => {

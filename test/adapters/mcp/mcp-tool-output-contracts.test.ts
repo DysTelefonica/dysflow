@@ -31,6 +31,8 @@ const OUTPUT_CONTRACT_GROUPS = {
     "dysflow_validate_manifest",
     // #704 — read-only VBA module pre-import linting.
     "dysflow_lint_module",
+    // #760 — read-only project-config resolution without Access.
+    "dysflow_resolve_project",
   ],
   modernServiceAliases: ["run_vba"],
   vbaManagerDysflowResult: [
