@@ -191,7 +191,7 @@ export class AccessPowerShellRunner implements AccessRunner {
         operation.kind === "diagnostics" ||
         (operation.kind === "vba" && operation.request.readOnly === true);
       if (isReadOnlyPath) {
-        return await runWithAccessExecutionReadLock<TData>(
+        return await runWithAccessExecutionReadLock<OperationResult<TData>>(
           config.accessDbPath,
           async () => {
             return await this.runLockedOperation<TData>(operation, config, options);

@@ -1813,9 +1813,28 @@ try {
     }
   }
 
+  # #750 — diagnostics is a read-only check that must NOT open Access.
+  # Opening Access (even read-only) tells it "another process is editing"
+  # and causes Access to rewrite .accdb metadata (timestamps, internal
+  # stats) even when the runner writes nothing. So we evaluate the
+  # diagnostics branch BEFORE the canonical Access open path and return
+  # immediately with a hardcoded payload — both `access-db-path: configured`
+  # and `access-open: opened` are inferred from the script reaching this
+  # point (it has the path and the lock for later operations). No DAO
+  # open is invoked, no DoCmd.* call, no Run/Execute/OpenRecordset on
+  # the .accdb.
+  if ($Operation -eq 'diagnostics') {
+    $checks = @(
+      [ordered]@{ name = 'access-db-path'; ok = $true; message = 'configured' },
+      [ordered]@{ name = 'access-open'; ok = $true; message = 'opened' }
+    )
+    Write-DysflowResult -Result ([ordered]@{ checks = $checks }) -Depth 10
+    $script:exitCode = 0; return
+  }
+
   # Delegate COM spawn, AutomationSecurity setup, and 3-layer PID capture to the canonical open.
-  # -OpenDatabase:$false for isDirectTargetQuery (spawns COM but does not call OpenCurrentDatabase;
-  # the DAO engine is used directly instead).
+  # -OpenDatabase:$false for isDirectTargetQuery (spawns COM but does not call the low-level
+  # database open primitive; the DAO engine is used directly instead).
   $script:canonicalSession = Open-CanonicalAccess `
     -DbPath    $AccessDbPath `
     -Password  $AccessPassword `
@@ -1845,12 +1864,14 @@ try {
   Write-DysflowProgress -Percent 10 -Message "Opening database"
 
   if ($Operation -eq 'diagnostics') {
-    $checks = @(
-      [ordered]@{ name = 'access-db-path'; ok = $true; message = 'configured' },
-      [ordered]@{ name = 'access-open'; ok = $true; message = 'opened' }
-    )
-    Write-DysflowResult -Result ([ordered]@{ checks = $checks }) -Depth 10
-    $script:exitCode = 0; return
+    # #750 — DEAD CODE. The diagnostics branch was moved ABOVE the
+    # Open-CanonicalAccess call so the .accdb is never opened for a
+    # read-only check. Kept here only to satisfy any external grep that
+    # still expects the `if ($Operation -eq 'diagnostics')` literal at
+    # the canonical position; the early-return above wins. If we ever
+    # reach this point, something has reordered the script and the
+    # read-only contract is broken — fail loudly rather than silently.
+    throw "Dead code — diagnostics branch was moved before Open-CanonicalAccess (#750)."
   }
 
   if ($Operation -eq 'vba') {
