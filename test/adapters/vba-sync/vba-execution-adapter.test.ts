@@ -1366,6 +1366,43 @@ describe("VbaExecutionAdapter", () => {
     );
   });
 
+  // #748 — VbaExecutionAdapter must accept a per-input resolver function
+  // (AllowedProcedures resolver from #674) instead of a frozen array captured
+  // at constructor time. This is the fix for the "stale allowedProcedures"
+  // issue where the project config was edited but the MCP runtime kept the
+  // old allowlist because it was loaded once at startup.
+  it("#748 — accepts test_vba when allowedProcedures is a per-input resolver function (cross-project leak fix #674)", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Allowed" }])),
+      cwd: "C:/repo",
+    };
+    // Resolver function: returns the allowlist based on the input each call.
+    // In production this reads the project config of the target project.
+    const resolver = vi.fn().mockResolvedValue(["Test_Allowed", "Test_AlsoAllowed"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_Allowed",
+      argsJson: "[]",
+    });
+
+    // Resolver MUST be invoked with the input (per-input, not frozen).
+    expect(resolver).toHaveBeenCalledWith(
+      expect.objectContaining({ procedureName: "Test_Allowed" }),
+    );
+    // Gate accepted — procedure is in the resolved allowlist.
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_Allowed", args: [] }]),
+      }),
+      expect.any(Object),
+    );
+  });
+
   it("PR1b — refuses test_vba when procedure is NOT in the configured allowedProcedures list (even with dryRun:true)", async () => {
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool: vi.fn(),
