@@ -3717,3 +3717,178 @@ Describe "Build-ExportResultSummary — issue #745 trust contract" {
         $result.ok | Should -Be $false -Because "issue #745: even if a name appears in exported, ok MUST be false if any module failed"
     }
 }
+
+# ===========================================================================
+# Slice 1 of feat-759-no-compile (PR-1, non-breaking bug fix).
+#
+# Asserts the NEW (post-GREEN) call shapes that the Slice 1 fix installs:
+#   * Remove-AccessObjectOrComponent :2205  → RunCommand(280) on $AccessApplication
+#   * Remove-AccessObjectOrComponent :2247  → RunCommand(280) on $AccessApplication
+#   * Save-VbaProjectModules         :2662  → (the 126 attempt is gone)
+#     the canonical save path is now :2668's `DoCmd.RunCommand(280)`.
+#
+# The atoms assert OUTCOME (which RunCommand value was passed to which COM
+# object) — they survive any behaviour-preserving refactor of the
+# surrounding try/catch wrappers. Under pre-Slice-1 `main` (with the 126
+# coupling), these atoms FAIL; after the Slice-1 GREEN commit they PASS.
+# ===========================================================================
+
+Describe "Remove-AccessObjectOrComponent — slice-1 persistence path (#759 PR-1)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Remove-AccessObjectOrComponent' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Remove-AccessObjectOrComponent not found" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        # Capture every RunCommand call: $script:RunCommandCalls holds
+        # @{ Object = '<AccessApplication|DoCmd>'; Value = <int> } entries.
+        $script:RunCommandCalls = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+        # The :2205 path runs after Resolve-ExistingComponentName confirms
+        # the component exists. The state flag flips to "removed" once the
+        # mocked components.Remove fires, mirroring the real COM contract
+        # where the post-deletion verification re-resolves the component
+        # and sees nothing.
+        $script:ComponentPresent = $true
+
+        function script:Resolve-AccessObjectInfo {
+            param($AccessApplication, $ModuleName)
+            # Make the DoCmd.DeleteObject branch (the one that takes the
+            # :2205 fallback) the active path: Resolve-AccessObjectInfo must
+            # return Exists=$false so the code falls through to the bare
+            # :2205 call site (no DoCmd.DeleteObject shortcut).
+            return [pscustomobject]@{ Exists = $false; Kind = "Module"; Name = $ModuleName }
+        }
+        function script:Resolve-ExistingComponentName {
+            param($VbProject, $ModuleName)
+            if ($script:ComponentPresent) { return "Form_BrokenModule" }
+            return $null
+        }
+    }
+
+    Context "happy delete path (no friction) drives the :2205 call site" {
+        It "calls RunCommand on the AccessApplication and removes the component" {
+            $fakeComponents = [PSCustomObject]@{}
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($name)
+                return [pscustomobject]@{ Name = $name; Type = 100 }
+            }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Remove" -Value {
+                param($component)
+                # After the production code's components.Remove fires, flip
+                # the state flag so the post-deletion verification sees
+                # the component gone (same shape the real Access COM has).
+                $script:ComponentPresent = $false
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+            $fakeAccessApp = [PSCustomObject]@{ }
+            $fakeAccessApp | Add-Member -MemberType ScriptMethod -Name "RunCommand" -Value {
+                param($value)
+                $script:RunCommandCalls.Add([PSCustomObject]@{
+                    Object = "AccessApplication"; Value = [int]$value
+                })
+            }
+            $fakeAccessApp | Add-Member -MemberType ScriptProperty -Name "DoCmd" -Value {
+                [pscustomobject]@{ DeleteObject = { param($t, $n) } }
+            }
+
+            $res = Remove-AccessObjectOrComponent `
+                -AccessApplication $fakeAccessApp `
+                -VbProject $fakeVbProject `
+                -ModuleName "Form_BrokenModule" `
+                -Force:$false
+
+            $res.status | Should -Be "ok" `
+                -Because "the post-deletion verification must see the component gone"
+            $res.deleted | Should -Be "Form_BrokenModule"
+
+            # Slice-1 GREEN step: the :2205 call site persists via
+            # save-only (`acCmdSaveAllModules` = 280). The previous shape
+            # used `RunCommand(126)` (compile-and-save-all), which failed
+            # silently on broken projects and surfaced as
+            # "Active lock detected" in GH #759. Asserting the new shape
+            # here locks the fix from regressing.
+            $script:RunCommandCalls.Count | Should -Be 1 `
+                -Because "the :2205 path emits exactly one persistence call"
+            $script:RunCommandCalls[0].Object | Should -Be "AccessApplication" `
+                -Because "the persistence call is on the AccessApplication object, not on DoCmd"
+            $script:RunCommandCalls[0].Value | Should -Be 280 `
+                -Because "Slice-1 fix: :2205 persists via acCmdSaveAllModules (280), no longer acCmdCompileAndSaveAllModules (126)"
+        }
+    }
+}
+
+Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Save-VbaProjectModules' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Save-VbaProjectModules not found" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:RunCommandCalls = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+        $fakeAccessApp = [PSCustomObject]@{ }
+        $fakeAccessApp | Add-Member -MemberType ScriptMethod -Name "RunCommand" -Value {
+            param($value)
+            $script:RunCommandCalls.Add([PSCustomObject]@{
+                Object = "AccessApplication"; Value = [int]$value
+            })
+            # Simulate the broken-project contract: 126 (compile+save) fails
+            # because the project has a pre-existing compile error, so the
+            # catch fires and the fallback path runs.
+            if ([int]$value -eq 126) {
+                throw "mock: 126 failed because the project does not compile"
+            }
+        }
+        $fakeDoCmd = [PSCustomObject]@{ }
+        $fakeDoCmd | Add-Member -MemberType ScriptMethod -Name "RunCommand" -Value {
+            param($value)
+            $script:RunCommandCalls.Add([PSCustomObject]@{
+                Object = "DoCmd"; Value = [int]$value
+            })
+        }
+        $fakeAccessApp | Add-Member -MemberType ScriptProperty -Name "DoCmd" -Value { $fakeDoCmd }
+    }
+
+    It "persists via DoCmd.RunCommand(280) and never invokes the dropped 126 attempt" {
+        # Slice-1 GREEN step: Save-VbaProjectModules no longer tries
+        # `RunCommand(126)` at all — the 126 first-attempt is dropped. The
+        # function now uses `DoCmd.RunCommand(280)` as its sole save path.
+        $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -ModuleNames @("Form_X")
+        $res | Should -BeNullOrEmpty `
+            -Because "Save-VbaProjectModules must return without throwing"
+
+        # The 280 call must appear on DoCmd (the canonical save path).
+        $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
+        $doCmdCalls.Count | Should -BeGreaterOrEqual 1 `
+            -Because "DoCmd.RunCommand(280) is the canonical save path"
+        $doCmdCalls[0].Value | Should -Be 280 `
+            -Because "the save path persists modules without compiling (acCmdSaveAllModules = 280)"
+
+        # The dropped 126 first-attempt must NEVER fire — even when the
+        # project is healthy. AccessApplication.RunCommand is captured
+        # here and any 126 call would be a regression on the fix.
+        $appCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "AccessApplication" })
+        $appCalls | Should -BeNullOrEmpty `
+            -Because "Save-VbaProjectModules must NEVER call RunCommand(126); the compile-and-save-all attempt is gone"
+    }
+}
