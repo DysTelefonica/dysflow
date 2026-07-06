@@ -1338,7 +1338,8 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "dysflow_vba_execute")
         ?.handler({ procedureName: "DeleteAll" });
       expect(result?.isError).toBe(true);
-      expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      // #757 (F6) — the no-allowlist branch now has its own distinct code.
+      expect(result?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
       expect(result?.content[0]?.text).toContain("DeleteAll");
       expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
     });
@@ -1441,7 +1442,8 @@ describe("MCP tool registration over core services", () => {
         .find((t) => t.name === "run_vba")
         ?.handler({ procedureName: "DeleteAll" });
       expect(result?.isError).toBe(true);
-      expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      // #757 (F6) — the no-allowlist branch now has its own distinct code.
+      expect(result?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
       expect(result?.content[0]?.text).toContain("DeleteAll");
       expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
     });

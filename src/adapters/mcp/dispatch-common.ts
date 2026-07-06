@@ -31,6 +31,20 @@ export const MCP_PROCEDURE_NOT_ALLOWED = "MCP_PROCEDURE_NOT_ALLOWED" as const;
 export type McpProcedureNotAllowedCode = typeof MCP_PROCEDURE_NOT_ALLOWED;
 
 /**
+ * Issue #757 (F6) — allowlist-not-configured branch of the procedure gate.
+ * Split out of the generic `MCP_INPUT_INVALID` so consumers can distinguish
+ * "this project declares no allowedProcedures at all" (a config problem the
+ * operator fixes in `.dysflow/project.json`) from a genuine input-shape error.
+ * Reserved earlier in `canonical-handlers-procedure-not-allowed.test.ts`
+ * ("other SDD work owns MCP_ALLOWLIST_NOT_CONFIGURED"). Emitted by BOTH the
+ * MCP-handler gate (`ensureProcedureAllowed`, run_vba/dysflow_vba_execute) and
+ * the adapter gate (`VbaExecutionAdapter.ensureTestProceduresAllowed`,
+ * test_vba) so a consumer greps one string regardless of which layer refused.
+ */
+export const MCP_ALLOWLIST_NOT_CONFIGURED = "MCP_ALLOWLIST_NOT_CONFIGURED" as const;
+export type McpAllowlistNotConfiguredCode = typeof MCP_ALLOWLIST_NOT_CONFIGURED;
+
+/**
  * Issue #659 — schema-rejection envelope. Retains the legacy `MCP_INPUT_INVALID`
  * code (kept for backward compat per `gate-error-codes/spec.md` scenario 5).
  * The structured `error` block carries `code` + `message` but deliberately
@@ -106,6 +120,36 @@ export function procedureNotAllowed(
       code: MCP_PROCEDURE_NOT_ALLOWED,
       message,
       allowedProcedures: [...allowedProcedures],
+      remediation,
+    },
+  };
+}
+
+/**
+ * Issue #757 (F6) — gate-rejection envelope for the allowlist-NOT-configured
+ * branch (project declares no `allowedProcedures` and the caller did not pass
+ * `dryRun:true`). Distinct from `procedureNotAllowed` (which fires when an
+ * allowlist IS configured but the requested procedure is absent) and from the
+ * generic schema-rejection `invalidInput`. Emits the new
+ * `MCP_ALLOWLIST_NOT_CONFIGURED` code in BOTH the legacy `content[0].text`
+ * body and the structured `error` block. No `allowedProcedures` field is
+ * surfaced because there is no allowlist to introspect.
+ */
+export function allowlistNotConfigured(procedureName: string): McpToolResult {
+  const remediation =
+    `Declare a non-empty 'allowedProcedures' allowlist in .dysflow/project.json ` +
+    `(it is re-read per call — no server restart is needed), or pass dryRun:true ` +
+    `to plan without executing.`;
+  const message =
+    `Refusing to execute VBA procedure '${procedureName}': project config declares ` +
+    `no allowedProcedures allowlist. ${remediation}`;
+  return {
+    content: [{ type: "text", text: `${MCP_ALLOWLIST_NOT_CONFIGURED}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: {
+      code: MCP_ALLOWLIST_NOT_CONFIGURED,
+      message,
       remediation,
     },
   };

@@ -7,6 +7,7 @@ import {
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import {
+  allowlistNotConfigured,
   invalidInput,
   isWriteAllowed,
   procedureNotAllowed,
@@ -51,12 +52,9 @@ export function ensureProcedureAllowed(
   // gap where "read-only" tools could in fact run arbitrary compiled VBA.
   if (allowedProcedures === undefined || allowedProcedures.length === 0) {
     if (dryRun !== true) {
-      return invalidInput(
-        `Refusing to execute VBA procedure '${procedureName}': ` +
-          `project config must declare allowedProcedures (with procedure in the list) ` +
-          `OR caller must pass dryRun:true. ` +
-          `Set allowedProcedures in .dysflow/project.json to allow this procedure.`,
-      );
+      // #757 (F6) — split out of the generic MCP_INPUT_INVALID so consumers can
+      // tell "no allowlist configured" (a config fix) apart from a schema error.
+      return allowlistNotConfigured(procedureName);
     }
     return undefined;
   }

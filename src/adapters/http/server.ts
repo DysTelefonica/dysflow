@@ -394,9 +394,14 @@ async function routeRequest(
     const result = await context.services.vbaSyncToolService.execute("test_vba", body.data);
     const status =
       !result.ok &&
-      ["MCP_INPUT_INVALID", "VBA_INVALID_TEST_PLAN", "VBA_NO_TESTS_SELECTED"].includes(
-        result.error.code,
-      )
+      [
+        "MCP_INPUT_INVALID",
+        // #757 (F6) — the no-allowlist branch keeps the 400 status it had when
+        // it was reported as MCP_INPUT_INVALID; only the code string changed.
+        "MCP_ALLOWLIST_NOT_CONFIGURED",
+        "VBA_INVALID_TEST_PLAN",
+        "VBA_NO_TESTS_SELECTED",
+      ].includes(result.error.code)
         ? 400
         : !result.ok && result.error.code === "PROCEDURE_NOT_ALLOWED"
           ? 403

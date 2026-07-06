@@ -1178,9 +1178,10 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected default-deny refusal");
-    // Same `MCP_INPUT_INVALID` code as PR1a's MCP-handler gate so consumers can
-    // grep for the same string regardless of which layer caught the call.
-    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    // #757 (F6) — same `MCP_ALLOWLIST_NOT_CONFIGURED` code as PR1a's MCP-handler
+    // gate so consumers grep for the same string regardless of which layer caught
+    // the call (was the generic MCP_INPUT_INVALID before the split).
+    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(result.error.message).toContain("allowedProcedures");
     expect(result.error.message).toContain("dryRun");
     expect(result.error.message).toContain("Test_RunAll");
@@ -1201,7 +1202,7 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected default-deny refusal for empty allowlist");
-    expect(result.error.code).toBe("MCP_INPUT_INVALID");
+    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(result.error.message).toContain("allowedProcedures");
     expect(result.error.message).toContain("Test_DeleteAll");
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();

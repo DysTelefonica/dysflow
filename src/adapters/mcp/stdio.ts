@@ -279,7 +279,13 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
   });
 }
 
-function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
+// #757 (F7) — exported as a test seam so the per-input allowedProcedures
+// resolver wiring (below) can be asserted directly without spinning up the
+// full SDK server.
+export function createConfiguredServices(
+  config: DysflowConfig,
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry({
     ...config,
     fileSystem: nodeRegistryFileSystem,
@@ -321,7 +327,19 @@ function createConfiguredServices(config: DysflowConfig): DysflowMcpServices {
       // gate as the MCP-handler `handleMcpVbaExecute`. The MCP-handler gate
       // covers `run_vba` / `dysflow_vba_execute` (PR1a); `test_vba` routes
       // through the adapter (PR1b) and shares the same allowlist.
-      allowedProcedures: config.allowedProcedures,
+      //
+      // #757 (F7) — pass a per-input RESOLVER instead of the frozen
+      // config.allowedProcedures. This service bundle is cached by serviceCache
+      // per resolved-config key, so a frozen array meant a mid-session edit to
+      // .dysflow/project.json was ignored by test_vba until a server restart.
+      // The resolver re-reads config on every call (loadDysflowConfig has no
+      // cache), so a newly-added test procedure takes effect immediately —
+      // mirroring the MCP-handler gate resolver wired in startMcpStdioAdapter
+      // (#674/#748) that already gives run_vba this behavior.
+      allowedProcedures: async (input: unknown) => {
+        const resolved = await resolveConfigForInput(input, options);
+        return resolved.ok ? resolved.data.allowedProcedures : undefined;
+      },
     }),
   };
 }
@@ -386,7 +404,13 @@ export function createDynamicServices(
       serviceCache.delete(cacheKey);
       serviceCache.set(cacheKey, services);
     } else {
-      services = (options.serviceFactory ?? createConfiguredServices)(configResult.data);
+      // #757 (F7) — the default factory needs `options` (cwd/env) so its
+      // per-input allowedProcedures resolver resolves config against the same
+      // roots the dispatcher uses. An injected serviceFactory keeps the legacy
+      // single-arg shape (tests supply their own allowlist directly).
+      services = options.serviceFactory
+        ? options.serviceFactory(configResult.data)
+        : createConfiguredServices(configResult.data, options);
       if (serviceCache.size >= MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES) {
         const oldestKey = serviceCache.keys().next().value;
         if (oldestKey !== undefined) serviceCache.delete(oldestKey);

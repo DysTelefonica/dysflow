@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  deriveExpectedLockFile,
   derivePsTimeoutMs,
+  deriveTimeoutPhase,
   MIN_PS_TIMEOUT_MS,
   resolveDefaultVbaManagerScriptPath,
   spawnVbaManager,
@@ -268,6 +270,69 @@ describe("VbaSyncAdapter Orchestrator", () => {
       expect(result.error.message).toMatch(/timed out after \d+ms/);
     }
     expect(result.durationMs).toBeGreaterThan(10_000);
+  });
+
+  it("#757 (F3) — VBA_MANAGER_TIMEOUT carries a structured envelope (phase, reaped PIDs, cleanup warnings, remediation)", async () => {
+    // The post-timeout reap double reports one attributed kill, one orphan kill,
+    // and one refused kill — dysflow must surface all three in the envelope so a
+    // consuming agent acts without a manual MSACCESS.EXE / .laccdb audit.
+    const preflight: AccessOperationPreflightCleanup = {
+      cleanup: vi
+        .fn()
+        // 1st call: the pre-run preflight (clean).
+        .mockResolvedValueOnce({ cleaned: [], killed: [], orphanedKilled: [], errors: [] })
+        // 2nd call: the post-timeout reap with structured results.
+        .mockResolvedValueOnce({
+          cleaned: ["op-1"],
+          killed: [1111],
+          orphanedKilled: [2222],
+          errors: [
+            {
+              operationId: "orphan",
+              message:
+                "Refused to kill PID 3333: mainWindowHandle is 0x1F, not 0 (visible window).",
+            },
+          ],
+        }),
+    };
+    const executor: VbaManagerExecutor = async (request) => ({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      durationMs: request.timeoutMs,
+      timedOut: true,
+    });
+    const service = new VbaSyncAdapter({
+      executor,
+      preflightCleanup: preflight,
+      timeoutMs: 12_000,
+      accessPath: "C:/db/front.accdb",
+      env: {},
+    });
+
+    const result = await service.execute("export_all", {
+      accessPath: "C:/db/front.accdb",
+      projectRoot: "C:/repo",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected timeout failure");
+    expect(result.error.code).toBe("VBA_MANAGER_TIMEOUT");
+    const details = result.error.details as Record<string, unknown>;
+    expect(details.phase).toBe("export");
+    expect(details.wasApply).toBe(true);
+    // The reported budget is the resolved operation timeout that was exceeded;
+    // assert its shape, not the exact internal resolution.
+    expect(typeof details.operationTimeoutMs).toBe("number");
+    expect(details.operationTimeoutMs as number).toBeGreaterThan(0);
+    // Auto-reaped PIDs (attributed + orphan) the consumer need NOT clean.
+    expect(details.reapedProcessPids).toEqual([1111, 2222]);
+    // The refused kill is surfaced as a cleanup warning — may still be lingering.
+    expect(details.cleanupWarnings).toEqual([
+      "orphan: Refused to kill PID 3333: mainWindowHandle is 0x1F, not 0 (visible window).",
+    ]);
+    expect(details.expectedLockFile).toBe("C:/db/front.laccdb");
+    expect(result.error.remediation).toContain("dysflow_access_force_cleanup_orphaned");
   });
 
   it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {
@@ -1218,6 +1283,40 @@ describe("VbaSyncAdapter Orchestrator", () => {
         data: { valid: true, name: "SpyForm", kind: "Form", controlCount: 0 },
       });
     });
+  });
+});
+
+describe("#757 (F3) — deriveTimeoutPhase", () => {
+  it("maps export/import/compile/verify/link/execute tools to their phase", () => {
+    expect(deriveTimeoutPhase("export_all")).toBe("export");
+    expect(deriveTimeoutPhase("export_modules")).toBe("export");
+    expect(deriveTimeoutPhase("import_all")).toBe("import");
+    expect(deriveTimeoutPhase("import_modules")).toBe("import");
+    expect(deriveTimeoutPhase("compile_vba")).toBe("compile");
+    expect(deriveTimeoutPhase("verify_code")).toBe("verify");
+    expect(deriveTimeoutPhase("relink_directory")).toBe("link");
+    expect(deriveTimeoutPhase("test_vba")).toBe("execute");
+  });
+
+  it("falls back to 'other' for an unmapped tool", () => {
+    expect(deriveTimeoutPhase("exists")).toBe("other");
+    expect(deriveTimeoutPhase("list_objects")).toBe("other");
+  });
+});
+
+describe("#757 (F3) — deriveExpectedLockFile", () => {
+  it("derives the .laccdb lock path for an .accdb binary (case-insensitive extension)", () => {
+    expect(deriveExpectedLockFile("C:/db/front.accdb")).toBe("C:/db/front.laccdb");
+    expect(deriveExpectedLockFile("C:/db/Front.ACCDB")).toBe("C:/db/Front.laccdb");
+  });
+
+  it("derives the legacy .ldb lock path for an .mdb binary", () => {
+    expect(deriveExpectedLockFile("C:/db/legacy.mdb")).toBe("C:/db/legacy.ldb");
+  });
+
+  it("returns undefined for an unknown extension or missing path", () => {
+    expect(deriveExpectedLockFile("C:/db/front.sqlite")).toBeUndefined();
+    expect(deriveExpectedLockFile(undefined)).toBeUndefined();
   });
 });
 

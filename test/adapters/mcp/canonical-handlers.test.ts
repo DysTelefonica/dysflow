@@ -19,7 +19,8 @@ describe("ensureProcedureAllowed — default-deny gate (PR1a, #621 F1)", () => {
     const error = ensureProcedureAllowed("DeleteAll", undefined, undefined);
     expect(error).toBeDefined();
     expect(error?.isError).toBe(true);
-    expect(error?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    // #757 (F6) — the no-allowlist branch now carries its own distinct code.
+    expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).toContain("DeleteAll");
     expect(error?.content[0]?.text).toContain("allowedProcedures");
     expect(error?.content[0]?.text).toContain("dryRun");
