@@ -223,6 +223,14 @@ export type AccessQueryRequest = {
   backendPath?: string;
   rootPath?: string;
   databasePath?: string;
+  /**
+   * Semantic target role for read-only query/schema tools (#716).
+   * `frontend` resolves to the configured `accessPath`; `backend` resolves to `backendPath`.
+   * Resolution requires `projectId` (or `contextId`) and happens downstream
+   * of the mapper; explicit `accessPath`/`backendPath`/`databasePath` win
+   * when provided.
+   */
+  target?: "frontend" | "backend";
   exportPath?: string;
   importPath?: string;
   queryDefinitions?: readonly { name: string; sql: string }[];

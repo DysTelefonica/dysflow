@@ -6,7 +6,10 @@ import {
   buildWriteFixtureRequest,
   coerceTimeoutMs,
   getStr,
+  isValidQueryTarget,
   pickOverrides,
+  pickQueryTarget,
+  VALID_QUERY_TARGETS,
 } from "../../../src/core/mapping/access-query-request-mapper.js";
 
 /**
@@ -25,6 +28,7 @@ const OVERRIDE_KEYS = [
   "expectedProjectRoot",
   "expectedDestinationRoot",
   "timeoutMs",
+  "target",
 ] as const;
 
 function pickOverrideSlice(request: Record<string, unknown>): Record<string, unknown> {
@@ -438,6 +442,54 @@ describe("access-query-request-mapper", () => {
       expect(() => coerceTimeoutMs("15000" as unknown as number)).toThrow(
         /timeoutMs must be a number/,
       );
+    });
+  });
+
+  describe("target (#716)", () => {
+    it("VALID_QUERY_TARGETS exposes only 'frontend' and 'backend'", () => {
+      expect([...VALID_QUERY_TARGETS].sort()).toEqual(["backend", "frontend"]);
+    });
+
+    it("isValidQueryTarget accepts the two valid roles and rejects everything else", () => {
+      expect(isValidQueryTarget("frontend")).toBe(true);
+      expect(isValidQueryTarget("backend")).toBe(true);
+      expect(isValidQueryTarget("auto")).toBe(false);
+      expect(isValidQueryTarget("FRONTEND")).toBe(false);
+      expect(isValidQueryTarget(123)).toBe(false);
+      expect(isValidQueryTarget(undefined)).toBe(false);
+      expect(isValidQueryTarget(null)).toBe(false);
+    });
+
+    it("pickQueryTarget returns the value when valid and undefined otherwise", () => {
+      expect(pickQueryTarget({ target: "frontend" })).toBe("frontend");
+      expect(pickQueryTarget({ target: "backend" })).toBe("backend");
+      expect(pickQueryTarget({ target: "auto" })).toBeUndefined();
+      expect(pickQueryTarget({})).toBeUndefined();
+    });
+
+    it("pickOverrides surfaces target as part of the override slice (#716)", () => {
+      const result = pickOverrides({ projectId: "p", target: "backend" });
+      expect(result.target).toBe("backend");
+      expect(result.projectId).toBe("p");
+    });
+
+    it("buildQueryReadRequest for get_schema passes target through to the request", () => {
+      const request = buildQueryReadRequest("get_schema", {
+        projectId: "p",
+        target: "frontend",
+        tableName: "TbConfiguracionBackends",
+      });
+      expect(request.target).toBe("frontend");
+      expect(request.tableName).toBe("TbConfiguracionBackends");
+      expect(request.projectId).toBe("p");
+    });
+
+    it("buildQueryReadRequest omits target when not provided", () => {
+      const request = buildQueryReadRequest("get_schema", {
+        projectId: "p",
+        tableName: "TbConfiguracionBackends",
+      });
+      expect(request.target).toBeUndefined();
     });
   });
 });

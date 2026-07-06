@@ -173,7 +173,8 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "List the database's tables (names only). Read-only — use get_schema for a table's columns.",
   list_linked_tables:
     "List tables linked into the frontend from a backend, with their connection sources. Read-only.",
-  get_schema: "Return the column schema (names, types, sizes, keys) of a table. Read-only.",
+  get_schema:
+    'Return the column schema (names, types, sizes, keys) of a table. Read-only. When `projectId` and `target` (`"frontend"` | `"backend"`) are passed together, Dysflow resolves `target` to the configured `accessPath` / `backendPath` from `.dysflow/project.json` so callers do not have to know the local file paths; explicit `accessPath`/`backendPath`/`databasePath` still win when provided.',
   count_rows: "Count rows in a table or for a SQL/query predicate. Read-only.",
   distinct_values:
     "Return the distinct values of a column (by tableName+columnName, or via a SQL/query). Read-only.",

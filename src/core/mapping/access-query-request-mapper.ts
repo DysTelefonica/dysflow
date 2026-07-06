@@ -74,7 +74,22 @@ export type OverrideShape = {
   expectedProjectRoot: string | undefined;
   expectedDestinationRoot: string | undefined;
   timeoutMs: number | undefined;
+  /** Semantic target role for read tools (#716). Resolved to accessPath/backendPath by the consumer. */
+  target: QueryTarget | undefined;
 };
+
+/**
+ * Semantic target role for read-only query/schema tools (#716).
+ * `frontend` resolves to the configured `accessPath`; `backend` resolves to `backendPath`.
+ * Resolution requires `projectId` (or `contextId`) and happens downstream of the mapper.
+ */
+export type QueryTarget = "frontend" | "backend";
+
+export const VALID_QUERY_TARGETS: readonly QueryTarget[] = ["frontend", "backend"];
+
+export function isValidQueryTarget(value: unknown): value is QueryTarget {
+  return typeof value === "string" && (VALID_QUERY_TARGETS as readonly string[]).includes(value);
+}
 
 /**
  * Reads a trimmed non-empty string from `params[key]`, falling back to the
@@ -130,7 +145,20 @@ export function pickOverrides(params: Record<string, unknown>): OverrideShape {
     expectedProjectRoot: getStr(params, "expectedProjectRoot"),
     expectedDestinationRoot: getStr(params, "expectedDestinationRoot"),
     timeoutMs: coerceTimeoutMs(params.timeoutMs as number | string | undefined),
+    target: pickQueryTarget(params),
   };
+}
+
+/**
+ * Reads `target` from the raw input and validates it is one of
+ * `"frontend" | "backend"`. Invalid values surface as `undefined`
+ * so the upstream Zod schema (which declares the enum) still
+ * refuses them at the MCP boundary; this picker just defensively
+ * normalizes whatever reaches the mapper.
+ */
+export function pickQueryTarget(params: Record<string, unknown>): QueryTarget | undefined {
+  const raw = params.target;
+  return isValidQueryTarget(raw) ? raw : undefined;
 }
 
 /**
