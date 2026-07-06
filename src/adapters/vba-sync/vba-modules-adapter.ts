@@ -575,7 +575,11 @@ export class VbaModulesAdapter {
     if (!mapping) {
       return failureResult(createDysflowError("MAPPING_ERROR", "Missing export_all mapping."));
     }
-    const exportResult = await this.orchestrator.executeMappedTool("export_all", params, mapping);
+    const exportResult = await this.orchestrator.executeMappedTool(
+      "export_all",
+      { ...params, readOnly: true },
+      mapping,
+    );
     if (!exportResult.ok) return exportResult;
 
     const data = (exportResult.data ?? {}) as Record<string, unknown>;
@@ -897,6 +901,7 @@ export class VbaModulesAdapter {
         ...params,
         moduleNames,
         exportPath: snapshotDir,
+        readOnly: true,
       },
       exportMapping,
     );

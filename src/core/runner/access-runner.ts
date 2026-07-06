@@ -44,6 +44,7 @@ import {
   type LockFileSystemPort,
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
+  runWithAccessExecutionReadLock,
 } from "./cross-process-lock.js";
 
 export type { LockFileSystemPort };
@@ -178,6 +179,26 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
 
     try {
+      // #750 — diagnostics and any `kind: "vba"` request that explicitly opts
+      // into readOnly (export_modules, export_all) must NOT acquire the
+      // cross-process file lock. Acquiring that lock tells Access "another
+      // process is editing" and causes Access to rewrite metadata on the
+      // .accdb (timestamps, internal stats) even when the runner itself
+      // doesn't write. A read-only tool must never trigger that. We still
+      // serialize in-process via the same `lockState` map so two read-only
+      // calls don't run concurrently against the same .accdb.
+      const isReadOnlyPath =
+        operation.kind === "diagnostics" ||
+        (operation.kind === "vba" && operation.request.readOnly === true);
+      if (isReadOnlyPath) {
+        return await runWithAccessExecutionReadLock<TData>(
+          config.accessDbPath,
+          async () => {
+            return await this.runLockedOperation<TData>(operation, config, options);
+          },
+          defaultAccessExecutionLocks,
+        );
+      }
       // F3b (#620): collect non-ENOENT heartbeat errors in a closure so they can
       // be drained as warning diagnostics on the returned `OperationResult`.
       // ENOENT (lock already released) is still suppressed inside

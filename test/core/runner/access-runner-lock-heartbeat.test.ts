@@ -94,7 +94,11 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
 
     // Start the first operation — it will hold the lock while executor is awaiting
     const firstRunPromise = runner.run(
-      { kind: "diagnostics", request: {} },
+      // #750 — the heartbeat contract is verified here on a WRITE path
+      // (`kind: "vba"` without `readOnly: true`). Read-only paths
+      // (diagnostics, export_modules, export_all) intentionally skip the
+      // cross-process lock and therefore do not have a heartbeat to verify.
+      { kind: "vba", request: { moduleName: "Test", procedureName: "Test" } },
       {
         configSource: "explicit-request",
         allowWrites: false,
@@ -180,7 +184,8 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
 
     // Complete the first operation
     await runner.run(
-      { kind: "diagnostics", request: {} },
+      // #750 — write path (no `readOnly: true`) to exercise the heartbeat contract.
+      { kind: "vba", request: { moduleName: "Test", procedureName: "Test" } },
       {
         configSource: "explicit-request",
         allowWrites: false,
@@ -261,7 +266,10 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
     });
 
     const result = await runner.run(
-      { kind: "diagnostics", request: {} },
+      // #750 — write path so the test exercises the heartbeat contract.
+      // Read-only paths (diagnostics, export_modules, export_all) skip the
+      // cross-process lock and therefore have no heartbeat to verify.
+      { kind: "vba", request: { moduleName: "Test", procedureName: "Test" } },
       {
         configSource: "explicit-request",
         allowWrites: false,

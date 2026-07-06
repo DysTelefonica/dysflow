@@ -151,8 +151,12 @@ describe("AccessPowerShellRunner", () => {
 
     await runner.run(
       {
-        kind: "diagnostics",
-        request: { includeEnvironment: true },
+        // #750 — write path so the test exercises the cross-process lock and
+        // the LOCK_TIMEOUT contract. Read-only paths (diagnostics,
+        // export_modules, export_all) intentionally skip the cross-process
+        // lock and never hit this branch.
+        kind: "vba",
+        request: { moduleName: "Test", procedureName: "Test" },
       },
       {
         ...config,
