@@ -165,110 +165,95 @@ function createBrokenProjectAdapter(cwd: string): BrokenProjectAdapter {
   return { adapter };
 }
 
-describe.skipIf(!canRunAccessE2e)(
-  "broken-project fixture E2E (feat-759 PR-1)",
-  () => {
-    let workspaceRoot: string;
-    let cleanupWorkspace: () => void;
-    let adapter: VbaSyncAdapter;
+describe.skipIf(!canRunAccessE2e)("broken-project fixture E2E (feat-759 PR-1)", () => {
+  let workspaceRoot: string;
+  let cleanupWorkspace: () => void;
+  let adapter: VbaSyncAdapter;
 
-    beforeAll(() => {
-      const workspace = createBrokenProjectWorkspace();
-      workspaceRoot = workspace.root;
-      cleanupWorkspace = workspace.cleanup;
-      // loadDysflowConfig validates the project's config so we can surface
-      // any fixture setup mistake BEFORE Access is invoked.
-      const config = loadDysflowConfig({
-        cwd: workspaceRoot,
-        env: {
-          ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
-          DYSFLOW_ACCESS_PASSWORD:
-            process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
-          DYSFLOW_BACKEND_PASSWORD:
-            process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
-        },
-      });
-      expect(config.ok, JSON.stringify(config)).toBe(true);
-      if (!config.ok) throw new Error(`project config failed: ${config.error.message}`);
-
-      ({ adapter } = createBrokenProjectAdapter(workspaceRoot));
-    }, 90_000);
-
-    afterAll(() => {
-      try {
-        cleanupWorkspace?.();
-      } catch {
-        /* ignore */
-      }
+  beforeAll(() => {
+    const workspace = createBrokenProjectWorkspace();
+    workspaceRoot = workspace.root;
+    cleanupWorkspace = workspace.cleanup;
+    // loadDysflowConfig validates the project's config so we can surface
+    // any fixture setup mistake BEFORE Access is invoked.
+    const config = loadDysflowConfig({
+      cwd: workspaceRoot,
+      env: {
+        ACCESS_VBA_PASSWORD: process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
+        DYSFLOW_ACCESS_PASSWORD:
+          process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
+        DYSFLOW_BACKEND_PASSWORD:
+          process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD,
+      },
     });
+    expect(config.ok, JSON.stringify(config)).toBe(true);
+    if (!config.ok) throw new Error(`project config failed: ${config.error.message}`);
 
-    // The TEST plan mirrors the GitHub #759 acceptance criterion verbatim.
-    // Each step is independent so a regression in any single step surfaces
-    // a specific failure rather than a vague "the chain broke here".
-    it(
-      "imports the well-formed GoodModule759 module into the clean project (baseline)",
-      async () => {
-        const result = await adapter.execute("import_modules", {
-          moduleNames: ["GoodModule759"],
-          importMode: "Code",
-          dryRun: false,
-          apply: true,
-          timeoutMs: 90_000,
-        });
-        expect(result.ok, JSON.stringify(result)).toBe(true);
-      },
-      120_000,
-    );
+    ({ adapter } = createBrokenProjectAdapter(workspaceRoot));
+  }, 90_000);
 
-    it(
-      "imports the intentionally broken BrokenModule759 (this is what surfaces the compile coupling under current `main`)",
-      async () => {
-        // Under current `main` this call surfaces `VBA_IMPORT_PHASE_FAILED`
-        // because the broken source triggers the compile-and-save coupling
-        // (RunCommand(126)) inside `Save-VbaProjectModules`. The Slice-1
-        // fix removes that coupling, so the import persists via save-only
-        // (RunCommand(280)) and the call returns ok:true.
-        const result = await adapter.execute("import_modules", {
-          moduleNames: ["BrokenModule759"],
-          importMode: "Code",
-          dryRun: false,
-          apply: true,
-          timeoutMs: 90_000,
-        });
-        expect(result.ok, JSON.stringify(result)).toBe(true);
-      },
-      120_000,
-    );
+  afterAll(() => {
+    try {
+      cleanupWorkspace?.();
+    } catch {
+      /* ignore */
+    }
+  });
 
-    it(
-      "delete_module(force:true) succeeds against the broken project without 'Active lock detected'",
-      async () => {
-        // This is the cardinal regression assertion. Under current `main`,
-        // Remove-AccessObjectOrComponent at :2205 emits RunCommand(126)
-        // (compile-and-save-ALL) with a swallowing catch. On a broken
-        // project 126 fails silently, the post-deletion verification sees
-        // the component still present, and the script throws
-        // "Active lock detected: the VBA component 'BrokenModule759'
-        // remains in the project after deletion attempt." — the exact
-        // symptom consumers reported in GH #759.
-        //
-        // The matching Pester atom (`scripts/tests/dysflow-vba-manager.Tests.ps1`
-        // — `Remove-AccessObjectOrComponent — slice-1 persistence path`) is
-        // the deterministic contract on the same fix site: under current
-        // main it asserts RunCommand(126), after the GREEN step it asserts
-        // RunCommand(280). Together the two tests pin the fix from both
-        // the unit and the integration layers.
-        const result = await adapter.execute("delete_module", {
-          moduleName: "BrokenModule759",
-          force: true,
-          timeoutMs: 90_000,
-        });
-        expect(result.ok, JSON.stringify(result)).toBe(true);
-        // Belt-and-braces: also assert the error text is absent.
-        const text = JSON.stringify(result);
-        expect(text).not.toMatch(/Active lock detected/i);
-      },
-      120_000,
-    );
-  },
-);
+  // The TEST plan mirrors the GitHub #759 acceptance criterion verbatim.
+  // Each step is independent so a regression in any single step surfaces
+  // a specific failure rather than a vague "the chain broke here".
+  it("imports the well-formed GoodModule759 module into the clean project (baseline)", async () => {
+    const result = await adapter.execute("import_modules", {
+      moduleNames: ["GoodModule759"],
+      importMode: "Code",
+      dryRun: false,
+      apply: true,
+      timeoutMs: 90_000,
+    });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  }, 120_000);
+
+  it("imports the intentionally broken BrokenModule759 (this is what surfaces the compile coupling under current `main`)", async () => {
+    // Under current `main` this call surfaces `VBA_IMPORT_PHASE_FAILED`
+    // because the broken source triggers the compile-and-save coupling
+    // (RunCommand(126)) inside `Save-VbaProjectModules`. The Slice-1
+    // fix removes that coupling, so the import persists via save-only
+    // (RunCommand(280)) and the call returns ok:true.
+    const result = await adapter.execute("import_modules", {
+      moduleNames: ["BrokenModule759"],
+      importMode: "Code",
+      dryRun: false,
+      apply: true,
+      timeoutMs: 90_000,
+    });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  }, 120_000);
+
+  it("delete_module(force:true) succeeds against the broken project without 'Active lock detected'", async () => {
+    // This is the cardinal regression assertion. Under current `main`,
+    // Remove-AccessObjectOrComponent at :2205 emits RunCommand(126)
+    // (compile-and-save-ALL) with a swallowing catch. On a broken
+    // project 126 fails silently, the post-deletion verification sees
+    // the component still present, and the script throws
+    // "Active lock detected: the VBA component 'BrokenModule759'
+    // remains in the project after deletion attempt." — the exact
+    // symptom consumers reported in GH #759.
+    //
+    // The matching Pester atom (`scripts/tests/dysflow-vba-manager.Tests.ps1`
+    // — `Remove-AccessObjectOrComponent — slice-1 persistence path`) is
+    // the deterministic contract on the same fix site: under current
+    // main it asserts RunCommand(126), after the GREEN step it asserts
+    // RunCommand(280). Together the two tests pin the fix from both
+    // the unit and the integration layers.
+    const result = await adapter.execute("delete_module", {
+      moduleName: "BrokenModule759",
+      force: true,
+      timeoutMs: 90_000,
+    });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    // Belt-and-braces: also assert the error text is absent.
+    const text = JSON.stringify(result);
+    expect(text).not.toMatch(/Active lock detected/i);
+  }, 120_000);
+});
