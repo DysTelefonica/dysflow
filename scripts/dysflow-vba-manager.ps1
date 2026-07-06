@@ -2202,7 +2202,16 @@ function Remove-AccessObjectOrComponent {
     try {
         $component = $components.Item($componentName)
         $components.Remove($component)
-        try { $AccessApplication.RunCommand(126) } catch { Write-Debug "Diagnostics: $_" }
+        # feat-759-no-compile / Slice 1 — persist via save-only
+        # (`acCmdSaveAllModules` = 280) instead of the previous
+        # compile-and-save-all (`acCmdCompileAndSaveAllModules` = 126). 126
+        # was the structural root cause of the "Active lock detected" bug
+        # on broken projects (#759): it failed silently when the project
+        # did not compile, the deletion never persisted, and the
+        # post-deletion verification re-found the component. 280 saves
+        # without compiling, so it cannot fail because of pre-existing
+        # project compile state. The human compiles in Access.
+        try { $AccessApplication.RunCommand(280) } catch { Write-Debug "Diagnostics: $_" }
         # Post-deletion verification
         $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
         if ($checkCompName) {
@@ -2244,7 +2253,11 @@ function Remove-AccessObjectOrComponent {
                     try {
                         $AccessApplication.RunCommand(4) # acCmdCompactDatabase = 4
                         $components.Remove($component)
-                        try { $AccessApplication.RunCommand(126) } catch {}
+                        # feat-759-no-compile / Slice 1 — persist via save-only
+                        # (acCmdSaveAllModules = 280) on the force/friction
+                        # branch. See the :2205 comment above for the
+                        # structural rationale (GH #759).
+                        try { $AccessApplication.RunCommand(280) } catch {}
                         # Post-deletion verification
                         $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
                         if ($checkCompName) {
@@ -2657,12 +2670,12 @@ function Save-VbaProjectModules {
         [Parameter(Mandatory = $true)][string[]]$ModuleNames
     )
 
-    try {
-        # acCmdCompileAndSaveAllModules = 126
-        $AccessApplication.RunCommand(126)
-        return
-    } catch { Write-Debug "Diagnostics: $_" }
-
+    # feat-759-no-compile / Slice 1 — the previous code tried
+    # `RunCommand(126)` (acCmdCompileAndSaveAllModules) first and fell
+    # back to `RunCommand(280)` (acCmdSaveAllModules) on failure. The
+    # 126 attempt is dropped entirely: 280 saves modules without
+    # compiling, so it cannot fail because of pre-existing project
+    # compile state. The human compiles in Access.
     try {
         # acCmdSaveAllModules = 280
         $AccessApplication.DoCmd.RunCommand(280)

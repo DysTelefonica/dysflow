@@ -3721,19 +3721,16 @@ Describe "Build-ExportResultSummary — issue #745 trust contract" {
 # ===========================================================================
 # Slice 1 of feat-759-no-compile (PR-1, non-breaking bug fix).
 #
-# Locks the CURRENT (broken) call sites that the Slice 1 fix replaces:
-#   * Remove-AccessObjectOrComponent :2205  → RunCommand(126) on $AccessApplication
-#   * Remove-AccessObjectOrComponent :2247  → RunCommand(126) on $AccessApplication
-#   * Save-VbaProjectModules         :2662  → RunCommand(126) on $AccessApplication
-#     (with :2668  RunCommand(280) on $AccessApplication.DoCmd as the fallback
-#      that already exists in the file)
+# Asserts the NEW (post-GREEN) call shapes that the Slice 1 fix installs:
+#   * Remove-AccessObjectOrComponent :2205  → RunCommand(280) on $AccessApplication
+#   * Remove-AccessObjectOrComponent :2247  → RunCommand(280) on $AccessApplication
+#   * Save-VbaProjectModules         :2662  → (the 126 attempt is gone)
+#     the canonical save path is now :2668's `DoCmd.RunCommand(280)`.
 #
-# The atoms below ASSERT the current shape so the GREEN step has a precise
-# target to flip. Under current `main` these atoms PASS (the broken shape is
-# what we are replacing); the GREEN commit replaces 126 with 280 AND flips
-# each atom to assert the new shape. The atoms assert OUTCOME (which
-# RunCommand value was passed to which COM object) — they survive any
-# behaviour-preserving refactor of the surrounding try/catch wrappers.
+# The atoms assert OUTCOME (which RunCommand value was passed to which COM
+# object) — they survive any behaviour-preserving refactor of the
+# surrounding try/catch wrappers. Under pre-Slice-1 `main` (with the 126
+# coupling), these atoms FAIL; after the Slice-1 GREEN commit they PASS.
 # ===========================================================================
 
 Describe "Remove-AccessObjectOrComponent — slice-1 persistence path (#759 PR-1)" {
@@ -3815,18 +3812,18 @@ Describe "Remove-AccessObjectOrComponent — slice-1 persistence path (#759 PR-1
                 -Because "the post-deletion verification must see the component gone"
             $res.deleted | Should -Be "Form_BrokenModule"
 
-            # The :2205 call site MUST persist the removal. Under current
-            # `main` that is `RunCommand(126)` (the broken shape we are
-            # replacing in this slice); under the Slice-1 GREEN step it
-            # becomes `RunCommand(280)` and this atom flips its expected
-            # value. Asserting the call shape here makes the GREEN step
-            # verifiable from the test output alone.
+            # Slice-1 GREEN step: the :2205 call site persists via
+            # save-only (`acCmdSaveAllModules` = 280). The previous shape
+            # used `RunCommand(126)` (compile-and-save-all), which failed
+            # silently on broken projects and surfaced as
+            # "Active lock detected" in GH #759. Asserting the new shape
+            # here locks the fix from regressing.
             $script:RunCommandCalls.Count | Should -Be 1 `
                 -Because "the :2205 path emits exactly one persistence call"
             $script:RunCommandCalls[0].Object | Should -Be "AccessApplication" `
                 -Because "the persistence call is on the AccessApplication object, not on DoCmd"
-            $script:RunCommandCalls[0].Value | Should -Be 126 `
-                -Because "current main uses acCmdCompileAndSaveAllModules (126) at :2205; the GREEN step flips this to 280"
+            $script:RunCommandCalls[0].Value | Should -Be 280 `
+                -Because "Slice-1 fix: :2205 persists via acCmdSaveAllModules (280), no longer acCmdCompileAndSaveAllModules (126)"
         }
     }
 }
@@ -3872,31 +3869,26 @@ Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
         $fakeAccessApp | Add-Member -MemberType ScriptProperty -Name "DoCmd" -Value { $fakeDoCmd }
     }
 
-    It "falls back to DoCmd.RunCommand(280) when the 126 first-attempt throws (current broken-project contract)" {
-        # Under current `main` Save-VbaProjectModules tries `RunCommand(126)`
-        # first then falls back to `$AccessApplication.DoCmd.RunCommand(280)`.
-        # The 126 path is the broken shape we are dropping in the Slice-1
-        # GREEN step. By having the 126 mock throw (simulating a broken
-        # project), we force the code down the existing 280 fallback so the
-        # atom can assert both call sites in a single run.
+    It "persists via DoCmd.RunCommand(280) and never invokes the dropped 126 attempt" {
+        # Slice-1 GREEN step: Save-VbaProjectModules no longer tries
+        # `RunCommand(126)` at all — the 126 first-attempt is dropped. The
+        # function now uses `DoCmd.RunCommand(280)` as its sole save path.
         $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -ModuleNames @("Form_X")
         $res | Should -BeNullOrEmpty `
-            -Because "Save-VbaProjectModules must return without throwing on a broken project"
+            -Because "Save-VbaProjectModules must return without throwing"
 
-        # Both calls must appear in the captured sequence:
-        #   1. AccessApplication.RunCommand(126) — the first-attempt that
-        #      the Slice-1 GREEN step drops
-        #   2. DoCmd.RunCommand(280) — the canonical save path that survives
-        $calls = @($script:RunCommandCalls)
-        $calls.Count | Should -BeGreaterOrEqual 2 `
-            -Because "Save-VbaProjectModules must attempt 126 first then fall back to 280"
+        # The 280 call must appear on DoCmd (the canonical save path).
+        $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
+        $doCmdCalls.Count | Should -BeGreaterOrEqual 1 `
+            -Because "DoCmd.RunCommand(280) is the canonical save path"
+        $doCmdCalls[0].Value | Should -Be 280 `
+            -Because "the save path persists modules without compiling (acCmdSaveAllModules = 280)"
 
-        $firstAttempt = $calls | Where-Object { $_.Object -eq "AccessApplication" } | Select-Object -First 1
-        $firstAttempt.Value | Should -Be 126 `
-            -Because "the current main Save-VbaProjectModules first-attempt uses 126 at :2662; the GREEN step drops this attempt entirely"
-
-        $fallback = $calls | Where-Object { $_.Object -eq "DoCmd" } | Select-Object -First 1
-        $fallback.Value | Should -Be 280 `
-            -Because "DoCmd.RunCommand(280) is the existing canonical save path (acCmdSaveAllModules)"
+        # The dropped 126 first-attempt must NEVER fire — even when the
+        # project is healthy. AccessApplication.RunCommand is captured
+        # here and any 126 call would be a regression on the fix.
+        $appCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "AccessApplication" })
+        $appCalls | Should -BeNullOrEmpty `
+            -Because "Save-VbaProjectModules must NEVER call RunCommand(126); the compile-and-save-all attempt is gone"
     }
 }
