@@ -68,8 +68,23 @@ Param(
     [string]$OperationFile = ""
     ,
     [Parameter()]
-    [switch]$Force
+    [switch]$Force,
+
+    # issue #752 — opt-in verbose contract. When set, per-module import/export
+    # result objects carry a `verbose` field with source / destination line
+    # counts, byte counts, sha256 hashes and a derived `truncated` bool, so an AI
+    # caller can detect silent truncation without trusting `status:ok`.
+    [Parameter()]
+    [switch]$VerboseContract
 )
+
+# issue #752 — wire the script-scope verbose flags consumed by Import-VbaModule
+# / Export-VbaModule. We name the switch `-VerboseContract` because PowerShell's
+# [CmdletBinding()] reserves `-Verbose` for Write-Verbose.
+# Per-action filtering (import-only vs export-only) is the adapter's job — the
+# contract flag gates both, symmetrically, in this version.
+$script:ImportVerbose = [bool]$VerboseContract
+$script:ExportVerbose = [bool]$VerboseContract
 
 # Sentinel-guarantee trap. Any terminating error that escapes the per-action
 # try/catch (uncaught .NET exception, dot-source failure during script load,
@@ -927,6 +942,199 @@ function Test-IsVbaOptionDirectiveLine {
 
     $trim = $Line.Trim()
     return ($trim -match '^Option\s+(Compare\s+\w+|Explicit|Base\s+\d+|Private\s+Module)$')
+}
+
+# issue #752: extract the `Attribute VB_Name` value from a raw source file.
+# Pure function — no COM. Strips UTF-8 BOM, skips leading blank lines, returns $null
+# when no Attribute VB_Name is present. Used by Import-VbaModule to refuse importing
+# a source file whose declared VB_Name disagrees with the moduleName parameter (or
+# with the existing component that Resolve-ExistingComponentName resolves to).
+function Get-VbNameFromSourceFile {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -eq 0) { return $null }
+
+    # Detect UTF-8 BOM (EF BB BF); if present, skip those 3 bytes before decoding.
+    $startIndex = 0
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $startIndex = 3
+    }
+    if ($startIndex -ge $bytes.Length) { return $null }
+
+    $rest = New-Object 'byte[]' ($bytes.Length - $startIndex)
+    [Array]::Copy($bytes, $startIndex, $rest, 0, $rest.Length)
+    $text = [System.Text.Encoding]::UTF8.GetString($rest)
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+
+    $lines = @($text -split "`r?`n")
+    foreach ($line in $lines) {
+        $trim = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trim)) { continue }
+        # Canonical VBA shape: `Attribute VB_Name = "<name>"`. VB_Name token is exact-case
+        # per VBA convention; allow any amount of whitespace around `=` and inside quotes.
+        if ($trim -match '^Attribute\s+VB_Name\s*=\s*"([^"]+)"\s*$') {
+            return $matches[1]
+        }
+    }
+    return $null
+}
+
+# issue #752: detect duplicate `Option Explicit` / `Option Compare ...` / `Option Base` /
+# `Option Private Module` directives in a source file. The VBA compiler will silently
+# reject — or, worse, accept and produce different symptoms downstream — when more than
+# one of each kind appears. Imports through AddFromFile have been observed to skip
+# silently when duplicates are present. Pure function — no COM.
+function Test-SourceFileHasDuplicateOptions {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -eq 0) { return $false }
+
+    # Strip UTF-8 BOM defensively before decoding.
+    $startIndex = 0
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $startIndex = 3
+    }
+    if ($startIndex -ge $bytes.Length) { return $false }
+    $rest = New-Object 'byte[]' ($bytes.Length - $startIndex)
+    [Array]::Copy($bytes, $startIndex, $rest, 0, $rest.Length)
+    $text = [System.Text.Encoding]::UTF8.GetString($rest)
+
+    # Bucket duplicates by directive kind (Compare / Explicit / Base / Private Module),
+    # case-insensitively. `Option Compare Text` and `Option Compare Database` share the
+    # Compare bucket — VBA treats them as the same directive, so we follow suit.
+    $seen = @{}
+    $lines = @($text -split "`r?`n")
+    foreach ($line in $lines) {
+        $trim = $line.Trim()
+        if ($trim -notmatch '^Option\s+\S') { continue }
+
+        if ($trim -imatch '^Option\s+Compare\s+\S+\s*$') { $kind = "Compare" }
+        elseif ($trim -imatch '^Option\s+Explicit\s*$') { $kind = "Explicit" }
+        elseif ($trim -imatch '^Option\s+Base\s+\d+\s*$') { $kind = "Base" }
+        elseif ($trim -imatch '^Option\s+Private\s+Module\s*$') { $kind = "PrivateModule" }
+        else { continue }
+
+        $key = $kind.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            return $true
+        }
+        $seen[$key] = $true
+    }
+    return $false
+}
+
+# issue #752: pre-import size snapshot — raw file bytes / line count / sha256. Used by
+# the `verbose:true` opt-in on dysflow_import_modules to surface silent truncation
+# (when AddFromFile returns fewer lines than the source file). Pure function — no COM.
+function Get-SourceFileSizeSnapshot {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Source file not found: '$Path'"
+    }
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $byteCount = $bytes.Length
+    if ($byteCount -eq 0) {
+        return [pscustomobject]@{
+            bytes  = 0
+            lines  = 0
+            sha256 = ""
+        }
+    }
+
+    $sha = ""
+    try {
+        $sha = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        ).Replace("-", "").ToLowerInvariant()
+    } catch {
+        # SHA256 should never fail on the runtime we target; if it does, leave empty
+        # rather than break the import path.
+        $sha = ""
+    }
+
+    # Line count: count \n (0x0A) occurrences in the raw bytes. If the file ends with
+    # a newline, the count is the number of *lines*; otherwise it's the number of line
+    # endings, so add one for the trailing unterminated line. Empty file is handled at
+    # the top of this function (returns 0).
+    $newlineCount = 0
+    foreach ($b in $bytes) {
+        if ($b -eq 0x0A) { $newlineCount++ }
+    }
+    $lastByte = [int]$bytes[$byteCount - 1]
+    if ($lastByte -eq 0x0A) {
+        $lines = $newlineCount
+    } else {
+        $lines = $newlineCount + 1
+    }
+
+    return [pscustomobject]@{
+        bytes  = $byteCount
+        lines  = $lines
+        sha256 = $sha
+    }
+}
+
+# issue #752 — binary-side counterpart of Get-SourceFileSizeSnapshot. Joins the
+# live CodeModule's text via Lines(1, CountOfLines) with CRLF (matching how
+# VBA's CodeModule stores lines), then hashes that string. Returns the same
+# {bytes, lines, sha256} shape so callers can compare source vs destination
+# without translating between two result types. This helper holds the only
+# physical reference to the COM CodeModule; release it in the caller.
+function Get-CodeModuleSizeSnapshot {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$CodeModule
+    )
+
+    if ($null -eq $CodeModule) {
+        return [pscustomobject]@{ bytes = 0; lines = 0; sha256 = "" }
+    }
+
+    $count = 0
+    try {
+        $count = [int]$CodeModule.CountOfLines
+    } catch {
+        # COM already torn down (likely because the parent VBComponent was
+        # removed mid-call). Return an empty snapshot so the verbose path is
+        # never the cause of a noisy error of its own.
+        return [pscustomobject]@{ bytes = 0; lines = 0; sha256 = "" }
+    }
+
+    if ($count -le 0) {
+        return [pscustomobject]@{ bytes = 0; lines = 0; sha256 = "" }
+    }
+
+    $lines = @($CodeModule.Lines(1, $count))
+    $joined = [string]::Join("`r`n", $lines)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($joined)
+    $sha = ""
+    try {
+        $sha = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        ).Replace("-", "").ToLowerInvariant()
+    } catch { $sha = "" }
+
+    return [pscustomobject]@{
+        bytes  = $bytes.Length
+        lines  = $count
+        sha256 = $sha
+    }
 }
 
 function Normalize-VbaImportText {
@@ -2866,10 +3074,94 @@ function Import-VbaModule {
 
             $component = $VbProject.VBComponents.Item($actualComponentName)
             $codeModule = $component.CodeModule
+
+            # issue #752 — defensive validation #1: VB_Name collision.
+            # If the source file declares `Attribute VB_Name = "<X>"` and that X
+            # differs from $actualComponentName (the resolved existing component),
+            # Access's CodeModule.AddFromFile still applies the source's VB_Name,
+            # producing a silent rename. Refuse and surface a structured error so
+            # the caller can rename the source file (or pass the matching
+            # moduleName) instead of inheriting a misnamed module.
+            $sourceVbName = Get-VbNameFromSourceFile -Path $src
+            if (-not [string]::IsNullOrEmpty($sourceVbName) -and $sourceVbName -ne $actualComponentName) {
+                throw ("VB_NAME_MISMATCH: source file declares Attribute VB_Name = '{0}' but moduleName parameter '{1}' resolves to existing component '{2}'. " +
+                       "Resolve the conflict by renaming the source file or passing the matching moduleName. " +
+                       "Use -VerboseContract to see source/destination hashes." -f $sourceVbName, $ModuleName, $actualComponentName)
+            }
+
+            # issue #752 — defensive validation #2: duplicate Option directives.
+            # VBA rejects files with more than one Option Explicit / Option Compare
+            # / Option Base / Option Private Module. AddFromFile currently passes
+            # them through verbatim and Access fails downstream with a confusing
+            # compile error. Fail fast here with a typed error code.
+            if (Test-SourceFileHasDuplicateOptions -Path $src) {
+                throw ("DUPLICATE_OPTION_DIRECTIVE: source file '{0}' has duplicate Option Explicit/Compare directives; VBA will reject the import." -f $src)
+            }
+
+            # issue #752 — opt-in verbose snapshot of the source file (snapshot
+            # before AddFromFile mutates anything). The script-scope flag is set
+            # by the top-level dispatcher when the caller passes -VerboseContract.
+            $importVerboseSource = $null
+            if ($script:ImportVerbose) {
+                $importVerboseSource = Get-SourceFileSizeSnapshot -Path $src
+            }
+
             $count = $codeModule.CountOfLines
             if ($count -gt 0) { $codeModule.DeleteLines(1, $count) }
             $script:ImportCurrentPhase = "import"
             $codeModule.AddFromFile($tmpAnsiSanitized)
+
+            # issue #752 — defensive validation #3: post-import truncation check.
+            # If the source file's line count is strictly greater than the
+            # destination's CountOfLines after AddFromFile, the import was
+            # silently truncated. AddFromFile in v1.15.7 truncates when the
+            # pre-existing component's CountOfLines was smaller than the source
+            # (see issue #752 repro). Source-larger than destination is the
+            # truncation signature; we allow source == destination (perfect
+            # match) and source < destination (grew; fine).
+            $destLines = 0
+            try { $destLines = [int]$codeModule.CountOfLines } catch { $destLines = 0 }
+            $srcLines = 0
+            try {
+                $snap = Get-SourceFileSizeSnapshot -Path $src
+                $srcLines = [int]$snap.lines
+            } catch { $srcLines = 0 }
+            if ($srcLines -gt $destLines -and $srcLines -gt 0) {
+                throw ("IMPORT_TRUNCATED: source has {0} lines, destination has {1} lines. " +
+                       "The pre-existing module's CountOfLines may have capped AddFromFile. " +
+                       "Pass -VerboseContract (verbose:true) or manually remove the existing module first." -f $srcLines, $destLines)
+            }
+
+            # issue #752 — opt-in verbose snapshot of the destination (binary)
+            # after AddFromFile. Compute truncated/mismatchReason from the two
+            # snapshots; $null means the destination mirrors the source.
+            $importVerboseDest = $null
+            $importVerboseTruncated = $false
+            $importVerboseMismatch = $null
+            if ($script:ImportVerbose) {
+                $importVerboseDest = Get-CodeModuleSizeSnapshot -CodeModule $codeModule
+                if ($importVerboseSource -and $importVerboseDest) {
+                    $importVerboseTruncated = ([int]$importVerboseDest.lines -lt [int]$importVerboseSource.lines)
+                    if (-not $importVerboseTruncated) {
+                        if ([string]$importVerboseDest.sha256 -ne [string]$importVerboseSource.sha256) {
+                            $importVerboseMismatch = "content_hash"
+                        }
+                    } else {
+                        $importVerboseMismatch = "line_count"
+                    }
+                }
+            }
+
+            $importResultVerbose = $null
+            if ($script:ImportVerbose) {
+                $importResultVerbose = [pscustomobject]@{
+                    source         = $importVerboseSource
+                    destination    = $importVerboseDest
+                    truncated      = [bool]$importVerboseTruncated
+                    mismatchReason = $importVerboseMismatch
+                }
+            }
+
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
@@ -2877,6 +3169,13 @@ function Import-VbaModule {
                 Error                = $null
                 DurationMs           = 0
                 RollbackApplied      = $false
+                # issue #752 — opt-in verbose contract. The pscustomobject
+                # shape stays backward-compatible: when -VerboseContract is
+                # not requested, Verbose is $null and existing consumers ignore
+                # the field. When requested, downstream Invoke-ImportAction
+                # forwards this object into the per-module entry of the
+                # DYSFLOW_RESULT envelope.
+                Verbose              = $importResultVerbose
             }
         } catch {
             if ($_.Exception.Message -ne 'COMPONENTE_NO_ENCONTRADO') {
@@ -4162,6 +4461,14 @@ function Invoke-ImportAction {
                     # Defensive: never let a non-null error slip into an ok entry.
                     $lastResults[$name].error = $null
                 }
+                # issue #752 — forward the optional Verbose snapshot from
+                # Import-VbaModule. Backward-compatible: when the caller did not
+                # pass -VerboseContract, $importResult.Verbose is $null and we
+                # do not set the property on $lastResults[$name]. When set, the
+                # field carries {source, destination, truncated, mismatchReason}.
+                if ($importResult -and $importResult.PSObject.Properties['Verbose'] -and $importResult.Verbose) {
+                    $lastResults[$name] | Add-Member -NotePropertyName Verbose -NotePropertyValue ($importResult.Verbose) -Force
+                }
             } catch {
                 $moduleStopwatch.Stop()
                 $failedThisPass.Add($name) | Out-Null
@@ -4177,14 +4484,21 @@ function Invoke-ImportAction {
                 # message text matches a recognizable Access lock pattern;
                 # otherwise null. We deliberately do NOT try to be cleverer
                 # than the message text — guessing would mislead consumers.
+                # issue #752 — VB_NAME_MISMATCH / DUPLICATE_OPTION_DIRECTIVE /
+                # IMPORT_TRUNCATED detection is done by simple prefix matching
+                # on the throw messages emitted by Import-VbaModule so the
+                # per-module error.code carries the typed signal consumers need
+                # to act on the failure without re-parsing free-form text.
                 $machine = $null
                 $user = $null
                 $errorCode = "VBA_IMPORT_PHASE_FAILED"
-                # Guard the helper call so legacy AST-extracted unit tests that
-                # do not pre-load these helpers can still invoke the function
-                # without a CommandNotFoundException. In production, both
-                # helpers are defined in the same script and always present.
-                if (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
+                if ($messageString.StartsWith("VB_NAME_MISMATCH:")) {
+                    $errorCode = "VB_NAME_MISMATCH"
+                } elseif ($messageString.StartsWith("DUPLICATE_OPTION_DIRECTIVE:")) {
+                    $errorCode = "DUPLICATE_OPTION_DIRECTIVE"
+                } elseif ($messageString.StartsWith("IMPORT_TRUNCATED:")) {
+                    $errorCode = "IMPORT_TRUNCATED"
+                } elseif (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
                     if (Test-IsAccessDatabaseLockedError -Message $messageString) {
                         $errorCode = "ACCESS_DATABASE_LOCKED"
                         if (Get-Command -Name Get-AccessDatabaseLockedOwner -ErrorAction SilentlyContinue) {

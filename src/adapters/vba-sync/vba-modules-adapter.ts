@@ -76,16 +76,32 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
 const COMPILE_MAPPING: DirectMapping = mapping("Compile", true);
 
 const MODULE_MAPPINGS: Record<string, DirectMapping> = {
-  export_modules: mapping("Export", false, (input) => stringArray(input.moduleNames)),
-  export_all: mapping("Export", false, (input) => {
-    const filter = stringValue(input.filter);
-    return filter === undefined ? [] : [filter];
-  }),
+  export_modules: mapping(
+    "Export",
+    false,
+    (input) => stringArray(input.moduleNames),
+    // issue #752 — forward the opt-in verbose flag so the per-module export
+    // result carries {source, destination, truncated, mismatchReason}.
+    (input) => ({ verbose: input.verbose === true }),
+  ),
+  export_all: mapping(
+    "Export",
+    false,
+    (input) => {
+      const filter = stringValue(input.filter);
+      return filter === undefined ? [] : [filter];
+    },
+    (input) => ({ verbose: input.verbose === true }),
+  ),
   import_modules: mapping(
     "Import",
     false,
     (input) => stringArray(input.moduleNames),
-    (input) => ({ importMode: normalizeImportMode(stringValue(input.importMode)) }),
+    (input) => ({
+      importMode: normalizeImportMode(stringValue(input.importMode)),
+      // issue #752 — opt-in verbose flag for truncation detection.
+      verbose: input.verbose === true,
+    }),
   ),
   import_all: mapping(
     "Import",
@@ -93,6 +109,8 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
     () => [],
     (input) => ({
       importMode: normalizeImportMode(stringValue(input.importMode)),
+      // issue #752 — opt-in verbose flag for truncation detection.
+      verbose: input.verbose === true,
     }),
   ),
   list_objects: mapping("List-Objects", true),

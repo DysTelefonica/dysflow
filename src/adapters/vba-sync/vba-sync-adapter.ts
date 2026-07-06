@@ -122,6 +122,12 @@ const VBA_MANAGER_EXTRA_KEYS = new Set([
   "procedureName",
   "argsJson",
   "force",
+  // issue #752 — opt-in verbose contract. The script's switch is named
+  // -VerboseContract (because [CmdletBinding()]$Verbose is the common
+  // Write-Verbose parameter). The dispatch rewrites `verbose` → `-VerboseContract`
+  // below to keep the JSON contract on the consumer side while the PS surface
+  // stays unambiguous.
+  "verbose",
 ]);
 const TOOL_NOT_IMPLEMENTED_MESSAGE =
   "This tool is tracked for parity but is not implemented by this service yet.";
@@ -844,10 +850,16 @@ export const spawnVbaManager: VbaManagerExecutor = async (request) => {
     // Booleans map to PowerShell [switch] params: emit the bare flag for true,
     // omit it entirely for false. Never "-Flag true", which a switch rejects.
     if (typeof value === "boolean") {
-      if (value) args.push(flag);
+      if (value) {
+        // issue #752 — rename the JSON key `verbose` to the PS switch
+        // `-VerboseContract`. The script uses `-VerboseContract` because
+        // [CmdletBinding()]$Verbose is the common Write-Verbose parameter
+        // and reusing the name would collide with the Write-Verbose surface.
+        args.push(key === "verbose" ? "-VerboseContract" : flag);
+      }
       continue;
     }
-    args.push(flag, String(value));
+    args.push(key === "verbose" ? "-VerboseContract" : flag, String(value));
   }
 
   try {

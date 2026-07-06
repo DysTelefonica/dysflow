@@ -190,6 +190,12 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "missingTokenPolicy",
       "strictMissingTokens",
       "overwrite",
+      // issue #752 — opt-in verbose flag for `import_modules` / `import_all` /
+      // `export_modules` / `export_all` to surface source-vs-destination line
+      // counts, byte counts, sha256 hashes and a `truncated` boolean. Added as
+      // a single shared SCHEMA_PROPS entry so the description stays in one
+      // place rather than being copy-pasted into four tool schemas.
+      "verboseContract",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

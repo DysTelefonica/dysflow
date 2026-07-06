@@ -144,7 +144,17 @@ export const SCHEMA_PROPS = {
   compile: {
     type: "boolean",
     description:
-      "Trigger a VBA project compile+save (acCmdCompileAndSaveAllModules). For test_vba: runs before the test. For import_modules/import_all: runs after a successful import. Compile errors are propagated with component and line context.",
+      "When true, a successful per-module import is followed by a project-wide VBA compile (acCmdCompileAndSaveAllModules). Compile errors are propagated with component and line context.",
+  } as JsonSchemaProperty,
+  // issue #752 — opt-in verbose contract. When true, the per-module import /
+  // export result gains a `verbose` field with source / destination line
+  // counts, byte counts, sha256 hashes and a derived `truncated` boolean.
+  // Default false to preserve backward compatibility (existing consumers
+  // ignore the field).
+  verboseContract: {
+    type: "boolean",
+    description:
+      "When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content.",
   } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: {
