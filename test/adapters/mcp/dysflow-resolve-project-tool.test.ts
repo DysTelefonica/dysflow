@@ -151,7 +151,7 @@ describe("createResolveProjectTool() — tool factory", () => {
 
     const tool = createResolveProjectTool({ cwd: workdir });
     expect(tool.name).toBe("dysflow_resolve_project");
-    expect(tool.inputSchema.properties).toHaveProperty("projectId");
+    expect(tool.inputSchema?.properties).toHaveProperty("projectId");
 
     const result = await tool.handler({ projectId: "captured-cwd" });
     expect(result.isError).toBe(false);
