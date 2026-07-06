@@ -31,7 +31,7 @@ delete process.env.DYSFLOW_HOME;
  *   - Heavy whole-project operations need a generous timeoutMs; set it in
  *     the project.json so the runner honors it end-to-end.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
