@@ -196,7 +196,10 @@ describe("scripts/dysflow-access-runner.ps1 — diagnostics branch (#750)", () =
     // not any mention of these names in comments, function definitions, or
     // helper function bodies.
     const openAccessPatterns: readonly { name: string; pattern: RegExp }[] = [
-      { name: "Open-CanonicalAccess", pattern: /\$script:canonicalSession\s*=\s*Open-CanonicalAccess\b/ },
+      {
+        name: "Open-CanonicalAccess",
+        pattern: /\$script:canonicalSession\s*=\s*Open-CanonicalAccess\b/,
+      },
     ];
     for (const { name, pattern } of openAccessPatterns) {
       const match = pattern.exec(script);

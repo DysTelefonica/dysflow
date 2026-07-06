@@ -2,8 +2,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight.js";
-import { AccessPowerShellRunner } from "../../../src/core/runner/access-runner.js";
 import type { PowerShellExecutor } from "../../../src/core/runner/access-runner.js";
+import { AccessPowerShellRunner } from "../../../src/core/runner/access-runner.js";
 import type { LockFileSystemPort } from "../../../src/core/runner/cross-process-lock.js";
 
 const noOpPreflight: AccessOperationPreflightCleanup = {
@@ -113,7 +113,11 @@ describe("AccessPowerShellRunner — read-only path (#750)", () => {
         kind: "vba",
         request: {
           readOnly: true,
-          // Other AccessVbaRequest fields are not exercised by this test.
+          // The runner-side read-only dispatch is what we are testing;
+          // moduleName / procedureName values are filler for the AccessVbaRequest
+          // shape but are not exercised by this code path.
+          moduleName: "Test",
+          procedureName: "Test",
         },
       },
       config,
@@ -156,7 +160,11 @@ describe("AccessPowerShellRunner — read-only path (#750)", () => {
       {
         kind: "vba",
         request: {
-          // No readOnly here — write path.
+          // No readOnly here — write path. moduleName / procedureName
+          // are filler for the AccessVbaRequest shape; the write-path
+          // test only verifies the lock contract.
+          moduleName: "Test",
+          procedureName: "Test",
         },
       },
       config,

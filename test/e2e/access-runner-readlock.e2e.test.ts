@@ -9,7 +9,6 @@ import { createDefaultPowerShellExecutor } from "../../src/adapters/powershell/d
 import { nodeLockFileSystem } from "../../src/adapters/runner/node-lock-file-system";
 import { AccessPowerShellRunner } from "../../src/core/runner/access-runner";
 import { AccessDiagnosticsService } from "../../src/core/services/diagnostics-service";
-import { VbaSyncOrchestrator } from "../../src/adapters/vba-sync/vba-sync-adapter.js";
 
 /**
  * #750 — end-to-end verification that read-only operations
@@ -27,8 +26,7 @@ import { VbaSyncOrchestrator } from "../../src/adapters/vba-sync/vba-sync-adapte
 
 const fixtureFront = resolve("E2E_testing/NoConformidades.accdb");
 const fixtureBackend = resolve("E2E_testing/NoConformidades_Datos.accdb");
-const canRunAccessE2e =
-  existsSync(fixtureFront) && existsSync(fixtureBackend);
+const canRunAccessE2e = existsSync(fixtureFront) && existsSync(fixtureBackend);
 const workspaces: Array<{ root: string; cleanup(): void }> = [];
 
 if (!canRunAccessE2e) {
