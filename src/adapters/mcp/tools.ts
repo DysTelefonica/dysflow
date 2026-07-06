@@ -31,8 +31,8 @@ import {
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
-import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { createResolveProjectTool } from "./dysflow-resolve-project-tool.js";
+import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
 export {
