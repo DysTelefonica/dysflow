@@ -353,6 +353,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'function Convert-Utf8ToAnsiTempFile',
             'function Convert-Utf8CodeImportToAnsiTempFile',
             'function Normalize-VbaImportText',
+            'function Ensure-VbNameAttributeAtTop',
+            'function Ensure-CodeBehindFormVbName',
             'function Get-ComponentFolder',
             'function Get-ComponentExtension',
             'function Resolve-ImportFileForModule',
@@ -389,6 +391,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Normalize-Newlines',
             'Get-AccessLockFilePath',
             'Assert-SafeVbaModuleName',
+            'Ensure-VbNameAttributeAtTop',
+            'Ensure-CodeBehindFormVbName',
             'Resolve-ImportFileForModule',
             'Resolve-FormCodeBehindFile',
             'Get-FormCodeBehindCandidateNames',
@@ -580,6 +584,163 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             $vbNameLines = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
             $vbNameLines.Count | Should -Be 1 -Because "issue #646: VB_Name must be preserved via the header bucket but never duplicated"
             $vbNameLines[0] | Should -Be 'Attribute VB_Name = "Form_Canonical"' -Because "the header-wins rule sources VB_Name from the live canonical export"
+        }
+    }
+
+    Context "Ensure-VbNameAttributeAtTop (form .cls emission, issue #743)" {
+        It "prepends Attribute VB_Name when the .cls text starts with Option Compare Database" {
+            $input = @(
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_TestVBNameVerification'
+
+            $firstLine = ($result -split "`r?`n")[0]
+            $firstLine | Should -Be 'Attribute VB_Name = "Form_TestVBNameVerification"' `
+                -Because "issue #743: form .cls sibling must carry Attribute VB_Name so Access does not invent Form_TempSccObjN on re-import"
+        }
+
+        It "replaces an existing Attribute VB_Name that does not match the canonical module name" {
+            $input = @(
+                'Attribute VB_Name = "Form_TempSccObj1"'
+                'Option Compare Database'
+            ) -join "`r`n"
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_TestVBNameVerification'
+
+            $matches = @($result -split "`r?`n" | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
+            $matches.Count | Should -Be 1 `
+                -Because "an existing stale Attribute VB_Name must be replaced exactly once, never duplicated"
+            $matches[0] | Should -Be 'Attribute VB_Name = "Form_TestVBNameVerification"' `
+                -Because "the canonical name is sourced from the export module name (filename basename + prefix)"
+        }
+
+        It "leaves the text unchanged when Attribute VB_Name already matches the canonical module name" {
+            $input = @(
+                'Attribute VB_Name = "Form_TestVBNameVerification"'
+                'Option Compare Database'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_TestVBNameVerification'
+
+            $result | Should -Be $input `
+                -Because "idempotent: do not duplicate or shift lines when the text is already correct"
+        }
+
+        It "treats leading blank lines as not-yet-content" {
+            $input = "`r`n`r`nOption Compare Database`r`nOption Explicit`r`nSub X()`r`nEnd Sub"
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_Blanks'
+
+            $trimmed = ($result -split "`r?`n" | Where-Object { $_.Trim() -ne '' })[0]
+            $trimmed | Should -Be 'Attribute VB_Name = "Form_Blanks"' `
+                -Because "whitespace at the start of the .cls text is not a valid first non-blank VB_Name"
+        }
+    }
+
+    Context "Ensure-CodeBehindFormVbName (.form.txt CodeBehindForm injection, issue #743)" {
+        It "injects Attribute VB_Name after CodeBehindForm when the canonical emission omits it" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    Width =10000'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_GlobalNameSpace = False'
+                'Attribute VB_Creatable = True'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Ensure-CodeBehindFormVbName -Text $input -ModuleName 'Form_BinaryLacksVbName'
+
+            # Attribute VB_Name must be present in the CodeBehindForm block, after the marker,
+            # and before any sibling VB_* attribute.
+            $markerIdx = -1
+            $lines = $result -split "`r?`n"
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].Trim() -eq 'CodeBehindForm') { $markerIdx = $i; break }
+            }
+            $markerIdx | Should -BeGreaterOrEqual 0 `
+                -Because "the form text must contain a CodeBehindForm marker"
+
+            $firstNonBlank = $null
+            for ($i = $markerIdx + 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].Trim() -ne '') { $firstNonBlank = $lines[$i]; break }
+            }
+            $firstNonBlank | Should -Be 'Attribute VB_Name = "Form_BinaryLacksVbName"' `
+                -Because "issue #743: the first non-blank line after CodeBehindForm must be Attribute VB_Name so Access can identify the form on re-import"
+
+            $vbNameCount = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' }).Count
+            $vbNameCount | Should -Be 1 `
+                -Because "an injected Attribute VB_Name must not be duplicated"
+        }
+
+        It "replaces a stale Attribute VB_Name in the CodeBehindForm block" {
+            $input = @(
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_TempSccObj2"'
+                'Option Compare Database'
+            ) -join "`r`n"
+
+            $result = Ensure-CodeBehindFormVbName -Text $input -ModuleName 'Form_ReplaceStale'
+
+            $lines = $result -split "`r?`n"
+            $vbNameLines = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
+            $vbNameLines.Count | Should -Be 1 -Because "stale Attribute VB_Name must not coexist with the canonical one"
+            $vbNameLines[0] | Should -Be 'Attribute VB_Name = "Form_ReplaceStale"' -Because "the canonical name comes from the filename"
+        }
+
+        It "returns the text unchanged when no CodeBehindForm marker exists" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                'End'
+            ) -join "`r`n"
+
+            $result = Ensure-CodeBehindFormVbName -Text $input -ModuleName 'Form_NotADocument'
+
+            $result | Should -Be $input `
+                -Because "a form-less text path skips the injection (defensive: do not invent structure)"
+        }
+
+        It "is idempotent on already-correct text" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_AlreadyCorrect"'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Ensure-CodeBehindFormVbName -Text $input -ModuleName 'Form_AlreadyCorrect'
+
+            $result | Should -Be $input `
+                -Because "idempotent: do not duplicate the canonical Attribute VB_Name"
+        }
+
+        It "injects Attribute VB_Name when the CodeBehindForm block has only Option directives (no Attribute at all)" {
+            $input = @(
+                'CodeBehindForm'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Ensure-CodeBehindFormVbName -Text $input -ModuleName 'Form_OnlyOptions'
+
+            $lines = $result -split "`r?`n"
+            $markerIdx = -1
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].Trim() -eq 'CodeBehindForm') { $markerIdx = $i; break }
+            }
+            $firstNonBlankAfter = $null
+            for ($i = $markerIdx + 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].Trim() -ne '') { $firstNonBlankAfter = $lines[$i]; break }
+            }
+            $firstNonBlankAfter | Should -Be 'Attribute VB_Name = "Form_OnlyOptions"' -Because "any VB_ attribute (or Option) after CodeBehindForm must yield to a canonical VB_Name as the first non-blank line"
         }
     }
 

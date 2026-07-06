@@ -73,7 +73,10 @@ Describe "Convert-Utf8CodeImportToAnsiTempFile — Unicode round-trip (EXPEDIENT
         # file empty. The sanitized output must be at least as large as the
         # body — Attribute VB_Name is PRESERVED (issue #646); duplicate Option
         # lines are de-duplicated and the executable body is preserved
-        # verbatim.
+        # verbatim. Note (issue #743): Attribute VB_Name is the ONLY `Attribute VB_*`
+        # line preserved during the import path. Sibling Attribute VB_ lines
+        # (GlobalNameSpace, Creatable, PredeclaredId, Exposed) MUST be stripped
+        # since Access rebuilds them on LoadFromText from the live binary.
         $sandbox = Join-Path (Join-Path $PSScriptRoot "..\..\test-runtime") (
             "unicode-roundtrip-" + [guid]::NewGuid().ToString("N")
         )
