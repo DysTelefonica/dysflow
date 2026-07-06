@@ -15,6 +15,10 @@ import {
   truthy,
 } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import {
+  type AllowedProcedures,
+  resolveAllowedProceduresFor,
+} from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 const EXECUTION_MAPPINGS = {
@@ -91,7 +95,7 @@ export class VbaExecutionAdapter {
   constructor(
     private readonly orchestrator: VbaSyncOrchestrator,
     private readonly fileSystem: ExecutionFileSystemPort = defaultExecutionFileSystem,
-    private readonly allowedProcedures?: readonly string[],
+    private readonly allowedProcedures?: AllowedProcedures,
   ) {}
 
   static handles(toolName: string): boolean {
@@ -327,7 +331,7 @@ End Sub
     // happen when the plan is rejected. The previous order ran compile_vba
     // first, which wrote the .accdb even when the gate would later refuse —
     // an unwanted side effect on the live binary.
-    const gateError = this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
+    const gateError = await this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
     if (gateError !== undefined) return gateError;
 
     // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits BEFORE
@@ -387,11 +391,17 @@ End Sub
    * OperationResult, so the result translator wraps the code in the MCP text
    * exactly as it does for PR1a's MCP-handler refusals.
    */
-  private ensureTestProceduresAllowed(
+  private async ensureTestProceduresAllowed(
     params: Record<string, unknown>,
     procedures: readonly string[],
-  ): OperationResult<unknown> | undefined {
-    if (this.allowedProcedures === undefined || this.allowedProcedures.length === 0) {
+  ): Promise<OperationResult<unknown> | undefined> {
+    // #748 — resolve per-input so the gate always sees the current
+    // allowedProcedures of the project the input targets. Accepts either
+    // a static array (legacy, frozen at construction) OR a resolver
+    // function (per-input, reads project config each call) per the
+    // #674 AllowedProcedures contract.
+    const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
+    if (resolved === undefined || resolved.length === 0) {
       if (params.dryRun !== true) {
         return failureResult(
           createDysflowError(
@@ -406,7 +416,7 @@ End Sub
       return undefined;
     }
 
-    const allowSet = new Set(this.allowedProcedures);
+    const allowSet = new Set(resolved);
     const disallowed = procedures.filter((procedure) => !allowSet.has(procedure));
     if (disallowed.length > 0) {
       // Issue #659 — split: this is case (b) (gate IS configured AND the
@@ -424,7 +434,7 @@ End Sub
             `are not in the configured allowedProcedures list. ` +
             `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
           {
-            allowedProcedures: this.allowedProcedures,
+            allowedProcedures: resolved,
             remediation:
               disallowed.length === 1
                 ? `Add '${disallowed[0]}' to allowedProcedures in .dysflow/project.json or test a procedure that is in the list.`

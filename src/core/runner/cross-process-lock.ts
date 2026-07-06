@@ -202,6 +202,45 @@ export const defaultAccessExecutionLocks = new Map<string, Promise<void>>();
  *                           wiring in `AccessPowerShellRunner.run` supplies an explicit
  *                           sink that drains into the returned `OperationResult.diagnostics`.
  */
+/**
+ * #750 — read-only variant of `runWithAccessExecutionLock`.
+ *
+ * Serializes work in-process via the same `lockState` map, but DOES NOT acquire
+ * the cross-process file lock and DOES NOT start a heartbeat. Used by the
+ * `AccessPowerShellRunner` for `kind: "diagnostics"` and for any
+ * `kind: "vba"` request that opts into `readOnly: true` (export_modules,
+ * export_all). Those paths are read-only and acquiring the cross-process
+ * lock would tell Access "another process is editing", causing Access to
+ * rewrite metadata on the .accdb even though the runner doesn't write.
+ */
+export async function runWithAccessExecutionReadLock<T>(
+  key: string,
+  work: () => T | Promise<T>,
+  lockState: Map<string, Promise<void>> = defaultAccessExecutionLocks,
+): Promise<T> {
+  const normalizedKey = key.toLowerCase();
+  const previous = lockState.get(normalizedKey) ?? Promise.resolve();
+  let releaseCurrent!: () => void;
+  const current = previous.then(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseCurrent = resolve;
+      }),
+  );
+  lockState.set(normalizedKey, current);
+
+  await previous;
+
+  // No cross-process file lock, no heartbeat. The in-process release still
+  // runs even if `work` throws — same invariant as the write variant.
+  try {
+    return await work();
+  } finally {
+    releaseCurrent();
+    if (lockState.get(normalizedKey) === current) lockState.delete(normalizedKey);
+  }
+}
+
 export async function runWithAccessExecutionLock<T>(
   key: string,
   work: () => T | Promise<T>,

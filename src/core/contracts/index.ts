@@ -114,6 +114,19 @@ export type AccessVbaRequest = {
    * Optional; default `undefined` is treated as "not a dry-run".
    */
   dryRun?: boolean;
+  /**
+   * #750 — explicit read-only marker for VBA operations that extract or
+   * inspect the binary without writing (e.g. `export_modules`,
+   * `export_all`). When `true`, the runner skips the cross-process file
+   * lock so Access does not rewrite metadata on the .accdb for what is
+   * actually a read. The `vba-sync-adapter` sets this automatically for
+   * the export tools; other callers (HTTP / direct runner use) can set it
+   * explicitly.
+   *
+   * Optional; default `undefined` is treated as "not read-only" (the
+   * runner takes the write path with the cross-process lock).
+   */
+  readOnly?: boolean;
   // Overrides
   projectId?: string;
   contextId?: string;

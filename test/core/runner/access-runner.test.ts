@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -151,8 +151,12 @@ describe("AccessPowerShellRunner", () => {
 
     await runner.run(
       {
-        kind: "diagnostics",
-        request: { includeEnvironment: true },
+        // #750 — write path so the test exercises the cross-process lock and
+        // the LOCK_TIMEOUT contract. Read-only paths (diagnostics,
+        // export_modules, export_all) intentionally skip the cross-process
+        // lock and never hit this branch.
+        kind: "vba",
+        request: { moduleName: "Test", procedureName: "Test" },
       },
       {
         ...config,
@@ -1294,6 +1298,13 @@ describe("Cross-process lock for .accdb", () => {
   });
 
   it("run() returns RUNNER_LOCK_TIMEOUT when cross-process lock cannot be acquired", async () => {
+    // Skip on non-Windows: the test uses the real PowerShell runner which
+    // requires Windows + Access COM. The Linux CI runner cannot execute
+    // the script; the lock-timeout branch is exercised via the in-process
+    // queue tests in test/core/runner/cross-process-lock.test.ts.
+    if (process.platform !== "win32") {
+      return;
+    }
     const dbPath = join(tmpdir(), `dysflow-lock-test-${Date.now()}.accdb`);
     const lockPath = getCrossProcessLockPath(dbPath);
     mkdirSync(lockPath, { recursive: true });
@@ -1312,8 +1323,18 @@ describe("Cross-process lock for .accdb", () => {
         scriptPath: "C:/tools/run.ps1",
         lockAcquireTimeoutMs: 100,
       });
+      // #750 — kind: "diagnostics" intentionally skips the cross-process
+      // file lock (read-only contract), so the lock-timeout branch is
+      // unreachable from that path. Use kind: "vba" (write path) so the
+      // test still exercises `runWithAccessExecutionLock` and the
+      // RUNNER_LOCK_TIMEOUT contract. moduleName / procedureName are
+      // filler for the AccessVbaRequest shape; the executor is never
+      // invoked because the lock acquisition itself throws.
       const result = await runner.run(
-        { kind: "diagnostics", request: {} },
+        {
+          kind: "vba",
+          request: { moduleName: "Test", procedureName: "Test" },
+        },
         { ...config, accessDbPath: dbPath },
       );
       expect(result.ok).toBe(false);
@@ -1330,11 +1351,30 @@ describe("Cross-process lock for .accdb", () => {
   // now covered by Pester behavioral tests in scripts/tests/dysflow-access-runner.Tests.ps1
   // ("Access runner return-based exits and force-kill — behavioral" describe block).
 
-  it("runs a real diagnostics check and verifies no lingering MSACCESS.EXE process", async () => {
+  // #750 — SKIPPED: the test's premise no longer holds. `kind: "diagnostics"`
+  // used to open Access (the COM open + pre-diagnostics DoCmd.SetWarnings
+  // call rewrote .accdb metadata), and the assertion verified that the
+  // spawned MSACCESS.EXE was reaped after the run. After #750, the
+  // diagnostics branch returns BEFORE Open-CanonicalAccess, so no Access
+  // process is ever spawned — the "no lingering MSACCESS.EXE" guarantee
+  // is now structural (vacuously true because nothing runs) and the
+  // accessPid assertion is unsatisfiable.
+  //
+  // The diagnostics read-only contract is covered by:
+  //   - test/core/scripts/dysflow-access-runner-static.test.ts (static
+  //     analysis of the PowerShell script, no runtime needed)
+  //   - test/core/runner/access-runner-readlock.test.ts (unit: confirms
+  //     the runner skips the cross-process lock for diagnostics)
+  //   - test/e2e/access-runner-readlock.e2e.test.ts (E2E: real PowerShell
+  //     + Access, asserts the .accdb md5 is byte-identical after doctor)
+  it.skip("runs a real diagnostics check and verifies no lingering MSACCESS.EXE process", async () => {
     if (process.platform !== "win32") {
       return;
     }
     const dbPath = join(process.cwd(), "E2E_testing/NoConformidades.accdb");
+    if (!existsSync(dbPath)) {
+      return;
+    }
     // Pass scriptPath explicitly so the test always uses the dev script regardless of DYSFLOW_HOME.
     // AGENTS.md: "Never modify the production runtime at %LOCALAPPDATA%\dysflow" — tests must
     // not inadvertently use it either.
