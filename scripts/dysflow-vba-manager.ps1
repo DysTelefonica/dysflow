@@ -743,6 +743,110 @@ function Convert-Utf8ToAnsiTempFile {
     [System.IO.File]::WriteAllText($TempPath, $text, $ansi)
 }
 
+# issue #743: ensure that form `.cls` code-behind files emitted by Export-VbaModule
+# always carry `Attribute VB_Name = "<FormName>"` as their first non-blank line.
+# Without it, Access interprets the module as a placeholder and produces
+# `Form_TempSccObj1`, `Form_TempSccObj2`, ... when the file is re-imported.
+# Pure text helper: no COM, no filesystem side effects.
+function Ensure-VbNameAttributeAtTop {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    if ([string]::IsNullOrEmpty($ModuleName)) {
+        throw "Ensure-VbNameAttributeAtTop: -ModuleName is required"
+    }
+
+    $expected = "Attribute VB_Name = `"$ModuleName`""
+    $normalized = $Text -replace "`r`n", "`n" -replace "`r", "`n"
+
+    if ([string]::IsNullOrEmpty($normalized)) {
+        # Empty input: return a fresh Attribute VB_Name line.
+        return $expected
+    }
+
+    $lines = @($normalized -split "`n")
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $trim = $lines[$i].Trim()
+        if ($trim -eq "") { continue }
+        # First non-blank line is here. Three shapes:
+        #   1) It is the correct Attribute VB_Name -> idempotent pass-through
+        #   2) It is a stale Attribute VB_Name -> replace value in place
+        #   3) Anything else -> prepend the canonical line and re-join
+        if ($trim -match '^Attribute\s+VB_Name\s*=\s*"([^"]*)"\s*$') {
+            if ($matches[1] -eq $ModuleName) {
+                return $Text
+            }
+            $lines[$i] = $expected
+            return ($lines -join "`n")
+        }
+        $lines = @($expected) + $lines
+        return ($lines -join "`n")
+    }
+
+    # No non-blank line at all -> append
+    return ($expected + "`n" + $Text)
+}
+
+# issue #743: ensure that the `CodeBehindForm` block of an Access `.form.txt`
+# (and `.report.txt`) carries `Attribute VB_Name = "<FormName>"` as the first
+# non-blank line after the marker, even when the underlying binary emitted
+# only sibling `Attribute VB_GlobalNameSpace` / `VB_Creatable` lines.
+# Pure text helper: no COM, no filesystem side effects.
+function Ensure-CodeBehindFormVbName {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    if ([string]::IsNullOrEmpty($ModuleName)) {
+        throw "Ensure-CodeBehindFormVbName: -ModuleName is required"
+    }
+
+    $expected = "Attribute VB_Name = `"$ModuleName`""
+    $normalized = $Text -replace "`r`n", "`n" -replace "`r", "`n"
+    $lines = @($normalized -split "`n")
+
+    $markerIdx = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -eq "CodeBehindForm") {
+            $markerIdx = $i
+            break
+        }
+    }
+
+    if ($markerIdx -lt 0) {
+        # Not a document module text -> defensive no-op (do not invent structure)
+        return $Text
+    }
+
+    for ($i = $markerIdx + 1; $i -lt $lines.Count; $i++) {
+        $trim = $lines[$i].Trim()
+        if ($trim -eq "") { continue }
+        if ($trim -match '^Attribute\s+VB_Name\s*=\s*"([^"]*)"\s*$') {
+            if ($matches[1] -eq $ModuleName) {
+                return $Text
+            }
+            $lines[$i] = $expected
+            return ($lines -join "`n")
+        }
+        # Insert before this non-blank, non-VB_Name line
+        $before = @()
+        for ($j = 0; $j -lt $i; $j++) { $before += $lines[$j] }
+        $after = @()
+        for ($j = $i; $j -lt $lines.Count; $j++) { $after += $lines[$j] }
+        return (($before + @($expected) + $after) -join "`n")
+    }
+
+    # Only-whitespace after CodeBehindForm: append
+    $lines += $expected
+    return ($lines -join "`n")
+}
+
 function Test-IsVbaImportMetadataLine {
     [CmdletBinding()]
     Param(
@@ -1592,6 +1696,13 @@ function Export-VbaModule {
             }
 
             Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
+            # issue #743: inject/replace `Attribute VB_Name` so Access never invents a
+            # `Form_TempSccObjN` placeholder on re-import. SaveAsText is the source of
+            # truth for everything BUT Attribute VB_Name (which the binary may already
+            # be missing on legacy graphs that imported through older dysflow versions).
+            $formTxtContent = [System.IO.File]::ReadAllText($finalPath, [System.Text.Encoding]::UTF8)
+            $formTxtContent = Ensure-CodeBehindFormVbName -Text $formTxtContent -ModuleName $actualName
+            Write-Utf8NoBom -Path $finalPath -Text $formTxtContent
         } else {
             if (-not $component) {
                 throw ("Componente no encontrado en VBProject para '{0}' y no es un documento Form/Report." -f $actualName)
@@ -1612,6 +1723,12 @@ function Export-VbaModule {
             $codeModule = $component.CodeModule
             if ($codeModule -and $codeModule.CountOfLines -gt 0) {
                 $codeLines = $codeModule.Lines(1, $codeModule.CountOfLines)
+                # issue #743: ensure the sibling .cls code-behind file carries
+                # `Attribute VB_Name = "<FormName>"` at the top. `CodeModule.Lines`
+                # for document modules does not include hidden declarations like
+                # Attribute VB_Name, so we must inject it explicitly to make the file
+                # re-importable as the canonical form (not a Form_TempSccObjN).
+                $codeLines = Ensure-VbNameAttributeAtTop -Text $codeLines -ModuleName $actualName
                 Write-Utf8NoBom -Path $clsPath -Text $codeLines
             }
         }
