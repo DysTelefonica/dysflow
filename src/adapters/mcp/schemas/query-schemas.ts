@@ -21,6 +21,12 @@ const READ_TARGET_OVERRIDE = {
   backendPath: SCHEMA_PROPS.backendPath,
   databasePath: SCHEMA_PROPS.databasePath,
   sourcePath: SCHEMA_PROPS.sourcePath,
+  target: {
+    type: "string",
+    enum: ["frontend", "backend"],
+    description:
+      "Semantic target role for read tools (#716). When set together with `projectId`, Dysflow resolves `target` to the configured frontend (`accessPath`) or backend (`backendPath`) from `.dysflow/project.json`. Explicit `accessPath`/`backendPath`/`databasePath` still win when provided.",
+  } as JsonSchemaProperty,
 };
 
 export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {

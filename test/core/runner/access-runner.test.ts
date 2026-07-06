@@ -1529,4 +1529,207 @@ describe("Cross-process lock for .accdb", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // --- #716: target (frontend/backend) resolves to configured accessPath / backendPath -----
+  //
+  // The runner always serializes the resolved request into `-PayloadJson <JSON>`
+  // and never emits per-path top-level flags, so we assert on the parsed payload
+  // (the data that actually reaches the PowerShell script) rather than the
+  // command-line structure. That keeps the tests refactor-safe against any
+  // future change to the runner's argument layout (#716 / `web-tdd-philosophy`).
+
+  const readPayloadFromArgs = (args: readonly string[]): Record<string, unknown> => {
+    const idx = args.indexOf("-PayloadJson");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const raw = args[idx + 1];
+    if (typeof raw !== "string") {
+      throw new Error(`expected -PayloadJson value to be a string, got ${typeof raw}`);
+    }
+    return JSON.parse(raw) as Record<string, unknown>;
+  };
+
+  it("query: target='frontend' resolves to configured accessDbPath and clears target (#716)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-target-fe-"));
+    const fakeAccdb = join(dir, "front.accdb");
+    writeFileSync(fakeAccdb, "");
+    try {
+      const capturedArgs: string[][] = [];
+      const executor: PowerShellExecutor = async (_command, args) => {
+        capturedArgs.push([...args]);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"tables":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      };
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: { action: "list_tables", mode: "read", sql: "", target: "frontend" },
+        },
+        { ...config, accessDbPath: fakeAccdb, backendPath: undefined },
+      );
+      expect(result.ok).toBe(true);
+      expect(capturedArgs.length).toBe(1);
+      const firstCallArgs = capturedArgs[0];
+      if (!firstCallArgs) throw new Error("expected one captured call");
+      const payload = readPayloadFromArgs(firstCallArgs);
+      // The runner resolved `target: "frontend"` → `databasePath: fakeAccdb`
+      // and cleared `target` so the PowerShell script consumes only concrete paths.
+      expect(payload.databasePath).toBe(fakeAccdb);
+      expect(payload.backendPath).toBeUndefined();
+      expect(payload.target).toBeUndefined();
+      expect(payload.action).toBe("list_tables");
+      expect(payload.mode).toBe("read");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: target='backend' resolves to configured backendPath and clears target (#716)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-target-be-"));
+    const fakeAccdb = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdb, "");
+    writeFileSync(fakeBackend, "");
+    try {
+      const capturedArgs: string[][] = [];
+      const executor: PowerShellExecutor = async (_command, args) => {
+        capturedArgs.push([...args]);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"tables":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      };
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: { action: "list_tables", mode: "read", sql: "", target: "backend" },
+        },
+        { ...config, accessDbPath: fakeAccdb, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(true);
+      expect(capturedArgs.length).toBe(1);
+      const firstCallArgs = capturedArgs[0];
+      if (!firstCallArgs) throw new Error("expected one captured call");
+      const payload = readPayloadFromArgs(firstCallArgs);
+      expect(payload.backendPath).toBe(fakeBackend);
+      expect(payload.databasePath).toBeUndefined();
+      expect(payload.target).toBeUndefined();
+      expect(payload.action).toBe("list_tables");
+      expect(payload.mode).toBe("read");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: explicit databasePath wins over target='frontend' and keeps target (#716)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-target-override-"));
+    const fakeAccdb = join(dir, "front.accdb");
+    const explicitPath = join(dir, "explicit.accdb");
+    writeFileSync(fakeAccdb, "");
+    writeFileSync(explicitPath, "");
+    try {
+      const capturedArgs: string[][] = [];
+      const executor: PowerShellExecutor = async (_command, args) => {
+        capturedArgs.push([...args]);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"tables":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      };
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "list_tables",
+            mode: "read",
+            sql: "",
+            target: "frontend",
+            databasePath: explicitPath,
+          },
+        },
+        { ...config, accessDbPath: fakeAccdb, backendPath: undefined },
+      );
+      expect(result.ok).toBe(true);
+      expect(capturedArgs.length).toBe(1);
+      const firstCallArgs = capturedArgs[0];
+      if (!firstCallArgs) throw new Error("expected one captured call");
+      const payload = readPayloadFromArgs(firstCallArgs);
+      // Explicit `databasePath` wins; the runner skipped the target resolution
+      // branch entirely, so `target` remains the caller's intent (a downstream
+      // observer can still read what was requested).
+      expect(payload.databasePath).toBe(explicitPath);
+      expect(payload.target).toBe("frontend");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: target='backend' with no backendPath configured fails fast with CONFIG_MISSING_TARGET_PATH (#716)", async () => {
+    const calls: unknown[] = [];
+    const executor: PowerShellExecutor = async () => {
+      calls.push("executor_called");
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const runner = new AccessPowerShellRunner({
+      lockFileSystem: nodeLockFileSystem,
+      executor,
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/run access.ps1",
+    });
+    const result = await runner.run(
+      {
+        kind: "query",
+        request: { action: "list_tables", mode: "read", sql: "", target: "backend" },
+      },
+      { ...config, accessDbPath: "C:/no/such/access.accdb", backendPath: undefined },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("CONFIG_MISSING_TARGET_PATH");
+    expect(String(result.error.message)).toMatch(/backend/);
+    expect(calls).toEqual([]);
+  });
 });

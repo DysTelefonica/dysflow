@@ -531,6 +531,7 @@ Many MCP tools share common context and override parameters:
 * **Access Database Path Overrides**:
   - `accessPath` / `databasePath` / `sourcePath` (string, optional): Paths to the frontend Access database. Overrides `.dysflow/project.json` settings.
   - `backendPath` / `comparePath` (string, optional): Paths to the backend database.
+  - `target` (string, enum `frontend` | `backend`, optional): Semantic role for project-aware read tools (#716). When passed alongside `projectId` and no explicit path is supplied, Dysflow resolves `target` against `.dysflow/project.json` (`"frontend"` → configured `accessPath`; `"backend"` → configured `backendPath`). Explicit paths still win. Unresolvable roles surface as a typed `CONFIG_MISSING_TARGET_PATH` error before the executor runs. Closed enum: `auto` mode is not implemented in this slice.
 * **Workspace Overrides**:
   - `destinationRoot` (string, optional): Directory for VBA module source exports (usually `src`).
   - `projectRoot` (string, optional): Root directory of the repository/worktree.
@@ -745,25 +746,25 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
 
 #### 3. Database Schema & Links
 * **`list_tables`**: List all tables in the active databases.
-  - Parameters: `accessPath`, `backendPath`, `databasePath`, `sourcePath` (optional)
+  - Parameters: `accessPath`, `backendPath`, `databasePath`, `sourcePath`, `target` (optional) — see [`target`](#common-input-parameters) for the projectId-first path
 * **`list_linked_tables`**: List only linked tables.
-  - Parameters: `accessPath`, `backendPath` (optional)
+  - Parameters: `accessPath`, `backendPath`, `target` (optional)
 * **`get_schema`**: Retrieve column types, sizes, and properties for a table.
-  - Parameters: `tableName` (string, optional), `accessPath` (optional)
+  - Parameters: `tableName` (string, optional), `accessPath` (optional), `target` (optional). When `projectId` + `target` are supplied without an explicit path, Dysflow resolves the role against `.dysflow/project.json` (e.g. `target="frontend"` → configured `accessPath` for frontend-local config tables like `TbConfiguracionBackends`).
 * **`count_rows`**: Get row count for a table or SQL query.
-  - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional)
+  - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
 * **`distinct_values`**: List distinct values of a column.
-  - Parameters: `tableName` (string, optional), `columnName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional)
+  - Parameters: `tableName` (string, optional), `columnName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
 * **`compare_backends`**: Compare structural differences between two backends.
-  - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional)
+  - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional), `target` (optional)
 * **`generate_erd`**: Generate an entity-relationship document for the database schema.
   - Parameters: `erdPath` (string, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional)
 * **`get_relationships`**: List foreign keys and relation constraints.
-  - Parameters: `accessPath` (optional)
+  - Parameters: `accessPath` (optional), `target` (optional)
 * **`list_access_files`**: Search for `.accdb` files recursively in a directory.
   - Parameters: `rootPath` (string, optional), `directory` (string, optional)
 * **`list_links`**: Get target connections of all linked tables.
-  - Parameters: `accessPath` (optional)
+  - Parameters: `accessPath` (optional), `target` (optional)
 * **`link_tables`**: Link tables to a backend file.
   - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
 * **`relink_tables`**: Rebind existing linked tables to a backend file.

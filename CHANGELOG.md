@@ -7,6 +7,43 @@
 
 ## [Unreleased]
 
+- **Semantic `target` role on read-only MCP schema/query tools** (#716). All
+  read tools that share the `READ_TARGET_OVERRIDE` input block
+  (`get_schema`, `count_rows`, `distinct_values`, `list_tables`,
+  `list_linked_tables`, `get_relationships`, `compare_backends`,
+  `list_access_files`, `list_links`) now accept a new `target`
+  parameter: `"frontend"` resolves to the configured `accessPath`
+  from `.dysflow/project.json`; `"backend"` resolves to the configured
+  `backendPath`. Explicit `accessPath` / `backendPath` / `databasePath`
+  / `sourcePath` continue to win, so no caller that previously passed
+  a concrete path regresses. The schema enum is closed (`frontend` /
+  `backend`) and `auto` mode is not implemented in this slice — the
+  issue hedges that AC with *"if implemented"* and the new explicit
+  role already gives callers the unambiguous choice. When the role
+  cannot be resolved against the project config (e.g. `target="backend"`
+  against a project without `backendPath`), the runner returns the
+  typed `CONFIG_MISSING_TARGET_PATH` error **before** invoking the
+  PowerShell executor, so no orphan PIDs / operation-registry entries
+  are created on the unresolvable path. Closes #716 for the
+  frontend-local + backend lookup + explicit precedence + typed-error
+  acceptance subset; `auto` mode + cross-DB ambiguity detection
+  remain acknowledged follow-ups in
+  `openspec/changes/feat-716-target-frontend-backend/verify-report.md`.
+- **Runner default-fallback block re-keyed off `finalOperation.request`**
+  (#716 follow-up, `src/core/runner/access-runner.ts:285-322`).
+  Discovered while rebasing the prior-session WIP onto current `main`:
+  the existing fallback that defaults a missing path to
+  `config.backendPath` / `config.accessDbPath` was reading the
+  **original** `operation.request`, so any upstream resolution that
+  had already populated a path (or cleared a `target`) was silently
+  overwritten by the spread. New `if (finalOperation.kind === "query")`
+  guard re-narrows TypeScript's discriminated union across the `let`
+  reassignment. Refactor-safe tests now assert on the parsed
+  `-PayloadJson` JSON content (what the PowerShell script actually
+  sees) rather than on top-level argument flags, so any future change
+  to the args layout that preserves the data semantics keeps the
+  suite green.
+
 ## [v1.16.1] - 2026-07-06
 
 Truncation-safe `import_modules` + opt-in verbose observability (issue #752). The

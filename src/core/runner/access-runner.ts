@@ -236,6 +236,53 @@ export class AccessPowerShellRunner implements AccessRunner {
   ): Promise<OperationResult<TData>> {
     let finalOperation = operation;
     if (operation.kind === "query") {
+      // #716 — when the caller passed a semantic `target` (frontend/backend)
+      // and did not supply an explicit `databasePath` or `backendPath`,
+      // resolve it from the project config. Explicit paths always win so
+      // callers can still override the configured target per-call.
+      if (
+        operation.request.target !== undefined &&
+        !operation.request.databasePath &&
+        !operation.request.backendPath
+      ) {
+        if (operation.request.target === "backend" && config.backendPath) {
+          finalOperation = {
+            ...operation,
+            request: {
+              ...operation.request,
+              backendPath: config.backendPath,
+              target: undefined,
+            },
+          };
+        } else if (operation.request.target === "frontend" && config.accessDbPath) {
+          finalOperation = {
+            ...operation,
+            request: {
+              ...operation.request,
+              databasePath: config.accessDbPath,
+              target: undefined,
+            },
+          };
+        } else if (operation.request.target === "frontend" && config.backendPath) {
+          // Frontend target requested but no frontend path is configured —
+          // fall back to a structured error rather than silently switching
+          // to the backend (which would violate the caller's intent).
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              "Cannot resolve frontend target: project config does not declare accessPath. Pass databasePath explicitly or set accessPath in .dysflow/project.json.",
+            ),
+          );
+        } else if (operation.request.target === "backend") {
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              "Cannot resolve backend target: project config does not declare backendPath. Pass backendPath explicitly or set backendPath in .dysflow/project.json.",
+            ),
+          );
+        }
+      }
+
       // Default the read/write target to the project's configured
       // backend when the caller did not pass databasePath or
       // backendPath. This used to silently fall through to the
@@ -243,23 +290,33 @@ export class AccessPowerShellRunner implements AccessRunner {
       // backendPath, which surfaced to MCP callers as the opaque
       // "RUNNER_INVALID_JSON: No DYSFLOW_RESULT line" error after
       // the PowerShell runner threw "Access database not found".
-      if (!operation.request.backendPath && !operation.request.databasePath) {
-        if (config.backendPath) {
-          finalOperation = {
-            ...operation,
-            request: {
-              ...operation.request,
-              backendPath: config.backendPath,
-            },
-          };
-        } else if (config.accessDbPath) {
-          finalOperation = {
-            ...operation,
-            request: {
-              ...operation.request,
-              databasePath: config.accessDbPath,
-            },
-          };
+      //
+      // Reads `finalOperation.request` (not `operation.request`) so the
+      // #716 semantic-target block above is not clobbered: when target
+      // resolution already populated `backendPath` or `databasePath`,
+      // we must not re-run this default and lose the cleared `target`.
+      // The `kind === "query"` guard re-narrows `finalOperation` after
+      // the `let` reassign so TypeScript accepts `.backendPath` etc.
+      if (finalOperation.kind === "query") {
+        const queryRequest = finalOperation.request;
+        if (!queryRequest.backendPath && !queryRequest.databasePath) {
+          if (config.backendPath) {
+            finalOperation = {
+              ...finalOperation,
+              request: {
+                ...queryRequest,
+                backendPath: config.backendPath,
+              },
+            };
+          } else if (config.accessDbPath) {
+            finalOperation = {
+              ...finalOperation,
+              request: {
+                ...queryRequest,
+                databasePath: config.accessDbPath,
+              },
+            };
+          }
         }
       }
 
