@@ -5,7 +5,11 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import type { FormIR } from "../../core/models/form-ir.js";
-import { parseFormTxt, serializeFormTxt } from "../../core/services/form-ir-service.js";
+import {
+  normalizeLineEndings,
+  parseFormTxt,
+  serializeFormTxt,
+} from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
@@ -81,12 +85,18 @@ export async function serializeForm(
   }
 
   const serialized = serializeFormTxt(ir);
-  // byteEqual compares the serialized output against the RAW original text
-  // (not normalized). This means CRLF vs LF differences, BOM bytes, or any
-  // other byte-level change in the source will cause byteEqual to flip false.
-  const byteEqual = serialized === originalText;
+  // byteEqual compares the serialized output against the LF-normalized
+  // original (per the round-trip guarantee documented on `serializeFormTxt`:
+  // `serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)`). CRLF
+  // originals therefore normalize to LF before comparison, so a clean
+  // round-trip reports byteEqual:true even when the on-disk line endings are
+  // CRLF — byteDiff reflects the post-normalization delta, so it stays at 0
+  // for a clean round-trip and grows only on real content mutations (BOM,
+  // whitespace, etc.).
+  const normalizedOriginal = normalizeLineEndings(originalText);
+  const byteEqual = serialized === normalizedOriginal;
   const byteDiff = Math.abs(
-    Buffer.byteLength(serialized, "utf8") - Buffer.byteLength(originalText, "utf8"),
+    Buffer.byteLength(serialized, "utf8") - Buffer.byteLength(normalizedOriginal, "utf8"),
   );
   const opaqueCount = countOpaqueEntries(ir);
 
