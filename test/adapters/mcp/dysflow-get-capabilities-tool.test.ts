@@ -179,6 +179,54 @@ describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
   });
 });
 
+// Issue #746 — dryRunDefault must align with the AGENTS.md / CHANGELOG v1.14
+// promise ("Writing tools now consistently default to plan mode (dryRun: true)
+// unless apply === true or dryRun === false is explicitly supplied"). Per-tool
+// contracts and the global snapshot surface must report `true`.
+describe("dryRunDefault contract — global + per-tool alignment (#746)", () => {
+  const VBA_SYNC_WRITE_TOOLS = [
+    "import_modules",
+    "import_all",
+    "compile_vba",
+    "delete_module",
+    "fix_encoding",
+    "vba_inline_execution",
+    "dysflow_form_add_control",
+    "dysflow_form_move_control",
+    "dysflow_form_rename_control",
+    "dysflow_form_deserialize",
+    "dysflow_create_form_from_template",
+  ] as const satisfies readonly (keyof typeof MCP_TOOL_CONTRACTS)[];
+
+  it("every vba-sync write-class contract declares dryRunDefault = true", () => {
+    for (const toolName of VBA_SYNC_WRITE_TOOLS) {
+      expect(
+        MCP_TOOL_CONTRACTS[toolName].dryRunDefault,
+        `${toolName} must default to dryRun:true to match AGENTS.md`,
+      ).toBe(true);
+    }
+  });
+
+  it("dryRunDefault snapshot field is true regardless of projectId/allowWrites", () => {
+    const writable = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+    });
+    const lockedDown = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+    });
+    expect(writable.dryRunDefault).toBe(true);
+    expect(lockedDown.dryRunDefault).toBe(true);
+  });
+});
+
 describe("dysflow_get_capabilities tool — registration and read-only contract (#656)", () => {
   it("is registered as a modern tool by createDysflowMcpTools", () => {
     const tools = createDysflowMcpTools(makeServices(), false);

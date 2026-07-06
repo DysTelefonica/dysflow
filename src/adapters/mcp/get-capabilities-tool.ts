@@ -130,12 +130,14 @@ function computeWriteClassToolsPermitted(
 }
 
 function deriveGlobalDryRunDefault(): boolean {
-  // Every write-class tool in MCP_TOOL_CONTRACTS either declares
-  // `dryRunDefault: true` explicitly or is a non-vba-sync dispatch route
-  // (where the generated contract defaults to true). vba-sync routes default
-  // to false, but those are filesystem-mutating tools where the dispatcher
-  // path still honors dryRun via `resolveIsDryRun`. The global default is the
-  // safer "plan first" stance.
+  // #746 — every write-class tool in MCP_TOOL_CONTRACTS now declares
+  // `dryRunDefault: true` (see `contractFromGeneratedRoute`). The dispatcher
+  // path realises that default for every tool — `resolveIsDryRun` for query
+  // aliases, `buildMaintenanceRequest` for query-maintenance, and
+  // `VbaModulesAdapter.execute` for vba-sync — so the snapshot must agree with
+  // AGENTS.md and the CHANGELOG v1.14 promise. The loop is preserved for
+  // defense-in-depth: if a future contract ever opts out, the global surfaces
+  // that explicit opt-out rather than silently flipping to false.
   for (const contract of Object.values(MCP_TOOL_CONTRACTS)) {
     if (contract.dryRunDefault === false) {
       return false;

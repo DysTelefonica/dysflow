@@ -26,10 +26,17 @@ function contractFromGeneratedRoute(name: GeneratedDispatchToolName): McpToolCon
   if (route.kind === "vba-sync" && !route.mutatesBinary && !route.mutatesFilesystem) {
     return { access: "read-only", writeGate: "none", summary: "Read-only MCP contract." };
   }
+  // Every write-class dispatch route defaults to plan mode (`dryRun: true`).
+  // The dispatcher path honors that default — `resolveIsDryRun` for query
+  // aliases, `buildMaintenanceRequest` for query-maintenance, and
+  // `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync.
+  // vba-sync tools are NOT an exception: they default to dry-run just like the
+  // rest, and the snapshot surface must agree with AGENTS.md and the CHANGELOG
+  // v1.14 promise of "standardized dryRun defaults".
   return {
     access: "conditional-write",
     writeGate: "conditional",
-    dryRunDefault: route.kind !== "vba-sync",
+    dryRunDefault: true,
     summary: "Write-capable MCP contract; write execution is write-gated.",
   };
 }
