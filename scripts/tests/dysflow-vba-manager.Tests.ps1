@@ -357,6 +357,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'function Ensure-CodeBehindFormVbName',
             'function Get-ComponentFolder',
             'function Get-ComponentExtension',
+            'function Build-ExportResultSummary',
             'function Resolve-ImportFileForModule',
             'function Get-AccessLockFilePath'
         )
@@ -396,7 +397,8 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Resolve-ImportFileForModule',
             'Resolve-FormCodeBehindFile',
             'Get-FormCodeBehindCandidateNames',
-            'Resolve-ImportModeValue'
+            'Resolve-ImportModeValue',
+            'Build-ExportResultSummary'
         )
 
         $extractedCode = ($functionDefs |
@@ -3430,5 +3432,64 @@ Describe "Get-FormCodeBehindCandidateNames — no cross-prefix candidates (#553)
         $names | Should -Contain 'MyForm'
         $names | Should -Contain 'Form_MyForm'
         $names | Should -Contain 'Report_MyForm'
+    }
+
+}
+
+Describe "Build-ExportResultSummary — issue #745 trust contract" {
+    BeforeAll {
+        $scriptPath = (Resolve-Path (Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1")).Path
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$null)
+        $def = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Build-ExportResultSummary' },
+            $true
+        ) | Select-Object -First 1
+        Invoke-Expression $def.Extent.Text
+    }
+
+    It "returns ok=true with no warnings when every module exported cleanly" {
+        $exported = @("ModA", "ModB", "ModC")
+        $warnings = @()
+        $result = Build-ExportResultSummary -Exported $exported -Warnings $warnings
+
+        $result.ok | Should -Be $true -Because "ok MUST reflect actual success state (issue #745 trust contract)"
+        $result.exported | Should -Be $exported
+        $result.ContainsKey("warnings") | Should -Be $false -Because "no warnings => no warnings key (transport cleanliness)"
+    }
+
+    It "returns ok=false and surfaces warnings when any module failed" {
+        $exported = @("ModA", "ModB")
+        $warnings = @(
+            @{ module = "ModB"; error = "Access COM timeout"; message = "Access COM timeout" }
+        )
+        $result = Build-ExportResultSummary -Exported $exported -Warnings $warnings
+
+        $result.ok | Should -Be $false -Because "ANY failure flips ok=false; this is the regression guard that catches #745 export silent-fail"
+        $result.exported | Should -Be $exported -Because "we keep the names that DID export successfully, even if others failed"
+        $result.warnings | Should -HaveCount 1
+        $result.warnings[0].module | Should -Be "ModB"
+        $result.warnings[0].error | Should -Be "Access COM timeout"
+    }
+
+    It "returns ok=false and an empty exported list when every module failed" {
+        $result = Build-ExportResultSummary -Exported @() -Warnings @(
+            @{ module = "ModA"; error = "SaveAsText produced an incomplete file"; message = "SaveAsText produced an incomplete file" },
+            @{ module = "ModB"; error = "Extension resolution failed"; message = "Extension resolution failed" }
+        )
+
+        $result.ok | Should -Be $false
+        $result.exported | Should -Be @()
+        $result.warnings | Should -HaveCount 2
+    }
+
+    It "is contract-binding: ok=false is the only signal downstream consumers see" {
+        $exported = @("ModA")
+        $warnings = @(@{ module = "ModA"; error = "Could not write file"; message = "Could not write file" })
+        $result = Build-ExportResultSummary -Exported $exported -Warnings $warnings
+
+        # The downstream consumer pattern is: `if (-not $result.ok) { ... handle warnings ... }`.
+        # Verify the contract is exactly that: ok reflects the warnings, not the names.
+        $result.ok | Should -Be $false -Because "issue #745: even if a name appears in exported, ok MUST be false if any module failed"
     }
 }

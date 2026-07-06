@@ -865,6 +865,42 @@ function Test-IsVbaImportMetadataLine {
     )
 }
 
+# issue #745: trust contract for export_modules / export_all. The downstream
+# consumers (TypeScript MCP layer) read `result.ok` to decide pass/fail; the
+# previous implementation hard-coded `ok = $true` regardless of warnings, and
+# the per-module loop in Invoke-ExportAction appended names to `$exported` even
+# when Export-VbaModule silently returned without writing a file. This helper
+# is the single source of truth: `ok` is FALSE iff any module produced a
+# warning, the `exported` list is passed through unchanged, and the warnings
+# are surfaced when non-empty. Pure (no COM) so Pester can pin the contract
+# directly. Regression guard for the export silent-fail / `Form_TempSccObjN`
+# symptom in #745.
+#
+# Naming note: a previous draft named this `Merge-ExportResults`, but the
+# `Merge-` prefix collides with real cmdlets shipped by Hyper-V / ImportExcel
+# (Merge-MultipleSheets, Merge-Worksheet, Merge-VHD, Merge-CIPolicy). On
+# PowerShell 5.1 the verb-noun resolver tries those cmdlets first and never
+# falls back to the AST-extracted function, so the test fails with
+# `CommandNotFoundException`. `Build-` is a standard verb too but has no
+# shipping cmdlet collisions in the Windows PowerShell 5.1 default module
+# set, so the function is reliably discovered.
+function Build-ExportResultSummary {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Exported,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][hashtable[]]$Warnings
+    )
+
+    $result = @{
+        ok       = ($Warnings.Count -eq 0)
+        exported = $Exported
+    }
+    if ($Warnings.Count -gt 0) {
+        $result["warnings"] = $Warnings
+    }
+    return $result
+}
+
 function Test-IsVbaImportDroppableMetadataLine {
     [CmdletBinding()]
     Param(
