@@ -3095,10 +3095,9 @@ function Import-VbaModule {
             # and the VBE does not expose through CountOfLines.
             $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text ([System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252)))
             $visibleSourceLines = Get-VbaTextLineCount -Text $codeTextForStringImport
-            $visibleSourceSnapshot = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
             $importVerboseSource = $null
             if ($script:ImportVerbose) {
-                $importVerboseSource = $visibleSourceSnapshot
+                $importVerboseSource = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
             }
 
             $count = $codeModule.CountOfLines
@@ -4435,9 +4434,12 @@ function Invoke-ImportAction {
     $pendingTargets = @($targets)
     $pass = 0
     # R2: per-module structured result. Keys are module names, values are
-    # pscustomobject with {status, phase, error:{code,message,machine,user},
-    # durationMs, rollbackApplied}. Keeping these keyed by module name lets
-    # the retry loop preserve the last known good/bad state for each module.
+    # pscustomobject entries with {module, status, phase, error, durationMs,
+    # rollbackApplied, fallbackUsed, fallbackReason}. On error, error carries
+    # {code, message, machine, user, rollbackAttempted, rollbackApplied,
+    # rollbackError, fallbackUsed, fallbackReason}. Keeping these keyed by
+    # module name lets the retry loop preserve the last known good/bad state
+    # for each module.
     $lastResults = @{}
     $maxPasses = if ($useRetryImport) { [Math]::Max(2, $targets.Count) } else { 1 }
 
@@ -4475,8 +4477,9 @@ function Invoke-ImportAction {
                 $progressThisPass = $true
                 # R2 success record. Phase is null on the happy path because
                 # nothing failed. DurationMs is captured per-module (not just
-                # total). rollbackApplied is always false on success because
-                # no rollback is needed.
+                # total). rollbackApplied is false on success because no
+                # rollback is needed; fallbackUsed/fallbackReason report whether
+                # the F16 AddFromString fallback was needed after AddFromFile.
                 $resultFallbackUsed = [bool]($importResult -and $importResult.PSObject.Properties['FallbackUsed'] -and $importResult.FallbackUsed)
                 $resultFallbackReason = $null
                 if ($importResult -and $importResult.PSObject.Properties['FallbackReason']) {
@@ -4572,7 +4575,9 @@ function Invoke-ImportAction {
     } while ($useRetryImport -and $pendingTargets.Count -gt 0 -and $progressThisPass -and $pass -lt $maxPasses)
 
     # R2: emit per-module entries in the order the caller requested, with the
-    # rich shape {module, status, phase, error:{...}, durationMs, rollbackApplied}.
+    # rich shape {module, status, phase, error:{...}, durationMs,
+    # rollbackApplied, fallbackUsed, fallbackReason}. Error entries include
+    # nested rollback/fallback diagnostics under error as well.
     # Preserve the existing happy-path emit shape (top-level array) so existing
     # consumers parsing the DYSFLOW_RESULT sentinel still see a JSON array of
     # module entries.

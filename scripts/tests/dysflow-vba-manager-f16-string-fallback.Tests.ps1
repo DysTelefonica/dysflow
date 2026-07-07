@@ -358,14 +358,24 @@ Describe "dysflow-vba-manager.ps1 — F16 source-larger import fallback helpers"
         }
     }
 
-    It "surfaces fallback and rollback diagnostics in import results" {
-        $scriptText = [System.IO.File]::ReadAllText((Resolve-Path $script:ScriptPath).Path)
+    It "reports fallback diagnostics when AddFromFile truncates a source-larger update" {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-f16-fallback-diagnostics-{0}" -f [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $root | Out-Null
+        try {
+            $source = Join-Path $root "Test_Foo.bas"
+            [System.IO.File]::WriteAllText($source, "Attribute VB_Name = `"Test_Foo`"`r`nOption Explicit`r`nPublic Sub Newer()`r`nEnd Sub`r`n", [System.Text.Encoding]::UTF8)
+            $codeModule = New-FakeCodeModule -InitialText "Option Explicit`r`nPublic Sub Original()" -AddFromFileLineCap 2
+            $project = New-FakeVbProject -CodeModule $codeModule -Name "Test_Foo"
 
-        $scriptText | Should -Match 'FallbackUsed\s*='
-        $scriptText | Should -Match 'FallbackReason\s*='
-        $scriptText | Should -Match 'rollbackAttempted\s*='
-        $scriptText | Should -Match 'rollbackApplied\s*='
-        $scriptText | Should -Match 'fallbackUsed\s*='
-        $scriptText | Should -Match 'fallbackReason\s*='
+            $result = Import-VbaModule -VbProject $project -ModuleName "Test_Foo" -ModulesPath $root -ImportMode "Auto"
+
+            $result.FallbackUsed | Should -Be $true
+            $result.FallbackReason | Should -Be "add_from_file_truncated"
+            $codeModule.State.AddFromFileCalls | Should -Be 1
+            $codeModule.State.AddFromStringCalls | Should -Be 1
+            $codeModule.State.Text | Should -Be "Option Explicit`r`nPublic Sub Newer()`r`nEnd Sub"
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }

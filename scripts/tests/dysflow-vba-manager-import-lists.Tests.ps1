@@ -8,8 +8,10 @@
 # makes them pass lives in scripts/dysflow-vba-manager.ps1 and must:
 #
 #   R1 — accept long moduleNames lists without truncation
-#   R2 — emit per-module {module, status, phase, error:{code,message,machine,user},
-#                          durationMs, rollbackApplied}
+#   R2 — emit per-module {module, status, phase, error:{code,message,machine,user,
+#                          rollbackAttempted,rollbackApplied,rollbackError,
+#                          fallbackUsed,fallbackReason}, durationMs,
+#                          rollbackApplied, fallbackUsed, fallbackReason}
 #   R3 — keep going after a per-module failure (do not abort the whole list)
 #   R4 — treat an explicit empty NormalizedModules as a plan / no-op, NOT as
 #        the "import everything under ModulesPath" behavior
