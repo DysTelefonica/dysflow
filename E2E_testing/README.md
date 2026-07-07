@@ -21,7 +21,11 @@ Targeted hotfix scripts:
 
 - `node E2E_testing/mcp-e2e-import-grow-in-place.mjs` — F16 regression: imports a small module,
   then imports a larger source over the same component and fails if `IMPORT_TRUNCATED` resurfaces.
-  Skips safely when the `NoConformidades.accdb` fixture is not present.
+  Skips safely when the `NoConformidades.accdb` fixture is not present. Set
+  `DYSFLOW_REQUIRE_ACCESS_E2E=1` for release-gate mode: missing Windows/Access fixtures or password
+  become a non-zero failure instead of a skip. The standalone MCP script owns this release-required
+  mode because it is the release gate entry point; Vitest integration tests remain developer feedback
+  and keep their host-capability skips.
 
 The full battery is the release gate. During feature or bug work, only exercise the parts of the
 E2E that touch your change — do not pay the cost of the whole thing on every iteration.

@@ -16,6 +16,18 @@ const moduleName = "Test_F16GrowImport";
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD;
+const requireAccessE2e = /^(1|true|yes)$/i.test(process.env.DYSFLOW_REQUIRE_ACCESS_E2E ?? "");
+
+function skipOrFail(message) {
+  const prefix = requireAccessE2e ? "required fixture missing" : "skipped";
+  const output = `[f16-import-grow] ${prefix}: ${message}`;
+  if (requireAccessE2e) {
+    console.error(output);
+    process.exit(1);
+  }
+  console.log(output);
+  process.exit(0);
+}
 
 function makeModule(name, lineCount) {
   const filler = Array.from(
@@ -43,18 +55,15 @@ function firstModule(payload) {
 }
 
 if (process.platform !== "win32") {
-  console.log("[f16-import-grow] skipped: Windows + Access required.");
-  process.exit(0);
+  skipOrFail("Windows + Access required.");
 }
 
 if (!existsSync(fixturePath)) {
-  console.log(`[f16-import-grow] skipped: missing fixture ${fixturePath}`);
-  process.exit(0);
+  skipOrFail(`missing fixture ${fixturePath}`);
 }
 
 if (!password) {
-  console.log("[f16-import-grow] skipped: set ACCESS_VBA_PASSWORD for the fixture before running.");
-  process.exit(0);
+  skipOrFail("set ACCESS_VBA_PASSWORD for the fixture before running.");
 }
 
 const resolvedCommand = resolveMcpE2eCommand({ env: process.env, repoRoot });
@@ -110,7 +119,13 @@ try {
   await writeFile(modulePath, makeModule(moduleName, 40), "utf8");
   const grown = await callImport(true);
   const entry = firstModule(toolPayload(grown.response));
-  if (grown.isError || entry?.status !== "ok" || entry?.error?.code === "IMPORT_TRUNCATED" || entry?.verbose?.truncated) {
+  if (
+    grown.isError ||
+    entry?.status !== "ok" ||
+    entry?.error?.code === "IMPORT_TRUNCATED" ||
+    entry?.verbose?.truncated ||
+    entry?.verbose?.mismatchReason != null
+  ) {
     throw new Error(`Grow import failed/truncated. entry=${JSON.stringify(entry)} text=${grown.text}`);
   }
 
