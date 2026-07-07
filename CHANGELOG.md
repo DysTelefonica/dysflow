@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.21.0] - 2026-07-07
 
 ### Fixed (multi-AI friction log F11, F13, F14)
 
