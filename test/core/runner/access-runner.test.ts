@@ -1732,4 +1732,350 @@ describe("Cross-process lock for .accdb", () => {
     expect(String(result.error.message)).toMatch(/backend/);
     expect(calls).toEqual([]);
   });
+
+  // ----------------------------------------------------------------
+  // PR-2 of v1.20.0 (issues #763 + #764) — `target: "auto"` resolution
+  // and cross-DB ambiguity detection. The runner MUST:
+  //   - Resolve `target: "auto"` via `cross-db-table-lookup` (queries
+  //     backend then frontend) and set the resolved `databasePath`.
+  //   - Return ACCESS_TABLE_AMBIGUOUS when the table exists in BOTH
+  //     databases.
+  //   - For the no-target case (target undefined), ALSO run the lookup
+  //     when the request carries a tableName, so callers get the typed
+  //     ambiguity error instead of a silent non-deterministic answer
+  //     (#764).
+  //
+  // The runner exposes the lookup through a `runProbe` seam that does
+  // not acquire the cross-process file lock (the parent `run()` already
+  // holds it). The tests inject a fake executor that simulates the probe
+  // per databasePath, and a fake `runProbe` is not necessary because the
+  // auto-mode branch calls `runProbe` directly on the runner (which
+  // falls through to the executor). The executor mock discriminates by
+  // the `-DatabasePath` value in the spawned arguments.
+  // ----------------------------------------------------------------
+
+  /**
+   * Build a fake executor that returns "table found" for the databases in
+   * `hits` and ACCESS_TABLE_NOT_FOUND for the rest. Discriminates by the
+   * resolved `databasePath` / `backendPath` in the `-PayloadJson` arg.
+   */
+  function makeFakeExecutor(
+    hits: { backend?: boolean; frontend?: boolean },
+  ): {
+    executor: PowerShellExecutor;
+    calls: Array<{ databasePath?: string; backendPath?: string }>;
+  } {
+    const calls: Array<{ databasePath?: string; backendPath?: string }> = [];
+    const executor: PowerShellExecutor = async (_command, args) => {
+      const idx = args.indexOf("-PayloadJson");
+      const raw = idx >= 0 ? args[idx + 1] : undefined;
+      const payload =
+        typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      calls.push({
+        ...(typeof payload.databasePath === "string"
+          ? { databasePath: payload.databasePath }
+          : {}),
+        ...(typeof payload.backendPath === "string"
+          ? { backendPath: payload.backendPath }
+          : {}),
+      });
+      const path =
+        typeof payload.databasePath === "string"
+          ? payload.databasePath
+          : typeof payload.backendPath === "string"
+            ? payload.backendPath
+            : "";
+      const isBackend = path === fakeBackend;
+      const hit = isBackend ? hits.backend : hits.frontend;
+      if (hit === true) {
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"tableName":"TbPeople","columns":["id","name"]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      }
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT {}",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    return { executor, calls };
+  }
+
+  let fakeAccdbForAuto = "";
+  let fakeBackendForAuto = "";
+
+  it("query: target='auto' resolves to backend when the table exists in backend only (#763)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-be-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            target: "auto",
+            tableName: "TbPeople",
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(true);
+      // The runner should consult both DBs (the lookup always probes both),
+      // then resolve the request to a single call with the backend path.
+      expect(calls.length).toBe(3);
+      const finalCall = calls[2];
+      expect(finalCall?.databasePath).toBe(fakeBackend);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: target='auto' resolves to frontend when the table exists in frontend only (#763)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-fe-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: false, frontend: true });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            target: "auto",
+            tableName: "TbConfiguracionBackends",
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(true);
+      expect(calls.length).toBe(3);
+      const finalCall = calls[2];
+      expect(finalCall?.databasePath).toBe(fakeFrontend);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: target='auto' returns ACCESS_TABLE_AMBIGUOUS when the table exists in both DBs (#763 + #764)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-amb-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            target: "auto",
+            tableName: "TbShared",
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected ACCESS_TABLE_AMBIGUOUS");
+      expect(result.error.code).toBe("ACCESS_TABLE_AMBIGUOUS");
+      const details = result.error.details as
+        | { roles?: string[]; candidates?: { role: string; path: string }[] }
+        | undefined;
+      expect(details?.roles?.sort()).toEqual(["backend", "frontend"]);
+      expect(details?.candidates).toEqual([
+        { role: "backend", path: fakeBackend },
+        { role: "frontend", path: fakeFrontend },
+      ]);
+      // The runner MUST NOT have called the executor a third time with the
+      // ambiguous request — the lookup resolved the failure.
+      expect(calls.length).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: no target + table in BOTH DBs returns ACCESS_TABLE_AMBIGUOUS (#764)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-amb-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            tableName: "TbShared",
+            // No `target`, no `databasePath`, no `backendPath`.
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected ACCESS_TABLE_AMBIGUOUS");
+      expect(result.error.code).toBe("ACCESS_TABLE_AMBIGUOUS");
+      const details = result.error.details as
+        | { roles?: string[]; candidates?: { role: string; path: string }[] }
+        | undefined;
+      expect(details?.roles?.sort()).toEqual(["backend", "frontend"]);
+      // Two probe calls (one per DB), no third call.
+      expect(calls.length).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: no target + table only in backend resolves to backend (#764)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-be-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            tableName: "TbPeople",
+            // No `target` — the runner must probe both DBs and resolve to
+            // the only DB that has the table.
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(true);
+      // Two probe calls + one final resolved call.
+      expect(calls.length).toBe(3);
+      const finalCall = calls[2];
+      expect(finalCall?.databasePath).toBe(fakeBackend);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("query: no target + table in neither DB returns CONFIG_MISSING_TARGET_PATH (#764, edge)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-miss-"));
+    fakeAccdbForAuto = join(dir, "front.accdb");
+    fakeBackendForAuto = join(dir, "backend.accdb");
+    writeFileSync(fakeAccdbForAuto, "");
+    writeFileSync(fakeBackendForAuto, "");
+    try {
+      const fakeFrontend = fakeAccdbForAuto;
+      const fakeBackend = fakeBackendForAuto;
+      const { executor, calls } = makeFakeExecutor({ backend: false, frontend: false });
+      const runner = new AccessPowerShellRunner({
+        lockFileSystem: nodeLockFileSystem,
+        executor,
+        preflightCleanup: noOpPreflight,
+        scriptPath: "C:/tools/run access.ps1",
+      });
+      const result = await runner.run(
+        {
+          kind: "query",
+          request: {
+            action: "get_schema",
+            mode: "read",
+            sql: "",
+            tableName: "TbMissing",
+          },
+        },
+        { ...config, accessDbPath: fakeFrontend, backendPath: fakeBackend },
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected failure");
+      // When the lookup returns ACCESS_TABLE_NOT_FOUND, the runner falls
+      // through to the existing CONFIG_MISSING_TARGET_PATH guard because
+      // neither `databasePath` nor `backendPath` is set on the request.
+      expect(result.error.code).toBe("CONFIG_MISSING_TARGET_PATH");
+      // Two probe calls (one per DB); the runner did NOT invoke a third
+      // time because the lookup exhausted both candidates.
+      expect(calls.length).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
