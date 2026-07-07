@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v1.20.1] - 2026-07-07
+
 - **F16 import_modules grow-in-place hotfix**: updating an existing standard
   module/class with a larger source file no longer requires a manual
   `delete_module` + `import_modules` workaround. The import path still starts
@@ -10,7 +12,14 @@
   `CodeModule.AddFromString` when Access keeps the old `CountOfLines` cap.
   `VBComponents.Remove()` is deliberately not used, avoiding visible VBE
   "Save As module" prompts. The `IMPORT_TRUNCATED` check remains as a
-  defensive safety net.
+  defensive safety net. Release verification included the required real Access
+  E2E gate:
+  `DYSFLOW_REQUIRE_ACCESS_E2E=1 node E2E_testing/mcp-e2e-import-grow-in-place.mjs`
+  (exit 0, `[f16-import-grow] passed: larger source imported through MCP
+  without IMPORT_TRUNCATED.`).
+
+Implementation commits: PR #775 merge `f34568ad`; local harness follow-up
+`a8dddba0` (`test(e2e): fix F16 import harness MCP payload`).
 
 ## [v1.20.0] - 2026-07-07
 
