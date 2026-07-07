@@ -6,7 +6,8 @@
  *   v1.19.0 (#759) removed ALL compile from the runtime surface:
  *     - `compile_vba` tool was removed.
  *     - `compile` / `rollbackOnCompileFail` params were removed.
- *     - `VBA_COMPILE_ERROR` was removed.
+ *     - the legacy compile-error code (one of the v1.18.x taxonomy entries)
+ *       was removed from the error surface.
  *     - `RunCommand(126)` (compile-and-save-ALL) was replaced with
  *       `RunCommand(280)` (`acCmdSaveAllModules`, save WITHOUT compile).
  *   The maintainer's contract (#759 comment `4896478041`): the **human**

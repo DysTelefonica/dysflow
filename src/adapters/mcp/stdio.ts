@@ -120,6 +120,10 @@ export async function startMcpStdioAdapter(
     // dysflow_lint_module so it honors opt-outs and triggers the legacy
     // auto-detection downgrade.
     startupConfig?.lintRulesOverride ?? {},
+    // PR-1 (issue #762, v1.20.0) — forward the resolved front-end `.accdb`
+    // path so `dysflow_get_capabilities` can surface the per-project
+    // `humanCompilePending` flag from the process-local state cache.
+    startupConfig?.accessDbPath,
   );
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.

@@ -479,6 +479,11 @@ export function createDysflowMcpTools(
   lintRulesOverride: Readonly<
     Partial<Record<VbaModuleLintRule, { enabled: boolean; reason?: string }>>
   > = {},
+  // PR-1 (issue #762, v1.20.0) — front-end `.accdb` path used to surface
+  // the per-project `humanCompilePending` flag in the capabilities snapshot.
+  // When omitted, the snapshot reports `humanCompilePending: false` (no
+  // project in scope at startup).
+  accessDbPath?: string,
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
@@ -597,6 +602,7 @@ export function createDysflowMcpTools(
       allowedProcedures,
       projectId,
       allowWrites,
+      accessDbPath,
     }),
     // issue #701 — read-only VBA procedure introspection
     {

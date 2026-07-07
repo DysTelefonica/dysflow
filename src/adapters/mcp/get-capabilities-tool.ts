@@ -5,6 +5,7 @@
 import packageJson from "../../../package.json" with { type: "json" };
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -47,6 +48,11 @@ import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
  *   resolver is configured, the resolver outcome is unknown to the snapshot
  *   and the list is empty — the consumer must call `dysflow_get_capabilities`
  *   with the per-input tool name to resolve the per-tool gate.
+ * - `humanCompilePending` (v1.20.0, issue #762): inferred flag that tells
+ *   the consumer whether the human has likely to need to compile the
+ *   project in Access (Debug ▸ Compile) before any test run. Sourced from
+ *   the process-local `human-compile-state` cache keyed by `accessDbPath`.
+ *   `false` when no `accessDbPath` is in scope (no project recorded).
  */
 export type McpCapabilitySnapshot = {
   adapterVersion: string;
@@ -66,6 +72,8 @@ export type McpCapabilitySnapshot = {
   dryRunDefault: boolean;
   toolsVisible: number;
   writeClassToolsPermitted: readonly string[];
+  /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
+  humanCompilePending: boolean;
 };
 
 export type GetCapabilitiesAllInput = {
@@ -76,6 +84,12 @@ export type GetCapabilitiesAllInput = {
   allowWrites: boolean;
   surface?: "stdio" | "http";
   adapterVersion?: string;
+  /**
+   * v1.20.0 (#762) — front-end `.accdb` path used to look up the
+   * per-project `human-compile-state`. When omitted, the snapshot
+   * reports `humanCompilePending: false` (no project in scope).
+   */
+  accessDbPath?: string;
 };
 
 // ─── Pure aggregate function ──────────────────────────────────────────────────
@@ -90,6 +104,14 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
   const toolNames = Object.keys(MCP_TOOL_CONTRACTS);
 
   const writeClassToolsPermitted = computeWriteClassToolsPermitted(input.writesEnabled, toolNames);
+
+  // v1.20.0 (#762) — surface the human-compile reminder signal. When no
+  // accessDbPath is in scope (no project), the flag stays false: there is
+  // nothing for the human to compile.
+  const humanCompilePending =
+    input.accessDbPath !== undefined && input.accessDbPath.length > 0
+      ? isHumanCompilePending(input.accessDbPath)
+      : false;
 
   return {
     adapterVersion,
@@ -109,6 +131,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     dryRunDefault: deriveGlobalDryRunDefault(),
     toolsVisible: toolNames.length,
     writeClassToolsPermitted,
+    humanCompilePending,
   };
 }
 
@@ -179,6 +202,12 @@ export function createGetCapabilitiesTool(opts: {
   allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined;
   projectId: string | undefined;
   allowWrites: boolean;
+  /**
+   * v1.20.0 (#762) — optional front-end `.accdb` path used to surface
+   * the per-project `humanCompilePending` flag. When omitted, the
+   * snapshot reports `humanCompilePending: false` (no project in scope).
+   */
+  accessDbPath?: string;
 }): DysflowMcpTool {
   const snapshot = getCapabilitiesAll({
     writesEnabled: opts.writesEnabled,
@@ -189,11 +218,12 @@ export function createGetCapabilitiesTool(opts: {
     allowedProcedures: Array.isArray(opts.allowedProcedures) ? opts.allowedProcedures : undefined,
     projectId: opts.projectId,
     allowWrites: opts.allowWrites,
+    accessDbPath: opts.accessDbPath,
   });
 
   return {
     name: "dysflow_get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. ${MCP_TOOL_CONTRACTS.dysflow_get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.dysflow_get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);
