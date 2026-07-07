@@ -426,7 +426,6 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
-  "dysflow_vba_execute",
   "dysflow_query_execute",
   "dysflow_doctor",
   "dysflow_access_operations_list",
@@ -486,24 +485,6 @@ export function createDysflowMcpTools(
   accessDbPath?: string,
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
-    {
-      name: "dysflow_vba_execute",
-      description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Requires an already compiled project. PR1a (#621 F1): the adapter now defaults to deny — a call without an 'allowedProcedures' allowlist (project config) AND without dryRun:true is refused with MCP_INPUT_INVALID. PR-4 (#659): when the allowlist IS configured but the procedure is not in it, the refusal emits MCP_PROCEDURE_NOT_ALLOWED (distinct structured code) with error.allowedProcedures and error.remediation; the legacy MCP_INPUT_INVALID body prefix is preserved for backward compat. Pass dryRun:true in the request body to use the explicit escape hatch. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
-      inputSchema: VBA_EXECUTE_SCHEMA,
-      handler: async (input, context) => {
-        // #674 — resolve the allowlist per input so the gate sees the
-        // allowlist of the project the input targets, not the startup one.
-        const resolvedAllowed = await resolveAllowedProceduresFor(allowedProcedures, input);
-        return handleMcpVbaExecute(
-          input,
-          VBA_EXECUTE_SCHEMA,
-          services,
-          resolvedAllowed,
-          (validatedInput) => validatedInput as AccessVbaRequest,
-          context,
-        );
-      },
-    },
     {
       name: "dysflow_query_execute",
       description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,

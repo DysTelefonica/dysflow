@@ -428,7 +428,6 @@ const HUMAN_COMPILE_REMINDER_TOOLS: ReadonlySet<string> = new Set([
   "delete_module",
   "test_vba",
   "run_vba",
-  "dysflow_vba_execute",
 ]);
 
 /**

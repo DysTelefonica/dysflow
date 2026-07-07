@@ -53,15 +53,20 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
     // #704 added lint_module (read-only VBA module pre-import linting).
     // feat-759-no-compile (v1.19.0) — compile_vba was removed.
-    // Expected breakdown: 53 dispatch names (DYSFLOW_MCP_TOOL_NAMES, including
-    //   inspect_form/compare_form/lint_form_code, the three form mutation tools, the
-    //   new serialize/deserialize pair, and create_form_from_template)
-    //   - 0 hidden stubs (zero-hidden-tools policy)
-    //   + 14 modern core tools = 67 visible.
+    // #777 Opción A (2026-07-07) renamed 7 `dysflow_*` names to canonical in #58405eb2.
+    // #777 Opción A cont. (this PR) continues the rename for the bespoke
+    //   tools in `tools.ts` and removes `dysflow_vba_execute` (canonical
+    //   `run_vba` was already registered in `alias-tools.ts`). Visible
+    //   count drops by 1 per legacy alias removed.
+    //   Expected breakdown:
+    //     53 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     - 0 hidden stubs (zero-hidden-tools policy)
+    //     + 13 modern core tools (was 14 — `dysflow_vba_execute` removed)
+    //     = 66 visible (was 67).
     expect(toolCount).toBe(53);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(14);
-    expect(visibleCount).toBe(67);
+    expect(modernCount).toBe(13);
+    expect(visibleCount).toBe(66);
   });
 
   it("verifies split-mode coverage explicitly", () => {

@@ -97,11 +97,11 @@ export async function handleMcpVbaExecute(
   const coreResult = await services.vbaService.execute(request, context?.sendProgress);
   const mcpResult = translateCoreResultToMcpContent(coreResult);
   // PR-1 (issue #762, v1.20.0) — surface the human-compile reminder on
-  // `dysflow_vba_execute` (and the legacy `run_vba` alias that calls this
-  // same handler). The access path is sourced from the request that the
-  // schema-validated input produced.
+  // `run_vba` (and was previously surfaced on `dysflow_vba_execute` — that
+  // legacy name was removed under #777 Opción A cont.). The access path is
+  // sourced from the request that the schema-validated input produced.
   return withHumanCompileReminder(mcpResult, {
-    toolName: "dysflow_vba_execute",
+    toolName: "run_vba",
     accessPath: extractAccessPathFromInput(request) ?? "",
   });
 }

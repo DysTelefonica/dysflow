@@ -124,12 +124,6 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
 };
 
 const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
-  dysflow_vba_execute: {
-    access: "conditional-write",
-    writeGate: "conditional",
-    summary:
-      "Conditional-write MCP contract; VBA execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
-  },
   dysflow_query_execute: {
     access: "read-write",
     writeGate: "conditional",

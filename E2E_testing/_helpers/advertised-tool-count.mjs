@@ -14,8 +14,9 @@
 // Bumping this number? Update every site listed above AND bump the
 // corresponding `README.md` / `docs/` mentions.
 
-/** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 67;
+/** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter.
+ * #777 (Opción A cont.) — drops by 1 per renamed tool legacy alias removed. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 66;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

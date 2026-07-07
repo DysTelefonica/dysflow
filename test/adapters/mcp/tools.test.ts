@@ -92,44 +92,46 @@ describe("MCP tool registration over core services", () => {
 
     expect(toolNames).toEqual(
       expect.arrayContaining([
-        "dysflow_vba_execute",
+        "run_vba",
         "dysflow_query_execute",
         "dysflow_doctor",
         "dysflow_access_operations_list",
         "dysflow_access_cleanup",
       ]),
     );
-    expect(tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema).toMatchObject({
+    // #777 (Opción A cont.) — `run_vba` is the canonical VBA-execute tool
+    // (alias-tools.ts). Its schema uses `argsJson` (JSON-encoded args) per
+    // the MCP_TOOL_SCHEMAS contract; per-schema property assertions live
+    // in `tool-schemas-parity.test.ts`. Here we only pin the contract shape.
+    expect(tools.find((tool) => tool.name === "run_vba")?.inputSchema).toMatchObject({
       type: "object",
       required: ["procedureName"],
       additionalProperties: false,
-      properties: {
-        moduleName: { type: "string" },
-        procedureName: { type: "string" },
-        arguments: { type: "array" },
-        dryRun: { type: "boolean" },
-      },
     });
     await expect(
-      tools[0]?.handler({
-        moduleName: "Automation",
+      tools.find((tool) => tool.name === "run_vba")?.handler({
         procedureName: "Refresh",
-        arguments: [2026],
+        argsJson: JSON.stringify([2026]),
         dryRun: true,
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
       ok: true,
     });
     await expect(
-      tools[1]?.handler({ sql: "SELECT id, name FROM People", mode: "read" }),
+      tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({
+        sql: "SELECT id, name FROM People",
+        mode: "read",
+      }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [{ id: 1, name: "Ada" }] }) }],
       isError: false,
       ok: true,
     });
-    await expect(tools[2]?.handler({ includeEnvironment: true })).resolves.toEqual({
+    await expect(
+      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ includeEnvironment: true }),
+    ).resolves.toEqual({
       content: [
         {
           type: "text",
@@ -142,8 +144,15 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
 
+    // #777 (Opción A cont.) — canonical `run_vba` uses `argsJson` and an
+    // empty `moduleName` (module resolution is out of scope for the alias).
     expect(vba.requests).toEqual([
-      { moduleName: "Automation", procedureName: "Refresh", arguments: [2026], dryRun: true },
+      expect.objectContaining({
+        moduleName: "",
+        procedureName: "Refresh",
+        arguments: [2026],
+        dryRun: true,
+      }),
     ]);
     expect(query.requests).toEqual([{ sql: "SELECT id, name FROM People", mode: "read" }]);
     expect(diagnostics.requests).toEqual([{ includeEnvironment: true }]);
@@ -158,7 +167,6 @@ describe("MCP tool registration over core services", () => {
 
     const toolNames = tools.map((tool) => tool.name);
     const expectedModernToolNames = [
-      "dysflow_vba_execute",
       "dysflow_query_execute",
       "dysflow_doctor",
       "dysflow_access_operations_list",
@@ -172,6 +180,19 @@ describe("MCP tool registration over core services", () => {
     );
   });
 
+  // #777 (Opción A cont.) — the legacy `dysflow_vba_execute` name is REMOVED
+  // from the MCP surface; the canonical `run_vba` (already registered in
+  // alias-tools.ts) is the only advertised VBA-execute name.
+  it("#777 excludes dysflow_vba_execute from the tools surface (Opción A cont.)", () => {
+    const tools = createDysflowMcpTools({
+      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+      queryService: new FakeQueryService(successResult({ rows: [] })),
+      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+    });
+    expect(tools.find((tool) => tool.name === "dysflow_vba_execute")).toBeUndefined();
+    expect(tools.find((tool) => tool.name === "run_vba")).toBeDefined();
+  });
+
   it("regression: MODERN_TOOL_NAMES are exactly the 13 underscore-only names and none contains a dot", () => {
     // This test is the authoritative contract for modern tool names.
     // It guards against accidental regression to dotted names (e.g. dysflow.vba.execute).
@@ -180,8 +201,11 @@ describe("MCP tool registration over core services", () => {
     // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
     // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
     // #704 added lint_module (read-only VBA module pre-import linting).
+    // #777 Opción A cont. — `dysflow_vba_execute` was REMOVED from
+    // MODERN_TOOL_NAMES; the canonical `run_vba` (already in
+    // DYSFLOW_MCP_TOOL_NAMES as a VBA_SYNC_TOOL_NAME) is NOT a modern tool
+    // name in this sense — it's a pre-existing alias.
     const expectedNames = [
-      "dysflow_vba_execute",
       "dysflow_query_execute",
       "dysflow_doctor",
       "dysflow_access_operations_list",
@@ -210,12 +234,16 @@ describe("MCP tool registration over core services", () => {
       queryService: new FakeQueryService(successResult({ rows: [] })),
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
-    const schema = tools.find((tool) => tool.name === "dysflow_vba_execute")?.inputSchema;
+    // #777 (Opción A cont.) — exercise against the canonical `run_vba`
+    // tool (legacy `dysflow_vba_execute` was REMOVED). The schema now uses
+    // the shared `CTX_PROPS` atoms in `MCP_TOOL_SCHEMAS.run_vba`. Match
+    // case-insensitively to keep the contract honest.
+    const schema = tools.find((tool) => tool.name === "run_vba")?.inputSchema;
 
-    expect(schema?.properties?.projectId?.description).toContain("canonical project identity");
-    expect(schema?.properties?.projectId?.description).toContain("Engram");
-    expect(schema?.properties?.contextId?.description).toContain("run/context id");
-    expect(schema?.properties?.contextId?.description).toContain("Do not duplicate projectId");
+    expect(schema?.properties?.projectId?.description?.toLowerCase()).toContain(
+      "canonical project identity",
+    );
+    expect(schema?.properties?.contextId?.description?.toLowerCase()).toContain("run/context id");
   });
 
   it("accepts contextId/projectId on short core calls without requiring local path injection", async () => {
@@ -235,7 +263,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_vba_execute")
+        .find((tool) => tool.name === "run_vba")
         ?.handler({
           contextId: "00-no-conformidades-staging-clean",
           procedureName: "Smoke",
@@ -253,12 +281,15 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toMatchObject({ isError: false });
 
     expect(diagnostics.requests).toEqual([{ contextId: "00-no-conformidades-staging-clean" }]);
+    // #777 (Opción A cont.) — canonical `run_vba` (alias-tools.ts) builds
+    // the request with `moduleName: ""` and `arguments: []` defaults; only
+    // the caller's payload is asserted here.
     expect(vba.requests).toEqual([
-      {
+      expect.objectContaining({
         contextId: "00-no-conformidades-staging-clean",
         procedureName: "Smoke",
         dryRun: true,
-      },
+      }),
     ]);
     expect(query.requests).toEqual([
       { contextId: "00-no-conformidades-staging-clean", sql: "SELECT 1", mode: "read" },
@@ -446,7 +477,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_vba_execute")
+        .find((tool) => tool.name === "run_vba")
         ?.handler({ moduleName: "Automation" }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
@@ -485,7 +516,14 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
-  it("rejects empty-string procedureName before reaching the runner (minLength guard)", async () => {
+  it("rejects empty-string procedureName before reaching the runner", async () => {
+    // #777 (Opción A cont.) — the legacy `dysflow_vba_execute` schema
+    // used a `minLength: 1` guard on procedureName; the canonical `run_vba`
+    // schema (MCP_TOOL_SCHEMAS.run_vba) does not declare that guard, so
+    // empty procedureNames now flow through to the allowlist gate. The
+    // allowlist gate returns MCP_PROCEDURE_NOT_ALLOWED (default-deny),
+    // which is the actual safety guarantee. This test now exercises the
+    // canonical path.
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const tools = createDysflowMcpTools({
       vbaService: vba,
@@ -494,14 +532,10 @@ describe("MCP tool registration over core services", () => {
     });
 
     await expect(
-      tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "" }),
-    ).resolves.toMatchObject({
-      isError: true,
-      ok: false,
-      content: [{ text: expect.stringContaining("procedureName") }],
-    });
+      tools.find((t) => t.name === "run_vba")?.handler({ procedureName: "" }),
+    ).resolves.toMatchObject({ isError: true });
     await expect(
-      tools.find((t) => t.name === "dysflow_vba_execute")?.handler({ procedureName: "   " }),
+      tools.find((t) => t.name === "run_vba")?.handler({ procedureName: "   " }),
     ).resolves.toMatchObject({ isError: true });
     expect(vba.requests).toHaveLength(0);
   });
@@ -1252,7 +1286,7 @@ describe("MCP tool registration over core services", () => {
       const sendProgress = () => {};
       const context = { progressToken: "tok-1", sendProgress };
 
-      const tool = tools.find((t) => t.name === "dysflow_vba_execute");
+      const tool = tools.find((t) => t.name === "run_vba");
       await tool?.handler({ procedureName: "DoWork", dryRun: true }, context);
 
       expect(vba.capturedOnProgress).toHaveLength(1);
@@ -1300,111 +1334,7 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
-  describe("allowedProcedures — procedureName allowlist for dysflow_vba_execute", () => {
-    function makeTools(
-      allowedProcedures: readonly string[],
-      vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
-    ) {
-      return createDysflowMcpTools(
-        {
-          vbaService: vba,
-          queryService: new FakeQueryService(successResult({ rows: [] })),
-          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-        },
-        false,
-        undefined,
-        {},
-        allowedProcedures,
-      );
-    }
-
-    it("blocks a procedure not in the allowlist", async () => {
-      const tools = makeTools(["Refresh", "Sync"]);
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "DeleteAll" });
-      expect(result?.isError).toBe(true);
-      expect(result?.content[0]).toMatchObject({
-        text: expect.stringContaining("DeleteAll"),
-      });
-      expect(result?.content[0]).toMatchObject({
-        text: expect.stringContaining("allowedProcedures"),
-      });
-    });
-
-    it("allows a procedure that is in the allowlist", async () => {
-      const tools = makeTools(["Refresh", "Sync"]);
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "Refresh" });
-      expect(result?.isError).toBe(false);
-    });
-
-    it("refuses by default when allowlist is empty and no dryRun (default-deny, PR1a #621)", async () => {
-      const tools = makeTools([]);
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "DeleteAll" });
-      expect(result?.isError).toBe(true);
-      // #757 (F6) — the no-allowlist branch now has its own distinct code.
-      expect(result?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
-      expect(result?.content[0]?.text).toContain("DeleteAll");
-      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
-    });
-
-    it("refuses by default when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
-      const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-      });
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "AnyProcedure" });
-      expect(result?.isError).toBe(true);
-      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
-    });
-
-    it("accepts dryRun:true as escape hatch when allowlist is empty (PR1a #621)", async () => {
-      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
-      const tools = makeTools([], vba);
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "DeleteAll", dryRun: true });
-      expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([
-        expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
-      ]);
-    });
-
-    it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
-      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
-      const tools = createDysflowMcpTools({
-        vbaService: vba,
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-      });
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "AnyProcedure", dryRun: true });
-      expect(result?.isError).toBe(false);
-      expect(vba.requests).toEqual([
-        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
-      ]);
-    });
-
-    it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
-      const tools = makeTools(["Refresh", "Sync"]);
-      const result = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "DeleteAll", dryRun: true });
-      expect(result?.isError).toBe(true);
-      expect(result?.content[0]?.text).toContain("DeleteAll");
-      expect(result?.content[0]?.text).toContain("allowedProcedures");
-    });
-  });
-
-  describe("allowedProcedures — procedureName allowlist for run_vba alias", () => {
+  describe("allowedProcedures — procedureName allowlist for run_vba", () => {
     function makeTools(
       allowedProcedures: readonly string[],
       vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1509,29 +1439,6 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("modern and alias handler compatibility", () => {
-    it("returns the same allowlist error for dysflow_vba_execute and run_vba", async () => {
-      const tools = createDysflowMcpTools(
-        {
-          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-          queryService: new FakeQueryService(successResult({ rows: [] })),
-          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-        },
-        false,
-        undefined,
-        {},
-        ["AllowedProcedure"],
-      );
-
-      const modernResult = await tools
-        .find((t) => t.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "BlockedProcedure" });
-      const aliasResult = await tools
-        .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "BlockedProcedure" });
-
-      expect(aliasResult).toEqual(modernResult);
-    });
-
     it("delegates read-only query_sql through the same query execution path as dysflow_query_execute", async () => {
       const query = new FakeQueryService(successResult({ rows: [{ ok: true }] }));
       const tools = createDysflowMcpTools({

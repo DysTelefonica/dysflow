@@ -143,8 +143,14 @@ describe("MCP/core architecture boundary", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_vba_execute")
-        ?.handler({ procedureName: "Smoke", dryRun: true }),
+        .find((tool) => tool.name === "run_vba")
+        // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED.
+        // The canonical `run_vba` is registered in alias-tools.ts and
+        // accepts `argsJson` instead of `arguments[]`. The schema for
+        // `run_vba` does not enforce `minLength: 1` on procedureName,
+        // so empty/whitespace procedureNames fall through to the
+        // default-deny gate at the runner level.
+        ?.handler({ procedureName: "Smoke", argsJson: "[]", dryRun: true }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools

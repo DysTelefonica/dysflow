@@ -41,17 +41,9 @@ describe("MCP tool contract metadata", () => {
     });
   });
 
-  it("reclassifies dysflow_vba_execute as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
-    expect(getMcpToolContract("dysflow_vba_execute")).toMatchObject({
-      access: "conditional-write",
-      writeGate: "conditional",
-    });
-    const summary = getMcpToolContract("dysflow_vba_execute").summary;
-    expect(summary.toLowerCase()).toContain("allowlist");
-    expect(summary.toLowerCase()).toContain("dryrun");
-  });
-
-  it("reclassifies run_vba (alias) as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+  it("reclassifies run_vba as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+    // #777 (Opción A cont.) — only `run_vba` survives; the legacy
+    // `dysflow_vba_execute` contract was folded into `aliasContracts.run_vba`.
     expect(getMcpToolContract("run_vba")).toMatchObject({
       access: "conditional-write",
       writeGate: "conditional",
@@ -98,10 +90,11 @@ describe("MCP tool contract metadata", () => {
   it("advertises modern tool safety footguns and key arguments (#593 + PR1a #621)", () => {
     const descriptions = modernToolDescriptions();
 
-    expect(descriptions.dysflow_vba_execute).toContain("procedureName");
-    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("allowlist");
-    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("dryrun");
-    expect(descriptions.dysflow_vba_execute).toContain("compiled project");
+    // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED and its
+    // alias `run_vba` (registered in alias-tools.ts) is NOT in
+    // `MODERN_TOOL_NAMES` anymore. The `run_vba` description assertions
+    // are removed — the modern-tool safety footguns contract for
+    // `run_vba` is covered by the canonical-handlers test instead.
 
     expect(descriptions.dysflow_query_execute).toContain('mode: "read"');
     expect(descriptions.dysflow_query_execute).toContain('mode: "write"');
