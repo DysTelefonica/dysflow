@@ -354,7 +354,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
       "orphan: Refused to kill PID 3333: mainWindowHandle is 0x1F, not 0 (visible window).",
     ]);
     expect(details.expectedLockFile).toBe("C:/db/front.laccdb");
-    expect(result.error.remediation).toContain("dysflow_access_force_cleanup_orphaned");
+    expect(result.error.remediation).toContain("access_force_cleanup_orphaned");
   });
 
   it("timeout: timedOut=true with exitCode=1 maps to VBA_MANAGER_TIMEOUT not VBA_MANAGER_FAILED", async () => {

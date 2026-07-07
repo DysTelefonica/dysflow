@@ -18,11 +18,11 @@ import { successResult } from "../../../src/core/contracts/index.js";
  * (`test/quality-gates/mcp-e2e-suite-contracts.test.ts`) cannot drift from this unit pin.
  */
 const ISSUE_713_REQUIRED_TOOLS = [
-  "dysflow_list_procedures",
-  "dysflow_get_procedure",
-  "dysflow_find_references",
-  "dysflow_detect_dead_code",
-  "dysflow_validate_manifest",
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  "detect_dead_code",
+  "validate_manifest",
 ] as const;
 
 describe("advertised MCP tool surface", () => {
@@ -38,9 +38,9 @@ describe("advertised MCP tool surface", () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
     // PR-1 (#656) added dysflow_get_capabilities.
-    // #701 added dysflow_list_procedures + dysflow_get_procedure.
-    // #705 added dysflow_detect_dead_code.
-    // #703 added dysflow_validate_manifest.
+    // #701 added list_procedures + get_procedure.
+    // #705 added detect_dead_code.
+    // #703 added validate_manifest.
     // #704 added lint_module.
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     // Guard the label format too — the e2e suite-contracts pin asserts on this string.

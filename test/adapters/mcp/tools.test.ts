@@ -93,10 +93,10 @@ describe("MCP tool registration over core services", () => {
     expect(toolNames).toEqual(
       expect.arrayContaining([
         "run_vba",
-        "dysflow_query_execute",
-        "dysflow_doctor",
-        "dysflow_access_operations_list",
-        "dysflow_access_cleanup",
+        "query_execute",
+        "doctor",
+        "list_access_operations",
+        "cleanup_access_operation",
       ]),
     );
     // #777 (Opción A cont.) — `run_vba` is the canonical VBA-execute tool
@@ -120,7 +120,7 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      tools.find((tool) => tool.name === "dysflow_query_execute")?.handler({
+      tools.find((tool) => tool.name === "query_execute")?.handler({
         sql: "SELECT id, name FROM People",
         mode: "read",
       }),
@@ -193,30 +193,30 @@ describe("MCP tool registration over core services", () => {
     expect(tools.find((tool) => tool.name === "run_vba")).toBeDefined();
   });
 
-  it("regression: MODERN_TOOL_NAMES are exactly the 13 underscore-only names and none contains a dot", () => {
+  it("regression: MODERN_TOOL_NAMES are exactly the 11 underscore-only names and none contains a dot", () => {
     // This test is the authoritative contract for modern tool names.
     // It guards against accidental regression to dotted names (e.g. dysflow.vba.execute).
     // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
     // #701 added read-only VBA procedure introspection tools.
-    // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
-    // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
+    // #705 added detect_dead_code (read-only dead-code analysis).
+    // #703 added validate_manifest (read-only VBA test manifest validation).
     // #704 added lint_module (read-only VBA module pre-import linting).
-    // #777 Opción A cont. — `dysflow_vba_execute` was REMOVED from
-    // MODERN_TOOL_NAMES; the canonical `run_vba` (already in
-    // DYSFLOW_MCP_TOOL_NAMES as a VBA_SYNC_TOOL_NAME) is NOT a modern tool
-    // name in this sense — it's a pre-existing alias.
+    // #777 Opción A cont. — `dysflow_vba_execute`,
+    // `dysflow_access_operations_list`, and `dysflow_access_cleanup`
+    // were REMOVED from MODERN_TOOL_NAMES; the canonical `run_vba`,
+    // `list_access_operations`, and `cleanup_access_operation` (already
+    // in DYSFLOW_MCP_TOOL_NAMES as VBA_SYNC_TOOL_NAMES) are NOT modern
+    // tool names in this sense — they are pre-existing aliases.
     const expectedNames = [
-      "dysflow_query_execute",
-      "dysflow_doctor",
-      "dysflow_access_operations_list",
-      "dysflow_access_cleanup",
-      "dysflow_access_force_cleanup_orphaned",
+      "query_execute",
+      "doctor",
+      "access_force_cleanup_orphaned",
       "dysflow_get_capabilities",
-      "dysflow_list_procedures",
-      "dysflow_get_procedure",
-      "dysflow_find_references",
-      "dysflow_detect_dead_code",
-      "dysflow_validate_manifest",
+      "list_procedures",
+      "get_procedure",
+      "find_references",
+      "detect_dead_code",
+      "validate_manifest",
       "lint_module",
       "dysflow_resolve_project",
     ];
@@ -272,7 +272,7 @@ describe("MCP tool registration over core services", () => {
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({
           contextId: "00-no-conformidades-staging-clean",
           sql: "SELECT 1",
@@ -306,7 +306,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({
           sql: "SELECT * FROM BackendOnlyTable",
           mode: "read",
@@ -334,7 +334,7 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
 
-    const properties = tools.find((tool) => tool.name === "dysflow_query_execute")?.inputSchema
+    const properties = tools.find((tool) => tool.name === "query_execute")?.inputSchema
       ?.properties;
 
     expect(properties).toHaveProperty("dryRun");
@@ -351,7 +351,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write" }),
     ).resolves.toMatchObject({ isError: false });
 
@@ -370,7 +370,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true }),
     ).resolves.toMatchObject({ isError: false });
 
@@ -388,7 +388,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true });
 
     expect(result?.isError).toBe(true);
@@ -405,7 +405,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: false });
 
     expect(result?.isError).toBe(true);
@@ -426,7 +426,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toMatchObject({ isError: false });
 
@@ -549,7 +549,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     await expect(
-      tools.find((t) => t.name === "dysflow_query_execute")?.handler({ sql: "", mode: "read" }),
+      tools.find((t) => t.name === "query_execute")?.handler({ sql: "", mode: "read" }),
     ).resolves.toMatchObject({
       isError: true,
       ok: false,
@@ -577,7 +577,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "SELECT 1", mode: "delete" }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: mode must be one of: read, write." }],
@@ -587,7 +587,7 @@ describe("MCP tool registration over core services", () => {
     });
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toMatchObject({
       content: [
@@ -646,7 +646,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
@@ -1073,7 +1073,7 @@ describe("MCP tool registration over core services", () => {
     });
   });
 
-  it("routes dysflow_doctor runner timeouts to safe MCP tool error content", async () => {
+  it("routes doctor runner timeouts to safe MCP tool error content", async () => {
     const diagnostics = new FakeDiagnosticsService(
       failureResult({
         code: "RUNNER_TIMEOUT",
@@ -1088,7 +1088,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     await expect(
-      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ projectId: "dysflow" }),
+      tools.find((tool) => tool.name === "doctor")?.handler({ projectId: "dysflow" }),
     ).resolves.toEqual({
       content: [{ type: "text", text: "RUNNER_TIMEOUT: Timed out opening [PATH]" }],
       isError: true,
@@ -1293,7 +1293,7 @@ describe("MCP tool registration over core services", () => {
       expect(vba.capturedOnProgress[0]).toBe(sendProgress);
     });
 
-    it("dysflow_query_execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
+    it("query_execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
       const query = new ProgressCapturingQueryService();
       const tools = createDysflowMcpTools(
         {
@@ -1307,7 +1307,7 @@ describe("MCP tool registration over core services", () => {
       const sendProgress = () => {};
       const context = { progressToken: "tok-2", sendProgress };
 
-      const tool = tools.find((t) => t.name === "dysflow_query_execute");
+      const tool = tools.find((t) => t.name === "query_execute");
       await tool?.handler({ sql: "SELECT 1", mode: "read" }, context);
 
       expect(query.capturedOnProgress).toHaveLength(1);
@@ -1439,7 +1439,7 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("modern and alias handler compatibility", () => {
-    it("delegates read-only query_sql through the same query execution path as dysflow_query_execute", async () => {
+    it("delegates read-only query_sql through the same query execution path as query_execute", async () => {
       const query = new FakeQueryService(successResult({ rows: [{ ok: true }] }));
       const tools = createDysflowMcpTools({
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1449,7 +1449,7 @@ describe("MCP tool registration over core services", () => {
 
       await expect(
         tools
-          .find((t) => t.name === "dysflow_query_execute")
+          .find((t) => t.name === "query_execute")
           ?.handler({ sql: "SELECT 1", mode: "read" }),
       ).resolves.toMatchObject({ isError: false });
       await expect(
@@ -1469,7 +1469,7 @@ describe("MCP tool registration over core services", () => {
         failureResult(
           createDysflowError(
             "INVALID_READ_ONLY_QUERY",
-            'DROP statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.',
+            'DROP statements are not allowed in read-only queries. Use exec_sql or query_execute with mode "write" for write operations.',
           ),
         ),
       );
@@ -1491,12 +1491,12 @@ describe("MCP tool registration over core services", () => {
       expect(query.requests).toHaveLength(1);
     });
 
-    it("blocks DDL via dysflow_query_execute with mode read by delegating to queryService", async () => {
+    it("blocks DDL via query_execute with mode read by delegating to queryService", async () => {
       const query = new FakeQueryService(
         failureResult(
           createDysflowError(
             "INVALID_READ_ONLY_QUERY",
-            'DELETE statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.',
+            'DELETE statements are not allowed in read-only queries. Use exec_sql or query_execute with mode "write" for write operations.',
           ),
         ),
       );
@@ -1507,7 +1507,7 @@ describe("MCP tool registration over core services", () => {
       });
 
       const result = await tools
-        .find((t) => t.name === "dysflow_query_execute")
+        .find((t) => t.name === "query_execute")
         ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "read" });
       expect(result).toMatchObject({
         isError: true,
@@ -1518,7 +1518,7 @@ describe("MCP tool registration over core services", () => {
       expect(query.requests).toHaveLength(1);
     });
 
-    it("allows write SQL via dysflow_query_execute with mode write when writes enabled", async () => {
+    it("allows write SQL via query_execute with mode write when writes enabled", async () => {
       const query = new FakeQueryService(successResult({ rows: [] }));
       const tools = createDysflowMcpTools(
         {
@@ -1531,7 +1531,7 @@ describe("MCP tool registration over core services", () => {
 
       await expect(
         tools
-          .find((t) => t.name === "dysflow_query_execute")
+          .find((t) => t.name === "query_execute")
           ?.handler({ sql: "DELETE FROM TbConfiguracion", mode: "write" }),
       ).resolves.toMatchObject({ isError: false });
 
@@ -1566,11 +1566,11 @@ describe("MCP tool registration over core services", () => {
   });
 });
 
-// PR2 (#621 F1 / #6a) — dysflow_query_execute write mode must pass allowTables/
+// PR2 (#621 F1 / #6a) — query_execute write mode must pass allowTables/
 // denyTables through to queryService. The modern handler spreads the validated
 // input into AccessQueryRequest; the schema change in dysflow-schemas.ts is
 // what makes the fields surface here.
-describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #6a)", () => {
+describe("query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #6a)", () => {
   it("write mode projects allowTables and denyTables from input into the core query request", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools(
@@ -1583,7 +1583,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
     );
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({
         sql: "UPDATE People SET name='Ada'",
         mode: "write",
@@ -1619,7 +1619,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
     );
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({
         sql: "UPDATE Secrets SET x=1",
         mode: "write",
@@ -1640,7 +1640,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
     });
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({
         sql: "SELECT * FROM People",
         mode: "read",
@@ -1673,7 +1673,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
     );
 
     const result = await tools
-      .find((tool) => tool.name === "dysflow_query_execute")
+      .find((tool) => tool.name === "query_execute")
       ?.handler({
         sql: "UPDATE People SET x=1",
         mode: "write",
@@ -1687,7 +1687,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
   });
 });
 
-// PR2 (#621 F2 / #6b) — modern dysflow_access_cleanup must preserve the full
+// PR2 (#621 F2 / #6b) — modern cleanup_access_operation must preserve the full
 // surface (projectId, contextId, backendPath, destinationRoot, projectRoot,
 // timeoutMs, strictContext, expectedAccessPath, expectedProjectRoot,
 // expectedDestinationRoot) that the legacy cleanup_access_operation schema
@@ -1695,7 +1695,7 @@ describe("dysflow_query_execute — allowTables/denyTables pass-through (PR2 #62
 // accessPath / force via the previous bare cast. The core service does not
 // enforce strictContext today (deferred to a follow-up), but the modern
 // surface must at least carry the param forward to the request.
-describe("dysflow_access_cleanup — full-field pass-through (PR2 #621 F2 / #6b)", () => {
+describe("cleanup_access_operation — full-field pass-through (PR2 #621 F2 / #6b)", () => {
   function makeCleanupServices(cleanupRequests: unknown[]): DysflowMcpServices {
     return {
       vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1714,7 +1714,7 @@ describe("dysflow_access_cleanup — full-field pass-through (PR2 #621 F2 / #6b)
     };
   }
 
-  for (const toolName of ["dysflow_access_cleanup", "cleanup_access_operation"] as const) {
+  for (const toolName of ["cleanup_access_operation", "cleanup_access_operation"] as const) {
     it(`${toolName} preserves strictContext through to the cleanup service request`, async () => {
       const cleanupRequests: unknown[] = [];
       const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
@@ -1889,7 +1889,7 @@ describe("AccessOperationRegistry explicit injection", () => {
     };
   }
 
-  for (const toolName of ["cleanup_access_operation", "dysflow_access_cleanup"] as const) {
+  for (const toolName of ["cleanup_access_operation", "cleanup_access_operation"] as const) {
     it(`${toolName} with force:true is refused when writes are disabled and does not reach cleanup service`, async () => {
       const cleanupRequests: unknown[] = [];
       const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
@@ -1980,7 +1980,7 @@ describe("AccessOperationRegistry explicit injection", () => {
     });
   }
 
-  it("dysflow_access_operations_list and list_access_operations list operations + registryHealth from the injected registry (#575)", async () => {
+  it("list_access_operations and list_access_operations list operations + registryHealth from the injected registry (#575)", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create({
       operationId: "op-test-mcp",
@@ -2002,7 +2002,7 @@ describe("AccessOperationRegistry explicit injection", () => {
       operationRegistry: registry,
     });
 
-    const listTool = tools.find((t) => t.name === "dysflow_access_operations_list");
+    const listTool = tools.find((t) => t.name === "list_access_operations");
     const aliasListTool = tools.find((t) => t.name === "list_access_operations");
 
     expect(listTool).toBeDefined();

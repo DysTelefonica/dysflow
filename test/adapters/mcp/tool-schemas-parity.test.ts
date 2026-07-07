@@ -108,7 +108,7 @@ describe("HTTP validation schemas", () => {
     expect(MCP_TOOL_SCHEMAS.run_vba?.required).not.toContain("dryRun");
   });
 
-  // PR2 (#621 F1 / #6a) — dysflow_query_execute write mode must surface
+  // PR2 (#621 F1 / #6a) — query_execute write mode must surface
   // allowTables/denyTables in its schema so the modern handler (which spreads
   // the validated input) can pass them through to AccessQueryService. The
   // legacy `exec_sql` already accepts these; this closes the alias drift.
@@ -134,7 +134,7 @@ describe("HTTP validation schemas", () => {
     expect(QUERY_EXECUTE_SCHEMA.required).not.toContain("denyTables");
   });
 
-  // PR2 (#621 F2 / #6b) — modern dysflow_access_cleanup must accept the
+  // PR2 (#621 F2 / #6b) — modern cleanup_access_operation must accept the
   // same optional surface (projectId/contextId/backendPath/.../strictContext/
   // expectedAccessPath/.../timeoutMs) that the legacy cleanup_access_operation
   // schema already declares, so buildCleanupRequest can project every field

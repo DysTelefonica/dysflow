@@ -8,7 +8,7 @@ Este documento define la batería real de pruebas para ejecutar después de reab
 2. Verificar que `dysflow` resuelve desde `AppData\Local`.
 3. Verificar que el repo activo contiene `.dysflow/project.json`; la configuración funcional no sale de variables de entorno.
 4. Verificar `opencode mcp list` con `dysflow connected`.
-5. Ejecutar pruebas MCP: `initialize`, `tools/list`, `dysflow_doctor`, query read, list operations y cleanup seguro.
+5. Ejecutar pruebas MCP: `initialize`, `tools/list`, `doctor`, query read, list operations y cleanup seguro.
 6. Validar PID ownership: cada operación que abre Access registra `operationId`, `accessPid`, `processStartTime`, `accessPath` y `status`.
 
 ## Entorno esperado
@@ -114,24 +114,24 @@ Resultado esperado:
 - `initialize` devuelve `serverInfo.name = "dysflow"`.
 - `tools/list` incluye:
   - `dysflow_vba_execute`
-  - `dysflow_query_execute`
-  - `dysflow_doctor`
-  - `dysflow_access_operations_list`
-  - `dysflow_access_cleanup`
+  - `query_execute`
+  - `doctor`
+  - `list_access_operations`
+  - `cleanup_access_operation`
 - `stderr` vacío.
 
 ## Prueba 4 — MCP doctor abre el front y registra operación
 
 ```powershell
 # dentro de una sesión MCP stdio
-{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"dysflow_doctor","arguments":{"includeEnvironment":true}}}
-{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"dysflow_access_operations_list","arguments":{}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"doctor","arguments":{"includeEnvironment":true}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"list_access_operations","arguments":{}}}
 ```
 
 Resultado esperado:
 
-- `dysflow_doctor` devuelve checks OK.
-- `dysflow_access_operations_list` muestra una operación `diagnostics` reciente.
+- `doctor` devuelve checks OK.
+- `list_access_operations` muestra una operación `diagnostics` reciente.
 - La operación contiene:
   - `operationId`
   - `accessPath = C:\Proyectos\dysflow\NoConformidades.accdb`
@@ -145,7 +145,7 @@ Resultado esperado:
 Usar una query de sistema para no depender de nombres de negocio.
 
 ```json
-{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"dysflow_query_execute","arguments":{"sql":"SELECT TOP 5 Name FROM MSysObjects WHERE Type=1 AND Flags=0","mode":"read"}}}
+{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"query_execute","arguments":{"sql":"SELECT TOP 5 Name FROM MSysObjects WHERE Type=1 AND Flags=0","mode":"read"}}}
 ```
 
 Resultado esperado:
@@ -157,7 +157,7 @@ Resultado esperado:
 ## Prueba 6 — Query read negativa contra tabla inexistente
 
 ```json
-{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"dysflow_query_execute","arguments":{"sql":"SELECT TOP 1 * FROM TablaQueNoExiste","mode":"read"}}}
+{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"query_execute","arguments":{"sql":"SELECT TOP 1 * FROM TablaQueNoExiste","mode":"read"}}}
 ```
 
 Resultado esperado:
@@ -202,14 +202,14 @@ Patrón seguro:
 - Usar backend explícito para tablas backend/globales de Issue #18: `TbCacheIndicadoresProyectoHeader`, `TbCacheIndicadoresProyectoDetalle` y `TbConfiguracion` deben vivir en `NoConformidades_Datos.accdb`.
 - Mantener `TbConfiguracionBackends` como tabla frontend/local; no moverla al backend ni usarla para clasificar cachés globales.
 - Para verificación manual, ejecutar primero con `dryRun:true`; si se aplica una tabla `ZZZ_*`, eliminarla con `drop_table` apuntando al mismo `backendPath`/`databasePath`.
-- Para cleanup, usar solo `dysflow_access_operations_list` y `dysflow_access_cleanup(operationId, accessPath)`. Nunca usar `Stop-Process -Name MSACCESS -Force`.
+- Para cleanup, usar solo `list_access_operations` y `cleanup_access_operation(operationId, accessPath)`. Nunca usar `Stop-Process -Name MSACCESS -Force`.
 
 ## Prueba 8 — Ownership PID: proceso exacto abierto por Dysflow
 
 Después de una operación Access, tomar el último registro:
 
 ```json
-{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"dysflow_access_operations_list","arguments":{}}}
+{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"list_access_operations","arguments":{}}}
 ```
 
 Validar manualmente el PID:
@@ -232,7 +232,7 @@ Criterios de aceptación:
 Tomar un `operationId` con `accessPid` registrado y llamar cleanup con path falso:
 
 ```json
-{"jsonrpc":"2.0","id":50,"method":"tools/call","params":{"name":"dysflow_access_cleanup","arguments":{"operationId":"<operationId>","accessPath":"C:\\otra\\base.accdb","force":true}}}
+{"jsonrpc":"2.0","id":50,"method":"tools/call","params":{"name":"cleanup_access_operation","arguments":{"operationId":"<operationId>","accessPath":"C:\\otra\\base.accdb","force":true}}}
 ```
 
 Resultado esperado:
@@ -245,7 +245,7 @@ Resultado esperado:
 Esta prueba se puede ejecutar con un registro inyectado en test unitario o provocando una operación donde no se capture PID. En E2E real, si aparece un registro `pid_unknown`:
 
 ```json
-{"jsonrpc":"2.0","id":60,"method":"tools/call","params":{"name":"dysflow_access_cleanup","arguments":{"operationId":"<pid_unknown_operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
+{"jsonrpc":"2.0","id":60,"method":"tools/call","params":{"name":"cleanup_access_operation","arguments":{"operationId":"<pid_unknown_operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
 ```
 
 Resultado esperado:
@@ -258,7 +258,7 @@ Resultado esperado:
 > Ejecutar solo si hay una operación `timed_out`, `failed` o `cleanup_pending` cuyo `accessPid` siga vivo y pertenezca al Access abierto por Dysflow.
 
 ```json
-{"jsonrpc":"2.0","id":70,"method":"tools/call","params":{"name":"dysflow_access_cleanup","arguments":{"operationId":"<operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
+{"jsonrpc":"2.0","id":70,"method":"tools/call","params":{"name":"cleanup_access_operation","arguments":{"operationId":"<operationId>","accessPath":"C:\\Proyectos\\dysflow\\NoConformidades.accdb","force":true}}}
 ```
 
 Resultado esperado:
@@ -287,7 +287,7 @@ Stop-Process -Name MSACCESS -Force
 Única vía permitida:
 
 ```txt
-dysflow_access_cleanup(operationId, accessPath)
+cleanup_access_operation(operationId, accessPath)
 ```
 
 Criterios de aceptación:

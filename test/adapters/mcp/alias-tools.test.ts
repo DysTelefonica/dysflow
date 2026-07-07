@@ -35,7 +35,7 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
   });
 
   // PR2 (#621 F2 / #6b) — buildCleanupRequest is the parity anchor for the
-  // modern dysflow_access_cleanup handler (replacing the previous bare cast).
+  // modern cleanup_access_operation handler (replacing the previous bare cast).
   // Every optional field that the legacy cleanup_access_operation schema
   // declares MUST project through so both the legacy and modern handlers
   // forward the same field set to the cleanup service.

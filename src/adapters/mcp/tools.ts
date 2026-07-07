@@ -428,21 +428,23 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
 export const MODERN_TOOL_NAMES = [
   "query_execute",
   "doctor",
-  "list_access_operations",
-  "cleanup_access_operation",
+  // #777 (Opción A cont.) — `list_access_operations` and
+  // `cleanup_access_operation` were REMOVED from MODERN_TOOL_NAMES;
+  // the canonical aliases (with bespoke handlers in alias-tools.ts)
+  // are owned by `aliasContracts`, not `modernContracts`.
   "access_force_cleanup_orphaned",
   "dysflow_get_capabilities",
   // issue #701 — read-only VBA procedure introspection
   "list_procedures",
   "get_procedure",
   "find_references",
-  // issue #705 — read-only dead-code detection
-  "dysflow_detect_dead_code",
-  // issue #703 — read-only VBA test manifest validation
-  "dysflow_validate_manifest",
-  // issue #704 — read-only VBA module pre-import linting
+  // #705 — read-only dead-code analysis over the supplied modules map.
+  "detect_dead_code",
+  // #703 — read-only VBA test manifest validation before `test_vba`.
+  "validate_manifest",
+  // #704 — read-only VBA module pre-import linting.
   "lint_module",
-  // Round-3 Item 1 — project config re-resolution
+  // Round-3 Item 1 — project config re-resolution companion tool
   "dysflow_resolve_project",
 ] as const;
 
@@ -516,39 +518,13 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "list_access_operations",
-      description: `List recent Dysflow Access operation records, including operationId, PID/process metadata when known, status, and target path. This is read-only and kills nothing. ${MCP_TOOL_CONTRACTS.list_access_operations.summary}`,
-      inputSchema: NO_INPUT_SCHEMA,
-      handler: async () => handleMcpAccessOperationsList(services),
-    },
-    {
-      name: "cleanup_access_operation",
-      description: `Reconcile or clean a tracked Access operation by operationId and accessPath. Without force it only inspects/reconciles eligible terminal records and kills nothing; force: true may kill a Dysflow-owned process and is write-gated with MCP_WRITES_DISABLED when writes are off. ${MCP_TOOL_CONTRACTS.cleanup_access_operation.summary}`,
-      inputSchema: CLEANUP_SCHEMA,
-      handler: async (input) =>
-        handleMcpAccessCleanup(
-          input,
-          CLEANUP_SCHEMA,
-          services,
-          writesEnabled,
-          writeAccessResolver,
-          // PR2 (#621 F2 / #6b) — modern/legacy alias parity. The previous
-          // bare cast dropped every field except operationId/accessPath/force.
-          // The legacy `cleanup_access_operation` already uses
-          // `buildCleanupRequest`, which projects the full optional surface
-          // (projectId, contextId, backendPath, destinationRoot, projectRoot,
-          // timeoutMs, strictContext, expectedAccessPath, expectedProjectRoot,
-          // expectedDestinationRoot). Use the same builder here so both
-          // surfaces carry the same field set forward to the cleanup service.
-          // The core service does not yet enforce strictContext
-          // (`AccessOperationCleanupService.cleanup` signature accepts only
-          // `{operationId, accessPath, force?}`); that ripples through to a
-          // follow-up PR. For now the modern surface at least preserves the
-          // param instead of silently dropping it.
-          (validatedInput) => buildCleanupRequest(validatedInput),
-        ),
-    },
-    {
+      // #777 (Opción A cont.) — the canonical `list_access_operations`
+      // and `cleanup_access_operation` registrations live exclusively
+      // in `alias-tools.ts` (`buildAliasTools`). Both aliases have
+      // bespoke handlers that were in place before this rename. The
+      // former bespoke registrations in this file (under their legacy
+      // `dysflow_access_operations_list` / `dysflow_access_cleanup`
+      // names) are REMOVED entirely; the alias is the sole source.
       name: "access_force_cleanup_orphaned",
       description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,

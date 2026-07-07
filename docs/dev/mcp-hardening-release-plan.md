@@ -87,7 +87,7 @@ One shared contract. No new config, no opt-out (deliberately simple).
 
 ### Where to change
 - `src/adapters/mcp/tools.ts` — pass `writesEnabled` + `writeAccessResolver` into
-  `dysflow_vba_execute` (copy the wiring `dysflow_query_execute` already uses at
+  `dysflow_vba_execute` (copy the wiring `query_execute` already uses at
   `tools.ts:106-115`).
 - `src/adapters/mcp/alias-tools.ts` — same wiring for the `run_vba` handler.
 - `src/adapters/mcp/canonical-handlers.ts` — add the gate inside

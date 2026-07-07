@@ -154,11 +154,11 @@ recoverable, and aligned with the write-gate contract.
 
 ### Timeout and orphan recovery
 
-1. Start with `dysflow_access_operations_list` to see tracked operationId, PID, status, and target
+1. Start with `list_access_operations` to see tracked operationId, PID, status, and target
    path.
-2. Use `dysflow_access_cleanup` without `force` to reconcile stale terminal records; this path kills
+2. Use `cleanup_access_operation` without `force` to reconcile stale terminal records; this path kills
    nothing.
-3. Use `dysflow_access_force_cleanup_orphaned` without `confirmPid` to list orphan candidates.
+3. Use `access_force_cleanup_orphaned` without `confirmPid` to list orphan candidates.
 4. Pass `confirmPid` only after verifying the process is headless, holds the same `accessPath`, and
    is not owned by a running Dysflow operation.
 5. Never kill `MSACCESS.EXE` by process name.

@@ -7,7 +7,7 @@
  *
  * This test exercises the wrapper through the SDK protocol path via
  * InMemoryTransport (no Access COM / PowerShell required — the wrapper's
- * behavior is at the adapter layer). It uses dysflow_access_force_cleanup_orphaned
+ * behavior is at the adapter layer). It uses access_force_cleanup_orphaned
  * which, when called without confirmPid, delegates to listOrphans internally.
  */
 
@@ -36,7 +36,7 @@ async function createHarness(tools: Parameters<typeof startWithSdkServer>[0]): P
 }
 
 describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP protocol (E2E)", () => {
-  it("dysflow_access_force_cleanup_orphaned with confirmPid absent returns SERVICE_UNAVAILABLE frame, not throw", async () => {
+  it("access_force_cleanup_orphaned with confirmPid absent returns SERVICE_UNAVAILABLE frame, not throw", async () => {
     // Build services WITHOUT an orphanCleanupService. The listOrphans wrapper
     // must return failureResult(SERVICE_UNAVAILABLE) — and that frame must reach
     // the SDK client as a structured McpToolResult (isError:true) rather than
@@ -58,7 +58,7 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
     const { client, close } = await createHarness(tools);
     try {
       const result = await client.callTool({
-        name: "dysflow_access_force_cleanup_orphaned",
+        name: "access_force_cleanup_orphaned",
         arguments: { accessPath: "C:/nonexistent/never.accdb" },
       });
       expect(result.isError).toBe(true);
@@ -72,7 +72,7 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
     }
   });
 
-  it("dysflow_access_force_cleanup_orphaned with confirmPid absent does NOT propagate an uncaught exception", async () => {
+  it("access_force_cleanup_orphaned with confirmPid absent does NOT propagate an uncaught exception", async () => {
     // Companion assertion: even when the underlying resolver fails (no project
     // config), the SDK call MUST return — it must not surface as a thrown
     // exception that crashes the client.
@@ -89,7 +89,7 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
       // Wrap in try/catch to assert NO exception escapes the SDK boundary.
       try {
         result = await client.callTool({
-          name: "dysflow_access_force_cleanup_orphaned",
+          name: "access_force_cleanup_orphaned",
           arguments: {},
         });
       } catch (err) {

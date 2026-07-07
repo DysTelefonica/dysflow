@@ -10,7 +10,7 @@ function makeBaseServices() {
   };
 }
 
-describe("dysflow_list_procedures — substring filter narrows procedures to matching names", () => {
+describe("list_procedures — substring filter narrows procedures to matching names", () => {
   it("returns only procedures whose name contains the filter substring", async () => {
     const sourceFixture = [
       "Option Explicit",
@@ -33,8 +33,8 @@ describe("dysflow_list_procedures — substring filter narrows procedures to mat
     ];
 
     const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({
       module: "modRiesgoEstadoGateHelper",

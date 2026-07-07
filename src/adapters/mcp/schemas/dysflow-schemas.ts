@@ -364,8 +364,8 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   },
 };
 
-// issue #705 — `dysflow_detect_dead_code`. The schema mirrors the
-// `dysflow_find_references` shape: the caller either supplies an inline
+// issue #705 — `detect_dead_code`. The schema mirrors the
+// `find_references` shape: the caller either supplies an inline
 // `modules` map (so the handler never opens Access) or relies on the
 // project-source-tree fallback resolved via the Access context.
 //

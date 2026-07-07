@@ -10,7 +10,7 @@ import {
 // CLEANUP_SCHEMA — required fields and shape
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe("CLEANUP_SCHEMA — dysflow_access_cleanup HTTP contract", () => {
+describe("CLEANUP_SCHEMA — cleanup_access_operation HTTP contract", () => {
   it("requires operationId and accessPath", () => {
     expect(CLEANUP_SCHEMA.required).toEqual(["operationId", "accessPath"]);
   });

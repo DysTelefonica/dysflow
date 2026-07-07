@@ -80,9 +80,9 @@ const cases = [
   { tool: "query_sql",            args: { sql: "INSERT INTO T VALUES (1)" },                          expectError: true,  label: "query_sql rejects INSERT" },
   { tool: "query_sql",            args: { sql: "CREATE TABLE ZZZ (ID INT)" },                         expectError: true,  label: "query_sql rejects CREATE" },
   { tool: "query_sql",            args: { sql: "  update T set x=1" },                                expectError: true,  label: "query_sql rejects UPDATE (leading space)" },
-  { tool: "dysflow_query_execute", args: { sql: "DROP TABLE TbConfiguracion", mode: "read" },         expectError: true,  label: "dysflow_query_execute rejects DROP in read mode" },
-  { tool: "dysflow_query_execute", args: { sql: "DELETE FROM TbNoConformidades", mode: "read" },      expectError: true,  label: "dysflow_query_execute rejects DELETE in read mode" },
-  { tool: "dysflow_query_execute", args: { sql: "ALTER TABLE T ADD col INT", mode: "read" },          expectError: true,  label: "dysflow_query_execute rejects ALTER in read mode" },
+  { tool: "query_execute", args: { sql: "DROP TABLE TbConfiguracion", mode: "read" },         expectError: true,  label: "query_execute rejects DROP in read mode" },
+  { tool: "query_execute", args: { sql: "DELETE FROM TbNoConformidades", mode: "read" },      expectError: true,  label: "query_execute rejects DELETE in read mode" },
+  { tool: "query_execute", args: { sql: "ALTER TABLE T ADD col INT", mode: "read" },          expectError: true,  label: "query_execute rejects ALTER in read mode" },
 ];
 
 let passed = 0;

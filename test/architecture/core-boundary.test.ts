@@ -154,15 +154,18 @@ describe("MCP/core architecture boundary", () => {
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_query_execute")
+        .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "SELECT 1", mode: "read" }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
-      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ includeEnvironment: true }),
+      tools.find((tool) => tool.name === "doctor")?.handler({ includeEnvironment: true }),
     ).resolves.toMatchObject({ isError: false });
 
+    // #777 (Opción A cont.) — `run_vba` (alias-tools.ts) builds the
+    // request with `moduleName: ""` and `arguments: []` defaults. Match
+    // the canonical shape, not just the caller's payload.
     expect(requests).toEqual([
-      { service: "vba", request: { procedureName: "Smoke", dryRun: true } },
+      expect.objectContaining({ service: "vba", request: expect.objectContaining({ procedureName: "Smoke", dryRun: true }) }),
       { service: "query", request: { sql: "SELECT 1", mode: "read" } },
       { service: "diagnostics", request: { includeEnvironment: true } },
     ]);

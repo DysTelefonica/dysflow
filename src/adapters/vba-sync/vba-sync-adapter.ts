@@ -451,7 +451,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       const remediation =
         `dysflow already attempted to reap the orphaned Access process on this timeout. ` +
         `If an MSACCESS.EXE still holds ${accessPath ?? "the target binary"}, list orphans with ` +
-        `dysflow_access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
+        `access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
         `Consider raising timeoutMs for large projects.`;
       return failureResult(
         createDysflowError(

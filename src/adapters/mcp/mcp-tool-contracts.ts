@@ -140,7 +140,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  // #777 (Opción A cont.) — `dysflow_access_cleanup` was REMOVED
+  // #777 (Opción A cont.) — `cleanup_access_operation` was REMOVED
   // entirely (the canonical `cleanup_access_operation` lives in
   // `aliasContracts`).
   access_force_cleanup_orphaned: {
@@ -183,7 +183,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  // issue #705 — `dysflow_detect_dead_code` is the read-only dead-code
+  // issue #705 — `detect_dead_code` is the read-only dead-code
   // analysis surface. The handler is the modern MCP counterpart to the
   // pure `detectDeadCode` core function: it never opens Access, never
   // spawns PowerShell, and never mutates the filesystem. Like its #701

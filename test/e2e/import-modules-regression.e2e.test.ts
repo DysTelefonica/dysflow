@@ -252,18 +252,18 @@ function buildToolCases(): ToolCase[] {
 
   // ----- Modern dysflow_* tools (6 tools, happy + sad where natural) -----
   cases.push(
-    t("dysflow_doctor", "happy", { projectId, includeEnvironment: true }),
-    t("dysflow_doctor", "sad", { projectId: "no-such-project-anywhere" }),
-    t("dysflow_query_execute", "happy", { projectId, sql: "SELECT 1 AS One", mode: "read" }),
-    t("dysflow_query_execute", "sad", { projectId, sql: "", mode: "read" }),
-    t("dysflow_access_operations_list", "happy", {}),
-    t("dysflow_access_cleanup", "happy", {
+    t("doctor", "happy", { projectId, includeEnvironment: true }),
+    t("doctor", "sad", { projectId: "no-such-project-anywhere" }),
+    t("query_execute", "happy", { projectId, sql: "SELECT 1 AS One", mode: "read" }),
+    t("query_execute", "sad", { projectId, sql: "", mode: "read" }),
+    t("list_access_operations", "happy", {}),
+    t("cleanup_access_operation", "happy", {
       operationId: "bogus-id-does-not-exist",
       accessPath: access,
     }),
-    t("dysflow_access_cleanup", "sad", { operationId: "../../../etc/passwd", accessPath: access }),
-    t("dysflow_access_force_cleanup_orphaned", "happy", {}),
-    t("dysflow_access_force_cleanup_orphaned", "sad", { confirmPid: -1 }),
+    t("cleanup_access_operation", "sad", { operationId: "../../../etc/passwd", accessPath: access }),
+    t("access_force_cleanup_orphaned", "happy", {}),
+    t("access_force_cleanup_orphaned", "sad", { confirmPid: -1 }),
   );
 
   // ----- VBA-sync write path (the #496 fix surface) -----

@@ -48,25 +48,27 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
     // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
-    // #701 added dysflow_list_procedures + dysflow_get_procedure.
-    // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
-    // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
+    // #701 added list_procedures + get_procedure.
+    // #705 added detect_dead_code (read-only dead-code analysis).
+    // #703 added validate_manifest (read-only VBA test manifest validation).
     // #704 added lint_module (read-only VBA module pre-import linting).
     // feat-759-no-compile (v1.19.0) — compile_vba was removed.
     // #777 Opción A (2026-07-07) renamed 7 `dysflow_*` names to canonical in #58405eb2.
-    // #777 Opción A cont. (this PR) continues the rename for the bespoke
-    //   tools in `tools.ts` and removes `dysflow_vba_execute` (canonical
-    //   `run_vba` was already registered in `alias-tools.ts`). Visible
-    //   count drops by 1 per legacy alias removed.
+    // #777 Opción A cont. (this PR) continues the rename for 11 bespoke
+    //   tools in `tools.ts`. Three of them (run_vba, list_access_operations,
+    //   cleanup_access_operation) were previously registered as BOTH a
+    //   bespoke tool AND an alias — the bespoke registration is REMOVED
+    //   and the alias is the sole source. The other 8 are bespoke-to-bespoke
+    //   renames. Visible count drops by 3 (one per alias-removed).
     //   Expected breakdown:
     //     53 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
-    //     + 13 modern core tools (was 14 — `dysflow_vba_execute` removed)
-    //     = 66 visible (was 67).
+    //     + 11 modern core tools (was 14, lost 3 aliases)
+    //     = 64 visible (was 67).
     expect(toolCount).toBe(53);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(13);
-    expect(visibleCount).toBe(66);
+    expect(modernCount).toBe(11);
+    expect(visibleCount).toBe(64);
   });
 
   it("verifies split-mode coverage explicitly", () => {

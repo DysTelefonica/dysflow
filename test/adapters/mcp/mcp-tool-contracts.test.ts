@@ -24,12 +24,12 @@ class FakeDiagnosticsService {
 
 describe("MCP tool contract metadata", () => {
   it("centralizes modern and legacy cleanup write-gate metadata", () => {
-    expect(getMcpToolContract("dysflow_access_cleanup")).toMatchObject({
+    expect(getMcpToolContract("cleanup_access_operation")).toMatchObject({
       access: "conditional-write",
       writeGate: "conditional",
     });
     expect(getMcpToolContract("cleanup_access_operation")).toMatchObject(
-      getMcpToolContract("dysflow_access_cleanup"),
+      getMcpToolContract("cleanup_access_operation"),
     );
   });
 
@@ -106,14 +106,10 @@ describe("MCP tool contract metadata", () => {
     expect(descriptions.doctor).toContain("includeEnvironment");
     expect(descriptions.doctor).toContain("accessPath");
 
-    expect(descriptions.list_access_operations).toContain("operationId");
-    expect(descriptions.list_access_operations).toContain("PID");
-    expect(descriptions.list_access_operations).toContain("read-only");
-
-    expect(descriptions.cleanup_access_operation).toContain("operationId");
-    expect(descriptions.cleanup_access_operation).toContain("force: true");
-    expect(descriptions.cleanup_access_operation).toContain("MCP_WRITES_DISABLED");
-    expect(descriptions.cleanup_access_operation).toContain("kills nothing");
+    // #777 (Opción A cont.) — `list_access_operations` and
+    // `cleanup_access_operation` were REMOVED from MODERN_TOOL_NAMES;
+    // they are pre-existing aliases in `alias-tools.ts`. Their
+    // description assertions live in `alias-tools.test.ts` instead.
 
     expect(descriptions.access_force_cleanup_orphaned).toContain("confirmPid");
     expect(descriptions.access_force_cleanup_orphaned).toContain("list");

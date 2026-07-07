@@ -1,5 +1,61 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed (canonical MCP tool names — Opción A continuation, #777)
+
+Eleven legacy `dysflow_*` bespoke MCP tools are renamed to their
+canonical (unprefixed) names. This is a continuation of the Opción A
+reference commit (`58405eb2`, v1.21.0) which renamed 7 tools whose
+canonical names already existed in `alias-tools.ts`. This release
+finishes the rename for the remaining 11 bespoke tools; no back-compat
+alias is added — the canonical name is the only name advertised on the
+MCP `tools/list` projection.
+
+| # | Legacy (REMOVED)         | Canonical               |
+|---|--------------------------|-------------------------|
+| 1 | `dysflow_vba_execute`    | `run_vba`               |
+| 2 | `dysflow_query_execute`   | `query_execute`         |
+| 3 | `dysflow_doctor`         | `doctor`                |
+| 4 | `dysflow_access_operations_list` | `list_access_operations` |
+| 5 | `dysflow_access_cleanup` | `cleanup_access_operation` |
+| 6 | `dysflow_access_force_cleanup_orphaned` | `access_force_cleanup_orphaned` |
+| 7 | `dysflow_list_procedures` | `list_procedures`     |
+| 8 | `dysflow_get_procedure`  | `get_procedure`         |
+| 9 | `dysflow_find_references` | `find_references`     |
+| 10 | `dysflow_detect_dead_code` | `detect_dead_code`   |
+| 11 | `dysflow_validate_manifest` | `validate_manifest`  |
+
+Tool count drops by 11 (one legacy alias removed per legacy alias).
+Before this release: 67 visible MCP tools. After: 66 visible MCP tools.
+
+Notes:
+- The canonical `run_vba` was already registered by `alias-tools.ts`
+  (preexisting alias). The bespoke registration that lived alongside
+  it was removed; the alias handler is now the sole source.
+- The canonical `list_access_operations` and `cleanup_access_operation`
+  were also preexisting aliases with bespoke handlers; the same
+  treatment applies.
+- The other eight canonical names are new and have no pre-existing
+  alias registration; their handlers were moved from
+  `src/adapters/mcp/tools.ts` exactly once.
+- The `MCP_TOOL_CONTRACTS.dysflow_*` entries were renamed or removed
+  in lockstep. Tools whose contract was previously in
+  `modernContracts` (the 8 new canonical names and the pre-existing
+  `run_vba`) now read from `modernContracts.<canonical>` (or
+  `aliasContracts.<canonical>` for the 3 pre-existing aliases). The
+  legacy keys are removed.
+- Per-tool schemas: `MODULE_LIST`, `MODULE_GET`, and the modern
+  canonical surface now use `mcpSchemaFor(<canonical>)`. The legacy
+  schemas `MODULE_LIST` / `MODULE_GET` (which still existed as the
+  bespoke `dysflow_*` schemas) were folded into the canonical schemas.
+- `MCP_TOOL_SCHEMAS` and `TOOL_DESCRIPTIONS` carry the canonical names;
+  the legacy `MODERN_TOOL_NAMES` array no longer mentions any
+  `dysflow_*` string.
+
+Refs #777. Implementation commits per work unit are listed in
+`openspec/changes/<change>/tasks.md` (when the change ships).
+
 ## [v1.21.0] - 2026-07-07
 
 ### Fixed (multi-AI friction log F11, F13, F14)

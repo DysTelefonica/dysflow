@@ -15,8 +15,11 @@
 // corresponding `README.md` / `docs/` mentions.
 
 /** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter.
- * #777 (Opción A cont.) — drops by 1 per renamed tool legacy alias removed. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 66;
+ * #777 (Opción A cont.) — drops by 3 (one per legacy alias removed:
+ * `dysflow_vba_execute`, `dysflow_access_operations_list`, `dysflow_access_cleanup`).
+ * The other 8 renamed tools were bespoke-to-bespoke renames and stay
+ * counted in the modern bespoke list. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 64;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;
@@ -27,9 +30,9 @@ export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_
  * @type {readonly string[]}
  */
 export const ISSUE_713_REQUIRED_TOOLS = Object.freeze([
-  "dysflow_list_procedures",
-  "dysflow_get_procedure",
-  "dysflow_find_references",
-  "dysflow_detect_dead_code",
-  "dysflow_validate_manifest",
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  "detect_dead_code",
+  "validate_manifest",
 ]);

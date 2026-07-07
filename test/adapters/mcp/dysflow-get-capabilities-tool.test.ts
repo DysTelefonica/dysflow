@@ -36,11 +36,11 @@ class FakeDiagnosticsService {
 }
 
 const ISSUE_713_REQUIRED_TOOLS = [
-  "dysflow_list_procedures",
-  "dysflow_get_procedure",
-  "dysflow_find_references",
-  "dysflow_detect_dead_code",
-  "dysflow_validate_manifest",
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  "detect_dead_code",
+  "validate_manifest",
 ] as const satisfies readonly (keyof typeof MCP_TOOL_CONTRACTS)[];
 
 function makeServices() {

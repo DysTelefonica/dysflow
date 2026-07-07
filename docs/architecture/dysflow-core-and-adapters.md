@@ -25,8 +25,8 @@ The shared validation kernel lives in `src/shared/validation/**` so the HTTP and
 The MCP adapter registers tools over core services:
 
 - `dysflow_vba_execute` -> `AccessVbaService`
-- `dysflow_query_execute` -> `AccessQueryService`
-- `dysflow_doctor` -> `AccessDiagnosticsService`
+- `query_execute` -> `AccessQueryService`
+- `doctor` -> `AccessDiagnosticsService`
 
 MCP startup must not write product logs to stdout. Stdout belongs to the stdio protocol; safe messages belong in returned tool content or stderr on startup failure.
 
