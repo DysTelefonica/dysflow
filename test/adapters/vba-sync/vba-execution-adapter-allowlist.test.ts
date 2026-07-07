@@ -1,8 +1,10 @@
+import { strict as assert } from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AllowedProcedures } from "../../../src/adapters/mcp/allowed-procedures-resolver.js";
 import { createConfiguredServices } from "../../../src/adapters/mcp/stdio.js";
 import {
   VbaExecutionAdapter,
@@ -10,7 +12,6 @@ import {
 } from "../../../src/adapters/vba-sync/vba-execution-adapter.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import { successResult } from "../../../src/core/contracts/index.js";
-import type { AllowedProcedures } from "../../../src/adapters/mcp/allowed-procedures-resolver.js";
 
 /**
  * F23 — v1.19.0 regression: `test_vba` reports `MCP_ALLOWLIST_NOT_CONFIGURED`
@@ -92,9 +93,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     // Per-input resolver simulating the production wiring: the resolver is
     // called with each test_vba input and returns the allowlist of the project
     // the input targets.
-    const resolver: AllowedProcedures = vi
-      .fn()
-      .mockResolvedValue(["Test_A", "Test_B", "Test_C"]);
+    const resolver: AllowedProcedures = vi.fn().mockResolvedValue(["Test_A", "Test_B", "Test_C"]);
     const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
 
     const result = await adapter.execute("test_vba", {
@@ -146,15 +145,31 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     const services = createConfiguredServices(config, { cwd: projectDir });
 
     // The composition root MUST wire a resolver (per F7), not a frozen array —
-    // a frozen array is the F22/F23 regression vector.
+    // a frozen array is the F22/F23 regression vector. `createConfiguredServices`
+    // is statically typed with an optional `vbaSyncToolService` because the
+    // dynamic `createDynamicServices` factory may omit it; for the static
+    // composition root it is always present, so we narrow with `assert` here.
+    assert(
+      services.vbaSyncToolService,
+      "createConfiguredServices must wire vbaSyncToolService for the static composition root",
+    );
+    // `vbaSyncToolService` is exposed as the narrow `VbaSyncPort` contract, but
+    // the static composition root wires a `VbaSyncAdapter` whose concrete
+    // `allowedProcedures` resolver is the regression-relevant property. Cast
+    // through `unknown` to a minimal structural view that exposes only the
+    // field under test — keeps the rest of the contract intact.
     const adapter = services.vbaSyncToolService as unknown as {
-      allowedProcedures?: unknown;
+      allowedProcedures?: AllowedProcedures;
     };
     expect(typeof adapter.allowedProcedures).toBe("function");
 
-    const resolver = adapter.allowedProcedures as (
-      input: unknown,
-    ) => Promise<readonly string[] | undefined>;
+    // Narrow the `AllowedProcedures` union (`readonly string[] | function`)
+    // to the function branch so the `await resolver(input)` call type-checks.
+    assert(
+      typeof adapter.allowedProcedures === "function",
+      "vbaSyncToolService must wire a function-form resolver for the F23 path",
+    );
+    const resolver = adapter.allowedProcedures;
     const input = {
       projectId: "f23-project",
       accessPath: resolve(projectDir, "front.accdb"),
@@ -170,7 +185,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     // so the runner is short-circuited (this is a config-layer regression
     // test, not a runner test — the real PowerShell spawn would fail on the
     // empty `.accdb` fixture and obscure the F23 signal we care about).
-    const result = await services.vbaSyncToolService!.execute("test_vba", {
+    const result = await services.vbaSyncToolService.execute("test_vba", {
       ...input,
       proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
       dryRun: true,

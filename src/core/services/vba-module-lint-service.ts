@@ -637,10 +637,7 @@ function lintArgumentTypeMatches(
  * Severity is `error`: a shadowed identifier compiles in some code paths
  * and breaks in others with a misleading `Calificador no válido` error.
  */
-function lintForbiddenName(
-  _source: string,
-  lines: readonly string[],
-): VbaModuleLintDiagnostic[] {
+function lintForbiddenName(_source: string, lines: readonly string[]): VbaModuleLintDiagnostic[] {
   const diagnostics: VbaModuleLintDiagnostic[] = [];
   const reported = new Set<string>();
 
@@ -689,11 +686,20 @@ function collectForbiddenNameMatches(code: string): ForbiddenNameMatch[] {
     /^\s*(?:Public|Private|Friend|Static)?\s*(?:Sub|Function|Property(?:\s+(?:Get|Let|Set))?)\s+([A-Za-z_][A-Za-z0-9_]*)/i,
   );
   if (procedureHeader?.[1] !== undefined) {
-    matches.push({ kind: "procedure", name: procedureHeader[1], column: 1 + (procedureHeader.index ?? 0) });
+    matches.push({
+      kind: "procedure",
+      name: procedureHeader[1],
+      column: 1 + (procedureHeader.index ?? 0),
+    });
   }
 
   // Module-level constant: `Const X = ...`
-  pushMatch(matches, code, /^\s*(?:Public|Private|Friend|Global)\s+Const\s+([A-Za-z_][A-Za-z0-9_]*)/i, "constant");
+  pushMatch(
+    matches,
+    code,
+    /^\s*(?:Public|Private|Friend|Global)\s+Const\s+([A-Za-z_][A-Za-z0-9_]*)/i,
+    "constant",
+  );
   pushMatch(matches, code, /^\s*Const\s+([A-Za-z_][A-Za-z0-9_]*)/i, "constant");
 
   // Module-level type: `Type X ... End Type`
@@ -731,10 +737,13 @@ function collectForbiddenNameMatches(code: string): ForbiddenNameMatch[] {
   // Parameter list — only when a procedure header is present on this
   // line. We capture the full parenthesized expression and walk the
   // comma-separated parameter specs.
-  const parenMatch = code.match(/^\s*(?:Public|Private|Friend|Static)?\s*(?:Sub|Function|Property(?:\s+(?:Get|Let|Set))?)\s+[A-Za-z_][A-Za-z0-9_]*\s*\(([^)]*)\)/i);
+  const parenMatch = code.match(
+    /^\s*(?:Public|Private|Friend|Static)?\s*(?:Sub|Function|Property(?:\s+(?:Get|Let|Set))?)\s+[A-Za-z_][A-Za-z0-9_]*\s*\(([^)]*)\)/i,
+  );
   if (parenMatch?.[1] !== undefined) {
     const params = parenMatch[1];
-    const paramsOffset = (parenMatch.index ?? 0) + code.slice(parenMatch.index ?? 0).indexOf("(") + 1;
+    const paramsOffset =
+      (parenMatch.index ?? 0) + code.slice(parenMatch.index ?? 0).indexOf("(") + 1;
     for (const spec of splitTopLevelCommas(params)) {
       const name = firstParameterName(spec);
       if (name === undefined) continue;

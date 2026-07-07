@@ -185,9 +185,7 @@ describe("translateCoreResultToMcpContent — JSON-stringifiable normalization (
 
       // The literal current behavior throws (this is the RED). After the fix
       // it does not throw — and the result is JSON-parseable as text.
-      expect(() =>
-        translateCoreResultToMcpContent(successResult(cyclic)),
-      ).not.toThrow();
+      expect(() => translateCoreResultToMcpContent(successResult(cyclic))).not.toThrow();
 
       const result = translateCoreResultToMcpContent(successResult(cyclic));
       const text = result.content[0]?.text ?? "";
@@ -220,9 +218,7 @@ describe("translateCoreResultToMcpContent — JSON-stringifiable normalization (
       // Without the fix, JSON.stringify of an object containing a BigInt throws
       // TypeError: Do not know how to serialize a BigInt. The fix MUST NOT throw.
       const data = { id: "row-1", totalBytes: BigInt("9007199254740993") };
-      expect(() =>
-        translateCoreResultToMcpContent(successResult(data)),
-      ).not.toThrow();
+      expect(() => translateCoreResultToMcpContent(successResult(data))).not.toThrow();
 
       const result = translateCoreResultToMcpContent(successResult(data));
       const text = result.content[0]?.text ?? "";

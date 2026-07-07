@@ -293,7 +293,8 @@ function normalizeRecursive(value: unknown, seen: WeakSet<object>, depth: number
 
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "symbol") return value.toString();
-  if (typeof value === "function") return describeFunction(value as (...args: unknown[]) => unknown);
+  if (typeof value === "function")
+    return describeFunction(value as (...args: unknown[]) => unknown);
 
   if (typeof value !== "object") return null;
 
@@ -310,11 +311,7 @@ function normalizeRecursive(value: unknown, seen: WeakSet<object>, depth: number
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(obj as Record<string, unknown>)) {
       try {
-        out[key] = normalizeRecursive(
-          (obj as Record<string, unknown>)[key],
-          seen,
-          depth + 1,
-        );
+        out[key] = normalizeRecursive((obj as Record<string, unknown>)[key], seen, depth + 1);
       } catch {
         // Defensive: any per-key failure converts to a string repr so the
         // overall structure still serializes.

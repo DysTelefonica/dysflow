@@ -1,6 +1,5 @@
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import {
   createDysflowError,
   failureResult,
@@ -15,6 +14,7 @@ import {
   stringValue,
 } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
@@ -439,8 +439,7 @@ End Sub
                 planProcedures: [...procedures],
                 // Echo the projectId the caller sent so a multi-project
                 // workspace can attribute the refusal to the right project.
-                inputProjectId:
-                  typeof params.projectId === "string" ? params.projectId : undefined,
+                inputProjectId: typeof params.projectId === "string" ? params.projectId : undefined,
                 // Same for accessPath — accepted under `accessPath`,
                 // `accessDbPath`, `databasePath`, and `sourcePath` aliases so
                 // a consumer can see which binary the call was targeting.

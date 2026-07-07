@@ -173,15 +173,9 @@ describe("lint_module", () => {
     );
     // `name` (parameter) and `err` (parameter) both shadow VBA globals.
     expect(forbidden.length).toBeGreaterThanOrEqual(2);
-    expect(
-      forbidden.some((d: { message: string }) => d.message.includes("'name'")),
-    ).toBe(true);
-    expect(
-      forbidden.some((d: { message: string }) => d.message.includes("'err'")),
-    ).toBe(true);
+    expect(forbidden.some((d: { message: string }) => d.message.includes("'name'"))).toBe(true);
+    expect(forbidden.some((d: { message: string }) => d.message.includes("'err'"))).toBe(true);
     // The recommendation appears in the message.
-    expect(
-      forbidden.some((d: { message: string }) => d.message.includes("errMsg")),
-    ).toBe(true);
+    expect(forbidden.some((d: { message: string }) => d.message.includes("errMsg"))).toBe(true);
   });
 });

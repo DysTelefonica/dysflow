@@ -19,10 +19,7 @@ import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
-export type FormMutationToolName =
-  | "form_add_control"
-  | "form_move_control"
-  | "form_rename_control";
+export type FormMutationToolName = "form_add_control" | "form_move_control" | "form_rename_control";
 
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
