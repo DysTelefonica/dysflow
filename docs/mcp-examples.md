@@ -33,17 +33,18 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 
 ### 2. Sizing and Sourcing Code (Write-gated)
 
-#### Import Specific Modified Modules and Compile Immediately
+#### Import Specific Modified Modules (save-only persistence)
 *   **Tool**: `import_modules`
 *   **Arguments**:
     ```json
     {
       "projectId": "my-project",
       "moduleNames": ["Funciones_Generales"],
-      "importMode": "auto",
-      "compile": true
+      "importMode": "auto"
     }
     ```
+*   The runtime persists via save-only (acCmdSaveAllModules = RunCommand 280). The human
+    compiles in Access (Debug > Compile) after the import.
 
 #### Mirror Access Binary to Disk (Pruning Deleted Modules)
 *   **Tool**: `export_all`

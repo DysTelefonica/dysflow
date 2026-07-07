@@ -59,14 +59,15 @@ describe("mcp-e2e.mjs — verify_code timeout contracts (#fix-verify-code-timeou
   });
 });
 
-describe("mcp-e2e.mjs — compile_vba mojibake pin", () => {
-  const src = readSource(MCP_E2E_PATH);
-
-  it("compile_vba is asserted with expected: 'error' (documented mojibake state)", () => {
+// feat-759-no-compile (v1.19.0) — the compile_vba mojibake pin was
+// retired. The runtime no longer compiles; the fixture binary's
+// documented mojibake in 117 components is no longer surfaced as a
+// structured runtime failure (the compile_vba tool is gone).
+describe("mcp-e2e.mjs — compile_vba mojibake pin (REMOVED in v1.19.0)", () => {
+  it("compile_vba is no longer called in mcp-e2e.mjs", () => {
+    const src = readSource(MCP_E2E_PATH);
     const call = src.match(/record\(\s*"vba-sync"\s*,\s*"compile_vba"[\s\S]*?\)/);
-    expect(call, "compile_vba record() call not found in mcp-e2e.mjs").not.toBeNull();
-    const matchText = call?.[0] ?? "";
-    expect(matchText).toContain('expected: "error"');
+    expect(call, "compile_vba should NOT be invoked in mcp-e2e.mjs after feat-759-no-compile").toBeNull();
   });
 });
 

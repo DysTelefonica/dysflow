@@ -22,7 +22,6 @@ describe("AGENTS MCP workflow recipes", () => {
       "dysflow doctor",
       "export_all",
       "import_modules",
-      "compile_vba",
       "verify_code",
       "dysflow_access_operations_list",
       "dysflow_access_cleanup",
@@ -38,6 +37,7 @@ describe("AGENTS MCP workflow recipes", () => {
       "sourcePath",
       "`.cls`",
       "`.form.txt`",
+      "acCmdSaveAllModules",
     ]) {
       expect(recipes).toContain(requiredPhrase);
     }

@@ -2,7 +2,7 @@
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure", "Run-Tests", "Compile")]
+    [ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure", "Run-Tests")]
     [string]$Action,
 
     [Parameter()]
@@ -696,7 +696,7 @@ function Resolve-ModulesPath {
     Param(
         [Parameter(Mandatory = $true)][string]$DestinationRoot,
         [Parameter(Mandatory = $true)][string]$AccessPath,
-        [Parameter(Mandatory = $true)][ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure", "Compile")][string]$Action
+        [Parameter(Mandatory = $true)][ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure")][string]$Action
     )
     if (-not (Test-Path -Path $DestinationRoot)) {
         if ($Action -eq "Export" -or $Action -eq "Fix-Encoding" -or $Action -eq "Delete") {
