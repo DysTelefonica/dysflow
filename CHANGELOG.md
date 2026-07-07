@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+- **F16 import_modules grow-in-place hotfix**: updating an existing standard
+  module/class with a larger source file no longer requires a manual
+  `delete_module` + `import_modules` workaround. The import path still starts
+  with the existing headless-safe `CodeModule.DeleteLines` + `AddFromFile`
+  flow, then falls back to clearing the same component and using
+  `CodeModule.AddFromString` when Access keeps the old `CountOfLines` cap.
+  `VBComponents.Remove()` is deliberately not used, avoiding visible VBE
+  "Save As module" prompts. The `IMPORT_TRUNCATED` check remains as a
+  defensive safety net.
+
 ## [v1.20.0] - 2026-07-07
 
 - **`target: "auto"` mode on read-only schema/query tools** (#763, GH issue

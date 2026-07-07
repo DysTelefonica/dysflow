@@ -1090,6 +1090,86 @@ function Get-SourceFileSizeSnapshot {
     }
 }
 
+# F16: CodeModule.AddFromFile can keep the destination component's previous
+# CountOfLines cap even after DeleteLines(1, CountOfLines). For source-larger
+# updates, keep the existing component (no VBComponents.Remove; no VBE Save As
+# prompt) and fall back to CodeModule.AddFromString after clearing the module.
+# Pure function — no COM.
+function Test-ShouldUseCodeModuleStringFallback {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][int]$SourceLines,
+        [Parameter(Mandatory = $true)][int]$ExistingLines
+    )
+
+    return ($SourceLines -gt 0 -and $ExistingLines -gt 0 -and $SourceLines -gt $ExistingLines)
+}
+
+# F16: AddFromString inserts visible code into the existing component. Hidden
+# Attribute VB_* lines belong to file import/export metadata and must not be
+# pasted into the code pane. Preserve comments and string literals verbatim.
+# Pure function — no COM.
+function Convert-VbaTextForCodeModuleString {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) { return "" }
+
+    $lines = @($Text -split "`r?`n")
+    $kept = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        if ($line -match '^\s*Attribute\s+VB_\w+\s*=') { continue }
+        $kept.Add($line) | Out-Null
+    }
+
+    $result = ($kept -join "`r`n")
+    if ($result.Length -gt 0 -and -not $result.EndsWith("`r`n")) {
+        $result += "`r`n"
+    }
+    return $result
+}
+
+function Get-VbaTextLineCount {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) { return 0 }
+    $newlineCount = ([regex]::Matches($Text, "`n")).Count
+    if ($Text.EndsWith("`n")) { return $newlineCount }
+    return ($newlineCount + 1)
+}
+
+function Get-VbaTextSizeSnapshot {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return [pscustomobject]@{ bytes = 0; lines = 0; sha256 = "" }
+    }
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $sha = ""
+    try {
+        $sha = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        ).Replace("-", "").ToLowerInvariant()
+    } catch {
+        $sha = ""
+    }
+
+    return [pscustomobject]@{
+        bytes  = $bytes.Length
+        lines  = (Get-VbaTextLineCount -Text $Text)
+        sha256 = $sha
+    }
+}
+
 # issue #752 — binary-side counterpart of Get-SourceFileSizeSnapshot. Joins the
 # live CodeModule's text via Lines(1, CountOfLines) with CRLF (matching how
 # VBA's CodeModule stores lines), then hashes that string. Returns the same
@@ -2930,15 +3010,40 @@ function Import-VbaModule {
             # issue #752 — opt-in verbose snapshot of the source file (snapshot
             # before AddFromFile mutates anything). The script-scope flag is set
             # by the top-level dispatcher when the caller passes -VerboseContract.
+            $sourceSnapshot = Get-SourceFileSizeSnapshot -Path $src
             $importVerboseSource = $null
             if ($script:ImportVerbose) {
-                $importVerboseSource = Get-SourceFileSizeSnapshot -Path $src
+                $importVerboseSource = $sourceSnapshot
             }
 
             $count = $codeModule.CountOfLines
+            $shouldAllowStringFallback = Test-ShouldUseCodeModuleStringFallback -SourceLines ([int]$sourceSnapshot.lines) -ExistingLines ([int]$count)
             if ($count -gt 0) { $codeModule.DeleteLines(1, $count) }
             $script:ImportCurrentPhase = "import"
             $codeModule.AddFromFile($tmpAnsiSanitized)
+            $expectedImportedLines = [int]$sourceSnapshot.lines
+            $effectiveVerboseSource = $importVerboseSource
+
+            # F16: keep the headless-safe DeleteLines + AddFromFile path as the
+            # first attempt. If Access still applies the previous CountOfLines
+            # cap for a source-larger update, clear the same component again and
+            # paste visible code via AddFromString. This deliberately avoids
+            # VBComponents.Remove(), which can raise VBE Save As UI prompts in
+            # visible instances.
+            $afterAddFromFileLines = 0
+            try { $afterAddFromFileLines = [int]$codeModule.CountOfLines } catch { $afterAddFromFileLines = 0 }
+            if ($shouldAllowStringFallback -and [int]$sourceSnapshot.lines -gt $afterAddFromFileLines) {
+                if ($afterAddFromFileLines -gt 0) { $codeModule.DeleteLines(1, $afterAddFromFileLines) }
+                $codeText = [System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252))
+                $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text $codeText
+                $expectedImportedLines = Get-VbaTextLineCount -Text $codeTextForStringImport
+                if ($script:ImportVerbose) {
+                    $effectiveVerboseSource = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
+                }
+                if (-not [string]::IsNullOrWhiteSpace($codeTextForStringImport)) {
+                    $codeModule.AddFromString($codeTextForStringImport)
+                }
+            }
 
             # issue #752 — defensive validation #3: post-import truncation check.
             # If the source file's line count is strictly greater than the
@@ -2952,8 +3057,7 @@ function Import-VbaModule {
             try { $destLines = [int]$codeModule.CountOfLines } catch { $destLines = 0 }
             $srcLines = 0
             try {
-                $snap = Get-SourceFileSizeSnapshot -Path $src
-                $srcLines = [int]$snap.lines
+                $srcLines = [int]$expectedImportedLines
             } catch { $srcLines = 0 }
             if ($srcLines -gt $destLines -and $srcLines -gt 0) {
                 throw ("IMPORT_TRUNCATED: source has {0} lines, destination has {1} lines. " +
@@ -2969,10 +3073,10 @@ function Import-VbaModule {
             $importVerboseMismatch = $null
             if ($script:ImportVerbose) {
                 $importVerboseDest = Get-CodeModuleSizeSnapshot -CodeModule $codeModule
-                if ($importVerboseSource -and $importVerboseDest) {
-                    $importVerboseTruncated = ([int]$importVerboseDest.lines -lt [int]$importVerboseSource.lines)
+                if ($effectiveVerboseSource -and $importVerboseDest) {
+                    $importVerboseTruncated = ([int]$importVerboseDest.lines -lt [int]$effectiveVerboseSource.lines)
                     if (-not $importVerboseTruncated) {
-                        if ([string]$importVerboseDest.sha256 -ne [string]$importVerboseSource.sha256) {
+                        if ([string]$importVerboseDest.sha256 -ne [string]$effectiveVerboseSource.sha256) {
                             $importVerboseMismatch = "content_hash"
                         }
                     } else {
@@ -2984,7 +3088,7 @@ function Import-VbaModule {
             $importResultVerbose = $null
             if ($script:ImportVerbose) {
                 $importResultVerbose = [pscustomobject]@{
-                    source         = $importVerboseSource
+                    source         = $effectiveVerboseSource
                     destination    = $importVerboseDest
                     truncated      = [bool]$importVerboseTruncated
                     mismatchReason = $importVerboseMismatch

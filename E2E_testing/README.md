@@ -17,6 +17,12 @@ pay the E2E cost only when you need it.
 | Per feature/bug | manual JSON-RPC smoke for the touched tool | seconds | when integration tests don't cover the change end-to-end |
 | Pre-release | **full E2E battery** (`node E2E_testing/mcp-e2e.mjs`) | 5–15 minutes | **only** when cutting a release |
 
+Targeted hotfix scripts:
+
+- `node E2E_testing/mcp-e2e-import-grow-in-place.mjs` — F16 regression: imports a small module,
+  then imports a larger source over the same component and fails if `IMPORT_TRUNCATED` resurfaces.
+  Skips safely when the `NoConformidades.accdb` fixture is not present.
+
 The full battery is the release gate. During feature or bug work, only exercise the parts of the
 E2E that touch your change — do not pay the cost of the whole thing on every iteration.
 
