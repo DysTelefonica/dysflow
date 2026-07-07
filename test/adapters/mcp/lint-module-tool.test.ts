@@ -38,7 +38,13 @@ describe("dysflow_lint_module", () => {
     const parsed = JSON.parse(result.content[0]?.text ?? "{}");
     expect(parsed).toMatchObject({
       module: "InlineModule",
-      rules: ["option-declaration", "identifier-safety", "declaration-order", "arg-type-match"],
+      rules: [
+        "option-declaration",
+        "identifier-safety",
+        "declaration-order",
+        "arg-type-match",
+        "forbidden-name",
+      ],
       isClean: false,
       summary: { errors: 2, warnings: 0 },
     });
@@ -139,5 +145,43 @@ describe("dysflow_lint_module", () => {
 
     expect(result.isError).toBe(true);
     expect(result.ok).toBe(false);
+  });
+
+  // F22 (2026-07-06) — the `forbidden-name` rule is exposed through the
+  // `dysflow_lint_module` MCP tool. Consumers can call it standalone or
+  // as part of the default rule set; the diagnostic shape mirrors the
+  // in-process `lintVbaModule` API.
+  it("surfaces the F22 forbidden-name rule when called against a module with shadowing identifiers", async () => {
+    const result = await getTool().handler({
+      module: "ShadowedNames",
+      rules: ["forbidden-name"],
+      source: [
+        "Option Compare Database",
+        "Option Explicit",
+        "",
+        "Public Sub SaveRecord(ByVal name As String, ByVal err As Long)",
+        "End Sub",
+      ].join("\r\n"),
+    });
+
+    expect(result.isError).toBe(false);
+    const parsed = JSON.parse(result.content[0]?.text ?? "{}");
+    expect(parsed.rules).toEqual(["forbidden-name"]);
+    expect(parsed.isClean).toBe(false);
+    const forbidden = parsed.flatDiagnostics.filter(
+      (d: { code?: string }) => d.code === "FORBIDDEN_NAME",
+    );
+    // `name` (parameter) and `err` (parameter) both shadow VBA globals.
+    expect(forbidden.length).toBeGreaterThanOrEqual(2);
+    expect(
+      forbidden.some((d: { message: string }) => d.message.includes("'name'")),
+    ).toBe(true);
+    expect(
+      forbidden.some((d: { message: string }) => d.message.includes("'err'")),
+    ).toBe(true);
+    // The recommendation appears in the message.
+    expect(
+      forbidden.some((d: { message: string }) => d.message.includes("errMsg")),
+    ).toBe(true);
   });
 });

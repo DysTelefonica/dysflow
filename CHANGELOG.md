@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Added (multi-AI friction log F22)
+
+- **`dysflow_lint_module` ships the `forbidden-name` rule** (Friction F22,
+  multi-AI friction log 2026-07-06). The new rule flags identifiers
+  declared in any VBA module that shadow VBA / Access / DAO / ADO /
+  Scripting globals or reserved words (`Err`, `Error`, `Date`, `Time`,
+  `Now`, `Name`, `Type`, `Left`, `Right`, `Mid`, `Trim`, `Len`, `Replace`,
+  `Format`, `Array`, `Collection`, `Dictionary`, `Object`, `String`,
+  `Integer`, `Long`, `Boolean`, `Double`, `Currency`, `Variant`, `Form`,
+  `Report`, `Control`, `Recordset`, `Database`, `Field`, `Fields`,
+  `TableDef`, `QueryDef`, `DoCmd`, `CurrentDb`, `Application`, `Screen`,
+  `Forms`, `Reports`, `Me`, `Parent`, `New`, `Nothing`, `Null`, `Empty`,
+  `True`, `False`). The check is case-insensitive (lowercase fold at
+  match time) and fires on every declaration form: `Dim`, `Const`, `Type`,
+  `Enum`, `Declare ... Function/Sub`, `Sub`, `Function`, `Property
+  Get/Let/Set`, and the parameter list of any procedure header. The
+  diagnostic carries the structured `code: "FORBIDDEN_NAME"`, a line
+  number, the violating identifier, and a per-name recommendation
+  aligned to the project's convention (`errMsg` / `fechaAlta` / `db` /
+  `rs` / `qdf` / etc.). Severity is `error`: a shadowed identifier
+  compiles in some code paths and breaks in others with the misleading
+  `Calificador no válido` / `Invalid qualifier` class of error, so the
+  rule belongs on the same gate as the other `lint_module` errors.
+  Wired into the `dysflow_lint_module` MCP tool's `rules` array and
+  listed in `LINT_MODULE_SCHEMA`, `KNOWN_LINT_RULE_IDS`, and the
+  `LintRuleId` type so a project can opt out via
+  `.dysflow/project.json` `capabilities.lint.rules.forbidden-name =
+  { enabled: false }` for legacy codebases.
+
 ## [v1.20.1] - 2026-07-07
 
 - **F16 import_modules grow-in-place hotfix**: updating an existing standard

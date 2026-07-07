@@ -635,7 +635,7 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `source` (string, optional): Inline VBA source text.
-  - `rules` (array, optional): Filter to any of `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match`.
+  - `rules` (array, optional): Filter to any of `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match`, `forbidden-name` (F22 — flags identifiers that shadow VBA / Access / DAO globals).
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
 
@@ -676,7 +676,7 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - Returns a validation report with `valid`, separate `errors` and `warnings` arrays, and a `summary` containing test and diagnostic counts.
 * **`dysflow_lint_module`**: Lint a `.bas`/`.cls` source module before import.
   - Parameters: `module` (string, required), `source` (string, optional), `rules` (array, optional), `destinationRoot`/`projectRoot` (optional)
-  - Rules: `option-declaration`, `identifier-safety`, `declaration-order`, and `arg-type-match` (same-module signatures only; detects clear literal-argument / declared-type mismatches only; no cross-module type inference or variable-flow analysis).
+  - Rules: `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match` (same-module signatures only; detects clear literal-argument / declared-type mismatches only; no cross-module type inference or variable-flow analysis), and `forbidden-name` (F22 — flags identifiers that shadow VBA / Access / DAO / Scripting globals such as `Err`, `Date`, `Name`, `Form`, `DoCmd` — case-insensitive — on `Dim` / `Const` / `Type` / `Enum` / `Sub` / `Function` / `Property` / parameter declarations, with a project-convention recommendation like `errMsg` / `fechaAlta` / `db` / `rs` / `qdf`).
   - Returns `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }` — diagnostics grouped by rule name, flatDiagnostics for backward compatibility, `isClean` true when no findings, and `summary` with error/warning counts.
 * **`verify_code`**: The single dry-run tool that compares exported VBA/Form source against the disk tree. It NEVER mutates Access. One tool covers every comparison scope:
   - **Whole project** — omit `moduleNames`.

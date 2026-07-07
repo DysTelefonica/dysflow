@@ -322,11 +322,17 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
     rules: {
       type: "array",
       description:
-        "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match. " +
-        "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches — it performs no cross-module type inference and no variable-flow analysis.",
+        "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name. " +
+        "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches — it performs no cross-module type inference and no variable-flow analysis. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.) on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, case-insensitively, and recommends a project convention (errMsg, fechaAlta, etc.).",
       items: {
         type: "string",
-        enum: ["option-declaration", "identifier-safety", "declaration-order", "arg-type-match"],
+        enum: [
+          "option-declaration",
+          "identifier-safety",
+          "declaration-order",
+          "arg-type-match",
+          "forbidden-name",
+        ],
       },
     },
     ...ACCESS_OVERRIDE,

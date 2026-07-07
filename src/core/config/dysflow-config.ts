@@ -57,9 +57,9 @@ export type DysflowProjectCapabilities = {
   /**
    * Per-rule lint overrides (#731). Each entry maps a known rule id
    * (`option-declaration`, `identifier-safety`, `declaration-order`,
-   * `arg-type-match`) to its override. `enabled: false` suppresses the rule
-   * entirely; `enabled: true` keeps the rule at its default severity.
-   * The `reason` field is free-form and surfaces in the
+   * `arg-type-match`, `forbidden-name`) to its override. `enabled: false`
+   * suppresses the rule entirely; `enabled: true` keeps the rule at its
+   * default severity. The `reason` field is free-form and surfaces in the
    * `LINT_SUPPRESSED` info diagnostic so the suppression is auditable.
    */
   lint?: {
@@ -67,12 +67,16 @@ export type DysflowProjectCapabilities = {
   };
 };
 
-/** #731 — one of the four known lint rule ids. */
+/** #731 — one of the known lint rule ids. */
 export type LintRuleId =
   | "option-declaration"
   | "identifier-safety"
   | "declaration-order"
-  | "arg-type-match";
+  | "arg-type-match"
+  // F22 (2026-07-06) — flag identifiers that shadow VBA / Access / DAO
+  // globals. Wired into the same project-config override path so a
+  // legacy project can opt out with `enabled: false`.
+  | "forbidden-name";
 
 export type LintRuleOverride = {
   enabled: boolean;
@@ -178,6 +182,23 @@ export function loadDysflowConfigShared<
 
   const explicitAccessDbPath = stringValue(input.accessDbPath);
   if (explicitAccessDbPath !== undefined) {
+    // F23 — when the caller passes an explicit accessPath AND a repo project
+    // config is found, load the project config so the runtime can honor its
+    // `allowedProcedures` allowlist, `allowWrites` gate, lint overrides, and
+    // password-env settings. The project config loader honors the explicit
+    // accessPath override internally (via the `??` chain in
+    // `buildProjectConfig`), so the caller's `accessPath` still wins for the
+    // path. Without this, an explicit `accessPath` in the input would silently
+    // bypass the project's allowlist — a regression of the gate wired in
+    // PR1b (#621 F1) and the per-input resolver wired in #757 (F7). The old
+    // `buildExplicitConfig` path is kept as a fallback for the case where no
+    // project config exists on disk (the resolver is the only consumer that
+    // benefits from the merge; the rest of the surface still gets the
+    // original explicit-only behavior because they have no project config to
+    // consult).
+    if (repoConfig.found === "standard" || repoConfig.found === "compat") {
+      return loadFromPath(repoConfig.path);
+    }
     return buildExplicitConfig(input, env, cwd, explicitAccessDbPath) as T;
   }
 
@@ -800,6 +821,7 @@ const KNOWN_LINT_RULE_IDS: readonly LintRuleId[] = [
   "identifier-safety",
   "declaration-order",
   "arg-type-match",
+  "forbidden-name",
 ];
 
 /**
