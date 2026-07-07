@@ -168,7 +168,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     summary: "Read-only MCP contract.",
   },
   // issue #701 — read-only VBA procedure introspection
-  dysflow_list_procedures: {
+  list_procedures: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",

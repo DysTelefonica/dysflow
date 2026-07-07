@@ -433,7 +433,7 @@ export const MODERN_TOOL_NAMES = [
   "access_force_cleanup_orphaned",
   "dysflow_get_capabilities",
   // issue #701 — read-only VBA procedure introspection
-  "dysflow_list_procedures",
+  "list_procedures",
   "dysflow_get_procedure",
   "dysflow_find_references",
   // issue #705 — read-only dead-code detection
@@ -587,8 +587,8 @@ export function createDysflowMcpTools(
     }),
     // issue #701 — read-only VBA procedure introspection
     {
-      name: "dysflow_list_procedures",
-      description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_list_procedures.summary}`,
+      name: "list_procedures",
+      description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.list_procedures.summary}`,
       inputSchema: LIST_PROCEDURES_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, LIST_PROCEDURES_SCHEMA);
