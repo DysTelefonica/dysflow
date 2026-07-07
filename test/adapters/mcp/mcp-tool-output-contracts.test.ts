@@ -26,7 +26,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #701 — read-only modern service tools that parse VBA source text without
     // PowerShell runner DYSFLOW_RESULT output.
     "list_procedures",
-    "dysflow_get_procedure",
+    "get_procedure",
     "dysflow_find_references",
     // #705 — read-only dead-code analysis over the supplied modules map.
     "dysflow_detect_dead_code",

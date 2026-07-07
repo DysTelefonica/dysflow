@@ -434,7 +434,7 @@ export const MODERN_TOOL_NAMES = [
   "dysflow_get_capabilities",
   // issue #701 — read-only VBA procedure introspection
   "list_procedures",
-  "dysflow_get_procedure",
+  "get_procedure",
   "dysflow_find_references",
   // issue #705 — read-only dead-code detection
   "dysflow_detect_dead_code",
@@ -629,8 +629,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_get_procedure",
-      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_get_procedure.summary}`,
+      name: "get_procedure",
+      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.get_procedure.summary}`,
       inputSchema: GET_PROCEDURE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, GET_PROCEDURE_SCHEMA);

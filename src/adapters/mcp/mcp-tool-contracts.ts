@@ -173,7 +173,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  dysflow_get_procedure: {
+  get_procedure: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
