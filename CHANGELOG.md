@@ -2,6 +2,82 @@
 
 ## [Unreleased]
 
+### Fixed (multi-AI friction log F11, F13, F14)
+
+Four source commits ported in this batch — one per logical friction —
+to keep CHANGELOG.md edits from conflicting with each other (every
+commit on the tactical branch `fricciones-dysflow-F11-F23-2026-07-06`
+wanted to append a `[Unreleased]` block, which made a sequential
+cherry-pick fragile). The consolidated entry below summarizes all four
+commits in the order they were ported onto `fricciones-port-2026-07-07`.
+
+- **F11 — E2E sandbox source-path stabilization** (issue #766, commit
+  `37649fab`). The MCP E2E battery's `dysflow_list_procedures` disk-path
+  probe was passing the sandbox's own `destinationRoot` to
+  `resolveVbaSourceFile`, which rejected it because the security check
+  insists on the configured project's source root. Two surgical fixes
+  in `E2E_testing/_helpers/mcp-e2e-sandbox.mjs` (move `catalogPath`
+  under `src/`) and `E2E_testing/mcp-e2e.mjs` (inline `source` read
+  from `E2E_testing/src` for the configured project root, plus mark the
+  `unlink_table` negative case as `expected: "error"` to make the
+  structured failure explicit). No unit-test impact — these are E2E
+  harness paths only. `pnpm test:e2e:mcp` exercises the path end-to-end.
+
+- **F13 — deprecated `compile` / `rollbackOnCompileFail` silent strip
+  on `import_modules` / `import_all`** (issue #759 follow-up, commit
+  `70dd5665`). The `compile_vba` tool and the `compile` parameter on
+  `import_modules` / `import_all` were removed end-to-end in v1.19.0
+  (hard break — the runtime no longer compiles; the human compiles in
+  Access via Debug → Compile). Existing orchestrator briefs written
+  before v1.19.0 still hard-code `compile: false` / `compile: true`.
+  Without the strip those briefs receive `MCP_INPUT_INVALID: compile is
+  not allowed` from the schema layer. The dispatch factory now silently
+  strips the deprecated keys BEFORE schema validation, so:
+  * The schema layer (`validateInput`) keeps rejecting `compile` via
+    `additionalProperties: false`. The v1.19.0 contract pinned by
+    `test/adapters/mcp/schemas/vba-sync-schemas.test.ts` is unchanged.
+  * A legacy brief passing `compile: true` or `rollbackOnCompileFail`
+    does NOT receive the rejection. The call succeeds.
+  * The forwarded payload to `vbaSyncToolService.execute` does NOT
+    carry `compile` / `rollbackOnCompileFail` — the strip is real, not a
+    bypass that leaves the deprecated keys downstream.
+  A `console.warn` surfaces the `compile: true` case (the one that used
+  to trigger `compile_vba`). 7 new atoms in
+  `test/adapters/mcp/import-modules-compile-flag.test.ts` lock the
+  contract.
+
+- **F14 — JSON-stringifiable MCP tool result normalization** (commits
+  `5ce73eb5` and `9f6ddcbe`, 16 + 2 atoms). When a dysflow MCP tool
+  returns a value that `JSON.stringify` cannot serialize (a `Symbol`,
+  a function, a `BigInt`, a top-level `undefined`, an `Error` with
+  non-enumerable `message`, or an object with a circular reference),
+  the consumer previously got either a thrown `TypeError`
+  (`Converting circular structure to JSON` / `Do not know how to
+  serialize a BigInt`) or silently-dropped information
+  (`JSON.stringify({fn: () => {}})` returns `{}`). The new
+  `stringifyForMcp` helper routes the value through the appropriate
+  serializer and guarantees that `content[0].text` is ALWAYS a JSON
+  document that `JSON.parse` and a second `JSON.stringify` will accept
+  (the F14 contract). The helper:
+  * top-level primitives (null/string/number/boolean) → fast path
+  * `Symbol` / `function` / `BigInt` / `undefined` top-level → envelope
+    `{ raw: <serializable string>, type: <kind> }`
+  * `Error` instance → envelope exposing `.message`, `.stack`, `.name`,
+    `.code`, and any extra fields
+  * Object/array with circular refs → encoded with `__circular__`
+    placeholders for back-edges (via `normalizeForJsonStringify`)
+  * Nested `function` / `Symbol` / `BigInt` / `Error` are deep-walked
+    before the fast path so they are never silently dropped (F14
+    nested — commit `9f6ddcbe` adds the `requiresDeepNormalization`
+    guard).
+  18 atoms in
+  `test/adapters/mcp/result-translation-stringifiable.test.ts` lock the
+  contract.
+
+Implementation commits (in order, all on `fricciones-port-2026-07-07`):
+`37649fab` (F11), `70dd5665` (F13), `5ce73eb5` (F14 root),
+`9f6ddcbe` (F14 nested).
+
 ### Added (multi-AI friction log F22)
 
 - **`dysflow_lint_module` ships the `forbidden-name` rule** (Friction F22,
