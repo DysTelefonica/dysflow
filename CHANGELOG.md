@@ -1,5 +1,59 @@
 # Changelog
 
+## [v1.20.0] - 2026-07-07
+
+- **`target: "auto"` mode on read-only schema/query tools** (#763, GH issue
+  originally raised as deferred AC of #716). The cross-DB lookup primitive
+  (`src/core/runtime/cross-db-table-lookup.ts`) tries the configured backend
+  first, then the frontend, and returns which one contained the table.
+  Caller can read `dysflow_get_capabilities.toolsVisible` (still 68) and
+  the resolved `databasePath` from the result to determine which DB
+  served the data. **Migration**: existing `target: "frontend" |
+  "backend"` callers are unaffected; new `target: "auto"` callers get
+  the cross-DB resolution.
+- **Cross-DB ambiguity detection for read tools** (#764, deferred AC of
+  #716). When a caller invokes a read-only tool (`dysflow_get_schema`,
+  `dysflow_list_tables`, `dysflow_count_rows`, `dysflow_distinct_values`)
+  WITHOUT an explicit `target` / `databasePath`, and the table exists in
+  BOTH configured DBs, dysflow returns a typed `ACCESS_TABLE_AMBIGUOUS`
+  error with `error.details.roles: ["frontend", "backend"]` and the
+  candidates. Single-DB tables still resolve normally. **Hard break for
+  callers** that previously got a non-deterministic answer on ambiguous
+  tables — they now get a typed error. **Migration**: pass `target:
+  "frontend" | "backend" | "auto"` to disambiguate.
+- **Human-compile-reminder surface** (#762, PR-1 of v1.20.0). Before
+  any test run / module import, dysflow tracks the last persistence +
+  last `dysflow_verify_code` round-trip per `accessPath` and exposes:
+  - `dysflow_get_capabilities.humanCompilePending: bool` — true when the
+    human has not compiled since the last save-only persistence.
+  - `humanCompileReminder: "Dysflow did not compile. The human must
+    compile this project in Access (Debug > Compile) before any test
+    run. Last save-only persistence: <ISO timestamp>."` in the structured
+    result of `dysflow_import_modules` / `dysflow_import_all` /
+    `dysflow_delete_module` / `dysflow_test_vba` / `dysflow_run_vba`
+    when the human is pending. **ADDITIVE** — consumers that ignore
+    the reminder keep working.
+- **No new error codes** beyond `ACCESS_TABLE_AMBIGUOUS` (which is new in
+  v1.20.0). **No new tools** (existing tool count 68 unchanged). **No
+  defaults change**. The only contract changes are: new `target: "auto"`
+  enum value, new `humanCompilePending` capability field, new
+  `humanCompileReminder` result field on import / test / run tools,
+  and the ambiguity error code. v1.19.0's hard-break hold (zero
+  compile in dysflow) is preserved and reinforced.
+- **Migration note** (in CHANGELOG entry): the v1.20.0 behavior is
+  backward-compatible for single-DB projects (95% of consumers; the
+  `noconformidades-e2e` test fixture is a single-DB project and resolves
+  without changes). For multi-DB projects, callers passing no
+  `target` / `databasePath` on a table that exists in both DBs will now
+  get `ACCESS_TABLE_AMBIGUOUS` — they should either pass `target:
+  "auto"` to get the lookup result, or pass `target: "frontend" |
+  "backend"` to disambiguate explicitly.
+
+Implementation commits: PR-1 #765 (PR #762) `6ac401d7` (commits
+`7bc58b4e` … `c508f96b`); PR-2 #772 (PR #763 + #764) `1ead192b`
+(commits `31cc19ba` … `29481bbb`). Merge commits on main: `6ac401d7`
+(PR-1), `1ead192b` (PR-2).
+
 ## [v1.19.0] - 2026-07-06
 
 Hard-break removal of all dysflow-managed VBA compilation (#759). The
