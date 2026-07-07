@@ -124,7 +124,7 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
 };
 
 const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
-  dysflow_query_execute: {
+  query_execute: {
     access: "read-write",
     writeGate: "conditional",
     dryRunDefault: true,

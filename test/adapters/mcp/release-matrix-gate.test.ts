@@ -71,7 +71,7 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
   it("verifies split-mode coverage explicitly", () => {
     // Read/Write split mode checks
-    const queryExecute = tools.find((t) => t.name === "dysflow_query_execute");
+    const queryExecute = tools.find((t) => t.name === "query_execute");
     expect(queryExecute).toBeDefined();
     expect(queryExecute?.inputSchema?.properties?.mode?.enum).toEqual(["read", "write"]);
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("backendPath");

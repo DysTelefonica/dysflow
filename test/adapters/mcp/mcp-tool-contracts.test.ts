@@ -34,7 +34,7 @@ describe("MCP tool contract metadata", () => {
   });
 
   it("classifies modern query execution as read/write with dry-run protection", () => {
-    expect(getMcpToolContract("dysflow_query_execute")).toMatchObject({
+    expect(getMcpToolContract("query_execute")).toMatchObject({
       access: "read-write",
       writeGate: "conditional",
       dryRunDefault: true,
@@ -96,11 +96,11 @@ describe("MCP tool contract metadata", () => {
     // are removed — the modern-tool safety footguns contract for
     // `run_vba` is covered by the canonical-handlers test instead.
 
-    expect(descriptions.dysflow_query_execute).toContain('mode: "read"');
-    expect(descriptions.dysflow_query_execute).toContain('mode: "write"');
-    expect(descriptions.dysflow_query_execute).toContain("dryRun");
-    expect(descriptions.dysflow_query_execute).toContain("apply");
-    expect(descriptions.dysflow_query_execute).toContain("MCP_WRITES_DISABLED");
+    expect(descriptions.query_execute).toContain('mode: "read"');
+    expect(descriptions.query_execute).toContain('mode: "write"');
+    expect(descriptions.query_execute).toContain("dryRun");
+    expect(descriptions.query_execute).toContain("apply");
+    expect(descriptions.query_execute).toContain("MCP_WRITES_DISABLED");
 
     expect(descriptions.dysflow_doctor).toContain("projectId");
     expect(descriptions.dysflow_doctor).toContain("includeEnvironment");

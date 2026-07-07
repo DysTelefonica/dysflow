@@ -426,7 +426,7 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
-  "dysflow_query_execute",
+  "query_execute",
   "dysflow_doctor",
   "dysflow_access_operations_list",
   "dysflow_access_cleanup",
@@ -486,8 +486,8 @@ export function createDysflowMcpTools(
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
-      name: "dysflow_query_execute",
-      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,
+      name: "query_execute",
+      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpQueryExecute(

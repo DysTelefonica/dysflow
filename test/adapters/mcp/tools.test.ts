@@ -167,7 +167,7 @@ describe("MCP tool registration over core services", () => {
 
     const toolNames = tools.map((tool) => tool.name);
     const expectedModernToolNames = [
-      "dysflow_query_execute",
+      "query_execute",
       "dysflow_doctor",
       "dysflow_access_operations_list",
       "dysflow_access_cleanup",

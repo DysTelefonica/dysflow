@@ -13,7 +13,7 @@ const OUTPUT_CONTRACT_GROUPS = {
   modernCoreService: [
     // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
     // tool. It aggregates capability metadata; it never touches Access.
-    "dysflow_query_execute",
+    "query_execute",
     "dysflow_doctor",
     "dysflow_access_operations_list",
     "dysflow_access_cleanup",
