@@ -261,7 +261,10 @@ function buildToolCases(): ToolCase[] {
       operationId: "bogus-id-does-not-exist",
       accessPath: access,
     }),
-    t("cleanup_access_operation", "sad", { operationId: "../../../etc/passwd", accessPath: access }),
+    t("cleanup_access_operation", "sad", {
+      operationId: "../../../etc/passwd",
+      accessPath: access,
+    }),
     t("access_force_cleanup_orphaned", "happy", {}),
     t("access_force_cleanup_orphaned", "sad", { confirmPid: -1 }),
   );

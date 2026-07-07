@@ -165,7 +165,10 @@ describe("MCP/core architecture boundary", () => {
     // request with `moduleName: ""` and `arguments: []` defaults. Match
     // the canonical shape, not just the caller's payload.
     expect(requests).toEqual([
-      expect.objectContaining({ service: "vba", request: expect.objectContaining({ procedureName: "Smoke", dryRun: true }) }),
+      expect.objectContaining({
+        service: "vba",
+        request: expect.objectContaining({ procedureName: "Smoke", dryRun: true }),
+      }),
       { service: "query", request: { sql: "SELECT 1", mode: "read" } },
       { service: "diagnostics", request: { includeEnvironment: true } },
     ]);

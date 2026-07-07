@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   type AccessQueryRequest,
-  type AccessVbaRequest,
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -21,15 +20,7 @@ import {
   listVbaProcedures,
 } from "../../core/services/vba-procedure-service.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
-import { buildCleanupRequest } from "./alias-tools.js";
-import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
-import {
-  handleMcpAccessCleanup,
-  handleMcpAccessOperationsList,
-  handleMcpAccessOrphanCleanup,
-  handleMcpQueryExecute,
-  handleMcpVbaExecute,
-} from "./canonical-handlers.js";
+import { handleMcpAccessOrphanCleanup, handleMcpQueryExecute } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
 import { createResolveProjectTool } from "./dysflow-resolve-project-tool.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
@@ -61,18 +52,15 @@ import type {
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import {
-  CLEANUP_SCHEMA,
   DETECT_DEAD_CODE_SCHEMA,
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
   LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
-  NO_INPUT_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
   VALIDATE_MANIFEST_SCHEMA,
-  VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
 import { validateInput } from "./validator.js";
 

@@ -109,21 +109,25 @@ describe("MCP tool registration over core services", () => {
       additionalProperties: false,
     });
     await expect(
-      tools.find((tool) => tool.name === "run_vba")?.handler({
-        procedureName: "Refresh",
-        argsJson: JSON.stringify([2026]),
-        dryRun: true,
-      }),
+      tools
+        .find((tool) => tool.name === "run_vba")
+        ?.handler({
+          procedureName: "Refresh",
+          argsJson: JSON.stringify([2026]),
+          dryRun: true,
+        }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
       isError: false,
       ok: true,
     });
     await expect(
-      tools.find((tool) => tool.name === "query_execute")?.handler({
-        sql: "SELECT id, name FROM People",
-        mode: "read",
-      }),
+      tools
+        .find((tool) => tool.name === "query_execute")
+        ?.handler({
+          sql: "SELECT id, name FROM People",
+          mode: "read",
+        }),
     ).resolves.toEqual({
       content: [{ type: "text", text: JSON.stringify({ rows: [{ id: 1, name: "Ada" }] }) }],
       isError: false,
@@ -334,8 +338,7 @@ describe("MCP tool registration over core services", () => {
       diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
     });
 
-    const properties = tools.find((tool) => tool.name === "query_execute")?.inputSchema
-      ?.properties;
+    const properties = tools.find((tool) => tool.name === "query_execute")?.inputSchema?.properties;
 
     expect(properties).toHaveProperty("dryRun");
     expect(properties).toHaveProperty("apply");
@@ -476,9 +479,7 @@ describe("MCP tool registration over core services", () => {
     );
 
     await expect(
-      tools
-        .find((tool) => tool.name === "run_vba")
-        ?.handler({ moduleName: "Automation" }),
+      tools.find((tool) => tool.name === "run_vba")?.handler({ moduleName: "Automation" }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
@@ -1448,9 +1449,7 @@ describe("MCP tool registration over core services", () => {
       });
 
       await expect(
-        tools
-          .find((t) => t.name === "query_execute")
-          ?.handler({ sql: "SELECT 1", mode: "read" }),
+        tools.find((t) => t.name === "query_execute")?.handler({ sql: "SELECT 1", mode: "read" }),
       ).resolves.toMatchObject({ isError: false });
       await expect(
         tools.find((t) => t.name === "query_sql")?.handler({ sql: "SELECT 1" }),

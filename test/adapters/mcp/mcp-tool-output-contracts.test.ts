@@ -183,7 +183,9 @@ describe("MCP tool output contract inventory", () => {
     expect(OUTPUT_CONTRACT_GROUPS.modernServiceAliases).toHaveLength(3);
     expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain("run_vba");
     expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain("list_access_operations");
-    expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain("cleanup_access_operation");
+    expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain(
+      "cleanup_access_operation",
+    );
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("run_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("list_access_operations");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("cleanup_access_operation");
