@@ -259,8 +259,7 @@ End Sub
         // error against `__dysflow_inline__` as an explicit run failure.
         // We no longer try to distinguish "compile error against inline"
         // vs "compile error against another module" because the runtime
-        // does not compile — there is no compile error type to surface
-        // (VBA_COMPILE_ERROR is gone).
+        // does not compile — there is no compile error type to surface.
         inlineResult = await this.orchestrator.executeMappedTool(
           "run_vba",
           {
