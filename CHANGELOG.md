@@ -1,5 +1,82 @@
 # Changelog
 
+## [v1.19.0] - 2026-07-06
+
+Hard-break removal of all dysflow-managed VBA compilation (#759). The
+runtime no longer compiles; the human compiles in Access (Debug > Compile).
+Mutations persist via save-only (`acCmdSaveAllModules` = `RunCommand(280)`),
+which fixes the structural root cause of the consumer-reported "Active
+lock detected" / `VBA_IMPORT_PHASE_FAILED` chain on broken projects
+(merged in PR #760). This release removes every public surface that
+exposed the compile machinery:
+
+### Removed (hard break)
+
+- **`compile_vba` MCP tool** (`commit f6607bb8`). Registered in
+  `VBA_SYNC_TOOL_NAMES`, `MCP_TOOL_ROUTES`, `VBA_SYNC_TOOL_SCHEMAS`,
+  `TOOL_PARITY_REGISTRY`, `EXECUTION_MAPPINGS` — every surface drops the
+  entry. `dysflow_dysflow_get_capabilities.toolsVisible` decreases by
+  1 (68 -> 67). Any caller invoking `compile_vba` reaches an unknown
+  tool error.
+- **`compile` and `rollbackOnCompileFail` parameters on `import_modules` /
+  `import_all`** (`commit 68b27a46`). Removed `SCHEMA_PROPS.compile`,
+  removed the parameters from the Zod schemas (`additionalProperties:false`
+  rejects unknown keys with `MCP_INPUT_INVALID`), removed the post-import
+  compile block + rollback snapshot in `VbaModulesAdapter`, removed the
+  `truthy(params.compile)` check in `VbaExecutionAdapter.executeTestVba`,
+  and removed the dead HTTP surface mirror.
+- **`VBA_COMPILE_ERROR` error code** (`commit 39ddab41`). Removed from the
+  error taxonomy; no adapter or PowerShell runner can emit it. `compile:false`
+  / `compile:true` consumer failures are now `MCP_INPUT_INVALID` at the
+  schema boundary before any runner call.
+- **PowerShell compile machinery** (`commit cf974e0c`). Deleted four
+  function definitions from `scripts/dysflow-vba-manager.ps1`:
+  `Get-ActiveVbeLocation`, `New-CompileFailureResult`,
+  `Invoke-CompileVbaProject`, `Invoke-CompileAction`. The
+  `-Action "Compile"` dispatcher branch is gone. `Compile` is removed
+  from both `ValidateSet` declarations. The four `RunCommand(126)`
+  sites in the persistence paths were already replaced with
+  `RunCommand(280)` in PR #760.
+
+### Changed
+
+- **Save-only persistence is now canonical** (openspec/specs/vba-manager-actions/spec.md
+  "Save-only persistence (no compile)"). `import_modules`,
+  `import_all`, and `delete_module` complete via
+  `acCmdSaveAllModules` = `RunCommand(280)`. No compile step is invoked.
+- **vba_inline_execution skips its explicit compile step**. The inline
+  path imports `__dysflow_inline__` and runs it directly; Access
+  validates the procedure at call time. Any compile error against the
+  temp module now surfaces via `run_vba`'s normal failure path
+  (no `VBA_COMPILE_ERROR` type).
+
+### Migration
+
+Existing callers passing `compile: true` or `rollbackOnCompileFail: true`
+on `import_modules` / `import_all` receive `MCP_INPUT_INVALID` from the
+Zod `additionalProperties:false` validator. Existing callers invoking
+`compile_vba` reach an unknown tool error. Both are loud, schema-layer
+rejections; the migration is mechanical — drop the parameter / tool
+invocation and rely on Access (Debug > Compile) before re-running
+`test_vba` or trusting the binary.
+
+### Implementation commits (PR-2)
+
+- `0b98641c` test(schemas): pin rejection of removed compile + rollbackOnCompileFail params (RED)
+- `68b27a46` feat(mcp): drop compile + rollbackOnCompileFail params from import schemas (BREAKING)
+- `e546986b` test(mcp): pin removal of compile_vba tool across all registration surfaces (RED)
+- `f6607bb8` feat(mcp): drop compile_vba tool end-to-end (BREAKING)
+- `cf974e0c` chore(ps): remove Invoke-Compile* + New-CompileFailureResult from dysflow-vba-manager.ps1
+- `57ce8552` test(errors): pin VBA_COMPILE_ERROR removal from src/ source (RED)
+- `39ddab41` feat(mcp): drop VBA_COMPILE_ERROR from error taxonomy
+- `e0f632c3` test: drop compile_vba + compile:true test cases; cleanup obsolete tests
+- `0e63f920` docs(sweep): zero compile in working docs + update live OpenSpec specs
+
+PR-1 (Slice 1, already merged at `35d5fbe2`) replaced the persistence
+path's `RunCommand(126)` -> `RunCommand(280)` for the two delete
+paths. The four `RunCommand(126)` sites that remained inside
+`Invoke-CompileVbaProject` are removed in PR-2 commit `cf974e0c`.
+
 ## [v1.18.0] - 2026-07-06
 
 MCP friction consolidation from consumer production work (#757). Four

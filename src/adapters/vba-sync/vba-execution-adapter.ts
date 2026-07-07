@@ -105,11 +105,7 @@ export class VbaExecutionAdapter {
   static handles(toolName: string): boolean {
     // feat-759-no-compile (v1.19.0) — `compile_vba` was removed from the
     // MCP surface. Compile is no longer a tool the adapter routes through.
-    return (
-      toolName === "run_vba" ||
-      toolName === "test_vba" ||
-      toolName === "vba_inline_execution"
-    );
+    return toolName === "run_vba" || toolName === "test_vba" || toolName === "vba_inline_execution";
   }
 
   async execute(

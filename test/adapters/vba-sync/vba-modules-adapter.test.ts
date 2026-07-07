@@ -830,7 +830,6 @@ describe("VbaModulesAdapter", () => {
   // openspec/specs/vba-manager-actions/spec.md "Save-only persistence".
   // ========================================================================
 
-
   it("import_all with prune:true deletes binary modules absent from source before import — #555", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-import-all-prune-adapter-"));
     const sourceRoot = join(root, "src");

@@ -349,11 +349,7 @@ describe("vba_inline_execution tool behavior", () => {
         // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
         // inline path no longer makes an explicit compile call. The
         // flow is now delete-pre -> import -> run -> delete-post.
-        if (
-          name === "import_modules" ||
-          name === "run_vba" ||
-          name === "delete_module"
-        ) {
+        if (name === "import_modules" || name === "run_vba" || name === "delete_module") {
           return { ok: true, data: { status: "success" } };
         }
         return { ok: false };

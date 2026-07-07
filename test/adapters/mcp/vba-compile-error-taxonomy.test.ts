@@ -14,9 +14,10 @@
  * Note: CHANGELOG historical entries and `docs/archive/**` keep the
  * reference as record — they are out of scope per design.
  */
-import { describe, expect, it } from "vitest";
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { TOOL_DESCRIPTIONS } from "../../../src/adapters/mcp/tool-parity-registry.js";
 
 describe("feat-759-no-compile — VBA_COMPILE_ERROR is unreachable", () => {

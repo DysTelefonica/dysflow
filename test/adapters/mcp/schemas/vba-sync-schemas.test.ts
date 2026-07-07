@@ -19,8 +19,8 @@
  * deliberate PR widening the schemas.
  */
 import { describe, expect, it } from "vitest";
-import { validateInput } from "../../../../src/shared/validation/index.js";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
+import { validateInput } from "../../../../src/shared/validation/index.js";
 
 describe("feat-759-no-compile — schema rejection of the removed compile surface", () => {
   describe("import_modules", () => {
@@ -55,10 +55,7 @@ describe("feat-759-no-compile — schema rejection of the removed compile surfac
 
   describe("import_all", () => {
     it("rejects { compile: true } with MCP_INPUT_INVALID (additionalProperties:false)", () => {
-      const result = validateInput(
-        { compile: true },
-        VBA_SYNC_TOOL_SCHEMAS.import_all,
-      );
+      const result = validateInput({ compile: true }, VBA_SYNC_TOOL_SCHEMAS.import_all);
       expect(result).toBeDefined();
       expect(result).toMatch(/compile is not allowed/i);
     });

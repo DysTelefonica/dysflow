@@ -76,7 +76,8 @@ describe("VbaExecutionAdapter", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("TOOL_NOT_IMPLEMENTED");
+    if (result.ok) throw new Error("expected compile_vba refusal, not success");
+    expect(result.error.code).toBe("TOOL_NOT_IMPLEMENTED");
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
@@ -230,12 +231,7 @@ describe("VbaExecutionAdapter", () => {
     );
 
     const callNames = executeMappedTool.mock.calls.map((c) => c[0]);
-    expect(callNames).toEqual([
-      "delete_module",
-      "import_modules",
-      "run_vba",
-      "delete_module",
-    ]);
+    expect(callNames).toEqual(["delete_module", "import_modules", "run_vba", "delete_module"]);
   });
 
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {

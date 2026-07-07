@@ -347,7 +347,7 @@ describe.skipIf(!canRunE2e)(
       // metadata, not code lines). So the exported .cls can NEVER contain
       // `Attribute VB_Name`, regardless of whether import normalization preserves it —
       // this artifact cannot verify the fix. The Pester suite
-// (scripts/tests/dysflow-vba-manager.Tests.ps1, `Normalize-VbaImportText`
+      // (scripts/tests/dysflow-vba-manager.Tests.ps1, `Normalize-VbaImportText`
       // context) is the primary pinning seam for VB_Name reaching `AddFromFile`.
     }, 180_000);
 

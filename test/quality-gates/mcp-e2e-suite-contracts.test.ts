@@ -67,7 +67,10 @@ describe("mcp-e2e.mjs — compile_vba mojibake pin (REMOVED in v1.19.0)", () => 
   it("compile_vba is no longer called in mcp-e2e.mjs", () => {
     const src = readSource(MCP_E2E_PATH);
     const call = src.match(/record\(\s*"vba-sync"\s*,\s*"compile_vba"[\s\S]*?\)/);
-    expect(call, "compile_vba should NOT be invoked in mcp-e2e.mjs after feat-759-no-compile").toBeNull();
+    expect(
+      call,
+      "compile_vba should NOT be invoked in mcp-e2e.mjs after feat-759-no-compile",
+    ).toBeNull();
   });
 });
 

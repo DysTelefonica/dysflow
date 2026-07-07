@@ -26,9 +26,9 @@ import {
 } from "../../../src/adapters/mcp/mcp-tool-registry.js";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
 import { TOOL_PARITY_REGISTRY } from "../../../src/adapters/mcp/tool-parity-registry.js";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { VbaExecutionAdapter } from "../../../src/adapters/vba-sync/vba-execution-adapter.js";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 
 /**
@@ -44,9 +44,7 @@ function advertisedToolCount(): number {
     diagnosticsService: { run: async () => successResult({ checks: [] }) },
   });
   const hiddenRegistry = new Set(
-    tools
-      .filter((tool) => tool.hidden === true)
-      .map((tool) => tool.name as string),
+    tools.filter((tool) => tool.hidden === true).map((tool) => tool.name as string),
   );
   return tools.filter((tool) => !hiddenRegistry.has(tool.name as string)).length;
 }

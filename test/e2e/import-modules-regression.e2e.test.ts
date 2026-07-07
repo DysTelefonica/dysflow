@@ -301,13 +301,8 @@ function buildToolCases(): ToolCase[] {
       },
       150_000,
     ),
-// feat-759-no-compile (v1.19.0) — `compile` parameter is gone.
-    t(
-      "import_all",
-      "happy",
-      { projectId, importMode: "Code", dryRun: true },
-      150_000,
-    ),
+    // feat-759-no-compile (v1.19.0) — `compile` parameter is gone.
+    t("import_all", "happy", { projectId, importMode: "Code", dryRun: true }, 150_000),
     t(
       "import_all",
       "sad",
@@ -326,7 +321,7 @@ function buildToolCases(): ToolCase[] {
     t("delete_module", "sad", { projectId, moduleName: "NoSuchModule_xyz_999" }, 150_000),
     t("list_objects", "happy", { projectId, filter: "*" }, 150_000),
     t("exists", "happy", { projectId, moduleName: "TestGoodModule" }, 150_000),
-t("exists", "sad", { projectId, moduleName: "NoSuchModule_xyz_999" }, 150_000),
+    t("exists", "sad", { projectId, moduleName: "NoSuchModule_xyz_999" }, 150_000),
     // feat-759-no-compile (v1.19.0) — compile_vba was removed.
     t("fix_encoding", "happy", { projectId, location: "Source" }, 150_000),
     t("fix_encoding", "sad", { projectId, location: "InvalidLocation" }, 150_000),
