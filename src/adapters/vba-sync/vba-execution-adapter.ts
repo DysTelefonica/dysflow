@@ -1,5 +1,6 @@
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import {
   createDysflowError,
   failureResult,
@@ -63,6 +64,25 @@ const EXECUTION_MAPPINGS = {
 /** Defense-in-depth limits for vba_inline_execution (issue #533). */
 const MAX_INLINE_CODE_CHARS = 1024;
 const INLINE_TIMEOUT_CEILING_MS = 30_000;
+
+/**
+ * F23 — extract the access path from a tool input. Mirrors the helper in
+ * `adapters/mcp/result-translation.ts` (kept local to avoid an adapter
+ * → adapter import chain; the MCP path is the canonical one and the gate
+ * sits behind a different module). Accepts the explicit override fields
+ * the MCP wire protocol allows (`accessPath`, `accessDbPath`,
+ * `databasePath`, `sourcePath`) so the diagnostic echoes whichever alias
+ * the caller used.
+ */
+function extractAccessPathFromInput(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const obj = input as Record<string, unknown>;
+  for (const key of ["accessPath", "accessDbPath", "databasePath", "sourcePath"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return undefined;
+}
 
 export interface VbaSyncOrchestrator {
   executeMappedTool(
@@ -382,6 +402,12 @@ End Sub
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
       if (params.dryRun !== true) {
+        // F23 — best-effort config-path lookup so the refusal envelope names
+        // the actual `.dysflow/project.json` the resolver was consulting.
+        // When the lookup fails (no project config on disk, no projectId in
+        // the input, etc.) the field is `undefined` — the gate never BLOCKS
+        // on this lookup; it is purely diagnostic.
+        const diagnosticConfigPath = await this.resolveConfigPathForDiagnostic(params);
         // #757 (F6) — distinct `MCP_ALLOWLIST_NOT_CONFIGURED` code (was the
         // generic `MCP_INPUT_INVALID`) so consumers can tell "project declares
         // no allowlist" apart from a schema error. Same string the MCP-handler
@@ -398,6 +424,28 @@ End Sub
             {
               remediation:
                 "Declare a non-empty allowedProcedures in .dysflow/project.json, or pass dryRun:true.",
+              details: {
+                // The `.dysflow/project.json` path the resolver was consulting
+                // (or `undefined` when no project config was found).
+                configPath: diagnosticConfigPath,
+                // The allowlist as the resolver resolved it — may be an empty
+                // array (explicit deny-all) or `undefined` (no allowlist
+                // declared). Surfacing the EMPTY case lets a consumer tell
+                // apart "config has allowlist: []" from "config is missing
+                // the field entirely" without a second config read.
+                allowedProcedures: resolved,
+                // The plan procedures the gate was checking, so a consumer can
+                // confirm the input was routed to the gate they expected.
+                planProcedures: [...procedures],
+                // Echo the projectId the caller sent so a multi-project
+                // workspace can attribute the refusal to the right project.
+                inputProjectId:
+                  typeof params.projectId === "string" ? params.projectId : undefined,
+                // Same for accessPath — accepted under `accessPath`,
+                // `accessDbPath`, `databasePath`, and `sourcePath` aliases so
+                // a consumer can see which binary the call was targeting.
+                inputAccessPath: extractAccessPathFromInput(params),
+              },
             },
           ),
         );
@@ -433,6 +481,48 @@ End Sub
       );
     }
     return undefined;
+  }
+
+  /**
+   * F23 — best-effort lookup of the project config path the resolver was
+   * consulting, for the diagnostic `error.details.configPath` field on
+   * `MCP_ALLOWLIST_NOT_CONFIGURED` refusals. Returns `undefined` when no
+   * project config could be resolved (no projectId, no projectRoot, no
+   * `.dysflow/project.json` on disk, etc.) — the gate NEVER blocks on
+   * this; the diagnostic is purely informational.
+   *
+   * Reuses the same `loadDysflowConfigAsync` the per-input resolver in the
+   * composition root uses, so the surfaced path is the one the resolver
+   * actually consulted. When the resolver returned a frozen array (no
+   * project config to consult), the lookup still runs against the input
+   * `projectRoot` / `projectId` so the diagnostic is useful.
+   */
+  private async resolveConfigPathForDiagnostic(
+    params: Record<string, unknown>,
+  ): Promise<string | undefined> {
+    try {
+      const configResult = await loadDysflowConfigAsync({
+        cwd: this.orchestrator.cwd,
+        projectId: typeof params.projectId === "string" ? params.projectId : undefined,
+        contextId: typeof params.contextId === "string" ? params.contextId : undefined,
+        projectRoot: typeof params.projectRoot === "string" ? params.projectRoot : undefined,
+        accessDbPath:
+          typeof params.accessPath === "string"
+            ? params.accessPath
+            : typeof params.accessDbPath === "string"
+              ? params.accessDbPath
+              : undefined,
+      });
+      if (configResult.ok) {
+        return configResult.data.configPath;
+      }
+      return undefined;
+    } catch {
+      // Diagnostic-only: any failure here is swallowed so the gate
+      // refuses (which is the correct behavior) and the diagnostic is
+      // simply absent.
+      return undefined;
+    }
   }
 
   private async resolveTestProceduresJson(
