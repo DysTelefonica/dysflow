@@ -19,10 +19,7 @@ import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
-export type FormMutationToolName =
-  | "dysflow_form_add_control"
-  | "dysflow_form_move_control"
-  | "dysflow_form_rename_control";
+export type FormMutationToolName = "form_add_control" | "form_move_control" | "form_rename_control";
 
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
@@ -75,7 +72,7 @@ export async function mutateForm(args: {
 
   try {
     const mutation =
-      toolName === "dysflow_form_add_control"
+      toolName === "form_add_control"
         ? addControl(ir, {
             targetSectionName: stringValue(params.targetSectionName),
             control: {
@@ -84,7 +81,7 @@ export async function mutateForm(args: {
               properties: readProperties(params.properties),
             },
           })
-        : toolName === "dysflow_form_move_control"
+        : toolName === "form_move_control"
           ? moveControl(ir, {
               controlName: stringValue(params.controlName) ?? "",
               left: numberValue(params.left),

@@ -43,8 +43,8 @@ class FakeDiagnosticsService {
 
 describe("Dysflow MCP tool parity inventory", () => {
   it("declares the complete 53-tool inventory", () => {
-    // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
-    // Slice 5 (#618) added dysflow_create_form_from_template.
+    // Slice 3 (#616) added form_serialize + form_deserialize.
+    // Slice 5 (#618) added create_form_from_template.
     // feat-759-no-compile (v1.19.0) — compile_vba was removed (was 54
     // dispatch names, 30 vba-sync tools; now 53 dispatch, 29 vba-sync).
     expect(VBA_SYNC_TOOL_NAMES).toHaveLength(29);
@@ -57,12 +57,12 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("compact_repair");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("validate_form_spec");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("compare_form");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_add_control");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_move_control");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_rename_control");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_serialize");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_form_deserialize");
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("dysflow_create_form_from_template");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_add_control");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_move_control");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_rename_control");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_serialize");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_deserialize");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("create_form_from_template");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {

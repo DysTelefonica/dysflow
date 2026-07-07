@@ -144,7 +144,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     ```
 
 #### Round-trip Serialize a `.form.txt` (Read-only, slice 3)
-*   **Tool**: `dysflow_form_serialize`
+*   **Tool**: `form_serialize`
 *   **Arguments**:
     ```json
     {
@@ -155,7 +155,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 *   **Notes**: Returns `{ serialized, byteEqual, byteDiff, metadataReport: { preservedKeys, byteDiff, opaqueCount } }`. Read-only — `apply` is ignored, the binary is never opened, and writes are off by default. Use this to verify that a form has round-trip-safe serialization before any mutation or clone attempt.
 
 #### Write a `FormIR` Back to `.form.txt` Through the LoadFromText Gate (Write-gated, slice 3)
-*   **Tool**: `dysflow_form_deserialize`
+*   **Tool**: `form_deserialize`
 *   **Arguments**:
     ```json
     {

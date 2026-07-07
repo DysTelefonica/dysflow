@@ -52,7 +52,13 @@ describe("vba-module-lint-service", () => {
 
     expect(report).toMatchObject({
       module: "CleanModule",
-      rules: ["option-declaration", "identifier-safety", "declaration-order", "arg-type-match"],
+      rules: [
+        "option-declaration",
+        "identifier-safety",
+        "declaration-order",
+        "arg-type-match",
+        "forbidden-name",
+      ],
       isClean: true,
       flatDiagnostics: [],
       summary: { errors: 0, warnings: 0 },
@@ -181,6 +187,7 @@ describe("vba-module-lint-service", () => {
       "identifier-safety",
       "declaration-order",
       "arg-type-match",
+      "forbidden-name",
     ]);
     expect(report.isClean).toBe(false);
     expect(report.flatDiagnostics.length).toBeGreaterThan(0);
@@ -250,6 +257,170 @@ describe("vba-module-lint-service", () => {
       }),
     ]);
     expect(report.isClean).toBe(false);
+  });
+
+  // F22 (2026-07-06) — forbidden-name rule.
+  describe("forbidden-name rule (F22)", () => {
+    it("flags `Dim err As String` with the FORBIDDEN_NAME diagnostic and a recommendation", async () => {
+      const report = await lintVbaModule({
+        module: "BadErr",
+        rules: ["forbidden-name"],
+        source: [
+          "Option Compare Database",
+          "Option Explicit",
+          "",
+          "Public Sub Run()",
+          "    Dim err As String",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(false);
+      expect(report.flatDiagnostics).toEqual([
+        expect.objectContaining({
+          rule: "forbidden-name",
+          line: 5,
+          severity: "error",
+          code: "FORBIDDEN_NAME",
+        }),
+      ]);
+      const message = String(report.flatDiagnostics[0]?.message ?? "");
+      expect(message).toContain("'err'");
+      expect(message).toContain("errMsg");
+      expect(message).toContain("mensajeError");
+    });
+
+    it("flags the rule case-insensitively (DIM ERR, dim Err, etc.)", async () => {
+      for (const declaration of [
+        "    Dim err As String",
+        "    Dim ERR As String",
+        "    dim Err As String",
+        "    DIM err AS STRING",
+      ]) {
+        const report = await lintVbaModule({
+          module: "CaseInsensitive",
+          rules: ["forbidden-name"],
+          source: [
+            "Option Compare Database",
+            "Option Explicit",
+            "",
+            "Public Sub Run()",
+            declaration,
+            "End Sub",
+          ].join("\r\n"),
+        });
+
+        expect(report.isClean).toBe(false);
+        expect(report.flatDiagnostics).toEqual([
+          expect.objectContaining({
+            rule: "forbidden-name",
+            severity: "error",
+            code: "FORBIDDEN_NAME",
+          }),
+        ]);
+      }
+    });
+
+    it("does NOT flag valid alternative names like errMsg, fechaAlta, db, rs, qdf", async () => {
+      const report = await lintVbaModule({
+        module: "CleanNames",
+        rules: ["forbidden-name"],
+        source: [
+          "Option Compare Database",
+          "Option Explicit",
+          "",
+          "Public Sub Run()",
+          "    Dim errMsg As String",
+          "    Dim fechaAlta As Date",
+          "    Dim db As DAO.Database",
+          "    Dim rs As DAO.Recordset",
+          "    Dim qdf As DAO.QueryDef",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.flatDiagnostics).toEqual([]);
+    });
+
+    it("flags forbidden names in parameter lists and procedure names", async () => {
+      const report = await lintVbaModule({
+        module: "BadParams",
+        rules: ["forbidden-name"],
+        source: [
+          "Option Compare Database",
+          "Option Explicit",
+          "",
+          "Public Sub SaveRecord(ByVal name As String, ByVal error As Long)",
+          "    Dim fecha As Date",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      // Procedure name `SaveRecord` is fine; `name` and `error` are
+      // forbidden, and the local `fecha` is allowed (not in the list).
+      const messages = report.flatDiagnostics.map((d) => String(d.message));
+      expect(messages.some((m) => m.includes("'name'"))).toBe(true);
+      expect(messages.some((m) => m.includes("'error'"))).toBe(true);
+      expect(messages.some((m) => m.includes("'fecha'"))).toBe(false);
+      expect(report.isClean).toBe(false);
+    });
+
+    it("flags forbidden names in Function / Property / Type / Enum / Const declarations", async () => {
+      const report = await lintVbaModule({
+        module: "BadDeclarations",
+        rules: ["forbidden-name"],
+        source: [
+          "Option Compare Database",
+          "Option Explicit",
+          "",
+          "Public Type Name",
+          "    value As Long",
+          "End Type",
+          "",
+          "Public Enum Type",
+          "    First",
+          "End Enum",
+          "",
+          "Public Const Error = 42",
+          "",
+          "Public Function Format() As String",
+          '    Format = "x"',
+          "End Function",
+        ].join("\r\n"),
+      });
+
+      const flagged = report.flatDiagnostics.map((d) => String(d.message));
+      // `Name` is forbidden in Type declarations.
+      expect(flagged.some((m) => m.includes("'Name'"))).toBe(true);
+      // `Type` is forbidden in Enum declarations.
+      expect(flagged.some((m) => m.includes("'Type'"))).toBe(true);
+      // `Error` is forbidden in Const declarations.
+      expect(flagged.some((m) => m.includes("'Error'"))).toBe(true);
+      // `Format` is forbidden in Function declarations.
+      expect(flagged.some((m) => m.includes("'Format'"))).toBe(true);
+      expect(report.isClean).toBe(false);
+    });
+
+    it("does not flag identifiers that merely contain a forbidden word (e.g. ErrorMessage, dbBackup)", async () => {
+      const report = await lintVbaModule({
+        module: "LongerNames",
+        rules: ["forbidden-name"],
+        source: [
+          "Option Compare Database",
+          "Option Explicit",
+          "",
+          "Public Sub Run()",
+          "    Dim errMsg As String",
+          "    Dim errorMessage As String",
+          "    Dim dbBackup As DAO.Database",
+          "    Dim rsRiesgos As DAO.Recordset",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+    });
   });
 
   // #731 — identifier-safety overrides and legacy auto-detection.

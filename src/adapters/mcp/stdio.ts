@@ -117,7 +117,7 @@ export async function startMcpStdioAdapter(
     undefined, // projectId
     // #731 — startup project's lint rule overrides (e.g. enabled:false
     // for identifier-safety on a legacy Spanish project). Surfaced into
-    // dysflow_lint_module so it honors opt-outs and triggers the legacy
+    // lint_module so it honors opt-outs and triggers the legacy
     // auto-detection downgrade.
     startupConfig?.lintRulesOverride ?? {},
     // PR-1 (issue #762, v1.20.0) — forward the resolved front-end `.accdb`

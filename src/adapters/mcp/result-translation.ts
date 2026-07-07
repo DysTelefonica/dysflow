@@ -153,10 +153,251 @@ export function translateCoreResultToMcpContent<TData>(
   }
 
   return {
-    content: [{ type: "text", text: JSON.stringify(result.data) }],
+    content: [{ type: "text", text: stringifyForMcp(result.data) }],
     isError: false,
     ok: true,
   };
+}
+
+/**
+ * F14 — Multi-AI friction log (2026-07-06) — make MCP tool results always
+ * JSON-stringifiable so consumers can `JSON.stringify(r)` without try/catch.
+ *
+ * Without this, the following inputs cause `translateCoreResultToMcpContent`
+ * to either throw or to silently lose information:
+ *
+ *   - `BigInt`               throws `TypeError: Do not know how to serialize a BigInt`
+ *   - circular object        throws `TypeError: Converting circular structure to JSON`
+ *   - `undefined` (top-level) `JSON.stringify(undefined)` returns `undefined`,
+ *                            which propagates as `content[0].text === undefined`
+ *                            and breaks the MCP wire-shape contract
+ *   - `Symbol` (top-level)   `JSON.stringify(Symbol('x'))` returns `undefined`
+ *   - `function` (top-level) `JSON.stringify(fn)` returns `undefined`
+ *   - nested function/symbol silently dropped from the encoded object
+ *   - `Error` instances      `.message` is non-enumerable on some hosts,
+ *                            so a plain stringify loses the message
+ *
+ * The contract this helper enforces: the returned string is a JSON document
+ * that `JSON.parse` and a second `JSON.stringify` will accept. The shape
+ * varies by case:
+ *
+ *   - Already-JSON-serializable object/array  → encoded as-is
+ *   - `null`                                  → encoded as `null`
+ *   - Top-level `function`                    → `{ raw: "...", type: "function" }`
+ *   - Top-level `Symbol`                      → `{ raw: "Symbol(...)", type: "symbol" }`
+ *   - Top-level `BigInt`                      → `{ raw: "<digits>", type: "bigint" }`
+ *   - Top-level `undefined`                   → `{ raw: "undefined", type: "undefined" }`
+ *   - Top-level `Error`                       → `{ message, raw: <stack+message>, type: "error", code?: <Error.code> }`
+ *   - Object with circular refs               → encoded with `__circular__`
+ *                                              placeholders for back-edges
+ *   - Object containing BigInt/function/etc. → deep-normalized so nested values
+ *                                              are never silently dropped
+ *
+ * The helper is pure and side-effect free. Exporting it from the module lets
+ * tests and other adapters reuse the same normalization rule.
+ */
+export function stringifyForMcp(value: unknown): string {
+  // Fast path: top-level primitives that JSON.stringify handles cleanly.
+  if (value === null) return "null";
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number") {
+    // Number.isFinite guards against NaN/Infinity, which JSON.stringify also
+    // emits as `null` — keep that behavior explicit so the contract holds.
+    return Number.isFinite(value) ? String(value) : "null";
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+
+  // Top-level BigInt — wrap explicitly; JSON.stringify throws here.
+  if (typeof value === "bigint") {
+    return JSON.stringify({ raw: value.toString(), type: "bigint" });
+  }
+
+  // Top-level Symbol — JSON.stringify returns `undefined` here, losing the
+  // value silently. Wrap so the consumer can grep for the symbol description.
+  if (typeof value === "symbol") {
+    return JSON.stringify({
+      raw: value.toString(),
+      type: "symbol",
+    });
+  }
+
+  // Top-level function — same silent-loss problem.
+  if (typeof value === "function") {
+    return JSON.stringify({
+      raw: describeFunction(value as (...args: unknown[]) => unknown),
+      type: "function",
+    });
+  }
+
+  // Top-level Error — extract .message / .stack / .code explicitly so the
+  // diagnostic context survives the MCP wire.
+  if (value instanceof Error) {
+    return JSON.stringify(serializeError(value));
+  }
+
+  // Top-level undefined — JSON.stringify returns `undefined` (which means
+  // `JSON.stringify(undefined)` IS `undefined`, breaking the MCP `text` shape).
+  if (value === undefined) {
+    return JSON.stringify({ raw: "undefined", type: "undefined" });
+  }
+
+  // Top-level object/array — try a normal stringify first. If it throws (the
+  // circular case) or if the result would be `undefined` (silently dropped),
+  // fall back to the deep normalizer which replaces cycles and converts
+  // non-serializable leaves into representative strings.
+  try {
+    if (!requiresDeepNormalization(value, new WeakSet())) {
+      const direct = JSON.stringify(value);
+      if (direct !== undefined) return direct;
+    }
+  } catch {
+    // Swallow — the deep normalizer handles circular references and
+    // BigInt/function children by emitting representative placeholders.
+  }
+
+  return JSON.stringify(normalizeForJsonStringify(value, new WeakSet()));
+}
+
+// ─── Deep normalizer (F14) ────────────────────────────────────────────────────
+
+const MAX_NORMALIZE_DEPTH = 64;
+
+/**
+ * Walk `value` and return a structurally identical shape whose leaves are
+ * JSON-safe:
+ *   - `BigInt`           → its `.toString()`
+ *   - `function`         → the literal string `"[function <name or 'anonymous'>]"`
+ *   - `Symbol`           → `Symbol(...).toString()`
+ *   - `Error`            → `{ message, stack?, name?, code? }` via `serializeError`
+ *   - circular back-edge → the literal string `"__circular__"`
+ *   - everything else     → passed through unchanged
+ *
+ * `seen` is the set of objects currently being walked; on re-entry the
+ * back-edge is replaced by `"__circular__"` instead of recursing forever.
+ */
+export function normalizeForJsonStringify(value: unknown, seen?: WeakSet<object>): unknown {
+  const tracker = seen ?? new WeakSet<object>();
+  return normalizeRecursive(value, tracker, 0);
+}
+
+function normalizeRecursive(value: unknown, seen: WeakSet<object>, depth: number): unknown {
+  if (depth > MAX_NORMALIZE_DEPTH) return "[max depth reached]";
+  if (value === null) return null;
+  if (value === undefined) return undefined;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  // Errors serialize to a plain object explicitly so .message/.code/.stack
+  // survive even when those fields are non-enumerable on the host.
+  if (value instanceof Error) return serializeError(value);
+
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "symbol") return value.toString();
+  if (typeof value === "function")
+    return describeFunction(value as (...args: unknown[]) => unknown);
+
+  if (typeof value !== "object") return null;
+
+  // From here on it's `object` (arrays included). Cycle guard fires BEFORE
+  // the recursive call so back-edges do not stack-overflow.
+  const obj = value as object;
+  if (seen.has(obj)) return "__circular__";
+  seen.add(obj);
+
+  try {
+    if (Array.isArray(obj)) {
+      return obj.map((item) => normalizeRecursive(item, seen, depth + 1));
+    }
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(obj as Record<string, unknown>)) {
+      try {
+        out[key] = normalizeRecursive((obj as Record<string, unknown>)[key], seen, depth + 1);
+      } catch {
+        // Defensive: any per-key failure converts to a string repr so the
+        // overall structure still serializes.
+        out[key] = "[unserializable]";
+      }
+    }
+    return out;
+  } finally {
+    // Allow the same object to appear in NON-cyclic sibling branches of the
+    // walk; only re-entry from a currently-open ancestor should be cut off.
+    seen.delete(obj);
+  }
+}
+
+function requiresDeepNormalization(value: unknown, seen: WeakSet<object>, depth = 0): boolean {
+  if (depth > MAX_NORMALIZE_DEPTH) return true;
+  if (value === null || value === undefined) return false;
+  const kind = typeof value;
+  if (kind === "bigint" || kind === "symbol" || kind === "function") return true;
+  if (kind !== "object") return false;
+  if (value instanceof Error) return true;
+
+  const obj = value as object;
+  if (seen.has(obj)) return true;
+  seen.add(obj);
+
+  try {
+    const children = Array.isArray(obj)
+      ? obj
+      : Object.keys(obj as Record<string, unknown>).map(
+          (key) => (obj as Record<string, unknown>)[key],
+        );
+    return children.some((child) => requiresDeepNormalization(child, seen, depth + 1));
+  } finally {
+    seen.delete(obj);
+  }
+}
+
+function describeFunction(fn: (...args: unknown[]) => unknown): string {
+  // Function.prototype.toString() returns the source — safe and observable
+  // for grep. Falls back to a synthesized description if the runtime cannot
+  // produce a source string.
+  let source = "";
+  try {
+    source = fn.toString();
+  } catch {
+    source = "[function <unstringifiable>]";
+  }
+  return source.length > 0 ? source : "[function <anonymous>]";
+}
+
+function serializeError(error: Error): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    type: "error",
+    name: error.name,
+    message: error.message,
+    // `raw` mirrors the F14 envelope contract: a single string consumers can
+    // grep when they do not want to branch on `type`. Includes the stack
+    // when available so a downstream log scraper can extract frames.
+    raw: typeof error.stack === "string" ? error.stack : `${error.name}: ${error.message}`,
+  };
+  // `.code` is a non-standard but widely-used extension (Node sets it on
+  // many built-in errors; DysflowError attached it explicitly). Capture it
+  // when present.
+  const maybeCode = (error as Error & { code?: unknown }).code;
+  if (typeof maybeCode === "string" || typeof maybeCode === "number") {
+    out.code = maybeCode;
+  }
+  if (typeof error.stack === "string") {
+    out.stack = error.stack;
+  }
+  // Some adapters stuff extras (e.g. DysflowError.attachDetails) onto the
+  // instance; capture them too so the consumer can see what came back.
+  const extras: Record<string, unknown> = {};
+  for (const key of Object.keys(error as unknown as Record<string, unknown>)) {
+    if (key === "message" || key === "stack" || key === "name") continue;
+    try {
+      extras[key] = (error as unknown as Record<string, unknown>)[key];
+    } catch {
+      // ignore — the consumer still has the canonical fields.
+    }
+  }
+  if (Object.keys(extras).length > 0) {
+    out.details = extras;
+  }
+  return out;
 }
 
 /**

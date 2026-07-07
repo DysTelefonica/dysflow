@@ -5,6 +5,10 @@ export const VBA_MODULE_LINT_RULES = [
   "identifier-safety",
   "declaration-order",
   "arg-type-match",
+  // F22 (2026-07-06) — flag identifiers that shadow VBA / Access / DAO globals
+  // and reserved words. The orchestrator self-applies this rule (and the
+  // `forbidden-name` MCP `lint_module` rule surfaces it to consumers).
+  "forbidden-name",
 ] as const;
 
 export type VbaModuleLintRule = (typeof VBA_MODULE_LINT_RULES)[number];
@@ -142,6 +146,157 @@ const NUMERIC_VBA_TYPES = new Set([
   "decimal",
 ]);
 
+/**
+ * F22 (2026-07-06) — identifiers that shadow VBA / Access / DAO / ADO
+ * / Scripting globals, intrinsic functions, or common reserved words.
+ *
+ * Declaring one of these as a local variable, parameter, constant, type,
+ * enum, procedure, or property produces the misleading `Calificador no
+ * válido` / `Invalid qualifier` error class — VBA still parses the
+ * reference, the parser binds it to the shadowed global, and the
+ * downstream member access fails at compile time with a line that does
+ * not point at the source of the shadow.
+ *
+ * The list is case-insensitive at the match site; we normalize to
+ * lowercase before lookup so `Err`, `err` and `ERR` all trigger the same
+ * diagnostic.
+ */
+const FORBIDDEN_NAMES: ReadonlySet<string> = new Set([
+  // Err object
+  "err",
+  "error",
+  // Date / time
+  "date",
+  "time",
+  "now",
+  // String intrinsics (functions, not just types)
+  "left",
+  "right",
+  "mid",
+  "trim",
+  "len",
+  "replace",
+  "format",
+  // Containers
+  "array",
+  "collection",
+  "dictionary",
+  "object",
+  // Primitive types
+  "string",
+  "integer",
+  "long",
+  "boolean",
+  "double",
+  "currency",
+  "variant",
+  // Access object model — these are GLOBAL identifiers at module scope
+  "form",
+  "report",
+  "control",
+  "recordset",
+  "database",
+  "field",
+  "fields",
+  "tabledef",
+  "querydef",
+  "docmd",
+  "currentdb",
+  "application",
+  "screen",
+  "forms",
+  "reports",
+  "me",
+  "parent",
+  // Keywords / pseudo-values
+  "new",
+  "nothing",
+  "null",
+  "empty",
+  "true",
+  "false",
+  // Common member-like identifiers
+  "name",
+  "type",
+]);
+
+/**
+ * F22 — recommended convention per forbidden name. Sourced from the
+ * user-authored 2026-07-06 rule (orchestrator / multi-AI friction log).
+ * The first element of the joined recommendation is the canonical pick
+ * for that category; additional entries are listed as alternatives.
+ */
+const FORBIDDEN_NAME_RECOMMENDATIONS: Readonly<Record<string, readonly string[]>> = {
+  err: ["errMsg", "mensajeError", "textoError"],
+  error: ["errMsg", "mensajeError", "textoError"],
+  date: ["fechaAlta", "fechaInicio", "fechaFin", "fechaActual"],
+  time: ["horaAlta", "horaInicio", "horaFin", "horaActual"],
+  now: ["fechaActual", "momentoActual"],
+  left: ["ladoIzquierdo", "posicionIzquierda", "resto"],
+  right: ["ladoDerecho", "posicionDerecha"],
+  mid: ["subcadena", "valorCentral", "tramoMedio"],
+  trim: ["textoLimpio", "valorRecortado"],
+  len: ["longitud", "tamano"],
+  replace: ["reemplazarEn", "sustituirEn", "valorReemplazado"],
+  format: ["formatearA", "cadenaFormateada"],
+  array: ["arreglo", "vector", "listaValores"],
+  collection: ["col", "colItems", "colAnexos", "colResultados"],
+  dictionary: ["dict", "dictAnexos", "dictValores"],
+  object: ["objeto", "elemento", "entidad"],
+  string: ["texto", "cadena"],
+  integer: ["entero", "conteo", "numeroEntero"],
+  long: ["valor", "numero", "id", "contador"],
+  boolean: ["esValido", "tieneValor", "cumpleCondicion"],
+  double: ["valor", "importe", "porcentaje"],
+  currency: ["importe", "monto", "valorMoneda"],
+  variant: ["valor", "dato", "resultado"],
+  form: ["nombreFormulario", "frm"],
+  report: ["nombreReporte", "rpt"],
+  control: ["nombreControl", "ctrl"],
+  recordset: ["rs", "rsRiesgos", "rsAnexos"],
+  database: ["db"],
+  field: ["campo", "nombreCampo", "valorCampo"],
+  fields: ["campos", "listaCampos"],
+  tabledef: ["tdf", "definicionTabla"],
+  querydef: ["qdf", "definicionConsulta"],
+  docmd: ["comando", "accion"],
+  currentdb: ["base", "baseActual"],
+  application: ["app", "aplicacion"],
+  screen: ["pantalla"],
+  forms: ["formularios", "coleccionFormularios"],
+  reports: ["reportes", "coleccionReportes"],
+  me: ["moduloActual", "self"],
+  parent: ["elementoPadre", "parentForm", "contenedorPadre"],
+  new: ["esNuevo", "crearNuevo"],
+  nothing: ["vacio", "sinValor"],
+  null: ["vacio", "ausente", "sinValor"],
+  empty: ["vacio", "sinValor"],
+  true: ["esVerdadero", "activo"],
+  false: ["esFalso", "inactivo"],
+  name: ["nombre", "nombreUsuario", "nombreCampo", "nombreTabla"],
+  type: ["tipo", "tipoRegistro", "tipoRiesgo", "tipoAnexo"],
+};
+
+/**
+ * F22 — diagnostic code emitted by the `forbidden-name` rule. Consumers
+ * (CI gates, AI agents) can match on this code to distinguish shadowing
+ * findings from other identifier-safety problems.
+ */
+const FORBIDDEN_NAME_DIAGNOSTIC_CODE = "FORBIDDEN_NAME";
+
+function recommendFor(forbidden: string): readonly string[] {
+  return (
+    FORBIDDEN_NAME_RECOMMENDATIONS[forbidden] ?? [
+      "<choose a domain-specific name that does not shadow a VBA global>",
+    ]
+  );
+}
+
+function formatRecommendation(forbidden: string): string {
+  const picks = recommendFor(forbidden);
+  return `use one of: ${picks.join(", ")}`;
+}
+
 export function lintVbaModule(
   request: VbaModuleLintRequest,
 ): VbaModuleLintReport | Promise<VbaModuleLintReport> {
@@ -234,6 +389,11 @@ function finishLintReport(
     const found = lintArgumentTypeMatches(request.source, lines);
     flatDiagnostics.push(...found);
     byRule["arg-type-match"]?.push(...found);
+  }
+  if (rules.includes("forbidden-name")) {
+    const found = lintForbiddenName(request.source, lines);
+    flatDiagnostics.push(...found);
+    byRule["forbidden-name"]?.push(...found);
   }
 
   // #731 — `LINT_SUPPRESSED` is an audit marker, not a real finding; it
@@ -457,6 +617,190 @@ function lintArgumentTypeMatches(
   }
 
   return diagnostics;
+}
+
+/**
+ * F22 (2026-07-06) — flag every identifier declared in the module whose
+ * name shadows a VBA / Access / DAO global, intrinsic function, or
+ * reserved word. The check covers:
+ *
+ * - module-level variables: `Dim X`, `Private X`, `Public X`,
+ *   `Static X`, `Const X`, `Type X`, `Enum X`, `Declare ... Function X`
+ * - procedure names: `Sub X`, `Function X`, `Property Get/Let/Set X`
+ * - parameter names inside any procedure header
+ * - `With ... End With` is NOT a declaration, so it is excluded
+ *
+ * The match is case-insensitive (we normalize to lowercase) and only
+ * fires on the EXACT forbidden identifier — `ErrorMessage` does not
+ * trigger the `Error` rule, `dimErr` does not trigger the `Dim` rule.
+ *
+ * Severity is `error`: a shadowed identifier compiles in some code paths
+ * and breaks in others with a misleading `Calificador no válido` error.
+ */
+function lintForbiddenName(_source: string, lines: readonly string[]): VbaModuleLintDiagnostic[] {
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+  const reported = new Set<string>();
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const lineNumber = i + 1;
+    const raw = lines[i] ?? "";
+    const code = stripStringsAndComments(raw);
+
+    for (const { kind, name, column } of collectForbiddenNameMatches(code)) {
+      if (!FORBIDDEN_NAMES.has(name.toLowerCase())) continue;
+      const dedupeKey = `${lineNumber}:${column}:${name.toLowerCase()}`;
+      if (reported.has(dedupeKey)) continue;
+      reported.add(dedupeKey);
+
+      diagnostics.push({
+        rule: "forbidden-name",
+        line: lineNumber,
+        severity: "error",
+        code: FORBIDDEN_NAME_DIAGNOSTIC_CODE,
+        message: `Identifier '${name}' shadows VBA global '${name.toLowerCase()}' (${kind}); ${formatRecommendation(name.toLowerCase())}.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+interface ForbiddenNameMatch {
+  kind: "variable" | "parameter" | "procedure" | "constant" | "type" | "enum";
+  name: string;
+  /** 1-based column where the offending identifier starts. */
+  column: number;
+}
+
+/**
+ * F22 helper — extract every declaration / parameter / procedure name
+ * from a single stripped line. The line is assumed to be already free
+ * of strings and comments (`stripStringsAndComments`).
+ */
+function collectForbiddenNameMatches(code: string): ForbiddenNameMatch[] {
+  const matches: ForbiddenNameMatch[] = [];
+  if (code.trim().length === 0) return matches;
+
+  // Procedure header: `Sub Foo`, `Function Foo`, `Property Get Foo`, etc.
+  const procedureHeader = code.match(
+    /^\s*(?:Public|Private|Friend|Static)?\s*(?:Sub|Function|Property(?:\s+(?:Get|Let|Set))?)\s+([A-Za-z_][A-Za-z0-9_]*)/i,
+  );
+  if (procedureHeader?.[1] !== undefined) {
+    matches.push({
+      kind: "procedure",
+      name: procedureHeader[1],
+      column: 1 + (procedureHeader.index ?? 0),
+    });
+  }
+
+  // Module-level constant: `Const X = ...`
+  pushMatch(
+    matches,
+    code,
+    /^\s*(?:Public|Private|Friend|Global)\s+Const\s+([A-Za-z_][A-Za-z0-9_]*)/i,
+    "constant",
+  );
+  pushMatch(matches, code, /^\s*Const\s+([A-Za-z_][A-Za-z0-9_]*)/i, "constant");
+
+  // Module-level type: `Type X ... End Type`
+  pushMatch(matches, code, /^\s*(?:Public|Private)\s+Type\s+([A-Za-z_][A-Za-z0-9_]*)/i, "type");
+  pushMatch(matches, code, /^\s*Type\s+([A-Za-z_][A-Za-z0-9_]*)/i, "type");
+
+  // Module-level enum: `Enum X ... End Enum`
+  pushMatch(matches, code, /^\s*(?:Public|Private)\s+Enum\s+([A-Za-z_][A-Za-z0-9_]*)/i, "enum");
+  pushMatch(matches, code, /^\s*Enum\s+([A-Za-z_][A-Za-z0-9_]*)/i, "enum");
+
+  // Declare PtrSafe / non-PtrSafe: `Declare PtrSafe Function X Lib ...`
+  pushMatch(
+    matches,
+    code,
+    /^\s*(?:Public|Private)\s+Declare\s+(?:PtrSafe\s+)?(?:Sub|Function)\s+([A-Za-z_][A-Za-z0-9_]*)/i,
+    "procedure",
+  );
+
+  // Variable declarations at module scope. The pattern is permissive —
+  // any line that starts with one of the recognized prefixes and names
+  // an identifier triggers the check, because VBA is lenient about the
+  // order of `Dim`/`Private`/`Public`/etc. and we want to be safe.
+  // We exclude lines that already matched a procedure header above.
+  const isProcedureHeader = procedureHeader !== null;
+  if (!isProcedureHeader) {
+    pushMatch(
+      matches,
+      code,
+      /^\s*(?:Public|Private|Friend|Global|Static)\s+(?!Sub\b|Function\b|Property\b|Const\b|Declare\b|Type\b|Enum\b)([A-Za-z_][A-Za-z0-9_]*)/i,
+      "variable",
+    );
+    pushMatch(matches, code, /^\s*Dim\s+([A-Za-z_][A-Za-z0-9_]*)/i, "variable");
+  }
+
+  // Parameter list — only when a procedure header is present on this
+  // line. We capture the full parenthesized expression and walk the
+  // comma-separated parameter specs.
+  const parenMatch = code.match(
+    /^\s*(?:Public|Private|Friend|Static)?\s*(?:Sub|Function|Property(?:\s+(?:Get|Let|Set))?)\s+[A-Za-z_][A-Za-z0-9_]*\s*\(([^)]*)\)/i,
+  );
+  if (parenMatch?.[1] !== undefined) {
+    const params = parenMatch[1];
+    const paramsOffset =
+      (parenMatch.index ?? 0) + code.slice(parenMatch.index ?? 0).indexOf("(") + 1;
+    for (const spec of splitTopLevelCommas(params)) {
+      const name = firstParameterName(spec);
+      if (name === undefined) continue;
+      const columnInLine = paramsOffset + params.indexOf(name);
+      matches.push({
+        kind: "parameter",
+        name,
+        column: Math.max(1, columnInLine + 1),
+      });
+    }
+  }
+
+  return matches;
+}
+
+function pushMatch(
+  matches: ForbiddenNameMatch[],
+  code: string,
+  pattern: RegExp,
+  kind: ForbiddenNameMatch["kind"],
+): void {
+  const match = code.match(pattern);
+  if (match?.[1] === undefined) return;
+  matches.push({ kind, name: match[1], column: 1 + (match.index ?? 0) });
+}
+
+function firstParameterName(spec: string): string | undefined {
+  // Strip Optional, ByVal, ByRef, ParamArray — order in VBA is
+  // (Optional) (ByVal|ByRef) (ParamArray) name [( )] (As Type).
+  // We only need the identifier that follows those modifiers.
+  const cleaned = spec
+    .replace(/\bOptional\b/gi, " ")
+    .replace(/\bByVal\b/gi, " ")
+    .replace(/\bByRef\b/gi, " ")
+    .replace(/\bParamArray\b/gi, " ")
+    .trim();
+  const match = cleaned.match(/^([A-Za-z_][A-Za-z0-9_]*)/);
+  return match?.[1];
+}
+
+function splitTopLevelCommas(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let parenDepth = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i] ?? "";
+    if (char === "(") parenDepth += 1;
+    if (char === ")" && parenDepth > 0) parenDepth -= 1;
+    if (char === "," && parenDepth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (current.length > 0 || value.length > 0) parts.push(current);
+  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
 function buildProcedureSignatures(

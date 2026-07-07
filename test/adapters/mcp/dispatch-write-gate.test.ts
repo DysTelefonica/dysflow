@@ -60,11 +60,11 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect([...filesystemWriters].sort()).toEqual(
       [
         "catalog_add_control",
-        "dysflow_create_form_from_template",
-        "dysflow_form_add_control",
-        "dysflow_form_move_control",
-        "dysflow_form_rename_control",
-        "dysflow_form_deserialize",
+        "create_form_from_template",
+        "form_add_control",
+        "form_move_control",
+        "form_rename_control",
+        "form_deserialize",
         "export_all",
         "export_modules",
         "fix_encoding",
@@ -241,25 +241,25 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
 
   // Minimal valid input per tool; only tools with `required` fields need an override.
   const minimalInput: Record<string, Record<string, unknown>> = {
-    dysflow_form_add_control: {
+    form_add_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       controlName: "cmd",
       controlType: "CommandButton",
       apply: true,
     },
-    dysflow_form_move_control: {
+    form_move_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       controlName: "cmd",
       left: 0,
       apply: true,
     },
-    dysflow_form_rename_control: {
+    form_rename_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       controlName: "cmd",
       newName: "cmdSave",
       apply: true,
     },
-    dysflow_form_deserialize: {
+    form_deserialize: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       ir: {
         name: "Form_Customer",
@@ -270,10 +270,10 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       },
       apply: true,
     },
-    // slice 5 (issue #618) — minimal apply input for dysflow_create_form_from_template.
+    // slice 5 (issue #618) — minimal apply input for create_form_from_template.
     // The tool requires sourceForm/targetForm/tokenMap; apply:true forces isDryRun=false
     // so the write-gate must fire even when writes are disabled.
-    dysflow_create_form_from_template: {
+    create_form_from_template: {
       sourceForm: "Form_Customer",
       targetForm: "Form_CustomerClone",
       tokenMap: { FormName: "FormCustomerClone" },
@@ -294,11 +294,11 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "fix_encoding",
         "import_all",
         "import_modules",
-        "dysflow_create_form_from_template",
-        "dysflow_form_add_control",
-        "dysflow_form_move_control",
-        "dysflow_form_rename_control",
-        "dysflow_form_deserialize",
+        "create_form_from_template",
+        "form_add_control",
+        "form_move_control",
+        "form_rename_control",
+        "form_deserialize",
         "vba_inline_execution",
       ].sort(),
     );

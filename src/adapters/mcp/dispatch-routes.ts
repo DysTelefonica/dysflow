@@ -63,18 +63,18 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   // .accdb, spawns no Access process, and writes nothing. Mutations are
   // explicitly false so the write-gate never fires for this tool.
   lint_form_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  dysflow_form_add_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
-  dysflow_form_move_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
-  dysflow_form_rename_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  form_add_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  form_move_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  form_rename_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   // slice 3 — serialize (read-only) + deserialize (write-gated with LoadFromText gate).
   // Deserialize reuses the slice-4 import_modules gate via vbaSyncToolService so the
   // binary is the single source of truth for the apply check (#616).
-  dysflow_form_serialize: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  dysflow_form_deserialize: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  form_serialize: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  form_deserialize: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
   // slice 5 (#618) — clone a form from a template, apply `{{Token}}` placeholders, write
   // the cloned form to a target path, route through the import_modules LoadFromText gate.
   // Default dry-run is the safe semantic; a real binary mutation requires apply:true.
-  dysflow_create_form_from_template: {
+  create_form_from_template: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,

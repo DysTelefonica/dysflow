@@ -63,7 +63,7 @@ export function buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot }) {
     sqlScript: join(root, "script.sql"),
     formSpec: join(root, "form-spec.json"),
     queriesExportPath: join(root, "exports", "queries.json"),
-    catalogPath: join(root, "catalog.json"),
+    catalogPath: join(root, "src", "catalog.json"),
   };
 
   return {

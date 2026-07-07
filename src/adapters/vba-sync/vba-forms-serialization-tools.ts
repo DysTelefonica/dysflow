@@ -18,7 +18,7 @@ import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
-// Slice 3 (#616) — opaque metadata keys reported by dysflow_form_serialize
+// Slice 3 (#616) — opaque metadata keys reported by form_serialize
 // as the "preserved" set the round-trip is contracted to keep byte-equal.
 // These are the keys whose values are opaque blobs (Begin…End blocks) that
 // the serializer must reproduce verbatim for byte-equal round-trips.
@@ -49,7 +49,7 @@ export async function serializeForm(
     return failureResult(
       createDysflowError(
         "FORM_SPEC_MISSING",
-        "dysflow_form_serialize requires sourcePath (path to the .form.txt file).",
+        "form_serialize requires sourcePath (path to the .form.txt file).",
       ),
     );
   }
@@ -137,7 +137,7 @@ export async function deserializeForm(args: {
     return failureResult(
       createDysflowError(
         "FORM_SPEC_MISSING",
-        "dysflow_form_deserialize requires sourcePath (path to the .form.txt file).",
+        "form_deserialize requires sourcePath (path to the .form.txt file).",
       ),
     );
   }
@@ -147,14 +147,14 @@ export async function deserializeForm(args: {
     return failureResult(
       createDysflowError(
         "FORM_SPEC_MISSING",
-        "dysflow_form_deserialize requires an `ir` parameter (FormIR object).",
+        "form_deserialize requires an `ir` parameter (FormIR object).",
       ),
     );
   }
 
   const source = await resolveManagedMutationSource({
     orchestrator,
-    toolName: "dysflow_form_deserialize",
+    toolName: "form_deserialize",
     params,
     rawSourcePath: sourcePath,
   });

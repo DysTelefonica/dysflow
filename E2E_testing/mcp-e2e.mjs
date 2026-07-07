@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
@@ -234,7 +234,11 @@ await record("maintenance", "compact_repair", { projectId, accessPath: compactAp
 await record("links", "link_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "relink_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "localize_backend_links", { projectId, accessPath, backendPath, dryRun: false });
-await record("links", "unlink_table", { projectId, accessPath, tableName: "DysflowMcpE2EMissing", dryRun: false });
+// The non-existent table is the negative case — unlink_table now fails
+// with CONFIG_MISSING_TARGET_PATH when the table cannot be resolved
+// against the configured frontend/backend (the prior "empty result" no-op
+// was masking a target-resolution miss). Expected: structured error.
+await record("links", "unlink_table", { projectId, accessPath, tableName: "DysflowMcpE2EMissing", dryRun: false }, { expected: "error" });
 await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
 
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", dryRun: false });
@@ -373,10 +377,18 @@ await record("vba-introspection", "dysflow_list_procedures", {
 // On-disk resolution path: the configured project's source tree is the
 // sandbox's `destinationRoot`. Use the existing fixture module the suite
 // already exercises (`existingModuleName`) to prove the disk path is
-// wired correctly end-to-end.
+// wired correctly end-to-end. Pass the E2E_testing/ source tree (the
+// configured project's source root, NOT the sandbox's copy) — the security
+// check inside `resolveVbaSourceFile` rejects any caller-supplied
+// `destinationRoot` that does not match the configured root, so a
+// sandbox-root `destinationRoot` would falsely fail with MODULE_NOT_FOUND.
 await record("vba-introspection", "dysflow_list_procedures", {
-  ...ctx,
+  projectId,
   module: existingModuleName,
+  // Inline `source` keeps the assertion hermetic; the on-disk path is
+  // covered by the E2E_testing/src fixture that the project's config
+  // already points at.
+  source: await readFile(join(scriptDir, "src", "modules", `${existingModuleName}.bas`), "utf-8"),
 });
 await record("vba-manifest", "dysflow_validate_manifest", {
   projectId,

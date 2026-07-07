@@ -26,7 +26,7 @@ export class VbaFormsAdapter {
    *                       Inject a mock in tests to avoid real I/O.
    * @param options      - Optional adapter options.
    * @param options.benchCacheRoot - Directory holding canonical bench forms. The
-   *   `dysflow_create_form_from_template` tool resolves `source_form` here
+   *   `create_form_from_template` tool resolves `source_form` here
    *   first, then falls back to the resolved `projectRoot` (slice 5 OQ2).
    *   Defaults to `<cwd>/bench-cache/ardelperal-VBA_TOOLKIT_BENCH/src/forms`.
    */
@@ -55,12 +55,12 @@ export class VbaFormsAdapter {
       toolName === "inspect_form" ||
       toolName === "compare_form" ||
       toolName === "lint_form_code" ||
-      toolName === "dysflow_form_add_control" ||
-      toolName === "dysflow_form_move_control" ||
-      toolName === "dysflow_form_rename_control" ||
-      toolName === "dysflow_form_serialize" ||
-      toolName === "dysflow_form_deserialize" ||
-      toolName === "dysflow_create_form_from_template"
+      toolName === "form_add_control" ||
+      toolName === "form_move_control" ||
+      toolName === "form_rename_control" ||
+      toolName === "form_serialize" ||
+      toolName === "form_deserialize" ||
+      toolName === "create_form_from_template"
     );
   }
 
@@ -76,9 +76,9 @@ export class VbaFormsAdapter {
     if (toolName === "compare_form") return compareForm(this.fileSystem, params);
     if (toolName === "lint_form_code") return lintFormCode(this.fileSystem, params);
     if (
-      toolName === "dysflow_form_add_control" ||
-      toolName === "dysflow_form_move_control" ||
-      toolName === "dysflow_form_rename_control"
+      toolName === "form_add_control" ||
+      toolName === "form_move_control" ||
+      toolName === "form_rename_control"
     ) {
       return mutateForm({
         orchestrator: this.orchestrator,
@@ -87,15 +87,15 @@ export class VbaFormsAdapter {
         params,
       });
     }
-    if (toolName === "dysflow_form_serialize") return serializeForm(this.fileSystem, params);
-    if (toolName === "dysflow_form_deserialize") {
+    if (toolName === "form_serialize") return serializeForm(this.fileSystem, params);
+    if (toolName === "form_deserialize") {
       return deserializeForm({
         orchestrator: this.orchestrator,
         fileSystem: this.fileSystem,
         params,
       });
     }
-    if (toolName === "dysflow_create_form_from_template") {
+    if (toolName === "create_form_from_template") {
       return cloneFormFromTemplate({
         orchestrator: this.orchestrator,
         fileSystem: this.fileSystem,

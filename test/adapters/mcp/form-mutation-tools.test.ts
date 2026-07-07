@@ -46,10 +46,10 @@ function toolByName(name: string, writesEnabled = false) {
 
 describe("public form mutation MCP tools", () => {
   const names = [
-    "dysflow_form_add_control",
-    "dysflow_form_move_control",
-    "dysflow_form_rename_control",
-    "dysflow_create_form_from_template",
+    "form_add_control",
+    "form_move_control",
+    "form_rename_control",
+    "create_form_from_template",
   ] as const;
 
   it("registers all mutation tool names as public MCP tools", () => {
@@ -64,7 +64,7 @@ describe("public form mutation MCP tools", () => {
   });
 
   it("defines schemas with sourcePath, dryRun/apply, and mutation-specific fields", () => {
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_form_add_control.properties).toEqual(
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_add_control.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
@@ -73,7 +73,7 @@ describe("public form mutation MCP tools", () => {
         apply: expect.any(Object),
       }),
     );
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_form_move_control.properties).toEqual(
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_move_control.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
@@ -83,7 +83,7 @@ describe("public form mutation MCP tools", () => {
         apply: expect.any(Object),
       }),
     );
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_form_rename_control.properties).toEqual(
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_rename_control.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
@@ -92,12 +92,12 @@ describe("public form mutation MCP tools", () => {
         apply: expect.any(Object),
       }),
     );
-    // slice 5 (issue #618) — `dysflow_create_form_from_template` requires
+    // slice 5 (issue #618) — `create_form_from_template` requires
     // sourceForm + targetForm + tokenMap and supports dryRun/apply,
     // missingTokenPolicy, overwrite. Source target must NOT carry a `.form.txt`
     // extension because the adapter derives it from the name (mirroring slice-1
     // FormIR naming).
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_create_form_from_template.properties).toEqual(
+    expect(VBA_SYNC_TOOL_SCHEMAS.create_form_from_template.properties).toEqual(
       expect.objectContaining({
         sourceForm: expect.any(Object),
         targetForm: expect.any(Object),
@@ -111,7 +111,7 @@ describe("public form mutation MCP tools", () => {
   });
 
   it("allows dry-run mutation calls when writes are disabled and routes to the VBA sync service", async () => {
-    const { tool, vbaSyncToolService } = toolByName("dysflow_form_add_control", false);
+    const { tool, vbaSyncToolService } = toolByName("form_add_control", false);
 
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
@@ -124,14 +124,14 @@ describe("public form mutation MCP tools", () => {
     expect(result.isError).toBe(false);
     expect(vbaSyncToolService.requests).toEqual([
       {
-        toolName: "dysflow_form_add_control",
+        toolName: "form_add_control",
         input: expect.objectContaining({ controlName: "cmdSave", dryRun: true }),
       },
     ]);
   });
 
   it("write-gates apply mutation calls when writes are disabled", async () => {
-    const { tool, vbaSyncToolService } = toolByName("dysflow_form_move_control", false);
+    const { tool, vbaSyncToolService } = toolByName("form_move_control", false);
 
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
@@ -145,8 +145,8 @@ describe("public form mutation MCP tools", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("dysflow_create_form_from_template — dry-run is allowed when writes are disabled; apply is write-gated", async () => {
-    const { tool, vbaSyncToolService } = toolByName("dysflow_create_form_from_template", false);
+  it("create_form_from_template — dry-run is allowed when writes are disabled; apply is write-gated", async () => {
+    const { tool, vbaSyncToolService } = toolByName("create_form_from_template", false);
 
     // Dry-run should pass through to the VBA sync service (default dry-run is
     // the safe semantic; we never accept a binary-mutating call with writes
@@ -160,7 +160,7 @@ describe("public form mutation MCP tools", () => {
 
     expect(dryRunResult.isError).toBe(false);
     expect(vbaSyncToolService.requests.slice(-1)[0]).toMatchObject({
-      toolName: "dysflow_create_form_from_template",
+      toolName: "create_form_from_template",
       input: expect.objectContaining({ dryRun: true }),
     });
 

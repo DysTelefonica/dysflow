@@ -1,6 +1,111 @@
 # Changelog
 
-## [Unreleased]
+## [v1.21.0] - 2026-07-07
+
+### Fixed (multi-AI friction log F11, F13, F14)
+
+Four source commits ported in this batch — one per logical friction —
+to keep CHANGELOG.md edits from conflicting with each other (every
+commit on the tactical branch `fricciones-dysflow-F11-F23-2026-07-06`
+wanted to append a `[Unreleased]` block, which made a sequential
+cherry-pick fragile). The consolidated entry below summarizes all four
+commits in the order they were ported onto `fricciones-port-2026-07-07`.
+
+- **F11 — E2E sandbox source-path stabilization** (issue #766, commit
+  `37649fab`). The MCP E2E battery's `dysflow_list_procedures` disk-path
+  probe was passing the sandbox's own `destinationRoot` to
+  `resolveVbaSourceFile`, which rejected it because the security check
+  insists on the configured project's source root. Two surgical fixes
+  in `E2E_testing/_helpers/mcp-e2e-sandbox.mjs` (move `catalogPath`
+  under `src/`) and `E2E_testing/mcp-e2e.mjs` (inline `source` read
+  from `E2E_testing/src` for the configured project root, plus mark the
+  `unlink_table` negative case as `expected: "error"` to make the
+  structured failure explicit). No unit-test impact — these are E2E
+  harness paths only. `pnpm test:e2e:mcp` exercises the path end-to-end.
+
+- **F13 — deprecated `compile` / `rollbackOnCompileFail` silent strip
+  on `import_modules` / `import_all`** (issue #759 follow-up, commit
+  `70dd5665`). The `compile_vba` tool and the `compile` parameter on
+  `import_modules` / `import_all` were removed end-to-end in v1.19.0
+  (hard break — the runtime no longer compiles; the human compiles in
+  Access via Debug → Compile). Existing orchestrator briefs written
+  before v1.19.0 still hard-code `compile: false` / `compile: true`.
+  Without the strip those briefs receive `MCP_INPUT_INVALID: compile is
+  not allowed` from the schema layer. The dispatch factory now silently
+  strips the deprecated keys BEFORE schema validation, so:
+  * The schema layer (`validateInput`) keeps rejecting `compile` via
+    `additionalProperties: false`. The v1.19.0 contract pinned by
+    `test/adapters/mcp/schemas/vba-sync-schemas.test.ts` is unchanged.
+  * A legacy brief passing `compile: true` or `rollbackOnCompileFail`
+    does NOT receive the rejection. The call succeeds.
+  * The forwarded payload to `vbaSyncToolService.execute` does NOT
+    carry `compile` / `rollbackOnCompileFail` — the strip is real, not a
+    bypass that leaves the deprecated keys downstream.
+  A `console.warn` surfaces the `compile: true` case (the one that used
+  to trigger `compile_vba`). 7 new atoms in
+  `test/adapters/mcp/import-modules-compile-flag.test.ts` lock the
+  contract.
+
+- **F14 — JSON-stringifiable MCP tool result normalization** (commits
+  `5ce73eb5` and `9f6ddcbe`, 16 + 2 atoms). When a dysflow MCP tool
+  returns a value that `JSON.stringify` cannot serialize (a `Symbol`,
+  a function, a `BigInt`, a top-level `undefined`, an `Error` with
+  non-enumerable `message`, or an object with a circular reference),
+  the consumer previously got either a thrown `TypeError`
+  (`Converting circular structure to JSON` / `Do not know how to
+  serialize a BigInt`) or silently-dropped information
+  (`JSON.stringify({fn: () => {}})` returns `{}`). The new
+  `stringifyForMcp` helper routes the value through the appropriate
+  serializer and guarantees that `content[0].text` is ALWAYS a JSON
+  document that `JSON.parse` and a second `JSON.stringify` will accept
+  (the F14 contract). The helper:
+  * top-level primitives (null/string/number/boolean) → fast path
+  * `Symbol` / `function` / `BigInt` / `undefined` top-level → envelope
+    `{ raw: <serializable string>, type: <kind> }`
+  * `Error` instance → envelope exposing `.message`, `.stack`, `.name`,
+    `.code`, and any extra fields
+  * Object/array with circular refs → encoded with `__circular__`
+    placeholders for back-edges (via `normalizeForJsonStringify`)
+  * Nested `function` / `Symbol` / `BigInt` / `Error` are deep-walked
+    before the fast path so they are never silently dropped (F14
+    nested — commit `9f6ddcbe` adds the `requiresDeepNormalization`
+    guard).
+  18 atoms in
+  `test/adapters/mcp/result-translation-stringifiable.test.ts` lock the
+  contract.
+
+Implementation commits (in order, all on `fricciones-port-2026-07-07`):
+`37649fab` (F11), `70dd5665` (F13), `5ce73eb5` (F14 root),
+`9f6ddcbe` (F14 nested).
+
+### Added (multi-AI friction log F22)
+
+- **`lint_module` ships the `forbidden-name` rule** (Friction F22,
+  multi-AI friction log 2026-07-06). The new rule flags identifiers
+  declared in any VBA module that shadow VBA / Access / DAO / ADO /
+  Scripting globals or reserved words (`Err`, `Error`, `Date`, `Time`,
+  `Now`, `Name`, `Type`, `Left`, `Right`, `Mid`, `Trim`, `Len`, `Replace`,
+  `Format`, `Array`, `Collection`, `Dictionary`, `Object`, `String`,
+  `Integer`, `Long`, `Boolean`, `Double`, `Currency`, `Variant`, `Form`,
+  `Report`, `Control`, `Recordset`, `Database`, `Field`, `Fields`,
+  `TableDef`, `QueryDef`, `DoCmd`, `CurrentDb`, `Application`, `Screen`,
+  `Forms`, `Reports`, `Me`, `Parent`, `New`, `Nothing`, `Null`, `Empty`,
+  `True`, `False`). The check is case-insensitive (lowercase fold at
+  match time) and fires on every declaration form: `Dim`, `Const`, `Type`,
+  `Enum`, `Declare ... Function/Sub`, `Sub`, `Function`, `Property
+  Get/Let/Set`, and the parameter list of any procedure header. The
+  diagnostic carries the structured `code: "FORBIDDEN_NAME"`, a line
+  number, the violating identifier, and a per-name recommendation
+  aligned to the project's convention (`errMsg` / `fechaAlta` / `db` /
+  `rs` / `qdf` / etc.). Severity is `error`: a shadowed identifier
+  compiles in some code paths and breaks in others with the misleading
+  `Calificador no válido` / `Invalid qualifier` class of error, so the
+  rule belongs on the same gate as the other `lint_module` errors.
+  Wired into the `lint_module` MCP tool's `rules` array and
+  listed in `LINT_MODULE_SCHEMA`, `KNOWN_LINT_RULE_IDS`, and the
+  `LintRuleId` type so a project can opt out via
+  `.dysflow/project.json` `capabilities.lint.rules.forbidden-name =
+  { enabled: false }` for legacy codebases.
 
 ## [v1.20.1] - 2026-07-07
 
@@ -335,15 +440,15 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - **`dysflow_resolve_project` tool** (round-3 Item 1): new read-only MCP tool that resolves a project identity to its Access/backend paths via the `ProjectRegistry`. Pure helper `tryResolveProject()` — never opens Access, never mutates state. Registered in `MODERN_TOOL_NAMES` and `MCP_TOOL_CONTRACTS`. 8 dedicated tests. Tool count now 68.
 
 ## [v1.15.6] - 2026-07-06
-- Fix every write-class MCP tool contract (`MCP_TOOL_CONTRACTS`) to declare `dryRunDefault: true`, aligning the `dysflow_get_capabilities` snapshot with the AGENTS.md + CHANGELOG v1.14 promise of "standardized dryRun defaults". Previously `contractFromGeneratedRoute` set `dryRunDefault: route.kind !== "vba-sync"`, which silently returned `false` for every vba-sync route (`import_modules`, `import_all`, `compile_vba`, `delete_module`, `fix_encoding`, `vba_inline_execution`, `dysflow_form_*`, `dysflow_create_form_from_template`) and made the global `dryRunDefault` aggregate return `false` whenever any of those tools existed — directly contradicting the documented "plan first by default" stance. The dispatcher path already honors `dryRun: true` for these tools (`resolveIsDryRun` for query aliases, `buildMaintenanceRequest` for query-maintenance, `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync), so the contract surface now reflects reality. RED test covers the per-tool contracts and the global snapshot field; 504/504 MCP suite tests pass (#746).
-- Fix `dysflow_form_serialize` (`src/adapters/vba-sync/vba-forms-serialization-tools.ts:serializeForm`) to honor the round-trip guarantee documented on `serializeFormTxt` (`serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)`). Previously `byteEqual = serialized === originalText` compared against the RAW original so any CRLF fixture (the realistic Access SaveAsText encoding on Windows) reported `byteEqual: false` and `byteDiff > 0` even on a clean round-trip — the existing RED test `byteEqual is true for a clean round-trip fixture` had been failing on every CI run since the test landed in PR #741. `byteEqual` and `byteDiff` now both compare against `normalizeLineEndings(originalText)`: a clean round-trip reports `byteEqual:true, byteDiff:0` for either CRLF or LF originals, and real content mutations (BOM, whitespace, etc.) still flip them. 2347/2347 unit tests pass, including the previously-blank RED (#747).
+- Fix every write-class MCP tool contract (`MCP_TOOL_CONTRACTS`) to declare `dryRunDefault: true`, aligning the `dysflow_get_capabilities` snapshot with the AGENTS.md + CHANGELOG v1.14 promise of "standardized dryRun defaults". Previously `contractFromGeneratedRoute` set `dryRunDefault: route.kind !== "vba-sync"`, which silently returned `false` for every vba-sync route (`import_modules`, `import_all`, `compile_vba`, `delete_module`, `fix_encoding`, `vba_inline_execution`, `dysflow_form_*`, `create_form_from_template`) and made the global `dryRunDefault` aggregate return `false` whenever any of those tools existed — directly contradicting the documented "plan first by default" stance. The dispatcher path already honors `dryRun: true` for these tools (`resolveIsDryRun` for query aliases, `buildMaintenanceRequest` for query-maintenance, `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync), so the contract surface now reflects reality. RED test covers the per-tool contracts and the global snapshot field; 504/504 MCP suite tests pass (#746).
+- Fix `form_serialize` (`src/adapters/vba-sync/vba-forms-serialization-tools.ts:serializeForm`) to honor the round-trip guarantee documented on `serializeFormTxt` (`serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)`). Previously `byteEqual = serialized === originalText` compared against the RAW original so any CRLF fixture (the realistic Access SaveAsText encoding on Windows) reported `byteEqual: false` and `byteDiff > 0` even on a clean round-trip — the existing RED test `byteEqual is true for a clean round-trip fixture` had been failing on every CI run since the test landed in PR #741. `byteEqual` and `byteDiff` now both compare against `normalizeLineEndings(originalText)`: a clean round-trip reports `byteEqual:true, byteDiff:0` for either CRLF or LF originals, and real content mutations (BOM, whitespace, etc.) still flip them. 2347/2347 unit tests pass, including the previously-blank RED (#747).
 
 - Fix `Export-VbaModule` so form `.form.txt` files and their sibling `.cls` code-behind files always carry `Attribute VB_Name = "<FormName>"` as their canonical identity. Two pure helpers do the work: `Ensure-VbNameAttributeAtTop` (top-of-file guard for the .cls sibling emission that `$codeModule.Lines(1, N)` cannot include for document modules in Access) and `Ensure-CodeBehindFormVbName` (post-`SaveAsText` guard for the `.form.txt` `CodeBehindForm` block, which the binary may already be missing on legacy graphs that imported through older dysflow versions). Without either, Access invents `Form_TempSccObj1`, `Form_TempSccObj2`, ... on the next import and downstream `Me.<Control>` references fail with "No se encontró el método o el dato miembro". Both helpers are exposed via the existing `dysflow-vba-manager.Tests.ps1` AST harness (no COM required); 9 new Pester tests pin the contract (RED→GREEN) and 152 existing tests stay green (#743). Update to the stale "Attribute VB_Name + Option Explicit are stripped" comment in `dysflow-vba-manager-unicode-roundtrip.Tests.ps1` to reflect the new emission-side contract.
 
 ## [v1.15.4] - 2026-07-05
 
 - Fix `import_modules` with `compile:true` to roll back the partial write when the post-import project-wide compile fails. New `snapshotModulesForRollback` exports the binary state of every imported module via `export_modules` BEFORE the import; on a trustworthy compile failure (standard/class only, not the document-module unverified gate) the snapshot is re-imported with `importMode:"replace"`, leaving the `.accdb` in its pre-call state. Brand-new modules that did not exist pre-call are flagged `rollbackFailed: true, rollbackReason: "no_baseline_snapshot"` as a best-effort warning (NOT deleted). New `rollbackOnCompileFail: boolean` schema knob (default `true`); set to `false` to preserve the legacy partial-write behavior. Fixes the `import_modules` partial-write state (#732, #737).
-- Fix `dysflow_lint_module` `identifier-safety` rule to support per-rule overrides and legacy auto-detection. `capabilities.lint.rules.<RuleId>.enabled: false` emits a single `LINT_SUPPRESSED` info diagnostic and suppresses the rule entirely. When the operator's `src/` contains at least one non-ASCII identifier AND no `.dysflow-no-auto-allow` marker is present, `identifier-safety` non-ASCII findings downgrade from `error` to `warning` so legacy Spanish-language projects no longer fail the import_modules pre-import gate. The dot-underscore and reserved-word sub-rules stay at `error` severity in both paths. Fixes the `identifier-safety` false positives on legacy non-ASCII VBA identifiers (#731, #736).
+- Fix `lint_module` `identifier-safety` rule to support per-rule overrides and legacy auto-detection. `capabilities.lint.rules.<RuleId>.enabled: false` emits a single `LINT_SUPPRESSED` info diagnostic and suppresses the rule entirely. When the operator's `src/` contains at least one non-ASCII identifier AND no `.dysflow-no-auto-allow` marker is present, `identifier-safety` non-ASCII findings downgrade from `error` to `warning` so legacy Spanish-language projects no longer fail the import_modules pre-import gate. The dot-underscore and reserved-word sub-rules stay at `error` severity in both paths. Fixes the `identifier-safety` false positives on legacy non-ASCII VBA identifiers (#731, #736).
 - Fix `Open-CanonicalAccess` in `scripts/lib/dysflow-access-com.ps1` to force `Visible`/`UserControl` to `$false` BEFORE `OpenCurrentDatabase` so the Microsoft Access splash never paints. The previous post-spawn `try { Visible = $false } catch { Write-Debug }` rescue was both too late (the splash had already painted) and too silent (the failure was lost in `Write-Debug`). On failure, the canonical now throws a typed `DYSFLOW_HEADLESS_LAUNCH_FAILED` so the regression is loud. Fixes the `import_modules` visible-window violation on the write path (#730, #734).
 
 ## [v1.15.3] - 2026-07-05
@@ -550,12 +655,12 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 
 ## [v1.13.0] - 2026-07-01
 
-- chore(openspec): archive forms-ui-factory-slice-5-create-from-template - chore(sdd): apply-progress + tasks.md for slice 5 PR 3 ÔÇö 18/18 complete - feat(mcp): align parity registry + contract tests with new tool - docs(mcp): document dysflow_create_form_from_template in README - chore(sdd): apply-progress + tasks.md for slice 5 PR 2 - test(integration): bench round-trip with injected {{FormName}} and {{TitleCaption}} tokens - feat(adapter): bench-cache-first path resolution and restore-on-failure for create-from-template - feat(mcp): register dysflow_create_form_from_template with write gate - chore(sdd): apply-progress + tasks.md for slice 5 PR 1 - refactor(core): share preserved-metadata-key predicate with applyTokenMap - feat(core): add cloneFormFromTemplate + applyTokenMap (issue #618, slice 5 PR 1) - chore(openspec): scaffold slice 5 create-from-template change - feat(mcp-tools): expose serialize/deserialize for Forms IR (slice 3) - chore(openspec): archive forms-ui-factory-slice-4-mutation-primitives
+- chore(openspec): archive forms-ui-factory-slice-5-create-from-template - chore(sdd): apply-progress + tasks.md for slice 5 PR 3 ÔÇö 18/18 complete - feat(mcp): align parity registry + contract tests with new tool - docs(mcp): document create_form_from_template in README - chore(sdd): apply-progress + tasks.md for slice 5 PR 2 - test(integration): bench round-trip with injected {{FormName}} and {{TitleCaption}} tokens - feat(adapter): bench-cache-first path resolution and restore-on-failure for create-from-template - feat(mcp): register create_form_from_template with write gate - chore(sdd): apply-progress + tasks.md for slice 5 PR 1 - refactor(core): share preserved-metadata-key predicate with applyTokenMap - feat(core): add cloneFormFromTemplate + applyTokenMap (issue #618, slice 5 PR 1) - chore(openspec): scaffold slice 5 create-from-template change - feat(mcp-tools): expose serialize/deserialize for Forms IR (slice 3) - chore(openspec): archive forms-ui-factory-slice-4-mutation-primitives
 
 
 ## [v1.12.0] - 2026-06-30
 
-- feat(forms): add MCP form mutation primitives (`dysflow_form_add_control`, `dysflow_form_move_control`, `dysflow_form_rename_control`) with strict write gates and canonical LoadFromText verification on `Gestion_Riesgos.accdb`.
+- feat(forms): add MCP form mutation primitives (`form_add_control`, `form_move_control`, `form_rename_control`) with strict write gates and canonical LoadFromText verification on `Gestion_Riesgos.accdb`.
 - fix(forms): insert new controls into the section control container so Access `LoadFromText` accepts the mutated form source.
 - chore: ignore generated form mutation artifact.
 - docs: add MCP real-world examples reference.
