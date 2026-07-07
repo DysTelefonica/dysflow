@@ -1217,6 +1217,89 @@ function Get-CodeModuleSizeSnapshot {
     }
 }
 
+function Get-CodeModuleTextSnapshot {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$CodeModule
+    )
+
+    $count = 0
+    try { $count = [int]$CodeModule.CountOfLines } catch {
+        return [pscustomobject]@{
+            captured          = $false
+            ok                = $false
+            success           = $false
+            text              = $null
+            error             = [string]$_.Exception.Message
+            originalLineCount = $null
+        }
+    }
+    if ($count -le 0) {
+        return [pscustomobject]@{
+            captured          = $true
+            ok                = $true
+            success           = $true
+            text              = ""
+            error             = $null
+            originalLineCount = 0
+        }
+    }
+
+    try {
+        $lines = @($CodeModule.Lines(1, $count))
+        return [pscustomobject]@{
+            captured          = $true
+            ok                = $true
+            success           = $true
+            text              = [string]::Join("`r`n", $lines)
+            error             = $null
+            originalLineCount = $count
+        }
+    } catch {
+        return [pscustomobject]@{
+            captured          = $false
+            ok                = $false
+            success           = $false
+            text              = $null
+            error             = [string]$_.Exception.Message
+            originalLineCount = $count
+        }
+    }
+}
+
+function Restore-CodeModuleTextSnapshot {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$CodeModule,
+        [AllowNull()]$Snapshot
+    )
+
+    if ($null -eq $Snapshot -or -not $Snapshot.success) {
+        $snapshotError = $null
+        if ($null -ne $Snapshot -and $Snapshot.PSObject.Properties.Name -contains 'error') {
+            $snapshotError = $Snapshot.error
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$snapshotError)) {
+            $snapshotError = "CodeModule snapshot is unavailable; rollback was not attempted."
+        }
+        return [pscustomobject]@{ applied = $false; error = ("Rollback snapshot unavailable: {0}" -f [string]$snapshotError) }
+    }
+
+    $snapshotText = [string]$Snapshot.text
+
+    try {
+        $currentCount = 0
+        try { $currentCount = [int]$CodeModule.CountOfLines } catch { $currentCount = 0 }
+        if ($currentCount -gt 0) { $CodeModule.DeleteLines(1, $currentCount) }
+        if ($snapshotText.Length -gt 0) {
+            $CodeModule.AddFromString($snapshotText)
+        }
+        return [pscustomobject]@{ applied = $true; error = $null }
+    } catch {
+        return [pscustomobject]@{ applied = $false; error = [string]$_.Exception.Message }
+    }
+}
+
 function Normalize-VbaImportText {
     [CmdletBinding()]
     Param(
@@ -3007,21 +3090,37 @@ function Import-VbaModule {
                 throw ("DUPLICATE_OPTION_DIRECTIVE: source file '{0}' has duplicate Option Explicit/Compare directives; VBA will reject the import." -f $src)
             }
 
-            # issue #752 — opt-in verbose snapshot of the source file (snapshot
-            # before AddFromFile mutates anything). The script-scope flag is set
-            # by the top-level dispatcher when the caller passes -VerboseContract.
-            $sourceSnapshot = Get-SourceFileSizeSnapshot -Path $src
+            # issue #752 / F16 — compare the visible source that CodeModule can
+            # contain, not hidden Attribute metadata that AddFromString strips
+            # and the VBE does not expose through CountOfLines.
+            $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text ([System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252)))
+            $visibleSourceLines = Get-VbaTextLineCount -Text $codeTextForStringImport
+            $visibleSourceSnapshot = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
             $importVerboseSource = $null
             if ($script:ImportVerbose) {
-                $importVerboseSource = $sourceSnapshot
+                $importVerboseSource = $visibleSourceSnapshot
             }
 
             $count = $codeModule.CountOfLines
-            $shouldAllowStringFallback = Test-ShouldUseCodeModuleStringFallback -SourceLines ([int]$sourceSnapshot.lines) -ExistingLines ([int]$count)
+            $shouldAllowStringFallback = Test-ShouldUseCodeModuleStringFallback -SourceLines ([int]$visibleSourceLines) -ExistingLines ([int]$count)
+            $mutationStarted = $false
+            $fallbackUsed = $false
+            $fallbackReason = $null
+            $rollbackResult = $null
+            $script:ImportLastRollbackApplied = $false
+            $script:ImportLastRollbackError = $null
+            $script:ImportLastFallbackUsed = $false
+            $script:ImportLastFallbackReason = $null
+            $script:ImportLastRollbackAttempted = $false
+            $originalCodeModuleSnapshot = Get-CodeModuleTextSnapshot -CodeModule $codeModule
+            if (-not $originalCodeModuleSnapshot.success) {
+                throw ("VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED: could not capture original module text before import mutation: {0}" -f $originalCodeModuleSnapshot.error)
+            }
+            $mutationStarted = $true
             if ($count -gt 0) { $codeModule.DeleteLines(1, $count) }
             $script:ImportCurrentPhase = "import"
             $codeModule.AddFromFile($tmpAnsiSanitized)
-            $expectedImportedLines = [int]$sourceSnapshot.lines
+            $expectedImportedLines = [int]$visibleSourceLines
             $effectiveVerboseSource = $importVerboseSource
 
             # F16: keep the headless-safe DeleteLines + AddFromFile path as the
@@ -3032,10 +3131,10 @@ function Import-VbaModule {
             # visible instances.
             $afterAddFromFileLines = 0
             try { $afterAddFromFileLines = [int]$codeModule.CountOfLines } catch { $afterAddFromFileLines = 0 }
-            if ($shouldAllowStringFallback -and [int]$sourceSnapshot.lines -gt $afterAddFromFileLines) {
+            if ($shouldAllowStringFallback -and [int]$visibleSourceLines -gt $afterAddFromFileLines) {
+                $fallbackUsed = $true
+                $fallbackReason = "add_from_file_truncated"
                 if ($afterAddFromFileLines -gt 0) { $codeModule.DeleteLines(1, $afterAddFromFileLines) }
-                $codeText = [System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252))
-                $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text $codeText
                 $expectedImportedLines = Get-VbaTextLineCount -Text $codeTextForStringImport
                 if ($script:ImportVerbose) {
                     $effectiveVerboseSource = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
@@ -3102,6 +3201,8 @@ function Import-VbaModule {
                 Error                = $null
                 DurationMs           = 0
                 RollbackApplied      = $false
+                FallbackUsed         = [bool]$fallbackUsed
+                FallbackReason       = $fallbackReason
                 # issue #752 — opt-in verbose contract. The pscustomobject
                 # shape stays backward-compatible: when -VerboseContract is
                 # not requested, Verbose is $null and existing consumers ignore
@@ -3112,6 +3213,14 @@ function Import-VbaModule {
             }
         } catch {
             if ($_.Exception.Message -ne 'COMPONENTE_NO_ENCONTRADO') {
+                if ($mutationStarted) {
+                    $script:ImportLastRollbackAttempted = $true
+                    $rollbackResult = Restore-CodeModuleTextSnapshot -CodeModule $codeModule -Snapshot $originalCodeModuleSnapshot
+                    $script:ImportLastRollbackApplied = [bool]$rollbackResult.applied
+                    $script:ImportLastRollbackError = $rollbackResult.error
+                }
+                $script:ImportLastFallbackUsed = [bool]$fallbackUsed
+                $script:ImportLastFallbackReason = $fallbackReason
                 throw
             }
 
@@ -3135,6 +3244,8 @@ function Import-VbaModule {
                 Error                = $null
                 DurationMs           = 0
                 RollbackApplied      = $false
+                FallbackUsed         = $false
+                FallbackReason       = $null
             }
         }
 
@@ -4346,6 +4457,11 @@ function Invoke-ImportAction {
 
             $moduleStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
             $script:ImportCurrentPhase = "locate-source"
+            $script:ImportLastRollbackAttempted = $false
+            $script:ImportLastRollbackApplied = $false
+            $script:ImportLastRollbackError = $null
+            $script:ImportLastFallbackUsed = $false
+            $script:ImportLastFallbackReason = $null
             try {
                 $beforeExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
                 $importResult = Import-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -ImportMode $ImportMode
@@ -4361,6 +4477,11 @@ function Invoke-ImportAction {
                 # nothing failed. DurationMs is captured per-module (not just
                 # total). rollbackApplied is always false on success because
                 # no rollback is needed.
+                $resultFallbackUsed = [bool]($importResult -and $importResult.PSObject.Properties['FallbackUsed'] -and $importResult.FallbackUsed)
+                $resultFallbackReason = $null
+                if ($importResult -and $importResult.PSObject.Properties['FallbackReason']) {
+                    $resultFallbackReason = $importResult.FallbackReason
+                }
                 $lastResults[$name] = [pscustomobject]@{
                     module          = [string]$name
                     status          = "ok"
@@ -4368,6 +4489,8 @@ function Invoke-ImportAction {
                     error           = $null
                     durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
                     rollbackApplied = $false
+                    fallbackUsed    = $resultFallbackUsed
+                    fallbackReason  = $resultFallbackReason
                 }
                 if ($lastResults[$name].error) {
                     # Defensive: never let a non-null error slip into an ok entry.
@@ -4410,6 +4533,8 @@ function Invoke-ImportAction {
                     $errorCode = "DUPLICATE_OPTION_DIRECTIVE"
                 } elseif ($messageString.StartsWith("IMPORT_TRUNCATED:")) {
                     $errorCode = "IMPORT_TRUNCATED"
+                } elseif ($messageString.StartsWith("VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED:")) {
+                    $errorCode = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED"
                 } elseif (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
                     if (Test-IsAccessDatabaseLockedError -Message $messageString) {
                         $errorCode = "ACCESS_DATABASE_LOCKED"
@@ -4429,13 +4554,16 @@ function Invoke-ImportAction {
                         message = $messageString
                         machine = $machine
                         user    = $user
+                        rollbackAttempted = [bool]$script:ImportLastRollbackAttempted
+                        rollbackApplied   = [bool]$script:ImportLastRollbackApplied
+                        rollbackError     = $script:ImportLastRollbackError
+                        fallbackUsed      = [bool]$script:ImportLastFallbackUsed
+                        fallbackReason    = $script:ImportLastFallbackReason
                     }
                     durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
-                    # R2: rollback is a no-op for now. Modules imported earlier in
-                    # the same call remain imported. We surface this explicitly so
-                    # consumers can decide whether to retry, prune, or rollback
-                    # manually. Documented in the consumer-request commit message.
-                    rollbackApplied = $false
+                    rollbackApplied = [bool]$script:ImportLastRollbackApplied
+                    fallbackUsed    = [bool]$script:ImportLastFallbackUsed
+                    fallbackReason  = $script:ImportLastFallbackReason
                 }
             }
         }
@@ -4462,6 +4590,8 @@ function Invoke-ImportAction {
                 error           = $null
                 durationMs      = 0
                 rollbackApplied = $false
+                fallbackUsed    = $false
+                fallbackReason  = $null
             }) | Out-Null
         }
     }
