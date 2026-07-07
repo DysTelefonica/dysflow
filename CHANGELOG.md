@@ -1,33 +1,39 @@
 # Changelog
 
-## [Unreleased]
+## [v1.22.0] - 2026-07-07
 
 ### Changed (canonical MCP tool names — Opción A continuation, #777)
 
-Eleven legacy `dysflow_*` bespoke MCP tools are renamed to their
-canonical (unprefixed) names. This is a continuation of the Opción A
-reference commit (`58405eb2`, v1.21.0) which renamed 7 tools whose
-canonical names already existed in `alias-tools.ts`. This release
-finishes the rename for the remaining 11 bespoke tools; no back-compat
-alias is added — the canonical name is the only name advertised on the
-MCP `tools/list` projection.
+Thirteen legacy `dysflow_*` MCP tools are renamed to their canonical
+(unprefixed) names. This is a continuation of the Opción A reference
+commit (`58405eb2`, v1.21.0) which renamed 7 tools whose canonical
+names already existed in `alias-tools.ts`. v1.22.0 finishes the rename
+for the remaining 13 tools (11 from the original Opción A
+continuation + 2 read-only introspection tools that slipped through
+the alias-ownership check); no back-compat alias is added — the
+canonical name is the only name advertised on the MCP `tools/list`
+projection.
 
-| # | Legacy (REMOVED)         | Canonical               |
-|---|--------------------------|-------------------------|
-| 1 | `dysflow_vba_execute`    | `run_vba`               |
-| 2 | `dysflow_query_execute`   | `query_execute`         |
-| 3 | `dysflow_doctor`         | `doctor`                |
-| 4 | `dysflow_access_operations_list` | `list_access_operations` |
-| 5 | `dysflow_access_cleanup` | `cleanup_access_operation` |
-| 6 | `dysflow_access_force_cleanup_orphaned` | `access_force_cleanup_orphaned` |
-| 7 | `dysflow_list_procedures` | `list_procedures`     |
-| 8 | `dysflow_get_procedure`  | `get_procedure`         |
-| 9 | `dysflow_find_references` | `find_references`     |
-| 10 | `dysflow_detect_dead_code` | `detect_dead_code`   |
-| 11 | `dysflow_validate_manifest` | `validate_manifest`  |
+| # | Legacy (REMOVED)         | Canonical               | Class              |
+|---|--------------------------|-------------------------|--------------------|
+| 1 | `dysflow_vba_execute`    | `run_vba`               | alias-override    |
+| 2 | `dysflow_query_execute`  | `query_execute`         | bespoke-to-bespoke |
+| 3 | `dysflow_doctor`         | `doctor`                | bespoke-to-bespoke |
+| 4 | `dysflow_access_operations_list` | `list_access_operations` | alias-override |
+| 5 | `dysflow_access_cleanup` | `cleanup_access_operation` | alias-override |
+| 6 | `dysflow_access_force_cleanup_orphaned` | `access_force_cleanup_orphaned` | bespoke-to-bespoke |
+| 7 | `dysflow_list_procedures` | `list_procedures`     | bespoke-to-bespoke |
+| 8 | `dysflow_get_procedure`  | `get_procedure`         | bespoke-to-bespoke |
+| 9 | `dysflow_find_references` | `find_references`     | bespoke-to-bespoke |
+| 10 | `dysflow_detect_dead_code` | `detect_dead_code`   | bespoke-to-bespoke |
+| 11 | `dysflow_validate_manifest` | `validate_manifest`  | bespoke-to-bespoke |
+| 12 | `dysflow_get_capabilities` | `get_capabilities`   | bespoke-to-bespoke |
+| 13 | `dysflow_resolve_project` | `resolve_project`     | bespoke-to-bespoke |
 
-Tool count drops by 11 (one legacy alias removed per legacy alias).
-Before this release: 67 visible MCP tools. After: 66 visible MCP tools.
+Tool count: 67 visible MCP tools → **64** (drop of 3 — the three
+alias-override rows that had a duplicate registration in both
+`alias-tools.ts` and `tools.ts`; the other 10 are bespoke-to-bespoke
+renames, 1-for-1 with the legacy).
 
 Notes:
 - The canonical `run_vba` was already registered by `alias-tools.ts`
@@ -36,9 +42,16 @@ Notes:
 - The canonical `list_access_operations` and `cleanup_access_operation`
   were also preexisting aliases with bespoke handlers; the same
   treatment applies.
-- The other eight canonical names are new and have no pre-existing
+- The other ten canonical names are new and have no pre-existing
   alias registration; their handlers were moved from
   `src/adapters/mcp/tools.ts` exactly once.
+- The two final renames (#12 and #13) were originally left behind
+  because they were intentional canonical names registered in
+  bespoke factory files (`get-capabilities-tool.ts` and
+  `dysflow-resolve-project-tool.ts`), not as legacy aliases of an
+  already-canonical tool. They are now renamed to the canonical
+  form. The `dysflow-resolve-project-tool.ts` file is renamed to
+  `resolve-project-tool.ts` to match the canonical name.
 - The `MCP_TOOL_CONTRACTS.dysflow_*` entries were renamed or removed
   in lockstep. Tools whose contract was previously in
   `modernContracts` (the 8 new canonical names and the pre-existing
@@ -52,6 +65,19 @@ Notes:
 - `MCP_TOOL_SCHEMAS` and `TOOL_DESCRIPTIONS` carry the canonical names;
   the legacy `MODERN_TOOL_NAMES` array no longer mentions any
   `dysflow_*` string.
+- A new regression test
+  (`test/adapters/mcp/advertised-tool-count.test.ts`) asserts that
+  no advertised MCP tool name starts with `dysflow_`. This is the
+  contract for all future releases — the Opción A directive
+  ("no legacy ni non legacy, todos han de ser iguales") is now
+  mechanically enforced.
+
+### Breaking change
+
+Any consumer (human or AI agent) that calls a `dysflow_*` MCP tool
+must migrate to the canonical unprefixed name. There is no back-compat
+alias. The previous version (v1.21.0) removed the alias for 7 form
+and lint tools; v1.22.0 removes the alias for the remaining 13.
 
 Refs #777. Implementation commits per work unit are listed in
 `openspec/changes/<change>/tasks.md` (when the change ships).
