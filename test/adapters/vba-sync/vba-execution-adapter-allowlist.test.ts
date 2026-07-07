@@ -170,7 +170,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     // so the runner is short-circuited (this is a config-layer regression
     // test, not a runner test — the real PowerShell spawn would fail on the
     // empty `.accdb` fixture and obscure the F23 signal we care about).
-    const result = await services.vbaSyncToolService.execute("test_vba", {
+    const result = await services.vbaSyncToolService!.execute("test_vba", {
       ...input,
       proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
       dryRun: true,

@@ -203,7 +203,7 @@ resolución: `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE
    pnpm test:e2e:mcp    # luego abre el informe y mira solo las filas que tocan tu cambio
    ```
 
-   Para ejecutar **una sola herramienta** (por ejemplo `dysflow_form_add_control`), edita
+   Para ejecutar **una sola herramienta** (por ejemplo `form_add_control`), edita
    temporalmente `E2E_testing/mcp-e2e.mjs`, comenta todas las filas de `runBattery()` excepto
    la que necesitas, y re-ejecuta. **No comitees esa edición.**
 

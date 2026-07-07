@@ -197,11 +197,11 @@ describe("dryRunDefault contract — global + per-tool alignment (#746)", () => 
     "delete_module",
     "fix_encoding",
     "vba_inline_execution",
-    "dysflow_form_add_control",
-    "dysflow_form_move_control",
-    "dysflow_form_rename_control",
-    "dysflow_form_deserialize",
-    "dysflow_create_form_from_template",
+    "form_add_control",
+    "form_move_control",
+    "form_rename_control",
+    "form_deserialize",
+    "create_form_from_template",
   ] as const satisfies readonly (keyof typeof MCP_TOOL_CONTRACTS)[];
 
   it("every vba-sync write-class contract declares dryRunDefault = true", () => {

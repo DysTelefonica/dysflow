@@ -179,7 +179,7 @@ describe("MCP tool registration over core services", () => {
     // #701 added read-only VBA procedure introspection tools.
     // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
     // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
-    // #704 added dysflow_lint_module (read-only VBA module pre-import linting).
+    // #704 added lint_module (read-only VBA module pre-import linting).
     const expectedNames = [
       "dysflow_vba_execute",
       "dysflow_query_execute",
@@ -193,7 +193,7 @@ describe("MCP tool registration over core services", () => {
       "dysflow_find_references",
       "dysflow_detect_dead_code",
       "dysflow_validate_manifest",
-      "dysflow_lint_module",
+      "lint_module",
       "dysflow_resolve_project",
     ];
 
@@ -812,8 +812,13 @@ describe("MCP tool registration over core services", () => {
 
     it("every registered MCP tool has an entry in MCP_TOOL_SCHEMAS", () => {
       const tools = createDysflowMcpTools(makeServices());
-      // Non-modern tools are those outside the 'dysflow_' namespace
-      const nonModernTools = tools.filter((t) => !t.name.startsWith("dysflow_"));
+      // Non-modern tools are those outside the MODERN_TOOL_NAMES namespace.
+      // After Opción A (2026-07-07) the modern tools have canonical names
+      // without the `dysflow_` prefix (e.g. `lint_module` instead of
+      // `dysflow_lint_module`), so we filter against MODERN_TOOL_NAMES
+      // directly instead of the old prefix heuristic.
+      const modernSet = new Set<string>(MODERN_TOOL_NAMES);
+      const nonModernTools = tools.filter((t) => !modernSet.has(t.name));
       for (const tool of nonModernTools) {
         expect(
           MCP_TOOL_SCHEMAS,

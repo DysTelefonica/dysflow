@@ -1,5 +1,5 @@
 /**
- * Issue #733 RED tests — dysflow_form_serialize output contract.
+ * Issue #733 RED tests — form_serialize output contract.
  *
  * Validates that serializeForm emits byteEqual, metadataReport, and
  * supports the includeSerialized flag per the documented contract.

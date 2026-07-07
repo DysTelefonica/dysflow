@@ -22,12 +22,12 @@ function getTool(accessContextResolver?: Parameters<typeof createDysflowMcpTools
     undefined,
     accessContextResolver,
   );
-  const tool = tools.find((t) => t.name === "dysflow_lint_module");
-  if (tool === undefined) throw new Error("dysflow_lint_module tool not found");
+  const tool = tools.find((t) => t.name === "lint_module");
+  if (tool === undefined) throw new Error("lint_module tool not found");
   return tool;
 }
 
-describe("dysflow_lint_module", () => {
+describe("lint_module", () => {
   it("lints inline source and returns the stable output shape", async () => {
     const result = await getTool().handler({
       module: "InlineModule",
@@ -148,7 +148,7 @@ describe("dysflow_lint_module", () => {
   });
 
   // F22 (2026-07-06) — the `forbidden-name` rule is exposed through the
-  // `dysflow_lint_module` MCP tool. Consumers can call it standalone or
+  // `lint_module` MCP tool. Consumers can call it standalone or
   // as part of the default rule set; the diagnostic shape mirrors the
   // in-process `lintVbaModule` API.
   it("surfaces the F22 forbidden-name rule when called against a module with shadowing identifiers", async () => {

@@ -51,9 +51,9 @@ function mockFs(overrides: Partial<FormFileSystemPort> = {}): FormFileSystemPort
 
 describe("VbaFormsAdapter — form mutation tools", () => {
   it("handles public form mutation tools", () => {
-    expect(VbaFormsAdapter.handles("dysflow_form_add_control")).toBe(true);
-    expect(VbaFormsAdapter.handles("dysflow_form_move_control")).toBe(true);
-    expect(VbaFormsAdapter.handles("dysflow_form_rename_control")).toBe(true);
+    expect(VbaFormsAdapter.handles("form_add_control")).toBe(true);
+    expect(VbaFormsAdapter.handles("form_move_control")).toBe(true);
+    expect(VbaFormsAdapter.handles("form_rename_control")).toBe(true);
   });
 
   it("dry-runs add-control without writing or importing", async () => {
@@ -62,7 +62,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs({ writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_add_control", {
+    const result = await adapter.execute("form_add_control", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "cmdSave",
       controlType: "CommandButton",
@@ -85,7 +85,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs({ writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_move_control", {
+    const result = await adapter.execute("form_move_control", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "txtName",
       left: 800,
@@ -111,7 +111,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs();
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_move_control", {
+    const result = await adapter.execute("form_move_control", {
       sourcePath: "C:/outside/forms/Form_Customer.form.txt",
       controlName: "txtName",
       left: 800,
@@ -138,7 +138,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs();
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_add_control", {
+    const result = await adapter.execute("form_add_control", {
       sourcePath: "C:/runtime/dysflow/forms/Form_Customer.form.txt",
       controlName: "cmdSave",
       controlType: "CommandButton",
@@ -156,7 +156,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs();
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_add_control", {
+    const result = await adapter.execute("form_add_control", {
       sourcePath: "C:/repo/forms/Form_Customer.cls",
       controlName: "cmdSave",
       controlType: "CommandButton",
@@ -174,7 +174,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs({ writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_move_control", {
+    const result = await adapter.execute("form_move_control", {
       sourcePath: "forms/../forms/Form_Customer.form.txt",
       controlName: "txtName",
       left: 800,
@@ -206,7 +206,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     const fs = mockFs({ writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("dysflow_form_rename_control", {
+    const result = await adapter.execute("form_rename_control", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "txtName",
       newName: "txtCustomerName",
@@ -250,7 +250,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
       codeBehind: null,
     };
 
-    const result = await adapter.execute("dysflow_form_deserialize", {
+    const result = await adapter.execute("form_deserialize", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       ir,
       apply: true,
@@ -297,7 +297,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
       codeBehind: null,
     };
 
-    const result = await adapter.execute("dysflow_form_deserialize", {
+    const result = await adapter.execute("form_deserialize", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       ir,
       apply: true,
@@ -342,7 +342,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
       codeBehind: null,
     };
 
-    const result = await adapter.execute("dysflow_form_deserialize", {
+    const result = await adapter.execute("form_deserialize", {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       ir,
       apply: true,
@@ -357,7 +357,7 @@ describe("VbaFormsAdapter — form mutation tools", () => {
 });
 
 // ---------------------------------------------------------------------------
-// slice 5 (issue #618) — `dysflow_create_form_from_template`
+// slice 5 (issue #618) — `create_form_from_template`
 // ---------------------------------------------------------------------------
 //
 // Fixture used for the clone engine: contains `{{FormName}}` and
@@ -381,9 +381,9 @@ const CLONE_BENCH_TARGET_PATH = "C:\\bench\\forms\\Form_CloneTarget.form.txt";
 const CLONE_PROJECT_SOURCE_PATH = "C:\\repo\\forms\\Form_CloneSource.form.txt";
 const CLONE_BENCH_ROOT = "C:\\bench\\forms";
 
-describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () => {
-  it("handles dysflow_create_form_from_template", () => {
-    expect(VbaFormsAdapter.handles("dysflow_create_form_from_template")).toBe(true);
+describe("VbaFormsAdapter — create_form_from_template (slice 5)", () => {
+  it("handles create_form_from_template", () => {
+    expect(VbaFormsAdapter.handles("create_form_from_template")).toBe(true);
   });
 
   it("dry-runs with bench-first resolution: reads bench source, never writes or imports", async () => {
@@ -399,7 +399,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
@@ -440,7 +440,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -468,7 +468,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
@@ -513,7 +513,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -537,7 +537,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget", TitleCaption: "Cloned Caption" },
@@ -572,7 +572,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -605,7 +605,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -644,7 +644,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -687,7 +687,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -735,7 +735,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const fs = mockFs({ readFile, writeFile });
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -771,7 +771,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
     // TitleCaption is unmapped — strict policy must reject before any write.
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { FormName: "CloneTarget" },
@@ -791,7 +791,7 @@ describe("VbaFormsAdapter — dysflow_create_form_from_template (slice 5)", () =
     const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
 
     // Empty token key — engine rejects at validation.
-    const result = await adapter.execute("dysflow_create_form_from_template", {
+    const result = await adapter.execute("create_form_from_template", {
       sourceForm: "Form_CloneSource",
       targetForm: "Form_CloneTarget",
       tokenMap: { "": "X" },

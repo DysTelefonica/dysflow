@@ -442,7 +442,7 @@ export const MODERN_TOOL_NAMES = [
   // issue #703 — read-only VBA test manifest validation
   "dysflow_validate_manifest",
   // issue #704 — read-only VBA module pre-import linting
-  "dysflow_lint_module",
+  "lint_module",
   // Round-3 Item 1 — project config re-resolution
   "dysflow_resolve_project",
 ] as const;
@@ -982,8 +982,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_lint_module",
-      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). Read-only. ${MCP_TOOL_CONTRACTS.dysflow_lint_module.summary}`,
+      name: "lint_module",
+      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
       inputSchema: LINT_MODULE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, LINT_MODULE_SCHEMA);

@@ -125,7 +125,7 @@ export type DysflowConfig = {
   /**
    * #731 — per-rule lint overrides from `.dysflow/project.json`
    * `capabilities.lint.rules`. Surfaced into the runtime so the MCP
-   * `dysflow_lint_module` tool can honor operator opt-outs and trigger
+   * `lint_module` tool can honor operator opt-outs and trigger
    * the legacy-project auto-detection. `undefined` when the project
    * config has no `capabilities.lint` block.
    */

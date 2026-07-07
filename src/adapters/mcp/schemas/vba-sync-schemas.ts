@@ -331,7 +331,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       },
     },
   },
-  dysflow_form_add_control: {
+  form_add_control: {
     type: "object",
     required: ["sourcePath", "controlName", "controlType"],
     additionalProperties: false,
@@ -351,7 +351,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  dysflow_form_move_control: {
+  form_move_control: {
     type: "object",
     required: ["sourcePath", "controlName"],
     additionalProperties: false,
@@ -369,7 +369,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  dysflow_form_rename_control: {
+  form_rename_control: {
     type: "object",
     required: ["sourcePath", "controlName", "newName"],
     additionalProperties: false,
@@ -386,7 +386,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  dysflow_form_serialize: {
+  form_serialize: {
     type: "object",
     required: ["sourcePath"],
     additionalProperties: false,
@@ -406,7 +406,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  dysflow_form_deserialize: {
+  form_deserialize: {
     type: "object",
     required: ["sourcePath", "ir"],
     additionalProperties: false,
@@ -430,8 +430,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  // slice 5 (issue #618) — `dysflow_create_form_from_template`
-  dysflow_create_form_from_template: {
+  // slice 5 (issue #618) — `create_form_from_template`
+  create_form_from_template: {
     type: "object",
     required: ["sourceForm", "targetForm", "tokenMap"],
     additionalProperties: false,

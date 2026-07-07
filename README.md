@@ -630,7 +630,7 @@ Validate a VBA test manifest before running `test_vba`. The tool parses an inlin
   - `modules` (object, optional): Key-value pair of module names to inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
-#### `dysflow_lint_module`
+#### `lint_module`
 Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). It never opens Access, never spawns PowerShell, and never mutates files. Read-only.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
@@ -674,7 +674,7 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
   - Returns a validation report with `valid`, separate `errors` and `warnings` arrays, and a `summary` containing test and diagnostic counts.
-* **`dysflow_lint_module`**: Lint a `.bas`/`.cls` source module before import.
+* **`lint_module`**: Lint a `.bas`/`.cls` source module before import.
   - Parameters: `module` (string, required), `source` (string, optional), `rules` (array, optional), `destinationRoot`/`projectRoot` (optional)
   - Rules: `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match` (same-module signatures only; detects clear literal-argument / declared-type mismatches only; no cross-module type inference or variable-flow analysis), and `forbidden-name` (F22 — flags identifiers that shadow VBA / Access / DAO / Scripting globals such as `Err`, `Date`, `Name`, `Form`, `DoCmd` — case-insensitive — on `Dim` / `Const` / `Type` / `Enum` / `Sub` / `Function` / `Property` / parameter declarations, with a project-convention recommendation like `errMsg` / `fechaAlta` / `db` / `rs` / `qdf`).
   - Returns `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }` — diagnostics grouped by rule name, flatDiagnostics for backward compatibility, `isClean` true when no findings, and `summary` with error/warning counts.
@@ -795,17 +795,17 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `sourcePath`/`path` (string, left `.form.txt` file), `targetPath`/`target` (string, right `.form.txt` file)
 * **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
   - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional)
-* **`dysflow_form_add_control`**: Add one control to a version-controlled `.form.txt` through FormIR. Defaults to dry-run; `apply:true` writes the source and requires the `import_modules` LoadFromText gate to pass.
+* **`form_add_control`**: Add one control to a version-controlled `.form.txt` through FormIR. Defaults to dry-run; `apply:true` writes the source and requires the `import_modules` LoadFromText gate to pass.
   - Parameters: `sourcePath`, `controlName`, `controlType`, `properties` (optional), `targetSectionName` (optional), `dryRun`, `apply`
-* **`dysflow_form_move_control`**: Move one existing control by updating `Left` and/or `Top` only. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
+* **`form_move_control`**: Move one existing control by updating `Left` and/or `Top` only. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
   - Parameters: `sourcePath`, `controlName`, `left` (optional), `top` (optional), `dryRun`, `apply`
-* **`dysflow_form_rename_control`**: Rename one existing control while preserving its type, properties, and opaque metadata. Controls with `[Event Procedure]` bindings are rejected rather than silently breaking Access event procedure names. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
+* **`form_rename_control`**: Rename one existing control while preserving its type, properties, and opaque metadata. Controls with `[Event Procedure]` bindings are rejected rather than silently breaking Access event procedure names. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
   - Parameters: `sourcePath`, `controlName`, `newName`, `dryRun`, `apply`
-* **`dysflow_form_serialize`** *(slice 3, #616)*: Read-only round-trip serializer. Parses a `.form.txt` at `sourcePath`, runs it through `parseFormTxt` → `serializeFormTxt`, and returns the serialized text with `byteEqual` + `metadataReport` (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Access is never opened. `apply` is ignored — this tool is intentionally read-only.
+* **`form_serialize`** *(slice 3, #616)*: Read-only round-trip serializer. Parses a `.form.txt` at `sourcePath`, runs it through `parseFormTxt` → `serializeFormTxt`, and returns the serialized text with `byteEqual` + `metadataReport` (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Access is never opened. `apply` is ignored — this tool is intentionally read-only.
   - Parameters: `sourcePath` (string, required), `formName` (string, optional; derived from filename when omitted), `dryRun`/`apply` (ignored)
-* **`dysflow_form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.
+* **`form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.
   - Parameters: `sourcePath` (string, required), `ir` (object, required — the slice-1 FormIR), `formName` (string, optional), `dryRun`/`apply`
-* **`dysflow_create_form_from_template`** *(slice 5, #618)*: Clone a source `.form.txt` into a new target form by applying a `{{Token}}` token map (e.g. `{{FormName}}` → `Form_FormNuevaAuditoria`). Resolves `sourceForm`/`targetForm` via bench-cache first, then `projectRoot`. Defaults to dry-run — returns the post-replacement preview plus the applied/missing token summary; `apply:true` writes the target and routes through the `import_modules` LoadFromText gate, restoring the original target on gate failure. Use `overwrite:true` to replace an existing target. `missingTokenPolicy` accepts `warn-pass-through` (default) or `strict`. Write-gated.
+* **`create_form_from_template`** *(slice 5, #618)*: Clone a source `.form.txt` into a new target form by applying a `{{Token}}` token map (e.g. `{{FormName}}` → `Form_FormNuevaAuditoria`). Resolves `sourceForm`/`targetForm` via bench-cache first, then `projectRoot`. Defaults to dry-run — returns the post-replacement preview plus the applied/missing token summary; `apply:true` writes the target and routes through the `import_modules` LoadFromText gate, restoring the original target on gate failure. Use `overwrite:true` to replace an existing target. `missingTokenPolicy` accepts `warn-pass-through` (default) or `strict`. Write-gated.
   - Parameters: `sourceForm` (string, required — form name without `.form.txt`), `targetForm` (string, required — target form name), `tokenMap` (object, required — `{ Token: replacement }`), `missingTokenPolicy` (string, optional — `warn-pass-through` | `strict`), `strictMissingTokens` (boolean, optional), `overwrite` (boolean, optional — default `false`), `dryRun`/`apply`
 
 ### MCP protocol and maintenance

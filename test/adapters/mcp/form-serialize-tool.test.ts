@@ -66,7 +66,7 @@ function toolByName(name: string, writesEnabled = false) {
   return { tool, vbaSyncToolService };
 }
 
-const SERIALIZE_NAMES = ["dysflow_form_serialize", "dysflow_form_deserialize"] as const;
+const SERIALIZE_NAMES = ["form_serialize", "form_deserialize"] as const;
 
 // ---------------------------------------------------------------------------
 // Registration surfaces — must be present in all 5 surfaces
@@ -87,12 +87,12 @@ describe("public form serialize/deserialize MCP tools — registration", () => {
   });
 
   it("serialize tool is read-only; deserialize tool mutates binary + filesystem", () => {
-    expect(MCP_TOOL_ROUTES.dysflow_form_serialize).toMatchObject({
+    expect(MCP_TOOL_ROUTES.form_serialize).toMatchObject({
       kind: "vba-sync",
       mutatesBinary: false,
       mutatesFilesystem: false,
     });
-    expect(MCP_TOOL_ROUTES.dysflow_form_deserialize).toMatchObject({
+    expect(MCP_TOOL_ROUTES.form_deserialize).toMatchObject({
       kind: "vba-sync",
       mutatesBinary: true,
       mutatesFilesystem: true,
@@ -107,8 +107,8 @@ describe("public form serialize/deserialize MCP tools — registration", () => {
   });
 
   it("VbaFormsAdapter.handles() returns true for both serialize tools", () => {
-    expect(VbaFormsAdapter.handles("dysflow_form_serialize")).toBe(true);
-    expect(VbaFormsAdapter.handles("dysflow_form_deserialize")).toBe(true);
+    expect(VbaFormsAdapter.handles("form_serialize")).toBe(true);
+    expect(VbaFormsAdapter.handles("form_deserialize")).toBe(true);
   });
 });
 
@@ -117,8 +117,8 @@ describe("public form serialize/deserialize MCP tools — registration", () => {
 // ---------------------------------------------------------------------------
 
 describe("public form serialize/deserialize MCP tools — schemas", () => {
-  it("dysflow_form_serialize exposes sourcePath, controlName/ir, dryRun, apply", () => {
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_form_serialize.properties).toEqual(
+  it("form_serialize exposes sourcePath, controlName/ir, dryRun, apply", () => {
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_serialize.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         formName: expect.any(Object),
@@ -128,8 +128,8 @@ describe("public form serialize/deserialize MCP tools — schemas", () => {
     );
   });
 
-  it("dysflow_form_deserialize exposes sourcePath, ir, dryRun, apply", () => {
-    expect(VBA_SYNC_TOOL_SCHEMAS.dysflow_form_deserialize.properties).toEqual(
+  it("form_deserialize exposes sourcePath, ir, dryRun, apply", () => {
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_deserialize.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         ir: expect.any(Object),
@@ -146,7 +146,7 @@ describe("public form serialize/deserialize MCP tools — schemas", () => {
 
 describe("public form serialize/deserialize MCP tools — write-gate", () => {
   it("serialize tool can be called when writes are disabled (read-only)", async () => {
-    const { tool } = toolByName("dysflow_form_serialize", false);
+    const { tool } = toolByName("form_serialize", false);
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       formName: "Form_Customer",
@@ -155,7 +155,7 @@ describe("public form serialize/deserialize MCP tools — write-gate", () => {
   });
 
   it("deserialize tool REJECTS apply:true when writes are disabled", async () => {
-    const { tool } = toolByName("dysflow_form_deserialize", false);
+    const { tool } = toolByName("form_deserialize", false);
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       formName: "Form_Customer",
@@ -173,7 +173,7 @@ describe("public form serialize/deserialize MCP tools — write-gate", () => {
   });
 
   it("deserialize tool accepts dryRun:true when writes are disabled", async () => {
-    const { tool } = toolByName("dysflow_form_deserialize", false);
+    const { tool } = toolByName("form_deserialize", false);
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       formName: "Form_Customer",
@@ -196,8 +196,8 @@ describe("public form serialize/deserialize MCP tools — write-gate", () => {
 // ---------------------------------------------------------------------------
 
 describe("slice-3 wiring does not regress slice-4 mutation tools", () => {
-  it("dysflow_form_add_control is still callable alongside new serialize tools", async () => {
-    const { tool } = toolByName("dysflow_form_add_control", false);
+  it("form_add_control is still callable alongside new serialize tools", async () => {
+    const { tool } = toolByName("form_add_control", false);
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "txtNewField",

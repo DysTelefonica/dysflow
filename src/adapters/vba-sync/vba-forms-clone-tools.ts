@@ -24,7 +24,7 @@ import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { FormsExecutionTarget, VbaFormsOrchestrator } from "./vba-forms-types.js";
 
-// dysflow_create_form_from_template — slice 5 (issue #618)
+// create_form_from_template — slice 5 (issue #618)
 //
 // Pipeline:
 //   1. Resolve `sourceForm` against the bench cache first, then the resolved
@@ -40,7 +40,7 @@ import type { FormsExecutionTarget, VbaFormsOrchestrator } from "./vba-forms-typ
 //
 // The restore-on-failure captures `originalTargetText` (empty string when the
 // target was newly created) and writes it back best-effort. Slice 4
-// `dysflow_form_deserialize` mirrors this pattern on the source path.
+// `form_deserialize` mirrors this pattern on the source path.
 export async function cloneFormFromTemplate(args: {
   orchestrator: VbaFormsOrchestrator;
   fileSystem: FormFileSystemPort;
@@ -54,7 +54,7 @@ export async function cloneFormFromTemplate(args: {
     return failureResult(
       createDysflowError(
         "FORM_SPEC_MISSING",
-        "dysflow_create_form_from_template requires sourceForm (form name).",
+        "create_form_from_template requires sourceForm (form name).",
       ),
     );
   }
@@ -62,7 +62,7 @@ export async function cloneFormFromTemplate(args: {
     return failureResult(
       createDysflowError(
         "FORM_SPEC_MISSING",
-        "dysflow_create_form_from_template requires targetForm (form name).",
+        "create_form_from_template requires targetForm (form name).",
       ),
     );
   }
@@ -73,7 +73,7 @@ export async function cloneFormFromTemplate(args: {
     return failureResult(
       createDysflowError(
         "INVALID_INPUT",
-        "dysflow_create_form_from_template requires sourceForm and targetForm to start with 'Form_' or 'Report_'.",
+        "create_form_from_template requires sourceForm and targetForm to start with 'Form_' or 'Report_'.",
       ),
     );
   }
@@ -153,7 +153,7 @@ export async function cloneFormFromTemplate(args: {
     return failureResult(
       createDysflowError(
         "INVALID_INPUT",
-        `dysflow_create_form_from_template sourcePath must be inside the resolved source root. sourcePath=${sourcePath}; root=${sourceRootForContainment}.`,
+        `create_form_from_template sourcePath must be inside the resolved source root. sourcePath=${sourcePath}; root=${sourceRootForContainment}.`,
       ),
     );
   }
@@ -187,7 +187,7 @@ export async function cloneFormFromTemplate(args: {
     return failureResult(
       createDysflowError(
         "INVALID_INPUT",
-        `dysflow_create_form_from_template targetPath must be inside the resolved source root. targetPath=${targetPath}; root=${targetRoot}.`,
+        `create_form_from_template targetPath must be inside the resolved source root. targetPath=${targetPath}; root=${targetRoot}.`,
       ),
     );
   }

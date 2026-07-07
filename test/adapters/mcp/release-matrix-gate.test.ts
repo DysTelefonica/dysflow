@@ -45,17 +45,17 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
 
     // #405 / #510 / form-ui-factory: these counts are the invariant for MCP tool registration.
     // Any edit that moves one of these numbers MUST justify the change in that PR.
-    // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
-    // Slice 5 (#618) added dysflow_create_form_from_template.
+    // Slice 3 (#616) added form_serialize + form_deserialize.
+    // Slice 5 (#618) added create_form_from_template.
     // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
     // #701 added dysflow_list_procedures + dysflow_get_procedure.
     // #705 added dysflow_detect_dead_code (read-only dead-code analysis).
     // #703 added dysflow_validate_manifest (read-only VBA test manifest validation).
-    // #704 added dysflow_lint_module (read-only VBA module pre-import linting).
+    // #704 added lint_module (read-only VBA module pre-import linting).
     // feat-759-no-compile (v1.19.0) — compile_vba was removed.
     // Expected breakdown: 53 dispatch names (DYSFLOW_MCP_TOOL_NAMES, including
     //   inspect_form/compare_form/lint_form_code, the three form mutation tools, the
-    //   new serialize/deserialize pair, and dysflow_create_form_from_template)
+    //   new serialize/deserialize pair, and create_form_from_template)
     //   - 0 hidden stubs (zero-hidden-tools policy)
     //   + 14 modern core tools = 67 visible.
     expect(toolCount).toBe(53);
