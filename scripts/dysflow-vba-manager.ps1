@@ -2698,212 +2698,28 @@ function Save-VbaProjectModules {
     }
 }
 
-function Get-ActiveVbeLocation {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)]$AccessApplication
-    )
-
-    $componentName = $null
-    $line = $null
-    $column = $null
-    $endLine = $null
-    $endColumn = $null
-    $sourceLine = $null
-
-    try {
-        $vbe = $AccessApplication.VBE
-        if ($vbe) {
-            $originalVisible = $false
-            $visibilityToggled = $false
-            try {
-                if ($vbe.MainWindow) {
-                    $originalVisible = $vbe.MainWindow.Visible
-                    if (-not $originalVisible) {
-                        $vbe.MainWindow.Visible = $true
-                        $visibilityToggled = $true
-                    }
-                }
-            } catch { Write-Debug "Diagnostics: $_" }
-
-            try {
-                $pane = $vbe.ActiveCodePane
-                if ($pane) {
-                    $startLine = 0
-                    $startColumn = 0
-                    $selectedEndLine = 0
-                    $selectedEndColumn = 0
-                    try {
-                        $pane.GetSelection([ref]$startLine, [ref]$startColumn, [ref]$selectedEndLine, [ref]$selectedEndColumn)
-                        $line = [int]$startLine
-                        $column = [int]$startColumn
-                        $endLine = [int]$selectedEndLine
-                        $endColumn = [int]$selectedEndColumn
-                    } catch { Write-Debug "Diagnostics: $_" }
-
-                    try {
-                        $codeModule = $pane.CodeModule
-                        if ($codeModule) {
-                            try { $componentName = [string]$codeModule.Parent.Name } catch { Write-Debug "Diagnostics: $_" }
-                            if ($line -and $line -gt 0) {
-                                try { $sourceLine = [string]$codeModule.Lines($line, 1) } catch { Write-Debug "Diagnostics: $_" }
-                            }
-                        }
-                    } catch { Write-Debug "Diagnostics: $_" }
-                }
-
-                if (-not $componentName) {
-                    try {
-                        $selected = $vbe.SelectedVBComponent
-                        if ($selected) { $componentName = [string]$selected.Name }
-                    } catch { Write-Debug "Diagnostics: $_" }
-                }
-            } finally {
-                try {
-                    if ($visibilityToggled -and $vbe.MainWindow) {
-                        $vbe.MainWindow.Visible = $originalVisible
-                    }
-                } catch { Write-Debug "Diagnostics: $_" }
-            }
-
-            # Fallback 1.2: Scan VBComponents for Saved = $false
-            if (-not $componentName -and $vbe.ActiveVBProject) {
-                try {
-                    foreach ($comp in $vbe.ActiveVBProject.VBComponents) {
-                        if ($comp.Saved -eq $false) {
-                            $componentName = $comp.Name
-                            $codeModule = $comp.CodeModule
-                            if ($codeModule -and $codeModule.CountOfLines -gt 0) {
-                                $count = $codeModule.CountOfLines
-                                # Scan lines for comment-aware syntax errors
-                                for ($i = 1; $i -le $count; $i++) {
-                                    $lineText = $codeModule.Lines($i, 1)
-                                    $inString = $false
-                                    $stringStartCol = 0
-                                    $len = $lineText.Length
-                                    for ($col = 1; $col -le $len; $col++) {
-                                        $char = $lineText[$col - 1]
-                                        if ($char -eq '"') {
-                                            if ($inString) {
-                                                if ($col -lt $len -and $lineText[$col] -eq '"') {
-                                                    $col++ # skip escaped quote
-                                                } else {
-                                                    $inString = $false
-                                                }
-                                            } else {
-                                                $inString = $true
-                                                $stringStartCol = $col
-                                            }
-                                        } elseif ($char -eq "'" -and -not $inString) {
-                                            break # comment, ignore rest of line
-                                        }
-                                    }
-                                    # If the line is not continued and has an unclosed string, we found a syntax error
-                                    if ($inString -and -not $lineText.TrimEnd().EndsWith("_")) {
-                                        $line = $i
-                                        $column = $stringStartCol
-                                        $sourceLine = $lineText
-                                        break
-                                    }
-                                }
-                                # Default to line 1 if no syntax error line identified
-                                if (-not $line) {
-                                    $line = 1
-                                    $column = 1
-                                    $sourceLine = $codeModule.Lines(1, 1)
-                                }
-                            }
-                            break # found the dirty module, stop component scan
-                        }
-                    }
-                } catch { Write-Debug "Diagnostics: $_" }
-            }
-        }
-    } catch { Write-Debug "Diagnostics: $_" }
-
-    return [pscustomobject]@{
-        component  = $componentName
-        line       = $line
-        column     = $column
-        endLine    = $endLine
-        endColumn  = $endColumn
-        sourceLine = $sourceLine
-    }
-}
-
-function New-CompileFailureResult {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)][string]$Message,
-        $Location
-    )
-    if (-not $Location) {
-        $Location = [pscustomobject]@{
-            component = $null; line = $null; column = $null
-            endLine = $null; endColumn = $null; sourceLine = $null
-        }
-    }
-    return [pscustomobject]@{
-        ok         = $false
-        phase      = "compile"
-        # Structured object (NOT a bare string) so the TS adapter maps it to a
-        # DysflowError with code VBA_COMPILE_ERROR (failureFromStructuredRunnerResult).
-        error      = [ordered]@{ code = "VBA_COMPILE_ERROR"; message = $Message }
-        component  = $Location.component
-        line       = $Location.line
-        column     = $Location.column
-        endLine    = $Location.endLine
-        endColumn  = $Location.endColumn
-        sourceLine = $Location.sourceLine
-    }
-}
-
-function Invoke-CompileVbaProject {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)]$AccessApplication
-    )
-
-    # acCmdCompileAndSaveAllModules = 126.
-    # IMPORTANT (issue #543): RunCommand(126) does NOT throw on most compile
-    # failures — it returns normally even when modules fail to compile. The
-    # authoritative success signal is Application.IsCompiled, checked below.
-    try {
-        $AccessApplication.RunCommand(126)
-    } catch {
-        $location = Get-ActiveVbeLocation -AccessApplication $AccessApplication
-        return New-CompileFailureResult -Message $_.Exception.Message -Location $location
-    }
-
-    $isCompiled = $true
-    try { $isCompiled = [bool]$AccessApplication.IsCompiled } catch { $isCompiled = $true }
-
-    if (-not $isCompiled) {
-        # Access can leave document modules (forms/reports) whose code was modified
-        # programmatically flagged as uncompiled until a second compile pass, even
-        # when the code is valid. Retry once before declaring a failure; a genuine
-        # compile error stays uncompiled across BOTH passes (issue #543).
-        try { $AccessApplication.RunCommand(126) } catch { Write-Debug "Diagnostics: $_" }
-        try { $isCompiled = [bool]$AccessApplication.IsCompiled } catch { $isCompiled = $true }
-    }
-
-    if (-not $isCompiled) {
-        $location = Get-ActiveVbeLocation -AccessApplication $AccessApplication
-        return New-CompileFailureResult -Message "VBA project failed to compile (Application.IsCompiled is False after acCmdCompileAndSaveAllModules). One or more modules contain compile errors." -Location $location
-    }
-
-    return [pscustomobject]@{
-        ok          = $true
-        phase       = "compile"
-        error       = $null
-        component   = $null
-        line        = $null
-        column      = $null
-        endLine     = $null
-        endColumn   = $null
-        sourceLine  = $null
-    }
-}
+# ========================================================================
+# feat-759-no-compile (v1.19.0) — Compile-machinery removed.
+#
+# The following PowerShell functions were deleted in PR-2:
+#   - Get-ActiveVbeLocation      (~lines :2701-:2832) — only called by
+#                                  Invoke-CompileVbaProject
+#   - New-CompileFailureResult   (~lines :2834-:2859) — emits the
+#                                  VBA_COMPILE_ERROR envelope (which is
+#                                  gone from the error taxonomy)
+#   - Invoke-CompileVbaProject   (~lines :2861-:2906) — calls RunCommand(126)
+#                                  (= acCmdCompileAndSaveAllModules); the only
+#                                  internal caller was the now-removed
+#                                  compile_vba MCP tool
+#   - Invoke-CompileAction       (~lines :4265-:4294) — top-level compile
+#                                  dispatcher that called
+#                                  Invoke-CompileVbaProject
+#
+# The remaining persistence path (import_modules, import_all, delete_module)
+# uses RunCommand(280) = acCmdSaveAllModules (save WITHOUT compile). The
+# human compiles in Access (Debug > Compile). See
+# openspec/specs/vba-manager-actions/spec.md "Save-only persistence".
+# ========================================================================
 
 function Import-DocumentCodeBehind {
     [CmdletBinding()]
@@ -4262,36 +4078,15 @@ function Invoke-DeleteAction {
     Write-Status -Message ("OK Delete completado ({0})" -f $NormalizedModules.Count) -Color Green
 }
 
-function Invoke-CompileAction {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)]$Session,
-        [switch]$Json
-    )
-
-    $compileResult = Invoke-CompileVbaProject -AccessApplication $Session.AccessApplication
-    if ($Json) {
-        # -Json mode: Write-DysflowResult emits the structured sentinel and
-        # also writes the JSON to the success output stream (test stub at the
-        # top of the test file, real implementation writes to [Console]::Out
-        # only). The caller's $res receives the JSON string the stub emits,
-        # which ConvertFrom-Json then parses into an object.
-        Write-DysflowResult -Result $compileResult -Depth 6
-    } else {
-        if ($compileResult.ok) {
-            Write-Status -Message "OK compilación VBA completada" -Color Green
-        } else {
-            Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error.message) -Color Red
-            if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
-            if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
-            if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
-        }
-        # No -Json mode: status messages carry the result. No value is
-        # returned (the previous behavior leaked the PSCustomObject to the
-        # caller, which is neither empty nor a JSON string and broke the
-        # contract).
-    }
-}
+# ========================================================================
+# feat-759-no-compile (v1.19.0) — Invoke-CompileAction removed.
+#
+# Was the top-level compile dispatcher. The `Compile` PowerShell action is
+# no longer reachable: the compile_vba MCP tool is gone, the inline
+# execution path skips the explicit compile step (letting run_vba surface
+# any compile error as a regular run failure), and no other dispatcher
+# branch invokes it.
+# ========================================================================
 
 function Invoke-RunProcedureAction {
     [CmdletBinding()]
@@ -4699,26 +4494,12 @@ try {
     } elseif ($Action -eq "Run-Tests") {
         Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson $ProceduresJson -ProceduresJsonFile $ProceduresJsonFile -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -Json:$Json
 
-    } elseif ($Action -eq "Compile") {
-        $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        # Invoke CompileVbaProject directly so we get the result object (Invoke-CompileAction
-        # returns nothing when -Json, so the old $compileActionResult check was always false).
-        # A compile failure must exit non-zero so the TS adapter takes the structured-failure
-        # path (issue #543); exit runs the finally block below, which closes the session.
-        $compileResult = Invoke-CompileVbaProject -AccessApplication $session.AccessApplication
-        if ($Json) {
-            Write-DysflowResult -Result $compileResult -Depth 6
-        } else {
-            if ($compileResult.ok) {
-                Write-Status -Message "OK compilación VBA completada" -Color Green
-            } else {
-                Write-Status -Message ("ERROR compilación VBA: {0}" -f $compileResult.error.message) -Color Red
-                if ($compileResult.component) { Write-Status -Message ("Componente: {0}" -f $compileResult.component) -Color Red }
-                if ($compileResult.line) { Write-Status -Message ("Línea: {0}, Columna: {1}" -f $compileResult.line, $compileResult.column) -Color Red }
-                if ($compileResult.sourceLine) { Write-Status -Message ("Código: {0}" -f $compileResult.sourceLine) -Color Red }
-            }
-        }
-        if (-not $compileResult.ok) { exit 1 }
+    # feat-759-no-compile (v1.19.0) — the `Compile` action dispatcher branch
+    # was removed. The compile_vba MCP tool is gone, the inline execution
+    # path skips the explicit compile step (letting run_vba surface any
+    # compile error as a regular run failure), and the helper functions
+    # Invoke-CompileVbaProject / Invoke-CompileAction / New-CompileFailureResult
+    # are gone. No path routes -Action "Compile" anymore.
 
     } elseif ($Action -eq "Generate-ERD") {
         Invoke-GenerateErdAction -BackendPath $BackendPath -DestinationRoot $DestinationRoot -ErdPath $ErdPath -Password $Password -Json:$Json

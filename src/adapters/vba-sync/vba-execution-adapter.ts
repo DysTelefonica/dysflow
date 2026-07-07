@@ -20,15 +20,12 @@ import {
 } from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
-// feat-759-no-compile (v1.19.0) — `EXECUTION_MAPPINGS.compile_vba` was
-// removed. The `compile_vba` MCP tool no longer exists. The PowerShell
-// `Compile` action still runs INTERNALLY as part of the inline execution
-// path (vba_inline_execution compiles a temp module under a different
-// concern — see openspec/specs/vba-inline-execution/spec.md), so a local
-// `INLINE_COMPILE_MAPPING` constant preserves that wiring without exposing
-// `compile_vba` as an MCP-routable execution.
-const INLINE_COMPILE_MAPPING: DirectMapping = mapping("Compile", true);
-
+// feat-759-no-compile (v1.19.0) — `EXECUTION_MAPPINGS.compile_vba` and
+// the inline-execution's explicit Compile step were removed. The
+// `compile_vba` MCP tool no longer exists; vba_inline_execution now
+// skips the explicit compile and lets `run_vba` surface any compile
+// error against the temp module as a regular run failure. See
+// openspec/specs/vba-inline-execution/spec.md.
 const EXECUTION_MAPPINGS = {
   test_vba: mapping(
     "Run-Tests",
@@ -254,40 +251,25 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
-        // feat-759-no-compile (v1.19.0) — `compile_vba` is removed from the
-        // MCP surface, but the PowerShell `Compile` action still runs HERE
-        // because vba_inline_execution compiles a temp module under
-        // `__dysflow_inline__`. The toolName literal is preserved so the
-        // orchestrator's existing mapping lookup remains valid; we just
-        // pass the local INLINE_COMPILE_MAPPING instead of reaching into
-        // EXECUTION_MAPPINGS (which no longer carries compile_vba).
-        const compileRes = await this.orchestrator.executeMappedTool(
-          "compile_vba",
-          inlineParams,
-          INLINE_COMPILE_MAPPING,
+        // feat-759-no-compile (v1.19.0) — the inline path no longer makes
+        // an explicit `compile_vba` call. Save-only persistence (see
+        // openspec/specs/vba-manager-actions/spec.md "Save-only persistence")
+        // is the canonical mutation path; `run_vba` triggers Access to
+        // validate the procedure at call time, which surfaces any compile
+        // error against `__dysflow_inline__` as an explicit run failure.
+        // We no longer try to distinguish "compile error against inline"
+        // vs "compile error against another module" because the runtime
+        // does not compile — there is no compile error type to surface
+        // (VBA_COMPILE_ERROR is gone).
+        inlineResult = await this.orchestrator.executeMappedTool(
+          "run_vba",
+          {
+            ...inlineParams,
+            moduleNames: [moduleName],
+            procedureName: `${moduleName}.ExecuteInline`,
+          },
+          EXECUTION_MAPPINGS.run_vba,
         );
-        let hasInlineCompileError = false;
-        if (!compileRes.ok) {
-          const errStr = JSON.stringify(compileRes.error || {});
-          if (errStr.includes(`"component":"${moduleName}"`) || errStr.includes("_inline_")) {
-            hasInlineCompileError = true;
-            inlineResult = compileRes;
-          }
-        }
-        if (!compileRes.ok && hasInlineCompileError) {
-          // Keep the compileRes failure as inlineResult
-        } else {
-          // 5. Run procedure
-          inlineResult = await this.orchestrator.executeMappedTool(
-            "run_vba",
-            {
-              ...inlineParams,
-              moduleNames: [moduleName],
-              procedureName: `${moduleName}.ExecuteInline`,
-            },
-            EXECUTION_MAPPINGS.run_vba,
-          );
-        }
       }
     } catch (err) {
       inlineResult = failureResult(
