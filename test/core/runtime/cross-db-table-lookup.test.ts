@@ -137,8 +137,12 @@ describe("cross-db-table-lookup (#763 + #764) — happy paths", () => {
     expect(result.databaseRole).toBe("backend");
     expect(result.databasePath).toBe(backendPath);
     expect(result.schema).toEqual({ columns: ["id", "name"] });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ databasePath: backendPath, table: "TbPeople" });
+    // Cardinality: both DBs are consulted (we always probe both so the
+    // lookup can distinguish "single-DB" from "ambiguous"). The frontend
+    // probe comes back negative, so the result is the backend answer.
+    expect(calls).toHaveLength(2);
+    const queriedPaths = calls.map((c) => c.databasePath).sort();
+    expect(queriedPaths).toEqual([backendPath, frontendPath].sort());
   });
 
   it("returns the frontend result when the table exists in frontend but not backend", async () => {
@@ -148,8 +152,10 @@ describe("cross-db-table-lookup (#763 + #764) — happy paths", () => {
     if (!result.ok) throw new Error("expected ok");
     expect(result.databaseRole).toBe("frontend");
     expect(result.databasePath).toBe(frontendPath);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ databasePath: frontendPath, table: "TbConfiguracion" });
+    // Cardinality: both DBs are consulted (same as the backend-only case).
+    expect(calls).toHaveLength(2);
+    const queriedPaths = calls.map((c) => c.databasePath).sort();
+    expect(queriedPaths).toEqual([backendPath, frontendPath].sort());
   });
 });
 
