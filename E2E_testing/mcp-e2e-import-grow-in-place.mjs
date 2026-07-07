@@ -50,7 +50,9 @@ function toolPayload(message) {
 }
 
 function firstModule(payload) {
-  const modules = Array.isArray(payload) ? payload : (payload?.modules ?? []);
+  const result = payload?.result ?? payload;
+  if (result?.module && result?.status) return result;
+  const modules = Array.isArray(result) ? result : (result?.modules ?? []);
   return modules[0];
 }
 
@@ -90,7 +92,7 @@ async function callImport(verbose = false) {
     requestId: 2,
     method: "tools/call",
     params: {
-      name: "dysflow_import_modules",
+      name: "import_modules",
       arguments: {
         accessPath,
         destinationRoot: modulesRoot,
