@@ -122,6 +122,16 @@ class FakeRunner implements AccessRunner {
     this.operations.push(operation);
     return this.nextResult as OperationResult<TData>;
   }
+
+  // v1.20.0 (#763 + #764) — cross-DB table lookup seam. Not exercised by
+  // the shape-validation tests in this file; the dedicated lookup tests
+  // (`test/core/runtime/cross-db-table-lookup.test.ts`) cover the seam.
+  async runProbe<TData>(
+    _request: import("../../../src/core/contracts/index.js").AccessQueryRequest,
+    _config: DysflowConfig,
+  ): Promise<OperationResult<TData>> {
+    throw new Error("FakeRunner.runProbe: not implemented for these shape-validation tests");
+  }
 }
 
 describe("core services over AccessRunner", () => {

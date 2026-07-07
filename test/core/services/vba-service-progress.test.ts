@@ -28,6 +28,12 @@ class CapturingRunner implements AccessRunner {
     this.capturedOptions.push(options ?? {});
     return successResult({} as TData);
   }
+
+  // v1.20.0 (#763 + #764) — cross-DB lookup seam. Not exercised by
+  // the progress-forwarding tests in this file.
+  async runProbe<TData>(): Promise<OperationResult<TData>> {
+    throw new Error("CapturingRunner.runProbe: not exercised by progress tests");
+  }
 }
 
 describe("AccessVbaService — onProgress forwarding", () => {

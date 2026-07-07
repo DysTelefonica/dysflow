@@ -226,11 +226,17 @@ export type AccessQueryRequest = {
   /**
    * Semantic target role for read-only query/schema tools (#716).
    * `frontend` resolves to the configured `accessPath`; `backend` resolves to `backendPath`.
-   * Resolution requires `projectId` (or `contextId`) and happens downstream
-   * of the mapper; explicit `accessPath`/`backendPath`/`databasePath` win
-   * when provided.
+   * `auto` (PR-2 of v1.20.0, issue #763) triggers the cross-DB table
+   * lookup primitive: the runner probes the configured backend first,
+   * then the frontend, and resolves to whichever one contains the
+   * table. When both have it, the runner returns a typed
+   * `ACCESS_TABLE_AMBIGUOUS` error (issue #764).
+   *
+   * Resolution requires `projectId` (or `contextId`) and happens
+   * downstream of the mapper; explicit `accessPath`/`backendPath`/
+   * `databasePath` win when provided.
    */
-  target?: "frontend" | "backend";
+  target?: "frontend" | "backend" | "auto";
   exportPath?: string;
   importPath?: string;
   queryDefinitions?: readonly { name: string; sql: string }[];
