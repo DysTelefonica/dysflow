@@ -34,7 +34,6 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "list_objects",
   "exists",
   "test_vba",
-  "compile_vba",
   "verify_code",
   "delete_module",
   "generate_erd",
@@ -121,8 +120,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Execute one PUBLIC VBA procedure by name and return its result. Pass arguments via argsJson — a JSON array of scalars only (string/number/boolean/null). Requires a compiled project; subject to the allowedProcedures allowlist when configured. PR1a (#621 F1): the adapter defaults to deny when no allowlist is configured — pass dryRun:true in the request body to use the explicit escape hatch. Headless.",
   test_vba:
     "Run VBA test procedures and report pass/fail per atom — the project's green gate. Select tests with proceduresJson (explicit list), filter (name substring) or testsPath. Requires a compiled project: import and compile before running. PR1b (#621 F1): the in-adapter allowlist gate is implemented in VbaExecutionAdapter.executeTestVba (default-deny when no allowlist is configured, with dryRun:true as the escape hatch).",
-  compile_vba:
-    "Compile and save all VBA modules headless. Reports a structured VBA_COMPILE_ERROR when standard/class modules fail to compile (via Application.IsCompiled); mutates only the binary's compiled state. Form/report document modules cannot be verified headless.",
+  // feat-759-no-compile (v1.19.0) — compile_vba tool description removed.
+  // Compile no longer lives in the dysflow runtime; the human compiles in
+  // Access (Debug > Compile).
   verify_code:
     "Compare the on-disk source against the VBA source exported live from the binary. Read-only and dry-run. moduleNames is a true focused export request (Access exports only requested modules, then the compare is filtered to the same modules). USE BEFORE AND AFTER import_modules / import_all to confirm Unicode characters round-trip cleanly (no mojibake drift) and that the per-module result matches the binary. Act on actionableDifferent / recommendedAction, NOT raw different[] (most diffs are non-functional export noise). Timeout failures are phase-aware: export stalls return VBA_MANAGER_TIMEOUT; preflight and compare stalls return VERIFY_CODE_PHASE_TIMEOUT with details.phase, details.moduleName/details.moduleNames, details.operationTimeoutMs and details.phaseTimeoutMs. Export-phase errors also carry details.durationMs; if post-timeout Access orphan cleanup exceeds its own bound, details.cleanupTimedOut:true and details.cleanupTimeoutMs are set on the parent error. Folding is string-aware. strict:true does a byte-exact compare; diff:true adds per-module snippets.",
   delete_module:

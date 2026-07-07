@@ -42,7 +42,6 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   list_objects: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
   test_vba: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  compile_vba: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
   // verify_code is the single source/binary compare tool (read-only dry-run): it
   // does whole-project AND single-module comparison and only RECOMMENDS an
   // explicit import/export — it never mutates the .accdb. Keep mutatesBinary:false.

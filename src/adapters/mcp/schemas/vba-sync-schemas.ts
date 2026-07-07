@@ -147,11 +147,10 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
-  compile_vba: {
-    type: "object",
-    additionalProperties: false,
-    properties: { ...CTX_PROPS, ...ACCESS_OVERRIDE, timeoutMs: SCHEMA_PROPS.timeoutMs },
-  },
+  // feat-759-no-compile (v1.19.0) — the `compile_vba` tool schema was
+  // removed. The compile_vba tool itself is gone from VBA_SYNC_TOOL_NAMES,
+  // MCP_TOOL_ROUTES, TOOL_PARITY_REGISTRY, and EXECUTION_MAPPINGS.
+  // See openspec/specs/vba-manager-actions/spec.md "No compile_vba Action".
   verify_code: {
     type: "object",
     additionalProperties: false,

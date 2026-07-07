@@ -9,7 +9,6 @@ export const VBA_SYNC_TOOL_NAMES = [
   "exists",
   "run_vba",
   "test_vba",
-  "compile_vba",
   "verify_code",
   "delete_module",
   "generate_erd",

@@ -15,7 +15,7 @@
 // corresponding `README.md` / `docs/` mentions.
 
 /** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 68;
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 67;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

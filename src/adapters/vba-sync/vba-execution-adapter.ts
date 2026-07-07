@@ -20,8 +20,16 @@ import {
 } from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
+// feat-759-no-compile (v1.19.0) — `EXECUTION_MAPPINGS.compile_vba` was
+// removed. The `compile_vba` MCP tool no longer exists. The PowerShell
+// `Compile` action still runs INTERNALLY as part of the inline execution
+// path (vba_inline_execution compiles a temp module under a different
+// concern — see openspec/specs/vba-inline-execution/spec.md), so a local
+// `INLINE_COMPILE_MAPPING` constant preserves that wiring without exposing
+// `compile_vba` as an MCP-routable execution.
+const INLINE_COMPILE_MAPPING: DirectMapping = mapping("Compile", true);
+
 const EXECUTION_MAPPINGS = {
-  compile_vba: mapping("Compile", true),
   test_vba: mapping(
     "Run-Tests",
     true,
@@ -98,10 +106,11 @@ export class VbaExecutionAdapter {
   ) {}
 
   static handles(toolName: string): boolean {
+    // feat-759-no-compile (v1.19.0) — `compile_vba` was removed from the
+    // MCP surface. Compile is no longer a tool the adapter routes through.
     return (
       toolName === "run_vba" ||
       toolName === "test_vba" ||
-      toolName === "compile_vba" ||
       toolName === "vba_inline_execution"
     );
   }
@@ -112,9 +121,6 @@ export class VbaExecutionAdapter {
   ): Promise<OperationResult<unknown>> {
     if (toolName === "vba_inline_execution") {
       return this.executeInline(params);
-    }
-    if (toolName === "compile_vba") {
-      return this.orchestrator.executeMappedTool(toolName, params, EXECUTION_MAPPINGS.compile_vba);
     }
     if (toolName === "run_vba") {
       // Just map it using normal flow. If run_vba is handled manually, this acts as fallback.
@@ -248,10 +254,17 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
+        // feat-759-no-compile (v1.19.0) — `compile_vba` is removed from the
+        // MCP surface, but the PowerShell `Compile` action still runs HERE
+        // because vba_inline_execution compiles a temp module under
+        // `__dysflow_inline__`. The toolName literal is preserved so the
+        // orchestrator's existing mapping lookup remains valid; we just
+        // pass the local INLINE_COMPILE_MAPPING instead of reaching into
+        // EXECUTION_MAPPINGS (which no longer carries compile_vba).
         const compileRes = await this.orchestrator.executeMappedTool(
           "compile_vba",
           inlineParams,
-          EXECUTION_MAPPINGS.compile_vba,
+          INLINE_COMPILE_MAPPING,
         );
         let hasInlineCompileError = false;
         if (!compileRes.ok) {
