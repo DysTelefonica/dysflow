@@ -82,10 +82,18 @@ export type OverrideShape = {
  * Semantic target role for read-only query/schema tools (#716).
  * `frontend` resolves to the configured `accessPath`; `backend` resolves to `backendPath`.
  * Resolution requires `projectId` (or `contextId`) and happens downstream of the mapper.
+ *
+ * v1.20.0 (#763) — `auto` is a NEW third value that triggers the cross-DB
+ * table lookup primitive (`cross-db-table-lookup`). The runner resolves
+ * `auto` by querying the configured backend first, then the frontend,
+ * returning whichever one contains the table. When the table exists in
+ * both, the runner returns a typed `ACCESS_TABLE_AMBIGUOUS` error (sibling
+ * issue #764). Resolution requires `projectId` (or `contextId`) AND a
+ * `tableName` in the request.
  */
-export type QueryTarget = "frontend" | "backend";
+export type QueryTarget = "frontend" | "backend" | "auto";
 
-export const VALID_QUERY_TARGETS: readonly QueryTarget[] = ["frontend", "backend"];
+export const VALID_QUERY_TARGETS: readonly QueryTarget[] = ["frontend", "backend", "auto"];
 
 export function isValidQueryTarget(value: unknown): value is QueryTarget {
   return typeof value === "string" && (VALID_QUERY_TARGETS as readonly string[]).includes(value);

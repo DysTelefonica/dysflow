@@ -447,13 +447,18 @@ describe("access-query-request-mapper", () => {
 
   describe("target (#716)", () => {
     it("VALID_QUERY_TARGETS exposes only 'frontend' and 'backend'", () => {
-      expect([...VALID_QUERY_TARGETS].sort()).toEqual(["backend", "frontend"]);
+      // v1.20.0 (#763) — `auto` is added as a third value (see the
+      // dedicated `target (#763) — auto enum value` describe block below).
+      // The shape of this assertion is preserved by sorting so the order
+      // doesn't matter; it pins the v1.19.0 minimum + the v1.20.0 addition.
+      expect([...VALID_QUERY_TARGETS].sort()).toEqual(["auto", "backend", "frontend"]);
     });
 
     it("isValidQueryTarget accepts the two valid roles and rejects everything else", () => {
       expect(isValidQueryTarget("frontend")).toBe(true);
       expect(isValidQueryTarget("backend")).toBe(true);
-      expect(isValidQueryTarget("auto")).toBe(false);
+      // v1.20.0 (#763) — `auto` is now a third valid value.
+      expect(isValidQueryTarget("auto")).toBe(true);
       expect(isValidQueryTarget("FRONTEND")).toBe(false);
       expect(isValidQueryTarget(123)).toBe(false);
       expect(isValidQueryTarget(undefined)).toBe(false);
@@ -463,7 +468,8 @@ describe("access-query-request-mapper", () => {
     it("pickQueryTarget returns the value when valid and undefined otherwise", () => {
       expect(pickQueryTarget({ target: "frontend" })).toBe("frontend");
       expect(pickQueryTarget({ target: "backend" })).toBe("backend");
-      expect(pickQueryTarget({ target: "auto" })).toBeUndefined();
+      // v1.20.0 (#763) — `auto` round-trips through the picker.
+      expect(pickQueryTarget({ target: "auto" })).toBe("auto");
       expect(pickQueryTarget({})).toBeUndefined();
     });
 
