@@ -171,7 +171,7 @@ describe("MCP tool registration over core services", () => {
       "doctor",
       "list_access_operations",
       "cleanup_access_operation",
-      "dysflow_access_force_cleanup_orphaned",
+      "access_force_cleanup_orphaned",
     ];
 
     expect(toolNames).toEqual(expect.arrayContaining(expectedModernToolNames));

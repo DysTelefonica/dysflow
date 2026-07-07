@@ -115,10 +115,10 @@ describe("MCP tool contract metadata", () => {
     expect(descriptions.cleanup_access_operation).toContain("MCP_WRITES_DISABLED");
     expect(descriptions.cleanup_access_operation).toContain("kills nothing");
 
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("confirmPid");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("list");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("headless");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("confirmPid");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("list");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("headless");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
   });
 });
 

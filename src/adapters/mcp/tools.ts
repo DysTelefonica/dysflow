@@ -430,7 +430,7 @@ export const MODERN_TOOL_NAMES = [
   "doctor",
   "list_access_operations",
   "cleanup_access_operation",
-  "dysflow_access_force_cleanup_orphaned",
+  "access_force_cleanup_orphaned",
   "dysflow_get_capabilities",
   // issue #701 — read-only VBA procedure introspection
   "dysflow_list_procedures",
@@ -549,8 +549,8 @@ export function createDysflowMcpTools(
         ),
     },
     {
-      name: "dysflow_access_force_cleanup_orphaned",
-      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
+      name: "access_force_cleanup_orphaned",
+      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(

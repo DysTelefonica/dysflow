@@ -143,7 +143,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
   // #777 (Opción A cont.) — `dysflow_access_cleanup` was REMOVED
   // entirely (the canonical `cleanup_access_operation` lives in
   // `aliasContracts`).
-  dysflow_access_force_cleanup_orphaned: {
+  access_force_cleanup_orphaned: {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
