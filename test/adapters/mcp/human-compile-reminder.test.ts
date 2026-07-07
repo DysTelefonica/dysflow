@@ -30,6 +30,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { createDispatchTool } from "../../../src/adapters/mcp/dispatch-factory";
+import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation";
+import type { OperationResult, VbaSyncPort } from "../../../src/core/contracts/index";
+import { successResult } from "../../../src/core/contracts/index";
 import {
   clearHumanCompileState,
   isHumanCompilePending,
@@ -37,10 +40,6 @@ import {
   recordVerifyFail,
   recordVerifyOk,
 } from "../../../src/core/runtime/human-compile-state";
-import { successResult } from "../../../src/core/contracts/index";
-import type { OperationResult } from "../../../src/core/contracts/index";
-import type { VbaSyncPort } from "../../../src/core/contracts/index";
-import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation";
 
 const ACCESS_PATH_A = "C:/repo/hcr/projA/front.accdb";
 const ACCESS_PATH_B = "C:/repo/hcr/projB/front.accdb";
@@ -60,16 +59,26 @@ function makeServicesWithFakeSync(fakeData: unknown): DysflowMcpServices & {
     },
   };
   return {
-    vbaService: { async execute() { return successResult({ returnValue: "ok" }); } },
-    queryService: { async execute() { return successResult({ rows: [] }); } },
-    diagnosticsService: { async run() { return successResult({ checks: [] }); } },
+    vbaService: {
+      async execute() {
+        return successResult({ returnValue: "ok" });
+      },
+    },
+    queryService: {
+      async execute() {
+        return successResult({ rows: [] });
+      },
+    },
+    diagnosticsService: {
+      async run() {
+        return successResult({ checks: [] });
+      },
+    },
     vbaSyncToolService,
   };
 }
 
-function parseHandlerContent<T = unknown>(
-  content: readonly { type: "text"; text: string }[],
-): T {
+function parseHandlerContent<T = unknown>(content: readonly { type: "text"; text: string }[]): T {
   const first = content[0];
   if (first === undefined) throw new Error("handler returned no content");
   return JSON.parse(first.text) as T;
@@ -104,9 +113,7 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     expect(data.humanCompileReminder as string).toMatch(/compile/i);
     // The reminder must reference an ISO timestamp placeholder — the implementation
     // substitutes the actual `lastPersistenceAt` for the consumer.
-    expect(data.humanCompileReminder as string).toMatch(
-      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-    );
+    expect(data.humanCompileReminder as string).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
     resetState(ACCESS_PATH_A);
   });
@@ -220,14 +227,13 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     recordPersistence(ACCESS_PATH_A);
 
     const services = makeServicesWithFakeSync({ unused: true });
-    services.vbaSyncToolService.execute = async () =>
-      // biome-ignore lint/suspicious/noExplicitAny: failure envelope shape
-      ({
-        ok: false,
-        error: { code: "TEST_ERROR", message: "deliberate" },
-        diagnostics: [],
-        durationMs: 0,
-      } as any);
+    const failureResult: OperationResult<unknown> = {
+      ok: false,
+      error: { code: "TEST_ERROR", message: "deliberate", retryable: false },
+      diagnostics: [],
+      durationMs: 0,
+    };
+    services.vbaSyncToolService.execute = async () => failureResult;
     const tool = createDispatchTool("import_modules", services, true, undefined, {});
 
     const result = await tool.handler({

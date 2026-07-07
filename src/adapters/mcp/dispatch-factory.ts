@@ -11,8 +11,8 @@ import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
 import {
   type DysflowMcpServices,
   type DysflowMcpTool,
-  type McpWriteAccessResolver,
   extractAccessPathFromInput,
+  type McpWriteAccessResolver,
   resolveInScopeSecrets,
   translateCoreResultToMcpContent,
   withHumanCompileReminder,

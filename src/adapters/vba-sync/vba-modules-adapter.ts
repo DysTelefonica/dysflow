@@ -210,7 +210,7 @@ export class VbaModulesAdapter {
       // confirmed the binary state; anything else (failure envelope,
       // warnings, drift) is recorded as a failed verify (the reminder stays
       // visible).
-      const verifyResult = compareSourceAgainstBinary(
+      const verifyResult = await compareSourceAgainstBinary(
         params,
         this.getComparisonContext(),
         this.fileSystem,
@@ -345,7 +345,11 @@ export class VbaModulesAdapter {
     // Only recorded for the tools that actually mutate the binary (import_*
     // and delete_module) — verify_code, export_*, and read-only tools do not
     // trigger this hook.
-    if (toolName === "import_modules" || toolName === "import_all" || toolName === "delete_module") {
+    if (
+      toolName === "import_modules" ||
+      toolName === "import_all" ||
+      toolName === "delete_module"
+    ) {
       const accessPath = await this.resolveAccessPathForRecording(effectiveParams);
       if (accessPath !== undefined) {
         recordPersistence(accessPath);

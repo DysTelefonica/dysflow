@@ -11,14 +11,14 @@ import type {
   AccessOrphanCleanupResult,
 } from "../../core/operations/access-orphan-cleanup.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
-import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
-import type { AccessQueryResult } from "../../core/services/query-service.js";
-import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import {
   getHumanCompileState,
   HUMAN_COMPILE_REMINDER_TEXT,
   isHumanCompilePending,
 } from "../../core/runtime/human-compile-state.js";
+import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
+import type { AccessQueryResult } from "../../core/services/query-service.js";
+import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
