@@ -86,16 +86,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       moduleNames: SCHEMA_PROPS.moduleNames,
       importMode: SCHEMA_PROPS.importMode,
       dryRun: SCHEMA_PROPS.dryRun,
-      compile: SCHEMA_PROPS.compile,
-      // #732 — when true (default), a project-wide compile failure after a
-      // successful per-module import triggers a rollback of every imported
-      // module in this call. Set to false to preserve the legacy
-      // partial-write behavior (advanced use case).
-      rollbackOnCompileFail: {
-        type: "boolean",
-        description:
-          "When true (default), a project-wide compile failure after a successful per-module import triggers a rollback of every imported module in this call. Set to false to preserve the legacy partial-write behavior (advanced use case).",
-      },
       // issue #752 — opt-in verbose flag. Adds per-module {source,
       // destination, truncated, mismatchReason} to each result entry so an AI
       // caller can detect silent truncation instead of trusting `status:ok`.
@@ -112,7 +102,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       importMode: SCHEMA_PROPS.importMode,
       dryRun: SCHEMA_PROPS.dryRun,
-      compile: SCHEMA_PROPS.compile,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
       timeoutMs: SCHEMA_PROPS.timeoutMs,

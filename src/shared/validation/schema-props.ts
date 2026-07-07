@@ -141,11 +141,6 @@ export const SCHEMA_PROPS = {
     description:
       "JSON encoded argument array. Non-arrays will be wrapped in a single-element array [value].",
   } as JsonSchemaProperty,
-  compile: {
-    type: "boolean",
-    description:
-      "When true, a successful per-module import is followed by a project-wide VBA compile (acCmdCompileAndSaveAllModules). Compile errors are propagated with component and line context.",
-  } as JsonSchemaProperty,
   // issue #752 — opt-in verbose contract. When true, the per-module import /
   // export result gains a `verbose` field with source / destination line
   // counts, byte counts, sha256 hashes and a derived `truncated` boolean.
