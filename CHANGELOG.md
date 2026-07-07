@@ -188,7 +188,7 @@ Implementation commits: PR #775 merge `f34568ad`; harness follow-up
   originally raised as deferred AC of #716). The cross-DB lookup primitive
   (`src/core/runtime/cross-db-table-lookup.ts`) tries the configured backend
   first, then the frontend, and returns which one contained the table.
-  Caller can read `dysflow_get_capabilities.toolsVisible` (still 68) and
+  Caller can read `get_capabilities.toolsVisible` (still 68) and
   the resolved `databasePath` from the result to determine which DB
   served the data. **Migration**: existing `target: "frontend" |
   "backend"` callers are unaffected; new `target: "auto"` callers get
@@ -206,7 +206,7 @@ Implementation commits: PR #775 merge `f34568ad`; harness follow-up
 - **Human-compile-reminder surface** (#762, PR-1 of v1.20.0). Before
   any test run / module import, dysflow tracks the last persistence +
   last `dysflow_verify_code` round-trip per `accessPath` and exposes:
-  - `dysflow_get_capabilities.humanCompilePending: bool` — true when the
+  - `get_capabilities.humanCompilePending: bool` — true when the
     human has not compiled since the last save-only persistence.
   - `humanCompileReminder: "Dysflow did not compile. The human must
     compile this project in Access (Debug > Compile) before any test
@@ -251,7 +251,7 @@ exposed the compile machinery:
 - **`compile_vba` MCP tool** (`commit f6607bb8`). Registered in
   `VBA_SYNC_TOOL_NAMES`, `MCP_TOOL_ROUTES`, `VBA_SYNC_TOOL_SCHEMAS`,
   `TOOL_PARITY_REGISTRY`, `EXECUTION_MAPPINGS` — every surface drops the
-  entry. `dysflow_dysflow_get_capabilities.toolsVisible` decreases by
+  entry. `dysflow_get_capabilities.toolsVisible` decreases by
   1 (68 -> 67). Any caller invoking `compile_vba` reaches an unknown
   tool error.
 - **`compile` and `rollbackOnCompileFail` parameters on `import_modules` /
@@ -493,10 +493,10 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - **Export trust contract** (#745): `export_modules` and `export_all` now set `ok: false` when any module produces warnings instead of silently returning success with zero files written. New `Build-ExportResultSummary` function (renamed from `Merge-ExportResultSummary` to avoid PowerShell 5.1 cmdlet collisions) is the single source of truth for the export result trust contract. 4 Pester test atoms verify the contract across clean/partial/total failure scenarios.
 - **`AccessVbaService.execute({dryRun:true})` short-circuit** (#746): when the top-level service receives `dryRun: true`, it returns a structured plan without opening Access, spawning PowerShell, or touching any state. Covers the MCP dispatch path so every vba-sync tool that sets `dryRun:true` reaches this guard.
 - **`dryRun:true` for `test_vba` and `delete_module`** (round-3 Item 5): both tools now accept an explicit `dryRun:true` parameter that returns a structured plan without running VBA or deleting anything. `dryRun:true` is EXPLICIT-ONLY (no default) so production operations don't accidentally dry-run. Schema additions in `vba-sync-schemas.ts`, adapter short-circuits in `vba-execution-adapter` and `vba-modules-adapter`, `DeletePlanResult` type in `vba-import-plan.ts`. RED tests in both adapter test suites.
-- **`dysflow_resolve_project` tool** (round-3 Item 1): new read-only MCP tool that resolves a project identity to its Access/backend paths via the `ProjectRegistry`. Pure helper `tryResolveProject()` — never opens Access, never mutates state. Registered in `MODERN_TOOL_NAMES` and `MCP_TOOL_CONTRACTS`. 8 dedicated tests. Tool count now 68.
+- **`resolve_project` tool** (round-3 Item 1): new read-only MCP tool that resolves a project identity to its Access/backend paths via the `ProjectRegistry`. Pure helper `tryResolveProject()` — never opens Access, never mutates state. Registered in `MODERN_TOOL_NAMES` and `MCP_TOOL_CONTRACTS`. 8 dedicated tests. Tool count now 68.
 
 ## [v1.15.6] - 2026-07-06
-- Fix every write-class MCP tool contract (`MCP_TOOL_CONTRACTS`) to declare `dryRunDefault: true`, aligning the `dysflow_get_capabilities` snapshot with the AGENTS.md + CHANGELOG v1.14 promise of "standardized dryRun defaults". Previously `contractFromGeneratedRoute` set `dryRunDefault: route.kind !== "vba-sync"`, which silently returned `false` for every vba-sync route (`import_modules`, `import_all`, `compile_vba`, `delete_module`, `fix_encoding`, `vba_inline_execution`, `dysflow_form_*`, `create_form_from_template`) and made the global `dryRunDefault` aggregate return `false` whenever any of those tools existed — directly contradicting the documented "plan first by default" stance. The dispatcher path already honors `dryRun: true` for these tools (`resolveIsDryRun` for query aliases, `buildMaintenanceRequest` for query-maintenance, `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync), so the contract surface now reflects reality. RED test covers the per-tool contracts and the global snapshot field; 504/504 MCP suite tests pass (#746).
+- Fix every write-class MCP tool contract (`MCP_TOOL_CONTRACTS`) to declare `dryRunDefault: true`, aligning the `get_capabilities` snapshot with the AGENTS.md + CHANGELOG v1.14 promise of "standardized dryRun defaults". Previously `contractFromGeneratedRoute` set `dryRunDefault: route.kind !== "vba-sync"`, which silently returned `false` for every vba-sync route (`import_modules`, `import_all`, `compile_vba`, `delete_module`, `fix_encoding`, `vba_inline_execution`, `dysflow_form_*`, `create_form_from_template`) and made the global `dryRunDefault` aggregate return `false` whenever any of those tools existed — directly contradicting the documented "plan first by default" stance. The dispatcher path already honors `dryRun: true` for these tools (`resolveIsDryRun` for query aliases, `buildMaintenanceRequest` for query-maintenance, `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync), so the contract surface now reflects reality. RED test covers the per-tool contracts and the global snapshot field; 504/504 MCP suite tests pass (#746).
 - Fix `form_serialize` (`src/adapters/vba-sync/vba-forms-serialization-tools.ts:serializeForm`) to honor the round-trip guarantee documented on `serializeFormTxt` (`serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)`). Previously `byteEqual = serialized === originalText` compared against the RAW original so any CRLF fixture (the realistic Access SaveAsText encoding on Windows) reported `byteEqual: false` and `byteDiff > 0` even on a clean round-trip — the existing RED test `byteEqual is true for a clean round-trip fixture` had been failing on every CI run since the test landed in PR #741. `byteEqual` and `byteDiff` now both compare against `normalizeLineEndings(originalText)`: a clean round-trip reports `byteEqual:true, byteDiff:0` for either CRLF or LF originals, and real content mutations (BOM, whitespace, etc.) still flip them. 2347/2347 unit tests pass, including the previously-blank RED (#747).
 
 - Fix `Export-VbaModule` so form `.form.txt` files and their sibling `.cls` code-behind files always carry `Attribute VB_Name = "<FormName>"` as their canonical identity. Two pure helpers do the work: `Ensure-VbNameAttributeAtTop` (top-of-file guard for the .cls sibling emission that `$codeModule.Lines(1, N)` cannot include for document modules in Access) and `Ensure-CodeBehindFormVbName` (post-`SaveAsText` guard for the `.form.txt` `CodeBehindForm` block, which the binary may already be missing on legacy graphs that imported through older dysflow versions). Without either, Access invents `Form_TempSccObj1`, `Form_TempSccObj2`, ... on the next import and downstream `Me.<Control>` references fail with "No se encontró el método o el dato miembro". Both helpers are exposed via the existing `dysflow-vba-manager.Tests.ps1` AST harness (no COM required); 9 new Pester tests pin the contract (RED→GREEN) and 152 existing tests stay green (#743). Update to the stale "Attribute VB_Name + Option Explicit are stripped" comment in `dysflow-vba-manager-unicode-roundtrip.Tests.ps1` to reflect the new emission-side contract.
@@ -538,15 +538,15 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - **Release-gate fix — `E2E_testing/mcp-e2e.mjs` advertised count bumped `54 → 61`.**
   The harness hardcoded `advertised.length === 54` while
   `test/adapters/mcp/advertised-tool-count.test.ts:25` already pinned **61** (the count
-  after the gate-introspection epic added `dysflow_get_capabilities` in PR #661). Every
+  after the gate-introspection epic added `get_capabilities` in PR #661). Every
   pre-release E2E run flipped the protocol preflight red and aborted the battery on
   STOP-ON-FAIL — the release gate was broken since v1.14.0. The two are pinned together
   by an explicit comment in the harness (`update both together`); this commit realigns
   them so the gate runs green.
-- **`dysflow_get_capabilities` E2E coverage added** (epic #655, PR #661). New
+- **`get_capabilities` E2E coverage added** (epic #655, PR #661). New
   `capabilities` area row exercises the tool through the suite-owned PID wrapper
   (`record()`, with preflight + post-tool `:zombie-check`). A second row,
-  `dysflow_get_capabilities:toolsVisible-matches-advertised`, cross-checks the
+  `get_capabilities:toolsVisible-matches-advertised`, cross-checks the
   snapshot's `toolsVisible` against the live registry — drift between the unit pin
   and the live MCP server now surfaces immediately in the report instead of failing
   silently.
@@ -558,7 +558,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 
 ## [v1.14.0] - 2026-07-03
 ### get-capabilities-mcp (#656)
-- **New `dysflow_get_capabilities` MCP tool exposes a single introspectable source-of-truth
+- **New `get_capabilities` MCP tool exposes a single introspectable source-of-truth
   for the MCP write gate, per-project `allowWrites` resolution, the `allowedProcedures`
   allowlist gate, and the implicit `dryRun:true` default.** A new IA consumer calls this
   tool once per session and decides every subsequent call without consulting docs. The
@@ -577,7 +577,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   declare per-project capability hints in a single, version-controlled location
   (`src/core/config/dysflow-config.ts:197` — `capabilities.*` with `tools`,
   `procedures`, `writes`, and `dryRun` sub-keys). The block is consumed by
-  `dysflow_get_capabilities` (#656) and by the MCP tool-contracts layer so a future
+  `get_capabilities` (#656) and by the MCP tool-contracts layer so a future
   consumer never needs to re-derive project intent from docs. The node loader
   (`src/adapters/config/dysflow-config-node.ts:27`) merges the block with sensible
   defaults. Two unit tests pin the contract:
@@ -594,7 +594,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   (mirroring the existing `@dysflow:` annotation convention) — dangerous entry
   points must be opted in explicitly. The MCP adapter
   (`src/adapters/discovery/allowed-procedures-adapter.ts:88`) renders the discovery
-  result for `dysflow_get_capabilities`. Five unit tests at
+  result for `get_capabilities`. Five unit tests at
   `test/core/services/allowed-procedures-discovery.test.ts:565` pin the contract:
   default scan, dangerous opt-out, empty project, nested modules, and
   prefix-collision rules.

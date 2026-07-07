@@ -67,7 +67,7 @@ export function ensureProcedureAllowed(
     // #659 — emit the new MCP_PROCEDURE_NOT_ALLOWED envelope so consumers can
     // distinguish "procedure is not in the allowlist" from generic
     // MCP_INPUT_INVALID. The structured error block carries the active
-    // allowlist and a remediation hint pointing to dysflow_get_capabilities.
+    // allowlist and a remediation hint pointing to get_capabilities.
     return procedureNotAllowed(procedureName, allowedProcedures);
   }
   return undefined;

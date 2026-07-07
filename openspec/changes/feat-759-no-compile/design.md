@@ -83,7 +83,7 @@ Exact sites in `scripts/dysflow-vba-manager.ps1` (line numbers verified by direc
 
 **Before:** caller → MCP `tools/list` includes `compile_vba` (count 68) → caller invokes `compile_vba` → dispatch resolves to `dispatch-routes.compile_vba` (`{ kind: "vba-sync", mutatesBinary: true }`) → `vba-sync-adapter.handles("compile_vba")` → `EXECUTION_MAPPINGS.compile_vba` → PS `Invoke-CompileAction` → `Invoke-CompileVbaProject` → `RunCommand(126)` (sites `:2859` / `:2873`) → on failure: `New-CompileFailureResult` envelope with `code: "VBA_COMPILE_ERROR"` → TS adapter maps to `error.details.code = "VBA_COMPILE_ERROR"`.
 
-**After Slice 3:** caller → MCP `tools/list` does NOT include `compile_vba` (count 67) → caller invokes `compile_vba` → dispatch returns `tool-not-found` (`-32601: Method not found`) BEFORE any PS invocation. No `VBA_COMPILE_ERROR` envelope is constructible; `New-CompileFailureResult` no longer exists; `EXECUTION_MAPPINGS.compile_vba` key no longer exists; `VBA_SYNC_TOOL_NAMES`, `MCP_TOOL_ROUTES`, `tool-parity-registry`, `dispatch-factory`, `vba-sync-adapter.handles/execute`, and `vba-sync-schemas.compile_vba` schema are all empty of the name. `dysflow_dysflow_get_capabilities.toolsVisible` drops 68 → 67.
+**After Slice 3:** caller → MCP `tools/list` does NOT include `compile_vba` (count 67) → caller invokes `compile_vba` → dispatch returns `tool-not-found` (`-32601: Method not found`) BEFORE any PS invocation. No `VBA_COMPILE_ERROR` envelope is constructible; `New-CompileFailureResult` no longer exists; `EXECUTION_MAPPINGS.compile_vba` key no longer exists; `VBA_SYNC_TOOL_NAMES`, `MCP_TOOL_ROUTES`, `tool-parity-registry`, `dispatch-factory`, `vba-sync-adapter.handles/execute`, and `vba-sync-schemas.compile_vba` schema are all empty of the name. `dysflow_get_capabilities.toolsVisible` drops 68 → 67.
 
 ## Error model
 
@@ -121,7 +121,7 @@ Per `web-tdd-philosophy` Hard Rules + `testing-philosophy.md` "test at the ports
 
 ### Slice 3 — RED → GREEN → REFACTOR
 
-- **RED — vitest (`test/adapters/mcp/mcp-tool-registry.test.ts` + `dysflow-get-capabilities-tool.test.ts`):** asserts `VBA_SYNC_TOOL_NAMES` does NOT contain `compile_vba`; `MCP_TOOL_ROUTES` has no `compile_vba` key; `EXECUTION_MAPPINGS` has no `compile_vba`; `dysflow_dysflow_get_capabilities.toolsVisible` decreases by exactly 1.
+- **RED — vitest (`test/adapters/mcp/mcp-tool-registry.test.ts` + `dysflow-get-capabilities-tool.test.ts`):** asserts `VBA_SYNC_TOOL_NAMES` does NOT contain `compile_vba`; `MCP_TOOL_ROUTES` has no `compile_vba` key; `EXECUTION_MAPPINGS` has no `compile_vba`; `dysflow_get_capabilities.toolsVisible` decreases by exactly 1.
 - **RED — vitest (`test/adapters/vba-sync/vba-execution-adapter.test.ts`, `vba-sync-adapter.test.ts`):** asserts `handles()` returns `false` for `compile_vba`; `execute()` branch is unreachable; `EXECUTION_MAPPINGS.compile_vba` access throws `undefined`.
 - **RED — vitest (`test/shared/validation/schema-props.test.ts` + `test/adapters/mcp/schemas/vba-sync-schemas.test.ts`):** asserts no `compile_vba` schema is exported; `tool-parity-registry.test.ts` asserts no `compile_vba` description entry.
 - **RED — Pester (`scripts/tests/dysflow-vba-manager.Tests.ps1`):** asserts `Invoke-CompileAction`, `Invoke-CompileVbaProject`, `New-CompileFailureResult` no longer exist as script functions (AST scan).
@@ -149,7 +149,7 @@ grep -rnE '\bcompile\b' \
 ## Invariants preserved
 
 1. **Existing callers of `import_modules`, `import_all`, `delete_module`, `test_vba`** (without compile params) — completely unaffected. Slice 2's param removal is purely additive at the rejection boundary.
-2. **Existing callers of every other tool** (`list_tables`, `get_schema`, `query_execute`, `verify_code`, `link_tables`, `relink_tables`, `compact_repair`, `seed_fixture`, `teardown_fixture`, `create_table`, `drop_table`, `dysflow_dysflow_get_capabilities`, etc.) — completely unaffected. Slice 3's tool removal touches only `compile_vba` and the registry/route/description artefacts.
+2. **Existing callers of every other tool** (`list_tables`, `get_schema`, `query_execute`, `verify_code`, `link_tables`, `relink_tables`, `compact_repair`, `seed_fixture`, `teardown_fixture`, `create_table`, `drop_table`, `dysflow_get_capabilities`, etc.) — completely unaffected. Slice 3's tool removal touches only `compile_vba` and the registry/route/description artefacts.
 3. **The Active-lock bug must be REPRODUCIBLE without the fix (test the test) BEFORE the fix ships, then NOT reproducible after.** This is the cardinal invariant of Slice 1. The Pester and E2E RED tests assert the bug is fixed by asserting the symptom is absent — if either test could pass on the broken code, the test is wrong.
 4. **The broken-project fixture E2E** (`test/e2e/import-modules-broken-project.e2e.test.ts`) **runs on Windows + Access** — no mocks on the runner path. The persistence layer is not mockable for this regression; it must hit real Access.
 

@@ -184,12 +184,12 @@ await record("operations", "access_force_cleanup_orphaned", { projectId, accessP
 // Same harness shape as every other tool — record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
-await record("capabilities", "dysflow_get_capabilities", { projectId });
+await record("capabilities", "get_capabilities", { projectId });
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
   // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
   const crossStart = Date.now();
-  const cross = await callMcp("tools/call", { name: "dysflow_get_capabilities", arguments: { projectId } });
+  const cross = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
   const crossMs = Date.now() - crossStart;
   const crossRow = (() => {
     if (cross.timedOut) return { pass: false, summary: "timeout" };
@@ -206,8 +206,8 @@ await record("capabilities", "dysflow_get_capabilities", { projectId });
         : `drift: snapshot.toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length}`,
     };
   })();
-  rows.push({ area: "capabilities", tool: "dysflow_get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
-  console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tdysflow_get_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
+  rows.push({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
+  console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tget_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
 }
 
 await record("query", "query_sql", { projectId, ...backendTarget, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades" });

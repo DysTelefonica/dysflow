@@ -340,7 +340,7 @@ export class VbaModulesAdapter {
     if (!importResult.ok) return importResult;
 
     // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
-    // human-compile state cache so `dysflow_get_capabilities` and the result
+    // human-compile state cache so `get_capabilities` and the result
     // reminder surface know there is something for the human to compile.
     // Only recorded for the tools that actually mutate the binary (import_*
     // and delete_module) — verify_code, export_*, and read-only tools do not

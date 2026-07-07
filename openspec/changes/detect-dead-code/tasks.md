@@ -116,7 +116,7 @@ pnpm exec tsc --noEmit
 Expected evidence after GREEN:
 - All 14 RED core tests + 4 contract tests pass
 - `pnpm test` clean
-- `dysflow_detect_dead_code` in `dysflow_get_capabilities` output (`toolsVisible` count increments)
+- `dysflow_detect_dead_code` in `get_capabilities` output (`toolsVisible` count increments)
 - No `dispatch-routes.ts` or `mcp-tool-registry.ts` changes
 
 ---

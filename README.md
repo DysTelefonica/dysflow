@@ -584,7 +584,7 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
-#### `dysflow_get_capabilities`
+#### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. The snapshot surfaces the running adapter version, MCP surface, process- and project-level write flags, projectId resolution outcome, the `allowedProcedures` allowlist, the global `dryRun` default, the count of tools visible in `tools/list`, and the list of write-class tools currently permitted.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
 
@@ -639,8 +639,8 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
 
-#### `dysflow_resolve_project`
-Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `dysflow_get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+#### `resolve_project`
+Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.

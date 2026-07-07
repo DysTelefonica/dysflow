@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createResolveProjectTool,
   tryResolveProject,
-} from "../../../src/adapters/mcp/dysflow-resolve-project-tool";
+} from "../../../src/adapters/mcp/resolve-project-tool";
 
 /**
- * Round-3 Item 1 — `dysflow_resolve_project` exposes a pure helper
+ * Round-3 Item 1 — `resolve_project` exposes a pure helper
  * `tryResolveProject(input, cwd)` so consumers can ask "what would the MCP
  * think if I passed THIS projectId?" without round-tripping through the
  * running MCP. The helper never throws — it ALWAYS returns a typed
@@ -150,7 +150,7 @@ describe("createResolveProjectTool() — tool factory", () => {
     });
 
     const tool = createResolveProjectTool({ cwd: workdir });
-    expect(tool.name).toBe("dysflow_resolve_project");
+    expect(tool.name).toBe("resolve_project");
     expect(tool.inputSchema?.properties).toHaveProperty("projectId");
 
     const result = await tool.handler({ projectId: "captured-cwd" });

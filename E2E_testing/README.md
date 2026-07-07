@@ -58,7 +58,7 @@ writes). Areas currently covered:
 - **security** — read-only guard against DROP/DELETE
 - **vba** — `run_vba` allowlist enforcement
 - **operations** — `list_access_operations` / `cleanup` / `force_cleanup_orphaned`
-- **capabilities** — `dysflow_get_capabilities` snapshot + toolsVisible-vs-advertised cross-check
+- **capabilities** — `get_capabilities` snapshot + toolsVisible-vs-advertised cross-check
 - **maintenance** — `compact_repair` (dry-run + apply)
 - **links** — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - **write** — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
@@ -84,10 +84,10 @@ If you bypass `record()`, you lose all three. Don't.
 
 ```javascript
 // Correct — uses the suite helper, gets preflight + zombie check for free.
-await record("capabilities", "dysflow_get_capabilities", { projectId });
+await record("capabilities", "get_capabilities", { projectId });
 
 // Wrong — bypasses the helper. You get raw output but lose all safety invariants.
-const raw = await callMcp("tools/call", { name: "dysflow_get_capabilities", arguments: { projectId } });
+const raw = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
 ```
 
 ### Adding coverage for a new tool

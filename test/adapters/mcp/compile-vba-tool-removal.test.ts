@@ -11,7 +11,7 @@
  *   5. `EXECUTION_MAPPINGS.compile_vba` — vba-execution-adapter.ts:25
  *   6. `handles()` returns false for compile_vba — vba-modules-adapter.ts +
  *      vba-execution-adapter.ts + vba-sync-adapter.ts
- *   7. `dysflow_dysflow_get_capabilities.toolsVisible` — drops by exactly 1
+ *   7. `dysflow_get_capabilities.toolsVisible` — drops by exactly 1
  *      (68 -> 67).
  *
  * Mirrors the registration pin pattern from

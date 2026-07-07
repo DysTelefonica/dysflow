@@ -82,7 +82,7 @@ The audit script `grep -rnE '\bcompile\b' src/ | grep -v 'compilerOptions' | gre
 | `dysflow_test_vba` result includes reminder when no compile | ✅ | `test/adapters/mcp/human-compile-reminder.test.ts` happy-2 + sad |
 | `dysflow_run_vba` result includes reminder when no compile | ✅ | Coverage via `handleMcpVbaExecute` wrapping (same handler as `dysflow_vba_execute`). Dispatch-factory path covers vba-sync test_vba + import_* + delete_module. |
 | `dysflow_import_modules` / `dysflow_import_all` includes reminder when `dryRun: false` | ✅ | Happy path test exercises this directly. |
-| `dysflow_get_capabilities` exposes `humanCompilePending: bool` | ✅ | 4 tests in `dysflow-get-capabilities-tool.test.ts` cover the field. |
+| `get_capabilities` exposes `humanCompilePending: bool` | ✅ | 4 tests in `dysflow-get-capabilities-tool.test.ts` cover the field. |
 | Tests RED→GREEN with `web-tdd-philosophy` discipline | ✅ | 10 unit + 4 snapshot + 6 integration tests, fixture-gated, three paths per slice. |
 | All existing tests stay green (2397/2399 baseline) | ✅ | 2417/2419 after this slice. No regressions. |
 | Audit script returns zero matches in NEW code | ✅ | All matches are comments or the reminder text constant (excluded by spec). |

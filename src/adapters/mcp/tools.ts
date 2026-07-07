@@ -22,7 +22,7 @@ import {
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import { handleMcpAccessOrphanCleanup, handleMcpQueryExecute } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
-import { createResolveProjectTool } from "./dysflow-resolve-project-tool.js";
+import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
@@ -421,7 +421,7 @@ export const MODERN_TOOL_NAMES = [
   // the canonical aliases (with bespoke handlers in alias-tools.ts)
   // are owned by `aliasContracts`, not `modernContracts`.
   "access_force_cleanup_orphaned",
-  "dysflow_get_capabilities",
+  "get_capabilities",
   // issue #701 — read-only VBA procedure introspection
   "list_procedures",
   "get_procedure",
@@ -433,7 +433,7 @@ export const MODERN_TOOL_NAMES = [
   // #704 — read-only VBA module pre-import linting.
   "lint_module",
   // Round-3 Item 1 — project config re-resolution companion tool
-  "dysflow_resolve_project",
+  "resolve_project",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -538,7 +538,7 @@ export function createDysflowMcpTools(
     // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
     // aggregated `McpCapabilitySnapshot` for the live MCP adapter. The tool
     // is registered in `MODERN_TOOL_NAMES` above and surfaces its contract
-    // summary through `MCP_TOOL_CONTRACTS.dysflow_get_capabilities` (added in
+    // summary through `MCP_TOOL_CONTRACTS.get_capabilities` (added in
     // `mcp-tool-contracts.ts`). It is intentionally read-only — it never
     // touches Access, never spawns PowerShell, and is never write-gated.
     createGetCapabilitiesTool({

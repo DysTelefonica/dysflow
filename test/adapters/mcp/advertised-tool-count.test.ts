@@ -37,7 +37,7 @@ describe("advertised MCP tool surface", () => {
   it(`advertises exactly ${EXPECTED_ADVERTISED_TOOL_COUNT} non-hidden tools (matches the MCP server tools/list)`, () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
-    // PR-1 (#656) added dysflow_get_capabilities.
+    // PR-1 (#656) added get_capabilities.
     // #701 added list_procedures + get_procedure.
     // #705 added detect_dead_code.
     // #703 added validate_manifest.
@@ -53,5 +53,13 @@ describe("advertised MCP tool surface", () => {
 
   it("advertises a duplicate-free set", () => {
     expect(new Set(advertised).size).toBe(advertised.length);
+  });
+
+  it("does not advertise any tool whose name starts with 'dysflow_' (#777 cont.)", () => {
+    // Opción A directive: "no legacy ni non legacy, todos han de ser iguales".
+    // The previous 11 (#777) and these 2 (get_capabilities, resolve_project)
+    // are the LAST tools still carrying the dysflow_ prefix.
+    const dysflowPrefixed = advertised.filter((name) => name.startsWith("dysflow_"));
+    expect(dysflowPrefixed).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
-// `dysflow_resolve_project` — round-3 Item 1 companion to
-// `dysflow_get_capabilities`. The snapshot tool reports the projectId that
+// `resolve_project` — round-3 Item 1 companion to
+// `get_capabilities`. The snapshot tool reports the projectId that
 // was captured at factory construction; this tool re-resolves
 // `.dysflow/project.json` from disk so a consumer can ask
 // "what would the MCP think if I passed THIS projectId?" without
@@ -177,17 +177,17 @@ export const RESOLVE_PROJECT_SCHEMA = {
 } as const;
 
 /**
- * Factory for the `dysflow_resolve_project` MCP tool. The factory is
+ * Factory for the `resolve_project` MCP tool. The factory is
  * pure: it captures `cwd` once at construction and the handler reads it
  * on every invocation. Tests pass a `mkdtempSync` directory so the
  * integration exercise does not depend on `process.cwd()`.
  */
 export function createResolveProjectTool(opts: { cwd: string }): DysflowMcpTool {
   return {
-    name: "dysflow_resolve_project",
+    name: "resolve_project",
     description:
-      "Read .dysflow/project.json from the supplied cwd and return a structured diagnosis of how a hypothetical projectId would resolve. Companion to dysflow_get_capabilities: the snapshot tool reports the projectId captured at factory construction; this tool re-checks the project.json on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Returns { projectId, outcome, reason, accessPath, projectRoot, sourceRoot } with reason one of: explicit id match | single project config found | project.json not found | id mismatch | unknown. Use outcome === 'resolved' to confirm a projectId is wired; use outcome === 'unresolved' + reason to diagnose a missing or mismatched config. " +
-      MCP_TOOL_CONTRACTS.dysflow_resolve_project.summary,
+      "Read .dysflow/project.json from the supplied cwd and return a structured diagnosis of how a hypothetical projectId would resolve. Companion to get_capabilities: the snapshot tool reports the projectId captured at factory construction; this tool re-checks the project.json on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Returns { projectId, outcome, reason, accessPath, projectRoot, sourceRoot } with reason one of: explicit id match | single project config found | project.json not found | id mismatch | unknown. Use outcome === 'resolved' to confirm a projectId is wired; use outcome === 'unresolved' + reason to diagnose a missing or mismatched config. " +
+      MCP_TOOL_CONTRACTS.resolve_project.summary,
     inputSchema: RESOLVE_PROJECT_SCHEMA,
     handler: async (input): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const params =

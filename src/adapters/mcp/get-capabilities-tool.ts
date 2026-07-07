@@ -46,7 +46,7 @@ import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
  *   is `read-write` or `conditional-write`) that the process-level gate
  *   currently permits. When `writesProcess.enabled` is `false` and no
  *   resolver is configured, the resolver outcome is unknown to the snapshot
- *   and the list is empty — the consumer must call `dysflow_get_capabilities`
+ *   and the list is empty — the consumer must call `get_capabilities`
  *   with the per-input tool name to resolve the per-tool gate.
  * - `humanCompilePending` (v1.20.0, issue #762): inferred flag that tells
  *   the consumer whether the human has likely to need to compile the
@@ -144,7 +144,7 @@ function computeWriteClassToolsPermitted(
   // aggregate (the resolver takes a per-input argument), so the snapshot
   // reports an empty list. Consumers who need the per-input verdict call
   // `resolveEffectiveGate` (a follow-up layer of #655) or re-invoke
-  // `dysflow_get_capabilities` with the specific tool input.
+  // `get_capabilities` with the specific tool input.
   if (!writesEnabled) return [];
   return toolNames.filter((name) => {
     const contract = MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS];
@@ -184,7 +184,7 @@ function readAdapterVersion(): string {
 // ─── Tool factory ─────────────────────────────────────────────────────────────
 
 /**
- * Factory for the `dysflow_get_capabilities` tool. Wires the aggregate
+ * Factory for the `get_capabilities` tool. Wires the aggregate
  * function with the captured adapter context (writesEnabled, resolver,
  * allowlist, projectId). Returns a `DysflowMcpTool` ready to register via
  * the `createDysflowMcpTools` factory.
@@ -222,8 +222,8 @@ export function createGetCapabilitiesTool(opts: {
   });
 
   return {
-    name: "dysflow_get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.dysflow_get_capabilities.summary}`,
+    name: "get_capabilities",
+    description:       `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);

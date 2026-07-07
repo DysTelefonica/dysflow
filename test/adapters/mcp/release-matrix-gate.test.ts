@@ -47,7 +47,7 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // Any edit that moves one of these numbers MUST justify the change in that PR.
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
-    // PR-1 (#656) added dysflow_get_capabilities (read-only introspection).
+    // PR-1 (#656) added get_capabilities (read-only introspection).
     // #701 added list_procedures + get_procedure.
     // #705 added detect_dead_code (read-only dead-code analysis).
     // #703 added validate_manifest (read-only VBA test manifest validation).

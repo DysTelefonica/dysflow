@@ -7,7 +7,7 @@
  *   - `error.code` = `"MCP_PROCEDURE_NOT_ALLOWED"`
  *   - `error.message` naming the rejected procedure
  *   - `error.allowedProcedures` = the allowlist active at the time of the call
- *   - `error.remediation` mentioning `dysflow_get_capabilities`
+ *   - `error.remediation` mentioning `get_capabilities`
  *
  * The legacy `content[0].text` body keeps the `"MCP_PROCEDURE_NOT_ALLOWED: …"`
  * prefix so regex-based consumers can still parse the failure.
@@ -46,14 +46,14 @@ describe("procedureNotAllowed — structured envelope (#659)", () => {
     const allowed = ["Test_A", "Test_B"] as const;
     const result = procedureNotAllowed("Test_X", allowed);
     // The body MUST carry the active allowlist so a consumer can introspect it
-    // without a second round-trip to `dysflow_get_capabilities`.
+    // without a second round-trip to `get_capabilities`.
     expect(result.content[0]?.text).toContain("Test_A");
     expect(result.content[0]?.text).toContain("Test_B");
   });
 
-  it("body includes a remediation hint mentioning dysflow_get_capabilities", () => {
+  it("body includes a remediation hint mentioning get_capabilities", () => {
     const result = procedureNotAllowed("Test_X", ["Test_A"]);
-    expect(result.content[0]?.text).toContain("dysflow_get_capabilities");
+    expect(result.content[0]?.text).toContain("get_capabilities");
   });
 
   it("structured `error.code` matches the body prefix code", () => {
@@ -72,9 +72,9 @@ describe("procedureNotAllowed — structured envelope (#659)", () => {
     expect(result.error?.allowedProcedures).toEqual(["Test_A", "Test_B"]);
   });
 
-  it("structured `error.remediation` mentions dysflow_get_capabilities", () => {
+  it("structured `error.remediation` mentions get_capabilities", () => {
     const result = procedureNotAllowed("Test_X", ["Test_A"]);
-    expect(result.error?.remediation).toContain("dysflow_get_capabilities");
+    expect(result.error?.remediation).toContain("get_capabilities");
   });
 
   it("handles a single-element allowlist consistently", () => {

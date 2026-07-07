@@ -58,7 +58,7 @@ E2E_testing/
   - resolución desde disco contra el árbol fuente del sandbox (happy path)
 - `vba-manifest` — `validate_manifest` (#703): validación previa del manifest de tests VBA sin ejecutar `test_vba`
 - `operations` — `list_access_operations` / `cleanup` / `force_cleanup_orphaned`
-- `capabilities` — `dysflow_get_capabilities` snapshot + cross-check vs `advertised.length`
+- `capabilities` — `get_capabilities` snapshot + cross-check vs `advertised.length`
 - `maintenance` — `compact_repair` (dry-run + apply con password real)
 - `links` — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - `write` — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
@@ -352,9 +352,9 @@ deben moverse juntos:
 | E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 67` |
 | Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness importa el contador compartido `EXPECTED_ADVERTISED_TOOL_COUNT` |
 
-`dysflow_get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
+`get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
 cruza con `advertised.length` para detectar drift entre el pin unit y el servidor en vivo
-(fila `dysflow_get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
+(fila `get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
 `toolsVisible=66` y el pin dice 67, el cross-check falla aunque las herramientas
 individuales pasen.
 

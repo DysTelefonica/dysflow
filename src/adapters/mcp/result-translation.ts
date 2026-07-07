@@ -37,14 +37,14 @@ export type McpToolError = {
   /**
    * Optional remediation hint surfaced on gate-rejection envelopes (#659).
    * When present, the hint names the next action a consumer should take
-   * (e.g. "call dysflow_get_capabilities to introspect the allowlist").
+   * (e.g. "call get_capabilities to introspect the allowlist").
    */
   remediation?: string;
   /**
    * Optional allowlist surfaced when the rejection is an allowlist
    * membership check (#659). Equals the array that was active at the time
    * of the call — verbatim, NOT a snapshot — so a consumer can branch on
-   * its contents without a second round-trip to `dysflow_get_capabilities`.
+   * its contents without a second round-trip to `get_capabilities`.
    */
   allowedProcedures?: readonly string[];
 };

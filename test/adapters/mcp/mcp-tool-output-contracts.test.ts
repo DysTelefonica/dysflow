@@ -11,7 +11,7 @@ import type { AccessVbaResult } from "../../../src/core/services/vba-service";
 
 const OUTPUT_CONTRACT_GROUPS = {
   modernCoreService: [
-    // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
+    // PR-1 (#656) — `get_capabilities` is a read-only modern service
     // tool. It aggregates capability metadata; it never touches Access.
     "query_execute",
     "doctor",
@@ -24,7 +24,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // completely. The canonical `run_vba` is a pre-existing alias in
     // `alias-tools.ts` (lives in `modernServiceAliases` below); it is no
     // longer a modern tool name in this group.
-    "dysflow_get_capabilities",
+    "get_capabilities",
     // #701 — read-only modern service tools that parse VBA source text without
     // PowerShell runner DYSFLOW_RESULT output.
     "list_procedures",
@@ -37,7 +37,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #704 — read-only VBA module pre-import linting.
     "lint_module",
     // #760 — read-only project-config resolution without Access.
-    "dysflow_resolve_project",
+    "resolve_project",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

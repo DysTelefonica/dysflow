@@ -18,7 +18,7 @@ export type DysflowError = {
    * that hit the gate (e.g. `PROCEDURE_NOT_ALLOWED`). Lets a consuming
    * agent read the live allowlist directly off the error envelope instead
    * of re-asking the user. Mirrors the field exposed by
-   * `dysflow_get_capabilities.allowedProcedures` (#656 / PR #661).
+   * `get_capabilities.allowedProcedures` (#656 / PR #661).
    */
   allowedProcedures?: readonly string[];
   /**

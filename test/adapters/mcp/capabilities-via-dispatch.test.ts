@@ -3,7 +3,7 @@ import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
 /**
- * PR-1 (issue #656) — integration check that `dysflow_get_capabilities`
+ * PR-1 (issue #656) — integration check that `get_capabilities`
  * is reachable through the `createDysflowMcpTools` dispatch chain (the same
  * chain that `registerMcpTools` exposes) and that its `allowedProcedures`
  * field reflects the project-level allowlist passed in at registration time.
@@ -35,7 +35,7 @@ function makeServices() {
   };
 }
 
-describe("dysflow_get_capabilities via dispatch harness (#656)", () => {
+describe("get_capabilities via dispatch harness (#656)", () => {
   it("is reachable and the allowlist propagates through the registration chain", async () => {
     const allowedProcedures = ["Test_Alpha", "Test_Beta"] as const;
     const tools = createDysflowMcpTools(
@@ -46,7 +46,7 @@ describe("dysflow_get_capabilities via dispatch harness (#656)", () => {
       allowedProcedures, // project allowlist
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool, "tool must be reachable through the dispatch chain").toBeDefined();
 
     const result = await tool?.handler({});

@@ -10,7 +10,7 @@ import {
 } from "../../../src/core/runtime/human-compile-state";
 
 /**
- * PR-1 (issue #656) — `dysflow_get_capabilities` is a read-only MCP tool that
+ * PR-1 (issue #656) — `get_capabilities` is a read-only MCP tool that
  * returns an aggregated capabilities snapshot for the live MCP adapter. The
  * shape is the consumer surface for #655 (gate-introspection-v1).
  *
@@ -233,16 +233,16 @@ describe("dryRunDefault contract — global + per-tool alignment (#746)", () => 
   });
 });
 
-describe("dysflow_get_capabilities tool — registration and read-only contract (#656)", () => {
+describe("get_capabilities tool — registration and read-only contract (#656)", () => {
   it("is registered as a modern tool by createDysflowMcpTools", () => {
     const tools = createDysflowMcpTools(makeServices(), false);
-    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool, "tool must be registered").toBeDefined();
   });
 
   it("uses NO_INPUT_SCHEMA (read-only, no required input)", () => {
     const tools = createDysflowMcpTools(makeServices(), false);
-    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool?.inputSchema).toEqual({
       type: "object",
       additionalProperties: false,
@@ -252,7 +252,7 @@ describe("dysflow_get_capabilities tool — registration and read-only contract 
 
   it("is NOT write-gated: handler returns ok when writes are disabled", async () => {
     const tools = createDysflowMcpTools(makeServices(), false);
-    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    const tool = tools.find((t) => t.name === "get_capabilities");
     if (!tool) throw new Error("tool not registered");
 
     const result = await tool.handler({});
@@ -264,7 +264,7 @@ describe("dysflow_get_capabilities tool — registration and read-only contract 
 
   it("handler returns a parseable JSON payload with the documented snapshot", async () => {
     const tools = createDysflowMcpTools(makeServices(), true);
-    const tool = tools.find((t) => t.name === "dysflow_get_capabilities");
+    const tool = tools.find((t) => t.name === "get_capabilities");
     if (!tool) throw new Error("tool not registered");
 
     const result = await tool.handler({});
@@ -274,7 +274,7 @@ describe("dysflow_get_capabilities tool — registration and read-only contract 
     try {
       parsed = JSON.parse(result.content[0]?.text ?? "{}");
     } catch (error) {
-      throw new Error(`Expected dysflow_get_capabilities to return JSON: ${String(error)}`);
+      throw new Error(`Expected get_capabilities to return JSON: ${String(error)}`);
     }
     expect(parsed).toMatchObject({
       surface: "stdio",
