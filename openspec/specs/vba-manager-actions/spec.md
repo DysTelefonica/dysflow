@@ -157,11 +157,10 @@ named module; it MUST NOT modify the project.
 
 ---
 
-### Requirement: Run-Procedure and Compile Behavior
+### Requirement: Run-Procedure Action Behavior
 
 `Invoke-RunProcedureAction` MUST delegate to `Invoke-AccessProcedure` and return its result
-unchanged. `Invoke-CompileAction` MUST invoke the compile helper and surface any compile error
-in the result without throwing.
+unchanged.
 
 #### Scenario: Run-Procedure passes args through
 
@@ -169,13 +168,6 @@ in the result without throwing.
 - WHEN `Invoke-RunProcedureAction` runs
 - THEN `Invoke-AccessProcedure` is called with the same procedure name and converted args
 - AND the return value is passed through to the caller
-
-#### Scenario: Compile error surfaced
-
-- GIVEN the VBA project contains a compile error
-- WHEN `Invoke-CompileAction` runs
-- THEN the result contains the error description
-- AND no exception propagates to the dispatcher
 
 ---
 
@@ -393,3 +385,72 @@ The set of disk-file extensions that `export_all prune` and `import_all prune` a
 - WHEN `export_all prune:true` runs after a clean export
 - THEN the `.frm` file MUST NOT be deleted
 - AND the prune report MUST NOT list it under `deleted`
+
+---
+
+### Requirement: Save-Only Persistence After a Mutation
+
+The dysflow runtime MUST persist every VBA mutation via **cCmdSaveAllModules (RunCommand 280)**
+and MUST NOT invoke any project-wide compile as part of the mutation path. The human compiles in
+Access (Debug ▸ Compile) before re-running tests or trusting the binary.
+
+#### Scenario: import_modules persists via save-only
+
+- GIVEN a project config and a module source on disk
+- WHEN import_modules is called
+- THEN the binary persists the module via RunCommand(280) (cCmdSaveAllModules)
+- AND no RunCommand(126) (cCmdCompileAndSaveAllModules) is invoked
+
+#### Scenario: delete_module persists via save-only
+
+- GIVEN a module exists in the project
+- WHEN delete_module(force:true) is called
+- THEN the binary persists the removal via RunCommand(280)
+- AND no compile step is invoked
+
+#### Scenario: mutation succeeds on a broken project (Active-lock regression anchor)
+
+- GIVEN a project whose source contains a pre-existing compile error (incomplete VBA syntax that
+  prevents a project-wide compile)
+- WHEN delete_module(force:true) is followed by import_modules on the same binary
+- THEN both operations succeed
+- AND the Active lock detected: the VBA component 'X' remains in the project after deletion
+  attempt. error NEVER surfaces
+- AND persistence completes via RunCommand(280) only
+
+### Requirement: No compile_vba Action
+
+The compile_vba action MUST NOT exist in the ba-manager-actions capability surface. Removed
+in v1.19.0 (feat-759-no-compile hard break).
+
+#### Scenario: compile_vba absent from the action surface
+
+- GIVEN a v1.19.0+ runtime
+- WHEN a caller invokes a compile_vba action
+- THEN the action is not present in the action surface
+- AND no execution path returns VBA_COMPILE_ERROR
+
+### Requirement: No compile Parameter on Mutation Imports
+
+The import_modules, import_all, and 	est_vba actions MUST NOT accept a compile parameter.
+ollbackOnCompileFail MUST NOT exist on import_modules. Removed in v1.19.0 (feat-759-no-compile
+hard break).
+
+#### Scenario: import_modules schema rejects compile
+
+- GIVEN a v1.19.0+ runtime
+- WHEN import_modules is called with compile: true
+- THEN the schema validator (Zod dditionalProperties:false) rejects the call with
+  MCP_INPUT_INVALID
+
+#### Scenario: import_modules schema rejects ollbackOnCompileFail
+
+- GIVEN a v1.19.0+ runtime
+- WHEN import_modules is called with ollbackOnCompileFail: true
+- THEN the schema validator rejects the call with MCP_INPUT_INVALID
+
+#### Scenario: test_vba does not expose compile
+
+- GIVEN a v1.19.0+ runtime
+- WHEN the 	est_vba action schema is inspected
+- THEN no compile property is exposed

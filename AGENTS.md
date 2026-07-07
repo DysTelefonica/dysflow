@@ -148,9 +148,9 @@ recoverable, and aligned with the write-gate contract.
    the source to mirror.
 2. Edit disk source.
 3. Import only the touched modules with `import_modules` when possible; use `import_all` only for a
-   whole-tree resync.
-4. Compile with `compile_vba` after standard/class module edits.
-5. Re-run `verify_code` and the focused `test_vba` plan before trusting the binary.
+   whole-tree resync. Mutations persist via save-only (`acCmdSaveAllModules` = RunCommand 280) — the
+   runtime no longer compiles; the human compiles in Access (Debug > Compile) before re-running tests.
+4. Re-run `verify_code` and the focused `test_vba` plan before trusting the binary.
 
 ### Timeout and orphan recovery
 
@@ -186,8 +186,9 @@ recoverable, and aligned with the write-gate contract.
 ### Form/report sync ownership
 
 - Code-behind lives in `.cls`; layout lives in `.form.txt` or `.report.txt`.
-- Edit behavior in the `.cls`, then `import_modules` and `compile_vba` where headless compilation can
-  verify the module.
+- Edit behavior in the `.cls`, then `import_modules`. Mutations persist via save-only
+  (acCmdSaveAllModules = RunCommand 280); the runtime no longer compiles. The user compiles
+  in Access (Debug > Compile) before trusting the binary.
 - Edit controls/layout in `.form.txt`, then `import_modules`; ask the user to manually compile forms
   or reports when Access cannot verify document modules headlessly.
 - Verify form behavior through the `.cls` with `verify_code`; do not treat embedded
@@ -218,8 +219,8 @@ The `path` parameter is accepted as an alias for `sourcePath`. The tool returns
 ### validate_form_spec / generate_form — design and write a new form
 
 1. **`validate_form_spec`** — parse and lint a JSON form specification (`.form.json`).
-2. **`generate_form`** — write a `.form.json` stub from the spec. This does **not** create or
-   compile a live Access form; it produces the source artifact that `import_all` or `import_modules`
+2. **`generate_form`** — write a `.form.json` stub from the spec. This does **not** instantiate
+   a live Access form; it produces the source artifact that `import_all` or `import_modules`
    later synchronises into the database.
 
 ### catalog_add_control / harvest_form_catalog — control catalog management

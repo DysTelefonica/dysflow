@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**68 visible MCP tools · Windows / Node 20+**
+**67 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 68 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
+- A platform with 67 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
 
 ### It is not
 
@@ -660,11 +660,9 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
     - **Incompatible with `filter`.** A filtered export only lists the matching modules, so pruning would delete every other on-disk file — this combination is rejected with `INVALID_INPUT`.
     - **Saved queries are never pruned.** Only the managed module/class/form/report folders are scanned.
 * **`import_modules`**: Import VBA source modules from disk.
-  - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
+  - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`import_all`**: Bulk import all local modules into the Access project.
-  - Parameters: `importMode` (string, optional), `dryRun` (boolean, optional), `compile` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
-* **`compile_vba`**: Trigger VBA compilation inside the Access database.
-  - Parameters: `timeoutMs` (number, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
+  - Parameters: `importMode` (string, optional), `dryRun` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
 * **`fix_encoding`**: Normalize leading UTF-8 BOM artifacts in source files and round-trip affected module encoding in the binary. It does not restore lossy mojibake characters.
   - Parameters: `location` (string, optional), `timeoutMs` (number, optional)
 * **`test_vba`**: Execute VBA unit tests.

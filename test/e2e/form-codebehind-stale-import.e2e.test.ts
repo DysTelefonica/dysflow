@@ -292,13 +292,14 @@ describe.skipIf(!canRunE2e)(
     it('importMode "Auto": re-exported .cls reflects the .cls source, not the stale CodeBehindForm', async () => {
       // Phase 1 — import the form (LoadFromText from .form.txt, then AddFromFile from .cls).
       const importResult = await callMcp(
+        // feat-759-no-compile (v1.19.0) — `compile` parameter is gone;
+        // the import persists via save-only (acCmdSaveAllModules = 280).
         "import_modules",
         {
           projectId,
           moduleNames: [FORM_NAME],
           importMode: "Auto",
           dryRun: false,
-          compile: false,
         },
         { timeoutMs: 90_000 },
       );
@@ -350,42 +351,12 @@ describe.skipIf(!canRunE2e)(
       // context) is the primary pinning seam for VB_Name reaching `AddFromFile`.
     }, 180_000);
 
-    it('importMode "Auto" + compile:true: form import does NOT hard-fail; compile is reported unverified (#543)', async () => {
-      // Importing a form with compile:true must NOT hard-fail. The IsCompiled
-      // compile gate is reliable for standard/class modules, but Access cannot
-      // bring a programmatically imported form's document module to a compiled
-      // state headless, so dysflow does not trust that signal for document
-      // modules: it surfaces the import success with compileResult.verified=false
-      // instead of a spurious compile failure (issue #543 scoping).
-      const importResult = await callMcp(
-        "import_modules",
-        {
-          projectId,
-          moduleNames: [FORM_NAME],
-          importMode: "Auto",
-          dryRun: false,
-          compile: true,
-        },
-        { timeoutMs: 90_000 },
-      );
-      expect(importResult.timedOut, `import+compile timed out: ${importResult.text}`).toBe(false);
-      expect(importResult.isError, `import+compile hard-failed: ${importResult.text}`).toBe(false);
-      expect(importResult.ok, `import+compile not ok: ${importResult.text}`).toBe(true);
-
-      // The response carries a compileResult marked as not verified for the form's
-      // document module (rather than a trusted ok:true or a hard failure).
-      expect(
-        importResult.text,
-        `Expected compileResult in response: ${importResult.text}`,
-      ).toContain('"compileResult"');
-      const parsed = JSON.parse(importResult.text) as Record<string, unknown>;
-      const compileResult = parsed.compileResult as { verified?: boolean } | undefined;
-      expect(compileResult, "compileResult must be present in response").toBeDefined();
-      expect(
-        compileResult?.verified,
-        `compile of a document module must be reported as unverified: ${importResult.text}`,
-      ).toBe(false);
-    }, 90_000);
+    // feat-759-no-compile (v1.19.0) — the
+    // 'importMode "Auto" + compile:true: form import does NOT hard-fail;
+    // compile is reported unverified (#543)' atom was deleted. The compile
+    // step is gone from the runtime; the form-import path now persists via
+    // save-only (acCmdSaveAllModules = RunCommand 280) without a separate
+    // compile gate.
 
     it('importMode "Code": re-exported .cls reflects the .cls source (control case)', async () => {
       // importMode "Code" uses only the .cls — the .form.txt CodeBehindForm is not involved.
@@ -397,7 +368,7 @@ describe.skipIf(!canRunE2e)(
           moduleNames: [FORM_NAME],
           importMode: "Code",
           dryRun: false,
-          compile: false,
+          // feat-759-no-compile (v1.19.0) — `compile` parameter removed.
         },
         { timeoutMs: 90_000 },
       );

@@ -265,19 +265,15 @@ try {
 }
 // Guard: prune + filter must be rejected (a filtered prune would delete everything else).
 await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, filter: existingModuleName }, { expected: "error" });
-await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true, compile: false });
-await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true, compile: false });
-// The fixture binary's VBA project contains Unicode mojibake in 117 of its
-// class modules (e.g. `EnumSino.S�` where `Sí` was corrupted to the U+FFFD
-// replacement char during an earlier dysflow round-trip). VBA refuses to
-// parse identifiers that contain the replacement char, so `compile_vba`
-// will fail with `VBA_COMPILE_ERROR` on the first component that hits the
-// mojibake. This is a real, known, pre-existing state of the fixture
-// binary (`E2E_testing/NoConformidades.accdb`); the e2e asserts it via
-// `expected: "error"` so a future fix to the fixture (re-export from a
-// clean source, or replace the fixture with a release-grade copy) will
-// flip this back to `expected: "success"` and the test will catch it.
-await record("vba-sync", "compile_vba", { ...ctx, timeoutMs: 60000 }, { timeoutMs: 60000, expected: "error" });
+// feat-759-no-compile (v1.19.0) — `compile` parameter on import_tools
+// is gone. Callers passing it are rejected by Zod additionalProperties:false.
+await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true });
+await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true });
+// feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool was removed.
+// The mojibake-state pin test was retired; compile is no longer a
+// runtime concern (the human compiles in Access). The fixture binary's
+// mojibake is still real but no longer surfaces as a structured
+// runtime failure.
 await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expected: "error" });
 // verify_code exports every requested module to a temp dir and compares line
 // by line against the binary's VBA source. On the 131-component fixture

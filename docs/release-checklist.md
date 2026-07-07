@@ -85,17 +85,15 @@ so the heavy E2E never has to catch a regression that could have been caught
 in 100ms:
 
 - `test/quality-gates/mcp-e2e-suite-contracts.test.ts` (9 tests) — pins
-  `verify_code` timeout (≥180s), `compile_vba expected:"error"` (the
-  documented mojibake state), `tools/list` called before advertised, count =
-  54, sandbox isolation, final lingering-access-check row, STOP-ON-FAIL
+  `verify_code` timeout (≥180s), `tools/list` called before advertised, count =
+  53, sandbox isolation, final lingering-access-check row, STOP-ON-FAIL
   invariant, `suiteOwnPids.add(childPid)`, ACCESS_VBA_PASSWORD pre-flight.
 - `test/quality-gates/mcp-e2e-tool-existence.test.ts` (3 tests) — pins that
   every `record(area, tool, …)` call in `mcp-e2e.mjs` references a tool
   that exists in `createDysflowMcpTools()` (catches renames, removals,
   moves to the hidden registry).
-- `test/quality-gates/mcp-e2e-compile-vba-mojibake-pin.test.ts` (2 tests) —
-  pins the mojibake-state explanation in `mcp-e2e.mjs` so the comment
-  block cannot be deleted without the test catching it.
+- feat-759-no-compile (v1.19.0) — the compile_vba mojibake pin was
+  removed; the suite no longer asserts the mojibake expectation.
 
 If any of these cheap tests fail, fix them BEFORE running the heavy E2E.
 If they pass and the heavy E2E still fails, the regression is in a runtime

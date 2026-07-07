@@ -906,7 +906,7 @@ describe("MCP tool registration over core services", () => {
         "list_objects",
         "exists",
         "test_vba",
-        "compile_vba",
+        // feat-759-no-compile (v1.19.0) — compile_vba was removed.
         "verify_code",
         "delete_module",
         "generate_erd",
@@ -928,14 +928,17 @@ describe("MCP tool registration over core services", () => {
         },
         true,
       );
-      const compile = tools.find((t) => t.name === "compile_vba");
-      const result = await compile?.handler({ timeoutMs: 120_000 });
+      // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+      // verify_code (handled, also has a vbaSyncToolService route) as
+      // the smoke-test fixture.
+      const target = tools.find((t) => t.name === "verify_code");
+      const result = await target?.handler({ timeoutMs: 120_000 });
       expect(result).toEqual({
         content: [
           {
             type: "text",
             text: JSON.stringify({
-              toolName: "compile_vba",
+              toolName: "verify_code",
               input: { timeoutMs: 120_000 },
               ok: true,
             }),
@@ -974,11 +977,12 @@ describe("MCP tool registration over core services", () => {
       expect(importModules).toBeDefined();
       if (importModules === undefined) throw new Error("import_modules should be registered");
 
+      // feat-759-no-compile (v1.19.0) — the `compile` parameter is gone
+      // from import_tools. Use only the still-valid input.
       const result = await importModules.handler({
         moduleNames: ["DysflowMcpE2EMissing"],
         importMode: "code",
         dryRun: true,
-        compile: false,
       });
 
       expect(result).toEqual({
@@ -991,7 +995,6 @@ describe("MCP tool registration over core services", () => {
                 moduleNames: ["DysflowMcpE2EMissing"],
                 importMode: "code",
                 dryRun: true,
-                compile: false,
               },
               ok: true,
             }),

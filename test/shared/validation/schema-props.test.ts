@@ -144,7 +144,10 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "procedureName",
       "proceduresJson",
       "argsJson",
-      "compile",
+      // feat-759-no-compile (v1.19.0) — the `compile` property atom was
+      // removed: `import_modules` / `import_all` no longer accept a
+      // `compile` flag. See openspec/specs/vba-manager-actions/spec.md
+      // "Save-only persistence (no compile)".
       "filter",
       "importMode",
       "mode",

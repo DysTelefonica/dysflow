@@ -12,7 +12,6 @@ import {
   isRecord,
   readJsonFileAsync,
   stringValue,
-  truthy,
 } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import {
@@ -21,8 +20,13 @@ import {
 } from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
+// feat-759-no-compile (v1.19.0) — `EXECUTION_MAPPINGS.compile_vba` and
+// the inline-execution's explicit Compile step were removed. The
+// `compile_vba` MCP tool no longer exists; vba_inline_execution now
+// skips the explicit compile and lets `run_vba` surface any compile
+// error against the temp module as a regular run failure. See
+// openspec/specs/vba-inline-execution/spec.md.
 const EXECUTION_MAPPINGS = {
-  compile_vba: mapping("Compile", true),
   test_vba: mapping(
     "Run-Tests",
     true,
@@ -99,12 +103,9 @@ export class VbaExecutionAdapter {
   ) {}
 
   static handles(toolName: string): boolean {
-    return (
-      toolName === "run_vba" ||
-      toolName === "test_vba" ||
-      toolName === "compile_vba" ||
-      toolName === "vba_inline_execution"
-    );
+    // feat-759-no-compile (v1.19.0) — `compile_vba` was removed from the
+    // MCP surface. Compile is no longer a tool the adapter routes through.
+    return toolName === "run_vba" || toolName === "test_vba" || toolName === "vba_inline_execution";
   }
 
   async execute(
@@ -113,9 +114,6 @@ export class VbaExecutionAdapter {
   ): Promise<OperationResult<unknown>> {
     if (toolName === "vba_inline_execution") {
       return this.executeInline(params);
-    }
-    if (toolName === "compile_vba") {
-      return this.orchestrator.executeMappedTool(toolName, params, EXECUTION_MAPPINGS.compile_vba);
     }
     if (toolName === "run_vba") {
       // Just map it using normal flow. If run_vba is handled manually, this acts as fallback.
@@ -249,33 +247,24 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
-        const compileRes = await this.orchestrator.executeMappedTool(
-          "compile_vba",
-          inlineParams,
-          EXECUTION_MAPPINGS.compile_vba,
+        // feat-759-no-compile (v1.19.0) — the inline path no longer makes
+        // an explicit `compile_vba` call. Save-only persistence (see
+        // openspec/specs/vba-manager-actions/spec.md "Save-only persistence")
+        // is the canonical mutation path; `run_vba` triggers Access to
+        // validate the procedure at call time, which surfaces any compile
+        // error against `__dysflow_inline__` as an explicit run failure.
+        // We no longer try to distinguish "compile error against inline"
+        // vs "compile error against another module" because the runtime
+        // does not compile — there is no compile error type to surface.
+        inlineResult = await this.orchestrator.executeMappedTool(
+          "run_vba",
+          {
+            ...inlineParams,
+            moduleNames: [moduleName],
+            procedureName: `${moduleName}.ExecuteInline`,
+          },
+          EXECUTION_MAPPINGS.run_vba,
         );
-        let hasInlineCompileError = false;
-        if (!compileRes.ok) {
-          const errStr = JSON.stringify(compileRes.error || {});
-          if (errStr.includes(`"component":"${moduleName}"`) || errStr.includes("_inline_")) {
-            hasInlineCompileError = true;
-            inlineResult = compileRes;
-          }
-        }
-        if (!compileRes.ok && hasInlineCompileError) {
-          // Keep the compileRes failure as inlineResult
-        } else {
-          // 5. Run procedure
-          inlineResult = await this.orchestrator.executeMappedTool(
-            "run_vba",
-            {
-              ...inlineParams,
-              moduleNames: [moduleName],
-              procedureName: `${moduleName}.ExecuteInline`,
-            },
-            EXECUTION_MAPPINGS.run_vba,
-          );
-        }
       }
     } catch (err) {
       inlineResult = failureResult(
@@ -335,12 +324,12 @@ End Sub
     if (gateError !== undefined) return gateError;
 
     // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits BEFORE
-    // both compile_vba and the test_vba runner call. The gate already ran
-    // (so an out-of-allowlist procedure still emits PROCEDURE_NOT_ALLOWED);
-    // dryRun:true only replaces the runner invocation with a plan-shaped
-    // result so consumers can review what would have run. The schema gates
-    // dryRun via `additionalProperties: false`, so the only way to reach
-    // this branch is with the flag explicitly set to `true`.
+    // the test_vba runner call. The gate already ran (so an out-of-allowlist
+    // procedure still emits PROCEDURE_NOT_ALLOWED); dryRun:true only replaces
+    // the runner invocation with a plan-shaped result so consumers can review
+    // what would have run. The schema gates dryRun via
+    // `additionalProperties: false`, so the only way to reach this branch is
+    // with the flag explicitly set to `true`.
     if (params.dryRun === true) {
       return successResult({
         dryRun: true,
@@ -349,20 +338,10 @@ End Sub
         plan: {
           procedureName: resolvedProcedureNames,
           proceduresCount: resolvedProcedureNames.length,
-          compile: truthy(params.compile),
           warnings: [],
           errors: [],
         },
       });
-    }
-
-    if (truthy(params.compile)) {
-      const compileResult = await this.orchestrator.executeMappedTool(
-        "compile_vba",
-        params,
-        EXECUTION_MAPPINGS.compile_vba,
-      );
-      if (!compileResult.ok) return compileResult;
     }
 
     return inspectTestResult(

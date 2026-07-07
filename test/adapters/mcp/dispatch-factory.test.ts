@@ -78,8 +78,9 @@ describe("McpToolRoute exhaustiveness (#E)", () => {
   }
 
   it("discriminates a vba-sync tool (compile-time narrowing check)", () => {
-    // `compile_vba` is a stable vba-sync tool in the route table.
-    const route = MCP_TOOL_ROUTES.compile_vba;
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; pick another
+    // stable vba-sync tool for the narrowing-check fixture.
+    const route = MCP_TOOL_ROUTES.test_vba;
     expect(route.kind).toBe("vba-sync");
     expect(label(route)).toBe("vba-sync");
   });
@@ -126,7 +127,9 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
     // the PowerShell Fix-Encoding action rewrites modules inside the .accdb.
     expect(binaryWriters).toEqual(
       [
-        "compile_vba",
+        // feat-759-no-compile (v1.19.0) — compile_vba was removed; it is
+        // no longer a binary-writer. The remaining set is the union of
+        // mutation tools that still write to the .accdb.
         "delete_module",
         "fix_encoding",
         "import_all",

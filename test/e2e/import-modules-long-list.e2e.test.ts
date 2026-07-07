@@ -217,11 +217,12 @@ describeE2e("import_modules long-list (E2E)", () => {
       (_, i) => `ListMod${(i + 1).toString().padStart(2, "0")}`,
     );
 
+    // feat-759-no-compile (v1.19.0) — `compile` parameter is gone; the
+    // import persists via save-only (acCmdSaveAllModules = RunCommand 280).
     const res = await callMcp("import_modules", {
       projectId: "import-lists-e2e",
       moduleNames: names,
       apply: true,
-      compile: false,
     });
 
     // MCP server may still surface structured-failure envelopes for input

@@ -42,13 +42,15 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 54-tool inventory", () => {
+  it("declares the complete 53-tool inventory", () => {
     // Slice 3 (#616) added dysflow_form_serialize + dysflow_form_deserialize.
     // Slice 5 (#618) added dysflow_create_form_from_template.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(30);
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed (was 54
+    // dispatch names, 30 vba-sync tools; now 53 dispatch, 29 vba-sync).
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(29);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(54);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(54);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(53);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(53);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -64,8 +66,9 @@ describe("Dysflow MCP tool parity inventory", () => {
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(54);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(54);
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(53);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(53);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

@@ -175,7 +175,7 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
     }
   });
 
-  it("compiles and runs temporary VBA snippet and cleans up files", async () => {
+  it("runs temporary VBA snippet and cleans up files (no explicit compile in v1.19.0)", async () => {
     // 1. Run inline execution with a simple VBA math print statement
     const result = await callMcp(
       "vba_inline_execution",

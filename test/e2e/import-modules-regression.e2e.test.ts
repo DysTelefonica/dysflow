@@ -4,7 +4,7 @@ delete process.env.DYSFLOW_HOME;
  * Comprehensive E2E suite for the dysflow MCP tool surface.
  *
  * Acceptance criterion for the v1.2.34 release (issue #496) and every
- * subsequent release: each of the 51 MCP tools must respond correctly
+ * subsequent release: each of the 50 MCP tools (compile_vba was removed in v1.19.0) must respond correctly
  * when invoked through the same JSON-RPC stdio protocol that a real
  * opencode client uses in production.
  *
@@ -276,7 +276,6 @@ function buildToolCases(): ToolCase[] {
         moduleNames: ["TestGoodModule"],
         importMode: "Code",
         dryRun: false,
-        compile: false,
       },
       150_000,
     ),
@@ -288,7 +287,6 @@ function buildToolCases(): ToolCase[] {
         moduleNames: ["NoSuchModule_xyz_999"],
         importMode: "Code",
         dryRun: false,
-        compile: false,
       },
       150_000,
     ),
@@ -300,16 +298,11 @@ function buildToolCases(): ToolCase[] {
         moduleNames: ["TestAnotherModule"],
         importMode: "Code",
         dryRun: true,
-        compile: false,
       },
       150_000,
     ),
-    t(
-      "import_all",
-      "happy",
-      { projectId, importMode: "Code", dryRun: true, compile: false },
-      150_000,
-    ),
+    // feat-759-no-compile (v1.19.0) — `compile` parameter is gone.
+    t("import_all", "happy", { projectId, importMode: "Code", dryRun: true }, 150_000),
     t(
       "import_all",
       "sad",
@@ -318,7 +311,6 @@ function buildToolCases(): ToolCase[] {
         destinationRoot: join(workspaceRoot, "src", "no-such"),
         importMode: "Code",
         dryRun: false,
-        compile: false,
       },
       150_000,
     ),
@@ -330,8 +322,7 @@ function buildToolCases(): ToolCase[] {
     t("list_objects", "happy", { projectId, filter: "*" }, 150_000),
     t("exists", "happy", { projectId, moduleName: "TestGoodModule" }, 150_000),
     t("exists", "sad", { projectId, moduleName: "NoSuchModule_xyz_999" }, 150_000),
-    t("compile_vba", "happy", { projectId }, 150_000),
-    t("compile_vba", "sad", { projectId: "no-such-project" }, 150_000),
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed.
     t("fix_encoding", "happy", { projectId, location: "Source" }, 150_000),
     t("fix_encoding", "sad", { projectId, location: "InvalidLocation" }, 150_000),
     t(
@@ -460,7 +451,10 @@ function buildToolCases(): ToolCase[] {
 const allCases = buildToolCases();
 
 describe.skipIf(!canRunE2e)(
-  "dysflow MCP tool surface (all 51 tools, issue #496 acceptance)",
+  // feat-759-no-compile (v1.19.0) — compile_vba was removed; the E2E
+  // surface covers all 50 tools now (68 -> 67 advertised; the harness
+  // exercises 50 distinct tools).
+  "dysflow MCP tool surface (issue #496 acceptance)",
   () => {
     beforeAll(() => {
       setupWorkspace();
@@ -580,7 +574,6 @@ describe.skipIf(!canRunE2e)(
           moduleNames: [nonAsciiModuleName],
           importMode: "Code",
           dryRun: false,
-          compile: false,
         },
         { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
       );
@@ -613,7 +606,6 @@ describe.skipIf(!canRunE2e)(
           moduleNames: [nonAsciiModuleName],
           importMode: "Code",
           dryRun: false,
-          compile: false,
         },
         { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
       );

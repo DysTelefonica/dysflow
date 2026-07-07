@@ -63,7 +63,8 @@ E2E_testing/
 - `links` — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - `write` — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
 - `vba-sync` — `export_modules`, `export_all` (incl. `--prune`), `import_modules`, `import_all`,
-  `compile_vba`, `verify_code`, `delete_module`, `fix_encoding`, `generate_erd`
+  `verify_code`, `delete_module`, `fix_encoding`, `generate_erd`
+  (feat-759-no-compile v1.19.0: `compile_vba` was removed)
 - `forms` — `validate_form_spec`, `generate_form`, `catalog_add_control`, `harvest_form_catalog`
 - `legacy` — `run_vba`, `cleanup_access_operation`, `list_access_operations` (alias pre-1.4)
 - `zombies` — `lingering-access-check` (la fila final; ver [§ Zombie check](#zombie-check))
@@ -123,8 +124,11 @@ Por cada herramienta el harness imprime una línea tabular:
 PASS   dysflow_query_execute            142ms   {"RowCount":1534}
 PASS   query_sql                        128ms   {"RowCount":1534}
 PASS   compact_repair                   2415ms  {"dryRun":true,...}
-FAIL   compile_vba                     4500ms   {"code":"VBA_COMPILE_ERROR",...}
-mcp-e2e: STOP-ON-FAIL after compile_vba (...). Aborting battery. Fix the root cause before re-running.
+# feat-759-no-compile (v1.19.0) — the legacy "FAIL compile_vba"
+# entry above was removed; compile_vba is no longer a tool. The
+# fixture still has mojibake in some modules, but the compile
+# step is now manual (Debug > Compile in Access), so the suite
+# no longer asserts a structured compile failure.
 ```
 
 Tras la batería, el informe Markdown aterriza en
@@ -281,13 +285,13 @@ pesado descubriría 5–15 minutos después.
 | Test | Lo que pina | Coste |
 |---|---|---|
 | `mcp-e2e-stop-on-fail.test.ts` | Driver `record()`: H3a/b/c (expected error/success vs isError), H7a/b/c (zombie-check, REFUSE-START, PID eviction). Inyecta fakes al helper real, **no re-implementa la regla**. | <100 ms |
-| `mcp-e2e-suite-contracts.test.ts` | Contratos estructurales del harness: timeout ≥ 180 000 ms en `verify_code`, `compile_vba` con `expected: "error"` (mojibake conocido), secuencia `tools/list → advertised-tool-count`, sandbox aislado, fila final `lingering-access-check`. | <100 ms |
+| `mcp-e2e-suite-contracts.test.ts` | Contratos estructurales del harness: timeout ≥ 180 000 ms en `verify_code`, secuencia `tools/list → advertised-tool-count`, sandbox aislado, fila final `lingering-access-check`. | <100 ms |
 | `mcp-e2e-tool-existence.test.ts` | Cada `record(..., "<tool>", ...)` en el harness apunta a una herramienta que existe en `createDysflowMcpTools`. | <100 ms |
 | `mcp-e2e-subprocess-preflight.test.ts` | REFUSE-START con subprocess real (no fakes): un spawn externo deja un nieto, la siguiente herramienta aborta. | <1 s |
 | `mcp-e2e-grandchild-zombie.test.ts` | H5 descendant walk: el walker detecta nietos vía `wmic` cuando el padre ya cerró. | <1 s |
 | `mcp-e2e-final-lingering-check.test.ts` | H6 retardo prudente de 1 s antes del primer poll (issue #574). | <2 s |
 | `mcp-e2e-global-zombie-pin.test.ts` | Delta global de `MSACCESS.EXE` start vs end; atrapa fugas fuera del watchlist. | <2 s |
-| `mcp-e2e-compile-vba-mojibake-pin.test.ts` | Documenta que el fixture tiene 117 componentes con mojibake Unicode conocido y que `compile_vba` se espera que falle. Si arreglas el fixture, este test te avisa para invertir la expectativa. | <100 ms |
+| feat-759-no-compile (v1.19.0) — `mcp-e2e-compile-vba-mojibake-pin.test.ts` was deleted. The mojibake pin is no longer relevant: compile_vba is gone, so the harness no longer asserts a structured compile failure against the fixture. | — |
 | `resolve-mcp-e2e-command.test.ts` + `-esm` | `resolveMcpE2eCommand`: prioridad `DYSFLOW_E2E_COMMAND → test-runtime → production (rechazado) → none`. Inyecta `fs` fake; el `-esm` valida el comportamiento con ESM subprocess real. | <1 s |
 
 Si tocas `E2E_testing/mcp-e2e.mjs` o `_helpers/mcp-e2e-record.mjs`, espera a que estos

@@ -76,7 +76,6 @@ export const HTTP_TEST_VBA_SCHEMA: JsonObjectSchema = {
   additionalProperties: false,
   properties: {
     proceduresJson: { type: "string", minLength: 1 },
-    compile: { type: "boolean" },
     dryRun: SCHEMA_PROPS.dryRun,
     timeoutMs: SCHEMA_PROPS.timeoutMs,
   },

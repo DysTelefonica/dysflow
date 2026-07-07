@@ -54,12 +54,16 @@ describe("VbaExecutionAdapter", () => {
   it("handles execution tools", () => {
     expect(VbaExecutionAdapter.handles("run_vba")).toBe(true);
     expect(VbaExecutionAdapter.handles("test_vba")).toBe(true);
-    expect(VbaExecutionAdapter.handles("compile_vba")).toBe(true);
+    // feat-759-no-compile (v1.19.0) — compile_vba is no longer handled.
+    expect(VbaExecutionAdapter.handles("compile_vba")).toBe(false);
     expect(VbaExecutionAdapter.handles("export_modules")).toBe(false);
   });
 
-  it("maps compile_vba to orchestrator executeMappedTool", async () => {
-    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
+  it("compile_vba is refused as TOOL_NOT_IMPLEMENTED (feat-759-no-compile hard break)", async () => {
+    // v1.19.0 — compile_vba is removed end-to-end. VbaExecutionAdapter.execute
+    // refuses it with TOOL_NOT_IMPLEMENTED (defense-in-depth; the upstream
+    // dispatch never routes it).
+    const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool,
       cwd: "C:/repo",
@@ -71,15 +75,10 @@ describe("VbaExecutionAdapter", () => {
       destinationRoot: "C:/repo",
     });
 
-    expect(result).toMatchObject({
-      ok: true,
-      data: { ok: true },
-    });
-    expect(executeMappedTool).toHaveBeenCalledWith(
-      "compile_vba",
-      { accessPath: "C:/custom/front.accdb", destinationRoot: "C:/repo" },
-      expect.objectContaining({ action: "Compile", json: true }),
-    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected compile_vba refusal, not success");
+    expect(result.error.code).toBe("TOOL_NOT_IMPLEMENTED");
+    expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
   // --- vba_inline_execution guardrails (#533) ---------------------------------
@@ -200,13 +199,15 @@ describe("VbaExecutionAdapter", () => {
     }
   });
 
-  it("executes inline code using a stable __dysflow_inline__ module name, compiles, runs, and cleans up", async () => {
+  it("executes inline code using a stable __dysflow_inline__ module name, runs, and cleans up (compile is gone in v1.19.0)", async () => {
+    // feat-759-no-compile (v1.19.0) — inline execution no longer makes an
+    // explicit compile step. The flow is now import -> run -> cleanup.
+    // Access implicitly validates the procedure at call time.
     const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
 
     executeMappedTool.mockImplementation((toolName, _params) => {
       if (toolName === "delete_module") return Promise.resolve(successResult({ ok: true }));
       if (toolName === "import_modules") return Promise.resolve(successResult({ ok: true }));
-      if (toolName === "compile_vba") return Promise.resolve(successResult({ ok: true }));
       if (toolName === "run_vba") return Promise.resolve(successResult("success return"));
       return Promise.resolve(successResult({ ok: true }));
     });
@@ -230,13 +231,7 @@ describe("VbaExecutionAdapter", () => {
     );
 
     const callNames = executeMappedTool.mock.calls.map((c) => c[0]);
-    expect(callNames).toEqual([
-      "delete_module",
-      "import_modules",
-      "compile_vba",
-      "run_vba",
-      "delete_module",
-    ]);
+    expect(callNames).toEqual(["delete_module", "import_modules", "run_vba", "delete_module"]);
   });
 
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {
@@ -456,41 +451,10 @@ describe("VbaExecutionAdapter", () => {
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("runs compile before test_vba plan execution when compile is requested", async () => {
-    const root = await mkdtemp(join(tmpdir(), "dysflow-vba-compile-tests-adapter-"));
-    await writeFile(
-      join(root, "tests.vba.json"),
-      JSON.stringify([{ procedure: "Test_RunAll", args: [] }]),
-      "utf8",
-    );
-
-    const executeMappedTool = vi.fn().mockImplementation((toolName) => {
-      if (toolName === "compile_vba") return Promise.resolve(successResult({ ok: true }));
-      return Promise.resolve(successResult([{ ok: true }]));
-    });
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool,
-      cwd: root,
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
-
-    const result = await adapter.execute("test_vba", { compile: true });
-
-    expect(result.ok).toBe(true);
-    expect(executeMappedTool).toHaveBeenCalledTimes(2);
-    expect(executeMappedTool).toHaveBeenNthCalledWith(
-      1,
-      "compile_vba",
-      expect.objectContaining({ compile: true }),
-      expect.objectContaining({ action: "Compile", json: true }),
-    );
-    expect(executeMappedTool).toHaveBeenNthCalledWith(
-      2,
-      "test_vba",
-      expect.objectContaining({ compile: true }),
-      expect.objectContaining({ action: "Run-Tests", json: true }),
-    );
-  });
+  // feat-759-no-compile (v1.19.0) — the "runs compile before test_vba
+  // when compile is requested" test was deleted because compile is gone.
+  // The runner no longer makes a compile_vba call before test_vba; the
+  // human compiles in Access (Debug > Compile).
 
   it("returns VBA_INVALID_TEST_PLAN when the test plan file is missing", async () => {
     const orchestrator: VbaSyncOrchestrator = {
@@ -540,38 +504,9 @@ describe("VbaExecutionAdapter", () => {
     });
   });
 
-  it("short-circuits when compile_vba fails during test_vba with compile:true", async () => {
-    const executeMappedTool = vi.fn().mockImplementation((toolName) => {
-      if (toolName === "compile_vba") {
-        return Promise.resolve({
-          ok: false as const,
-          error: {
-            code: "VBA_MANAGER_FAILED" as const,
-            message: "compile error",
-            retryable: false,
-          },
-          diagnostics: [],
-          durationMs: 5,
-        });
-      }
-      return Promise.resolve(successResult([{ ok: true }]));
-    });
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool,
-      cwd: "C:/repo",
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
-
-    const result = await adapter.execute("test_vba", {
-      compile: true,
-      procedureName: "Test_Compile",
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("VBA_MANAGER_FAILED");
-    // Should not have called executeMappedTool for test_vba (stopped after compile failure)
-    expect(executeMappedTool).toHaveBeenCalledTimes(1);
-  });
+  // feat-759-no-compile (v1.19.0) — the "short-circuits when compile_vba
+  // fails during test_vba" test was deleted because compile is gone.
+  // No runner call is made before test_vba anymore.
 
   it("returns result unchanged from orchestrator when test data is not an array (non-array result shape)", async () => {
     // inspectTestResult: when result.ok=true but result.data is not an array, returns result as-is
@@ -1235,7 +1170,6 @@ describe("VbaExecutionAdapter", () => {
       plan: {
         procedureName: ["Test_Anything"],
         proceduresCount: 1,
-        compile: false,
         warnings: [],
         errors: [],
       },
@@ -1272,36 +1206,15 @@ describe("VbaExecutionAdapter", () => {
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("Round-3 Item 5 — test_vba with dryRun:true and compile:true plans the compile but does NOT invoke compile_vba either", async () => {
-    // The short-circuit must also skip the pre-run compile_vba call so the
-    // .accdb is never touched in dry-run mode.
-    const executeMappedTool = vi.fn();
-    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
-
-    const result = await adapter.execute("test_vba", {
-      proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
-      dryRun: true,
-      compile: true,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected plan-only success with compile");
-    expect(result.data).toMatchObject({
-      dryRun: true,
-      willExecute: false,
-      willModifyAccess: false,
-      plan: {
-        procedureName: ["Test_A"],
-        compile: true,
-      },
-    });
-    expect(executeMappedTool).not.toHaveBeenCalled();
-  });
+  // feat-759-no-compile (v1.19.0) — the "Round-3 Item 5 — test_vba with
+  // dryRun:true and compile:true" test was deleted because compile is
+  // gone from the runtime; compile no longer participates in any path.
 
   it("Round-3 Item 5 — test_vba WITHOUT dryRun executes the runner (existing behavior preserved)", async () => {
     // Contraparte: when dryRun is absent, the original execute path runs —
-    // plan resolution → gate → compile_vba (if requested) → executeMappedTool.
+    // plan resolution → gate → executeMappedTool (compile is gone in v1.19.0,
+    // so the runner now follows the gate directly without a preceding
+    // acCmdCompileAndSaveAllModules step).
     const executeMappedTool = vi
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_A" }]));
@@ -1516,79 +1429,17 @@ describe("VbaExecutionAdapter", () => {
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("#667 — compile_vba does NOT run when plan resolution fails (no manifest)", async () => {
-    // #667 reversed the ordering: plan resolution runs first, then the gate,
-    // then compile_vba. With no manifest, plan resolution fails with
-    // VBA_INVALID_TEST_PLAN and compile_vba is NEVER invoked — the binary
-    // write is correctly gated by the existence of a valid plan.
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool: vi.fn().mockResolvedValue(successResult({ ok: true })),
-      cwd: "C:/repo",
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
-
-    const result = await adapter.execute("test_vba", { compile: true });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected VBA_INVALID_TEST_PLAN, not success");
-    expect(result.error.code).toBe("VBA_INVALID_TEST_PLAN");
-    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
-  });
-
-  it("#667 — compile_vba runs AFTER the gate when a valid plan + non-empty allowlist is provided", async () => {
-    // The new ordering: resolve plan → gate → compile → run. When the plan
-    // resolves cleanly AND the gate passes, compile_vba IS invoked.
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool: vi
-        .fn()
-        .mockResolvedValueOnce(successResult({ ok: true })) // compile_vba
-        .mockResolvedValueOnce(successResult([{ ok: true, procedure: "Test_Allowed" }])), // test_vba
-      cwd: "C:/repo",
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
-
-    const result = await adapter.execute("test_vba", {
-      compile: true,
-      procedureName: "Test_Allowed",
-      argsJson: "[]",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(2);
-    expect(orchestrator.executeMappedTool).toHaveBeenNthCalledWith(
-      1,
-      "compile_vba",
-      expect.objectContaining({ compile: true }),
-      expect.any(Object),
-    );
-    expect(orchestrator.executeMappedTool).toHaveBeenNthCalledWith(
-      2,
-      "test_vba",
-      expect.any(Object),
-      expect.any(Object),
-    );
-  });
-
-  it("#667 — compile_vba does NOT run when the gate refuses (plan has procedure not in allowlist)", async () => {
-    // The new ordering means: if the gate refuses (PROCEDURE_NOT_ALLOWED),
-    // compile_vba is never invoked even though the caller asked for it. This
-    // is the security fix — the prior ordering wrote the binary first.
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool: vi.fn().mockResolvedValue(successResult({ ok: true })),
-      cwd: "C:/repo",
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
-
-    const result = await adapter.execute("test_vba", {
-      compile: true,
-      procedureName: "Test_NotInList",
-      argsJson: "[]",
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected refusal, not success");
-    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
-    // compile_vba was NEVER invoked — the binary write is correctly skipped.
-    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
-  });
+  // feat-759-no-compile (v1.19.0) — the "#667 — compile_vba does NOT
+  // run when plan resolution fails (no manifest)" test was deleted because
+  // compile is gone from the runtime. The plan-resolution-fails path
+  // itself is still covered by the standard VBA_INVALID_TEST_PLAN atoms.
 });
+
+// ========================================================================
+// feat-759-no-compile (v1.19.0) — deleted #667 tests
+//
+// Both #667 atoms asserted the (gate → compile_vba → test_vba) ordering
+// fixed in earlier PRs. compile is gone in v1.19.0, so the ordering is
+// (gate → test_vba). The gate-side rejection contract is still covered
+// above by the standard PROCEDURE_NOT_ALLOWED atoms.
+// ========================================================================

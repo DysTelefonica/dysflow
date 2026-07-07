@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, parse, resolve } from "node:path";
@@ -23,39 +22,12 @@ import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 // ========================================================================
-// #732 — compile-failure rollback types + constants (module level so the
-// helper methods inside VbaModulesAdapter can use them)
+// #732 — compile-failure rollback types + constants REMOVED in v1.19.0
+// (feat-759-no-compile): compile + rollbackOnCompileFail leave the public
+// surface entirely, so the rollback helpers and the COMPILE_MAPPING constant
+// are gone with them. Save-only persistence (acCmdSaveAllModules = 280) is
+// the canonical mutation path per openspec/specs/vba-manager-actions/spec.md.
 // ========================================================================
-
-const COMPILE_FAILURE_ROLLBACK_REASON = "compile_failure_post_import";
-const NO_BASELINE_ROLLBACK_REASON = "no_baseline_snapshot";
-
-type RollbackSnapshotEntry = {
-  fileType: "bas" | "cls" | "form.txt" | "report.txt";
-  relPath: string;
-};
-
-type RollbackSnapshot = {
-  /** Temp directory holding the pre-call source files. */
-  snapshotDir: string;
-  /** Modules that were exported; missing means no pre-call binary state. */
-  snapshotFiles: ReadonlyMap<string, RollbackSnapshotEntry>;
-};
-
-type ExportModuleEntry = {
-  module: string;
-  status: string;
-  fileType?: string;
-  relPath?: string;
-};
-
-type PerModuleResult = {
-  module: string;
-  status: string;
-  rollbackApplied?: boolean;
-  rollbackReason?: string;
-  rollbackFailed?: boolean;
-};
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
@@ -69,11 +41,9 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   tmpdir: () => tmpdir(),
 };
 
-/**
- * Compile mapping — used when compile:true is requested after a successful import.
- * Maps to Action: "Compile" with JSON output enabled (same as compile_vba tool).
- */
-const COMPILE_MAPPING: DirectMapping = mapping("Compile", true);
+// COMPILE_MAPPING was removed in v1.19.0 (feat-759-no-compile). The runtime
+// no longer compiles after a mutation. Persistence is save-only via
+// acCmdSaveAllModules (RunCommand 280).
 
 const MODULE_MAPPINGS: Record<string, DirectMapping> = {
   export_modules: mapping(
@@ -353,101 +323,6 @@ export class VbaModulesAdapter {
           }
         : importResult;
 
-    // If compile:true is requested, run acCmdCompileAndSaveAllModules after a successful import.
-    // Skip compile on dry-run (already handled above), on import failure, or when compile is falsy.
-    if ((toolName === "import_modules" || toolName === "import_all") && truthy(params.compile)) {
-      // #732 — snapshot the binary state of every module being imported BEFORE
-      // the write so a project-wide compile failure can be rolled back. The
-      // snapshot is per-module; modules that did not exist in the binary
-      // pre-call (i.e. brand-new modules) cannot be rolled back and are
-      // surfaced as rollbackFailed: true with a warning instead.
-      const rollbackOnCompileFail = params.rollbackOnCompileFail !== false;
-      const rollbackSnapshot =
-        toolName === "import_modules" && rollbackOnCompileFail
-          ? await this.snapshotModulesForRollback(params)
-          : undefined;
-
-      const compileResult = await this.orchestrator.executeMappedTool(
-        "compile_vba",
-        params,
-        COMPILE_MAPPING,
-      );
-
-      if (!compileResult.ok) {
-        // The IsCompiled compile gate (issue #543) is reliable for standard and
-        // class modules, but NOT for document modules: Access cannot bring a
-        // programmatically imported form/report document module to a compiled
-        // state headless, so it reports a spurious VBA_COMPILE_ERROR even when the
-        // code is valid (tracked separately). When the import set includes a
-        // form/report, do NOT hard-fail on a compile result we cannot trust —
-        // surface the import success with compileVerified:false so the caller
-        // knows the compile was not verified. For standard/class-only imports the
-        // failure is trustworthy and propagates as a hard failure.
-        const untrustworthy =
-          compileResult.error.code === "VBA_COMPILE_ERROR" &&
-          (await this.importIncludesDocumentModule(toolName, params));
-
-        if (untrustworthy) {
-          return {
-            ...resultWithPrune,
-            data: {
-              ...(resultWithPrune.data as Record<string, unknown>),
-              compileResult: {
-                ok: false,
-                verified: false,
-                reason: "document-module-compile-not-verifiable-headless",
-                error: compileResult.error,
-              },
-            },
-          };
-        }
-
-        // #732 — compile failed and we DO trust the failure (standard/class
-        // only). Roll back every successfully imported module using the
-        // pre-import snapshot so the .accdb is left in its pre-call state.
-        // The caller still receives the typed VBA_COMPILE_ERROR so they know
-        // WHY the write did not stick; the per-module rollbackReason
-        // surfaces what was reverted (in `error.details.modules`).
-        if (rollbackSnapshot !== undefined) {
-          const rollbackReport = await this.rollbackModulesFromSnapshot(
-            rollbackSnapshot,
-            resultWithPrune,
-          );
-          return failureResult(
-            {
-              ...compileResult.error,
-              // `details` is the structured place the consumer can branch
-              // on. `rollbackApplied` is the single boolean the issue
-              // pins; `modules` is the per-module array so callers can
-              // render what was reverted (and which brand-new modules
-              // were flagged `rollbackFailed: true` with a `no_baseline_snapshot` reason).
-              details: {
-                ...(compileResult.error.details ?? {}),
-                rollbackApplied: true,
-                modules: rollbackReport,
-              },
-            },
-            {
-              diagnostics: resultWithPrune.diagnostics,
-              durationMs: resultWithPrune.durationMs,
-              operation: resultWithPrune.operation,
-            },
-          );
-        }
-
-        return compileResult;
-      }
-
-      // Merge compileResult into the import result data so callers can inspect it.
-      return {
-        ...resultWithPrune,
-        data: {
-          ...(resultWithPrune.data as Record<string, unknown>),
-          compileResult: { ...(compileResult.data as Record<string, unknown>), verified: true },
-        },
-      };
-    }
-
     return resultWithPrune;
   }
 
@@ -525,53 +400,6 @@ export class VbaModulesAdapter {
     if (!deleteResult.ok) return deleteResult;
 
     return successResult({ applied: true, deleted: deleteNames });
-  }
-
-  /**
-   * True when the import set includes a form/report document module. Used to
-   * decide whether a post-import compile failure is trustworthy: the IsCompiled
-   * gate cannot verify document modules headless (issue #543), so a compile error
-   * after a form/report import must not hard-fail the operation.
-   */
-  private async importIncludesDocumentModule(
-    toolName: string,
-    params: Record<string, unknown>,
-  ): Promise<boolean> {
-    // import_all imports every object, including all forms and reports.
-    if (toolName === "import_all") return true;
-    const moduleNames = stringArray(params.moduleNames).map((name) => name.toLowerCase());
-    if (moduleNames.length === 0) return false;
-
-    const target = await this.orchestrator.resolveExecutionTarget(params);
-    if (!target.ok) return false;
-    const root = target.data.destinationRoot;
-
-    for (const folder of [resolve(root, "forms"), resolve(root, "reports")]) {
-      let entries: readonly { name: string }[] | readonly string[];
-      try {
-        entries = await this.fileSystem.readdir(folder);
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        const entryName = typeof entry === "string" ? entry : entry.name;
-        const lower = entryName.toLowerCase();
-        // Any file in forms/ or reports/ belongs to a document module: a .form.txt
-        // /.report.txt is the layout, a .cls is its code-behind. A form whose source
-        // currently has only the .cls (layout not re-exported) is still a document
-        // module, so detect it too. This is scoped to forms/ and reports/ — a normal
-        // class in classes/ is never scanned here, so it cannot be misclassified.
-        const base = lower.endsWith(".form.txt")
-          ? lower.slice(0, -".form.txt".length)
-          : lower.endsWith(".report.txt")
-            ? lower.slice(0, -".report.txt".length)
-            : lower.endsWith(".cls")
-              ? lower.slice(0, -".cls".length)
-              : null;
-        if (base !== null && moduleNames.includes(base)) return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -887,113 +715,10 @@ export class VbaModulesAdapter {
     );
   }
 
-  // ========================================================================
-  // #732 — compile-failure rollback helpers
-  // ========================================================================
-
-  /**
-   * Per-module baseline snapshot used to roll back a partially-applied
-   * `import_modules` call when the post-import project-wide compile fails.
-   * `snapshotDir` is a temp directory holding the pre-call binary state of
-   * every module that existed in the .accdb BEFORE the import. Modules
-   * that did not exist pre-call (brand-new modules) are NOT in the snapshot
-   * — they cannot be rolled back and surface as `rollbackFailed: true`
-   * with a `no_baseline_snapshot` reason instead.
-   */
-  private async snapshotModulesForRollback(
-    params: Record<string, unknown>,
-  ): Promise<RollbackSnapshot> {
-    const moduleNames = stringArray(params.moduleNames);
-    const snapshotDir = resolve(tmpdir(), `dysflow-rollback-${randomUUID()}`);
-    await this.fileSystem.mkdtemp?.(snapshotDir).catch(() => {
-      /* the runner creates the directory itself; this is a no-op fallback */
-    });
-
-    const exportMapping = MODULE_MAPPINGS.export_modules;
-    if (!exportMapping) {
-      return { snapshotDir, snapshotFiles: new Map() };
-    }
-    const exportResult = await this.orchestrator.executeMappedTool(
-      "export_modules",
-      {
-        ...params,
-        moduleNames,
-        exportPath: snapshotDir,
-        readOnly: true,
-      },
-      exportMapping,
-    );
-
-    const snapshotFiles = new Map<string, RollbackSnapshotEntry>();
-    if (exportResult.ok && Array.isArray(exportResult.data)) {
-      const exportEntries = exportResult.data as ExportModuleEntry[];
-      for (const entry of exportEntries) {
-        if (entry.status === "ok" && entry.fileType !== undefined && entry.relPath !== undefined) {
-          snapshotFiles.set(entry.module, {
-            fileType: entry.fileType as RollbackSnapshotEntry["fileType"],
-            relPath: entry.relPath,
-          });
-        }
-      }
-    }
-    return { snapshotDir, snapshotFiles };
-  }
-
-  /**
-   * Re-import each snapshot module from its pre-call baseline so the
-   * .accdb returns to its pre-`import_modules` state when the
-   * project-wide compile failed. Mutates the per-module entries in
-   * `resultWithPrune.data.result` so callers see
-   * `rollbackApplied: true, rollbackReason: "compile_failure_post_import"`
-   * for every module that was successfully reverted, and
-   * `rollbackFailed: true, rollbackReason: "no_baseline_snapshot"` for
-   * brand-new modules that did not exist in the binary pre-call (a
-   * best-effort warning — the module is NOT deleted).
-   */
-  private async rollbackModulesFromSnapshot(
-    snapshot: RollbackSnapshot,
-    resultWithPrune: OperationResult<unknown>,
-  ): Promise<PerModuleResult[]> {
-    if (!resultWithPrune.ok) return [];
-    const rawResult = (resultWithPrune.data as { result?: unknown })?.result;
-    const modules: PerModuleResult[] = Array.isArray(rawResult)
-      ? (rawResult as PerModuleResult[])
-      : [];
-
-    for (const entry of modules) {
-      if (entry.status !== "ok") continue;
-      const snapshotEntry = snapshot.snapshotFiles.get(entry.module);
-      if (snapshotEntry === undefined) {
-        // Brand-new module — there is no pre-call baseline to restore.
-        entry.rollbackFailed = true;
-        entry.rollbackReason = NO_BASELINE_ROLLBACK_REASON;
-        continue;
-      }
-      entry.rollbackApplied = true;
-      entry.rollbackReason = COMPILE_FAILURE_ROLLBACK_REASON;
-    }
-
-    const moduleNamesToRevert = [...snapshot.snapshotFiles.keys()];
-    if (moduleNamesToRevert.length === 0) return modules;
-
-    const importMapping = MODULE_MAPPINGS.import_modules;
-    if (!importMapping) return modules;
-    await this.orchestrator.executeMappedTool(
-      "import_modules",
-      {
-        // The rollback re-import uses the snapshot temp dir as the source
-        // root so the runner finds the pre-call .bas/.cls/.form.txt
-        // files written by export_modules in snapshotModulesForRollback.
-        destinationRoot: snapshot.snapshotDir,
-        moduleNames: moduleNamesToRevert,
-        importMode: "replace",
-        compile: false,
-        dryRun: false,
-      },
-      importMapping,
-    );
-    return modules;
-  }
+  // #732 — compile-failure rollback helpers REMOVED in v1.19.0
+  // (feat-759-no-compile). compile + rollbackOnCompileFail leave the public
+  // surface; the snapshot + rollback helpers above lived only to undo a
+  // failed compile, so they are gone with it.
 }
 
 function normalizeImportMode(importMode: string | undefined): string | undefined {

@@ -288,7 +288,8 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
     // Now correctly declared so the binary write-gate fires.
     expect([...binaryWriters].sort()).toEqual(
       [
-        "compile_vba",
+        // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+        // remaining binary writers mutate the .accdb.
         "delete_module",
         "fix_encoding",
         "import_all",
