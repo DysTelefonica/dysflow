@@ -8,6 +8,11 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import {
+  recordPersistence,
+  recordVerifyFail,
+  recordVerifyOk,
+} from "../../core/runtime/human-compile-state.js";
+import {
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
@@ -199,7 +204,28 @@ export class VbaModulesAdapter {
       return this.auditOrphans(params);
     }
     if (toolName === "verify_code") {
-      return compareSourceAgainstBinary(params, this.getComparisonContext(), this.fileSystem);
+      // PR-1 (issue #762, v1.20.0) — record the verify_code round-trip into
+      // the human-compile state cache. `actionableOk === true` means the
+      // comparison surfaced no actionable differences → the user has
+      // confirmed the binary state; anything else (failure envelope,
+      // warnings, drift) is recorded as a failed verify (the reminder stays
+      // visible).
+      const verifyResult = await compareSourceAgainstBinary(
+        params,
+        this.getComparisonContext(),
+        this.fileSystem,
+      );
+      if (verifyResult.ok) {
+        const accessPath = await this.resolveAccessPathForRecording(params);
+        if (accessPath !== undefined) {
+          if (verifyResult.data.actionableOk === true) {
+            recordVerifyOk(accessPath);
+          } else {
+            recordVerifyFail(accessPath);
+          }
+        }
+      }
+      return verifyResult;
     }
 
     const dryRun = params.apply === true ? false : params.dryRun !== false;
@@ -312,6 +338,24 @@ export class VbaModulesAdapter {
       mapping,
     );
     if (!importResult.ok) return importResult;
+
+    // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
+    // human-compile state cache so `dysflow_get_capabilities` and the result
+    // reminder surface know there is something for the human to compile.
+    // Only recorded for the tools that actually mutate the binary (import_*
+    // and delete_module) — verify_code, export_*, and read-only tools do not
+    // trigger this hook.
+    if (
+      toolName === "import_modules" ||
+      toolName === "import_all" ||
+      toolName === "delete_module"
+    ) {
+      const accessPath = await this.resolveAccessPathForRecording(effectiveParams);
+      if (accessPath !== undefined) {
+        recordPersistence(accessPath);
+      }
+    }
+
     const resultWithPrune =
       toolName === "import_all" && truthy(params.prune)
         ? {
@@ -615,6 +659,32 @@ export class VbaModulesAdapter {
       runPreflightCleanup: this.orchestrator.runPreflightCleanup.bind(this.orchestrator),
       runVbaManager: this.orchestrator.executor.bind(this.orchestrator),
     };
+  }
+
+  /**
+   * Resolve the `accessPath` for a recording hook (v1.20.0, #762). Used by
+   * the verify_code and `import_modules` / `import_all` / `delete_module`
+   * recording sites. Returns `undefined` when the target resolution fails
+   * or the resolved target has no `accessPath` — recording is best-effort
+   * and never throws.
+   *
+   * The orchestrator's `resolveExecutionTarget` is independent from the
+   * executor path used by `executeMappedTool`, so calling it here does not
+   * short-circuit the executor. The double-resolve is intentional: the
+   * recording hook keeps the consumer of the recording decoupled from the
+   * executor's internal target handling.
+   */
+  private async resolveAccessPathForRecording(
+    params: Record<string, unknown>,
+  ): Promise<string | undefined> {
+    try {
+      const target = await this.orchestrator.resolveExecutionTarget(params);
+      if (!target.ok) return undefined;
+      const accessPath = target.data.accessPath;
+      return typeof accessPath === "string" && accessPath.length > 0 ? accessPath : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async planImport(

@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { getCapabilitiesAll } from "../../../src/adapters/mcp/get-capabilities-tool";
 import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
+import {
+  clearHumanCompileState,
+  recordPersistence,
+  recordVerifyOk,
+} from "../../../src/core/runtime/human-compile-state";
 
 /**
  * PR-1 (issue #656) — `dysflow_get_capabilities` is a read-only MCP tool that
@@ -279,5 +284,81 @@ describe("dysflow_get_capabilities tool — registration and read-only contract 
       toolsVisible: expect.any(Number),
       writeClassToolsPermitted: expect.any(Array),
     });
+  });
+});
+
+// PR-1 (issue #762) — v1.20.0 adds a `humanCompilePending: boolean` field to
+// the snapshot. The flag is sourced from the project-scoped `human-compile-state`
+// keyed by `accessDbPath`. Each test below uses a unique accessPath and clears
+// the state in `afterEach` so atoms cannot leak into each other.
+describe("getCapabilitiesAll() — humanCompilePending snapshot field (#762)", () => {
+  const TEST_ACCESS_PATH = "C:/repo/snapshot-front.accdb";
+
+  afterEach(() => {
+    clearHumanCompileState(TEST_ACCESS_PATH);
+  });
+
+  it("happy: after recordPersistence the snapshot reports humanCompilePending=true", () => {
+    clearHumanCompileState(TEST_ACCESS_PATH);
+    recordPersistence(TEST_ACCESS_PATH);
+
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+      accessDbPath: TEST_ACCESS_PATH,
+    });
+
+    expect(snapshot.humanCompilePending).toBe(true);
+  });
+
+  it("happy 2: after recordPersistence + recordVerifyOk the snapshot reports humanCompilePending=false", () => {
+    clearHumanCompileState(TEST_ACCESS_PATH);
+    recordPersistence(TEST_ACCESS_PATH);
+    recordVerifyOk(TEST_ACCESS_PATH);
+
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+      accessDbPath: TEST_ACCESS_PATH,
+    });
+
+    expect(snapshot.humanCompilePending).toBe(false);
+  });
+
+  it("edge: with no recorded events the snapshot reports humanCompilePending=false", () => {
+    clearHumanCompileState(TEST_ACCESS_PATH);
+
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: "p",
+      allowWrites: false,
+      accessDbPath: TEST_ACCESS_PATH,
+    });
+
+    expect(snapshot.humanCompilePending).toBe(false);
+  });
+
+  it("edge: when no accessDbPath is supplied the snapshot reports humanCompilePending=false (no project in scope)", () => {
+    clearHumanCompileState(TEST_ACCESS_PATH);
+    recordPersistence(TEST_ACCESS_PATH); // would be pending if accessDbPath was forwarded
+
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+      // accessDbPath omitted on purpose
+    });
+
+    expect(snapshot.humanCompilePending).toBe(false);
   });
 });
