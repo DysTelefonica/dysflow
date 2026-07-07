@@ -43,7 +43,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "list_objects",
     "exists",
     "test_vba",
-    "compile_vba",
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed.
     "verify_code",
     "delete_module",
     "generate_erd",

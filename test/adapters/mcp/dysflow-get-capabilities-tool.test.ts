@@ -185,9 +185,10 @@ describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
 // contracts and the global snapshot surface must report `true`.
 describe("dryRunDefault contract — global + per-tool alignment (#746)", () => {
   const VBA_SYNC_WRITE_TOOLS = [
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+    // remaining write-class set mutates the .accdb or the source tree.
     "import_modules",
     "import_all",
-    "compile_vba",
     "delete_module",
     "fix_encoding",
     "vba_inline_execution",

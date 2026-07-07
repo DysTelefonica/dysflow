@@ -112,8 +112,11 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const opResult = await service.execute("list_access_operations", {});
     expect(opResult.ok).toBe(true);
 
-    // Test routing to Execution adapter
-    const execResult = await service.execute("compile_vba", {});
+    // feat-759-no-compile (v1.19.0) — compile_vba is removed; route via
+    // run_vba (still handled by the execution adapter) instead.
+    const execResult = await service.execute("run_vba", {
+      procedureName: "Module1.DoNothing",
+    });
     expect(execResult.ok).toBe(true);
 
     // Test routing to Forms adapter
@@ -123,6 +126,25 @@ describe("VbaSyncAdapter Orchestrator", () => {
     // Test routing to Modules adapter
     const moduleResult = await service.execute("exists", { moduleName: "Module1" });
     expect(moduleResult.ok).toBe(true);
+  });
+
+  it("compile_vba is refused as TOOL_NOT_IMPLEMENTED by the orchestrator (feat-759-no-compile)", async () => {
+    // v1.19.0 — compile_vba is removed from every sub-adapter. The
+    // orchestrator returns TOOL_NOT_IMPLEMENTED.
+    const service = new VbaSyncAdapter({
+      accessPath: "C:/db/front.accdb",
+      env: {},
+      executor: async () => ({
+        exitCode: 0,
+        stdout: 'DYSFLOW_RESULT {"ok":true}',
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      }),
+    });
+    const result = await service.execute("compile_vba", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("TOOL_NOT_IMPLEMENTED");
   });
 
   it("runs preflight cleanup with the resolved target before invoking the manager", async () => {
@@ -392,7 +414,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
     });
 
     await service.execute("exists", { moduleName: "Module1" });
-    await service.execute("compile_vba", {});
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+    // verify_code as a second timed runner call.
+    await service.execute("verify_code", {});
 
     // The project config timeoutMs=180_000 must be honored; no 25s hard-cap.
     // The captured timeout is effectiveTimeoutMs - preflightElapsedMs.
@@ -749,20 +773,20 @@ describe("VbaSyncAdapter Orchestrator", () => {
 
   describe("import runner parse-failure contract", () => {
     const stderr = "runner stderr detail";
+    // feat-759-no-compile (v1.19.0) — the `compile` parameter is gone from
+    // import_tools. The fixture no longer carries it.
     const importTools = [
       {
         toolName: "import_modules",
         params: {
           moduleNames: ["Test_IndicadoresCaracterizacion", "ModuloCacheIndicadoresIssue18"],
           importMode: "Auto",
-          compile: false,
         },
       },
       {
         toolName: "import_all",
         params: {
           importMode: "Auto",
-          compile: false,
         },
       },
     ];
@@ -926,7 +950,10 @@ describe("VbaSyncAdapter Orchestrator", () => {
         timedOut: false,
       }),
     });
-    const result = await service.execute("compile_vba", {});
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; the strict
+    // context contract still applies to every handled tool. Use
+    // verify_code (still in the vba-sync set; read-only binary compare).
+    const result = await service.execute("verify_code", {});
     expect(result.ok).toBe(true);
   });
 
@@ -942,7 +969,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
         timedOut: false,
       }),
     });
-    const result = await service.execute("compile_vba", {
+    const result = await service.execute("verify_code", {
       strictContext: true,
       expectedAccessPath: "C:/db/different.accdb",
     });
@@ -965,7 +992,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
         timedOut: false,
       }),
     });
-    const result = await service.execute("compile_vba", {
+    const result = await service.execute("verify_code", {
       strictWrite: true,
       expectedDestinationRoot: "C:/repo",
     });
@@ -1036,7 +1063,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
         };
       },
     });
-    const result = await service.execute("compile_vba", {});
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+    // verify_code (read-only binary compare) as a handled tool.
+    const result = await service.execute("verify_code", {});
     expect(result.ok).toBe(true);
     expect(capturedRequest).toBeDefined();
     expect(capturedRequest?.accessPath).toBe("C:/db/service.accdb");
@@ -1073,7 +1102,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
           };
         },
       });
-      const result = await service.execute("compile_vba", {});
+      // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+      // verify_code (handled tool) instead.
+      const result = await service.execute("verify_code", {});
       expect(result.ok).toBe(true);
       expect(capturedRequest).toBeDefined();
       expect(capturedRequest?.accessPath?.replace(/\\/g, "/")).toBe("C:/db/project.accdb");
@@ -1092,7 +1123,9 @@ describe("VbaSyncAdapter Orchestrator", () => {
         cwd: root,
         env: {},
       });
-      const result = await service.execute("compile_vba", {});
+      // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+      // verify_code (handled tool) to exercise the no-config path.
+      const result = await service.execute("verify_code", {});
       expect(result.ok).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -1236,8 +1269,12 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const cases = [
       { toolName: "import_modules" as const, params: { moduleNames: ["Module1"] }, wrapped: true },
       { toolName: "import_all" as const, params: {}, wrapped: true },
+      // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
+      // exists (a read-only tool that returns {ok:true} on success) as
+      // the non-wrapped case. verify_code returns a richer payload so it
+      // doesn't fit the `toEqual({ok:true})` check.
       { toolName: "exists" as const, params: { moduleName: "Module1" }, wrapped: false },
-      { toolName: "compile_vba" as const, params: {}, wrapped: false },
+      { toolName: "list_objects" as const, params: {}, wrapped: false },
     ];
 
     for (const { toolName, params, wrapped } of cases) {
@@ -1287,12 +1324,15 @@ describe("VbaSyncAdapter Orchestrator", () => {
 });
 
 describe("#757 (F3) — deriveTimeoutPhase", () => {
-  it("maps export/import/compile/verify/link/execute tools to their phase", () => {
+  it("maps export/import/verify/link/execute tools to their phase", () => {
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+    // "compile" timeout phase is no longer reachable from any
+    // MCP-routable tool. (TIMEOUT_PHASE_BY_TOOL keeps the entry for
+    // any future inline-execution edge case; the assertion is dropped.)
     expect(deriveTimeoutPhase("export_all")).toBe("export");
     expect(deriveTimeoutPhase("export_modules")).toBe("export");
     expect(deriveTimeoutPhase("import_all")).toBe("import");
     expect(deriveTimeoutPhase("import_modules")).toBe("import");
-    expect(deriveTimeoutPhase("compile_vba")).toBe("compile");
     expect(deriveTimeoutPhase("verify_code")).toBe("verify");
     expect(deriveTimeoutPhase("relink_directory")).toBe("link");
     expect(deriveTimeoutPhase("test_vba")).toBe("execute");

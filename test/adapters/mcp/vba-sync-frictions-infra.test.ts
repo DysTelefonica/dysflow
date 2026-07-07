@@ -95,7 +95,7 @@ describe("VBA-modifying tools write-gating", () => {
     }
   });
 
-  it("blocks delete_module, import_modules, import_all, compile_vba, and vba_inline_execution when writesEnabled=false", async () => {
+  it("blocks delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=false (compile_vba removed in v1.19.0)", async () => {
     const tools = createDysflowMcpTools(services, false);
 
     // Test delete_module
@@ -134,17 +134,10 @@ describe("VBA-modifying tools write-gating", () => {
       );
     }
 
-    // Test compile_vba
-    {
-      const tool = tools.find((t) => t.name === "compile_vba");
-      expect(tool).toBeDefined();
-      if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({}, {} as any);
-      expect(res.isError).toBe(true);
-      expect(res.content?.[0]?.text).toContain(
-        "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: compile_vba).",
-      );
-    }
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+    // write-gate no longer needs to fire for it. Use delete_module as
+    // a representative write-gate check (it is the canonical binary
+    // mutator that is still write-gated).
 
     // Test vba_inline_execution
     {
@@ -159,7 +152,7 @@ describe("VBA-modifying tools write-gating", () => {
     }
   });
 
-  it("allows delete_module, import_modules, import_all, compile_vba, and vba_inline_execution when writesEnabled=true", async () => {
+  it("allows delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=true (compile_vba removed in v1.19.0)", async () => {
     const tools = createDysflowMcpTools(services, true);
 
     // Test delete_module
@@ -186,13 +179,9 @@ describe("VBA-modifying tools write-gating", () => {
       expect(res.isError).toBeFalsy();
     }
 
-    // Test compile_vba
-    {
-      const tool = tools.find((t) => t.name === "compile_vba");
-      if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({}, {} as any);
-      expect(res.isError).toBeFalsy();
-    }
+    // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+    // write-gate no longer needs to fire for it. Use delete_module as
+    // a representative write-gate check.
 
     // Test vba_inline_execution
     {
@@ -357,11 +346,13 @@ describe("vba_inline_execution tool behavior", () => {
       validateStrictContext: () => ({ ok: true }),
       executeMappedTool: async (name: string, params: any) => {
         executedTools.push({ name, params });
+        // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
+        // inline path no longer makes an explicit compile call. The
+        // flow is now delete-pre -> import -> run -> delete-post.
         if (
           name === "import_modules" ||
           name === "run_vba" ||
-          name === "delete_module" ||
-          name === "compile_vba"
+          name === "delete_module"
         ) {
           return { ok: true, data: { status: "success" } };
         }
@@ -385,13 +376,13 @@ describe("vba_inline_execution tool behavior", () => {
 
     expect(result.ok).toBe(true);
 
-    // Expecting 5 tools to be executed in sequence (delete pre-cleanup, import, compile, run, delete post-cleanup)
-    expect(executedTools.length).toBe(5);
+    // Expecting 4 tools to be executed in sequence (delete pre-cleanup, import, run, delete post-cleanup)
+    // — compile is gone in v1.19.0.
+    expect(executedTools.length).toBe(4);
     expect(executedTools[0]?.name).toBe("delete_module");
     expect(executedTools[1]?.name).toBe("import_modules");
-    expect(executedTools[2]?.name).toBe("compile_vba");
-    expect(executedTools[3]?.name).toBe("run_vba");
-    expect(executedTools[4]?.name).toBe("delete_module");
+    expect(executedTools[2]?.name).toBe("run_vba");
+    expect(executedTools[3]?.name).toBe("delete_module");
 
     // The generated module name is __dysflow_inline__
     const importParams = executedTools[1]?.params;
@@ -408,12 +399,12 @@ describe("vba_inline_execution tool behavior", () => {
     expect(writtenFiles[0]?.content).toContain("MsgBox 123");
 
     // Verify run_vba params
-    const runParams = executedTools[3]?.params;
+    const runParams = executedTools[2]?.params;
     expect(runParams?.moduleNames).toContain(generatedModuleName);
     expect(runParams?.procedureName).toBe(`${generatedModuleName}.ExecuteInline`);
 
     // Verify delete_module params
-    const deleteParams = executedTools[4]?.params;
+    const deleteParams = executedTools[3]?.params;
     expect(deleteParams?.moduleName).toBe(generatedModuleName);
 
     // Verify file removal (pre-cleanup and post-cleanup)
@@ -434,7 +425,8 @@ describe("vba_inline_execution tool behavior", () => {
       validateStrictContext: () => ({ ok: true }),
       executeMappedTool: async (name: string, params: any) => {
         executedTools.push({ name, params });
-        if (name === "import_modules" || name === "compile_vba") {
+        // feat-759-no-compile (v1.19.0) — compile_vba was removed.
+        if (name === "import_modules") {
           return { ok: true };
         }
         if (name === "run_vba") {
