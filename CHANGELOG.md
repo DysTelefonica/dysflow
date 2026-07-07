@@ -18,7 +18,7 @@
   (exit 0, `[f16-import-grow] passed: larger source imported through MCP
   without IMPORT_TRUNCATED.`).
 
-Implementation commits: PR #775 merge `f34568ad`; local harness follow-up
+Implementation commits: PR #775 merge `f34568ad`; harness follow-up
 `a8dddba0` (`test(e2e): fix F16 import harness MCP payload`).
 
 ## [v1.20.0] - 2026-07-07
