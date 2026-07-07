@@ -3,18 +3,25 @@ import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
+import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const fixturePath = join(scriptDir, "NoConformidades.accdb");
-const managerPath = join(repoRoot, "scripts", "dysflow-vba-manager.ps1");
 const tempRoot = join(process.env.TEMP ?? process.env.TMP ?? ".", `dysflow-f16-import-grow-${Date.now()}`);
 const accessPath = join(tempRoot, "NoConformidades.accdb");
 const modulesRoot = join(tempRoot, "modules");
 const moduleName = "Test_F16GrowImport";
+const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
+const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
+const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD;
 
 function makeModule(name, lineCount) {
-  const filler = Array.from({ length: lineCount }, (_, index) => `    Debug.Print "line ${index + 1}"`);
+  const filler = Array.from(
+    { length: lineCount },
+    (_, index) => `    Debug.Print "line ${index + 1}"`,
+  );
   return [
     `Attribute VB_Name = "${name}"`,
     "Option Explicit",
@@ -24,31 +31,15 @@ function makeModule(name, lineCount) {
   ].join("\r\n");
 }
 
-function parseDysflowResult(stdout) {
-  for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line.startsWith("DYSFLOW_RESULT ")) continue;
-    return JSON.parse(line.slice("DYSFLOW_RESULT ".length));
-  }
-  throw new Error(`No DYSFLOW_RESULT line found. stdout=${stdout.slice(0, 500)}`);
+function toolPayload(message) {
+  const text = message?.result?.content?.map((item) => item.text ?? "").join("\n") ?? "";
+  if (!text.trim()) return null;
+  return JSON.parse(text);
 }
 
 function firstModule(payload) {
   const modules = Array.isArray(payload) ? payload : (payload?.modules ?? []);
   return modules[0];
-}
-
-async function runImport(extraArgs = []) {
-  return await new Promise((resolvePromise) => {
-    const child = spawn("pwsh", ["-NoProfile", "-NonInteractive", "-File", managerPath, ...extraArgs], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
-    child.on("close", (code) => resolvePromise({ code: code ?? -1, stdout, stderr }));
-  });
 }
 
 if (process.platform !== "win32") {
@@ -61,6 +52,49 @@ if (!existsSync(fixturePath)) {
   process.exit(0);
 }
 
+if (!password) {
+  console.log("[f16-import-grow] skipped: set ACCESS_VBA_PASSWORD for the fixture before running.");
+  process.exit(0);
+}
+
+const resolvedCommand = resolveMcpE2eCommand({ env: process.env, repoRoot });
+if (!resolvedCommand.ok) {
+  console.error(`[f16-import-grow] ${resolvedCommand.code}: ${resolvedCommand.message}`);
+  process.exit(1);
+}
+const cliCommand = resolvedCommand.command;
+process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
+
+async function callImport(verbose = false) {
+  const child = spawn(cliCommand, ["mcp"], {
+    cwd: scriptDir,
+    shell: true,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      ACCESS_VBA_PASSWORD: password,
+      DYSFLOW_ACCESS_PASSWORD: password,
+    },
+  });
+  return await runMcpHarness({
+    child,
+    requestId: 2,
+    method: "tools/call",
+    params: {
+      name: "dysflow_import_modules",
+      arguments: {
+        accessPath,
+        destinationRoot: modulesRoot,
+        moduleNames: [moduleName],
+        dryRun: false,
+        verbose,
+      },
+    },
+    timeoutMs,
+    closeWatchdogMs,
+  });
+}
+
 try {
   await rm(tempRoot, { recursive: true, force: true });
   await mkdir(modulesRoot, { recursive: true });
@@ -68,27 +102,19 @@ try {
 
   const modulePath = join(modulesRoot, `${moduleName}.bas`);
   await writeFile(modulePath, makeModule(moduleName, 2), "utf8");
-  const baseArgs = [
-    "-Action", "Import",
-    "-AccessPath", accessPath,
-    "-DestinationRoot", modulesRoot,
-    "-ModuleNamesJson", JSON.stringify([moduleName]),
-    "-Json",
-  ];
-
-  const initial = await runImport(baseArgs);
-  if (initial.code !== 0 || firstModule(parseDysflowResult(initial.stdout))?.status !== "ok") {
-    throw new Error(`Initial import failed. code=${initial.code} stderr=${initial.stderr}`);
+  const initial = await callImport(false);
+  if (initial.isError || firstModule(toolPayload(initial.response))?.status !== "ok") {
+    throw new Error(`Initial import failed. text=${initial.text}`);
   }
 
   await writeFile(modulePath, makeModule(moduleName, 40), "utf8");
-  const grown = await runImport([...baseArgs, "-VerboseContract"]);
-  const entry = firstModule(parseDysflowResult(grown.stdout));
-  if (grown.code !== 0 || entry?.status !== "ok" || entry?.error?.code === "IMPORT_TRUNCATED" || entry?.verbose?.truncated) {
-    throw new Error(`Grow import failed/truncated. code=${grown.code} entry=${JSON.stringify(entry)} stderr=${grown.stderr}`);
+  const grown = await callImport(true);
+  const entry = firstModule(toolPayload(grown.response));
+  if (grown.isError || entry?.status !== "ok" || entry?.error?.code === "IMPORT_TRUNCATED" || entry?.verbose?.truncated) {
+    throw new Error(`Grow import failed/truncated. entry=${JSON.stringify(entry)} text=${grown.text}`);
   }
 
-  console.log("[f16-import-grow] passed: larger source imported over existing module without IMPORT_TRUNCATED.");
+  console.log("[f16-import-grow] passed: larger source imported through MCP without IMPORT_TRUNCATED.");
 } finally {
   if (!process.env.DYSFLOW_E2E_PRESERVE_SANDBOX) {
     await rm(tempRoot, { recursive: true, force: true });
