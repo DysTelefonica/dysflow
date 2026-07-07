@@ -170,7 +170,7 @@ describe("MCP tool registration over core services", () => {
       "query_execute",
       "doctor",
       "list_access_operations",
-      "dysflow_access_cleanup",
+      "cleanup_access_operation",
       "dysflow_access_force_cleanup_orphaned",
     ];
 

@@ -429,7 +429,7 @@ export const MODERN_TOOL_NAMES = [
   "query_execute",
   "doctor",
   "list_access_operations",
-  "dysflow_access_cleanup",
+  "cleanup_access_operation",
   "dysflow_access_force_cleanup_orphaned",
   "dysflow_get_capabilities",
   // issue #701 — read-only VBA procedure introspection
@@ -522,8 +522,8 @@ export function createDysflowMcpTools(
       handler: async () => handleMcpAccessOperationsList(services),
     },
     {
-      name: "dysflow_access_cleanup",
-      description: `Reconcile or clean a tracked Access operation by operationId and accessPath. Without force it only inspects/reconciles eligible terminal records and kills nothing; force: true may kill a Dysflow-owned process and is write-gated with MCP_WRITES_DISABLED when writes are off. ${MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary}`,
+      name: "cleanup_access_operation",
+      description: `Reconcile or clean a tracked Access operation by operationId and accessPath. Without force it only inspects/reconciles eligible terminal records and kills nothing; force: true may kill a Dysflow-owned process and is write-gated with MCP_WRITES_DISABLED when writes are off. ${MCP_TOOL_CONTRACTS.cleanup_access_operation.summary}`,
       inputSchema: CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessCleanup(

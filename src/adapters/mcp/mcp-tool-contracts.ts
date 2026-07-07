@@ -140,7 +140,9 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  dysflow_access_cleanup: aliasContracts.cleanup_access_operation,
+  // #777 (Opción A cont.) — `dysflow_access_cleanup` was REMOVED
+  // entirely (the canonical `cleanup_access_operation` lives in
+  // `aliasContracts`).
   dysflow_access_force_cleanup_orphaned: {
     access: "conditional-write",
     writeGate: "conditional",

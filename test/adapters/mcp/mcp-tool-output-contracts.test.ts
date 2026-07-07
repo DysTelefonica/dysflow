@@ -16,7 +16,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "query_execute",
     "doctor",
     "list_access_operations",
-    "dysflow_access_cleanup",
+    "cleanup_access_operation",
     "dysflow_access_force_cleanup_orphaned",
     // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED
     // completely. The canonical `run_vba` is a pre-existing alias in
